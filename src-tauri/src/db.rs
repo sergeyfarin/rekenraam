@@ -119,7 +119,10 @@ pub fn resolve_accessible_db(mut path: PathBuf) -> PathBuf {
     chosen
 }
 
-const MIGRATIONS: &[(i32, &str)] = &[(1, include_str!("../migrations/V1__init.sql"))];
+const MIGRATIONS: &[(i32, &str)] = &[
+    (1, include_str!("../migrations/V1__init.sql")),
+    (2, include_str!("../migrations/V2__account_balancing.sql")),
+];
 
 fn run_migrations(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;

@@ -1,11 +1,10 @@
-<main class="page">
-  <h1>Planning</h1>
-  <p>Plan budgets and forecasts.</p>
+<main>
+  <div class="bx--grid">
+    <div class="bx--row">
+      <div class="bx--col-lg-8 bx--col-md-8 bx--col-sm-4">
+        <h1 class="bx--type-productive-heading-04">Planning</h1>
+        <p class="bx--type-body-long-02">Plan budgets and forecasts.</p>
+      </div>
+    </div>
+  </div>
 </main>
-
-<style>
-  .page {
-    padding: 2rem 1.5rem;
-    text-align: center;
-  }
-</style>
