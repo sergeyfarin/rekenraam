@@ -241,7 +241,8 @@ pub fn run() {
                 guard.conn = Some(conn);
             }
 
-            let settings = commands::load_backup_settings();
+            let db_state = app.state::<DbState>();
+            let settings = commands::load_backup_settings(Some(&db_state));
             let scheduler = app.state::<BackupSchedulerState>();
             commands::restart_backup_scheduler(app.handle().clone(), scheduler, settings);
 

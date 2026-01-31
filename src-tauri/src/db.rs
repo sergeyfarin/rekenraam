@@ -131,6 +131,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (9, include_str!("../migrations/V9__reporting.sql")),
     (10, include_str!("../migrations/V10__institutions_countries.sql")),
     (11, include_str!("../migrations/V11__currencies_seed.sql")),
+    (12, include_str!("../migrations/V12__backup_settings.sql")),
 ];
 
 pub fn migration_versions() -> Vec<i32> {

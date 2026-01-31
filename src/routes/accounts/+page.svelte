@@ -385,27 +385,27 @@
   })();
 </script>
 
-<main>
-  <div class="bx--grid">
-    <div class="bx--row">
-      <div class="bx--col-lg-8 bx--col-md-8 bx--col-sm-4">
-        <h1 class="bx--type-productive-heading-04">Accounts</h1>
-        <p class="bx--type-body-long-02">View, filter, and organize your accounts.</p>
+<main class="page">
+  <div class="page-grid container">
+    <div class="page-row">
+      <div class="page-col">
+        <h1 class="page-title">Accounts</h1>
+        <p class="page-subtitle">View, filter, and organize your accounts.</p>
       </div>
-      <div class="bx--col-lg-4 bx--col-md-8 bx--col-sm-4 header-actions">
-        <button class="bx--btn bx--btn--primary" type="button" on:click={openCreateDialog}>
+      <div class="page-col page-col-actions header-actions">
+        <button class="btn btn-primary" type="button" on:click={openCreateDialog}>
           New account
         </button>
       </div>
     </div>
 
-    <div class="bx--row">
-      <div class="bx--col-lg-12">
-        <div class="bx--tile account-tree">
-          <div class="tree-header">
-            <h2 class="bx--type-productive-heading-03">Account tree</h2>
+    <div class="page-row">
+      <div class="page-col">
+        <div class="card account-tree">
+          <div class="card-header">
+            <h2 class="section-title">Account tree</h2>
             <button
-              class="bx--btn bx--btn--ghost bx--btn--sm"
+              class="btn btn-ghost btn-sm"
               type="button"
               on:click={() => (showAccountTree = !showAccountTree)}
             >
@@ -414,7 +414,7 @@
           </div>
           {#if showAccountTree}
             {#if accountTree.length === 0}
-              <p class="bx--type-body-short-01">No accounts yet.</p>
+              <p class="text-sm text-muted">No accounts yet.</p>
             {:else}
               <ul class="tree">
                 {#each accountTree as node}
@@ -427,13 +427,13 @@
       </div>
     </div>
 
-    <div class="bx--row controls">
-      <div class="bx--col-lg-5 bx--col-md-4 bx--col-sm-4">
-        <div class="bx--form-item">
-          <label class="bx--label" for="account-search">Search</label>
+    <div class="page-row controls">
+      <div class="page-col">
+        <div class="form-field">
+          <label class="label" for="account-search">Search</label>
           <input
             id="account-search"
-            class="bx--text-input"
+            class="input"
             type="text"
             placeholder="Search by name, institution, country, type, or last4"
             bind:value={search}
@@ -441,18 +441,18 @@
         </div>
       </div>
 
-      <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
-        <div class="bx--form-item checkbox">
-          <label class="bx--checkbox-label" for="include-closed">
-            <input id="include-closed" type="checkbox" class="bx--checkbox" bind:checked={includeClosed} />
-            <span class="bx--checkbox-label-text">Include closed accounts</span>
+      <div class="page-col">
+        <div class="form-field checkbox-field">
+          <label class="checkbox" for="include-closed">
+            <input id="include-closed" type="checkbox" bind:checked={includeClosed} />
+            <span>Include closed accounts</span>
           </label>
         </div>
       </div>
 
-      <div class="bx--col-lg-4 bx--col-md-4 bx--col-sm-4 controls-actions">
+      <div class="page-col page-col-actions controls-actions">
         <button
-          class="bx--btn bx--btn--ghost"
+          class="btn btn-ghost"
           type="button"
           on:click={() => (showAdvancedFilters = !showAdvancedFilters)}
         >
@@ -462,116 +462,106 @@
     </div>
 
     {#if showAdvancedFilters}
-      <div class="bx--row advanced-filters">
-        <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
-          <div class="bx--form-item">
-            <label class="bx--label" for="group-by">Group by</label>
-            <div class="bx--select">
-              <select id="group-by" class="bx--select-input" bind:value={groupBy}>
+      <div class="page-row advanced-filters">
+        <div class="page-col">
+          <div class="form-field">
+            <label class="label" for="group-by">Group by</label>
+              <select id="group-by" class="select" bind:value={groupBy}>
                 <option value="institution">Institution</option>
                 <option value="type">Account type</option>
                 <option value="none">None</option>
               </select>
-            </div>
           </div>
         </div>
 
-        <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
-          <div class="bx--form-item">
-            <label class="bx--label" for="sort-by">Sort by</label>
-            <div class="bx--select">
-              <select id="sort-by" class="bx--select-input" bind:value={sortBy}>
+        <div class="page-col">
+          <div class="form-field">
+            <label class="label" for="sort-by">Sort by</label>
+              <select id="sort-by" class="select" bind:value={sortBy}>
                 <option value="name">Name</option>
                 <option value="balance">Balance</option>
                 <option value="institution">Institution</option>
                 <option value="type">Account type</option>
               </select>
-            </div>
           </div>
         </div>
 
-        <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
-          <div class="bx--form-item">
-            <label class="bx--label" for="sort-dir">Direction</label>
-            <div class="bx--select">
-              <select id="sort-dir" class="bx--select-input" bind:value={sortDir}>
+        <div class="page-col">
+          <div class="form-field">
+            <label class="label" for="sort-dir">Direction</label>
+              <select id="sort-dir" class="select" bind:value={sortDir}>
                 <option value="asc">Ascending</option>
                 <option value="desc">Descending</option>
               </select>
-            </div>
           </div>
         </div>
       </div>
     {/if}
 
     {#if loading}
-      <div class="bx--row">
-        <div class="bx--col-lg-12">
-          <p class="bx--type-body-short-01">Loading accounts…</p>
+      <div class="page-row">
+        <div class="page-col">
+          <p class="text-sm text-muted">Loading accounts…</p>
         </div>
       </div>
     {:else if error}
-      <div class="bx--row">
-        <div class="bx--col-lg-12">
-          <p class="bx--type-body-short-01 error">{error}</p>
+      <div class="page-row">
+        <div class="page-col">
+          <p class="text-sm text-error">{error}</p>
         </div>
       </div>
     {:else}
       {#each grouped as group}
-        <section class="bx--row group" aria-label={group.label}>
-          <div class="bx--col-lg-12">
-            <div class="bx--tile">
-              <div class="bx--structured-list">
-                <div class="bx--structured-list-thead">
-                  <div class="bx--structured-list-row bx--structured-list-row--header-row">
-                    <div class="bx--structured-list-cell heading">{group.label}</div>
-                    <div class="bx--structured-list-cell heading">Institution</div>
-                    <div class="bx--structured-list-cell heading amount">Balance</div>
-                    <div class="bx--structured-list-cell heading action">Actions</div>
-                  </div>
+        <section class="page-row group" aria-label={group.label}>
+          <div class="page-col">
+            <div class="card">
+              <div class="data-table">
+                <div class="data-row header">
+                  <div class="data-cell heading">{group.label}</div>
+                  <div class="data-cell heading">Institution</div>
+                  <div class="data-cell heading amount">Balance</div>
+                  <div class="data-cell heading action">Actions</div>
                 </div>
-                <div class="bx--structured-list-tbody">
-                  {#if group.accounts.length === 0}
-                    <div class="bx--structured-list-row">
-                      <div class="bx--structured-list-cell">No accounts found.</div>
-                      <div class="bx--structured-list-cell"></div>
-                      <div class="bx--structured-list-cell"></div>
-                      <div class="bx--structured-list-cell"></div>
-                    </div>
-                  {:else}
-                    {#each group.accounts as account}
-                      <div class="bx--structured-list-row">
-                        <div class="bx--structured-list-cell">
-                          <a class="bx--link" href={`/accounts/${account.id}`}>{account.name}</a>
-                          <div class="bx--type-body-short-01 meta">
-                            {account.account_type}
-                            {#if account.number_last4}
-                              ••••{account.number_last4}
-                            {/if}
-                          </div>
-                        </div>
-                        <div class="bx--structured-list-cell">
-                            {account.institution_name ?? "—"}
-                            {#if account.country_name}
-                              <div class="bx--type-body-short-01 meta">{account.country_name}</div>
-                            {/if}
-                        </div>
-                        <div class="bx--structured-list-cell amount">
-                          {formatMinor(accountBalance(account))}
-                        </div>
-                        <div class="bx--structured-list-cell action">
-                          <button
-                            class="bx--btn bx--btn--ghost bx--btn--sm"
-                            type="button"
-                            on:click={() => openEditDialog(account)}
-                          >
-                            Edit
-                          </button>
+                {#if group.accounts.length === 0}
+                  <div class="data-row">
+                    <div class="data-cell">No accounts found.</div>
+                    <div class="data-cell"></div>
+                    <div class="data-cell"></div>
+                    <div class="data-cell"></div>
+                  </div>
+                {:else}
+                  {#each group.accounts as account}
+                    <div class="data-row">
+                      <div class="data-cell">
+                        <a class="link" href={`/accounts/${account.id}`}>{account.name}</a>
+                        <div class="text-sm text-muted meta">
+                          {account.account_type}
+                          {#if account.number_last4}
+                            ••••{account.number_last4}
+                          {/if}
                         </div>
                       </div>
-                    {/each}
-                  {/if}
-                </div>
+                      <div class="data-cell">
+                        {account.institution_name ?? "—"}
+                        {#if account.country_name}
+                          <div class="text-sm text-muted meta">{account.country_name}</div>
+                        {/if}
+                      </div>
+                      <div class="data-cell amount">
+                        {formatMinor(accountBalance(account))}
+                      </div>
+                      <div class="data-cell action">
+                        <button
+                          class="btn btn-ghost btn-sm"
+                          type="button"
+                          on:click={() => openEditDialog(account)}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  {/each}
+                {/if}
               </div>
             </div>
           </div>
@@ -583,29 +573,28 @@
   {#if dialogOpen}
     <div class="dialog-backdrop" role="presentation" on:click={closeDialog}></div>
     <div class="dialog" role="dialog" aria-modal="true" aria-label="Account dialog">
-      <form class="bx--form" on:submit={submitAccount}>
+      <form on:submit={submitAccount}>
         <header class="dialog-header">
-          <h2 class="bx--type-productive-heading-03">
+          <h2 class="section-title">
             {dialogMode === "create" ? "Create account" : "Edit account"}
           </h2>
         </header>
 
         <div class="dialog-body">
-          <div class="bx--form-item">
-            <label class="bx--label" for="account-name">Name</label>
+          <div class="form-field">
+            <label class="label" for="account-name">Name</label>
             <input
               id="account-name"
-              class="bx--text-input"
+              class="input"
               type="text"
               bind:value={formName}
               required
             />
           </div>
 
-          <div class="bx--form-item">
-            <label class="bx--label" for="account-type">Account type</label>
-            <div class="bx--select">
-              <select id="account-type" class="bx--select-input" bind:value={formType}>
+          <div class="form-field">
+            <label class="label" for="account-type">Account type</label>
+              <select id="account-type" class="select" bind:value={formType}>
                 <option value="cash">Cash</option>
                 <option value="checking">Checking</option>
                 <option value="savings">Savings</option>
@@ -618,15 +607,13 @@
                 <option value="expense">Expense</option>
                 <option value="equity">Equity</option>
               </select>
-            </div>
           </div>
 
-          <div class="bx--form-item">
-            <label class="bx--label" for="account-commodity">Commodity</label>
-            <div class="bx--select">
+          <div class="form-field">
+            <label class="label" for="account-commodity">Commodity</label>
               <select
                 id="account-commodity"
-                class="bx--select-input"
+                class="select"
                 bind:value={formCommodityId}
               >
                 {#each commodities as commodity}
@@ -635,61 +622,52 @@
                   </option>
                 {/each}
               </select>
-            </div>
           </div>
 
-          <div class="bx--form-item">
-            <label class="bx--label" for="account-country">Country</label>
-            <div class="bx--select">
-              <select id="account-country" class="bx--select-input" bind:value={formCountryId}>
+          <div class="form-field">
+            <label class="label" for="account-country">Country</label>
+              <select id="account-country" class="select" bind:value={formCountryId}>
                 <option value="">None</option>
                 {#each countries as country}
                   <option value={country.id}>{country.name} ({country.code})</option>
                 {/each}
               </select>
-            </div>
           </div>
 
-          <div class="bx--form-item">
-            <label class="bx--label" for="account-institution">Institution</label>
-            <div class="bx--select">
-              <select id="account-institution" class="bx--select-input" bind:value={formInstitutionId}>
+          <div class="form-field">
+            <label class="label" for="account-institution">Institution</label>
+              <select id="account-institution" class="select" bind:value={formInstitutionId}>
                 <option value="">None</option>
                 {#each institutions as institution}
                   <option value={institution.id}>{institution.name}</option>
                 {/each}
               </select>
-            </div>
           </div>
 
-          <div class="bx--form-item">
-            <label class="bx--label" for="new-institution-name">Create new institution</label>
+          <div class="form-field">
+            <label class="label" for="new-institution-name">Create new institution</label>
             <div class="inline-create">
               <input
                 id="new-institution-name"
-                class="bx--text-input"
+                class="input"
                 type="text"
                 placeholder="Institution name"
                 bind:value={newInstitutionName}
               />
-              <div class="bx--select">
-                <select class="bx--select-input" bind:value={newInstitutionKind}>
+                <select class="select" bind:value={newInstitutionKind}>
                   <option value="bank">Bank</option>
                   <option value="broker">Broker</option>
                   <option value="credit_union">Credit union</option>
                   <option value="other">Other</option>
                 </select>
-              </div>
-              <div class="bx--select">
-                <select class="bx--select-input" bind:value={newInstitutionCountryId}>
+                <select class="select" bind:value={newInstitutionCountryId}>
                   <option value="">Country</option>
                   {#each countries as country}
                     <option value={country.id}>{country.name}</option>
                   {/each}
                 </select>
-              </div>
               <button
-                class="bx--btn bx--btn--secondary"
+                class="btn btn-secondary"
                 type="button"
                 on:click={createInstitutionInline}
                 disabled={creatingInstitution}
@@ -699,30 +677,30 @@
             </div>
           </div>
 
-          <div class="bx--form-item">
-            <label class="bx--label" for="account-last4">Last 4 digits</label>
+          <div class="form-field">
+            <label class="label" for="account-last4">Last 4 digits</label>
             <input
               id="account-last4"
-              class="bx--text-input"
+              class="input"
               type="text"
               maxlength="4"
               bind:value={formLast4}
             />
           </div>
 
-          <div class="bx--form-item checkbox">
-            <label class="bx--checkbox-label" for="account-closed">
-              <input id="account-closed" type="checkbox" class="bx--checkbox" bind:checked={formIsClosed} />
-              <span class="bx--checkbox-label-text">Closed</span>
+          <div class="form-field checkbox-field">
+            <label class="checkbox" for="account-closed">
+              <input id="account-closed" type="checkbox" bind:checked={formIsClosed} />
+              <span>Closed</span>
             </label>
           </div>
         </div>
 
         <footer class="dialog-footer">
-          <button class="bx--btn bx--btn--secondary" type="button" on:click={closeDialog}>
+          <button class="btn btn-secondary" type="button" on:click={closeDialog}>
             Cancel
           </button>
-          <button class="bx--btn bx--btn--primary" type="submit" disabled={submitting}>
+          <button class="btn btn-primary" type="submit" disabled={submitting}>
             {submitting ? "Saving…" : "Save"}
           </button>
         </footer>
@@ -775,24 +753,13 @@
     opacity: 0.7;
   }
 
-  .error {
-    color: #da1e28;
-  }
-
-  .checkbox {
+  .checkbox-field {
     padding-top: 1.5rem;
   }
 
   .account-tree {
     margin-top: 1rem;
     margin-bottom: 1.5rem;
-  }
-
-  .tree-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
   }
 
   :global(.tree) {
@@ -847,9 +814,10 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #fff;
+    background: var(--card);
     width: min(560px, 90vw);
     border-radius: 8px;
+    border: 1px solid var(--border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     z-index: 31;
   }
@@ -869,13 +837,6 @@
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
-  }
-
-  .inline-create {
-    display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr auto;
-    gap: 0.5rem;
-    align-items: center;
   }
 
   .inline-create {

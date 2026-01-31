@@ -35,57 +35,57 @@
   }
 </script>
 
-<main>
-  <div class="bx--grid">
-    <div class="bx--row">
-      <div class="bx--col-lg-8 bx--col-md-8 bx--col-sm-4">
-        <h1 class="bx--type-productive-heading-05">Rekenraam</h1>
-        <p class="bx--type-body-long-02">Personal finance tracking with a local-first database.</p>
+<main class="page">
+  <div class="page-grid container">
+    <div class="page-row">
+      <div class="page-col">
+        <h1 class="page-title">Rekenraam</h1>
+        <p class="page-subtitle">Personal finance tracking with a local-first database.</p>
       </div>
     </div>
 
-    <div class="bx--row">
-      <div class="bx--col-lg-6 bx--col-md-8 bx--col-sm-4">
-        <form class="bx--form-item" onsubmit={greet}>
-          <div class="bx--form-item">
-            <label class="bx--label" for="greet-input">Name</label>
+    <div class="page-row">
+      <div class="page-col">
+        <form onsubmit={greet}>
+          <div class="form-field">
+            <label class="label" for="greet-input">Name</label>
             <input
               id="greet-input"
-              class="bx--text-input"
+              class="input"
               placeholder="Enter a name..."
               bind:value={name}
             />
           </div>
-          <div class="bx--form-item">
-            <button class="bx--btn bx--btn--primary" type="submit">Greet</button>
+          <div class="form-field">
+            <button class="btn btn-primary" type="submit">Greet</button>
           </div>
         </form>
-        <p class="bx--type-body-short-01">{greetMsg}</p>
+        <p class="text-sm text-muted">{greetMsg}</p>
       </div>
     </div>
 
-    <div class="bx--row">
-      <div class="bx--col-lg-6 bx--col-md-8 bx--col-sm-4">
-        <div class="bx--tile">
-          <h2 class="bx--type-productive-heading-03">Database</h2>
-          <div class="bx--form-item">
-            <button class="bx--btn bx--btn--secondary" type="button" onclick={checkDbHealth}>
+    <div class="page-row">
+      <div class="page-col">
+        <div class="card">
+          <h2 class="section-title">Database</h2>
+          <div class="form-field">
+            <button class="btn btn-secondary" type="button" onclick={checkDbHealth}>
               Check DB Health
             </button>
           </div>
-          <p class="bx--type-body-short-01">{dbHealth}</p>
+          <p class="text-sm text-muted">{dbHealth}</p>
         </div>
       </div>
 
-      <div class="bx--col-lg-6 bx--col-md-8 bx--col-sm-4">
-        <div class="bx--tile">
-          <h2 class="bx--type-productive-heading-03">Schema</h2>
-          <div class="bx--form-item">
-            <button class="bx--btn bx--btn--secondary" type="button" onclick={checkSchemaVersion}>
+      <div class="page-col">
+        <div class="card">
+          <h2 class="section-title">Schema</h2>
+          <div class="form-field">
+            <button class="btn btn-secondary" type="button" onclick={checkSchemaVersion}>
               Check Schema Version
             </button>
           </div>
-          <p class="bx--type-body-short-01">{schemaVersion}</p>
+          <p class="text-sm text-muted">{schemaVersion}</p>
         </div>
       </div>
     </div>

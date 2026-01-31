@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 
 use serde::{Deserialize, Serialize};
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use tauri::{async_runtime, command, AppHandle, Manager, State};
 use rfd::FileDialog;
 use tokio::time::{sleep, Duration};
@@ -11,6 +11,8 @@ use crate::db::{
     normalize_db_path, open_and_migrate, save_storage_path,
 };
 use crate::state::{BackupSchedulerState, DbState};
+
+const SINGLE_BOOK_ID: i64 = 1;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BackupSettings {
@@ -65,20 +67,95 @@ fn backup_settings_file() -> Option<PathBuf> {
     Some(path)
 }
 
-pub fn load_backup_settings() -> BackupSettings {
-    let Some(path) = backup_settings_file() else {
-        return BackupSettings::default();
-    };
-    let Ok(content) = fs::read_to_string(path) else {
-        return BackupSettings::default();
-    };
-    serde_json::from_str(&content).unwrap_or_default()
+fn load_backup_settings_file() -> Option<BackupSettings> {
+    let path = backup_settings_file()?;
+    let content = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
 }
 
-fn save_backup_settings(settings: &BackupSettings) -> Result<(), String> {
+fn save_backup_settings_file(settings: &BackupSettings) -> Result<(), String> {
     let path = backup_settings_file().ok_or_else(|| "backup config path not available".to_string())?;
     let serialized = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
     fs::write(path, serialized).map_err(|e| e.to_string())
+}
+
+fn load_backup_settings_db(conn: &rusqlite::Connection) -> Result<Option<BackupSettings>, String> {
+    let row = conn
+        .query_row(
+            "SELECT enabled, interval_minutes, retention_count, backup_path, backup_on_close
+             FROM backup_settings WHERE book_id = ?1",
+            [SINGLE_BOOK_ID],
+            |r| {
+                let enabled: i64 = r.get(0)?;
+                let interval_minutes: i64 = r.get(1)?;
+                let retention_count: i64 = r.get(2)?;
+                let backup_on_close: i64 = r.get(4)?;
+                Ok(BackupSettings {
+                    enabled: enabled != 0,
+                    interval_minutes: interval_minutes.max(0) as u64,
+                    retention_count: retention_count.max(0) as u64,
+                    backup_path: r.get(3)?,
+                    backup_on_close: backup_on_close != 0,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(row)
+}
+
+fn save_backup_settings_db(
+    conn: &rusqlite::Connection,
+    settings: &BackupSettings,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO backup_settings
+            (book_id, enabled, interval_minutes, retention_count, backup_path, backup_on_close, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+         ON CONFLICT(book_id) DO UPDATE SET
+            enabled = excluded.enabled,
+            interval_minutes = excluded.interval_minutes,
+            retention_count = excluded.retention_count,
+            backup_path = excluded.backup_path,
+            backup_on_close = excluded.backup_on_close,
+            updated_at = excluded.updated_at",
+        params![
+            SINGLE_BOOK_ID,
+            settings.enabled as i64,
+            settings.interval_minutes as i64,
+            settings.retention_count as i64,
+            settings.backup_path,
+            settings.backup_on_close as i64,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn load_backup_settings(db: Option<&DbState>) -> BackupSettings {
+    if let Some(db_state) = db {
+        if let Ok(guard) = db_state.inner.lock() {
+            if let Some(conn) = guard.conn.as_ref() {
+                if let Ok(Some(settings)) = load_backup_settings_db(conn) {
+                    return settings;
+                }
+
+                if let Some(file_settings) = load_backup_settings_file() {
+                    let _ = save_backup_settings_db(conn, &file_settings);
+                    let _ = backup_settings_file().and_then(|p| fs::remove_file(p).ok());
+                    return file_settings;
+                }
+            }
+        }
+    }
+
+    load_backup_settings_file().unwrap_or_default()
+}
+
+fn save_backup_settings(db: &DbState, settings: &BackupSettings) -> Result<(), String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    save_backup_settings_db(conn, settings)
 }
 
 fn default_backup_dir(db_path: &PathBuf) -> PathBuf {
@@ -244,17 +321,18 @@ pub fn pick_backup_file() -> Option<String> {
 }
 
 #[command]
-pub fn get_backup_settings() -> BackupSettings {
-    load_backup_settings()
+pub fn get_backup_settings(db: State<DbState>) -> BackupSettings {
+    load_backup_settings(Some(&db))
 }
 
 #[command]
 pub fn set_backup_settings(
     app: AppHandle,
     scheduler: State<BackupSchedulerState>,
+    db: State<DbState>,
     settings: BackupSettings,
 ) -> Result<BackupSettings, String> {
-    save_backup_settings(&settings)?;
+    save_backup_settings(&db, &settings)?;
     restart_backup_scheduler(app, scheduler, settings.clone());
     Ok(settings)
 }
@@ -298,14 +376,14 @@ fn create_backup_internal(
 
 #[command]
 pub fn create_backup(db: State<DbState>, dest_path: Option<String>) -> Result<String, String> {
-    let settings = load_backup_settings();
+    let settings = load_backup_settings(Some(&db));
     let dest = dest_path.map(PathBuf::from);
     create_backup_internal(&db, &settings, dest)
 }
 
 #[command]
 pub fn list_backups(db: State<DbState>, path: Option<String>) -> Result<Vec<BackupInfo>, String> {
-    let settings = load_backup_settings();
+    let settings = load_backup_settings(Some(&db));
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let db_path = guard
         .db_path
@@ -373,7 +451,8 @@ pub fn restart_backup_scheduler(
 }
 
 pub fn backup_on_close(app: &AppHandle) {
-    let settings = load_backup_settings();
+    let db_state = app.state::<DbState>();
+    let settings = load_backup_settings(Some(&db_state));
     if !settings.backup_on_close {
         return;
     }
@@ -599,6 +678,68 @@ mod tests {
         }
 
         let _ = fs::remove_file(&db_file);
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_backup_settings_db_roundtrip() {
+        let temp = create_temp_dir("backup_settings_db");
+        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+
+        let settings = BackupSettings {
+            enabled: true,
+            interval_minutes: 30,
+            retention_count: 7,
+            backup_path: Some("C:/backups".to_string()),
+            backup_on_close: false,
+        };
+
+        save_backup_settings_db(&conn, &settings).expect("save settings db");
+        let loaded = load_backup_settings_db(&conn)
+            .expect("load settings db")
+            .expect("settings row");
+
+        assert_eq!(loaded.enabled, settings.enabled);
+        assert_eq!(loaded.interval_minutes, settings.interval_minutes);
+        assert_eq!(loaded.retention_count, settings.retention_count);
+        assert_eq!(loaded.backup_path, settings.backup_path);
+        assert_eq!(loaded.backup_on_close, settings.backup_on_close);
+
+        drop(conn);
+        let _ = fs::remove_file(normalize_db_path(&db_path));
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_load_backup_settings_from_db_state() {
+        let temp = create_temp_dir("backup_settings_state");
+        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+
+        let settings = BackupSettings {
+            enabled: true,
+            interval_minutes: 15,
+            retention_count: 3,
+            backup_path: Some(temp.join("custom").to_string_lossy().to_string()),
+            backup_on_close: true,
+        };
+
+        save_backup_settings_db(&conn, &settings).expect("save settings db");
+
+        let db_state = DbState {
+            inner: Mutex::new(DbStateInner {
+                db_path: Some(db_path.clone()),
+                conn: Some(conn),
+            }),
+        };
+
+        let loaded = load_backup_settings(Some(&db_state));
+        assert_eq!(loaded.enabled, settings.enabled);
+        assert_eq!(loaded.interval_minutes, settings.interval_minutes);
+        assert_eq!(loaded.retention_count, settings.retention_count);
+        assert_eq!(loaded.backup_path, settings.backup_path);
+        assert_eq!(loaded.backup_on_close, settings.backup_on_close);
+
+        let _ = fs::remove_file(normalize_db_path(&temp));
         let _ = fs::remove_dir_all(&temp);
     }
 }

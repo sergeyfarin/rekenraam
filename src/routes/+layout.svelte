@@ -1,16 +1,7 @@
 <script lang="ts">
 //   import { page } from "$app/stores";
+  import "../app.css";
   import { page } from "$app/state";
-  import { Column,
-    Content,
-    Grid,
-    Header,
-    HeaderNav,
-    HeaderNavItem,
-    HeaderNavMenu,
-    Row,
-    SkipToContent, } from "carbon-components-svelte";
-  import "carbon-components-svelte/css/all.css";
 
   type Tab = { label: string; href: string };
 
@@ -25,20 +16,19 @@
     { label: "Settings", href: "/settings" },
     { label: "About", href: "/about" }
   ] satisfies Tab[];
+
+  $: currentPath = page.url.pathname;
 </script>
 
-<Header companyName="" platformName="Rekenraam 🪙">
-  <!-- <svelte:fragment slot="skipToContent">
-    <SkipToContent />
-  </svelte:fragment> -->
-  <HeaderNav>
-  <!-- <HeaderNavigation aria-label="Primary"> -->
-    {#each tabs as tab}
-      <HeaderNavItem href={tab.href} text={tab.label} />
-    {/each}
-  </HeaderNav>
-</Header>
+<header class="app-header">
+  <div class="container header-inner">
+    <div class="brand">Rekenraam 🪙</div>
+    <nav class="nav" aria-label="Primary">
+      {#each tabs as tab}
+        <a href={tab.href} class:active={currentPath === tab.href}>{tab.label}</a>
+      {/each}
+    </nav>
+  </div>
+</header>
 
-<div class="bx--content">
-  <slot />
-</div>
+<slot />

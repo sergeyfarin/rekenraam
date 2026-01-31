@@ -18,7 +18,7 @@
 <li class="tree-item">
   <div class="tree-row">
     <div class="tree-title">
-      <a class="bx--link" href={`/accounts/${node.id}`}>{node.name}</a>
+      <a class="link" href={`/accounts/${node.id}`}>{node.name}</a>
       <span class="tree-meta">
         {node.account_type}
         {#if node.institution_name}

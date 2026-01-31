@@ -297,72 +297,72 @@
   }
 </script>
 
-<main>
-  <div class="bx--grid">
-    <div class="bx--row">
-      <div class="bx--col-lg-8 bx--col-md-8 bx--col-sm-4">
-        <h1 class="bx--type-productive-heading-04">Settings</h1>
-        <p class="bx--type-body-long-02">Configure preferences and storage options.</p>
+<main class="page">
+  <div class="page-grid container">
+    <div class="page-row">
+      <div class="page-col">
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Configure preferences and storage options.</p>
       </div>
     </div>
 
-    <div class="bx--row">
-      <div class="bx--col-lg-12">
-        <div class="bx--tile">
-          <h2 class="bx--type-productive-heading-03">Storage</h2>
-          <p class="bx--type-body-short-01">Current database path</p>
-          <p class="bx--type-body-long-02 mono">{dbPath || "—"}</p>
+    <div class="page-row">
+      <div class="page-col">
+        <div class="card">
+          <h2 class="section-title">Storage</h2>
+          <p class="text-sm text-muted">Current database path</p>
+          <p class="mono">{dbPath || "—"}</p>
 
           <div class="actions">
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={openDatabaseFile} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={openDatabaseFile} disabled={busy}>
               Open database file…
             </button>
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={openDatabaseFolder} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={openDatabaseFolder} disabled={busy}>
               Open database folder…
             </button>
-            <button class="bx--btn bx--btn--primary" type="button" on:click={createNewDatabase} disabled={busy}>
+            <button class="btn btn-primary" type="button" on:click={createNewDatabase} disabled={busy}>
               Create new database…
             </button>
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={moveDatabase} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={moveDatabase} disabled={busy}>
               Move database…
             </button>
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={duplicateDatabase} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={duplicateDatabase} disabled={busy}>
               Save As / Duplicate…
             </button>
-            <button class="bx--btn bx--btn--danger" type="button" on:click={restoreFromBackup} disabled={busy}>
+            <button class="btn btn-danger" type="button" on:click={restoreFromBackup} disabled={busy}>
               Restore from backup…
             </button>
           </div>
 
           {#if status}
-            <p class="bx--type-body-short-01 success">{status}</p>
+            <p class="text-sm text-success">{status}</p>
           {/if}
           {#if error}
-            <p class="bx--type-body-short-01 error">{error}</p>
+            <p class="text-sm text-error">{error}</p>
           {/if}
         </div>
       </div>
     </div>
 
-    <div class="bx--row">
-      <div class="bx--col-lg-12">
-        <div class="bx--tile">
-          <h2 class="bx--type-productive-heading-03">Backups</h2>
+    <div class="page-row">
+      <div class="page-col">
+        <div class="card">
+          <h2 class="section-title">Backups</h2>
 
           <div class="backup-grid">
-            <label class="bx--label">
+            <label class="checkbox">
               <input type="checkbox" bind:checked={backupSettings.enabled} />
-              Enable scheduled backups
+              <span>Enable scheduled backups</span>
             </label>
 
-            <label class="bx--label">
+            <label class="checkbox">
               <input type="checkbox" bind:checked={backupSettings.backup_on_close} />
-              Backup on close
+              <span>Backup on close</span>
             </label>
 
-            <label class="bx--label">
+            <label class="label">
               Interval (minutes)
-              <select class="bx--select-input" bind:value={backupSettings.interval_minutes}>
+              <select class="select" bind:value={backupSettings.interval_minutes}>
                 <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={15}>15</option>
@@ -372,10 +372,10 @@
               </select>
             </label>
 
-            <label class="bx--label">
+            <label class="label">
               Retention count
               <input
-                class="bx--text-input"
+                class="input"
                 type="number"
                 min="0"
                 bind:value={backupSettings.retention_count}
@@ -383,31 +383,31 @@
             </label>
 
             <div class="backup-path">
-              <p class="bx--type-body-short-01">Backup folder</p>
-              <p class="bx--type-body-long-02 mono">{backupSettings.backup_path || "(Default: <db>/backups)"}</p>
-              <button class="bx--btn bx--btn--secondary" type="button" on:click={chooseBackupFolder} disabled={busy}>
+              <p class="text-sm text-muted">Backup folder</p>
+              <p class="mono">{backupSettings.backup_path || "(Default: <db>/backups)"}</p>
+              <button class="btn btn-secondary" type="button" on:click={chooseBackupFolder} disabled={busy}>
                 Choose backup folder…
               </button>
             </div>
           </div>
 
           <div class="actions">
-            <button class="bx--btn bx--btn--primary" type="button" on:click={saveBackupSettings} disabled={busy}>
+            <button class="btn btn-primary" type="button" on:click={saveBackupSettings} disabled={busy}>
               Save backup settings
             </button>
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={createBackupNow} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={createBackupNow} disabled={busy}>
               Create backup now
             </button>
-            <button class="bx--btn bx--btn--ghost" type="button" on:click={refreshBackups} disabled={busy}>
+            <button class="btn btn-ghost" type="button" on:click={refreshBackups} disabled={busy}>
               Refresh list
             </button>
           </div>
 
           {#if backupStatus}
-            <p class="bx--type-body-short-01 success">{backupStatus}</p>
+            <p class="text-sm text-success">{backupStatus}</p>
           {/if}
           {#if backupError}
-            <p class="bx--type-body-short-01 error">{backupError}</p>
+            <p class="text-sm text-error">{backupError}</p>
           {/if}
 
           <div class="backup-list">
@@ -417,7 +417,7 @@
               <span>Modified</span>
             </div>
             {#if backups.length === 0}
-              <p class="bx--type-body-short-01">No backups yet.</p>
+              <p class="text-sm text-muted">No backups yet.</p>
             {:else}
               {#each backups as backup}
                 <div class="backup-list__row">
@@ -432,63 +432,63 @@
       </div>
     </div>
 
-    <div class="bx--row">
-      <div class="bx--col-lg-12">
-        <div class="bx--tile">
-          <h2 class="bx--type-productive-heading-03">Maintenance &amp; Health</h2>
+    <div class="page-row">
+      <div class="page-col">
+        <div class="card">
+          <h2 class="section-title">Maintenance &amp; Health</h2>
 
           {#if dbStats && !dbStats.writable}
-            <p class="bx--type-body-short-01 warning">
+            <p class="text-sm text-warning">
               Database is read-only. Write operations and migrations are disabled.
             </p>
           {/if}
 
           <div class="health-grid">
             <div>
-              <p class="bx--type-body-short-01">Schema version</p>
-              <p class="bx--type-body-long-02">
+              <p class="text-sm text-muted">Schema version</p>
+              <p>
                 {migrationStatus ? `${migrationStatus.current_version} / ${migrationStatus.latest_version}` : "—"}
               </p>
               {#if migrationStatus && migrationStatus.pending_versions.length > 0}
-                <p class="bx--type-body-short-01 warning">
+                <p class="text-sm text-warning">
                   Pending migrations: {migrationStatus.pending_versions.join(", ")}
                 </p>
               {/if}
             </div>
             <div>
-              <p class="bx--type-body-short-01">DB size</p>
-              <p class="bx--type-body-long-02">{dbStats ? formatBytes(dbStats.size_bytes) : "—"}</p>
+              <p class="text-sm text-muted">DB size</p>
+              <p>{dbStats ? formatBytes(dbStats.size_bytes) : "—"}</p>
             </div>
             <div>
-              <p class="bx--type-body-short-01">Last modified</p>
-              <p class="bx--type-body-long-02">{dbStats ? formatDate(dbStats.modified_unix) : "—"}</p>
+              <p class="text-sm text-muted">Last modified</p>
+              <p>{dbStats ? formatDate(dbStats.modified_unix) : "—"}</p>
             </div>
             <div>
-              <p class="bx--type-body-short-01">Journal mode</p>
-              <p class="bx--type-body-long-02">{dbStats?.journal_mode || "—"}</p>
+              <p class="text-sm text-muted">Journal mode</p>
+              <p>{dbStats?.journal_mode || "—"}</p>
             </div>
           </div>
 
           <div class="actions">
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={refreshMaintenance} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={refreshMaintenance} disabled={busy}>
               Refresh status
             </button>
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={runIntegrityCheck} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={runIntegrityCheck} disabled={busy}>
               Run integrity check
             </button>
-            <button class="bx--btn bx--btn--secondary" type="button" on:click={runVacuum} disabled={busy}>
+            <button class="btn btn-secondary" type="button" on:click={runVacuum} disabled={busy}>
               Vacuum / Optimize
             </button>
           </div>
 
           {#if integrityStatus}
-            <p class="bx--type-body-short-01">Integrity status: {integrityStatus}</p>
+            <p class="text-sm text-muted">Integrity status: {integrityStatus}</p>
           {/if}
           {#if maintenanceStatus}
-            <p class="bx--type-body-short-01 success">{maintenanceStatus}</p>
+            <p class="text-sm text-success">{maintenanceStatus}</p>
           {/if}
           {#if maintenanceError}
-            <p class="bx--type-body-short-01 error">{maintenanceError}</p>
+            <p class="text-sm text-error">{maintenanceError}</p>
           {/if}
         </div>
       </div>
@@ -505,20 +505,8 @@
   }
 
   .mono {
-    font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     font-size: 0.875rem;
-  }
-
-  .error {
-    color: #da1e28;
-  }
-
-  .success {
-    color: #24a148;
-  }
-
-  .warning {
-    color: #f1c21b;
   }
 
   .health-grid {

@@ -2280,7 +2280,7 @@ mod tests {
             .expect("account exists");
         assert_eq!(fetched.name, "Test Cash");
         assert_eq!(fetched.institution_name.as_deref(), Some("Test Bank"));
-        assert_eq!(fetched.country_name.as_deref(), Some("United States"));
+        assert_eq!(fetched.country_name.as_deref(), Some("United States of America"));
 
         let updated = update_account(
             as_state(&db_state),
