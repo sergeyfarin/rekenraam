@@ -203,6 +203,7 @@
   let currencyError = "";
   let currencyStatus = "";
   let showCurrencyDialog = false;
+  let editingCurrency: Currency | null = null;
   let newCurrency = { symbol: "", display_symbol: "", name: "", scale: 2 };
 
   let fxRatesDaily: FxRateDaily[] = [];
@@ -824,12 +825,25 @@
   }
 
   function openNewCurrency() {
+    editingCurrency = null;
     newCurrency = { symbol: "", display_symbol: "", name: "", scale: 2 };
+    showCurrencyDialog = true;
+  }
+
+  function openEditCurrency(currency: Currency) {
+    editingCurrency = currency;
+    newCurrency = {
+      symbol: currency.symbol || "",
+      display_symbol: currency.display_symbol || "",
+      name: currency.name,
+      scale: currency.scale,
+    };
     showCurrencyDialog = true;
   }
 
   function closeCurrencyDialog() {
     showCurrencyDialog = false;
+    editingCurrency = null;
   }
 
   async function saveCurrency() {
@@ -837,21 +851,34 @@
     currencyStatus = "";
     busy = true;
     try {
-      await invoke("create_currency", {
-        input: {
-          book_id: 1,
-          symbol: newCurrency.symbol,
-          display_symbol: newCurrency.display_symbol || null,
-          name: newCurrency.name,
-          scale: newCurrency.scale,
-          is_active: true,
-        },
-      });
-      currencyStatus = "Currency created.";
+      if (editingCurrency) {
+        await invoke("update_currency", {
+          input: {
+            id: editingCurrency.id,
+            symbol: newCurrency.symbol,
+            display_symbol: newCurrency.display_symbol || null,
+            name: newCurrency.name,
+            scale: newCurrency.scale,
+          },
+        });
+        currencyStatus = "Currency updated.";
+      } else {
+        await invoke("create_currency", {
+          input: {
+            book_id: 1,
+            symbol: newCurrency.symbol,
+            display_symbol: newCurrency.display_symbol || null,
+            name: newCurrency.name,
+            scale: newCurrency.scale,
+            is_active: true,
+          },
+        });
+        currencyStatus = "Currency created.";
+      }
       closeCurrencyDialog();
       await loadCurrencies();
     } catch (e) {
-      currencyError = `Failed to create currency: ${String(e)}`;
+      currencyError = `Failed to ${editingCurrency ? 'update' : 'create'} currency: ${String(e)}`;
     } finally {
       busy = false;
     }
@@ -1532,6 +1559,7 @@
                     {/if}
                   </Table.Cell>
                   <Table.Cell class="text-right">
+                    <Button variant="ghost" size="sm" onclick={() => openEditCurrency(c)}>Edit</Button>
                     {#if !c.is_default}
                       <Button variant="ghost" size="sm" onclick={() => setDefaultCurrency(c)}>Set Default</Button>
                       <Button variant="ghost" size="sm" onclick={() => toggleCurrencyActive(c)}>
@@ -1968,11 +1996,11 @@
   </Dialog.Content>
 </Dialog.Root>
 
-<!-- New Currency Dialog -->
+<!-- Currency Dialog -->
 <Dialog.Root bind:open={showCurrencyDialog}>
   <Dialog.Content>
     <Dialog.Header>
-      <Dialog.Title>Add Currency</Dialog.Title>
+      <Dialog.Title>{editingCurrency ? "Edit Currency" : "Add Currency"}</Dialog.Title>
     </Dialog.Header>
     <div class="grid gap-4 py-4">
       <div class="grid grid-cols-2 gap-4">
@@ -2003,7 +2031,7 @@
     <Dialog.Footer>
       <Button variant="secondary" onclick={closeCurrencyDialog}>Cancel</Button>
       <Button onclick={saveCurrency} disabled={busy || !newCurrency.symbol || !newCurrency.name}>
-        Create
+        {editingCurrency ? "Update" : "Create"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
