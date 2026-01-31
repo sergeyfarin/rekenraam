@@ -14,6 +14,7 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 - V9: `V9__reporting.sql` (report definitions + report runs cache)
 - V10: `V10__institutions_countries.sql` (countries + institutions + account links)
 - V11: `V11__currencies_seed.sql` (currencies table + country default currencies + seed data)
+- V12: `V12__backup_settings.sql` (backup settings stored per book)
 
 ### Core Entities
 **books**
@@ -81,6 +82,9 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **documents**
 - Document references attached to accounts or transactions.
+
+**backup_settings**
+- Backup schedule and retention configuration per book.
 
 **balance_constraints**
 - Per-account balance rules (min/max, sign enforcement).

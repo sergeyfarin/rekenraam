@@ -1,9 +1,9 @@
-<main>
-  <div class="bx--grid">
-    <div class="bx--row">
-      <div class="bx--col-lg-8 bx--col-md-8 bx--col-sm-4">
-        <h1 class="bx--type-productive-heading-04">Planning</h1>
-        <p class="bx--type-body-long-02">Plan budgets and forecasts.</p>
+<main class="page">
+  <div class="page-grid container">
+    <div class="page-row">
+      <div class="page-col">
+        <h1 class="page-title">Planning</h1>
+        <p class="page-subtitle">Plan budgets and forecasts.</p>
       </div>
     </div>
   </div>

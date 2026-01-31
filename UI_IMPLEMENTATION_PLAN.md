@@ -3,6 +3,7 @@
 This plan outlines UI work needed to surface the backend capabilities that have been implemented so far.
 
 ---
+0) Adopt ShadCDN UI framework
 
 ## 1) Navigation & Core Screens
 - **Accounts**
@@ -85,5 +86,5 @@ This plan outlines UI work needed to surface the backend capabilities that have 
 # UI/UX Notes
 - Use existing Svelte routing structure under src/routes.
 - Add a shared `services/api.ts` wrapper for Tauri invoke calls if not present.
-- Reuse Carbon components for consistency with current UI.
+- Reuse ShadCDN components for consistency with current UI.
 - Keep single-book mode assumptions in the UI (no book picker).

@@ -189,7 +189,8 @@ fn parse_param_schema(schema: Option<&str>) -> Result<Option<ParamSchemaSpec>, S
     let Some(schema_str) = schema else {
         return Ok(None);
     };
-    let value: JsonValue = serde_json::from_str(schema_str).map_err(|e| e.to_string())?;
+    let value: JsonValue = serde_json::from_str(schema_str)
+        .map_err(|e| format!("invalid params_schema json: {e}"))?;
     let obj = value.as_object().ok_or_else(|| "params_schema must be a JSON object".to_string())?;
 
     let required = obj
@@ -398,7 +399,7 @@ fn build_param_values(params: &JsonValue, order: &[String]) -> Result<Vec<Value>
 
 fn is_select_query(sql: &str) -> bool {
     let trimmed = sql.trim_start().to_lowercase();
-    trimmed.starts_with("select")
+    trimmed.starts_with("select") || trimmed.starts_with("with")
 }
 
 fn apply_row_limit(sql: &str, limit: usize) -> String {

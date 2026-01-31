@@ -534,7 +534,7 @@ pub struct TaxSummaryReport { tax_year: i32, country: Country }
 
 ## UI Component Library
 
-Using **Carbon Design System** (IBM) via `carbon-components-svelte`:
+Using **ShadCDN** (ShadCN-inspired Svelte components) for the UI system:
 
 ### Key Components to Build
 - `SplitEditor` — Multi-line transaction entry

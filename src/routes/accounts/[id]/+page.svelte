@@ -138,26 +138,26 @@
   }
 </script>
 
-<main>
-  <div class="bx--grid">
+<main class="page">
+  <div class="page-grid container">
     {#if loading}
-      <div class="bx--row">
-        <div class="bx--col-lg-12">
-          <p class="bx--type-body-short-01">Loading account…</p>
+      <div class="page-row">
+        <div class="page-col">
+          <p class="text-sm text-muted">Loading account…</p>
         </div>
       </div>
     {:else if error}
-      <div class="bx--row">
-        <div class="bx--col-lg-12">
-          <p class="bx--type-body-short-01 error">{error}</p>
+      <div class="page-row">
+        <div class="page-col">
+          <p class="text-sm text-error">{error}</p>
         </div>
       </div>
     {:else if account}
-      <div class="bx--row">
-        <div class="bx--col-lg-12">
-          <div class="bx--tile account-summary">
-            <h1 class="bx--type-productive-heading-04">{account.name}</h1>
-            <p class="bx--type-body-long-02">
+      <div class="page-row">
+        <div class="page-col">
+          <div class="card account-summary">
+            <h1 class="page-title">{account.name}</h1>
+            <p class="page-subtitle">
               {account.account_type}
               {#if account.institution_name}
                 · {account.institution_name}
@@ -183,77 +183,71 @@
             </div>
             {#if account?.account_type === "investment"}
               <div class="booking-policy">
-                <label class="bx--label" for="booking-policy">Booking policy</label>
-                <div class="bx--select">
-                  <select
-                    id="booking-policy"
-                    class="bx--select-input"
-                    bind:value={bookingPolicy}
-                    on:change={saveBookingPolicy}
-                    disabled={savingPolicy}
-                  >
-                    <option value="fifo">FIFO</option>
-                    <option value="lifo">LIFO</option>
-                    <option value="average">Average</option>
-                    <option value="strict">Strict</option>
-                  </select>
-                </div>
+                <label class="label" for="booking-policy">Booking policy</label>
+                <select
+                  id="booking-policy"
+                  class="select"
+                  bind:value={bookingPolicy}
+                  on:change={saveBookingPolicy}
+                  disabled={savingPolicy}
+                >
+                  <option value="fifo">FIFO</option>
+                  <option value="lifo">LIFO</option>
+                  <option value="average">Average</option>
+                  <option value="strict">Strict</option>
+                </select>
               </div>
             {/if}
           </div>
         </div>
       </div>
 
-      <div class="bx--row">
-        <div class="bx--col-lg-12">
-          <div class="bx--tile">
-            <h2 class="bx--type-productive-heading-03">Transactions</h2>
-            <div class="bx--structured-list">
-              <div class="bx--structured-list-thead">
-                <div class="bx--structured-list-row bx--structured-list-row--header-row">
-                  <div class="bx--structured-list-cell heading">Date</div>
-                  <div class="bx--structured-list-cell heading">Payee</div>
-                  <div class="bx--structured-list-cell heading">Memo</div>
-                  <div class="bx--structured-list-cell heading">Category</div>
-                  <div class="bx--structured-list-cell heading amount">Amount</div>
-                  <div class="bx--structured-list-cell heading amount">Balance</div>
+      <div class="page-row">
+        <div class="page-col">
+          <div class="card">
+            <h2 class="section-title">Transactions</h2>
+            <div class="data-table transaction-table">
+              <div class="data-row header">
+                <div class="data-cell heading">Date</div>
+                <div class="data-cell heading">Payee</div>
+                <div class="data-cell heading">Memo</div>
+                <div class="data-cell heading">Category</div>
+                <div class="data-cell heading amount">Amount</div>
+                <div class="data-cell heading amount">Balance</div>
+              </div>
+              {#if entries.length === 0}
+                <div class="data-row">
+                  <div class="data-cell">No transactions yet.</div>
+                  <div class="data-cell"></div>
+                  <div class="data-cell"></div>
+                  <div class="data-cell"></div>
+                  <div class="data-cell"></div>
+                  <div class="data-cell"></div>
                 </div>
-              </div>
-              <div class="bx--structured-list-tbody">
-                {#if entries.length === 0}
-                  <div class="bx--structured-list-row">
-                    <div class="bx--structured-list-cell">No transactions yet.</div>
-                    <div class="bx--structured-list-cell"></div>
-                    <div class="bx--structured-list-cell"></div>
-                    <div class="bx--structured-list-cell"></div>
-                    <div class="bx--structured-list-cell"></div>
-                    <div class="bx--structured-list-cell"></div>
-                  </div>
-                {:else}
-                  {#each entries as entry}
-                    <div class="bx--structured-list-row">
-                      <div class="bx--structured-list-cell">
-                        {entry.txn_date}
-                      </div>
-                      <div class="bx--structured-list-cell">
-                        {entry.payee_name ?? "—"}
-                      </div>
-                      <div class="bx--structured-list-cell">
-                        {entry.memo ?? "—"}
-                      </div>
-                      <div class="bx--structured-list-cell">
-                        {entry.category_name ?? "—"}
-                      </div>
-                      <div class="bx--structured-list-cell amount">
-                        {formatMinor(entry.amount_minor)}
-                      </div>
-                      <div class="bx--structured-list-cell amount">
-                        {formatMinor(entry.running_balance_minor)}
-                      </div>
+              {:else}
+                {#each entries as entry}
+                  <div class="data-row">
+                    <div class="data-cell">
+                      {entry.txn_date}
                     </div>
-                  {/each}
-                {/if}
-              </div>
+                    <div class="data-cell">
+                      {entry.payee_name ?? "—"}
+                    </div>
+                    <div class="data-cell">
+                      {entry.memo ?? "—"}
+                    </div>
+                    <div class="data-cell">
+                      {entry.category_name ?? "—"}
+                    </div>
+                    <div class="data-cell amount">
+                      {formatMinor(entry.amount_minor)}
+                    </div>
+                    <div class="data-cell amount">
+                      {formatMinor(entry.running_balance_minor)}
+                    </div>
+                  </div>
+                {/each}
+              {/if}
             </div>
           </div>
         </div>
@@ -273,7 +267,7 @@
     flex-wrap: wrap;
     gap: 1rem;
     font-size: 0.875rem;
-    color: #525252;
+    color: #64748b;
   }
 
   .booking-policy {
@@ -289,7 +283,7 @@
     text-align: right;
   }
 
-  .error {
-    color: #da1e28;
+  .transaction-table .data-row {
+    grid-template-columns: 1fr 1.4fr 2fr 1.4fr 1fr 1fr;
   }
 </style>
