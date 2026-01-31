@@ -2,6 +2,13 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { invoke } from "@tauri-apps/api/core";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import * as Table from "$lib/components/ui/table";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import { Badge } from "$lib/components/ui/badge";
 
   type Account = {
     id: number;
@@ -782,7 +789,7 @@
                   id="booking-policy"
                   class="select"
                   bind:value={bookingPolicy}
-                  on:change={saveBookingPolicy}
+                  onchange={saveBookingPolicy}
                   disabled={savingPolicy}
                 >
                   <option value="fifo">FIFO</option>
@@ -804,7 +811,7 @@
                 <h2 class="section-title">Transactions</h2>
               </div>
               <div class="page-col page-col-actions">
-                <button class="btn btn-primary" type="button" on:click={openCreateDialog}>New transaction</button>
+                <Button onclick={openCreateDialog}>New transaction</Button>
               </div>
             </div>
 
@@ -842,32 +849,32 @@
                 </div>
               </div>
               <div class="page-col page-col-actions">
-                <button class="btn btn-secondary" type="button" on:click={loadTransactions}>Apply filters</button>
+                <Button variant="secondary" onclick={loadTransactions}>Apply filters</Button>
               </div>
             </div>
 
             <div class="data-table striped compact transaction-table" bind:this={tableRef}>
               <div class="data-row header" style={`grid-template-columns: ${txGridTemplate}`}>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => setSort("date")}>
+                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("date")}>
                   Date
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 0)}></span>
+                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 0)}></span>
                 </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => setSort("payee")}>
+                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("payee")}>
                   Payee
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 1)}></span>
+                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 1)}></span>
                 </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => setSort("memo")}>
+                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("memo")}>
                   Memo
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 2)}></span>
+                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 2)}></span>
                 </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => setSort("status")}>
+                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("status")}>
                   Status
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 3)}></span>
+                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 3)}></span>
                 </button>
                 <div class="data-cell heading">Category</div>
-                <button class="data-cell heading amount sort-button col-header" type="button" on:click={() => setSort("amount")}>
+                <button class="data-cell heading amount sort-button col-header" type="button" onclick={() => setSort("amount")}>
                   Amount
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 5)}></span>
+                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 5)}></span>
                 </button>
                 <div class="data-cell heading action">Actions</div>
               </div>
@@ -894,14 +901,14 @@
                       <div class="data-cell">{categoryName(accountSplit(tx).category_id)}</div>
                       <div class="data-cell amount">{formatMinor(accountSplit(tx).amount_minor, accountSplit(tx).commodity_id)}</div>
                       <div class="data-cell action">
-                        <button class="btn btn-ghost btn-sm" type="button" on:click={() => openEditDialog(tx)}>Edit</button>
+                        <Button variant="ghost" size="sm" onclick={() => openEditDialog(tx)}>Edit</Button>
                         {#if tx.transaction.status === "cleared"}
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => updateStatus(tx, "uncleared")}>Unflag</button>
+                          <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "uncleared")}>Unflag</Button>
                         {:else}
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => updateStatus(tx, "cleared")}>Flag</button>
+                          <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "cleared")}>Flag</Button>
                         {/if}
-                        <button class="btn btn-ghost btn-sm" type="button" on:click={() => updateStatus(tx, "void")}>Void</button>
-                        <button class="btn btn-ghost btn-sm" type="button" on:click={() => removeTransaction(tx)}>Delete</button>
+                        <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "void")}>Void</Button>
+                        <Button variant="ghost" size="sm" onclick={() => removeTransaction(tx)}>Delete</Button>
                       </div>
                     </div>
                   {/key}
@@ -915,9 +922,9 @@
   </div>
 
   {#if dialogOpen}
-    <button class="dialog-backdrop" type="button" aria-label="Close dialog" on:click={closeDialog}></button>
+    <button class="dialog-backdrop" type="button" aria-label="Close dialog" onclick={closeDialog}></button>
     <div class="dialog" role="dialog" aria-modal="true" aria-label="Transaction dialog">
-      <form on:submit|preventDefault={submitTransaction}>
+      <form onsubmit={(e) => { e.preventDefault(); submitTransaction(); }}>
         <header class="dialog-header">
           <h2 class="section-title">
             {dialogMode === "create" ? "New transaction" : "Edit transaction"}
@@ -1003,7 +1010,7 @@
             </select>
           </div>
           <div class="form-field">
-            <button class="btn btn-secondary" type="button" on:click={openSplitEditor}>Split transaction…</button>
+            <Button variant="secondary" onclick={openSplitEditor}>Split transaction…</Button>
             {#if splitMode}
               <p class="text-sm text-muted">Split mode enabled.</p>
             {/if}
@@ -1011,17 +1018,17 @@
         </div>
 
         <footer class="dialog-footer">
-          <button class="btn btn-secondary" type="button" on:click={closeDialog}>Cancel</button>
-          <button class="btn btn-primary" type="submit" disabled={submitting}>
+          <Button variant="secondary" onclick={closeDialog}>Cancel</Button>
+          <Button type="submit" disabled={submitting}>
             {submitting ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </footer>
       </form>
     </div>
   {/if}
 
   {#if dialogOpen && splitEditorOpen}
-    <button class="dialog-backdrop" type="button" aria-label="Close split editor" on:click={closeSplitEditor}></button>
+    <button class="dialog-backdrop" type="button" aria-label="Close split editor" onclick={closeSplitEditor}></button>
     <div class="dialog" role="dialog" aria-modal="true" aria-label="Split editor">
       <div class="dialog-header">
         <h2 class="section-title">Split transaction</h2>
@@ -1062,21 +1069,21 @@
                   <input class="input" bind:value={split.memo} placeholder="Split memo" />
                 </div>
                 <div class="data-cell action">
-                  <button class="btn btn-ghost btn-sm" type="button" on:click={() => removeSplitRow(idx)}>
+                  <Button variant="ghost" size="sm" onclick={() => removeSplitRow(idx)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               </div>
             {/each}
           </div>
-          <button class="btn btn-ghost btn-sm" type="button" on:click={addSplitRow}>Add split</button>
+          <Button variant="ghost" size="sm" onclick={addSplitRow}>Add split</Button>
           {#if splitsTotalMinor() !== null}
             <p class="text-sm text-muted">Split total: {splitsTotalMinor()}</p>
           {/if}
         </fieldset>
       </div>
       <div class="dialog-footer">
-        <button class="btn btn-secondary" type="button" on:click={closeSplitEditor}>Done</button>
+        <Button variant="secondary" onclick={closeSplitEditor}>Done</Button>
       </div>
     </div>
   {/if}

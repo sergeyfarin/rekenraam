@@ -1,6 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import * as Tabs from "$lib/components/ui/tabs";
+  import * as Table from "$lib/components/ui/table";
+  import * as Alert from "$lib/components/ui/alert";
+  import { Badge } from "$lib/components/ui/badge";
 
   // Tab state
   let activeTab: "holdings" | "transactions" | "lots" = "holdings";
@@ -144,8 +153,7 @@
       // Convert positions to base currency if quote commodity is selected
       if (quoteCommodityId) {
         convertedPositions = await invoke<ConvertedPosition[]>("convert_positions", {
-          bookId: 1,
-          quoteCommodityId: quoteCommodityId,
+          baseCommodityId: quoteCommodityId,
           asOfDate: asOfDate || null,
         });
 
@@ -353,479 +361,302 @@
   $: currencies = commodities.filter((c) => c.kind === "currency");
 </script>
 
-<main class="page">
-  <div class="page-grid container">
-    <div class="page-row">
-      <div class="page-col">
-        <h1 class="page-title">Investments</h1>
-        <p class="page-subtitle">Track holdings and portfolio performance.</p>
-      </div>
+<main class="py-6">
+  <div class="container mx-auto px-6 space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Investments</h1>
+      <p class="text-muted-foreground">Track holdings and portfolio performance.</p>
     </div>
 
     <!-- Actions & Filters -->
-    <div class="page-row">
-      <div class="page-col">
-        <div class="actions-bar">
-          <div class="actions-group">
-            <button class="btn btn-primary" on:click={openBuyDialog} disabled={busy}>Buy</button>
-            <button class="btn btn-secondary" on:click={openSellDialog} disabled={busy}>Sell</button>
-            <button class="btn btn-secondary" on:click={openDividendDialog} disabled={busy}>Dividend</button>
+    <Card.Root>
+      <Card.Content class="pt-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex gap-2">
+            <Button onclick={openBuyDialog} disabled={busy}>Buy</Button>
+            <Button variant="secondary" onclick={openSellDialog} disabled={busy}>Sell</Button>
+            <Button variant="secondary" onclick={openDividendDialog} disabled={busy}>Dividend</Button>
           </div>
-          <div class="filters-group">
-            <label class="label-inline">
-              <span>As of:</span>
-              <input type="date" class="input input-sm" bind:value={asOfDate} />
-            </label>
-            <label class="label-inline">
-              <span>Quote:</span>
-              <select class="select select-sm" bind:value={quoteCommodityId}>
+          <div class="flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2">
+              <Label for="as-of-date">As of:</Label>
+              <Input id="as-of-date" type="date" bind:value={asOfDate} class="w-40" />
+            </div>
+            <div class="flex items-center gap-2">
+              <Label for="quote-currency">Quote:</Label>
+              <select id="quote-currency" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={quoteCommodityId}>
                 {#each currencies as c}
                   <option value={c.id}>{c.symbol || c.name}</option>
                 {/each}
               </select>
-            </label>
-            <button class="btn btn-ghost btn-sm" on:click={loadPositions} disabled={busy}>
+            </div>
+            <Button variant="outline" onclick={loadPositions} disabled={busy}>
               {busy ? "Loading..." : "Refresh"}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </Card.Content>
+    </Card.Root>
 
     {#if error}
-      <div class="page-row">
-        <div class="page-col">
-          <p class="text-error">{error}</p>
-        </div>
-      </div>
+      <Alert.Root variant="destructive">
+        <Alert.Title>Error</Alert.Title>
+        <Alert.Description>{error}</Alert.Description>
+      </Alert.Root>
     {/if}
 
     {#if status}
-      <div class="page-row">
-        <div class="page-col">
-          <p class="text-success">{status}</p>
-        </div>
-      </div>
+      <Alert.Root>
+        <Alert.Title>Success</Alert.Title>
+        <Alert.Description>{status}</Alert.Description>
+      </Alert.Root>
     {/if}
 
     <!-- Summary Cards -->
-    <div class="page-row">
-      <div class="page-col">
-        <div class="summary-cards">
-          <div class="summary-card">
-            <span class="summary-label">Total Value</span>
-            <span class="summary-value">{formatCurrency(totalValue)}</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-label">Total Cost Basis</span>
-            <span class="summary-value">{formatCurrency(totalCostBasis)}</span>
-          </div>
-          <div class="summary-card" class:summary-card--positive={totalGainLoss >= 0} class:summary-card--negative={totalGainLoss < 0}>
-            <span class="summary-label">Unrealized Gain/Loss</span>
-            <span class="summary-value">{formatCurrency(totalGainLoss)}</span>
-          </div>
-        </div>
-      </div>
+    <div class="grid gap-4 md:grid-cols-3">
+      <Card.Root>
+        <Card.Header class="pb-2">
+          <Card.Description>Total Value</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <div class="text-2xl font-bold">{formatCurrency(totalValue)}</div>
+        </Card.Content>
+      </Card.Root>
+      <Card.Root>
+        <Card.Header class="pb-2">
+          <Card.Description>Total Cost Basis</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <div class="text-2xl font-bold">{formatCurrency(totalCostBasis)}</div>
+        </Card.Content>
+      </Card.Root>
+      <Card.Root class={totalGainLoss >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+        <Card.Header class="pb-2">
+          <Card.Description>Unrealized Gain/Loss</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <div class="text-2xl font-bold">{formatCurrency(totalGainLoss)}</div>
+        </Card.Content>
+      </Card.Root>
     </div>
 
     <!-- Tabs -->
-    <div class="page-row">
-      <div class="page-col">
-        <div class="tabs">
-          <button class="tab" class:active={activeTab === "holdings"} on:click={() => handleTabChange("holdings")}>
-            Holdings
-          </button>
-          <button class="tab" class:active={activeTab === "lots"} on:click={() => handleTabChange("lots")}>
-            Tax Lots
-          </button>
-        </div>
-      </div>
-    </div>
+    <Tabs.Root value={activeTab} onValueChange={(v) => handleTabChange(v as typeof activeTab)}>
+      <Tabs.List>
+        <Tabs.Trigger value="holdings">Holdings</Tabs.Trigger>
+        <Tabs.Trigger value="lots">Tax Lots</Tabs.Trigger>
+      </Tabs.List>
 
-    <!-- Holdings Tab -->
-    {#if activeTab === "holdings"}
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
+      <Tabs.Content value="holdings">
+        <Card.Root>
+          <Card.Content class="pt-6">
             {#if convertedPositions.length === 0 && positions.length === 0}
-              <p class="text-muted">No holdings found. Use Buy to add securities.</p>
+              <p class="text-muted-foreground">No holdings found. Use Buy to add securities.</p>
             {:else}
-              <div class="holdings-table">
-                <div class="holdings-table__header">
-                  <span>Account</span>
-                  <span>Security</span>
-                  <span class="text-right">Quantity</span>
-                  <span class="text-right">Value</span>
-                  <span class="text-right">Cost Basis</span>
-                  <span class="text-right">Gain/Loss</span>
-                </div>
-                {#each convertedPositions.length > 0 ? convertedPositions : positions as pos}
-                  {@const costBasis = pos.lots.reduce((sum, lot) => sum + (lot.converted_cost_basis_minor || lot.remaining_cost_basis_minor), 0)}
-                  {@const value = 'value_minor' in pos ? pos.value_minor : 0}
-                  {@const gainLoss = value - costBasis}
-                  <div class="holdings-table__row">
-                    <span>{pos.account_name}</span>
-                    <span>{pos.commodity_name}</span>
-                    <span class="text-right">{formatQuantity(pos.balance_minor, pos.commodity_scale)}</span>
-                    <span class="text-right">
-                      {formatCurrency(value)}
-                      {#if 'price_missing' in pos && pos.price_missing}
-                        <span class="text-warning" title="Price missing">⚠</span>
-                      {/if}
-                    </span>
-                    <span class="text-right">{formatCurrency(costBasis)}</span>
-                    <span class="text-right" class:text-income={gainLoss >= 0} class:text-expense={gainLoss < 0}>
-                      {formatCurrency(gainLoss)}
-                    </span>
-                  </div>
-                {/each}
-              </div>
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head>Account</Table.Head>
+                    <Table.Head>Security</Table.Head>
+                    <Table.Head class="text-right">Quantity</Table.Head>
+                    <Table.Head class="text-right">Value</Table.Head>
+                    <Table.Head class="text-right">Cost Basis</Table.Head>
+                    <Table.Head class="text-right">Gain/Loss</Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {#each convertedPositions.length > 0 ? convertedPositions : positions as pos}
+                    {@const costBasis = pos.lots.reduce((sum, lot) => sum + (lot.converted_cost_basis_minor || lot.remaining_cost_basis_minor), 0)}
+                    {@const value = 'value_minor' in pos ? (pos.value_minor as number) : 0}
+                    {@const gainLoss = value - costBasis}
+                    <Table.Row>
+                      <Table.Cell>{pos.account_name}</Table.Cell>
+                      <Table.Cell>{pos.commodity_name}</Table.Cell>
+                      <Table.Cell class="text-right">{formatQuantity(pos.balance_minor, pos.commodity_scale)}</Table.Cell>
+                      <Table.Cell class="text-right">
+                        {formatCurrency(value)}
+                        {#if 'price_missing' in pos && pos.price_missing}
+                          <span class="text-yellow-600" title="Price missing">⚠</span>
+                        {/if}
+                      </Table.Cell>
+                      <Table.Cell class="text-right">{formatCurrency(costBasis)}</Table.Cell>
+                      <Table.Cell class="text-right {gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}">
+                        {formatCurrency(gainLoss)}
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                </Table.Body>
+              </Table.Root>
             {/if}
-          </div>
-        </div>
-      </div>
-    {/if}
+          </Card.Content>
+        </Card.Root>
+      </Tabs.Content>
 
-    <!-- Lots Tab -->
-    {#if activeTab === "lots"}
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
+      <Tabs.Content value="lots">
+        <Card.Root>
+          <Card.Content class="pt-6">
             {#if lotsWithHolding.length === 0}
-              <p class="text-muted">No tax lots found.</p>
+              <p class="text-muted-foreground">No tax lots found.</p>
             {:else}
-              <div class="lots-table">
-                <div class="lots-table__header">
-                  <span>Account</span>
-                  <span>Security</span>
-                  <span>Opened</span>
-                  <span class="text-right">Quantity</span>
-                  <span class="text-right">Cost Basis</span>
-                  <span class="text-right">Days Held</span>
-                  <span>Term</span>
-                </div>
-                {#each lotsWithHolding as lot}
-                  <div class="lots-table__row">
-                    <span>{lot.account_name}</span>
-                    <span>{lot.commodity_name}</span>
-                    <span>{formatDate(lot.opened_date)}</span>
-                    <span class="text-right">{formatQuantity(lot.quantity_minor, lot.commodity_scale)}</span>
-                    <span class="text-right">{formatCurrency(lot.cost_basis_minor)}</span>
-                    <span class="text-right">{lot.holding_days ?? "—"}</span>
-                    <span>
-                      <span class="badge" class:badge-long={lot.is_long_term} class:badge-short={!lot.is_long_term}>
-                        {lot.is_long_term ? "Long" : "Short"}
-                      </span>
-                    </span>
-                  </div>
-                {/each}
-              </div>
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head>Account</Table.Head>
+                    <Table.Head>Security</Table.Head>
+                    <Table.Head>Opened</Table.Head>
+                    <Table.Head class="text-right">Quantity</Table.Head>
+                    <Table.Head class="text-right">Cost Basis</Table.Head>
+                    <Table.Head class="text-right">Days Held</Table.Head>
+                    <Table.Head>Term</Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {#each lotsWithHolding as lot}
+                    <Table.Row>
+                      <Table.Cell>{lot.account_name}</Table.Cell>
+                      <Table.Cell>{lot.commodity_name}</Table.Cell>
+                      <Table.Cell>{formatDate(lot.opened_date)}</Table.Cell>
+                      <Table.Cell class="text-right">{formatQuantity(lot.quantity_minor, lot.commodity_scale)}</Table.Cell>
+                      <Table.Cell class="text-right">{formatCurrency(lot.cost_basis_minor)}</Table.Cell>
+                      <Table.Cell class="text-right">{lot.holding_days ?? "—"}</Table.Cell>
+                      <Table.Cell>
+                        <Badge variant={lot.is_long_term ? "default" : "secondary"}>
+                          {lot.is_long_term ? "Long" : "Short"}
+                        </Badge>
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                </Table.Body>
+              </Table.Root>
             {/if}
-          </div>
-        </div>
-      </div>
-    {/if}
+          </Card.Content>
+        </Card.Root>
+      </Tabs.Content>
+    </Tabs.Root>
   </div>
 </main>
 
 <!-- Buy/Sell Dialog -->
-{#if showTradeDialog}
-  <button class="dialog-backdrop" type="button" aria-label="Close" on:click={closeTradeDialog}></button>
-  <div class="dialog" role="dialog" aria-modal="true">
-    <div class="dialog-header">
-      <h2 class="section-title">{tradeType === "buy" ? "Buy Security" : "Sell Security"}</h2>
-    </div>
-    <div class="dialog-body">
-      <label class="label">
-        Date
-        <input class="input" type="date" bind:value={tradeForm.txn_date} />
-      </label>
-      <label class="label">
-        Investment Account
-        <select class="select" bind:value={tradeForm.investment_account_id}>
+<Dialog.Root bind:open={showTradeDialog}>
+  <Dialog.Content class="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>{tradeType === "buy" ? "Buy Security" : "Sell Security"}</Dialog.Title>
+    </Dialog.Header>
+    <div class="space-y-4 py-4">
+      <div class="space-y-2">
+        <Label for="trade-date">Date</Label>
+        <Input id="trade-date" type="date" bind:value={tradeForm.txn_date} />
+      </div>
+      <div class="space-y-2">
+        <Label for="trade-inv-account">Investment Account</Label>
+        <select id="trade-inv-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={tradeForm.investment_account_id}>
           <option value={null}>Select account...</option>
           {#each investmentAccounts as a}
             <option value={a.id}>{a.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Cash Account
-        <select class="select" bind:value={tradeForm.cash_account_id}>
+      </div>
+      <div class="space-y-2">
+        <Label for="trade-cash-account">Cash Account</Label>
+        <select id="trade-cash-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={tradeForm.cash_account_id}>
           <option value={null}>Select account...</option>
           {#each cashAccounts as a}
             <option value={a.id}>{a.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Security
-        <select class="select" bind:value={tradeForm.commodity_id}>
+      </div>
+      <div class="space-y-2">
+        <Label for="trade-security">Security</Label>
+        <select id="trade-security" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={tradeForm.commodity_id}>
           <option value={null}>Select security...</option>
           {#each securities as c}
             <option value={c.id}>{c.symbol || c.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Quantity
-        <input class="input" type="number" step="0.000001" bind:value={tradeForm.quantity} placeholder="Number of shares" />
-      </label>
-      <label class="label">
-        {tradeType === "buy" ? "Total Cost" : "Proceeds"}
-        <input class="input" type="number" step="0.01" bind:value={tradeForm.cash_amount} placeholder="Amount" />
-      </label>
-      <label class="label">
-        Memo (optional)
-        <input class="input" type="text" bind:value={tradeForm.memo} placeholder="Description" />
-      </label>
+      </div>
+      <div class="space-y-2">
+        <Label for="trade-quantity">Quantity</Label>
+        <Input id="trade-quantity" type="number" step="0.000001" bind:value={tradeForm.quantity} placeholder="Number of shares" />
+      </div>
+      <div class="space-y-2">
+        <Label for="trade-amount">{tradeType === "buy" ? "Total Cost" : "Proceeds"}</Label>
+        <Input id="trade-amount" type="number" step="0.01" bind:value={tradeForm.cash_amount} placeholder="Amount" />
+      </div>
+      <div class="space-y-2">
+        <Label for="trade-memo">Memo (optional)</Label>
+        <Input id="trade-memo" bind:value={tradeForm.memo} placeholder="Description" />
+      </div>
     </div>
-    <div class="dialog-footer">
-      <button class="btn btn-secondary" type="button" on:click={closeTradeDialog}>Cancel</button>
-      <button class="btn btn-primary" type="button" on:click={submitTrade} disabled={busy}>
+    <Dialog.Footer>
+      <Button variant="outline" onclick={closeTradeDialog}>Cancel</Button>
+      <Button onclick={submitTrade} disabled={busy}>
         {tradeType === "buy" ? "Buy" : "Sell"}
-      </button>
-    </div>
-  </div>
-{/if}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
 
 <!-- Dividend Dialog -->
-{#if showDividendDialog}
-  <button class="dialog-backdrop" type="button" aria-label="Close" on:click={closeDividendDialog}></button>
-  <div class="dialog" role="dialog" aria-modal="true">
-    <div class="dialog-header">
-      <h2 class="section-title">Record Dividend</h2>
-    </div>
-    <div class="dialog-body">
-      <label class="label">
-        Date
-        <input class="input" type="date" bind:value={dividendForm.txn_date} />
-      </label>
-      <label class="label">
-        Investment Account (source)
-        <select class="select" bind:value={dividendForm.investment_account_id}>
+<Dialog.Root bind:open={showDividendDialog}>
+  <Dialog.Content class="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Record Dividend</Dialog.Title>
+    </Dialog.Header>
+    <div class="space-y-4 py-4">
+      <div class="space-y-2">
+        <Label for="div-date">Date</Label>
+        <Input id="div-date" type="date" bind:value={dividendForm.txn_date} />
+      </div>
+      <div class="space-y-2">
+        <Label for="div-inv-account">Investment Account (source)</Label>
+        <select id="div-inv-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={dividendForm.investment_account_id}>
           <option value={null}>Select account...</option>
           {#each investmentAccounts as a}
             <option value={a.id}>{a.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Cash Account (destination)
-        <select class="select" bind:value={dividendForm.cash_account_id}>
+      </div>
+      <div class="space-y-2">
+        <Label for="div-cash-account">Cash Account (destination)</Label>
+        <select id="div-cash-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={dividendForm.cash_account_id}>
           <option value={null}>Select account...</option>
           {#each cashAccounts as a}
             <option value={a.id}>{a.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Income Account
-        <select class="select" bind:value={dividendForm.income_account_id}>
+      </div>
+      <div class="space-y-2">
+        <Label for="div-income-account">Income Account</Label>
+        <select id="div-income-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={dividendForm.income_account_id}>
           <option value={null}>Select account...</option>
           {#each incomeAccounts as a}
             <option value={a.id}>{a.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Security (optional)
-        <select class="select" bind:value={dividendForm.commodity_id}>
+      </div>
+      <div class="space-y-2">
+        <Label for="div-security">Security (optional)</Label>
+        <select id="div-security" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={dividendForm.commodity_id}>
           <option value={null}>None</option>
           {#each securities as c}
             <option value={c.id}>{c.symbol || c.name}</option>
           {/each}
         </select>
-      </label>
-      <label class="label">
-        Amount
-        <input class="input" type="number" step="0.01" bind:value={dividendForm.amount} placeholder="Dividend amount" />
-      </label>
-      <label class="label">
-        Memo (optional)
-        <input class="input" type="text" bind:value={dividendForm.memo} placeholder="Description" />
-      </label>
+      </div>
+      <div class="space-y-2">
+        <Label for="div-amount">Amount</Label>
+        <Input id="div-amount" type="number" step="0.01" bind:value={dividendForm.amount} placeholder="Dividend amount" />
+      </div>
+      <div class="space-y-2">
+        <Label for="div-memo">Memo (optional)</Label>
+        <Input id="div-memo" bind:value={dividendForm.memo} placeholder="Description" />
+      </div>
     </div>
-    <div class="dialog-footer">
-      <button class="btn btn-secondary" type="button" on:click={closeDividendDialog}>Cancel</button>
-      <button class="btn btn-primary" type="button" on:click={submitDividend} disabled={busy}>
+    <Dialog.Footer>
+      <Button variant="outline" onclick={closeDividendDialog}>Cancel</Button>
+      <Button onclick={submitDividend} disabled={busy}>
         Record Dividend
-      </button>
-    </div>
-  </div>
-{/if}
-
-<style>
-  .actions-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--bg-muted);
-    border-radius: 0.5rem;
-  }
-
-  .actions-group,
-  .filters-group {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-
-  .label-inline {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-  }
-
-  .input-sm,
-  .select-sm {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.875rem;
-  }
-
-  .btn-sm {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.875rem;
-  }
-
-  .summary-cards {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .summary-card {
-    padding: 1rem 1.5rem;
-    background: var(--bg-muted);
-    border-radius: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    min-width: 150px;
-  }
-
-  .summary-card--positive {
-    background: #dcfce7;
-  }
-
-  .summary-card--negative {
-    background: #fee2e2;
-  }
-
-  .summary-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-  }
-
-  .summary-value {
-    font-size: 1.5rem;
-    font-weight: 600;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1rem;
-  }
-
-  .tab {
-    padding: 0.75rem 1rem;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    font-size: 0.875rem;
-    color: var(--text-muted);
-  }
-
-  .tab:hover {
-    color: var(--text);
-    background: var(--bg-hover);
-  }
-
-  .tab.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-  }
-
-  .holdings-table,
-  .lots-table {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .holdings-table__header,
-  .holdings-table__row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 100px 100px 100px 100px;
-    gap: 1rem;
-    padding: 0.75rem;
-    align-items: center;
-  }
-
-  .lots-table__header,
-  .lots-table__row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 100px 100px 100px 80px 80px;
-    gap: 1rem;
-    padding: 0.75rem;
-    align-items: center;
-  }
-
-  .holdings-table__header,
-  .lots-table__header {
-    font-weight: 600;
-    background: var(--bg-muted);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .holdings-table__row,
-  .lots-table__row {
-    border-bottom: 1px solid var(--border-light, #eee);
-  }
-
-  .holdings-table__row:hover,
-  .lots-table__row:hover {
-    background: var(--bg-hover);
-  }
-
-  .text-right {
-    text-align: right;
-  }
-
-  .text-income {
-    color: #16a34a;
-  }
-
-  .text-expense {
-    color: #dc2626;
-  }
-
-  .text-warning {
-    color: #d97706;
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 0.125rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    background: var(--bg-muted);
-  }
-
-  .badge-long {
-    background: #dcfce7;
-    color: #16a34a;
-  }
-
-  .badge-short {
-    background: #fef3c7;
-    color: #d97706;
-  }
-</style>
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

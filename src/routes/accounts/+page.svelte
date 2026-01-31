@@ -100,7 +100,6 @@
   let formType: Account["account_type"] = "checking";
   let formCommodityId: number | null = null;
   let formInstitutionId: number | null = null;
-  let formCountryId: number | null = null;
   let newInstitutionName = "";
   let newInstitutionKind: "bank" | "broker" | "credit_union" | "other" = "bank";
   let newInstitutionCountryId: number | null = null;
@@ -231,9 +230,8 @@
     formId = null;
     formName = "";
     formType = "checking";
-    formCommodityId = commodities[0]?.id ?? null;
+    formCommodityId = commodities.filter(c => c.kind === 'currency')[0]?.id ?? commodities[0]?.id ?? null;
     formInstitutionId = null;
-    formCountryId = null;
     newInstitutionName = "";
     newInstitutionKind = "bank";
     newInstitutionCountryId = null;
@@ -250,10 +248,9 @@
     formType = account.account_type;
     formCommodityId = account.commodity_id;
     formInstitutionId = account.institution_id ?? null;
-    formCountryId = account.country_id ?? null;
     newInstitutionName = "";
     newInstitutionKind = "bank";
-    newInstitutionCountryId = account.country_id ?? null;
+    newInstitutionCountryId = null;
     formLast4 = account.number_last4 ?? "";
     formIsClosed = account.is_closed;
     formParentId = account.parent_id ?? null;
@@ -299,7 +296,7 @@
       return;
     }
     if (!formCommodityId) {
-      error = "Select a commodity.";
+      error = "Select a currency.";
       return;
     }
 
@@ -316,7 +313,7 @@
             name: formName.trim(),
             commodity_id: formCommodityId,
             institution_id: normalizeOptionalId(formInstitutionId),
-            country_id: normalizeOptionalId(formCountryId),
+            country_id: null,
             number_last4: formLast4.trim() || null,
             is_closed: formIsClosed
           }
@@ -331,7 +328,7 @@
             name: formName.trim(),
             commodity_id: formCommodityId,
             institution_id: normalizeOptionalId(formInstitutionId),
-            country_id: normalizeOptionalId(formCountryId),
+            country_id: null,
             number_last4: formLast4.trim() || null,
             is_closed: formIsClosed
           }
@@ -437,7 +434,7 @@
         <h1 class="text-3xl font-bold tracking-tight">Accounts</h1>
         <p class="text-muted-foreground">View, filter, and organize your accounts.</p>
       </div>
-      <Button on:click={openCreateDialog}>New account</Button>
+      <Button onclick={openCreateDialog}>New account</Button>
     </div>
 
     {#if error}
@@ -451,7 +448,7 @@
     <Card.Root>
       <Card.Header class="flex flex-row items-center justify-between">
         <Card.Title>Account Tree</Card.Title>
-        <Button variant="ghost" size="sm" on:click={() => (showAccountTree = !showAccountTree)}>
+        <Button variant="ghost" size="sm" onclick={() => (showAccountTree = !showAccountTree)}>
           {showAccountTree ? "Hide" : "Show"}
         </Button>
       </Card.Header>
@@ -472,7 +469,7 @@
 
     <!-- Search and Filters -->
     <div class="flex flex-wrap items-end gap-4">
-      <div class="flex-1 min-w-[200px]">
+      <div class="flex-1 min-w-50">
         <Label for="account-search">Search</Label>
         <Input
           id="account-search"
@@ -487,14 +484,14 @@
         <Label for="include-closed">Include closed accounts</Label>
       </div>
 
-      <Button variant="outline" on:click={() => (showAdvancedFilters = !showAdvancedFilters)}>
+      <Button variant="outline" onclick={() => (showAdvancedFilters = !showAdvancedFilters)}>
         {showAdvancedFilters ? "Hide filters" : "Show filters"}
       </Button>
     </div>
 
     {#if showAdvancedFilters}
       <div class="flex flex-wrap gap-4">
-        <div class="flex-1 min-w-[150px]">
+        <div class="flex-1 min-w-37.5">
           <Label for="group-by">Group by</Label>
           <select id="group-by" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={groupBy}>
             <option value="institution">Institution</option>
@@ -503,7 +500,7 @@
           </select>
         </div>
 
-        <div class="flex-1 min-w-[150px]">
+        <div class="flex-1 min-w-37.5">
           <Label for="sort-by">Sort by</Label>
           <select id="sort-by" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={sortBy}>
             <option value="name">Name</option>
@@ -513,7 +510,7 @@
           </select>
         </div>
 
-        <div class="flex-1 min-w-[150px]">
+        <div class="flex-1 min-w-37.5">
           <Label for="sort-dir">Direction</Label>
           <select id="sort-dir" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={sortDir}>
             <option value="asc">Ascending</option>
@@ -568,8 +565,8 @@
                         {formatMinor(accountBalance(account))}
                       </Table.Cell>
                       <Table.Cell class="text-right">
-                        <Button variant="ghost" size="sm" on:click={() => openEditDialog(account)}>Edit</Button>
-                        <Button variant="ghost" size="sm" class="text-destructive" on:click={() => deleteAccount(account)}>Delete</Button>
+                        <Button variant="ghost" size="sm" onclick={() => openEditDialog(account)}>Edit</Button>
+                        <Button variant="ghost" size="sm" class="text-destructive" onclick={() => deleteAccount(account)}>Delete</Button>
                       </Table.Cell>
                     </Table.Row>
                   {/each}
@@ -589,7 +586,7 @@
         <Dialog.Title>{dialogMode === "create" ? "Create account" : "Edit account"}</Dialog.Title>
       </Dialog.Header>
 
-      <form on:submit={submitAccount} class="space-y-4">
+      <form onsubmit={submitAccount} class="space-y-4">
         <div class="space-y-2">
           <Label for="account-name">Name</Label>
           <Input id="account-name" type="text" bind:value={formName} required />
@@ -613,34 +610,25 @@
         </div>
 
         <div class="space-y-2">
-          <Label for="account-commodity">Commodity</Label>
+          <Label for="account-commodity">Currency</Label>
           <select id="account-commodity" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formCommodityId}>
-            {#each commodities as commodity}
-              <option value={commodity.id}>{commodity.symbol ?? commodity.name}</option>
+            {#each commodities.filter(c => c.kind === 'currency') as commodity}
+              <option value={commodity.id}>{commodity.symbol ? `${commodity.symbol} - ${commodity.name}` : commodity.name}</option>
             {/each}
           </select>
+          {#if commodities.filter(c => c.kind === 'currency').length === 0}
+            <p class="text-sm text-muted-foreground">No currencies available. Add currencies in Settings → Commodities.</p>
+          {/if}
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <Label for="account-country">Country</Label>
-            <select id="account-country" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formCountryId}>
-              <option value="">None</option>
-              {#each countries as country}
-                <option value={country.id}>{country.name} ({country.code})</option>
-              {/each}
-            </select>
-          </div>
-
-          <div class="space-y-2">
-            <Label for="account-institution">Institution</Label>
-            <select id="account-institution" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formInstitutionId}>
-              <option value="">None</option>
-              {#each institutions as institution}
-                <option value={institution.id}>{institution.name}</option>
-              {/each}
-            </select>
-          </div>
+        <div class="space-y-2">
+          <Label for="account-institution">Institution</Label>
+          <select id="account-institution" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formInstitutionId}>
+            <option value="">None</option>
+            {#each institutions as institution}
+              <option value={institution.id}>{institution.name}{institution.country_name ? ` (${institution.country_name})` : ''}</option>
+            {/each}
+          </select>
         </div>
 
         <div class="space-y-2">
@@ -659,7 +647,7 @@
                 <option value={country.id}>{country.name}</option>
               {/each}
             </select>
-            <Button type="button" variant="secondary" on:click={createInstitutionInline} disabled={creatingInstitution}>
+            <Button type="button" variant="secondary" onclick={createInstitutionInline} disabled={creatingInstitution}>
               {creatingInstitution ? "Adding…" : "Add"}
             </Button>
           </div>
@@ -678,7 +666,7 @@
         </div>
 
         <Dialog.Footer>
-          <Button variant="outline" type="button" on:click={closeDialog}>Cancel</Button>
+          <Button variant="outline" type="button" onclick={closeDialog}>Cancel</Button>
           <Button type="submit" disabled={submitting}>
             {submitting ? "Saving…" : "Save"}
           </Button>

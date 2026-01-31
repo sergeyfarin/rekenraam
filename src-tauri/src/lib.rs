@@ -14,6 +14,7 @@ use tokio::time::sleep;
 use rfd::FileDialog;
 mod db;
 mod commands;
+mod db_currencies;
 mod state;
 
 use crate::db::{
@@ -425,6 +426,27 @@ pub fn run() {
             commands::add_implicit_price,
             commands::get_latest_price,
             commands::get_price_on_date,
+            // Currency management
+            db_currencies::list_currencies,
+            db_currencies::get_default_currency,
+            db_currencies::create_currency,
+            db_currencies::update_currency,
+            db_currencies::set_default_currency,
+            db_currencies::toggle_currency_active,
+            // FX daily rates
+            db_currencies::list_fx_rates_daily,
+            db_currencies::create_fx_rate_daily,
+            db_currencies::delete_fx_rate_daily,
+            db_currencies::get_fx_rate_for_date,
+            // FX official rates
+            db_currencies::list_fx_rates_official,
+            db_currencies::create_fx_rate_official,
+            db_currencies::update_fx_rate_official,
+            db_currencies::delete_fx_rate_official,
+            db_currencies::get_official_rate_for_period,
+            // FX rate sources
+            db_currencies::list_fx_rate_sources,
+            db_currencies::create_fx_rate_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

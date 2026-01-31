@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import * as Table from "$lib/components/ui/table";
+  import * as Alert from "$lib/components/ui/alert";
+  import { Badge } from "$lib/components/ui/badge";
 
   type Account = {
     id: number;
@@ -108,14 +116,6 @@
     formTransferAccountId = null;
   }
 
-  let tableRef: HTMLDivElement | null = null;
-  let txColumnWidths = [12, 18, 22, 12, 16, 10, 10];
-  let resizingIndex: number | null = null;
-  let resizeStartX = 0;
-  let resizeStartWidths: number[] = [];
-
-  $: txGridTemplate = txColumnWidths.map((w) => `${w}%`).join(" ");
-
   onMount(async () => {
     await loadLookups();
     await loadTransactions();
@@ -222,53 +222,6 @@
     return categories.find((c) => c.id === id)?.kind ?? null;
   }
 
-  function startResize(event: PointerEvent, index: number) {
-    if (!tableRef || index >= txColumnWidths.length - 1) return;
-    event.preventDefault();
-    resizingIndex = index;
-    resizeStartX = event.clientX;
-    resizeStartWidths = [...txColumnWidths];
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", handleResize);
-    window.addEventListener("pointerup", stopResize);
-  }
-
-  function handleResize(event: PointerEvent) {
-    if (resizingIndex === null || !tableRef) return;
-    const deltaX = event.clientX - resizeStartX;
-    const totalWidth = tableRef.clientWidth || 1;
-    const deltaPercent = (deltaX / totalWidth) * 100;
-    const minWidth = 6;
-    const nextIndex = resizingIndex + 1;
-    let newCurrent = resizeStartWidths[resizingIndex] + deltaPercent;
-    let newNext = resizeStartWidths[nextIndex] - deltaPercent;
-
-    if (newCurrent < minWidth) {
-      const adjust = minWidth - newCurrent;
-      newCurrent = minWidth;
-      newNext -= adjust;
-    }
-    if (newNext < minWidth) {
-      const adjust = minWidth - newNext;
-      newNext = minWidth;
-      newCurrent -= adjust;
-    }
-
-    const updated = [...resizeStartWidths];
-    updated[resizingIndex] = Number(newCurrent.toFixed(2));
-    updated[nextIndex] = Number(newNext.toFixed(2));
-    txColumnWidths = updated;
-  }
-
-  function stopResize() {
-    resizingIndex = null;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-    window.removeEventListener("pointermove", handleResize);
-    window.removeEventListener("pointerup", stopResize);
-  }
-
   function primarySplit(tx: TransactionWithSplits, accountId: number | null) {
     if (accountId) {
       return tx.splits.find((s) => s.account_id === accountId) ?? tx.splits[0];
@@ -276,13 +229,6 @@
     return tx.splits.reduce((max, current) =>
       Math.abs(current.amount_minor) > Math.abs(max.amount_minor) ? current : max
     );
-  }
-
-  function statusBadgeClass(status: string) {
-    if (status === "reconciled") return "badge success";
-    if (status === "void") return "badge danger";
-    if (status === "cleared") return "badge warning";
-    return "badge";
   }
 
   function handleHeaderClick(column: FilterColumn) {
@@ -746,218 +692,232 @@
   });
 </script>
 
-<main class="page">
-  <div class="page-grid container">
-    <div class="page-row">
-      <div class="page-col">
-        <h1 class="page-title">Transactions</h1>
-        <p class="page-subtitle">Review and enter transactions.</p>
+<main class="py-6">
+  <div class="container mx-auto px-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Transactions</h1>
+        <p class="text-muted-foreground">Review and enter transactions.</p>
       </div>
-      <div class="page-col page-col-actions">
-        <button class="btn btn-primary" type="button" on:click={openCreateDialog}>New transaction</button>
-      </div>
+      <Button onclick={openCreateDialog}>New transaction</Button>
     </div>
 
     {#if error}
-      <p class="text-sm text-error">{error}</p>
+      <Alert.Root variant="destructive">
+        <Alert.Title>Error</Alert.Title>
+        <Alert.Description>{error}</Alert.Description>
+      </Alert.Root>
     {/if}
 
-    <div class="page-row">
-      <div class="page-col">
-        <div class="card">
-          {#if loading}
-            <p class="text-sm text-muted">Loading transactions…</p>
-          {:else}
-            <div class="data-table striped compact" bind:this={tableRef}>
-              <div class="data-row header" style={`grid-template-columns: ${txGridTemplate}`}>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => handleHeaderClick("date")}>
-                  {#if hasFilter("date")}<span class="filter-indicator">⏷</span>{/if}
-                  Date
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 0)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => handleHeaderClick("payee")}>
-                  {#if hasFilter("payee")}<span class="filter-indicator">⏷</span>{/if}
-                  Payee
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 1)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => handleHeaderClick("memo")}>
-                  {#if hasFilter("memo")}<span class="filter-indicator">⏷</span>{/if}
-                  Memo
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 2)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => handleHeaderClick("status")}>
-                  {#if hasFilter("status")}<span class="filter-indicator">⏷</span>{/if}
-                  Status
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 3)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" on:click={() => handleHeaderClick("account")}>
-                  {#if hasFilter("account")}<span class="filter-indicator">⏷</span>{/if}
-                  Account
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 4)}></span>
-                </button>
-                <button class="data-cell heading amount sort-button col-header" type="button" on:click={() => handleHeaderClick("amount")}>
-                  {#if hasFilter("amount")}<span class="filter-indicator">⏷</span>{/if}
-                  Amount
-                  <span class="col-resizer" on:pointerdown={(event) => startResize(event, 5)}></span>
-                </button>
-                <div class="data-cell heading action">Actions</div>
-              </div>
-              {#if activeFilter}
-                <div class="data-row filter-row" style={`grid-template-columns: ${txGridTemplate}`}>
-                  <div class="data-cell filter-cell">
-                    {#if activeFilter === "date"}
-                      <div class="filter-panel">
-                        <div class="form-field">
-                          <label class="label" for="tx-date-from">From</label>
-                          <input id="tx-date-from" class="input" type="date" bind:value={dateFrom} />
-                        </div>
-                        <div class="form-field">
-                          <label class="label" for="tx-date-to">To</label>
-                          <input id="tx-date-to" class="input" type="date" bind:value={dateTo} />
-                        </div>
-                        <div class="filter-actions">
-                          <button class="btn btn-secondary btn-sm" type="button" on:click={applyFilters}>Apply</button>
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => clearFilter("date")}>Clear</button>
-                        </div>
-                      </div>
-                    {:else if activeFilter === "payee"}
-                      <div class="filter-panel">
-                        <div class="form-field">
-                          <label class="label" for="tx-payee-filter">Payee contains</label>
-                          <input id="tx-payee-filter" class="input" placeholder="Filter payee" bind:value={payeeFilter} />
-                        </div>
-                        <div class="filter-actions">
-                          <button class="btn btn-secondary btn-sm" type="button" on:click={applyFilters}>Apply</button>
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => clearFilter("payee")}>Clear</button>
-                        </div>
-                      </div>
-                    {:else if activeFilter === "memo"}
-                      <div class="filter-panel">
-                        <div class="form-field">
-                          <label class="label" for="tx-memo-filter">Memo contains</label>
-                          <input id="tx-memo-filter" class="input" placeholder="Filter memo" bind:value={memoFilter} />
-                        </div>
-                        <div class="filter-actions">
-                          <button class="btn btn-secondary btn-sm" type="button" on:click={applyFilters}>Apply</button>
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => clearFilter("memo")}>Clear</button>
-                        </div>
-                      </div>
-                    {:else if activeFilter === "status"}
-                      <div class="filter-panel">
-                        <div class="form-field">
-                          <label class="label" for="tx-status-filter">Status</label>
-                          <select id="tx-status-filter" class="select" bind:value={statusFilter}>
-                            <option value="">Any status</option>
-                            <option value="uncleared">Uncleared</option>
-                            <option value="cleared">Cleared</option>
-                            <option value="reconciled">Reconciled</option>
-                            <option value="void">Void</option>
-                          </select>
-                        </div>
-                        <div class="filter-actions">
-                          <button class="btn btn-secondary btn-sm" type="button" on:click={applyFilters}>Apply</button>
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => clearFilter("status")}>Clear</button>
-                        </div>
-                      </div>
-                    {:else if activeFilter === "account"}
-                      <div class="filter-panel">
-                        <div class="form-field">
-                          <label class="label" for="tx-account-filter">Account</label>
-                          <select id="tx-account-filter" class="select" bind:value={accountFilterId}>
-                            <option value="">All accounts</option>
-                            {#each accounts as account}
-                              <option value={account.id}>{account.name}</option>
-                            {/each}
-                          </select>
-                        </div>
-                        <div class="filter-actions">
-                          <button class="btn btn-secondary btn-sm" type="button" on:click={applyFilters}>Apply</button>
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => clearFilter("account")}>Clear</button>
-                        </div>
-                      </div>
-                    {:else if activeFilter === "amount"}
-                      <div class="filter-panel">
-                        <div class="form-field">
-                          <label class="label" for="tx-amount-min">Min amount</label>
-                          <input id="tx-amount-min" class="input" placeholder="0.00" bind:value={amountMin} />
-                        </div>
-                        <div class="form-field">
-                          <label class="label" for="tx-amount-max">Max amount</label>
-                          <input id="tx-amount-max" class="input" placeholder="0.00" bind:value={amountMax} />
-                        </div>
-                        <div class="filter-actions">
-                          <button class="btn btn-secondary btn-sm" type="button" on:click={applyFilters}>Apply</button>
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => clearFilter("amount")}>Clear</button>
-                        </div>
-                      </div>
-                    {/if}
+    <Card.Root>
+      <Card.Content class="pt-6">
+        {#if loading}
+          <p class="text-sm text-muted-foreground">Loading transactions…</p>
+        {:else}
+          <!-- Filter Panel -->
+          {#if activeFilter}
+            <div class="mb-4 p-4 bg-muted/50 rounded-lg border">
+              {#if activeFilter === "date"}
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="space-y-1">
+                    <Label for="tx-date-from">From</Label>
+                    <Input id="tx-date-from" type="date" bind:value={dateFrom} class="w-40" />
+                  </div>
+                  <div class="space-y-1">
+                    <Label for="tx-date-to">To</Label>
+                    <Input id="tx-date-to" type="date" bind:value={dateTo} class="w-40" />
+                  </div>
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
+                    <Button variant="ghost" size="sm" onclick={() => clearFilter("date")}>Clear</Button>
+                  </div>
+                </div>
+              {:else if activeFilter === "payee"}
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="space-y-1 flex-1 max-w-xs">
+                    <Label for="tx-payee-filter">Payee contains</Label>
+                    <Input id="tx-payee-filter" placeholder="Filter payee" bind:value={payeeFilter} />
+                  </div>
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
+                    <Button variant="ghost" size="sm" onclick={() => clearFilter("payee")}>Clear</Button>
+                  </div>
+                </div>
+              {:else if activeFilter === "memo"}
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="space-y-1 flex-1 max-w-xs">
+                    <Label for="tx-memo-filter">Memo contains</Label>
+                    <Input id="tx-memo-filter" placeholder="Filter memo" bind:value={memoFilter} />
+                  </div>
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
+                    <Button variant="ghost" size="sm" onclick={() => clearFilter("memo")}>Clear</Button>
+                  </div>
+                </div>
+              {:else if activeFilter === "status"}
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="space-y-1">
+                    <Label for="tx-status-filter">Status</Label>
+                    <select id="tx-status-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={statusFilter}>
+                      <option value="">Any status</option>
+                      <option value="uncleared">Uncleared</option>
+                      <option value="cleared">Cleared</option>
+                      <option value="reconciled">Reconciled</option>
+                      <option value="void">Void</option>
+                    </select>
+                  </div>
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
+                    <Button variant="ghost" size="sm" onclick={() => clearFilter("status")}>Clear</Button>
+                  </div>
+                </div>
+              {:else if activeFilter === "account"}
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="space-y-1">
+                    <Label for="tx-account-filter">Account</Label>
+                    <select id="tx-account-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={accountFilterId}>
+                      <option value="">All accounts</option>
+                      {#each accounts as account}
+                        <option value={account.id}>{account.name}</option>
+                      {/each}
+                    </select>
+                  </div>
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
+                    <Button variant="ghost" size="sm" onclick={() => clearFilter("account")}>Clear</Button>
+                  </div>
+                </div>
+              {:else if activeFilter === "amount"}
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="space-y-1">
+                    <Label for="tx-amount-min">Min amount</Label>
+                    <Input id="tx-amount-min" type="number" step="0.01" placeholder="0.00" bind:value={amountMin} class="w-32" />
+                  </div>
+                  <div class="space-y-1">
+                    <Label for="tx-amount-max">Max amount</Label>
+                    <Input id="tx-amount-max" type="number" step="0.01" placeholder="0.00" bind:value={amountMax} class="w-32" />
+                  </div>
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
+                    <Button variant="ghost" size="sm" onclick={() => clearFilter("amount")}>Clear</Button>
                   </div>
                 </div>
               {/if}
-              {#if sorted.length === 0}
-                <div class="data-row" style={`grid-template-columns: ${txGridTemplate}`}>
-                  <div class="data-cell">No transactions found.</div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                </div>
-              {:else}
-                {#each sorted as tx}
-                  {#key tx.transaction.id}
-                    <div class="data-row" style={`grid-template-columns: ${txGridTemplate}`}>
-                      <div class="data-cell">{tx.transaction.txn_date}</div>
-                      <div class="data-cell">{payeeName(tx.transaction.payee_id)}</div>
-                      <div class="data-cell">{tx.transaction.memo ?? "—"}</div>
-                      <div class="data-cell">
-                        <span class={statusBadgeClass(tx.transaction.status)}>{tx.transaction.status}</span>
-                      </div>
-                      <div class="data-cell">{accountName(primarySplit(tx, accountFilterId).account_id)}</div>
-                      <div class="data-cell amount">
-                        {formatAmount(primarySplit(tx, accountFilterId).amount_minor, primarySplit(tx, accountFilterId).commodity_id)}
-                      </div>
-                      <div class="data-cell action">
-                        <button class="btn btn-ghost btn-sm" type="button" on:click={() => openEditDialog(tx)}>Edit</button>
-                        {#if tx.transaction.status === "cleared"}
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => updateStatus(tx, "uncleared")}>Unflag</button>
-                        {:else}
-                          <button class="btn btn-ghost btn-sm" type="button" on:click={() => updateStatus(tx, "cleared")}>Flag</button>
-                        {/if}
-                        <button class="btn btn-ghost btn-sm" type="button" on:click={() => updateStatus(tx, "void")}>Void</button>
-                        <button class="btn btn-ghost btn-sm" type="button" on:click={() => removeTransaction(tx)}>Delete</button>
-                      </div>
-                    </div>
-                  {/key}
-                {/each}
-              {/if}
             </div>
           {/if}
-        </div>
-      </div>
-    </div>
+
+          <div class="rounded-md border">
+            <Table.Root>
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("date")}>
+                    <span class="flex items-center gap-1">
+                      {#if hasFilter("date")}<span class="text-primary">⏷</span>{/if}
+                      Date
+                      {#if sortBy === "date"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
+                    </span>
+                  </Table.Head>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("payee")}>
+                    <span class="flex items-center gap-1">
+                      {#if hasFilter("payee")}<span class="text-primary">⏷</span>{/if}
+                      Payee
+                      {#if sortBy === "payee"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
+                    </span>
+                  </Table.Head>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("memo")}>
+                    <span class="flex items-center gap-1">
+                      {#if hasFilter("memo")}<span class="text-primary">⏷</span>{/if}
+                      Memo
+                      {#if sortBy === "memo"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
+                    </span>
+                  </Table.Head>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("status")}>
+                    <span class="flex items-center gap-1">
+                      {#if hasFilter("status")}<span class="text-primary">⏷</span>{/if}
+                      Status
+                      {#if sortBy === "status"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
+                    </span>
+                  </Table.Head>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("account")}>
+                    <span class="flex items-center gap-1">
+                      {#if hasFilter("account")}<span class="text-primary">⏷</span>{/if}
+                      Account
+                      {#if sortBy === "account"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
+                    </span>
+                  </Table.Head>
+                  <Table.Head class="text-right cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("amount")}>
+                    <span class="flex items-center justify-end gap-1">
+                      {#if hasFilter("amount")}<span class="text-primary">⏷</span>{/if}
+                      Amount
+                      {#if sortBy === "amount"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
+                    </span>
+                  </Table.Head>
+                  <Table.Head class="text-right">Actions</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {#if sorted.length === 0}
+                  <Table.Row>
+                    <Table.Cell colspan={7} class="text-center text-muted-foreground py-8">
+                      No transactions found.
+                    </Table.Cell>
+                  </Table.Row>
+                {:else}
+                  {#each sorted as tx (tx.transaction.id)}
+                    <Table.Row class="hover:bg-muted/50">
+                      <Table.Cell class="font-mono text-sm">{tx.transaction.txn_date}</Table.Cell>
+                      <Table.Cell>{payeeName(tx.transaction.payee_id)}</Table.Cell>
+                      <Table.Cell class="text-muted-foreground">{tx.transaction.memo ?? "—"}</Table.Cell>
+                      <Table.Cell>
+                        <Badge variant={tx.transaction.status === "reconciled" ? "default" : tx.transaction.status === "cleared" ? "secondary" : tx.transaction.status === "void" ? "destructive" : "outline"}>
+                          {tx.transaction.status}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>{accountName(primarySplit(tx, accountFilterId).account_id)}</Table.Cell>
+                      <Table.Cell class="text-right font-mono {primarySplit(tx, accountFilterId).amount_minor < 0 ? 'text-red-600' : 'text-green-600'}">
+                        {formatAmount(primarySplit(tx, accountFilterId).amount_minor, primarySplit(tx, accountFilterId).commodity_id)}
+                      </Table.Cell>
+                      <Table.Cell class="text-right">
+                        <div class="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onclick={() => openEditDialog(tx)}>Edit</Button>
+                          {#if tx.transaction.status === "cleared"}
+                            <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "uncleared")}>Unflag</Button>
+                          {:else}
+                            <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "cleared")}>Flag</Button>
+                          {/if}
+                          <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "void")}>Void</Button>
+                          <Button variant="ghost" size="sm" class="text-destructive" onclick={() => removeTransaction(tx)}>Delete</Button>
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                {/if}
+              </Table.Body>
+            </Table.Root>
+          </div>
+        {/if}
+      </Card.Content>
+      </Card.Root>
   </div>
 
-  {#if dialogOpen}
-    <div class="dialog-backdrop" role="presentation" on:click={closeDialog}></div>
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Transaction dialog">
-      <form on:submit|preventDefault={submitTransaction}>
-        <header class="dialog-header">
-          <h2 class="section-title">
+  <Dialog.Root bind:open={dialogOpen}>
+    <Dialog.Content class="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <form onsubmit={(e) => { e.preventDefault(); submitTransaction(); }}>
+        <Dialog.Header>
+          <Dialog.Title>
             {dialogMode === "create" ? "New transaction" : "Edit transaction"}
-          </h2>
-        </header>
+          </Dialog.Title>
+        </Dialog.Header>
 
-        <div class="dialog-body">
-          <div class="form-field">
-            <label class="label" for="tx-date">Date</label>
-            <input id="tx-date" class="input" type="date" bind:value={formDate} required />
+        <div class="space-y-4 py-4">
+          <div class="space-y-2">
+            <Label for="tx-date">Date</Label>
+            <Input id="tx-date" type="date" bind:value={formDate} required />
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-account">Account</label>
-            <select id="tx-account" class="select" bind:value={formAccountId} disabled={splitMode}>
+          <div class="space-y-2">
+            <Label for="tx-account">Account</Label>
+            <select id="tx-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors" bind:value={formAccountId} disabled={splitMode}>
               <option value="">Select account</option>
               {#each accounts as account}
                 <option value={account.id}>{account.name}</option>
@@ -965,23 +925,23 @@
             </select>
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-transfer-account">Transfer account</label>
+          <div class="space-y-2">
+            <Label for="tx-transfer-account">Transfer account</Label>
             {#if transferRequired}
-              <select id="tx-transfer-account" class="select" bind:value={formTransferAccountId} disabled={splitMode}>
+              <select id="tx-transfer-account" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors" bind:value={formTransferAccountId} disabled={splitMode}>
                 <option value="">Select account</option>
                 {#each accounts as account}
                   <option value={account.id}>{account.name}</option>
                 {/each}
               </select>
             {:else}
-              <p class="text-sm text-muted">Transfer account not required for non-transfer categories.</p>
+              <p class="text-sm text-muted-foreground">Transfer account not required for non-transfer categories.</p>
             {/if}
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-payee">Payee</label>
-            <select id="tx-payee" class="select" bind:value={formPayeeId}>
+          <div class="space-y-2">
+            <Label for="tx-payee">Payee</Label>
+            <select id="tx-payee" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors" bind:value={formPayeeId}>
               <option value="">None</option>
               {#each payees as payee}
                 <option value={payee.id}>{payee.name}</option>
@@ -989,24 +949,24 @@
             </select>
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-new-payee">New payee (optional)</label>
-            <input id="tx-new-payee" class="input" placeholder="Create payee" bind:value={formNewPayee} />
+          <div class="space-y-2">
+            <Label for="tx-new-payee">New payee (optional)</Label>
+            <Input id="tx-new-payee" placeholder="Create payee" bind:value={formNewPayee} />
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-memo">Memo</label>
-            <input id="tx-memo" class="input" bind:value={formMemo} />
+          <div class="space-y-2">
+            <Label for="tx-memo">Memo</Label>
+            <Input id="tx-memo" bind:value={formMemo} />
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-ref">Reference</label>
-            <input id="tx-ref" class="input" bind:value={formReference} />
+          <div class="space-y-2">
+            <Label for="tx-ref">Reference</Label>
+            <Input id="tx-ref" bind:value={formReference} />
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-category">Category</label>
-            <select id="tx-category" class="select" bind:value={formCategoryId} disabled={splitMode}>
+          <div class="space-y-2">
+            <Label for="tx-category">Category</Label>
+            <select id="tx-category" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors" bind:value={formCategoryId} disabled={splitMode}>
               <option value="">None</option>
               {#each categories as category}
                 <option value={category.id}>{category.name}</option>
@@ -1014,152 +974,99 @@
             </select>
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-amount">Amount</label>
-            <input id="tx-amount" class="input" placeholder="0.00" bind:value={formAmount} disabled={splitMode} />
+          <div class="space-y-2">
+            <Label for="tx-amount">Amount</Label>
+            <Input id="tx-amount" placeholder="0.00" bind:value={formAmount} disabled={splitMode} />
           </div>
 
-          <div class="form-field">
-            <label class="label" for="tx-status-select">Status</label>
-            <select id="tx-status-select" class="select" bind:value={formStatus}>
+          <div class="space-y-2">
+            <Label for="tx-status-select">Status</Label>
+            <select id="tx-status-select" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors" bind:value={formStatus}>
               <option value="uncleared">Uncleared</option>
               <option value="cleared">Cleared</option>
               <option value="reconciled">Reconciled</option>
               <option value="void">Void</option>
             </select>
           </div>
-          <div class="form-field">
-            <button class="btn btn-secondary" type="button" on:click={openSplitEditor}>Split transaction…</button>
+          <div class="space-y-2">
+            <Button variant="secondary" type="button" onclick={openSplitEditor}>Split transaction…</Button>
             {#if splitMode}
-              <p class="text-sm text-muted">Split mode enabled.</p>
+              <p class="text-sm text-muted-foreground">Split mode enabled.</p>
             {/if}
           </div>
         </div>
 
-        <footer class="dialog-footer">
-          <button class="btn btn-secondary" type="button" on:click={closeDialog}>Cancel</button>
-          <button class="btn btn-primary" type="submit" disabled={submitting}>
+        <Dialog.Footer>
+          <Button variant="outline" type="button" onclick={closeDialog}>Cancel</Button>
+          <Button type="submit" disabled={submitting}>
             {submitting ? "Saving…" : "Save"}
-          </button>
-        </footer>
+          </Button>
+        </Dialog.Footer>
       </form>
-    </div>
-  {/if}
+    </Dialog.Content>
+  </Dialog.Root>
 
-  {#if dialogOpen && splitEditorOpen}
-    <button class="dialog-backdrop" type="button" aria-label="Close split editor" on:click={closeSplitEditor}></button>
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Split editor">
-      <div class="dialog-header">
-        <h2 class="section-title">Split transaction</h2>
-      </div>
-      <div class="dialog-body">
-        <fieldset class="form-field">
-          <legend class="label">Splits</legend>
-          <div class="data-table compact">
-            <div class="data-row header">
-              <div class="data-cell heading">Account</div>
-              <div class="data-cell heading">Category</div>
-              <div class="data-cell heading amount">Amount</div>
-              <div class="data-cell heading">Memo</div>
-              <div class="data-cell heading action">Action</div>
-            </div>
-            {#each formSplits as split, idx}
-              <div class="data-row">
-                <div class="data-cell">
-                  <select class="select" bind:value={split.account_id}>
-                    <option value="">Select account</option>
-                    {#each accounts as account}
-                      <option value={account.id}>{account.name}</option>
-                    {/each}
-                  </select>
-                </div>
-                <div class="data-cell">
-                  <select class="select" bind:value={split.category_id}>
-                    <option value="">None</option>
-                    {#each categories as category}
-                      <option value={category.id}>{category.name}</option>
-                    {/each}
-                  </select>
-                </div>
-                <div class="data-cell amount">
-                  <input class="input" bind:value={split.amount} placeholder="0.00" />
-                </div>
-                <div class="data-cell">
-                  <input class="input" bind:value={split.memo} placeholder="Split memo" />
-                </div>
-                <div class="data-cell action">
-                  <button class="btn btn-ghost btn-sm" type="button" on:click={() => removeSplitRow(idx)}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            {/each}
-          </div>
-          <button class="btn btn-ghost btn-sm" type="button" on:click={addSplitRow}>Add split</button>
+  <Dialog.Root bind:open={splitEditorOpen}>
+    <Dialog.Content class="max-w-4xl">
+      <Dialog.Header>
+        <Dialog.Title>Split transaction</Dialog.Title>
+      </Dialog.Header>
+      <div class="space-y-4 py-4">
+        <div class="space-y-2">
+          <Label>Splits</Label>
+          <Table.Root>
+            <Table.Header>
+              <Table.Row>
+                <Table.Head>Account</Table.Head>
+                <Table.Head>Category</Table.Head>
+                <Table.Head class="text-right">Amount</Table.Head>
+                <Table.Head>Memo</Table.Head>
+                <Table.Head class="w-24">Action</Table.Head>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {#each formSplits as split, idx}
+                <Table.Row>
+                  <Table.Cell>
+                    <select class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={split.account_id}>
+                      <option value="">Select account</option>
+                      {#each accounts as account}
+                        <option value={account.id}>{account.name}</option>
+                      {/each}
+                    </select>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <select class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={split.category_id}>
+                      <option value="">None</option>
+                      {#each categories as category}
+                        <option value={category.id}>{category.name}</option>
+                      {/each}
+                    </select>
+                  </Table.Cell>
+                  <Table.Cell class="text-right">
+                    <Input bind:value={split.amount} placeholder="0.00" class="w-28 text-right" />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Input bind:value={split.memo} placeholder="Split memo" />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Button variant="ghost" size="sm" onclick={() => removeSplitRow(idx)}>
+                      Remove
+                    </Button>
+                  </Table.Cell>
+                </Table.Row>
+              {/each}
+            </Table.Body>
+          </Table.Root>
+          <Button variant="outline" size="sm" onclick={addSplitRow}>Add split</Button>
           {#if splitsTotalMinor() !== null}
-            <p class="text-sm text-muted">Split total: {splitsTotalMinor()}</p>
+            <p class="text-sm text-muted-foreground">Split total: {splitsTotalMinor()}</p>
           {/if}
-        </fieldset>
+        </div>
       </div>
-      <div class="dialog-footer">
-        <button class="btn btn-secondary" type="button" on:click={closeSplitEditor}>Done</button>
-      </div>
-    </div>
-  {/if}
+      <Dialog.Footer>
+        <Button variant="secondary" onclick={closeSplitEditor}>Done</Button>
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
 </main>
-
-<style>
-  .sort-button {
-    background: none;
-    border: none;
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
-  }
-
-  .col-header {
-    position: relative;
-    padding-right: 0.75rem;
-  }
-
-  .col-resizer {
-    position: absolute;
-    right: -4px;
-    top: 0;
-    height: 100%;
-    width: 8px;
-    cursor: col-resize;
-    touch-action: none;
-  }
-
-  .sort-button:focus-visible {
-    outline: 2px solid #2563eb;
-    outline-offset: 2px;
-  }
-
-  .filter-indicator {
-    margin-right: 0.35rem;
-    color: #2563eb;
-  }
-
-  .filter-row .filter-cell {
-    grid-column: 1 / -1;
-    padding: 0.75rem;
-    background: #f8fafc;
-  }
-
-  .filter-panel {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 0.75rem;
-    align-items: end;
-  }
-
-  .filter-actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
-  }
-</style>
