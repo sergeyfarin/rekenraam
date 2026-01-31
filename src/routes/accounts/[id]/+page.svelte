@@ -10,7 +10,10 @@
     account_type: string;
     name: string;
     commodity_id: number;
-    institution: string | null;
+    institution_id: number | null;
+    institution_name: string | null;
+    country_id: number | null;
+    country_name: string | null;
     number_last4: string | null;
     is_closed: boolean;
     created_at: string;
@@ -34,9 +37,29 @@
     running_balance_minor: number;
   };
 
+  type AccountDirective = {
+    id: number;
+    book_id: number;
+    account_id: number;
+    directive_type: string;
+    directive_date: string;
+    note: string | null;
+    metadata: string | null;
+    created_at: string;
+  };
+
+  type AccountBalance = {
+    account_id: number;
+    balance_minor: number;
+  };
+
   let accountId: number | null = null;
   let account: Account | null = null;
   let entries: RegisterEntry[] = [];
+  let directives: AccountDirective[] = [];
+  let balanceMinor = 0;
+  let bookingPolicy = "fifo";
+  let savingPolicy = false;
   let loading = true;
   let error = "";
 
@@ -64,6 +87,15 @@
       }
       account = fetched;
 
+      const balanceRows = await invoke<AccountBalance[]>("list_account_balances", { bookId: 1 });
+      const balanceMap = new Map(balanceRows.map((row) => [row.account_id, row.balance_minor] as const));
+      balanceMinor = balanceMap.get(accountId) ?? 0;
+
+      directives = await invoke<AccountDirective[]>("list_account_directives", { accountId });
+      if (account.account_type === "investment") {
+        bookingPolicy = await invoke<string>("get_account_booking_policy", { accountId });
+      }
+
       const rows = await invoke<RegisterEntry[]>("list_account_register_with_balance", {
         accountId,
         limit: 500,
@@ -83,6 +115,26 @@
       maximumFractionDigits: 2
     });
     return formatter.format(amountMinor / 100);
+  }
+
+  function findDirectiveDate(kind: string) {
+    const matches = directives.filter((d) => d.directive_type === kind);
+    if (matches.length === 0) return null;
+    return matches[matches.length - 1].directive_date;
+  }
+
+  async function saveBookingPolicy() {
+    if (!accountId) return;
+    savingPolicy = true;
+    try {
+      bookingPolicy = await invoke<string>("set_account_booking_policy", {
+        input: { account_id: accountId, booking_policy: bookingPolicy }
+      });
+    } catch (e) {
+      error = `Failed to update booking policy: ${String(e)}`;
+    } finally {
+      savingPolicy = false;
+    }
   }
 </script>
 
@@ -107,8 +159,11 @@
             <h1 class="bx--type-productive-heading-04">{account.name}</h1>
             <p class="bx--type-body-long-02">
               {account.account_type}
-              {#if account.institution}
-                · {account.institution}
+              {#if account.institution_name}
+                · {account.institution_name}
+              {/if}
+              {#if account.country_name}
+                · {account.country_name}
               {/if}
               {#if account.number_last4}
                 · ••••{account.number_last4}
@@ -117,6 +172,34 @@
                 · Closed
               {/if}
             </p>
+            <div class="account-meta">
+              <span>Balance: {formatMinor(balanceMinor)}</span>
+              {#if findDirectiveDate("open")}
+                <span>Opened: {findDirectiveDate("open")}</span>
+              {/if}
+              {#if findDirectiveDate("close")}
+                <span>Closed: {findDirectiveDate("close")}</span>
+              {/if}
+            </div>
+            {#if account?.account_type === "investment"}
+              <div class="booking-policy">
+                <label class="bx--label" for="booking-policy">Booking policy</label>
+                <div class="bx--select">
+                  <select
+                    id="booking-policy"
+                    class="bx--select-input"
+                    bind:value={bookingPolicy}
+                    on:change={saveBookingPolicy}
+                    disabled={savingPolicy}
+                  >
+                    <option value="fifo">FIFO</option>
+                    <option value="lifo">LIFO</option>
+                    <option value="average">Average</option>
+                    <option value="strict">Strict</option>
+                  </select>
+                </div>
+              </div>
+            {/if}
           </div>
         </div>
       </div>
@@ -182,6 +265,20 @@
 <style>
   .account-summary {
     margin-bottom: 1.5rem;
+  }
+
+  .account-meta {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: #525252;
+  }
+
+  .booking-policy {
+    margin-top: 1rem;
+    max-width: 240px;
   }
 
   .heading {

@@ -6,11 +6,14 @@ pub mod db_commodities;
 pub mod db_storage;
 #[path = "db_transactions.rs"]
 pub mod db_transactions;
+#[path = "db_reports.rs"]
+pub mod db_reports;
 
 pub use db_accounts::*;
 pub use db_commodities::*;
 pub use db_storage::*;
 pub use db_transactions::*;
+pub use db_reports::*;
 
 /*
 use std::{collections::HashSet, path::PathBuf};

@@ -128,7 +128,22 @@ const MIGRATIONS: &[(i32, &str)] = &[
     (6, include_str!("../migrations/V6__balance_constraints.sql")),
     (7, include_str!("../migrations/V7__import_rules_sessions.sql")),
     (8, include_str!("../migrations/V8__import_rules_extensions.sql")),
+    (9, include_str!("../migrations/V9__reporting.sql")),
+    (10, include_str!("../migrations/V10__institutions_countries.sql")),
+    (11, include_str!("../migrations/V11__currencies_seed.sql")),
 ];
+
+pub fn migration_versions() -> Vec<i32> {
+    MIGRATIONS.iter().map(|(version, _)| *version).collect()
+}
+
+pub fn latest_migration_version() -> i32 {
+    MIGRATIONS
+        .iter()
+        .map(|(version, _)| *version)
+        .max()
+        .unwrap_or(0)
+}
 
 fn run_migrations(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -169,4 +184,80 @@ pub fn open_and_migrate(path: &PathBuf) -> Result<(rusqlite::Connection, PathBuf
     )?;
     run_migrations(&mut conn)?;
     Ok((conn, db))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::params;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn create_temp_dir() -> PathBuf {
+        let start = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let mut temp = std::env::temp_dir();
+        temp.push(format!("rekenraam_db_test_{start}"));
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).expect("create temp dir");
+        temp
+    }
+
+    #[test]
+    fn test_report_cache_invalidation_by_book_state() {
+        let temp = create_temp_dir();
+        let (conn, _db_path) = open_and_migrate(&temp).expect("open and migrate");
+
+        let book_id: i64 = conn
+            .query_row("SELECT id FROM books WHERE name='Personal' LIMIT 1", [], |row| row.get(0))
+            .expect("book id");
+
+        let initial_seq: i64 = conn
+            .query_row(
+                "SELECT change_seq FROM book_state WHERE book_id = ?1",
+                [book_id],
+                |row| row.get(0),
+            )
+            .expect("initial change_seq");
+
+        conn.execute(
+            "INSERT INTO report_cache (book_id, report_type, params_hash, params_json, as_of_seq, payload_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![book_id, "test_report", "hash1", "{}", initial_seq, "{\"ok\":true}"],
+        )
+        .expect("insert report_cache");
+
+        let cached_seq: i64 = conn
+            .query_row(
+                "SELECT as_of_seq FROM report_cache WHERE book_id = ?1 AND report_type = 'test_report'",
+                [book_id],
+                |row| row.get(0),
+            )
+            .expect("cache as_of_seq");
+        assert_eq!(cached_seq, initial_seq);
+
+        let category_name = format!("Test Category {initial_seq}");
+        conn.execute(
+            "INSERT INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
+             VALUES (?1, NULL, ?2, 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![book_id, category_name],
+        )
+        .expect("insert category");
+
+        let updated_seq: i64 = conn
+            .query_row(
+                "SELECT change_seq FROM book_state WHERE book_id = ?1",
+                [book_id],
+                |row| row.get(0),
+            )
+            .expect("updated change_seq");
+
+        assert!(updated_seq > initial_seq, "change_seq should increment");
+        assert!(cached_seq < updated_seq, "cached report should be stale");
+
+        let _ = fs::remove_file(normalize_db_path(&temp));
+        let _ = fs::remove_dir_all(&temp);
+    }
 }

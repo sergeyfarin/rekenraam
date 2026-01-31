@@ -1,4 +1,5 @@
 use std::{path::PathBuf, sync::Mutex};
+use tauri::async_runtime::JoinHandle;
 
 #[derive(Default)]
 pub struct DbStateInner {
@@ -9,4 +10,9 @@ pub struct DbStateInner {
 #[derive(Default)]
 pub struct DbState {
     pub inner: Mutex<DbStateInner>,
+}
+
+#[derive(Default)]
+pub struct BackupSchedulerState {
+    pub task: Mutex<Option<JoinHandle<()>>>,
 }

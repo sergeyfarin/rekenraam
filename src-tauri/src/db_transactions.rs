@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use csv::ReaderBuilder;
+
 use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
@@ -388,6 +390,25 @@ fn parse_date_mmddyy(raw: &str) -> Option<String> {
     Some(format_ymd(y, m, d))
 }
 
+fn parse_date_ymd(raw: &str) -> Option<String> {
+    let cleaned = raw.trim().replace('\\', "/").replace('-', "/");
+    let parts: Vec<&str> = cleaned.split('/').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let y: i32 = parts[0].parse().ok()?;
+    let m: i32 = parts[1].parse().ok()?;
+    let d: i32 = parts[2].parse().ok()?;
+    if y < 1000 {
+        return None;
+    }
+    Some(format_ymd(y, m, d))
+}
+
+fn parse_csv_date(raw: &str) -> Option<String> {
+    parse_date_ymd(raw).or_else(|| parse_date_mmddyy(raw))
+}
+
 fn parse_ofx_date(raw: &str) -> Option<String> {
     let digits: String = raw.chars().take(8).collect();
     if digits.len() != 8 {
@@ -590,6 +611,89 @@ fn parse_hbci_mt940(content: &str) -> Result<Vec<ImportDraft>, String> {
     Ok(results)
 }
 
+fn parse_csv(content: &str) -> Result<Vec<ImportDraft>, String> {
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .flexible(true)
+        .from_reader(content.as_bytes());
+
+    let headers = reader
+        .headers()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|h| h.trim().to_lowercase())
+        .collect::<Vec<String>>();
+
+    if headers.is_empty() {
+        return Err("csv header row is required".to_string());
+    }
+
+    let idx = |names: &[&str]| -> Option<usize> {
+        names
+            .iter()
+            .find_map(|name| headers.iter().position(|h| h == name))
+    };
+
+    let date_idx = idx(&["date", "txn_date", "transaction_date"]);
+    let amount_idx = idx(&["amount", "amount_minor"]);
+    let payee_idx = idx(&["payee", "payee_name"]);
+    let memo_idx = idx(&["memo", "notes"]);
+    let reference_idx = idx(&["reference", "ref"]);
+    let import_id_idx = idx(&["import_id", "fitid"]);
+    let currency_idx = idx(&["currency", "currency_code"]);
+
+    if date_idx.is_none() && amount_idx.is_none() {
+        return Err("csv must include at least date or amount column".to_string());
+    }
+
+    let mut results = Vec::new();
+    for record in reader.records() {
+        let record = record.map_err(|e| e.to_string())?;
+        let get = |idx: Option<usize>| -> Option<String> {
+            idx.and_then(|i| record.get(i))
+                .map(|v| v.trim())
+                .filter(|v| !v.is_empty())
+                .map(|v| v.to_string())
+        };
+
+        let raw_date = get(date_idx);
+        let raw_amount = get(amount_idx);
+        let txn_date = raw_date.as_deref().and_then(parse_csv_date);
+        let amount_minor = match raw_amount.as_deref() {
+            Some(val) => Some(parse_amount_to_minor(val, 2)?),
+            None => None,
+        };
+
+        let draft = ImportDraft {
+            payee_name: get(payee_idx),
+            memo: get(memo_idx),
+            txn_date,
+            amount_minor,
+            reference: get(reference_idx),
+            import_id: get(import_id_idx),
+            currency_code: get(currency_idx),
+            account_id: None,
+            category_id: None,
+            payee_id: None,
+        };
+
+        if draft.txn_date.is_some() || draft.amount_minor.is_some() {
+            results.push(draft);
+        }
+    }
+
+    Ok(results)
+}
+
+fn looks_like_csv(content: &str) -> bool {
+    let first_line = content.lines().find(|l| !l.trim().is_empty());
+    let Some(line) = first_line else {
+        return false;
+    };
+    let lower = line.to_lowercase();
+    line.contains(',') && lower.contains("date") && lower.contains("amount")
+}
+
 #[command]
 pub fn parse_import_file(format: String, content: String) -> Result<Vec<ImportDraft>, String> {
     let fmt = format.to_lowercase();
@@ -600,6 +704,8 @@ pub fn parse_import_file(format: String, content: String) -> Result<Vec<ImportDr
             "qif"
         } else if content.contains(":61:") {
             "hbci"
+        } else if looks_like_csv(&content) {
+            "csv"
         } else {
             return Err("unable to detect import format".to_string());
         }
@@ -611,6 +717,7 @@ pub fn parse_import_file(format: String, content: String) -> Result<Vec<ImportDr
         "qif" => parse_qif(&content),
         "ofx" => parse_ofx(&content),
         "hbci" => parse_hbci_mt940(&content),
+        "csv" => parse_csv(&content),
         _ => Err("unsupported import format".to_string()),
     }
 }
@@ -1623,6 +1730,435 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(rows > 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::open_and_migrate;
+    use crate::state::DbStateInner;
+    use rusqlite::params;
+    use std::fs;
+    use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn create_temp_db() -> DbState {
+        let start = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let mut temp = std::env::temp_dir();
+        temp.push(format!("rekenraam_txn_test_{start}_{counter}"));
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).expect("create temp dir");
+
+        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        DbState {
+            inner: Mutex::new(DbStateInner {
+                db_path: Some(db_path),
+                conn: Some(conn),
+            }),
+        }
+    }
+
+    fn as_state<'a>(db: &'a DbState) -> State<'a, DbState> {
+        unsafe { std::mem::transmute::<&'a DbState, State<'a, DbState>>(db) }
+    }
+
+    fn lookup_account_id(conn: &rusqlite::Connection, name: &str) -> i64 {
+        conn.query_row(
+            "SELECT id FROM accounts WHERE name = ?1 LIMIT 1",
+            [name],
+            |row| row.get(0),
+        )
+        .expect("account id")
+    }
+
+    fn lookup_usd_id(conn: &rusqlite::Connection) -> i64 {
+        conn.query_row(
+            "SELECT id FROM commodities WHERE symbol = 'USD' LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("usd id")
+    }
+
+    fn create_expense_account(conn: &rusqlite::Connection) -> i64 {
+        let book_id: i64 = conn
+            .query_row("SELECT id FROM books WHERE name='Personal' LIMIT 1", [], |row| row.get(0))
+            .expect("book id");
+        let commodity_id = lookup_usd_id(conn);
+        conn.execute(
+            "INSERT INTO accounts (book_id, type, name, commodity_id) VALUES (?1, 'expense', 'Test Expense', ?2)",
+            params![book_id, commodity_id],
+        )
+        .expect("insert expense account");
+        conn.last_insert_rowid()
+    }
+
+    #[test]
+    fn test_create_update_register() {
+        let db_state = create_temp_db();
+        let (checking_id, expense_id, commodity_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let checking_id = lookup_account_id(conn, "Checking Account");
+            let expense_id = create_expense_account(conn);
+            let commodity_id = lookup_usd_id(conn);
+            (checking_id, expense_id, commodity_id)
+        };
+
+        let created = create_transaction_with_splits(
+            as_state(&db_state),
+            CreateTransactionInput {
+                book_id: 1,
+                txn_date: "2024-02-01".to_string(),
+                payee_id: None,
+                memo: Some("Groceries".to_string()),
+                status: Some("cleared".to_string()),
+                reference: None,
+                import_id: None,
+                splits: vec![
+                    CreateSplit {
+                        account_id: checking_id,
+                        commodity_id,
+                        amount_minor: -5000,
+                        category_id: None,
+                        memo: None,
+                    },
+                    CreateSplit {
+                        account_id: expense_id,
+                        commodity_id,
+                        amount_minor: 5000,
+                        category_id: None,
+                        memo: None,
+                    },
+                ],
+            },
+        )
+        .expect("create transaction");
+        assert_eq!(created.splits.len(), 2);
+
+        let register = list_account_register_with_balance(
+            as_state(&db_state),
+            checking_id,
+            None,
+            None,
+        )
+        .expect("register with balance");
+        assert_eq!(register.len(), 1);
+        assert_eq!(register[0].running_balance_minor, -5000);
+
+        let updated = update_transaction_with_splits(
+            as_state(&db_state),
+            UpdateTransactionInput {
+                id: created.transaction.id,
+                book_id: 1,
+                txn_date: "2024-02-01".to_string(),
+                payee_id: None,
+                memo: Some("Groceries updated".to_string()),
+                status: Some("cleared".to_string()),
+                reference: None,
+                import_id: None,
+                splits: vec![
+                    CreateSplit {
+                        account_id: checking_id,
+                        commodity_id,
+                        amount_minor: -7000,
+                        category_id: None,
+                        memo: None,
+                    },
+                    CreateSplit {
+                        account_id: expense_id,
+                        commodity_id,
+                        amount_minor: 7000,
+                        category_id: None,
+                        memo: None,
+                    },
+                ],
+            },
+        )
+        .expect("update transaction");
+        assert_eq!(updated.splits.len(), 2);
+
+        let register = list_account_register_with_balance(
+            as_state(&db_state),
+            checking_id,
+            None,
+            None,
+        )
+        .expect("register with balance updated");
+        assert_eq!(register.len(), 1);
+        assert_eq!(register[0].running_balance_minor, -7000);
+    }
+
+    #[test]
+    fn test_import_rules_and_sessions() {
+        let db_state = create_temp_db();
+
+        let err = create_import_rule(
+            as_state(&db_state),
+            ImportRuleCreate {
+                book_id: 1,
+                rule_kind: "payee".to_string(),
+                match_type: Some("invalid".to_string()),
+                match_text: "Amazon".to_string(),
+                priority: None,
+                amount_min_minor: None,
+                amount_max_minor: None,
+                date_from: None,
+                date_to: None,
+                match_account_id: None,
+                target_account_id: None,
+                target_category_id: None,
+                target_payee_id: None,
+            },
+        )
+        .expect_err("invalid match_type should error");
+        assert!(err.contains("match_type"));
+
+        let rule = create_import_rule(
+            as_state(&db_state),
+            ImportRuleCreate {
+                book_id: 1,
+                rule_kind: "memo".to_string(),
+                match_type: Some("contains".to_string()),
+                match_text: "Coffee".to_string(),
+                priority: Some(10),
+                amount_min_minor: None,
+                amount_max_minor: None,
+                date_from: None,
+                date_to: None,
+                match_account_id: None,
+                target_account_id: None,
+                target_category_id: None,
+                target_payee_id: None,
+            },
+        )
+        .expect("create import rule");
+
+        let rules = list_import_rules(as_state(&db_state), 1).expect("list rules");
+        assert!(rules.iter().any(|r| r.id == rule.id));
+
+        let deleted = delete_import_rule(as_state(&db_state), rule.id).expect("delete rule");
+        assert!(deleted);
+
+        let session = start_import_session(
+            as_state(&db_state),
+            ImportSessionStartInput {
+                book_id: 1,
+                source: Some("qif".to_string()),
+                notes: Some("test".to_string()),
+            },
+        )
+        .expect("start session");
+        assert_eq!(session.status, "started");
+
+        let committed = commit_import_session(as_state(&db_state), session.id)
+            .expect("commit session");
+        assert_eq!(committed.status, "committed");
+    }
+
+    #[test]
+    fn test_parse_import_formats_and_matching() {
+        let qif = "!Type:Bank\nD01/02/2024\nT-12.34\nPTest Store\nMNote\n^";
+        let qif_drafts = parse_import_file("qif".to_string(), qif.to_string())
+            .expect("parse qif");
+        assert_eq!(qif_drafts.len(), 1);
+        assert_eq!(qif_drafts[0].amount_minor, Some(-1234));
+
+        let ofx = "<OFX>\n<STMTTRN>\n<DTPOSTED>20240102\n<TRNAMT>-45.67\n<NAME>OFX Payee\n<MEMO>Memo\n<FITID>123\n</STMTTRN>\n";
+        let ofx_drafts = parse_import_file("ofx".to_string(), ofx.to_string())
+            .expect("parse ofx");
+        assert_eq!(ofx_drafts.len(), 1);
+        assert_eq!(ofx_drafts[0].amount_minor, Some(-4567));
+
+        let hbci = ":61:240102C12,34NTRFNONREF\n:86:HB memo";
+        let hbci_drafts = parse_import_file("hbci".to_string(), hbci.to_string())
+            .expect("parse hbci");
+        assert_eq!(hbci_drafts.len(), 1);
+        assert_eq!(hbci_drafts[0].amount_minor, Some(1234));
+
+        let csv = "date,amount,payee,memo,reference,import_id,currency\n2024-01-05,-10.50,Cafe,Latte,REF1,IMP1,USD";
+        let csv_drafts = parse_import_file("csv".to_string(), csv.to_string())
+            .expect("parse csv");
+        assert_eq!(csv_drafts.len(), 1);
+        assert_eq!(csv_drafts[0].amount_minor, Some(-1050));
+        assert_eq!(csv_drafts[0].payee_name.as_deref(), Some("Cafe"));
+
+        let auto_csv = parse_import_file("auto".to_string(), csv.to_string())
+            .expect("auto detect csv");
+        assert_eq!(auto_csv.len(), 1);
+
+        let auto_drafts = parse_import_file("auto".to_string(), ofx.to_string())
+            .expect("auto detect");
+        assert_eq!(auto_drafts.len(), 1);
+
+        let db_state = create_temp_db();
+        let checking_id = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            lookup_account_id(conn, "Checking Account")
+        };
+
+        let draft = ImportDraft {
+            payee_name: Some("Match Payee".to_string()),
+            memo: None,
+            txn_date: Some("2024-04-01".to_string()),
+            amount_minor: Some(-2500),
+            reference: None,
+            import_id: Some("match-1".to_string()),
+            currency_code: None,
+            account_id: None,
+            category_id: None,
+            payee_id: None,
+        };
+
+        let draft_match = ImportDraft {
+            payee_name: Some("Match Payee".to_string()),
+            memo: None,
+            txn_date: Some("2024-04-01".to_string()),
+            amount_minor: Some(-2500),
+            reference: None,
+            import_id: Some("match-1".to_string()),
+            currency_code: None,
+            account_id: None,
+            category_id: None,
+            payee_id: None,
+        };
+
+        let created = import_transactions(
+            as_state(&db_state),
+            checking_id,
+            vec![draft],
+            false,
+        )
+        .expect("import transactions");
+        assert_eq!(created.created_tx_ids.len(), 1);
+        assert_eq!(created.skipped, 0);
+
+        let matches = match_import_transactions(
+            as_state(&db_state),
+            checking_id,
+            vec![draft_match],
+        )
+        .expect("match imports");
+        assert_eq!(matches.len(), 1);
+        assert!(matches[0].matched_tx_id.is_some());
+    }
+
+    #[test]
+    fn test_import_negative_paths_and_duplicates() {
+        let db_state = create_temp_db();
+        let (checking_id, commodity_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let checking_id = lookup_account_id(conn, "Checking Account");
+            let commodity_id = lookup_usd_id(conn);
+            (checking_id, commodity_id)
+        };
+
+        let drafts = vec![
+            ImportDraft {
+                payee_name: Some("Missing Amount".to_string()),
+                memo: None,
+                txn_date: Some("2024-06-01".to_string()),
+                amount_minor: None,
+                reference: None,
+                import_id: None,
+                currency_code: None,
+                account_id: None,
+                category_id: None,
+                payee_id: None,
+            },
+            ImportDraft {
+                payee_name: Some("Missing Date".to_string()),
+                memo: None,
+                txn_date: None,
+                amount_minor: Some(-1234),
+                reference: None,
+                import_id: None,
+                currency_code: None,
+                account_id: None,
+                category_id: None,
+                payee_id: None,
+            },
+        ];
+
+        let result = import_transactions(
+            as_state(&db_state),
+            checking_id,
+            drafts,
+            false,
+        )
+        .expect("import transactions");
+        assert_eq!(result.created_tx_ids.len(), 0);
+        assert_eq!(result.skipped, 2);
+
+        let tx_id = {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+            conn.execute(
+                "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, created_at, updated_at)
+                 VALUES (1, '2024-06-05', NULL, 'Duplicate Memo', 'cleared', NULL, 'dup-1', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [],
+            )
+            .expect("insert tx");
+            let tx_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, -5000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx_id, checking_id, commodity_id],
+            )
+            .expect("insert split");
+            tx_id
+        };
+
+        let match_by_import_id = ImportDraft {
+            payee_name: None,
+            memo: Some("Duplicate Memo".to_string()),
+            txn_date: Some("2024-06-05".to_string()),
+            amount_minor: Some(-5000),
+            reference: None,
+            import_id: Some("dup-1".to_string()),
+            currency_code: None,
+            account_id: None,
+            category_id: None,
+            payee_id: None,
+        };
+
+        let matches = match_import_transactions(
+            as_state(&db_state),
+            checking_id,
+            vec![match_by_import_id],
+        )
+        .expect("match by import_id");
+        assert_eq!(matches[0].matched_tx_id, Some(tx_id));
+
+        let match_by_fields = ImportDraft {
+            payee_name: None,
+            memo: Some("Duplicate Memo".to_string()),
+            txn_date: Some("2024-06-05".to_string()),
+            amount_minor: Some(-5000),
+            reference: None,
+            import_id: None,
+            currency_code: None,
+            account_id: None,
+            category_id: None,
+            payee_id: None,
+        };
+
+        let matches = match_import_transactions(
+            as_state(&db_state),
+            checking_id,
+            vec![match_by_fields],
+        )
+        .expect("match by fields");
+        assert_eq!(matches[0].matched_tx_id, Some(tx_id));
+    }
 }
 
 #[command]

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import AccountTreeItem from "./AccountTreeItem.svelte";
 
   type Account = {
     id: number;
@@ -9,7 +10,10 @@
     account_type: string;
     name: string;
     commodity_id: number;
-    institution: string | null;
+    institution_id: number | null;
+    institution_name: string | null;
+    country_id: number | null;
+    country_name: string | null;
     number_last4: string | null;
     is_closed: boolean;
     created_at: string;
@@ -19,6 +23,21 @@
   type AccountBalance = {
     account_id: number;
     balance_minor: number;
+  };
+
+  type AccountTreeNode = {
+    id: number;
+    parent_id: number | null;
+    name: string;
+    account_type: string;
+    commodity_id: number;
+    commodity_name: string;
+    commodity_scale: number;
+    institution_name: string | null;
+    country_name: string | null;
+    balance_minor: number;
+    rollup_balance_minor: number;
+    children: AccountTreeNode[];
   };
 
   type Commodity = {
@@ -33,11 +52,34 @@
     updated_at: string;
   };
 
+  type Country = {
+    id: number;
+    book_id: number;
+    code: string;
+    name: string;
+    created_at: string;
+    updated_at: string;
+  };
+
+  type Institution = {
+    id: number;
+    book_id: number;
+    name: string;
+    kind: string;
+    country_id: number | null;
+    country_name: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+
   const bookId = 1;
 
   let accounts: Account[] = [];
   let balances = new Map<number, number>();
+  let accountTree: AccountTreeNode[] = [];
   let commodities: Commodity[] = [];
+  let countries: Country[] = [];
+  let institutions: Institution[] = [];
   let loading = true;
   let error = "";
 
@@ -49,7 +91,12 @@
   let formName = "";
   let formType: Account["account_type"] = "checking";
   let formCommodityId: number | null = null;
-  let formInstitution = "";
+  let formInstitutionId: number | null = null;
+  let formCountryId: number | null = null;
+  let newInstitutionName = "";
+  let newInstitutionKind: "bank" | "broker" | "credit_union" | "other" = "bank";
+  let newInstitutionCountryId: number | null = null;
+  let creatingInstitution = false;
   let formLast4 = "";
   let formIsClosed = false;
   let formParentId: number | null = null;
@@ -59,10 +106,15 @@
   let sortDir: "asc" | "desc" = "asc";
   let search = "";
   let includeClosed = false;
+  let showAdvancedFilters = false;
+  let showAccountTree = true;
 
   onMount(async () => {
     await loadAccounts();
     await loadCommodities();
+    await loadCountries();
+    await loadInstitutions();
+    await loadAccountTree();
   });
 
   async function loadAccounts() {
@@ -89,6 +141,15 @@
     }
   }
 
+  async function loadAccountTree() {
+    try {
+      accountTree = await invoke<AccountTreeNode[]>("get_account_tree", { bookId });
+    } catch (e) {
+      error = `Failed to load account tree: ${String(e)}`;
+      accountTree = [];
+    }
+  }
+
   async function loadCommodities() {
     try {
       const rows = await invoke<Commodity[]>("list_commodities", { bookId });
@@ -99,6 +160,24 @@
     } catch (e) {
       error = `Failed to load commodities: ${String(e)}`;
       commodities = [];
+    }
+  }
+
+  async function loadCountries() {
+    try {
+      countries = await invoke<Country[]>("list_countries", { bookId });
+    } catch (e) {
+      error = `Failed to load countries: ${String(e)}`;
+      countries = [];
+    }
+  }
+
+  async function loadInstitutions() {
+    try {
+      institutions = await invoke<Institution[]>("list_institutions", { bookId });
+    } catch (e) {
+      error = `Failed to load institutions: ${String(e)}`;
+      institutions = [];
     }
   }
 
@@ -114,9 +193,23 @@
     return formatter.format(amountMinor / 100);
   }
 
+  function formatMinorWithScale(amountMinor: number, scale: number) {
+    const formatter = new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: scale,
+      maximumFractionDigits: scale
+    });
+    return formatter.format(amountMinor / Math.pow(10, scale));
+  }
+
+  function normalizeOptionalId(value: number | string | null) {
+    if (value === null || value === "") return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
   function groupLabel(account: Account) {
     if (groupBy === "institution") {
-      return account.institution?.trim() || "Unknown institution";
+      return account.institution_name?.trim() || "Unknown institution";
     }
     if (groupBy === "type") {
       return account.account_type || "Unknown type";
@@ -131,7 +224,11 @@
     formName = "";
     formType = "checking";
     formCommodityId = commodities[0]?.id ?? null;
-    formInstitution = "";
+    formInstitutionId = null;
+    formCountryId = null;
+    newInstitutionName = "";
+    newInstitutionKind = "bank";
+    newInstitutionCountryId = null;
     formLast4 = "";
     formIsClosed = false;
     formParentId = null;
@@ -144,10 +241,42 @@
     formName = account.name;
     formType = account.account_type;
     formCommodityId = account.commodity_id;
-    formInstitution = account.institution ?? "";
+    formInstitutionId = account.institution_id ?? null;
+    formCountryId = account.country_id ?? null;
+    newInstitutionName = "";
+    newInstitutionKind = "bank";
+    newInstitutionCountryId = account.country_id ?? null;
     formLast4 = account.number_last4 ?? "";
     formIsClosed = account.is_closed;
     formParentId = account.parent_id ?? null;
+  }
+
+  async function createInstitutionInline() {
+    if (!newInstitutionName.trim()) {
+      error = "Institution name is required.";
+      return;
+    }
+
+    creatingInstitution = true;
+    error = "";
+
+    try {
+      const created = await invoke<Institution>("create_institution", {
+        input: {
+          book_id: bookId,
+          name: newInstitutionName.trim(),
+          kind: newInstitutionKind,
+          country_id: newInstitutionCountryId
+        }
+      });
+      await loadInstitutions();
+      formInstitutionId = created.id;
+      newInstitutionName = "";
+    } catch (e) {
+      error = `Failed to create institution: ${String(e)}`;
+    } finally {
+      creatingInstitution = false;
+    }
   }
 
   function closeDialog() {
@@ -178,7 +307,8 @@
             account_type: formType,
             name: formName.trim(),
             commodity_id: formCommodityId,
-            institution: formInstitution.trim() || null,
+            institution_id: normalizeOptionalId(formInstitutionId),
+            country_id: normalizeOptionalId(formCountryId),
             number_last4: formLast4.trim() || null,
             is_closed: formIsClosed
           }
@@ -192,7 +322,8 @@
             account_type: formType,
             name: formName.trim(),
             commodity_id: formCommodityId,
-            institution: formInstitution.trim() || null,
+            institution_id: normalizeOptionalId(formInstitutionId),
+            country_id: normalizeOptionalId(formCountryId),
             number_last4: formLast4.trim() || null,
             is_closed: formIsClosed
           }
@@ -213,7 +344,8 @@
     if (!search.trim()) return true;
     const haystack = [
       account.name,
-      account.institution ?? "",
+      account.institution_name ?? "",
+      account.country_name ?? "",
       account.account_type,
       account.number_last4 ?? ""
     ]
@@ -228,7 +360,7 @@
       return direction * (accountBalance(a) - accountBalance(b));
     }
     if (sortBy === "institution") {
-      return direction * (a.institution ?? "").localeCompare(b.institution ?? "");
+      return direction * (a.institution_name ?? "").localeCompare(b.institution_name ?? "");
     }
     if (sortBy === "type") {
       return direction * a.account_type.localeCompare(b.account_type);
@@ -267,56 +399,45 @@
       </div>
     </div>
 
+    <div class="bx--row">
+      <div class="bx--col-lg-12">
+        <div class="bx--tile account-tree">
+          <div class="tree-header">
+            <h2 class="bx--type-productive-heading-03">Account tree</h2>
+            <button
+              class="bx--btn bx--btn--ghost bx--btn--sm"
+              type="button"
+              on:click={() => (showAccountTree = !showAccountTree)}
+            >
+              {showAccountTree ? "Hide" : "Show"}
+            </button>
+          </div>
+          {#if showAccountTree}
+            {#if accountTree.length === 0}
+              <p class="bx--type-body-short-01">No accounts yet.</p>
+            {:else}
+              <ul class="tree">
+                {#each accountTree as node}
+                  <AccountTreeItem {node} {formatMinorWithScale} />
+                {/each}
+              </ul>
+            {/if}
+          {/if}
+        </div>
+      </div>
+    </div>
+
     <div class="bx--row controls">
-      <div class="bx--col-lg-4 bx--col-md-4 bx--col-sm-4">
+      <div class="bx--col-lg-5 bx--col-md-4 bx--col-sm-4">
         <div class="bx--form-item">
           <label class="bx--label" for="account-search">Search</label>
           <input
             id="account-search"
             class="bx--text-input"
             type="text"
-            placeholder="Search by name, institution, type, or last4"
+            placeholder="Search by name, institution, country, type, or last4"
             bind:value={search}
           />
-        </div>
-      </div>
-
-      <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
-        <div class="bx--form-item">
-          <label class="bx--label" for="group-by">Group by</label>
-          <div class="bx--select">
-            <select id="group-by" class="bx--select-input" bind:value={groupBy}>
-              <option value="institution">Institution</option>
-              <option value="type">Account type</option>
-              <option value="none">None</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
-        <div class="bx--form-item">
-          <label class="bx--label" for="sort-by">Sort by</label>
-          <div class="bx--select">
-            <select id="sort-by" class="bx--select-input" bind:value={sortBy}>
-              <option value="name">Name</option>
-              <option value="balance">Balance</option>
-              <option value="institution">Institution</option>
-              <option value="type">Account type</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="bx--col-lg-2 bx--col-md-4 bx--col-sm-4">
-        <div class="bx--form-item">
-          <label class="bx--label" for="sort-dir">Direction</label>
-          <div class="bx--select">
-            <select id="sort-dir" class="bx--select-input" bind:value={sortDir}>
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -328,7 +449,60 @@
           </label>
         </div>
       </div>
+
+      <div class="bx--col-lg-4 bx--col-md-4 bx--col-sm-4 controls-actions">
+        <button
+          class="bx--btn bx--btn--ghost"
+          type="button"
+          on:click={() => (showAdvancedFilters = !showAdvancedFilters)}
+        >
+          {showAdvancedFilters ? "Hide filters" : "Show filters"}
+        </button>
+      </div>
     </div>
+
+    {#if showAdvancedFilters}
+      <div class="bx--row advanced-filters">
+        <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
+          <div class="bx--form-item">
+            <label class="bx--label" for="group-by">Group by</label>
+            <div class="bx--select">
+              <select id="group-by" class="bx--select-input" bind:value={groupBy}>
+                <option value="institution">Institution</option>
+                <option value="type">Account type</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
+          <div class="bx--form-item">
+            <label class="bx--label" for="sort-by">Sort by</label>
+            <div class="bx--select">
+              <select id="sort-by" class="bx--select-input" bind:value={sortBy}>
+                <option value="name">Name</option>
+                <option value="balance">Balance</option>
+                <option value="institution">Institution</option>
+                <option value="type">Account type</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bx--col-lg-3 bx--col-md-4 bx--col-sm-4">
+          <div class="bx--form-item">
+            <label class="bx--label" for="sort-dir">Direction</label>
+            <div class="bx--select">
+              <select id="sort-dir" class="bx--select-input" bind:value={sortDir}>
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    {/if}
 
     {#if loading}
       <div class="bx--row">
@@ -377,7 +551,10 @@
                           </div>
                         </div>
                         <div class="bx--structured-list-cell">
-                          {account.institution ?? "—"}
+                            {account.institution_name ?? "—"}
+                            {#if account.country_name}
+                              <div class="bx--type-body-short-01 meta">{account.country_name}</div>
+                            {/if}
                         </div>
                         <div class="bx--structured-list-cell amount">
                           {formatMinor(accountBalance(account))}
@@ -462,13 +639,64 @@
           </div>
 
           <div class="bx--form-item">
+            <label class="bx--label" for="account-country">Country</label>
+            <div class="bx--select">
+              <select id="account-country" class="bx--select-input" bind:value={formCountryId}>
+                <option value="">None</option>
+                {#each countries as country}
+                  <option value={country.id}>{country.name} ({country.code})</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+
+          <div class="bx--form-item">
             <label class="bx--label" for="account-institution">Institution</label>
-            <input
-              id="account-institution"
-              class="bx--text-input"
-              type="text"
-              bind:value={formInstitution}
-            />
+            <div class="bx--select">
+              <select id="account-institution" class="bx--select-input" bind:value={formInstitutionId}>
+                <option value="">None</option>
+                {#each institutions as institution}
+                  <option value={institution.id}>{institution.name}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+
+          <div class="bx--form-item">
+            <label class="bx--label" for="new-institution-name">Create new institution</label>
+            <div class="inline-create">
+              <input
+                id="new-institution-name"
+                class="bx--text-input"
+                type="text"
+                placeholder="Institution name"
+                bind:value={newInstitutionName}
+              />
+              <div class="bx--select">
+                <select class="bx--select-input" bind:value={newInstitutionKind}>
+                  <option value="bank">Bank</option>
+                  <option value="broker">Broker</option>
+                  <option value="credit_union">Credit union</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="bx--select">
+                <select class="bx--select-input" bind:value={newInstitutionCountryId}>
+                  <option value="">Country</option>
+                  {#each countries as country}
+                    <option value={country.id}>{country.name}</option>
+                  {/each}
+                </select>
+              </div>
+              <button
+                class="bx--btn bx--btn--secondary"
+                type="button"
+                on:click={createInstitutionInline}
+                disabled={creatingInstitution}
+              >
+                {creatingInstitution ? "Adding…" : "Add"}
+              </button>
+            </div>
           </div>
 
           <div class="bx--form-item">
@@ -509,6 +737,18 @@
     margin-bottom: 1.5rem;
   }
 
+  .controls-actions {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding-bottom: 0.5rem;
+  }
+
+  .advanced-filters {
+    margin-top: -0.5rem;
+    margin-bottom: 1rem;
+  }
+
   .header-actions {
     display: flex;
     justify-content: flex-end;
@@ -541,6 +781,58 @@
 
   .checkbox {
     padding-top: 1.5rem;
+  }
+
+  .account-tree {
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .tree-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  :global(.tree) {
+    list-style: none;
+    margin: 0.75rem 0 0 0;
+    padding-left: 0;
+  }
+
+  :global(.tree-item) {
+    padding: 0.25rem 0;
+  }
+
+  :global(.tree-item > .tree) {
+    padding-left: 1rem;
+    border-left: 1px solid #e0e0e0;
+    margin-left: 0.25rem;
+  }
+
+  :global(.tree-row) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  :global(.tree-title) {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+
+  :global(.tree-meta) {
+    font-size: 0.75rem;
+    color: #6f6f6f;
+  }
+
+  :global(.tree-balances) {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.875rem;
   }
 
   .dialog-backdrop {
@@ -577,5 +869,19 @@
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
+  }
+
+  .inline-create {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .inline-create {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
   }
 </style>
