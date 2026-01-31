@@ -1213,20 +1213,20 @@ pub fn sell_commodity(
     )?;
 
     let policy = account_booking_policy(&tx, input.investment_account_id)?;
-    let requested = input.lot_strategy.to_lowercase();
-    let strategy = if policy == "strict" {
+    let mut requested = input.lot_strategy.trim().to_lowercase();
+    if requested.is_empty() || requested == "default" {
+        requested = policy.clone();
+    }
+
+    if policy == "strict" {
         if requested != "custom" {
             return Err("strict booking requires custom lot allocations".to_string());
         }
-        "custom".to_string()
-    } else if policy == "fifo" || policy == "lifo" || policy == "average" {
-        policy.clone()
-    } else {
-        if requested != "fifo" && requested != "lifo" && requested != "custom" && requested != "average" {
-            return Err("lot strategy must be fifo, lifo, average, or custom".to_string());
-        }
-        requested
-    };
+    } else if requested != "fifo" && requested != "lifo" && requested != "custom" && requested != "average" {
+        return Err("lot strategy must be fifo, lifo, average, or custom".to_string());
+    }
+
+    let strategy = requested;
 
     if strategy == "custom" && policy == "strict" && input.allow_short {
         return Err("strict booking does not allow short allocations".to_string());
@@ -2704,4 +2704,569 @@ pub fn delete_dividend_income_category(db: State<DbState>, id: i64) -> Result<bo
         .execute("DELETE FROM dividend_income_categories WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
     Ok(rows > 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::open_and_migrate;
+    use crate::state::DbStateInner;
+    use rusqlite::params;
+    use std::fs;
+    use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn create_temp_db() -> DbState {
+        let start = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let mut temp = std::env::temp_dir();
+        temp.push(format!("rekenraam_commodities_test_{start}_{counter}"));
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).expect("create temp dir");
+
+        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        DbState {
+            inner: Mutex::new(DbStateInner {
+                db_path: Some(db_path),
+                conn: Some(conn),
+            }),
+        }
+    }
+
+    fn as_state<'a>(db: &'a DbState) -> State<'a, DbState> {
+        unsafe { std::mem::transmute::<&'a DbState, State<'a, DbState>>(db) }
+    }
+
+    fn get_usd_id(conn: &rusqlite::Connection) -> i64 {
+        conn.query_row("SELECT id FROM commodities WHERE symbol='USD' LIMIT 1", [], |row| row.get(0))
+            .expect("usd id")
+    }
+
+    fn create_stock_commodity(conn: &rusqlite::Connection) -> i64 {
+        let book_id: i64 = conn
+            .query_row("SELECT id FROM books WHERE name='Personal' LIMIT 1", [], |row| row.get(0))
+            .expect("book id");
+        conn.execute(
+            "INSERT INTO commodities (book_id, kind, symbol, name, scale)
+             VALUES (?1, 'stock', 'ACME', 'ACME Corp', 2)",
+            params![book_id],
+        )
+        .expect("insert commodity");
+        conn.last_insert_rowid()
+    }
+
+    fn create_investment_account(conn: &rusqlite::Connection, commodity_id: i64) -> i64 {
+        let book_id: i64 = conn
+            .query_row("SELECT id FROM books WHERE name='Personal' LIMIT 1", [], |row| row.get(0))
+            .expect("book id");
+        conn.execute(
+            "INSERT INTO accounts (book_id, type, name, commodity_id)
+             VALUES (?1, 'investment', 'Brokerage', ?2)",
+            params![book_id, commodity_id],
+        )
+        .expect("insert investment account");
+        conn.last_insert_rowid()
+    }
+
+    fn get_checking_account(conn: &rusqlite::Connection) -> i64 {
+        conn.query_row("SELECT id FROM accounts WHERE name='Checking Account' LIMIT 1", [], |row| row.get(0))
+            .expect("checking id")
+    }
+
+    #[test]
+    fn test_prices_positions_and_gains() {
+        let db_state = create_temp_db();
+
+        let (stock_id, investment_account_id, cash_account_id, usd_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let stock_id = create_stock_commodity(conn);
+            let investment_account_id = create_investment_account(conn, stock_id);
+            let cash_account_id = get_checking_account(conn);
+            let usd_id = get_usd_id(conn);
+            (stock_id, investment_account_id, cash_account_id, usd_id)
+        };
+
+        let buy = buy_commodity(
+            as_state(&db_state),
+            BuyCommodityInput {
+                book_id: 1,
+                txn_date: "2024-01-10".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 1000,
+                cash_amount_minor: 100_000,
+                memo: Some("buy".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("buy commodity");
+        assert!(buy.transaction_id > 0);
+
+        let _price = create_commodity_price(
+            as_state(&db_state),
+            CommodityPriceCreate {
+                book_id: 1,
+                commodity_id: stock_id,
+                quote_commodity_id: usd_id,
+                price_minor: 20_000,
+                as_of_date: "2024-01-10".to_string(),
+                source: Some("manual".to_string()),
+                source_id: None,
+                is_manual: true,
+            },
+        )
+        .expect("create price");
+
+        let positions = get_positions(as_state(&db_state), 1, None).expect("positions");
+        assert!(positions.iter().any(|p| p.account_id == investment_account_id));
+
+        let converted = convert_positions(as_state(&db_state), usd_id, None)
+            .expect("convert positions");
+        let inv = converted
+            .iter()
+            .find(|p| p.account_id == investment_account_id)
+            .expect("investment position");
+        assert_eq!(inv.value_minor, 200_000);
+
+        let sell = sell_commodity(
+            as_state(&db_state),
+            SellCommodityInput {
+                book_id: 1,
+                txn_date: "2024-02-10".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 500,
+                cash_amount_minor: 70_000,
+                lot_strategy: "fifo".to_string(),
+                lot_allocations: None,
+                allow_short: false,
+                memo: Some("sell".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("sell commodity");
+
+        let gains = validate_sell_gains(as_state(&db_state), sell.transaction_id)
+            .expect("validate gains");
+        assert_eq!(gains.cost_basis_minor, 50_000);
+        assert_eq!(gains.proceeds_minor, 70_000);
+        assert_eq!(gains.gain_loss_minor, 20_000);
+    }
+
+    #[test]
+    fn test_corporate_actions_and_reports() {
+        let db_state = create_temp_db();
+
+        let (stock_id, investment_account_id, cash_account_id, usd_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let stock_id = create_stock_commodity(conn);
+            let investment_account_id = create_investment_account(conn, stock_id);
+            let cash_account_id = get_checking_account(conn);
+            let usd_id = get_usd_id(conn);
+            (stock_id, investment_account_id, cash_account_id, usd_id)
+        };
+
+        let buy = buy_commodity(
+            as_state(&db_state),
+            BuyCommodityInput {
+                book_id: 1,
+                txn_date: "2024-03-01".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 1000,
+                cash_amount_minor: 50_000,
+                memo: Some("buy".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("buy commodity");
+
+        let action = apply_corporate_action_split_merge(
+            as_state(&db_state),
+            ApplyCorporateActionInput {
+                book_id: 1,
+                commodity_id: stock_id,
+                ratio_num: 2,
+                ratio_den: 1,
+                effective_date: "2024-03-10".to_string(),
+                memo: Some("2-for-1".to_string()),
+            },
+        )
+        .expect("apply corporate action");
+        assert!(action.transaction_id.is_some());
+
+        let actions = list_corporate_actions(as_state(&db_state), 1, Some(stock_id))
+            .expect("list corporate actions");
+        assert_eq!(actions.len(), 1);
+
+        let positions = get_positions(as_state(&db_state), 1, None)
+            .expect("positions after split");
+        let pos = positions
+            .iter()
+            .find(|p| p.account_id == investment_account_id)
+            .expect("position exists");
+        assert_eq!(pos.balance_minor, 2000);
+
+        let _price = create_commodity_price(
+            as_state(&db_state),
+            CommodityPriceCreate {
+                book_id: 1,
+                commodity_id: stock_id,
+                quote_commodity_id: usd_id,
+                price_minor: 40_000,
+                as_of_date: "2024-03-10".to_string(),
+                source: Some("manual".to_string()),
+                source_id: None,
+                is_manual: true,
+            },
+        )
+        .expect("create price");
+
+        let sell = sell_commodity(
+            as_state(&db_state),
+            SellCommodityInput {
+                book_id: 1,
+                txn_date: "2024-03-15".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 1000,
+                cash_amount_minor: 60_000,
+                lot_strategy: "fifo".to_string(),
+                lot_allocations: None,
+                allow_short: false,
+                memo: Some("sell".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("sell commodity");
+        let gains = realized_gains_report(as_state(&db_state), None, None)
+            .expect("realized gains");
+        assert!(gains.iter().any(|g| g.tx_id == sell.transaction_id));
+
+        let unrealized = unrealized_gains_report(as_state(&db_state), usd_id, None)
+            .expect("unrealized gains");
+        assert!(unrealized.iter().any(|u| u.account_id == investment_account_id));
+
+        // ensure buy tx remains usable
+        let _ = validate_sell_gains(as_state(&db_state), buy.transaction_id)
+            .expect("validate gains for buy tx");
+    }
+
+    #[test]
+    fn test_dividend_income_categories_crud() {
+        let db_state = create_temp_db();
+
+        let (category_id, usd_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let usd_id = get_usd_id(conn);
+            conn.execute(
+                "INSERT INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
+                 VALUES (1, NULL, 'Dividends', 'income', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [],
+            )
+            .expect("insert category");
+            let category_id = conn.last_insert_rowid();
+            (category_id, usd_id)
+        };
+
+        let item = create_dividend_income_category(
+            as_state(&db_state),
+            DividendIncomeCategoryCreate {
+                book_id: 1,
+                category_id,
+                commodity_id: Some(usd_id),
+                tax_withheld_minor: Some(100),
+                notes: Some("withholding".to_string()),
+            },
+        )
+        .expect("create dividend income category");
+
+        let list = list_dividend_income_categories(as_state(&db_state), 1, Some(usd_id))
+            .expect("list dividend income categories");
+        assert_eq!(list.len(), 1);
+
+        let fetched = get_dividend_income_category(as_state(&db_state), item.id)
+            .expect("get dividend income category")
+            .expect("exists");
+        assert_eq!(fetched.category_id, category_id);
+
+        let updated = update_dividend_income_category(
+            as_state(&db_state),
+            DividendIncomeCategoryUpdate {
+                id: item.id,
+                book_id: 1,
+                category_id,
+                commodity_id: Some(usd_id),
+                tax_withheld_minor: Some(150),
+                notes: Some("updated".to_string()),
+            },
+        )
+        .expect("update dividend income category");
+        assert_eq!(updated.tax_withheld_minor, Some(150));
+
+        let duplicate_err = create_dividend_income_category(
+            as_state(&db_state),
+            DividendIncomeCategoryCreate {
+                book_id: 1,
+                category_id,
+                commodity_id: Some(usd_id),
+                tax_withheld_minor: None,
+                notes: None,
+            },
+        )
+        .expect_err("duplicate should fail");
+        assert!(duplicate_err.to_lowercase().contains("unique") || duplicate_err.to_lowercase().contains("constraint"));
+
+        let deleted = delete_dividend_income_category(as_state(&db_state), item.id)
+            .expect("delete dividend income category");
+        assert!(deleted);
+    }
+
+    #[test]
+    fn test_price_sources_crud() {
+        let db_state = create_temp_db();
+
+        let alpha = create_price_source(
+            as_state(&db_state),
+            PriceSourceCreate {
+                name: "Alpha".to_string(),
+                kind: "provider".to_string(),
+                provider: Some("AlphaFeed".to_string()),
+                base_url: Some("https://alpha.example".to_string()),
+            },
+        )
+        .expect("create price source");
+
+        let beta = create_price_source(
+            as_state(&db_state),
+            PriceSourceCreate {
+                name: "Beta".to_string(),
+                kind: "manual".to_string(),
+                provider: None,
+                base_url: None,
+            },
+        )
+        .expect("create second price source");
+
+        let list = list_price_sources(as_state(&db_state)).expect("list price sources");
+        assert!(list.len() >= 2);
+        assert!(list.iter().any(|s| s.name == "Alpha"));
+        assert!(list.iter().any(|s| s.name == "Beta"));
+
+        let updated = update_price_source(
+            as_state(&db_state),
+            PriceSourceUpdate {
+                id: alpha.id,
+                name: "Alpha Prime".to_string(),
+                kind: "provider".to_string(),
+                provider: Some("AlphaFeed".to_string()),
+                base_url: Some("https://alpha.example/v2".to_string()),
+            },
+        )
+        .expect("update price source");
+        assert_eq!(updated.name, "Alpha Prime");
+
+        let duplicate_err = create_price_source(
+            as_state(&db_state),
+            PriceSourceCreate {
+                name: "Alpha Prime".to_string(),
+                kind: "provider".to_string(),
+                provider: None,
+                base_url: None,
+            },
+        )
+        .expect_err("duplicate should fail");
+        assert!(
+            duplicate_err.to_lowercase().contains("unique")
+                || duplicate_err.to_lowercase().contains("constraint")
+        );
+
+        let deleted = delete_price_source(as_state(&db_state), beta.id)
+            .expect("delete price source");
+        assert!(deleted);
+
+        let list_after = list_price_sources(as_state(&db_state)).expect("list after delete");
+        assert!(list_after.iter().any(|s| s.id == alpha.id));
+    }
+
+    #[test]
+    fn test_commodity_price_sources_crud() {
+        let db_state = create_temp_db();
+
+        let commodity_id = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            create_stock_commodity(conn)
+        };
+
+        let source = create_price_source(
+            as_state(&db_state),
+            PriceSourceCreate {
+                name: "Provider".to_string(),
+                kind: "provider".to_string(),
+                provider: Some("Feed".to_string()),
+                base_url: Some("https://feed.example".to_string()),
+            },
+        )
+        .expect("create source");
+
+        let primary = create_commodity_price_source(
+            as_state(&db_state),
+            CommodityPriceSourceCreate {
+                commodity_id,
+                source_id: source.id,
+                symbol: "ZZZ".to_string(),
+                name_override: Some("ACME Override".to_string()),
+                is_primary: true,
+            },
+        )
+        .expect("create commodity price source");
+        assert!(primary.is_primary);
+
+        let secondary = create_commodity_price_source(
+            as_state(&db_state),
+            CommodityPriceSourceCreate {
+                commodity_id,
+                source_id: source.id,
+                symbol: "AAA".to_string(),
+                name_override: None,
+                is_primary: false,
+            },
+        )
+        .expect("create secondary mapping");
+
+        let list = list_commodity_price_sources(as_state(&db_state), commodity_id)
+            .expect("list commodity price sources");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].id, primary.id);
+        assert_eq!(list[1].id, secondary.id);
+
+        let updated = update_commodity_price_source(
+            as_state(&db_state),
+            CommodityPriceSourceUpdate {
+                id: secondary.id,
+                commodity_id,
+                source_id: source.id,
+                symbol: "BBB".to_string(),
+                name_override: Some("Alt".to_string()),
+                is_primary: true,
+            },
+        )
+        .expect("update commodity price source");
+        assert!(updated.is_primary);
+        assert_eq!(updated.symbol, "BBB");
+
+        let duplicate_err = create_commodity_price_source(
+            as_state(&db_state),
+            CommodityPriceSourceCreate {
+                commodity_id,
+                source_id: source.id,
+                symbol: "BBB".to_string(),
+                name_override: None,
+                is_primary: false,
+            },
+        )
+        .expect_err("duplicate should fail");
+        assert!(
+            duplicate_err.to_lowercase().contains("unique")
+                || duplicate_err.to_lowercase().contains("constraint")
+        );
+
+        let deleted = delete_commodity_price_source(as_state(&db_state), primary.id)
+            .expect("delete commodity price source");
+        assert!(deleted);
+
+        let list_after = list_commodity_price_sources(as_state(&db_state), commodity_id)
+            .expect("list after delete");
+        assert_eq!(list_after.len(), 1);
+        assert_eq!(list_after[0].id, secondary.id);
+    }
+
+    #[test]
+    fn test_booking_policy_override_for_investments() {
+        let db_state = create_temp_db();
+
+        let (stock_id, investment_account_id, cash_account_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let stock_id = create_stock_commodity(conn);
+            let investment_account_id = create_investment_account(conn, stock_id);
+            let cash_account_id = get_checking_account(conn);
+            (stock_id, investment_account_id, cash_account_id)
+        };
+
+        let first_buy = buy_commodity(
+            as_state(&db_state),
+            BuyCommodityInput {
+                book_id: 1,
+                txn_date: "2024-01-01".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 1000,
+                cash_amount_minor: 10_000,
+                memo: Some("buy1".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("buy commodity 1");
+
+        let second_buy = buy_commodity(
+            as_state(&db_state),
+            BuyCommodityInput {
+                book_id: 1,
+                txn_date: "2024-02-01".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 1000,
+                cash_amount_minor: 12_000,
+                memo: Some("buy2".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("buy commodity 2");
+
+        let sell = sell_commodity(
+            as_state(&db_state),
+            SellCommodityInput {
+                book_id: 1,
+                txn_date: "2024-03-01".to_string(),
+                commodity_id: stock_id,
+                investment_account_id,
+                cash_account_id,
+                quantity_minor: 1000,
+                cash_amount_minor: 15_000,
+                lot_strategy: "lifo".to_string(),
+                lot_allocations: None,
+                allow_short: false,
+                memo: Some("sell".to_string()),
+                payee_id: None,
+                status: Some("cleared".to_string()),
+            },
+        )
+        .expect("sell commodity");
+
+        assert_eq!(sell.allocations.len(), 1);
+        assert_eq!(sell.allocations[0].lot_id, second_buy.lot_id.unwrap());
+        assert_ne!(sell.allocations[0].lot_id, first_buy.lot_id.unwrap());
+    }
 }

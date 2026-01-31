@@ -16,7 +16,10 @@ pub struct Account {
     pub account_type: String,
     pub name: String,
     pub commodity_id: i64,
-    pub institution: Option<String>,
+    pub institution_id: Option<i64>,
+    pub institution_name: Option<String>,
+    pub country_id: Option<i64>,
+    pub country_name: Option<String>,
     pub number_last4: Option<String>,
     pub is_closed: bool,
     pub created_at: String,
@@ -30,7 +33,8 @@ pub struct AccountCreate {
     pub account_type: String,
     pub name: String,
     pub commodity_id: i64,
-    pub institution: Option<String>,
+    pub institution_id: Option<i64>,
+    pub country_id: Option<i64>,
     pub number_last4: Option<String>,
     pub is_closed: Option<bool>,
 }
@@ -43,9 +47,70 @@ pub struct AccountUpdate {
     pub account_type: String,
     pub name: String,
     pub commodity_id: i64,
-    pub institution: Option<String>,
+    pub institution_id: Option<i64>,
+    pub country_id: Option<i64>,
     pub number_last4: Option<String>,
     pub is_closed: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Country {
+    pub id: i64,
+    pub book_id: i64,
+    pub code: String,
+    pub name: String,
+    pub default_currency_id: Option<i64>,
+    pub currency_code: Option<String>,
+    pub currency_name: Option<String>,
+    pub currency_symbol: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CountryCreate {
+    pub book_id: i64,
+    pub code: String,
+    pub name: String,
+    pub default_currency_id: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CountryUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub code: String,
+    pub name: String,
+    pub default_currency_id: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Institution {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub country_id: Option<i64>,
+    pub country_name: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InstitutionCreate {
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub country_id: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InstitutionUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub country_id: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -209,6 +274,8 @@ pub struct AccountTreeNode {
     pub commodity_id: i64,
     pub commodity_name: String,
     pub commodity_scale: i64,
+    pub institution_name: Option<String>,
+    pub country_name: Option<String>,
     pub balance_minor: i64,
     pub rollup_balance_minor: i64,
     pub children: Vec<AccountTreeNode>,
@@ -407,7 +474,7 @@ pub struct DocumentFilter {
 }
 
 fn map_account_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
-    let is_closed: i64 = row.get(8)?;
+    let is_closed: i64 = row.get(11)?;
     Ok(Account {
         id: row.get(0)?,
         book_id: row.get(1)?,
@@ -415,11 +482,42 @@ fn map_account_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
         account_type: row.get(3)?,
         name: row.get(4)?,
         commodity_id: row.get(5)?,
-        institution: row.get(6)?,
-        number_last4: row.get(7)?,
+        institution_id: row.get(6)?,
+        institution_name: row.get(7)?,
+        country_id: row.get(8)?,
+        country_name: row.get(9)?,
+        number_last4: row.get(10)?,
         is_closed: is_closed != 0,
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+    })
+}
+
+fn map_country_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Country> {
+    Ok(Country {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        code: row.get(2)?,
+        name: row.get(3)?,
+        default_currency_id: row.get(4)?,
+        currency_code: row.get(5)?,
+        currency_name: row.get(6)?,
+        currency_symbol: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+    })
+}
+
+fn map_institution_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Institution> {
+    Ok(Institution {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        name: row.get(2)?,
+        kind: row.get(3)?,
+        country_id: row.get(4)?,
+        country_name: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -581,15 +679,16 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
     let is_closed = if input.is_closed.unwrap_or(false) { 1 } else { 0 };
 
     conn.execute(
-        "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, institution, number_last4, is_closed, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.parent_id,
             input.account_type,
             input.name,
             input.commodity_id,
-            input.institution,
+            input.institution_id,
+            input.country_id,
             input.number_last4,
             is_closed,
         ],
@@ -599,8 +698,13 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
     let id = conn.last_insert_rowid();
     let account = conn
         .query_row(
-            "SELECT id, book_id, parent_id, type, name, commodity_id, institution, number_last4, is_closed, created_at, updated_at
-             FROM accounts WHERE id = ?1",
+            "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
+                    a.institution_id, i.name, a.country_id, c.name,
+                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+             FROM accounts a
+             LEFT JOIN institutions i ON a.institution_id = i.id
+             LEFT JOIN countries c ON a.country_id = c.id
+             WHERE a.id = ?1",
             [id],
             map_account_row,
         )
@@ -616,8 +720,13 @@ pub fn get_account(db: State<DbState>, id: i64) -> Result<Option<Account>, Strin
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, parent_id, type, name, commodity_id, institution, number_last4, is_closed, created_at, updated_at
-             FROM accounts WHERE id = ?1",
+            "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
+                    a.institution_id, i.name, a.country_id, c.name,
+                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+             FROM accounts a
+             LEFT JOIN institutions i ON a.institution_id = i.id
+             LEFT JOIN countries c ON a.country_id = c.id
+             WHERE a.id = ?1",
         )
         .map_err(|e| e.to_string())?;
 
@@ -638,8 +747,13 @@ pub fn list_accounts(db: State<DbState>, book_id: i64) -> Result<Vec<Account>, S
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, parent_id, type, name, commodity_id, institution, number_last4, is_closed, created_at, updated_at
-             FROM accounts WHERE book_id = ?1 ORDER BY name ASC",
+            "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
+                    a.institution_id, i.name, a.country_id, c.name,
+                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+             FROM accounts a
+             LEFT JOIN institutions i ON a.institution_id = i.id
+             LEFT JOIN countries c ON a.country_id = c.id
+             WHERE a.book_id = ?1 ORDER BY a.name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -672,9 +786,10 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
                  type = ?4,
                  name = ?5,
                  commodity_id = ?6,
-                 institution = ?7,
-                 number_last4 = ?8,
-                 is_closed = ?9,
+                 institution_id = ?7,
+                 country_id = ?8,
+                 number_last4 = ?9,
+                 is_closed = ?10,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
              WHERE id = ?1",
             params![
@@ -684,7 +799,8 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
                 input.account_type,
                 input.name,
                 input.commodity_id,
-                input.institution,
+                input.institution_id,
+                input.country_id,
                 input.number_last4,
                 is_closed,
             ],
@@ -697,8 +813,13 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
 
     let account = conn
         .query_row(
-            "SELECT id, book_id, parent_id, type, name, commodity_id, institution, number_last4, is_closed, created_at, updated_at
-             FROM accounts WHERE id = ?1",
+            "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
+                    a.institution_id, i.name, a.country_id, c.name,
+                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+             FROM accounts a
+             LEFT JOIN institutions i ON a.institution_id = i.id
+             LEFT JOIN countries c ON a.country_id = c.id
+             WHERE a.id = ?1",
             [input.id],
             map_account_row,
         )
@@ -716,6 +837,271 @@ pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
         .execute("DELETE FROM accounts WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
 
+    Ok(rows > 0)
+}
+
+fn validate_institution_kind(kind: &str) -> Result<(), String> {
+    match kind {
+        "bank" | "broker" | "credit_union" | "other" => Ok(()),
+        _ => Err("institution kind must be bank, broker, credit_union, or other".to_string()),
+    }
+}
+
+#[command]
+pub fn list_countries(db: State<DbState>, book_id: i64) -> Result<Vec<Country>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
+                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+             FROM countries c
+             LEFT JOIN currencies cur ON c.default_currency_id = cur.id
+             WHERE c.book_id = ?1 ORDER BY c.name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([book_id], map_country_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(items)
+}
+
+#[command]
+pub fn create_country(db: State<DbState>, input: CountryCreate) -> Result<Country, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO countries (book_id, code, name, default_currency_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, input.code, input.name, input.default_currency_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let item = conn
+        .query_row(
+            "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
+                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+             FROM countries c
+             LEFT JOIN currencies cur ON c.default_currency_id = cur.id
+             WHERE c.id = ?1",
+            [id],
+            map_country_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(item)
+}
+
+#[command]
+pub fn get_country(db: State<DbState>, id: i64) -> Result<Option<Country>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let item = conn
+        .query_row(
+            "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
+                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+             FROM countries c
+             LEFT JOIN currencies cur ON c.default_currency_id = cur.id
+             WHERE c.id = ?1",
+            [id],
+            map_country_row,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(item)
+}
+
+#[command]
+pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Country, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE countries
+             SET book_id = ?2,
+                 code = ?3,
+                 name = ?4,
+                 default_currency_id = ?5,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![input.id, book_id, input.code, input.name, input.default_currency_id],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("country not found".to_string());
+    }
+
+    let item = conn
+        .query_row(
+            "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
+                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+             FROM countries c
+             LEFT JOIN currencies cur ON c.default_currency_id = cur.id
+             WHERE c.id = ?1",
+            [input.id],
+            map_country_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(item)
+}
+
+#[command]
+pub fn delete_country(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let rows = conn
+        .execute("DELETE FROM countries WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+    Ok(rows > 0)
+}
+
+#[command]
+pub fn list_institutions(db: State<DbState>, book_id: i64) -> Result<Vec<Institution>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+             FROM institutions i
+             LEFT JOIN countries c ON i.country_id = c.id
+             WHERE i.book_id = ?1 ORDER BY i.name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([book_id], map_institution_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(items)
+}
+
+#[command]
+pub fn create_institution(db: State<DbState>, input: InstitutionCreate) -> Result<Institution, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let kind = input.kind.to_lowercase();
+    validate_institution_kind(&kind)?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO institutions (book_id, name, kind, country_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, input.name, kind, input.country_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let item = conn
+        .query_row(
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+             FROM institutions i
+             LEFT JOIN countries c ON i.country_id = c.id
+             WHERE i.id = ?1",
+            [id],
+            map_institution_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(item)
+}
+
+#[command]
+pub fn get_institution(db: State<DbState>, id: i64) -> Result<Option<Institution>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let item = conn
+        .query_row(
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+             FROM institutions i
+             LEFT JOIN countries c ON i.country_id = c.id
+             WHERE i.id = ?1",
+            [id],
+            map_institution_row,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(item)
+}
+
+#[command]
+pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Result<Institution, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let kind = input.kind.to_lowercase();
+    validate_institution_kind(&kind)?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE institutions
+             SET book_id = ?2,
+                 name = ?3,
+                 kind = ?4,
+                 country_id = ?5,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![input.id, book_id, input.name, kind, input.country_id],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("institution not found".to_string());
+    }
+
+    let item = conn
+        .query_row(
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+             FROM institutions i
+             LEFT JOIN countries c ON i.country_id = c.id
+             WHERE i.id = ?1",
+            [input.id],
+            map_institution_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(item)
+}
+
+#[command]
+pub fn delete_institution(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let rows = conn
+        .execute("DELETE FROM institutions WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
     Ok(rows > 0)
 }
 
@@ -845,10 +1231,11 @@ pub fn create_account_balancing(
         .query_row(
             "SELECT MAX(as_of_date) FROM account_balancings WHERE account_id = ?1 AND voided_at IS NULL",
             [input.account_id],
-            |row| row.get(0),
+            |row| row.get::<_, Option<String>>(0),
         )
         .optional()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .flatten();
 
     if let Some(max_date) = latest {
         if input.as_of_date <= max_date {
@@ -1313,6 +1700,20 @@ pub fn get_account_booking_policy(db: State<DbState>, account_id: i64) -> Result
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
+    let account_type: Option<String> = conn
+        .query_row(
+            "SELECT type FROM accounts WHERE id = ?1",
+            [account_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let account_type = account_type.ok_or_else(|| "account not found".to_string())?;
+    if account_type != "investment" {
+        return Err("booking policy only applies to investment accounts".to_string());
+    }
+
     let policy: Option<String> = conn
         .query_row(
             "SELECT booking_policy FROM accounts WHERE id = ?1",
@@ -1337,6 +1738,20 @@ pub fn set_account_booking_policy(
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let account_type: Option<String> = conn
+        .query_row(
+            "SELECT type FROM accounts WHERE id = ?1",
+            [input.account_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let account_type = account_type.ok_or_else(|| "account not found".to_string())?;
+    if account_type != "investment" {
+        return Err("booking policy only applies to investment accounts".to_string());
+    }
 
     let rows = conn
         .execute(
@@ -1540,9 +1955,12 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
 
     let mut stmt = conn
         .prepare(
-            "SELECT a.id, a.parent_id, a.name, a.type, a.commodity_id, c.name, c.scale
+            "SELECT a.id, a.parent_id, a.name, a.type, a.commodity_id, c.name, c.scale,
+                    i.name, co.name
              FROM accounts a
              JOIN commodities c ON c.id = a.commodity_id
+             LEFT JOIN institutions i ON a.institution_id = i.id
+             LEFT JOIN countries co ON a.country_id = co.id
              WHERE a.book_id = ?1
              ORDER BY a.name ASC",
         )
@@ -1558,11 +1976,13 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
                 row.get::<_, i64>(4)?,
                 row.get::<_, String>(5)?,
                 row.get::<_, i64>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
             ))
         })
         .map_err(|e| e.to_string())?;
 
-    let mut accounts: Vec<(i64, Option<i64>, String, String, i64, String, i64)> = Vec::new();
+    let mut accounts: Vec<(i64, Option<i64>, String, String, i64, String, i64, Option<String>, Option<String>)> = Vec::new();
     for row in rows {
         accounts.push(row.map_err(|e| e.to_string())?);
     }
@@ -1585,20 +2005,32 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
     }
 
     let mut children_map: HashMap<Option<i64>, Vec<i64>> = HashMap::new();
-    let mut account_map: HashMap<i64, (Option<i64>, String, String, i64, String, i64)> = HashMap::new();
+    let mut account_map: HashMap<i64, (Option<i64>, String, String, i64, String, i64, Option<String>, Option<String>)> = HashMap::new();
 
-    for (id, parent_id, name, account_type, commodity_id, commodity_name, commodity_scale) in &accounts {
-        account_map.insert(*id, (*parent_id, name.clone(), account_type.clone(), *commodity_id, commodity_name.clone(), *commodity_scale));
+    for (id, parent_id, name, account_type, commodity_id, commodity_name, commodity_scale, institution_name, country_name) in &accounts {
+        account_map.insert(
+            *id,
+            (
+                *parent_id,
+                name.clone(),
+                account_type.clone(),
+                *commodity_id,
+                commodity_name.clone(),
+                *commodity_scale,
+                institution_name.clone(),
+                country_name.clone(),
+            ),
+        );
         children_map.entry(*parent_id).or_default().push(*id);
     }
 
     fn build_tree(
         account_id: i64,
-        account_map: &HashMap<i64, (Option<i64>, String, String, i64, String, i64)>,
+        account_map: &HashMap<i64, (Option<i64>, String, String, i64, String, i64, Option<String>, Option<String>)>,
         children_map: &HashMap<Option<i64>, Vec<i64>>,
         balances: &HashMap<i64, i64>,
     ) -> AccountTreeNode {
-        let (parent_id, name, account_type, commodity_id, commodity_name, commodity_scale) =
+        let (parent_id, name, account_type, commodity_id, commodity_name, commodity_scale, institution_name, country_name) =
             account_map.get(&account_id).cloned().unwrap();
         let balance_minor = *balances.get(&account_id).unwrap_or(&0);
 
@@ -1620,6 +2052,8 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
             commodity_id,
             commodity_name,
             commodity_scale,
+            institution_name,
+            country_name,
             balance_minor,
             rollup_balance_minor,
             children,
@@ -1688,6 +2122,611 @@ pub fn create_account_close(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     create_account_directive_internal(conn, "close", input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::open_and_migrate;
+    use crate::state::DbStateInner;
+    use std::fs;
+    use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn create_temp_db() -> DbState {
+        let start = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let mut temp = std::env::temp_dir();
+        temp.push(format!("rekenraam_accounts_test_{start}_{counter}"));
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).expect("create temp dir");
+
+        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        DbState {
+            inner: Mutex::new(DbStateInner {
+                db_path: Some(db_path),
+                conn: Some(conn),
+            }),
+        }
+    }
+
+    fn as_state<'a>(db: &'a DbState) -> State<'a, DbState> {
+        unsafe { std::mem::transmute::<&'a DbState, State<'a, DbState>>(db) }
+    }
+
+    fn get_usd_commodity_id(db: &DbState) -> i64 {
+        let guard = db.inner.lock().expect("lock db");
+        let conn = guard.conn.as_ref().expect("conn");
+        conn.query_row(
+            "SELECT id FROM commodities WHERE symbol = 'USD' LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("usd commodity")
+    }
+
+    #[test]
+    fn test_countries_and_institutions_crud() {
+        let db_state = create_temp_db();
+
+        let country = create_country(
+            as_state(&db_state),
+            CountryCreate {
+                book_id: 1,
+                code: "ZZ".to_string(),
+                name: "Testland".to_string(),
+                default_currency_id: None,
+            },
+        )
+        .expect("create country");
+
+        let countries = list_countries(as_state(&db_state), 1).expect("list countries");
+        assert!(countries.iter().any(|c| c.id == country.id));
+
+        let updated_country = update_country(
+            as_state(&db_state),
+            CountryUpdate {
+                id: country.id,
+                book_id: 1,
+                code: "ZZ".to_string(),
+                name: "Testland Republic".to_string(),
+                default_currency_id: None,
+            },
+        )
+        .expect("update country");
+        assert_eq!(updated_country.name, "Testland Republic");
+
+        let institution = create_institution(
+            as_state(&db_state),
+            InstitutionCreate {
+                book_id: 1,
+                name: "Broker One".to_string(),
+                kind: "broker".to_string(),
+                country_id: Some(updated_country.id),
+            },
+        )
+        .expect("create institution");
+
+        let institutions = list_institutions(as_state(&db_state), 1).expect("list institutions");
+        assert!(institutions.iter().any(|i| i.id == institution.id));
+
+        let updated_institution = update_institution(
+            as_state(&db_state),
+            InstitutionUpdate {
+                id: institution.id,
+                book_id: 1,
+                name: "Broker Two".to_string(),
+                kind: "broker".to_string(),
+                country_id: Some(updated_country.id),
+            },
+        )
+        .expect("update institution");
+        assert_eq!(updated_institution.name, "Broker Two");
+
+        let deleted_inst = delete_institution(as_state(&db_state), institution.id)
+            .expect("delete institution");
+        assert!(deleted_inst);
+
+        let deleted_country = delete_country(as_state(&db_state), updated_country.id)
+            .expect("delete country");
+        assert!(deleted_country);
+    }
+
+    #[test]
+    fn test_account_crud() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let country = list_countries(as_state(&db_state), 1)
+            .expect("list countries")
+            .into_iter()
+            .find(|c| c.code == "US")
+            .expect("US country");
+
+        let institution = create_institution(
+            as_state(&db_state),
+            InstitutionCreate {
+                book_id: 1,
+                name: "Test Bank".to_string(),
+                kind: "bank".to_string(),
+                country_id: Some(country.id),
+            },
+        )
+        .expect("create institution");
+
+        let created = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "cash".to_string(),
+                name: "Test Cash".to_string(),
+                commodity_id,
+                institution_id: Some(institution.id),
+                country_id: Some(country.id),
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create account");
+
+        let fetched = get_account(as_state(&db_state), created.id)
+            .expect("get account")
+            .expect("account exists");
+        assert_eq!(fetched.name, "Test Cash");
+        assert_eq!(fetched.institution_name.as_deref(), Some("Test Bank"));
+        assert_eq!(fetched.country_name.as_deref(), Some("United States"));
+
+        let updated = update_account(
+            as_state(&db_state),
+            AccountUpdate {
+                id: created.id,
+                book_id: 1,
+                parent_id: None,
+                account_type: "cash".to_string(),
+                name: "Renamed Cash".to_string(),
+                commodity_id,
+                institution_id: Some(institution.id),
+                country_id: Some(country.id),
+                number_last4: None,
+                is_closed: false,
+            },
+        )
+        .expect("update account");
+        assert_eq!(updated.name, "Renamed Cash");
+
+        let list = list_accounts(as_state(&db_state), 1).expect("list accounts");
+        assert!(list.iter().any(|a| a.id == created.id));
+
+        let deleted = delete_account(as_state(&db_state), created.id).expect("delete account");
+        assert!(deleted);
+    }
+
+    #[test]
+    fn test_account_balancing_flow() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "checking".to_string(),
+                name: "Balancing Account".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create account");
+
+        let balancing = create_account_balancing(
+            as_state(&db_state),
+            AccountBalancingCreate {
+                book_id: 1,
+                account_id: account.id,
+                as_of_date: "2024-01-01".to_string(),
+                balance_minor: 1000,
+                memo: Some("opening".to_string()),
+            },
+        )
+        .expect("create balancing");
+        assert_eq!(balancing.balance_minor, 1000);
+
+        let err = create_account_balancing(
+            as_state(&db_state),
+            AccountBalancingCreate {
+                book_id: 1,
+                account_id: account.id,
+                as_of_date: "2023-12-31".to_string(),
+                balance_minor: 900,
+                memo: None,
+            },
+        )
+        .expect_err("should reject earlier balancing date");
+        assert!(err.contains("balancing date"));
+
+        let listed = list_account_balancings(as_state(&db_state), account.id)
+            .expect("list balancings");
+        assert_eq!(listed.len(), 1);
+
+        let unlocked = unlock_account_balancings(
+            as_state(&db_state),
+            AccountBalancingUnlockInput {
+                account_id: account.id,
+                from_date: "2024-01-01".to_string(),
+                reason: Some("test".to_string()),
+                confirm: true,
+            },
+        )
+        .expect("unlock balancings");
+        assert!(unlocked >= 1);
+    }
+
+    #[test]
+    fn test_booking_policy_and_constraints_and_directives() {
+        let db_state = create_temp_db();
+
+        let commodity_id = get_usd_commodity_id(&db_state);
+        let account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "investment".to_string(),
+                name: "Policy Account".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create account");
+
+        let policy = set_account_booking_policy(
+            as_state(&db_state),
+            AccountBookingPolicyUpdate {
+                account_id: account.id,
+                booking_policy: "lifo".to_string(),
+            },
+        )
+        .expect("set booking policy");
+        assert_eq!(policy, "lifo");
+
+        let fetched = get_account_booking_policy(as_state(&db_state), account.id)
+            .expect("get booking policy");
+        assert_eq!(fetched, "lifo");
+
+        let checking = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "checking".to_string(),
+                name: "Non Investment".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create checking account");
+
+        let err = set_account_booking_policy(
+            as_state(&db_state),
+            AccountBookingPolicyUpdate {
+                account_id: checking.id,
+                booking_policy: "fifo".to_string(),
+            },
+        )
+        .expect_err("non-investment booking policy should fail");
+        assert!(err.contains("investment"));
+
+        let constraint = create_balance_constraint(
+            as_state(&db_state),
+            BalanceConstraintCreate {
+                book_id: 1,
+                account_id: account.id,
+                min_balance_minor: Some(0),
+                max_balance_minor: None,
+                sign_rule: Some("nonnegative".to_string()),
+            },
+        )
+        .expect("create constraint");
+        let constraints = list_balance_constraints(as_state(&db_state), account.id)
+            .expect("list constraints");
+        assert_eq!(constraints.len(), 1);
+        assert_eq!(constraints[0].id, constraint.id);
+
+        {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+            conn.execute(
+                "INSERT INTO transactions (book_id, txn_date, status, created_at, updated_at)
+                 VALUES (1, '2024-02-02', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [],
+            )
+            .expect("insert tx");
+            let tx_id = conn.last_insert_rowid();
+
+            // balancing account to keep splits zero-sum
+            conn.execute(
+                "INSERT INTO accounts (book_id, type, name, commodity_id)
+                 VALUES (1, 'income', 'Offset Account', ?1)",
+                params![commodity_id],
+            )
+            .expect("insert offset account");
+            let offset_id = conn.last_insert_rowid();
+
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, -500, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx_id, account.id, commodity_id],
+            )
+            .expect("insert negative split");
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 500, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx_id, offset_id, commodity_id],
+            )
+            .expect("insert offset split");
+        }
+
+        let err = validate_balance_constraints(as_state(&db_state), account.id)
+            .expect_err("constraint should fail on negative balance");
+        assert!(err.contains("constraint"));
+
+        let opened = create_account_open(
+            as_state(&db_state),
+            AccountDirectiveCreate {
+                book_id: 1,
+                account_id: account.id,
+                directive_date: "2024-01-01".to_string(),
+                note: Some("open".to_string()),
+                metadata: None,
+            },
+        )
+        .expect("create open directive");
+        assert_eq!(opened.directive_type, "open");
+
+        let closed = create_account_close(
+            as_state(&db_state),
+            AccountDirectiveCreate {
+                book_id: 1,
+                account_id: account.id,
+                directive_date: "2024-12-31".to_string(),
+                note: Some("close".to_string()),
+                metadata: None,
+            },
+        )
+        .expect("create close directive");
+        assert_eq!(closed.directive_type, "close");
+
+        let directives = list_account_directives(as_state(&db_state), account.id)
+            .expect("list directives");
+        assert_eq!(directives.len(), 2);
+
+        let check = create_balance_check(
+            as_state(&db_state),
+            BalanceCheckCreate {
+                book_id: 1,
+                account_id: account.id,
+                as_of_date: "2024-02-02".to_string(),
+                balance_minor: -500,
+                memo: Some("check".to_string()),
+            },
+        )
+        .expect("create balance check");
+        assert_eq!(check.balance_minor, -500);
+
+        let checks = list_balance_checks(as_state(&db_state), account.id)
+            .expect("list balance checks");
+        assert_eq!(checks.len(), 1);
+
+        let pad = create_pad_directive(
+            as_state(&db_state),
+            PadDirectiveCreate {
+                book_id: 1,
+                account_id: account.id,
+                pad_account_id: account.id,
+                as_of_date: "2024-02-03".to_string(),
+                target_balance_minor: 0,
+                tx_id: None,
+                memo: Some("pad".to_string()),
+            },
+        )
+        .expect("create pad directive");
+        assert_eq!(pad.target_balance_minor, 0);
+
+        let pads = list_pad_directives(as_state(&db_state), account.id)
+            .expect("list pad directives");
+        assert_eq!(pads.len(), 1);
+
+        let deleted = delete_balance_constraint(as_state(&db_state), constraint.id)
+            .expect("delete constraint");
+        assert!(deleted);
+    }
+
+    #[test]
+    fn test_notes_events_documents_crud() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "checking".to_string(),
+                name: "Notes Account".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create account");
+
+        let tx_id = {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+            conn.execute(
+                "INSERT INTO transactions (book_id, txn_date, status, created_at, updated_at)
+                 VALUES (1, '2024-05-01', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [],
+            )
+            .expect("insert tx");
+            conn.last_insert_rowid()
+        };
+
+        let note = create_note(
+            as_state(&db_state),
+            NoteCreate {
+                book_id: 1,
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+                note: "note text".to_string(),
+                note_date: Some("2024-05-01".to_string()),
+            },
+        )
+        .expect("create note");
+
+        let notes = list_notes(
+            as_state(&db_state),
+            NoteFilter {
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+            },
+        )
+        .expect("list notes");
+        assert_eq!(notes.len(), 1);
+
+        let fetched = get_note(as_state(&db_state), note.id)
+            .expect("get note")
+            .expect("note exists");
+        assert_eq!(fetched.note, "note text");
+
+        let updated = update_note(
+            as_state(&db_state),
+            NoteUpdate {
+                id: note.id,
+                book_id: 1,
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+                note: "note updated".to_string(),
+                note_date: Some("2024-05-02".to_string()),
+            },
+        )
+        .expect("update note");
+        assert_eq!(updated.note, "note updated");
+
+        let deleted = delete_note(as_state(&db_state), note.id).expect("delete note");
+        assert!(deleted);
+
+        let event = create_event(
+            as_state(&db_state),
+            EventCreate {
+                book_id: 1,
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+                event_type: "audit".to_string(),
+                event_date: "2024-05-01".to_string(),
+                description: Some("event".to_string()),
+                metadata: None,
+            },
+        )
+        .expect("create event");
+
+        let events = list_events(
+            as_state(&db_state),
+            EventFilter {
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+            },
+        )
+        .expect("list events");
+        assert_eq!(events.len(), 1);
+
+        let updated_event = update_event(
+            as_state(&db_state),
+            EventUpdate {
+                id: event.id,
+                book_id: 1,
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+                event_type: "audit".to_string(),
+                event_date: "2024-05-02".to_string(),
+                description: Some("event updated".to_string()),
+                metadata: Some("{}".to_string()),
+            },
+        )
+        .expect("update event");
+        assert_eq!(updated_event.description.as_deref(), Some("event updated"));
+
+        let deleted_event = delete_event(as_state(&db_state), event.id).expect("delete event");
+        assert!(deleted_event);
+
+        let doc = create_document(
+            as_state(&db_state),
+            DocumentCreate {
+                book_id: 1,
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+                doc_type: Some("statement".to_string()),
+                title: Some("Statement".to_string()),
+                uri: Some("file:///tmp/statement.pdf".to_string()),
+                mime_type: Some("application/pdf".to_string()),
+                notes: Some("doc notes".to_string()),
+            },
+        )
+        .expect("create document");
+
+        let docs = list_documents(
+            as_state(&db_state),
+            DocumentFilter {
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+            },
+        )
+        .expect("list documents");
+        assert_eq!(docs.len(), 1);
+
+        let fetched_doc = get_document(as_state(&db_state), doc.id)
+            .expect("get document")
+            .expect("doc exists");
+        assert_eq!(fetched_doc.title.as_deref(), Some("Statement"));
+
+        let updated_doc = update_document(
+            as_state(&db_state),
+            DocumentUpdate {
+                id: doc.id,
+                book_id: 1,
+                account_id: Some(account.id),
+                tx_id: Some(tx_id),
+                doc_type: Some("statement".to_string()),
+                title: Some("Statement Updated".to_string()),
+                uri: Some("file:///tmp/statement-v2.pdf".to_string()),
+                mime_type: Some("application/pdf".to_string()),
+                notes: Some("doc notes updated".to_string()),
+            },
+        )
+        .expect("update document");
+        assert_eq!(updated_doc.title.as_deref(), Some("Statement Updated"));
+
+        let deleted_doc = delete_document(as_state(&db_state), doc.id).expect("delete document");
+        assert!(deleted_doc);
+    }
 }
 
 #[command]

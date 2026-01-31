@@ -11,6 +11,9 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 - V6: `V6__balance_constraints.sql` (per-account balance constraints)
 - V7: `V7__import_rules_sessions.sql` (import rules + import sessions)
 - V8: `V8__import_rules_extensions.sql` (import rule priority + match types + amount/date/account match)
+- V9: `V9__reporting.sql` (report definitions + report runs cache)
+- V10: `V10__institutions_countries.sql` (countries + institutions + account links)
+- V11: `V11__currencies_seed.sql` (currencies table + country default currencies + seed data)
 
 ### Core Entities
 **books**
@@ -23,19 +26,28 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **accounts**
 - Accounts in a book.
-- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `institution`, `is_closed`, `booking_policy`.
+- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `institution_id`, `country_id`, `is_closed`, `booking_policy`.
 
 **transactions**
 - Top-level transaction header.
-- Key fields: `id`, `book_id`, `txn_date`, `payee_id`, `memo`, `status`.
+- Key fields: `id`, `book_id`, `txn_date`, `payee_id`, `memo`, `status`, `reference`, `import_id`.
 
 **splits**
 - Line items for a transaction (double-entry style).
-- Key fields: `id`, `tx_id`, `account_id`, `commodity_id`, `amount_minor`, `category_id`.
+- Key fields: `id`, `tx_id`, `account_id`, `commodity_id`, `amount_minor`, `category_id`, `memo`.
 
 ### Supporting Entities
 **payees**
 - Counterparties for transactions.
+
+**countries**
+- ISO-like country catalog per book with optional default currency.
+
+**currencies**
+- Currency catalog per book.
+
+**institutions**
+- Banks/brokers/credit unions per book (linked to countries).
 
 **categories**
 - Income/expense/transfer taxonomy.
@@ -75,7 +87,10 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **import_rules**
 - Import matching rules for payee/memo normalization and mapping.
-- Extended with `priority`, `match_type`, amount/date ranges, and account matching.
+- Extended with `priority`, `match_type`, amount/date ranges, and `match_account_id`.
+
+**import_sessions**
+- Import batch audit trail (`status`, timestamps, source).
 
 **import_sessions**
 - Audit trail for import batches.
@@ -113,6 +128,12 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 ### Reports + Cache
 **report_cache**
 - Cached report snapshots keyed by params and `as_of_seq`.
+
+**report_definitions**
+- Stored report definitions (SQL or templates).
+
+**report_runs**
+- Cached report results keyed by params and `as_of_seq`.
 
 ### System State
 **schema_migrations**

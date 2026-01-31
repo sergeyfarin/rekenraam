@@ -20,7 +20,7 @@ use crate::db::{
     create_db_placeholder, db_accessible, default_storage_dir, load_storage_path,
     open_and_migrate, resolve_accessible_db, save_storage_path,
 };
-use crate::state::DbState;
+use crate::state::{BackupSchedulerState, DbState};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct WindowState {
@@ -211,10 +211,12 @@ fn ensure_accessible_storage(mut storage: PathBuf) -> PathBuf {
 pub fn run() {
     let debounce_state: DebounceState = Arc::new(Mutex::new(None));
     let db_state = DbState::default();
+    let backup_scheduler = BackupSchedulerState::default();
 
     tauri::Builder::default()
         .manage(debounce_state.clone())
         .manage(db_state)
+        .manage(backup_scheduler)
         .setup(|app| {
             // If app was opened with a file argument (double-clicking an associated file), use it
             if let Some(file) = extract_launch_file() {
@@ -239,6 +241,10 @@ pub fn run() {
                 guard.conn = Some(conn);
             }
 
+            let settings = commands::load_backup_settings();
+            let scheduler = app.state::<BackupSchedulerState>();
+            commands::restart_backup_scheduler(app.handle().clone(), scheduler, settings);
+
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(state) = load_window_state() {
                     let state = fit_window_state_to_monitor(&window, state);
@@ -255,6 +261,8 @@ pub fn run() {
             WindowEvent::CloseRequested { .. } => {
                 cancel_pending_save(debounce_state.clone());
                 save_window_state(window);
+                let app = window.app_handle();
+                commands::backup_on_close(app);
             }
             WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
                 schedule_debounced_save(window, debounce_state.clone());
@@ -265,10 +273,26 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::validate_and_set_storage_location,
             commands::get_storage_location,
+            commands::pick_storage_file,
+            commands::pick_storage_folder,
+            commands::pick_backup_folder,
+            commands::pick_backup_file,
+            commands::create_new_storage,
+            commands::move_storage,
+            commands::copy_storage,
+            commands::restore_from_backup,
+            commands::create_backup,
+            commands::list_backups,
+            commands::get_backup_settings,
+            commands::set_backup_settings,
             commands::greet,
             commands::get_db_path,
             commands::db_health,
             commands::get_schema_version,
+            commands::get_migration_status,
+            commands::db_integrity_check,
+            commands::db_vacuum,
+            commands::db_stats,
             commands::create_account,
             commands::get_account,
             commands::list_accounts,
@@ -311,6 +335,16 @@ pub fn run() {
             commands::get_category,
             commands::update_category,
             commands::delete_category,
+            commands::list_countries,
+            commands::create_country,
+            commands::get_country,
+            commands::update_country,
+            commands::delete_country,
+            commands::list_institutions,
+            commands::create_institution,
+            commands::get_institution,
+            commands::update_institution,
+            commands::delete_institution,
             commands::list_payees,
             commands::create_payee,
             commands::get_payee,
@@ -358,6 +392,18 @@ pub fn run() {
             commands::list_account_position_totals_by_commodity,
             commands::realized_gains_report,
             commands::unrealized_gains_report,
+            commands::create_report_definition,
+            commands::update_report_definition,
+            commands::delete_report_definition,
+            commands::get_report_definition,
+            commands::list_report_definitions,
+            commands::run_report,
+            commands::report_account_balances,
+            commands::report_cashflow,
+            commands::report_category_spend,
+            commands::report_payee_totals,
+            commands::list_builtin_reports,
+            commands::prune_report_runs,
             commands::list_dividend_income_categories,
             commands::create_dividend_income_category,
             commands::get_dividend_income_category,
