@@ -122,6 +122,12 @@ pub fn resolve_accessible_db(mut path: PathBuf) -> PathBuf {
 const MIGRATIONS: &[(i32, &str)] = &[
     (1, include_str!("../migrations/V1__init.sql")),
     (2, include_str!("../migrations/V2__account_balancing.sql")),
+    (3, include_str!("../migrations/V3__dividend_income_categories.sql")),
+    (4, include_str!("../migrations/V4__directives_and_documents.sql")),
+    (5, include_str!("../migrations/V5__booking_policy_and_cost_basis.sql")),
+    (6, include_str!("../migrations/V6__balance_constraints.sql")),
+    (7, include_str!("../migrations/V7__import_rules_sessions.sql")),
+    (8, include_str!("../migrations/V8__import_rules_extensions.sql")),
 ];
 
 fn run_migrations(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
