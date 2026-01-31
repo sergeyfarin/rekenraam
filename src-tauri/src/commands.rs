@@ -1,14 +1,14 @@
 #[path = "db_accounts.rs"]
 pub mod db_accounts;
-#[path = "db_prices.rs"]
-pub mod db_prices;
+#[path = "db_commodities.rs"]
+pub mod db_commodities;
 #[path = "db_storage.rs"]
 pub mod db_storage;
 #[path = "db_transactions.rs"]
 pub mod db_transactions;
 
 pub use db_accounts::*;
-pub use db_prices::*;
+pub use db_commodities::*;
 pub use db_storage::*;
 pub use db_transactions::*;
 

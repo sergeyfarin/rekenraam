@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
 use crate::state::DbState;
+
+const SINGLE_BOOK_ID: i64 = 1;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Account {
@@ -59,6 +61,25 @@ pub struct Category {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct CategoryCreate {
+    pub book_id: i64,
+    pub parent_id: Option<i64>,
+    pub name: String,
+    pub kind: String,
+    pub color: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CategoryUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub parent_id: Option<i64>,
+    pub name: String,
+    pub kind: String,
+    pub color: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Payee {
     pub id: i64,
     pub book_id: i64,
@@ -67,6 +88,48 @@ pub struct Payee {
     pub metadata: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PayeeCreate {
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub metadata: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PayeeUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub metadata: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Tag {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TagCreate {
+    pub book_id: i64,
+    pub name: String,
+    pub color: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TagUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub color: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -105,6 +168,242 @@ pub struct AccountBalancingUnlockInput {
     pub from_date: String,
     pub reason: Option<String>,
     pub confirm: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccountBookingPolicyUpdate {
+    pub account_id: i64,
+    pub booking_policy: String,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BalanceConstraint {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: i64,
+    pub min_balance_minor: Option<i64>,
+    pub max_balance_minor: Option<i64>,
+    pub sign_rule: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BalanceConstraintCreate {
+    pub book_id: i64,
+    pub account_id: i64,
+    pub min_balance_minor: Option<i64>,
+    pub max_balance_minor: Option<i64>,
+    pub sign_rule: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccountTreeNode {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub name: String,
+    pub account_type: String,
+    pub commodity_id: i64,
+    pub commodity_name: String,
+    pub commodity_scale: i64,
+    pub balance_minor: i64,
+    pub rollup_balance_minor: i64,
+    pub children: Vec<AccountTreeNode>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccountDirective {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: i64,
+    pub directive_type: String,
+    pub directive_date: String,
+    pub note: Option<String>,
+    pub metadata: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccountDirectiveCreate {
+    pub book_id: i64,
+    pub account_id: i64,
+    pub directive_date: String,
+    pub note: Option<String>,
+    pub metadata: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BalanceCheck {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: i64,
+    pub as_of_date: String,
+    pub balance_minor: i64,
+    pub memo: Option<String>,
+    pub status: String,
+    pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BalanceCheckCreate {
+    pub book_id: i64,
+    pub account_id: i64,
+    pub as_of_date: String,
+    pub balance_minor: i64,
+    pub memo: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PadDirective {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: i64,
+    pub pad_account_id: i64,
+    pub as_of_date: String,
+    pub target_balance_minor: i64,
+    pub tx_id: Option<i64>,
+    pub memo: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PadDirectiveCreate {
+    pub book_id: i64,
+    pub account_id: i64,
+    pub pad_account_id: i64,
+    pub as_of_date: String,
+    pub target_balance_minor: i64,
+    pub tx_id: Option<i64>,
+    pub memo: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Note {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub note: String,
+    pub note_date: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NoteCreate {
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub note: String,
+    pub note_date: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NoteUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub note: String,
+    pub note_date: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NoteFilter {
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Event {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub event_type: String,
+    pub event_date: String,
+    pub description: Option<String>,
+    pub metadata: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct EventCreate {
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub event_type: String,
+    pub event_date: String,
+    pub description: Option<String>,
+    pub metadata: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct EventUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub event_type: String,
+    pub event_date: String,
+    pub description: Option<String>,
+    pub metadata: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct EventFilter {
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Document {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub doc_type: Option<String>,
+    pub title: Option<String>,
+    pub uri: Option<String>,
+    pub mime_type: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DocumentCreate {
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub doc_type: Option<String>,
+    pub title: Option<String>,
+    pub uri: Option<String>,
+    pub mime_type: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DocumentUpdate {
+    pub id: i64,
+    pub book_id: i64,
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
+    pub doc_type: Option<String>,
+    pub title: Option<String>,
+    pub uri: Option<String>,
+    pub mime_type: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DocumentFilter {
+    pub account_id: Option<i64>,
+    pub tx_id: Option<i64>,
 }
 
 fn map_account_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
@@ -163,10 +462,121 @@ fn map_payee_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Payee> {
     })
 }
 
+fn map_tag_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
+    Ok(Tag {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        name: row.get(2)?,
+        color: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
+    })
+}
+
+fn map_account_directive_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AccountDirective> {
+    Ok(AccountDirective {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        directive_type: row.get(3)?,
+        directive_date: row.get(4)?,
+        note: row.get(5)?,
+        metadata: row.get(6)?,
+        created_at: row.get(7)?,
+    })
+}
+
+fn map_balance_check_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BalanceCheck> {
+    Ok(BalanceCheck {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        as_of_date: row.get(3)?,
+        balance_minor: row.get(4)?,
+        memo: row.get(5)?,
+        status: row.get(6)?,
+        created_at: row.get(7)?,
+    })
+}
+
+fn map_pad_directive_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PadDirective> {
+    Ok(PadDirective {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        pad_account_id: row.get(3)?,
+        as_of_date: row.get(4)?,
+        target_balance_minor: row.get(5)?,
+        tx_id: row.get(6)?,
+        memo: row.get(7)?,
+        created_at: row.get(8)?,
+    })
+}
+
+fn map_note_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
+    Ok(Note {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        tx_id: row.get(3)?,
+        note: row.get(4)?,
+        note_date: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+    })
+}
+
+fn map_event_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
+    Ok(Event {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        tx_id: row.get(3)?,
+        event_type: row.get(4)?,
+        event_date: row.get(5)?,
+        description: row.get(6)?,
+        metadata: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+    })
+}
+
+fn map_document_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Document> {
+    Ok(Document {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        tx_id: row.get(3)?,
+        doc_type: row.get(4)?,
+        title: row.get(5)?,
+        uri: row.get(6)?,
+        mime_type: row.get(7)?,
+        notes: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+    })
+}
+
+#[allow(dead_code)]
+fn map_balance_constraint_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BalanceConstraint> {
+    Ok(BalanceConstraint {
+        id: row.get(0)?,
+        book_id: row.get(1)?,
+        account_id: row.get(2)?,
+        min_balance_minor: row.get(3)?,
+        max_balance_minor: row.get(4)?,
+        sign_rule: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+    })
+}
+
 #[command]
 pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Account, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
 
     let is_closed = if input.is_closed.unwrap_or(false) { 1 } else { 0 };
 
@@ -174,7 +584,7 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
         "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, institution, number_last4, is_closed, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
-            input.book_id,
+            book_id,
             input.parent_id,
             input.account_type,
             input.name,
@@ -223,6 +633,8 @@ pub fn get_account(db: State<DbState>, id: i64) -> Result<Option<Account>, Strin
 pub fn list_accounts(db: State<DbState>, book_id: i64) -> Result<Vec<Account>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
 
     let mut stmt = conn
         .prepare(
@@ -248,6 +660,8 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
+    let book_id = SINGLE_BOOK_ID;
+
     let is_closed = if input.is_closed { 1 } else { 0 };
 
     let rows = conn
@@ -265,7 +679,7 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
              WHERE id = ?1",
             params![
                 input.id,
-                input.book_id,
+                book_id,
                 input.parent_id,
                 input.account_type,
                 input.name,
@@ -309,6 +723,8 @@ pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
 pub fn list_account_balances(db: State<DbState>, book_id: i64) -> Result<Vec<AccountBalance>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
 
     let base_commodity_id: i64 = conn
         .query_row(
@@ -408,6 +824,8 @@ pub fn create_account_balancing(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
+    let book_id = SINGLE_BOOK_ID;
+
     let account_book_id: Option<i64> = tx
         .query_row(
             "SELECT book_id FROM accounts WHERE id = ?1",
@@ -418,7 +836,7 @@ pub fn create_account_balancing(
         .map_err(|e| e.to_string())?;
 
     match account_book_id {
-        Some(book_id) if book_id == input.book_id => {}
+        Some(account_book_id) if account_book_id == book_id => {}
         Some(_) => return Err("account does not belong to book".to_string()),
         None => return Err("account not found".to_string()),
     }
@@ -442,7 +860,7 @@ pub fn create_account_balancing(
         "INSERT INTO account_balancings (book_id, account_id, as_of_date, balance_minor, memo, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
-            input.book_id,
+            book_id,
             input.account_id,
             input.as_of_date,
             input.balance_minor,
@@ -524,6 +942,8 @@ pub fn unlock_account_balancings(
 pub fn list_categories(db: State<DbState>, book_id: i64) -> Result<Vec<Category>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
 
     let mut stmt = conn
         .prepare(
@@ -545,9 +965,114 @@ pub fn list_categories(db: State<DbState>, book_id: i64) -> Result<Vec<Category>
 }
 
 #[command]
+pub fn create_category(db: State<DbState>, input: CategoryCreate) -> Result<Category, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO categories (book_id, parent_id, name, kind, color, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, input.parent_id, input.name, input.kind, input.color],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let category = conn
+        .query_row(
+            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
+             FROM categories WHERE id = ?1",
+            [id],
+            map_category_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(category)
+}
+
+#[command]
+pub fn get_category(db: State<DbState>, id: i64) -> Result<Option<Category>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
+             FROM categories WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(map_category_row(row).map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[command]
+pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Category, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE categories
+             SET book_id = ?2,
+                 parent_id = ?3,
+                 name = ?4,
+                 kind = ?5,
+                 color = ?6,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![
+                input.id,
+                book_id,
+                input.parent_id,
+                input.name,
+                input.kind,
+                input.color,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("category not found".to_string());
+    }
+
+    let category = conn
+        .query_row(
+            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
+             FROM categories WHERE id = ?1",
+            [input.id],
+            map_category_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(category)
+}
+
+#[command]
+pub fn delete_category(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM categories WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
+}
+
+#[command]
 pub fn list_payees(db: State<DbState>, book_id: i64) -> Result<Vec<Payee>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
 
     let mut stmt = conn
         .prepare(
@@ -566,4 +1091,1200 @@ pub fn list_payees(db: State<DbState>, book_id: i64) -> Result<Vec<Payee>, Strin
     }
 
     Ok(payees)
+}
+
+#[command]
+pub fn create_payee(db: State<DbState>, input: PayeeCreate) -> Result<Payee, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO payees (book_id, name, kind, metadata, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, input.name, input.kind, input.metadata],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let payee = conn
+        .query_row(
+            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
+             FROM payees WHERE id = ?1",
+            [id],
+            map_payee_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(payee)
+}
+
+#[command]
+pub fn get_payee(db: State<DbState>, id: i64) -> Result<Option<Payee>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
+             FROM payees WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(map_payee_row(row).map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[command]
+pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE payees
+             SET book_id = ?2,
+                 name = ?3,
+                 kind = ?4,
+                 metadata = ?5,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![input.id, book_id, input.name, input.kind, input.metadata],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("payee not found".to_string());
+    }
+
+    let payee = conn
+        .query_row(
+            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
+             FROM payees WHERE id = ?1",
+            [input.id],
+            map_payee_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(payee)
+}
+
+#[command]
+pub fn delete_payee(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM payees WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
+}
+
+#[command]
+pub fn list_tags(db: State<DbState>, book_id: i64) -> Result<Vec<Tag>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, name, color, created_at, updated_at
+             FROM tags WHERE book_id = ?1 ORDER BY name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([book_id], map_tag_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut tags = Vec::new();
+    for row in rows {
+        tags.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(tags)
+}
+
+#[command]
+pub fn create_tag(db: State<DbState>, input: TagCreate) -> Result<Tag, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO tags (book_id, name, color, created_at, updated_at)
+         VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, input.name, input.color],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let tag = conn
+        .query_row(
+            "SELECT id, book_id, name, color, created_at, updated_at
+             FROM tags WHERE id = ?1",
+            [id],
+            map_tag_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(tag)
+}
+
+#[command]
+pub fn get_tag(db: State<DbState>, id: i64) -> Result<Option<Tag>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, name, color, created_at, updated_at
+             FROM tags WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(map_tag_row(row).map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[command]
+pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE tags
+             SET book_id = ?2,
+                 name = ?3,
+                 color = ?4,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![input.id, book_id, input.name, input.color],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("tag not found".to_string());
+    }
+
+    let tag = conn
+        .query_row(
+            "SELECT id, book_id, name, color, created_at, updated_at
+             FROM tags WHERE id = ?1",
+            [input.id],
+            map_tag_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(tag)
+}
+
+#[command]
+pub fn delete_tag(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM tags WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
+}
+
+#[command]
+pub fn get_account_booking_policy(db: State<DbState>, account_id: i64) -> Result<String, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let policy: Option<String> = conn
+        .query_row(
+            "SELECT booking_policy FROM accounts WHERE id = ?1",
+            [account_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    Ok(policy.unwrap_or_else(|| "fifo".to_string()))
+}
+
+#[command]
+pub fn set_account_booking_policy(
+    db: State<DbState>,
+    input: AccountBookingPolicyUpdate,
+) -> Result<String, String> {
+    let policy = input.booking_policy.to_lowercase();
+    if policy != "fifo" && policy != "lifo" && policy != "strict" && policy != "average" {
+        return Err("booking policy must be fifo, lifo, strict, or average".to_string());
+    }
+
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute(
+            "UPDATE accounts SET booking_policy = ?2, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?1",
+            params![input.account_id, policy],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("account not found".to_string());
+    }
+
+    Ok(policy)
+}
+
+#[allow(dead_code)]
+#[command]
+pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<bool, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let is_closed: Option<i64> = conn
+        .query_row(
+            "SELECT is_closed FROM accounts WHERE id = ?1",
+            [account_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let is_closed = match is_closed {
+        Some(v) => v != 0,
+        None => return Err("account not found".to_string()),
+    };
+
+    if !is_closed {
+        return Ok(false);
+    }
+
+    let balance: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount_minor), 0) FROM splits WHERE account_id = ?1",
+            [account_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    if balance != 0 {
+        return Err("account closing validation failed: balance is not zero".to_string());
+    }
+
+    Ok(true)
+}
+
+#[allow(dead_code)]
+#[command]
+pub fn create_balance_constraint(
+    db: State<DbState>,
+    input: BalanceConstraintCreate,
+) -> Result<BalanceConstraint, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+    let sign_rule = input
+        .sign_rule
+        .unwrap_or_else(|| "any".to_string())
+        .to_lowercase();
+    if sign_rule != "any" && sign_rule != "nonnegative" && sign_rule != "nonpositive" {
+        return Err("sign_rule must be any, nonnegative, or nonpositive".to_string());
+    }
+    if let (Some(min), Some(max)) = (input.min_balance_minor, input.max_balance_minor) {
+        if min > max {
+            return Err("min_balance_minor must be <= max_balance_minor".to_string());
+        }
+    }
+
+    conn.execute(
+        "INSERT INTO balance_constraints (book_id, account_id, min_balance_minor, max_balance_minor, sign_rule, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.account_id,
+            input.min_balance_minor,
+            input.max_balance_minor,
+            sign_rule,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let constraint = conn
+        .query_row(
+            "SELECT id, book_id, account_id, min_balance_minor, max_balance_minor, sign_rule, created_at, updated_at
+             FROM balance_constraints WHERE id = ?1",
+            [id],
+            map_balance_constraint_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(constraint)
+}
+
+#[allow(dead_code)]
+#[command]
+pub fn list_balance_constraints(
+    db: State<DbState>,
+    account_id: i64,
+) -> Result<Vec<BalanceConstraint>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, min_balance_minor, max_balance_minor, sign_rule, created_at, updated_at
+             FROM balance_constraints WHERE account_id = ?1
+             ORDER BY id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([account_id], map_balance_constraint_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut constraints = Vec::new();
+    for row in rows {
+        constraints.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(constraints)
+}
+
+#[allow(dead_code)]
+#[command]
+pub fn delete_balance_constraint(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM balance_constraints WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
+}
+
+#[allow(dead_code)]
+#[command]
+pub fn validate_balance_constraints(db: State<DbState>, account_id: i64) -> Result<bool, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let balance: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount_minor), 0) FROM splits WHERE account_id = ?1",
+            [account_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, min_balance_minor, max_balance_minor, sign_rule, created_at, updated_at
+             FROM balance_constraints WHERE account_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([account_id], map_balance_constraint_row)
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let constraint = row.map_err(|e| e.to_string())?;
+        if let Some(min) = constraint.min_balance_minor {
+            if balance < min {
+                return Err("balance constraint violated: below minimum".to_string());
+            }
+        }
+        if let Some(max) = constraint.max_balance_minor {
+            if balance > max {
+                return Err("balance constraint violated: above maximum".to_string());
+            }
+        }
+        if constraint.sign_rule == "nonnegative" && balance < 0 {
+            return Err("balance constraint violated: must be nonnegative".to_string());
+        }
+        if constraint.sign_rule == "nonpositive" && balance > 0 {
+            return Err("balance constraint violated: must be nonpositive".to_string());
+        }
+    }
+
+    Ok(true)
+}
+
+#[allow(dead_code)]
+#[command]
+pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountTreeNode>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT a.id, a.parent_id, a.name, a.type, a.commodity_id, c.name, c.scale
+             FROM accounts a
+             JOIN commodities c ON c.id = a.commodity_id
+             WHERE a.book_id = ?1
+             ORDER BY a.name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([book_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut accounts: Vec<(i64, Option<i64>, String, String, i64, String, i64)> = Vec::new();
+    for row in rows {
+        accounts.push(row.map_err(|e| e.to_string())?);
+    }
+
+    let mut balance_stmt = conn
+        .prepare(
+            "SELECT account_id, COALESCE(SUM(amount_minor), 0) AS balance_minor
+             FROM splits
+             GROUP BY account_id",
+        )
+        .map_err(|e| e.to_string())?;
+    let balance_rows = balance_stmt
+        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+        .map_err(|e| e.to_string())?;
+
+    let mut balances: HashMap<i64, i64> = HashMap::new();
+    for row in balance_rows {
+        let (account_id, balance_minor) = row.map_err(|e| e.to_string())?;
+        balances.insert(account_id, balance_minor);
+    }
+
+    let mut children_map: HashMap<Option<i64>, Vec<i64>> = HashMap::new();
+    let mut account_map: HashMap<i64, (Option<i64>, String, String, i64, String, i64)> = HashMap::new();
+
+    for (id, parent_id, name, account_type, commodity_id, commodity_name, commodity_scale) in &accounts {
+        account_map.insert(*id, (*parent_id, name.clone(), account_type.clone(), *commodity_id, commodity_name.clone(), *commodity_scale));
+        children_map.entry(*parent_id).or_default().push(*id);
+    }
+
+    fn build_tree(
+        account_id: i64,
+        account_map: &HashMap<i64, (Option<i64>, String, String, i64, String, i64)>,
+        children_map: &HashMap<Option<i64>, Vec<i64>>,
+        balances: &HashMap<i64, i64>,
+    ) -> AccountTreeNode {
+        let (parent_id, name, account_type, commodity_id, commodity_name, commodity_scale) =
+            account_map.get(&account_id).cloned().unwrap();
+        let balance_minor = *balances.get(&account_id).unwrap_or(&0);
+
+        let mut children = Vec::new();
+        let mut rollup_balance_minor = balance_minor;
+        if let Some(child_ids) = children_map.get(&Some(account_id)) {
+            for child_id in child_ids {
+                let child = build_tree(*child_id, account_map, children_map, balances);
+                rollup_balance_minor += child.rollup_balance_minor;
+                children.push(child);
+            }
+        }
+
+        AccountTreeNode {
+            id: account_id,
+            parent_id,
+            name,
+            account_type,
+            commodity_id,
+            commodity_name,
+            commodity_scale,
+            balance_minor,
+            rollup_balance_minor,
+            children,
+        }
+    }
+
+    let mut roots = Vec::new();
+    if let Some(root_ids) = children_map.get(&None) {
+        for root_id in root_ids {
+            roots.push(build_tree(*root_id, &account_map, &children_map, &balances));
+        }
+    }
+
+    Ok(roots)
+}
+
+fn create_account_directive_internal(
+    conn: &rusqlite::Connection,
+    directive_type: &str,
+    input: AccountDirectiveCreate,
+) -> Result<AccountDirective, String> {
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO account_directives (book_id, account_id, directive_type, directive_date, note, metadata, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.account_id,
+            directive_type,
+            input.directive_date,
+            input.note,
+            input.metadata,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let directive = conn
+        .query_row(
+            "SELECT id, book_id, account_id, directive_type, directive_date, note, metadata, created_at
+             FROM account_directives WHERE id = ?1",
+            [id],
+            map_account_directive_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(directive)
+}
+
+#[command]
+pub fn create_account_open(
+    db: State<DbState>,
+    input: AccountDirectiveCreate,
+) -> Result<AccountDirective, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    create_account_directive_internal(conn, "open", input)
+}
+
+#[command]
+pub fn create_account_close(
+    db: State<DbState>,
+    input: AccountDirectiveCreate,
+) -> Result<AccountDirective, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    create_account_directive_internal(conn, "close", input)
+}
+
+#[command]
+pub fn list_account_directives(
+    db: State<DbState>,
+    account_id: i64,
+) -> Result<Vec<AccountDirective>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, directive_type, directive_date, note, metadata, created_at
+             FROM account_directives WHERE account_id = ?1
+             ORDER BY directive_date DESC, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([account_id], map_account_directive_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut directives = Vec::new();
+    for row in rows {
+        directives.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(directives)
+}
+
+#[command]
+pub fn create_balance_check(
+    db: State<DbState>,
+    input: BalanceCheckCreate,
+) -> Result<BalanceCheck, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO balance_checks (book_id, account_id, as_of_date, balance_minor, memo, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.account_id,
+            input.as_of_date,
+            input.balance_minor,
+            input.memo,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let check = conn
+        .query_row(
+            "SELECT id, book_id, account_id, as_of_date, balance_minor, memo, status, created_at
+             FROM balance_checks WHERE id = ?1",
+            [id],
+            map_balance_check_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(check)
+}
+
+#[command]
+pub fn list_balance_checks(
+    db: State<DbState>,
+    account_id: i64,
+) -> Result<Vec<BalanceCheck>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, as_of_date, balance_minor, memo, status, created_at
+             FROM balance_checks WHERE account_id = ?1
+             ORDER BY as_of_date DESC, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([account_id], map_balance_check_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut checks = Vec::new();
+    for row in rows {
+        checks.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(checks)
+}
+
+#[command]
+pub fn create_pad_directive(
+    db: State<DbState>,
+    input: PadDirectiveCreate,
+) -> Result<PadDirective, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO pad_directives (book_id, account_id, pad_account_id, as_of_date, target_balance_minor, tx_id, memo, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.account_id,
+            input.pad_account_id,
+            input.as_of_date,
+            input.target_balance_minor,
+            input.tx_id,
+            input.memo,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let directive = conn
+        .query_row(
+            "SELECT id, book_id, account_id, pad_account_id, as_of_date, target_balance_minor, tx_id, memo, created_at
+             FROM pad_directives WHERE id = ?1",
+            [id],
+            map_pad_directive_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(directive)
+}
+
+#[command]
+pub fn list_pad_directives(
+    db: State<DbState>,
+    account_id: i64,
+) -> Result<Vec<PadDirective>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, pad_account_id, as_of_date, target_balance_minor, tx_id, memo, created_at
+             FROM pad_directives WHERE account_id = ?1
+             ORDER BY as_of_date DESC, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([account_id], map_pad_directive_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut directives = Vec::new();
+    for row in rows {
+        directives.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(directives)
+}
+
+#[command]
+pub fn create_note(db: State<DbState>, input: NoteCreate) -> Result<Note, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO notes (book_id, account_id, tx_id, note, note_date, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, input.account_id, input.tx_id, input.note, input.note_date],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let note = conn
+        .query_row(
+            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+             FROM notes WHERE id = ?1",
+            [id],
+            map_note_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(note)
+}
+
+#[command]
+pub fn list_notes(db: State<DbState>, filter: NoteFilter) -> Result<Vec<Note>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut sql = String::from(
+        "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+         FROM notes WHERE book_id = ?",
+    );
+    let mut params: Vec<Value> = vec![Value::from(SINGLE_BOOK_ID)];
+
+    if let Some(account_id) = filter.account_id {
+        sql.push_str(" AND account_id = ?");
+        params.push(Value::from(account_id));
+    }
+    if let Some(tx_id) = filter.tx_id {
+        sql.push_str(" AND tx_id = ?");
+        params.push(Value::from(tx_id));
+    }
+
+    sql.push_str(" ORDER BY note_date DESC, id DESC");
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(params), map_note_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut notes = Vec::new();
+    for row in rows {
+        notes.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(notes)
+}
+
+#[command]
+pub fn get_note(db: State<DbState>, id: i64) -> Result<Option<Note>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+             FROM notes WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(map_note_row(row).map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[command]
+pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE notes
+             SET book_id = ?2,
+                 account_id = ?3,
+                 tx_id = ?4,
+                 note = ?5,
+                 note_date = ?6,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![
+                input.id,
+                book_id,
+                input.account_id,
+                input.tx_id,
+                input.note,
+                input.note_date,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("note not found".to_string());
+    }
+
+    let note = conn
+        .query_row(
+            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+             FROM notes WHERE id = ?1",
+            [input.id],
+            map_note_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(note)
+}
+
+#[command]
+pub fn delete_note(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM notes WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
+}
+
+#[command]
+pub fn create_event(db: State<DbState>, input: EventCreate) -> Result<Event, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO events (book_id, account_id, tx_id, event_type, event_date, description, metadata, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.account_id,
+            input.tx_id,
+            input.event_type,
+            input.event_date,
+            input.description,
+            input.metadata,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let event = conn
+        .query_row(
+            "SELECT id, book_id, account_id, tx_id, event_type, event_date, description, metadata, created_at, updated_at
+             FROM events WHERE id = ?1",
+            [id],
+            map_event_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(event)
+}
+
+#[command]
+pub fn list_events(db: State<DbState>, filter: EventFilter) -> Result<Vec<Event>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut sql = String::from(
+        "SELECT id, book_id, account_id, tx_id, event_type, event_date, description, metadata, created_at, updated_at
+         FROM events WHERE book_id = ?",
+    );
+    let mut params: Vec<Value> = vec![Value::from(SINGLE_BOOK_ID)];
+
+    if let Some(account_id) = filter.account_id {
+        sql.push_str(" AND account_id = ?");
+        params.push(Value::from(account_id));
+    }
+    if let Some(tx_id) = filter.tx_id {
+        sql.push_str(" AND tx_id = ?");
+        params.push(Value::from(tx_id));
+    }
+
+    sql.push_str(" ORDER BY event_date DESC, id DESC");
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(params), map_event_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut events = Vec::new();
+    for row in rows {
+        events.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(events)
+}
+
+#[command]
+pub fn get_event(db: State<DbState>, id: i64) -> Result<Option<Event>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, tx_id, event_type, event_date, description, metadata, created_at, updated_at
+             FROM events WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(map_event_row(row).map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[command]
+pub fn update_event(db: State<DbState>, input: EventUpdate) -> Result<Event, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE events
+             SET book_id = ?2,
+                 account_id = ?3,
+                 tx_id = ?4,
+                 event_type = ?5,
+                 event_date = ?6,
+                 description = ?7,
+                 metadata = ?8,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![
+                input.id,
+                book_id,
+                input.account_id,
+                input.tx_id,
+                input.event_type,
+                input.event_date,
+                input.description,
+                input.metadata,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("event not found".to_string());
+    }
+
+    let event = conn
+        .query_row(
+            "SELECT id, book_id, account_id, tx_id, event_type, event_date, description, metadata, created_at, updated_at
+             FROM events WHERE id = ?1",
+            [input.id],
+            map_event_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(event)
+}
+
+#[command]
+pub fn delete_event(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM events WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
+}
+
+#[command]
+pub fn create_document(db: State<DbState>, input: DocumentCreate) -> Result<Document, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    conn.execute(
+        "INSERT INTO documents (book_id, account_id, tx_id, doc_type, title, uri, mime_type, notes, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.account_id,
+            input.tx_id,
+            input.doc_type,
+            input.title,
+            input.uri,
+            input.mime_type,
+            input.notes,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    let doc = conn
+        .query_row(
+            "SELECT id, book_id, account_id, tx_id, doc_type, title, uri, mime_type, notes, created_at, updated_at
+             FROM documents WHERE id = ?1",
+            [id],
+            map_document_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(doc)
+}
+
+#[command]
+pub fn list_documents(db: State<DbState>, filter: DocumentFilter) -> Result<Vec<Document>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut sql = String::from(
+        "SELECT id, book_id, account_id, tx_id, doc_type, title, uri, mime_type, notes, created_at, updated_at
+         FROM documents WHERE book_id = ?",
+    );
+    let mut params: Vec<Value> = vec![Value::from(SINGLE_BOOK_ID)];
+
+    if let Some(account_id) = filter.account_id {
+        sql.push_str(" AND account_id = ?");
+        params.push(Value::from(account_id));
+    }
+    if let Some(tx_id) = filter.tx_id {
+        sql.push_str(" AND tx_id = ?");
+        params.push(Value::from(tx_id));
+    }
+
+    sql.push_str(" ORDER BY id DESC");
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(params), map_document_row)
+        .map_err(|e| e.to_string())?;
+
+    let mut docs = Vec::new();
+    for row in rows {
+        docs.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(docs)
+}
+
+#[command]
+pub fn get_document(db: State<DbState>, id: i64) -> Result<Option<Document>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, book_id, account_id, tx_id, doc_type, title, uri, mime_type, notes, created_at, updated_at
+             FROM documents WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([id]).map_err(|e| e.to_string())?;
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(map_document_row(row).map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
+}
+
+#[command]
+pub fn update_document(db: State<DbState>, input: DocumentUpdate) -> Result<Document, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    let rows = conn
+        .execute(
+            "UPDATE documents
+             SET book_id = ?2,
+                 account_id = ?3,
+                 tx_id = ?4,
+                 doc_type = ?5,
+                 title = ?6,
+                 uri = ?7,
+                 mime_type = ?8,
+                 notes = ?9,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1",
+            params![
+                input.id,
+                book_id,
+                input.account_id,
+                input.tx_id,
+                input.doc_type,
+                input.title,
+                input.uri,
+                input.mime_type,
+                input.notes,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if rows == 0 {
+        return Err("document not found".to_string());
+    }
+
+    let doc = conn
+        .query_row(
+            "SELECT id, book_id, account_id, tx_id, doc_type, title, uri, mime_type, notes, created_at, updated_at
+             FROM documents WHERE id = ?1",
+            [input.id],
+            map_document_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(doc)
+}
+
+#[command]
+pub fn delete_document(db: State<DbState>, id: i64) -> Result<bool, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let rows = conn
+        .execute("DELETE FROM documents WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows > 0)
 }

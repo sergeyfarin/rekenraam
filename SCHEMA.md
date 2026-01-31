@@ -5,6 +5,12 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 ### Migrations
 - V1: `V1__init.sql` (core domain, reports, prices, invariants, seed data)
 - V2: `V2__account_balancing.sql` (account balancing and locking)
+- V3: `V3__dividend_income_categories.sql` (dividend income category mapping)
+- V4: `V4__directives_and_documents.sql` (directives, balance checks, pad directives, notes/events/documents)
+- V5: `V5__booking_policy_and_cost_basis.sql` (account booking policy + lot cost basis)
+- V6: `V6__balance_constraints.sql` (per-account balance constraints)
+- V7: `V7__import_rules_sessions.sql` (import rules + import sessions)
+- V8: `V8__import_rules_extensions.sql` (import rule priority + match types + amount/date/account match)
 
 ### Core Entities
 **books**
@@ -17,7 +23,7 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **accounts**
 - Accounts in a book.
-- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `institution`, `is_closed`.
+- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `institution`, `is_closed`, `booking_policy`.
 
 **transactions**
 - Top-level transaction header.
@@ -43,6 +49,37 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 **projects**
 - Project/cost center grouping.
 
+**dividend_income_categories**
+- Maps dividend income categories (optionally per commodity) for reporting and tax.
+
+**account_directives**
+- Open/close directives for accounts (audit trail).
+
+**balance_checks**
+- Balance assertion records (Beancount-style balance directives).
+
+**pad_directives**
+- Pad directives linking target balance and optional pad transaction.
+
+**notes**
+- Freeform notes attached to accounts or transactions.
+
+**events**
+- Dated events attached to accounts or transactions.
+
+**documents**
+- Document references attached to accounts or transactions.
+
+**balance_constraints**
+- Per-account balance rules (min/max, sign enforcement).
+
+**import_rules**
+- Import matching rules for payee/memo normalization and mapping.
+- Extended with `priority`, `match_type`, amount/date ranges, and account matching.
+
+**import_sessions**
+- Audit trail for import batches.
+
 ### Relations and Join Tables
 **split_tags**
 - Many-to-many: `splits` ↔ `tags`.
@@ -65,6 +102,7 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **lots**
 - Investment lots.
+- Adds `cost_basis_minor` for lot cost basis tracking.
 
 **split_lot_allocations**
 - Allocation of split quantities to lots.

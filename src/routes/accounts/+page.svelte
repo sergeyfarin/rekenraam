@@ -21,12 +21,38 @@
     balance_minor: number;
   };
 
+  type Commodity = {
+    id: number;
+    book_id: number;
+    kind: string;
+    symbol: string | null;
+    name: string;
+    scale: number;
+    metadata: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+
   const bookId = 1;
 
   let accounts: Account[] = [];
   let balances = new Map<number, number>();
+  let commodities: Commodity[] = [];
   let loading = true;
   let error = "";
+
+  let dialogOpen = false;
+  let dialogMode: "create" | "edit" = "create";
+  let submitting = false;
+
+  let formId: number | null = null;
+  let formName = "";
+  let formType: Account["account_type"] = "checking";
+  let formCommodityId: number | null = null;
+  let formInstitution = "";
+  let formLast4 = "";
+  let formIsClosed = false;
+  let formParentId: number | null = null;
 
   let groupBy: "institution" | "type" | "none" = "institution";
   let sortBy: "name" | "balance" | "type" | "institution" = "name";
@@ -36,6 +62,7 @@
 
   onMount(async () => {
     await loadAccounts();
+    await loadCommodities();
   });
 
   async function loadAccounts() {
@@ -62,6 +89,19 @@
     }
   }
 
+  async function loadCommodities() {
+    try {
+      const rows = await invoke<Commodity[]>("list_commodities", { bookId });
+      commodities = rows.filter((row) => row.book_id === bookId);
+      if (!formCommodityId && commodities.length > 0) {
+        formCommodityId = commodities[0].id;
+      }
+    } catch (e) {
+      error = `Failed to load commodities: ${String(e)}`;
+      commodities = [];
+    }
+  }
+
   function accountBalance(account: Account) {
     return balances.get(account.id) ?? 0;
   }
@@ -82,6 +122,90 @@
       return account.account_type || "Unknown type";
     }
     return "All accounts";
+  }
+
+  function openCreateDialog() {
+    dialogMode = "create";
+    dialogOpen = true;
+    formId = null;
+    formName = "";
+    formType = "checking";
+    formCommodityId = commodities[0]?.id ?? null;
+    formInstitution = "";
+    formLast4 = "";
+    formIsClosed = false;
+    formParentId = null;
+  }
+
+  function openEditDialog(account: Account) {
+    dialogMode = "edit";
+    dialogOpen = true;
+    formId = account.id;
+    formName = account.name;
+    formType = account.account_type;
+    formCommodityId = account.commodity_id;
+    formInstitution = account.institution ?? "";
+    formLast4 = account.number_last4 ?? "";
+    formIsClosed = account.is_closed;
+    formParentId = account.parent_id ?? null;
+  }
+
+  function closeDialog() {
+    dialogOpen = false;
+    submitting = false;
+  }
+
+  async function submitAccount(event: Event) {
+    event.preventDefault();
+    if (!formName.trim()) {
+      error = "Account name is required.";
+      return;
+    }
+    if (!formCommodityId) {
+      error = "Select a commodity.";
+      return;
+    }
+
+    submitting = true;
+    error = "";
+
+    try {
+      if (dialogMode === "create") {
+        await invoke<Account>("create_account", {
+          input: {
+            book_id: bookId,
+            parent_id: formParentId,
+            account_type: formType,
+            name: formName.trim(),
+            commodity_id: formCommodityId,
+            institution: formInstitution.trim() || null,
+            number_last4: formLast4.trim() || null,
+            is_closed: formIsClosed
+          }
+        });
+      } else if (formId !== null) {
+        await invoke<Account>("update_account", {
+          input: {
+            id: formId,
+            book_id: bookId,
+            parent_id: formParentId,
+            account_type: formType,
+            name: formName.trim(),
+            commodity_id: formCommodityId,
+            institution: formInstitution.trim() || null,
+            number_last4: formLast4.trim() || null,
+            is_closed: formIsClosed
+          }
+        });
+      }
+
+      closeDialog();
+      await loadAccounts();
+    } catch (e) {
+      error = `Failed to save account: ${String(e)}`;
+    } finally {
+      submitting = false;
+    }
   }
 
   $: filtered = accounts.filter((account) => {
@@ -135,6 +259,11 @@
       <div class="bx--col-lg-8 bx--col-md-8 bx--col-sm-4">
         <h1 class="bx--type-productive-heading-04">Accounts</h1>
         <p class="bx--type-body-long-02">View, filter, and organize your accounts.</p>
+      </div>
+      <div class="bx--col-lg-4 bx--col-md-8 bx--col-sm-4 header-actions">
+        <button class="bx--btn bx--btn--primary" type="button" on:click={openCreateDialog}>
+          New account
+        </button>
       </div>
     </div>
 
@@ -224,12 +353,14 @@
                     <div class="bx--structured-list-cell heading">{group.label}</div>
                     <div class="bx--structured-list-cell heading">Institution</div>
                     <div class="bx--structured-list-cell heading amount">Balance</div>
+                    <div class="bx--structured-list-cell heading action">Actions</div>
                   </div>
                 </div>
                 <div class="bx--structured-list-tbody">
                   {#if group.accounts.length === 0}
                     <div class="bx--structured-list-row">
                       <div class="bx--structured-list-cell">No accounts found.</div>
+                      <div class="bx--structured-list-cell"></div>
                       <div class="bx--structured-list-cell"></div>
                       <div class="bx--structured-list-cell"></div>
                     </div>
@@ -251,6 +382,15 @@
                         <div class="bx--structured-list-cell amount">
                           {formatMinor(accountBalance(account))}
                         </div>
+                        <div class="bx--structured-list-cell action">
+                          <button
+                            class="bx--btn bx--btn--ghost bx--btn--sm"
+                            type="button"
+                            on:click={() => openEditDialog(account)}
+                          >
+                            Edit
+                          </button>
+                        </div>
                       </div>
                     {/each}
                   {/if}
@@ -262,12 +402,117 @@
       {/each}
     {/if}
   </div>
+
+  {#if dialogOpen}
+    <div class="dialog-backdrop" role="presentation" on:click={closeDialog}></div>
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="Account dialog">
+      <form class="bx--form" on:submit={submitAccount}>
+        <header class="dialog-header">
+          <h2 class="bx--type-productive-heading-03">
+            {dialogMode === "create" ? "Create account" : "Edit account"}
+          </h2>
+        </header>
+
+        <div class="dialog-body">
+          <div class="bx--form-item">
+            <label class="bx--label" for="account-name">Name</label>
+            <input
+              id="account-name"
+              class="bx--text-input"
+              type="text"
+              bind:value={formName}
+              required
+            />
+          </div>
+
+          <div class="bx--form-item">
+            <label class="bx--label" for="account-type">Account type</label>
+            <div class="bx--select">
+              <select id="account-type" class="bx--select-input" bind:value={formType}>
+                <option value="cash">Cash</option>
+                <option value="checking">Checking</option>
+                <option value="savings">Savings</option>
+                <option value="credit">Credit</option>
+                <option value="loan">Loan</option>
+                <option value="investment">Investment</option>
+                <option value="asset">Asset</option>
+                <option value="liability">Liability</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="equity">Equity</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bx--form-item">
+            <label class="bx--label" for="account-commodity">Commodity</label>
+            <div class="bx--select">
+              <select
+                id="account-commodity"
+                class="bx--select-input"
+                bind:value={formCommodityId}
+              >
+                {#each commodities as commodity}
+                  <option value={commodity.id}>
+                    {commodity.symbol ?? commodity.name}
+                  </option>
+                {/each}
+              </select>
+            </div>
+          </div>
+
+          <div class="bx--form-item">
+            <label class="bx--label" for="account-institution">Institution</label>
+            <input
+              id="account-institution"
+              class="bx--text-input"
+              type="text"
+              bind:value={formInstitution}
+            />
+          </div>
+
+          <div class="bx--form-item">
+            <label class="bx--label" for="account-last4">Last 4 digits</label>
+            <input
+              id="account-last4"
+              class="bx--text-input"
+              type="text"
+              maxlength="4"
+              bind:value={formLast4}
+            />
+          </div>
+
+          <div class="bx--form-item checkbox">
+            <label class="bx--checkbox-label" for="account-closed">
+              <input id="account-closed" type="checkbox" class="bx--checkbox" bind:checked={formIsClosed} />
+              <span class="bx--checkbox-label-text">Closed</span>
+            </label>
+          </div>
+        </div>
+
+        <footer class="dialog-footer">
+          <button class="bx--btn bx--btn--secondary" type="button" on:click={closeDialog}>
+            Cancel
+          </button>
+          <button class="bx--btn bx--btn--primary" type="submit" disabled={submitting}>
+            {submitting ? "Saving…" : "Save"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  {/if}
 </main>
 
 <style>
   .controls {
     margin-top: 1rem;
     margin-bottom: 1.5rem;
+  }
+
+  .header-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
   }
 
   .group {
@@ -282,6 +527,10 @@
     text-align: right;
   }
 
+  .action {
+    text-align: right;
+  }
+
   .meta {
     opacity: 0.7;
   }
@@ -292,5 +541,41 @@
 
   .checkbox {
     padding-top: 1.5rem;
+  }
+
+  .dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 30;
+  }
+
+  .dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    width: min(560px, 90vw);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    z-index: 31;
+  }
+
+  .dialog-header {
+    padding: 1.5rem 1.5rem 0 1.5rem;
+  }
+
+  .dialog-body {
+    padding: 1rem 1.5rem;
+    display: grid;
+    gap: 1rem;
+  }
+
+  .dialog-footer {
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
   }
 </style>
