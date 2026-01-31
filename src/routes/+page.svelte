@@ -74,14 +74,11 @@
         invoke<Account[]>("list_accounts", { bookId: 1, includeClosed: false }),
         invoke<AccountBalance[]>("list_account_balances", { bookId: 1 }),
         invoke<TransactionWithSplits[]>("list_transactions", {
-          bookId: 1,
-          dateFrom: null,
-          dateTo: null,
-          accountIds: null,
-          payeeIds: null,
-          statusFilter: null,
-          limit: 10,
-          offset: 0,
+          filter: {
+            book_id: 1,
+            limit: 10,
+            offset: 0,
+          },
         }),
       ]);
 
@@ -315,8 +312,3 @@
     </div>
   </div>
 </main>
-    return "(No description)";
-  }
-</script>
-
-<main class="py-6">

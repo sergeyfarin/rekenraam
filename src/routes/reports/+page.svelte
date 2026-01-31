@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import * as Tabs from "$lib/components/ui/tabs";
+  import * as Table from "$lib/components/ui/table";
+  import * as Alert from "$lib/components/ui/alert";
 
   // Tab state
   let activeTab: "cashflow" | "spending" | "payees" | "gains" = "cashflow";
@@ -204,7 +211,7 @@
     busy = true;
     try {
       unrealizedGains = await invoke<UnrealizedGainEntry[]>("unrealized_gains_report", {
-        quoteCommodityId: selectedCommodityId,
+        baseCommodityId: selectedCommodityId,
         asOfDate: dateTo || null,
       });
 
@@ -272,458 +279,330 @@
   }
 </script>
 
-<main class="page">
-  <div class="page-grid container">
-    <div class="page-row">
-      <div class="page-col">
-        <h1 class="page-title">Reports</h1>
-        <p class="page-subtitle">Generate financial reports and insights.</p>
-      </div>
+<main class="py-6">
+  <div class="container mx-auto px-6 space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Reports</h1>
+      <p class="text-muted-foreground">Generate financial reports and insights.</p>
     </div>
 
     <!-- Filters -->
-    <div class="page-row">
-      <div class="page-col">
-        <div class="filters-bar">
-          <label class="label-inline">
-            <span>From:</span>
-            <input type="date" class="input input-sm" bind:value={dateFrom} />
-          </label>
-          <label class="label-inline">
-            <span>To:</span>
-            <input type="date" class="input input-sm" bind:value={dateTo} />
-          </label>
+    <Card.Root>
+      <Card.Content class="pt-6">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <Label for="date-from">From:</Label>
+            <Input id="date-from" type="date" bind:value={dateFrom} class="w-40" />
+          </div>
+          <div class="flex items-center gap-2">
+            <Label for="date-to">To:</Label>
+            <Input id="date-to" type="date" bind:value={dateTo} class="w-40" />
+          </div>
           {#if activeTab === "cashflow"}
-            <label class="label-inline">
-              <span>Group by:</span>
-              <select class="select select-sm" bind:value={groupBy}>
+            <div class="flex items-center gap-2">
+              <Label for="group-by">Group by:</Label>
+              <select id="group-by" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={groupBy}>
                 <option value="day">Day</option>
                 <option value="month">Month</option>
                 <option value="quarter">Quarter</option>
                 <option value="year">Year</option>
               </select>
-            </label>
+            </div>
           {/if}
           {#if activeTab === "gains"}
-            <label class="label-inline">
-              <span>Quote currency:</span>
-              <select class="select select-sm" bind:value={selectedCommodityId}>
+            <div class="flex items-center gap-2">
+              <Label for="quote-currency">Quote currency:</Label>
+              <select id="quote-currency" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={selectedCommodityId}>
                 {#each commodities.filter((c) => c.kind === "currency") as c}
                   <option value={c.id}>{c.symbol || c.name}</option>
                 {/each}
               </select>
-            </label>
+            </div>
           {/if}
-          <button class="btn btn-primary btn-sm" on:click={refreshReport} disabled={busy}>
+          <Button onclick={refreshReport} disabled={busy}>
             {busy ? "Loading..." : "Refresh"}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </Card.Content>
+    </Card.Root>
 
     {#if error}
-      <div class="page-row">
-        <div class="page-col">
-          <p class="text-error">{error}</p>
-        </div>
-      </div>
+      <Alert.Root variant="destructive">
+        <Alert.Title>Error</Alert.Title>
+        <Alert.Description>{error}</Alert.Description>
+      </Alert.Root>
     {/if}
 
     <!-- Tabs -->
-    <div class="page-row">
-      <div class="page-col">
-        <div class="tabs">
-          <button class="tab" class:active={activeTab === "cashflow"} on:click={() => handleTabChange("cashflow")}>
-            Cash Flow
-          </button>
-          <button class="tab" class:active={activeTab === "spending"} on:click={() => handleTabChange("spending")}>
-            Spending by Category
-          </button>
-          <button class="tab" class:active={activeTab === "payees"} on:click={() => handleTabChange("payees")}>
-            Spending by Payee
-          </button>
-          <button class="tab" class:active={activeTab === "gains"} on:click={() => handleTabChange("gains")}>
-            Investment Gains
-          </button>
-        </div>
-      </div>
-    </div>
+    <Tabs.Root value={activeTab} onValueChange={(v) => handleTabChange(v as typeof activeTab)}>
+      <Tabs.List>
+        <Tabs.Trigger value="cashflow">Cash Flow</Tabs.Trigger>
+        <Tabs.Trigger value="spending">Spending by Category</Tabs.Trigger>
+        <Tabs.Trigger value="payees">Spending by Payee</Tabs.Trigger>
+        <Tabs.Trigger value="gains">Investment Gains</Tabs.Trigger>
+      </Tabs.List>
 
-    <!-- Cashflow Tab -->
-    {#if activeTab === "cashflow"}
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
-            <h2 class="section-title">Cash Flow Report</h2>
-
+      <!-- Cashflow Tab -->
+      <Tabs.Content value="cashflow">
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Cash Flow Report</Card.Title>
+          </Card.Header>
+          <Card.Content>
             {#if cashflowData.length === 0}
-              <p class="text-muted">No data for selected period.</p>
+              <p class="text-muted-foreground">No data for selected period.</p>
             {:else}
-              <div class="summary-cards">
-                <div class="summary-card summary-card--income">
-                  <span class="summary-label">Total Inflow</span>
-                  <span class="summary-value">{formatCurrency(cashflowTotals.inflow)}</span>
-                </div>
-                <div class="summary-card summary-card--expense">
-                  <span class="summary-label">Total Outflow</span>
-                  <span class="summary-value">{formatCurrency(cashflowTotals.outflow)}</span>
-                </div>
-                <div class="summary-card" class:summary-card--positive={cashflowTotals.net >= 0} class:summary-card--negative={cashflowTotals.net < 0}>
-                  <span class="summary-label">Net Cash Flow</span>
-                  <span class="summary-value">{formatCurrency(cashflowTotals.net)}</span>
-                </div>
+              <div class="grid gap-4 md:grid-cols-3 mb-6">
+                <Card.Root class="border-green-200 bg-green-50">
+                  <Card.Header class="pb-2">
+                    <Card.Description>Total Inflow</Card.Description>
+                  </Card.Header>
+                  <Card.Content>
+                    <div class="text-2xl font-bold text-green-700">{formatCurrency(cashflowTotals.inflow)}</div>
+                  </Card.Content>
+                </Card.Root>
+                <Card.Root class="border-red-200 bg-red-50">
+                  <Card.Header class="pb-2">
+                    <Card.Description>Total Outflow</Card.Description>
+                  </Card.Header>
+                  <Card.Content>
+                    <div class="text-2xl font-bold text-red-700">{formatCurrency(cashflowTotals.outflow)}</div>
+                  </Card.Content>
+                </Card.Root>
+                <Card.Root class={cashflowTotals.net >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+                  <Card.Header class="pb-2">
+                    <Card.Description>Net Cash Flow</Card.Description>
+                  </Card.Header>
+                  <Card.Content>
+                    <div class="text-2xl font-bold">{formatCurrency(cashflowTotals.net)}</div>
+                  </Card.Content>
+                </Card.Root>
               </div>
 
-              <div class="report-table">
-                <div class="report-table__header">
-                  <span>Period</span>
-                  <span class="text-right">Inflow</span>
-                  <span class="text-right">Outflow</span>
-                  <span class="text-right">Net</span>
-                </div>
-                {#each cashflowData as row}
-                  <div class="report-table__row">
-                    <span>{formatPeriod(row.period_start)}</span>
-                    <span class="text-right text-income">{formatCurrency(row.inflow_minor)}</span>
-                    <span class="text-right text-expense">{formatCurrency(row.outflow_minor)}</span>
-                    <span class="text-right" class:text-income={row.net_minor >= 0} class:text-expense={row.net_minor < 0}>
-                      {formatCurrency(row.net_minor)}
-                    </span>
-                  </div>
-                {/each}
-              </div>
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head>Period</Table.Head>
+                    <Table.Head class="text-right">Inflow</Table.Head>
+                    <Table.Head class="text-right">Outflow</Table.Head>
+                    <Table.Head class="text-right">Net</Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {#each cashflowData as row}
+                    <Table.Row>
+                      <Table.Cell>{formatPeriod(row.period_start)}</Table.Cell>
+                      <Table.Cell class="text-right text-green-600">{formatCurrency(row.inflow_minor)}</Table.Cell>
+                      <Table.Cell class="text-right text-red-600">{formatCurrency(row.outflow_minor)}</Table.Cell>
+                      <Table.Cell class="text-right {row.net_minor >= 0 ? 'text-green-600' : 'text-red-600'}">
+                        {formatCurrency(row.net_minor)}
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                </Table.Body>
+              </Table.Root>
             {/if}
-          </div>
-        </div>
-      </div>
-    {/if}
+          </Card.Content>
+        </Card.Root>
+      </Tabs.Content>
 
-    <!-- Category Spend Tab -->
-    {#if activeTab === "spending"}
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
-            <h2 class="section-title">Spending by Category</h2>
-
+      <!-- Category Spend Tab -->
+      <Tabs.Content value="spending">
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Spending by Category</Card.Title>
+          </Card.Header>
+          <Card.Content>
             {#if categorySpendData.length === 0}
-              <p class="text-muted">No spending data for selected period.</p>
+              <p class="text-muted-foreground">No spending data for selected period.</p>
             {:else}
-              <div class="summary-cards">
-                <div class="summary-card summary-card--expense">
-                  <span class="summary-label">Total Spending</span>
-                  <span class="summary-value">{formatCurrency(Math.abs(categorySpendTotal))}</span>
-                </div>
+              <div class="mb-6">
+                <Card.Root class="border-red-200 bg-red-50 w-fit">
+                  <Card.Header class="pb-2">
+                    <Card.Description>Total Spending</Card.Description>
+                  </Card.Header>
+                  <Card.Content>
+                    <div class="text-2xl font-bold text-red-700">{formatCurrency(Math.abs(categorySpendTotal))}</div>
+                  </Card.Content>
+                </Card.Root>
               </div>
 
-              <div class="report-table">
-                <div class="report-table__header">
-                  <span>Category</span>
-                  <span class="text-right">Amount</span>
-                  <span class="text-right">% of Total</span>
-                </div>
-                {#each categorySpendData.sort((a, b) => Math.abs(b.total_minor) - Math.abs(a.total_minor)) as row}
-                  <div class="report-table__row">
-                    <span>{row.category_name || "(No category)"}</span>
-                    <span class="text-right" class:text-expense={row.total_minor < 0} class:text-income={row.total_minor > 0}>
-                      {formatCurrency(row.total_minor)}
-                    </span>
-                    <span class="text-right text-muted">
-                      {categorySpendTotal !== 0 ? ((Math.abs(row.total_minor) / Math.abs(categorySpendTotal)) * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                {/each}
-              </div>
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head>Category</Table.Head>
+                    <Table.Head class="text-right">Amount</Table.Head>
+                    <Table.Head class="text-right">% of Total</Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {#each categorySpendData.sort((a, b) => Math.abs(b.total_minor) - Math.abs(a.total_minor)) as row}
+                    <Table.Row>
+                      <Table.Cell>{row.category_name || "(No category)"}</Table.Cell>
+                      <Table.Cell class="text-right {row.total_minor < 0 ? 'text-red-600' : 'text-green-600'}">
+                        {formatCurrency(row.total_minor)}
+                      </Table.Cell>
+                      <Table.Cell class="text-right text-muted-foreground">
+                        {categorySpendTotal !== 0 ? ((Math.abs(row.total_minor) / Math.abs(categorySpendTotal)) * 100).toFixed(1) : 0}%
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                </Table.Body>
+              </Table.Root>
             {/if}
-          </div>
-        </div>
-      </div>
-    {/if}
+          </Card.Content>
+        </Card.Root>
+      </Tabs.Content>
 
-    <!-- Payee Totals Tab -->
-    {#if activeTab === "payees"}
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
-            <h2 class="section-title">Spending by Payee</h2>
-
+      <!-- Payee Totals Tab -->
+      <Tabs.Content value="payees">
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Spending by Payee</Card.Title>
+          </Card.Header>
+          <Card.Content>
             {#if payeeTotalsData.length === 0}
-              <p class="text-muted">No payee data for selected period.</p>
+              <p class="text-muted-foreground">No payee data for selected period.</p>
             {:else}
-              <div class="summary-cards">
-                <div class="summary-card">
-                  <span class="summary-label">Total</span>
-                  <span class="summary-value">{formatCurrency(payeeTotalsTotal)}</span>
-                </div>
+              <div class="mb-6">
+                <Card.Root class="w-fit">
+                  <Card.Header class="pb-2">
+                    <Card.Description>Total</Card.Description>
+                  </Card.Header>
+                  <Card.Content>
+                    <div class="text-2xl font-bold">{formatCurrency(payeeTotalsTotal)}</div>
+                  </Card.Content>
+                </Card.Root>
               </div>
 
-              <div class="report-table">
-                <div class="report-table__header">
-                  <span>Payee</span>
-                  <span class="text-right">Amount</span>
-                  <span class="text-right">% of Total</span>
-                </div>
-                {#each payeeTotalsData.sort((a, b) => Math.abs(b.total_minor) - Math.abs(a.total_minor)) as row}
-                  <div class="report-table__row">
-                    <span>{row.payee_name || "(No payee)"}</span>
-                    <span class="text-right" class:text-expense={row.total_minor < 0} class:text-income={row.total_minor > 0}>
-                      {formatCurrency(row.total_minor)}
-                    </span>
-                    <span class="text-right text-muted">
-                      {payeeTotalsTotal !== 0 ? ((Math.abs(row.total_minor) / Math.abs(payeeTotalsTotal)) * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                {/each}
-              </div>
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head>Payee</Table.Head>
+                    <Table.Head class="text-right">Amount</Table.Head>
+                    <Table.Head class="text-right">% of Total</Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {#each payeeTotalsData.sort((a, b) => Math.abs(b.total_minor) - Math.abs(a.total_minor)) as row}
+                    <Table.Row>
+                      <Table.Cell>{row.payee_name || "(No payee)"}</Table.Cell>
+                      <Table.Cell class="text-right {row.total_minor < 0 ? 'text-red-600' : 'text-green-600'}">
+                        {formatCurrency(row.total_minor)}
+                      </Table.Cell>
+                      <Table.Cell class="text-right text-muted-foreground">
+                        {payeeTotalsTotal !== 0 ? ((Math.abs(row.total_minor) / Math.abs(payeeTotalsTotal)) * 100).toFixed(1) : 0}%
+                      </Table.Cell>
+                    </Table.Row>
+                  {/each}
+                </Table.Body>
+              </Table.Root>
             {/if}
-          </div>
+          </Card.Content>
+        </Card.Root>
+      </Tabs.Content>
+
+      <!-- Investment Gains Tab -->
+      <Tabs.Content value="gains">
+        <div class="space-y-6">
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Realized Gains/Losses</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              {#if realizedGains.length === 0}
+                <p class="text-muted-foreground">No realized gains for selected period.</p>
+              {:else}
+                <div class="mb-6">
+                  <Card.Root class={realizedGainsTotal >= 0 ? "border-green-200 bg-green-50 w-fit" : "border-red-200 bg-red-50 w-fit"}>
+                    <Card.Header class="pb-2">
+                      <Card.Description>Total Realized Gain/Loss</Card.Description>
+                    </Card.Header>
+                    <Card.Content>
+                      <div class="text-2xl font-bold">{formatCurrency(realizedGainsTotal)}</div>
+                    </Card.Content>
+                  </Card.Root>
+                </div>
+
+                <Table.Root>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.Head>Date</Table.Head>
+                      <Table.Head class="text-right">Qty</Table.Head>
+                      <Table.Head class="text-right">Proceeds</Table.Head>
+                      <Table.Head class="text-right">Cost Basis</Table.Head>
+                      <Table.Head class="text-right">Gain/Loss</Table.Head>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {#each realizedGains as row}
+                      <Table.Row>
+                        <Table.Cell>{formatDate(row.txn_date)}</Table.Cell>
+                        <Table.Cell class="text-right">{(row.quantity_minor / 1000000).toFixed(4)}</Table.Cell>
+                        <Table.Cell class="text-right">{formatCurrency(row.proceeds_minor)}</Table.Cell>
+                        <Table.Cell class="text-right">{formatCurrency(row.cost_basis_minor)}</Table.Cell>
+                        <Table.Cell class="text-right {row.gain_loss_minor >= 0 ? 'text-green-600' : 'text-red-600'}">
+                          {formatCurrency(row.gain_loss_minor)}
+                        </Table.Cell>
+                      </Table.Row>
+                    {/each}
+                  </Table.Body>
+                </Table.Root>
+              {/if}
+            </Card.Content>
+          </Card.Root>
+
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Unrealized Gains/Losses</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              {#if unrealizedGains.length === 0}
+                <p class="text-muted-foreground">No unrealized gains data available.</p>
+              {:else}
+                <div class="mb-6">
+                  <Card.Root class={unrealizedGainsTotal >= 0 ? "border-green-200 bg-green-50 w-fit" : "border-red-200 bg-red-50 w-fit"}>
+                    <Card.Header class="pb-2">
+                      <Card.Description>Total Unrealized Gain/Loss</Card.Description>
+                    </Card.Header>
+                    <Card.Content>
+                      <div class="text-2xl font-bold">{formatCurrency(unrealizedGainsTotal)}</div>
+                    </Card.Content>
+                  </Card.Root>
+                </div>
+
+                <Table.Root>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.Head>Account</Table.Head>
+                      <Table.Head>Commodity</Table.Head>
+                      <Table.Head class="text-right">Value</Table.Head>
+                      <Table.Head class="text-right">Cost Basis</Table.Head>
+                      <Table.Head class="text-right">Gain/Loss</Table.Head>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {#each unrealizedGains as row}
+                      <Table.Row>
+                        <Table.Cell>{row.account_name}</Table.Cell>
+                        <Table.Cell>{row.commodity_name}</Table.Cell>
+                        <Table.Cell class="text-right">{formatCurrency(row.value_minor)}</Table.Cell>
+                        <Table.Cell class="text-right">{formatCurrency(row.cost_basis_minor)}</Table.Cell>
+                        <Table.Cell class="text-right {row.unrealized_gain_minor >= 0 ? 'text-green-600' : 'text-red-600'}">
+                          {formatCurrency(row.unrealized_gain_minor)}
+                          {#if row.price_missing}
+                            <span class="text-yellow-600" title="Price missing">⚠</span>
+                          {/if}
+                        </Table.Cell>
+                      </Table.Row>
+                    {/each}
+                  </Table.Body>
+                </Table.Root>
+              {/if}
+            </Card.Content>
+          </Card.Root>
         </div>
-      </div>
-    {/if}
-
-    <!-- Investment Gains Tab -->
-    {#if activeTab === "gains"}
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
-            <h2 class="section-title">Realized Gains/Losses</h2>
-
-            {#if realizedGains.length === 0}
-              <p class="text-muted">No realized gains for selected period.</p>
-            {:else}
-              <div class="summary-cards">
-                <div class="summary-card" class:summary-card--positive={realizedGainsTotal >= 0} class:summary-card--negative={realizedGainsTotal < 0}>
-                  <span class="summary-label">Total Realized Gain/Loss</span>
-                  <span class="summary-value">{formatCurrency(realizedGainsTotal)}</span>
-                </div>
-              </div>
-
-              <div class="report-table">
-                <div class="report-table__header report-table__header--gains">
-                  <span>Date</span>
-                  <span class="text-right">Qty</span>
-                  <span class="text-right">Proceeds</span>
-                  <span class="text-right">Cost Basis</span>
-                  <span class="text-right">Gain/Loss</span>
-                </div>
-                {#each realizedGains as row}
-                  <div class="report-table__row report-table__row--gains">
-                    <span>{formatDate(row.txn_date)}</span>
-                    <span class="text-right">{(row.quantity_minor / 1000000).toFixed(4)}</span>
-                    <span class="text-right">{formatCurrency(row.proceeds_minor)}</span>
-                    <span class="text-right">{formatCurrency(row.cost_basis_minor)}</span>
-                    <span class="text-right" class:text-income={row.gain_loss_minor >= 0} class:text-expense={row.gain_loss_minor < 0}>
-                      {formatCurrency(row.gain_loss_minor)}
-                    </span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        </div>
-      </div>
-
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
-            <h2 class="section-title">Unrealized Gains/Losses</h2>
-
-            {#if unrealizedGains.length === 0}
-              <p class="text-muted">No unrealized gains data available.</p>
-            {:else}
-              <div class="summary-cards">
-                <div class="summary-card" class:summary-card--positive={unrealizedGainsTotal >= 0} class:summary-card--negative={unrealizedGainsTotal < 0}>
-                  <span class="summary-label">Total Unrealized Gain/Loss</span>
-                  <span class="summary-value">{formatCurrency(unrealizedGainsTotal)}</span>
-                </div>
-              </div>
-
-              <div class="report-table">
-                <div class="report-table__header report-table__header--unrealized">
-                  <span>Account</span>
-                  <span>Commodity</span>
-                  <span class="text-right">Value</span>
-                  <span class="text-right">Cost Basis</span>
-                  <span class="text-right">Gain/Loss</span>
-                </div>
-                {#each unrealizedGains as row}
-                  <div class="report-table__row report-table__row--unrealized">
-                    <span>{row.account_name}</span>
-                    <span>{row.commodity_name}</span>
-                    <span class="text-right">{formatCurrency(row.value_minor)}</span>
-                    <span class="text-right">{formatCurrency(row.cost_basis_minor)}</span>
-                    <span class="text-right" class:text-income={row.unrealized_gain_minor >= 0} class:text-expense={row.unrealized_gain_minor < 0}>
-                      {formatCurrency(row.unrealized_gain_minor)}
-                      {#if row.price_missing}
-                        <span class="text-warning" title="Price missing">⚠</span>
-                      {/if}
-                    </span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        </div>
-      </div>
-    {/if}
+      </Tabs.Content>
+    </Tabs.Root>
   </div>
 </main>
-
-<style>
-  .filters-bar {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
-    padding: 1rem;
-    background: var(--bg-muted);
-    border-radius: 0.5rem;
-  }
-
-  .label-inline {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-  }
-
-  .input-sm,
-  .select-sm {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.875rem;
-  }
-
-  .btn-sm {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.875rem;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1rem;
-  }
-
-  .tab {
-    padding: 0.75rem 1rem;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    font-size: 0.875rem;
-    color: var(--text-muted);
-  }
-
-  .tab:hover {
-    color: var(--text);
-    background: var(--bg-hover);
-  }
-
-  .tab.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-  }
-
-  .summary-cards {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
-
-  .summary-card {
-    padding: 1rem 1.5rem;
-    background: var(--bg-muted);
-    border-radius: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    min-width: 150px;
-  }
-
-  .summary-card--income {
-    background: #dcfce7;
-  }
-
-  .summary-card--expense {
-    background: #fee2e2;
-  }
-
-  .summary-card--positive {
-    background: #dcfce7;
-  }
-
-  .summary-card--negative {
-    background: #fee2e2;
-  }
-
-  .summary-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .summary-value {
-    font-size: 1.5rem;
-    font-weight: 600;
-  }
-
-  .report-table {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .report-table__header,
-  .report-table__row {
-    display: grid;
-    grid-template-columns: 1fr 120px 120px 120px;
-    gap: 1rem;
-    padding: 0.75rem;
-    align-items: center;
-  }
-
-  .report-table__header--gains,
-  .report-table__row--gains {
-    grid-template-columns: 100px 80px 120px 120px 120px;
-  }
-
-  .report-table__header--unrealized,
-  .report-table__row--unrealized {
-    grid-template-columns: 1fr 150px 120px 120px 120px;
-  }
-
-  .report-table__header {
-    font-weight: 600;
-    background: var(--bg-muted);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .report-table__row {
-    border-bottom: 1px solid var(--border-light, #eee);
-  }
-
-  .report-table__row:hover {
-    background: var(--bg-hover);
-  }
-
-  .text-right {
-    text-align: right;
-  }
-
-  .text-income {
-    color: #16a34a;
-  }
-
-  .text-expense {
-    color: #dc2626;
-  }
-
-  .text-muted {
-    color: var(--text-muted);
-  }
-
-  .text-warning {
-    color: #d97706;
-  }
-</style>
