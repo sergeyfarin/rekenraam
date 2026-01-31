@@ -2,6 +2,14 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import AccountTreeItem from "./AccountTreeItem.svelte";
+  import * as Card from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import * as Table from "$lib/components/ui/table";
+  import * as Alert from "$lib/components/ui/alert";
+  import { Badge } from "$lib/components/ui/badge";
 
   type Account = {
     id: number;
@@ -339,6 +347,42 @@
     }
   }
 
+  async function deleteAccount(account: Account) {
+    if (!confirm(`Delete account "${account.name}"? This cannot be undone. Any transactions for this account will also be affected.`)) {
+      return;
+    }
+
+    error = "";
+    loading = true;
+
+    try {
+      await invoke("delete_account", { accountId: account.id, bookId });
+      await loadAccounts();
+    } catch (e) {
+      error = `Failed to delete account: ${String(e)}`;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function validateClosing(account: Account) {
+    error = "";
+    try {
+      const result = await invoke<{ valid: boolean; issues: string[] }>("validate_account_closing", {
+        accountId: account.id,
+        bookId,
+      });
+
+      if (result.valid) {
+        alert(`Account "${account.name}" can be safely closed. No issues found.`);
+      } else {
+        alert(`Account "${account.name}" has issues:\n\n${result.issues.join("\n")}`);
+      }
+    } catch (e) {
+      error = `Failed to validate account closing: ${String(e)}`;
+    }
+  }
+
   $: filtered = accounts.filter((account) => {
     if (!includeClosed && account.is_closed) return false;
     if (!search.trim()) return true;
@@ -385,386 +429,269 @@
   })();
 </script>
 
-<main class="page">
-  <div class="page-grid container">
-    <div class="page-row">
-      <div class="page-col">
-        <h1 class="page-title">Accounts</h1>
-        <p class="page-subtitle">View, filter, and organize your accounts.</p>
+<main class="py-6">
+  <div class="container mx-auto px-6 space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Accounts</h1>
+        <p class="text-muted-foreground">View, filter, and organize your accounts.</p>
       </div>
-      <div class="page-col page-col-actions header-actions">
-        <button class="btn btn-primary" type="button" on:click={openCreateDialog}>
-          New account
-        </button>
-      </div>
+      <Button on:click={openCreateDialog}>New account</Button>
     </div>
 
-    <div class="page-row">
-      <div class="page-col">
-        <div class="card account-tree">
-          <div class="card-header">
-            <h2 class="section-title">Account tree</h2>
-            <button
-              class="btn btn-ghost btn-sm"
-              type="button"
-              on:click={() => (showAccountTree = !showAccountTree)}
-            >
-              {showAccountTree ? "Hide" : "Show"}
-            </button>
-          </div>
-          {#if showAccountTree}
-            {#if accountTree.length === 0}
-              <p class="text-sm text-muted">No accounts yet.</p>
-            {:else}
-              <ul class="tree">
-                {#each accountTree as node}
-                  <AccountTreeItem {node} {formatMinorWithScale} />
-                {/each}
-              </ul>
-            {/if}
+    {#if error}
+      <Alert.Root variant="destructive">
+        <Alert.Title>Error</Alert.Title>
+        <Alert.Description>{error}</Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    <!-- Account Tree -->
+    <Card.Root>
+      <Card.Header class="flex flex-row items-center justify-between">
+        <Card.Title>Account Tree</Card.Title>
+        <Button variant="ghost" size="sm" on:click={() => (showAccountTree = !showAccountTree)}>
+          {showAccountTree ? "Hide" : "Show"}
+        </Button>
+      </Card.Header>
+      {#if showAccountTree}
+        <Card.Content>
+          {#if accountTree.length === 0}
+            <p class="text-sm text-muted-foreground">No accounts yet.</p>
+          {:else}
+            <ul class="tree">
+              {#each accountTree as node}
+                <AccountTreeItem {node} {formatMinorWithScale} />
+              {/each}
+            </ul>
           {/if}
-        </div>
-      </div>
-    </div>
+        </Card.Content>
+      {/if}
+    </Card.Root>
 
-    <div class="page-row controls">
-      <div class="page-col">
-        <div class="form-field">
-          <label class="label" for="account-search">Search</label>
-          <input
-            id="account-search"
-            class="input"
-            type="text"
-            placeholder="Search by name, institution, country, type, or last4"
-            bind:value={search}
-          />
-        </div>
+    <!-- Search and Filters -->
+    <div class="flex flex-wrap items-end gap-4">
+      <div class="flex-1 min-w-[200px]">
+        <Label for="account-search">Search</Label>
+        <Input
+          id="account-search"
+          type="text"
+          placeholder="Search by name, institution, country, type, or last4"
+          bind:value={search}
+        />
       </div>
 
-      <div class="page-col">
-        <div class="form-field checkbox-field">
-          <label class="checkbox" for="include-closed">
-            <input id="include-closed" type="checkbox" bind:checked={includeClosed} />
-            <span>Include closed accounts</span>
-          </label>
-        </div>
+      <div class="flex items-center gap-2">
+        <input id="include-closed" type="checkbox" bind:checked={includeClosed} class="h-4 w-4" />
+        <Label for="include-closed">Include closed accounts</Label>
       </div>
 
-      <div class="page-col page-col-actions controls-actions">
-        <button
-          class="btn btn-ghost"
-          type="button"
-          on:click={() => (showAdvancedFilters = !showAdvancedFilters)}
-        >
-          {showAdvancedFilters ? "Hide filters" : "Show filters"}
-        </button>
-      </div>
+      <Button variant="outline" on:click={() => (showAdvancedFilters = !showAdvancedFilters)}>
+        {showAdvancedFilters ? "Hide filters" : "Show filters"}
+      </Button>
     </div>
 
     {#if showAdvancedFilters}
-      <div class="page-row advanced-filters">
-        <div class="page-col">
-          <div class="form-field">
-            <label class="label" for="group-by">Group by</label>
-              <select id="group-by" class="select" bind:value={groupBy}>
-                <option value="institution">Institution</option>
-                <option value="type">Account type</option>
-                <option value="none">None</option>
-              </select>
-          </div>
+      <div class="flex flex-wrap gap-4">
+        <div class="flex-1 min-w-[150px]">
+          <Label for="group-by">Group by</Label>
+          <select id="group-by" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={groupBy}>
+            <option value="institution">Institution</option>
+            <option value="type">Account type</option>
+            <option value="none">None</option>
+          </select>
         </div>
 
-        <div class="page-col">
-          <div class="form-field">
-            <label class="label" for="sort-by">Sort by</label>
-              <select id="sort-by" class="select" bind:value={sortBy}>
-                <option value="name">Name</option>
-                <option value="balance">Balance</option>
-                <option value="institution">Institution</option>
-                <option value="type">Account type</option>
-              </select>
-          </div>
+        <div class="flex-1 min-w-[150px]">
+          <Label for="sort-by">Sort by</Label>
+          <select id="sort-by" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={sortBy}>
+            <option value="name">Name</option>
+            <option value="balance">Balance</option>
+            <option value="institution">Institution</option>
+            <option value="type">Account type</option>
+          </select>
         </div>
 
-        <div class="page-col">
-          <div class="form-field">
-            <label class="label" for="sort-dir">Direction</label>
-              <select id="sort-dir" class="select" bind:value={sortDir}>
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
-          </div>
+        <div class="flex-1 min-w-[150px]">
+          <Label for="sort-dir">Direction</Label>
+          <select id="sort-dir" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={sortDir}>
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
         </div>
       </div>
     {/if}
 
     {#if loading}
-      <div class="page-row">
-        <div class="page-col">
-          <p class="text-sm text-muted">Loading accounts…</p>
-        </div>
-      </div>
-    {:else if error}
-      <div class="page-row">
-        <div class="page-col">
-          <p class="text-sm text-error">{error}</p>
-        </div>
-      </div>
+      <p class="text-sm text-muted-foreground">Loading accounts…</p>
     {:else}
       {#each grouped as group}
-        <section class="page-row group" aria-label={group.label}>
-          <div class="page-col">
-            <div class="card">
-              <div class="data-table">
-                <div class="data-row header">
-                  <div class="data-cell heading">{group.label}</div>
-                  <div class="data-cell heading">Institution</div>
-                  <div class="data-cell heading amount">Balance</div>
-                  <div class="data-cell heading action">Actions</div>
-                </div>
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>{group.label}</Card.Title>
+          </Card.Header>
+          <Card.Content>
+            <Table.Root>
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head>Name</Table.Head>
+                  <Table.Head>Institution</Table.Head>
+                  <Table.Head class="text-right">Balance</Table.Head>
+                  <Table.Head class="text-right">Actions</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
                 {#if group.accounts.length === 0}
-                  <div class="data-row">
-                    <div class="data-cell">No accounts found.</div>
-                    <div class="data-cell"></div>
-                    <div class="data-cell"></div>
-                    <div class="data-cell"></div>
-                  </div>
+                  <Table.Row>
+                    <Table.Cell colspan={4} class="text-muted-foreground">No accounts found.</Table.Cell>
+                  </Table.Row>
                 {:else}
                   {#each group.accounts as account}
-                    <div class="data-row">
-                      <div class="data-cell">
-                        <a class="link" href={`/accounts/${account.id}`}>{account.name}</a>
-                        <div class="text-sm text-muted meta">
-                          {account.account_type}
+                    <Table.Row>
+                      <Table.Cell>
+                        <a class="font-medium hover:underline" href={`/accounts/${account.id}`}>{account.name}</a>
+                        <div class="text-xs text-muted-foreground">
+                          <Badge variant="outline" class="mr-1">{account.account_type}</Badge>
                           {#if account.number_last4}
-                            ••••{account.number_last4}
+                            <span>••••{account.number_last4}</span>
                           {/if}
                         </div>
-                      </div>
-                      <div class="data-cell">
+                      </Table.Cell>
+                      <Table.Cell>
                         {account.institution_name ?? "—"}
                         {#if account.country_name}
-                          <div class="text-sm text-muted meta">{account.country_name}</div>
+                          <div class="text-xs text-muted-foreground">{account.country_name}</div>
                         {/if}
-                      </div>
-                      <div class="data-cell amount">
+                      </Table.Cell>
+                      <Table.Cell class="text-right font-mono">
                         {formatMinor(accountBalance(account))}
-                      </div>
-                      <div class="data-cell action">
-                        <button
-                          class="btn btn-ghost btn-sm"
-                          type="button"
-                          on:click={() => openEditDialog(account)}
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    </div>
+                      </Table.Cell>
+                      <Table.Cell class="text-right">
+                        <Button variant="ghost" size="sm" on:click={() => openEditDialog(account)}>Edit</Button>
+                        <Button variant="ghost" size="sm" class="text-destructive" on:click={() => deleteAccount(account)}>Delete</Button>
+                      </Table.Cell>
+                    </Table.Row>
                   {/each}
                 {/if}
-              </div>
-            </div>
-          </div>
-        </section>
+              </Table.Body>
+            </Table.Root>
+          </Card.Content>
+        </Card.Root>
       {/each}
     {/if}
   </div>
 
-  {#if dialogOpen}
-    <div class="dialog-backdrop" role="presentation" on:click={closeDialog}></div>
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Account dialog">
-      <form on:submit={submitAccount}>
-        <header class="dialog-header">
-          <h2 class="section-title">
-            {dialogMode === "create" ? "Create account" : "Edit account"}
-          </h2>
-        </header>
+  <!-- Account Dialog -->
+  <Dialog.Root bind:open={dialogOpen}>
+    <Dialog.Content class="max-w-lg">
+      <Dialog.Header>
+        <Dialog.Title>{dialogMode === "create" ? "Create account" : "Edit account"}</Dialog.Title>
+      </Dialog.Header>
 
-        <div class="dialog-body">
-          <div class="form-field">
-            <label class="label" for="account-name">Name</label>
-            <input
-              id="account-name"
-              class="input"
-              type="text"
-              bind:value={formName}
-              required
-            />
+      <form on:submit={submitAccount} class="space-y-4">
+        <div class="space-y-2">
+          <Label for="account-name">Name</Label>
+          <Input id="account-name" type="text" bind:value={formName} required />
+        </div>
+
+        <div class="space-y-2">
+          <Label for="account-type">Account type</Label>
+          <select id="account-type" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formType}>
+            <option value="cash">Cash</option>
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+            <option value="credit">Credit</option>
+            <option value="loan">Loan</option>
+            <option value="investment">Investment</option>
+            <option value="asset">Asset</option>
+            <option value="liability">Liability</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+            <option value="equity">Equity</option>
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="account-commodity">Commodity</Label>
+          <select id="account-commodity" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formCommodityId}>
+            {#each commodities as commodity}
+              <option value={commodity.id}>{commodity.symbol ?? commodity.name}</option>
+            {/each}
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <Label for="account-country">Country</Label>
+            <select id="account-country" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formCountryId}>
+              <option value="">None</option>
+              {#each countries as country}
+                <option value={country.id}>{country.name} ({country.code})</option>
+              {/each}
+            </select>
           </div>
 
-          <div class="form-field">
-            <label class="label" for="account-type">Account type</label>
-              <select id="account-type" class="select" bind:value={formType}>
-                <option value="cash">Cash</option>
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
-                <option value="credit">Credit</option>
-                <option value="loan">Loan</option>
-                <option value="investment">Investment</option>
-                <option value="asset">Asset</option>
-                <option value="liability">Liability</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-                <option value="equity">Equity</option>
-              </select>
-          </div>
-
-          <div class="form-field">
-            <label class="label" for="account-commodity">Commodity</label>
-              <select
-                id="account-commodity"
-                class="select"
-                bind:value={formCommodityId}
-              >
-                {#each commodities as commodity}
-                  <option value={commodity.id}>
-                    {commodity.symbol ?? commodity.name}
-                  </option>
-                {/each}
-              </select>
-          </div>
-
-          <div class="form-field">
-            <label class="label" for="account-country">Country</label>
-              <select id="account-country" class="select" bind:value={formCountryId}>
-                <option value="">None</option>
-                {#each countries as country}
-                  <option value={country.id}>{country.name} ({country.code})</option>
-                {/each}
-              </select>
-          </div>
-
-          <div class="form-field">
-            <label class="label" for="account-institution">Institution</label>
-              <select id="account-institution" class="select" bind:value={formInstitutionId}>
-                <option value="">None</option>
-                {#each institutions as institution}
-                  <option value={institution.id}>{institution.name}</option>
-                {/each}
-              </select>
-          </div>
-
-          <div class="form-field">
-            <label class="label" for="new-institution-name">Create new institution</label>
-            <div class="inline-create">
-              <input
-                id="new-institution-name"
-                class="input"
-                type="text"
-                placeholder="Institution name"
-                bind:value={newInstitutionName}
-              />
-                <select class="select" bind:value={newInstitutionKind}>
-                  <option value="bank">Bank</option>
-                  <option value="broker">Broker</option>
-                  <option value="credit_union">Credit union</option>
-                  <option value="other">Other</option>
-                </select>
-                <select class="select" bind:value={newInstitutionCountryId}>
-                  <option value="">Country</option>
-                  {#each countries as country}
-                    <option value={country.id}>{country.name}</option>
-                  {/each}
-                </select>
-              <button
-                class="btn btn-secondary"
-                type="button"
-                on:click={createInstitutionInline}
-                disabled={creatingInstitution}
-              >
-                {creatingInstitution ? "Adding…" : "Add"}
-              </button>
-            </div>
-          </div>
-
-          <div class="form-field">
-            <label class="label" for="account-last4">Last 4 digits</label>
-            <input
-              id="account-last4"
-              class="input"
-              type="text"
-              maxlength="4"
-              bind:value={formLast4}
-            />
-          </div>
-
-          <div class="form-field checkbox-field">
-            <label class="checkbox" for="account-closed">
-              <input id="account-closed" type="checkbox" bind:checked={formIsClosed} />
-              <span>Closed</span>
-            </label>
+          <div class="space-y-2">
+            <Label for="account-institution">Institution</Label>
+            <select id="account-institution" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs" bind:value={formInstitutionId}>
+              <option value="">None</option>
+              {#each institutions as institution}
+                <option value={institution.id}>{institution.name}</option>
+              {/each}
+            </select>
           </div>
         </div>
 
-        <footer class="dialog-footer">
-          <button class="btn btn-secondary" type="button" on:click={closeDialog}>
-            Cancel
-          </button>
-          <button class="btn btn-primary" type="submit" disabled={submitting}>
+        <div class="space-y-2">
+          <Label>Create new institution</Label>
+          <div class="grid grid-cols-4 gap-2">
+            <Input placeholder="Institution name" bind:value={newInstitutionName} />
+            <select class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs" bind:value={newInstitutionKind}>
+              <option value="bank">Bank</option>
+              <option value="broker">Broker</option>
+              <option value="credit_union">Credit union</option>
+              <option value="other">Other</option>
+            </select>
+            <select class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs" bind:value={newInstitutionCountryId}>
+              <option value="">Country</option>
+              {#each countries as country}
+                <option value={country.id}>{country.name}</option>
+              {/each}
+            </select>
+            <Button type="button" variant="secondary" on:click={createInstitutionInline} disabled={creatingInstitution}>
+              {creatingInstitution ? "Adding…" : "Add"}
+            </Button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <Label for="account-last4">Last 4 digits</Label>
+            <Input id="account-last4" type="text" maxlength={4} bind:value={formLast4} />
+          </div>
+
+          <div class="flex items-center gap-2 pt-8">
+            <input id="account-closed" type="checkbox" bind:checked={formIsClosed} class="h-4 w-4" />
+            <Label for="account-closed">Closed</Label>
+          </div>
+        </div>
+
+        <Dialog.Footer>
+          <Button variant="outline" type="button" on:click={closeDialog}>Cancel</Button>
+          <Button type="submit" disabled={submitting}>
             {submitting ? "Saving…" : "Save"}
-          </button>
-        </footer>
+          </Button>
+        </Dialog.Footer>
       </form>
-    </div>
-  {/if}
+    </Dialog.Content>
+  </Dialog.Root>
 </main>
 
 <style>
-  .controls {
-    margin-top: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .controls-actions {
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
-    padding-bottom: 0.5rem;
-  }
-
-  .advanced-filters {
-    margin-top: -0.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .header-actions {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-  }
-
-  .group {
-    margin-bottom: 1.5rem;
-  }
-
-  .heading {
-    font-weight: 600;
-  }
-
-  .amount {
-    text-align: right;
-  }
-
-  .action {
-    text-align: right;
-  }
-
-  .meta {
-    opacity: 0.7;
-  }
-
-  .checkbox-field {
-    padding-top: 1.5rem;
-  }
-
-  .account-tree {
-    margin-top: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
   :global(.tree) {
     list-style: none;
-    margin: 0.75rem 0 0 0;
+    margin: 0;
     padding-left: 0;
   }
 
@@ -774,7 +701,7 @@
 
   :global(.tree-item > .tree) {
     padding-left: 1rem;
-    border-left: 1px solid #e0e0e0;
+    border-left: 1px solid hsl(var(--border));
     margin-left: 0.25rem;
   }
 
@@ -793,56 +720,12 @@
 
   :global(.tree-meta) {
     font-size: 0.75rem;
-    color: #6f6f6f;
+    color: hsl(var(--muted-foreground));
   }
 
   :global(.tree-balances) {
     display: flex;
     gap: 0.75rem;
     font-size: 0.875rem;
-  }
-
-  .dialog-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 30;
-  }
-
-  .dialog {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--card);
-    width: min(560px, 90vw);
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    z-index: 31;
-  }
-
-  .dialog-header {
-    padding: 1.5rem 1.5rem 0 1.5rem;
-  }
-
-  .dialog-body {
-    padding: 1rem 1.5rem;
-    display: grid;
-    gap: 1rem;
-  }
-
-  .dialog-footer {
-    padding: 0 1.5rem 1.5rem 1.5rem;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-  }
-
-  .inline-create {
-    display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr auto;
-    gap: 0.5rem;
-    align-items: center;
   }
 </style>
