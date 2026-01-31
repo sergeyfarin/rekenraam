@@ -28,7 +28,7 @@ impl Default for BackupSettings {
         Self {
             enabled: false,
             interval_minutes: 60,
-            retention_count: 10,
+            retention_count: 60,
             backup_path: None,
             backup_on_close: true,
         }
@@ -155,7 +155,9 @@ pub fn load_backup_settings(db: Option<&DbState>) -> BackupSettings {
 fn save_backup_settings(db: &DbState, settings: &BackupSettings) -> Result<(), String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
-    save_backup_settings_db(conn, settings)
+    save_backup_settings_db(conn, settings)?;
+    let _ = save_backup_settings_file(settings);
+    Ok(())
 }
 
 fn default_backup_dir(db_path: &PathBuf) -> PathBuf {

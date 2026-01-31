@@ -1,7 +1,7 @@
 <script lang="ts">
-//   import { page } from "$app/stores";
   import "../app.css";
   import { page } from "$app/state";
+  import { Button } from "$lib/components/ui/button";
 
   type Tab = { label: string; href: string };
 
@@ -20,12 +20,19 @@
   $: currentPath = page.url.pathname;
 </script>
 
-<header class="app-header">
-  <div class="container header-inner">
-    <div class="brand">Rekenraam 🪙</div>
-    <nav class="nav" aria-label="Primary">
+<header class="sticky top-0 z-10 border-b border-border bg-background">
+  <div class="container mx-auto flex h-16 items-center justify-between gap-4 px-6">
+    <div class="font-semibold text-lg">Rekenraam 🪙</div>
+    <nav class="flex flex-wrap gap-1" aria-label="Primary">
       {#each tabs as tab}
-        <a href={tab.href} class:active={currentPath === tab.href}>{tab.label}</a>
+        <a
+          href={tab.href}
+          class="px-3 py-1.5 rounded-md font-medium text-sm transition-colors {currentPath === tab.href
+            ? 'bg-accent text-foreground'
+            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}"
+        >
+          {tab.label}
+        </a>
       {/each}
     </nav>
   </div>
