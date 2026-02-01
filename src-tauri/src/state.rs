@@ -16,3 +16,8 @@ pub struct DbState {
 pub struct BackupSchedulerState {
     pub task: Mutex<Option<JoinHandle<()>>>,
 }
+
+#[derive(Default)]
+pub struct FxSchedulerState {
+    pub task: Mutex<Option<JoinHandle<()>>>,
+}

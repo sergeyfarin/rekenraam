@@ -1956,12 +1956,12 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
     let mut stmt = conn
         .prepare(
             "SELECT a.id, a.parent_id, a.name, a.type, a.commodity_id, c.name, c.scale,
-                    i.name, co.name
+                i.name, co.name
              FROM accounts a
              JOIN commodities c ON c.id = a.commodity_id
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries co ON a.country_id = co.id
-             WHERE a.book_id = ?1
+             WHERE a.book_id = ?1 AND a.type NOT IN ('income', 'expense')
              ORDER BY a.name ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -2305,6 +2305,184 @@ mod tests {
 
         let deleted = delete_account(as_state(&db_state), created.id).expect("delete account");
         assert!(deleted);
+    }
+
+    #[test]
+    fn test_account_tree_excludes_income_expense_rollup() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let parent = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "asset".to_string(),
+                name: "Parent Asset".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create parent account");
+
+        let child = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: Some(parent.id),
+                account_type: "asset".to_string(),
+                name: "Child Asset".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create child account");
+
+        let income = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: Some(parent.id),
+                account_type: "income".to_string(),
+                name: "Income Account".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create income account");
+
+        let expense = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: Some(parent.id),
+                account_type: "expense".to_string(),
+                name: "Expense Account".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create expense account");
+
+        let equity = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "equity".to_string(),
+                name: "Equity".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create equity account");
+
+        {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+
+            let insert_tx = |conn: &rusqlite::Connection| -> i64 {
+                conn.execute(
+                    "INSERT INTO transactions (book_id, txn_date, status, created_at, updated_at)
+                     VALUES (1, '2024-06-01', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    [],
+                )
+                .expect("insert tx");
+                conn.last_insert_rowid()
+            };
+
+            let tx1 = insert_tx(conn);
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 1000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx1, parent.id, commodity_id],
+            )
+            .expect("insert parent split");
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, -1000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx1, equity.id, commodity_id],
+            )
+            .expect("insert equity split 1");
+
+            let tx2 = insert_tx(conn);
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 2000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx2, child.id, commodity_id],
+            )
+            .expect("insert child split");
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, -2000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx2, equity.id, commodity_id],
+            )
+            .expect("insert equity split 2");
+
+            let tx3 = insert_tx(conn);
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 3000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx3, income.id, commodity_id],
+            )
+            .expect("insert income split");
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, -3000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx3, equity.id, commodity_id],
+            )
+            .expect("insert equity split 3");
+
+            let tx4 = insert_tx(conn);
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, -4000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx4, expense.id, commodity_id],
+            )
+            .expect("insert expense split");
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 4000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx4, equity.id, commodity_id],
+            )
+            .expect("insert equity split 4");
+        }
+
+        let tree = get_account_tree(as_state(&db_state), 1).expect("get account tree");
+
+        fn collect_nodes<'a>(nodes: &'a [AccountTreeNode], out: &mut Vec<&'a AccountTreeNode>) {
+            for node in nodes {
+                out.push(node);
+                collect_nodes(&node.children, out);
+            }
+        }
+
+        let mut all_nodes = Vec::new();
+        collect_nodes(&tree, &mut all_nodes);
+
+        assert!(!all_nodes.iter().any(|n| n.account_type == "income"));
+        assert!(!all_nodes.iter().any(|n| n.account_type == "expense"));
+
+        let parent_node = all_nodes
+            .iter()
+            .find(|n| n.id == parent.id)
+            .expect("parent node");
+        assert_eq!(parent_node.rollup_balance_minor, 3000);
     }
 
     #[test]

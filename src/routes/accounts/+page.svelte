@@ -116,6 +116,8 @@
   let showAdvancedFilters = false;
   let showAccountTree = true;
 
+  const hiddenAccountTypes = new Set(["income", "expense"]);
+
   onMount(async () => {
     await loadAccounts();
     await loadCommodities();
@@ -381,6 +383,7 @@
   }
 
   $: filtered = accounts.filter((account) => {
+    if (hiddenAccountTypes.has(account.account_type)) return false;
     if (!includeClosed && account.is_closed) return false;
     if (!search.trim()) return true;
     const haystack = [

@@ -15,13 +15,15 @@ use rfd::FileDialog;
 mod db;
 mod commands;
 mod db_currencies;
+mod fx_rates;
+mod fx_refresh;
 mod state;
 
 use crate::db::{
     create_db_placeholder, db_accessible, default_storage_dir, load_storage_path,
     open_and_migrate, resolve_accessible_db, save_storage_path,
 };
-use crate::state::{BackupSchedulerState, DbState};
+use crate::state::{BackupSchedulerState, DbState, FxSchedulerState};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct WindowState {
@@ -213,11 +215,13 @@ pub fn run() {
     let debounce_state: DebounceState = Arc::new(Mutex::new(None));
     let db_state = DbState::default();
     let backup_scheduler = BackupSchedulerState::default();
+    let fx_scheduler = FxSchedulerState::default();
 
     tauri::Builder::default()
         .manage(debounce_state.clone())
         .manage(db_state)
         .manage(backup_scheduler)
+        .manage(fx_scheduler)
         .setup(|app| {
             // If app was opened with a file argument (double-clicking an associated file), use it
             if let Some(file) = extract_launch_file() {
@@ -246,6 +250,9 @@ pub fn run() {
             let settings = commands::load_backup_settings(Some(&db_state));
             let scheduler = app.state::<BackupSchedulerState>();
             commands::restart_backup_scheduler(app.handle().clone(), scheduler, settings);
+
+            let fx_scheduler = app.state::<FxSchedulerState>();
+            fx_refresh::restart_fx_scheduler(app.handle().clone(), fx_scheduler);
 
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(state) = load_window_state() {
@@ -447,6 +454,18 @@ pub fn run() {
             // FX rate sources
             db_currencies::list_fx_rate_sources,
             db_currencies::create_fx_rate_source,
+            // FX settings and refresh state
+            db_currencies::get_fx_rate_settings,
+            db_currencies::set_fx_rate_settings,
+            db_currencies::list_fx_rate_source_assignments,
+            db_currencies::create_fx_rate_source_assignment,
+            db_currencies::update_fx_rate_source_assignment,
+            db_currencies::delete_fx_rate_source_assignment,
+            db_currencies::list_fx_rate_refresh_state,
+            db_currencies::upsert_fx_rate_refresh_state,
+            // FX refresh engine
+            fx_refresh::refresh_fx_rates_now,
+            fx_refresh::restart_fx_rate_scheduler,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -43,6 +44,9 @@
     rate_date: string;
     rate: number;
     source: string | null;
+    source_id: number | null;
+    is_derived: boolean;
+    derived_via_currency_id: number | null;
     created_at: string;
   };
 
@@ -76,6 +80,52 @@
     updated_at: string;
   };
 
+  type FxRateSettings = {
+    book_id: number;
+    base_currency_id: number;
+    base_currency_symbol: string | null;
+    default_source_id: number | null;
+    default_source_name: string | null;
+    refresh_enabled: boolean;
+    refresh_hour_utc: number;
+    refresh_minute_utc: number;
+    max_backfill_days: number;
+    weekend_policy: string;
+    created_at: string;
+    updated_at: string;
+  };
+
+  type FxRateSourceAssignment = {
+    id: number;
+    book_id: number;
+    from_currency_id: number;
+    from_currency_symbol: string | null;
+    to_currency_id: number;
+    to_currency_symbol: string | null;
+    source_id: number;
+    source_name: string | null;
+    effective_from: string;
+    effective_to: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+
+  type FxRateRefreshState = {
+    id: number;
+    book_id: number;
+    from_currency_id: number;
+    from_currency_symbol: string | null;
+    to_currency_id: number;
+    to_currency_symbol: string | null;
+    source_id: number;
+    source_name: string | null;
+    last_success_date: string | null;
+    last_attempt_at: string | null;
+    last_error: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+
   export let commodities: Commodity[] = [];
   export let busy = false;
 
@@ -91,23 +141,48 @@
   let editingCurrency: Currency | null = null;
   let newCurrency = { symbol: "", display_symbol: "", name: "", scale: 2 };
 
+  $: sortedCurrencies = [...currencies].sort((a, b) => {
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    if (a.is_default !== b.is_default) return a.is_default ? -1 : 1;
+    return (a.symbol || "").localeCompare(b.symbol || "");
+  });
+
   let fxRatesDaily: FxRateDaily[] = [];
   let fxRatesOfficial: FxRateOfficial[] = [];
   let fxRateSources: FxRateSource[] = [];
+  let fxRateSettings: FxRateSettings | null = null;
+  let fxRateAssignments: FxRateSourceAssignment[] = [];
+  let fxRateRefreshState: FxRateRefreshState[] = [];
   let fxRateError = "";
   let fxRateStatus = "";
   let showFxDailyDialog = false;
   let showFxOfficialDialog = false;
+  let showFxAssignmentDialog = false;
   let newFxDaily = { from_currency_id: 0, to_currency_id: 0, rate_date: "", rate: 0, source: "" };
   let newFxOfficial = { from_currency_id: 0, to_currency_id: 0, period_type: "yearly", period_year: new Date().getFullYear(), period_month: null as number | null, rate: 0, source_name: "", source_url: "", notes: "" };
+  let editingAssignment: FxRateSourceAssignment | null = null;
+  let newFxAssignment = {
+    from_currency_id: 0,
+    to_currency_id: 0,
+    source_id: 0,
+    effective_from: "",
+    effective_to: "",
+  };
 
   // Sub-tabs
-  let commoditiesSubTab: "currencies" | "commodities" | "fx-daily" | "fx-official" = "currencies";
+  let commoditiesSubTab: "currencies" | "commodities" | "fx-daily" | "fx-official" | "fx-settings" = "currencies";
+
+  onMount(() => {
+    initialize();
+  });
 
   export async function initialize() {
     await loadCommodities();
     await loadCurrencies();
     await loadFxRateSources();
+    await loadFxRateSettings();
+    await loadFxRateAssignments();
+    await loadFxRefreshState();
   }
 
   export async function loadCommodities() {
@@ -271,6 +346,155 @@
     }
   }
 
+  async function loadFxRateSettings() {
+    try {
+      fxRateSettings = await invoke<FxRateSettings | null>("get_fx_rate_settings", { bookId: 1 });
+    } catch (e) {
+      fxRateError = `Failed to load FX settings: ${String(e)}`;
+    }
+  }
+
+  async function saveFxRateSettings() {
+    if (!fxRateSettings) return;
+    fxRateError = "";
+    fxRateStatus = "";
+    busy = true;
+    try {
+      const normalizedDefaultSource = fxRateSettings.default_source_id ? Number(fxRateSettings.default_source_id) : null;
+      fxRateSettings = await invoke<FxRateSettings>("set_fx_rate_settings", {
+        input: {
+          base_currency_id: Number(fxRateSettings.base_currency_id),
+          default_source_id: normalizedDefaultSource,
+          refresh_enabled: fxRateSettings.refresh_enabled,
+          refresh_hour_utc: Number(fxRateSettings.refresh_hour_utc),
+          refresh_minute_utc: Number(fxRateSettings.refresh_minute_utc),
+          max_backfill_days: Number(fxRateSettings.max_backfill_days),
+          weekend_policy: fxRateSettings.weekend_policy,
+        },
+      });
+      await invoke("restart_fx_rate_scheduler");
+      fxRateStatus = "FX settings saved.";
+    } catch (e) {
+      fxRateError = `Failed to save FX settings: ${String(e)}`;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function loadFxRateAssignments() {
+    try {
+      fxRateAssignments = await invoke<FxRateSourceAssignment[]>("list_fx_rate_source_assignments", { bookId: 1 });
+    } catch (e) {
+      fxRateError = `Failed to load FX source assignments: ${String(e)}`;
+    }
+  }
+
+  function openNewFxAssignment() {
+    const activeCurrencies = currencies.filter(c => c.is_active);
+    const defaultCurrency = currencies.find(c => c.is_default);
+    newFxAssignment = {
+      from_currency_id: activeCurrencies[0]?.id || 0,
+      to_currency_id: defaultCurrency?.id || 0,
+      source_id: fxRateSources[0]?.id || 0,
+      effective_from: new Date().toISOString().split("T")[0],
+      effective_to: "",
+    };
+    editingAssignment = null;
+    showFxAssignmentDialog = true;
+  }
+
+  function openEditFxAssignment(assignment: FxRateSourceAssignment) {
+    editingAssignment = assignment;
+    newFxAssignment = {
+      from_currency_id: assignment.from_currency_id,
+      to_currency_id: assignment.to_currency_id,
+      source_id: assignment.source_id,
+      effective_from: assignment.effective_from,
+      effective_to: assignment.effective_to || "",
+    };
+    showFxAssignmentDialog = true;
+  }
+
+  function closeFxAssignmentDialog() {
+    showFxAssignmentDialog = false;
+    editingAssignment = null;
+  }
+
+  async function saveFxAssignment() {
+    fxRateError = "";
+    fxRateStatus = "";
+    busy = true;
+    try {
+      if (editingAssignment) {
+        await invoke("update_fx_rate_source_assignment", {
+          input: {
+            id: editingAssignment.id,
+            source_id: Number(newFxAssignment.source_id),
+            effective_from: newFxAssignment.effective_from,
+            effective_to: newFxAssignment.effective_to || null,
+          },
+        });
+        fxRateStatus = "FX source assignment updated.";
+      } else {
+        await invoke("create_fx_rate_source_assignment", {
+          input: {
+            from_currency_id: Number(newFxAssignment.from_currency_id),
+            to_currency_id: Number(newFxAssignment.to_currency_id),
+            source_id: Number(newFxAssignment.source_id),
+            effective_from: newFxAssignment.effective_from,
+            effective_to: newFxAssignment.effective_to || null,
+          },
+        });
+        fxRateStatus = "FX source assignment created.";
+      }
+      closeFxAssignmentDialog();
+      await loadFxRateAssignments();
+    } catch (e) {
+      fxRateError = `Failed to save FX source assignment: ${String(e)}`;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function deleteFxAssignment(assignment: FxRateSourceAssignment) {
+    if (!confirm("Delete this FX source assignment?")) return;
+    fxRateError = "";
+    fxRateStatus = "";
+    try {
+      await invoke("delete_fx_rate_source_assignment", { id: assignment.id });
+      fxRateStatus = "FX source assignment deleted.";
+      await loadFxRateAssignments();
+    } catch (e) {
+      fxRateError = `Failed to delete FX source assignment: ${String(e)}`;
+    }
+  }
+
+  async function loadFxRefreshState() {
+    try {
+      fxRateRefreshState = await invoke<FxRateRefreshState[]>("list_fx_rate_refresh_state", { bookId: 1 });
+    } catch (e) {
+      fxRateError = `Failed to load FX refresh status: ${String(e)}`;
+    }
+  }
+
+  async function refreshFxRatesNow() {
+    fxRateError = "";
+    fxRateStatus = "";
+    busy = true;
+    try {
+      const summary = await invoke<{ pairs_total: number; pairs_success: number; pairs_failed: number; rates_inserted: number; derived_inserted: number; last_error: string | null }>("refresh_fx_rates_now");
+      fxRateStatus = `FX refresh complete. ${summary.pairs_success}/${summary.pairs_total} pairs updated, ${summary.rates_inserted} rates.`;
+      if (summary.last_error) {
+        fxRateError = `Last error: ${summary.last_error}`;
+      }
+      await loadFxRefreshState();
+    } catch (e) {
+      fxRateError = `Failed to refresh FX rates: ${String(e)}`;
+    } finally {
+      busy = false;
+    }
+  }
+
   function openNewFxDaily() {
     const activeCurrencies = currencies.filter(c => c.is_active);
     const defaultCurrency = currencies.find(c => c.is_default);
@@ -423,6 +647,12 @@
       >
         Official FX Rates
       </button>
+      <button
+        class="px-4 py-2 text-sm font-medium {commoditiesSubTab === 'fx-settings' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
+        onclick={() => { commoditiesSubTab = 'fx-settings'; loadFxRateSettings(); loadFxRateAssignments(); loadFxRefreshState(); }}
+      >
+        FX Settings
+      </button>
     </div>
 
     <!-- Currencies Sub-tab -->
@@ -450,7 +680,7 @@
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {#each currencies as c}
+          {#each sortedCurrencies as c}
             <Table.Row class={!c.is_active ? 'opacity-50' : ''}>
               <Table.Cell class="font-mono font-semibold">{c.symbol || "—"}</Table.Cell>
               <Table.Cell class="text-lg">{c.display_symbol || "—"}</Table.Cell>
@@ -622,6 +852,171 @@
           {:else}
             <Table.Row>
               <Table.Cell colspan={6} class="text-muted-foreground">No official FX rates found.</Table.Cell>
+            </Table.Row>
+          {/each}
+        </Table.Body>
+      </Table.Root>
+    {/if}
+
+    <!-- FX Settings Sub-tab -->
+    {#if commoditiesSubTab === 'fx-settings'}
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-sm text-muted-foreground">Configure FX refresh and manage source assignments. Settings affect automatic updates.</p>
+        </div>
+        <div class="flex gap-2">
+          <Button onclick={refreshFxRatesNow} disabled={busy} size="sm">Refresh Now</Button>
+          <Button onclick={saveFxRateSettings} disabled={busy || !fxRateSettings} size="sm" variant="secondary">Save Settings</Button>
+        </div>
+      </div>
+
+      {#if fxRateStatus}
+        <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
+      {/if}
+      {#if fxRateError}
+        <p class="text-sm text-destructive mb-2">{fxRateError}</p>
+      {/if}
+
+      {#if fxRateSettings}
+        <div class="grid gap-4 lg:grid-cols-3 mb-6">
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Base Currency</Card.Title>
+            </Card.Header>
+            <Card.Content class="space-y-3">
+              <div class="grid gap-2">
+                <Label for="fx-base-currency">Base currency</Label>
+                <select id="fx-base-currency" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.base_currency_id}>
+                  {#each currencies as c}
+                    <option value={c.id}>{c.display_symbol || ''} {c.symbol} - {c.name}</option>
+                  {/each}
+                </select>
+              </div>
+              <div class="grid gap-2">
+                <Label for="fx-default-source">Default source</Label>
+                <select id="fx-default-source" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.default_source_id}>
+                  <option value="">Select source</option>
+                  {#each fxRateSources as s}
+                    <option value={s.id}>{s.name}</option>
+                  {/each}
+                </select>
+              </div>
+            </Card.Content>
+          </Card.Root>
+
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Refresh Schedule</Card.Title>
+            </Card.Header>
+            <Card.Content class="space-y-3">
+              <div class="flex items-center justify-between">
+                <Label for="fx-refresh-enabled">Enable refresh</Label>
+                <input id="fx-refresh-enabled" type="checkbox" class="h-4 w-4" bind:checked={fxRateSettings.refresh_enabled} />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="grid gap-2">
+                  <Label for="fx-refresh-hour">Hour (UTC)</Label>
+                  <Input id="fx-refresh-hour" type="number" min="0" max="23" bind:value={fxRateSettings.refresh_hour_utc} />
+                </div>
+                <div class="grid gap-2">
+                  <Label for="fx-refresh-minute">Minute (UTC)</Label>
+                  <Input id="fx-refresh-minute" type="number" min="0" max="59" bind:value={fxRateSettings.refresh_minute_utc} />
+                </div>
+              </div>
+            </Card.Content>
+          </Card.Root>
+
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Backfill Policy</Card.Title>
+            </Card.Header>
+            <Card.Content class="space-y-3">
+              <div class="grid gap-2">
+                <Label for="fx-backfill-days">Max backfill days</Label>
+                <Input id="fx-backfill-days" type="number" min="1" bind:value={fxRateSettings.max_backfill_days} />
+              </div>
+              <div class="grid gap-2">
+                <Label for="fx-weekend-policy">Weekend policy</Label>
+                <select id="fx-weekend-policy" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.weekend_policy}>
+                  <option value="skip">Skip</option>
+                  <option value="fill_previous">Fill previous</option>
+                  <option value="download">Download</option>
+                </select>
+              </div>
+            </Card.Content>
+          </Card.Root>
+        </div>
+      {/if}
+
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-semibold">Source Assignments</h3>
+        <Button onclick={openNewFxAssignment} disabled={busy} size="sm">Add Assignment</Button>
+      </div>
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.Head>Pair</Table.Head>
+            <Table.Head>Source</Table.Head>
+            <Table.Head>Effective</Table.Head>
+            <Table.Head class="text-right">Actions</Table.Head>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each fxRateAssignments as assignment}
+            <Table.Row>
+              <Table.Cell class="font-mono">{assignment.from_currency_symbol}/{assignment.to_currency_symbol}</Table.Cell>
+              <Table.Cell>{assignment.source_name}</Table.Cell>
+              <Table.Cell>{assignment.effective_from}{assignment.effective_to ? ` → ${assignment.effective_to}` : ''}</Table.Cell>
+              <Table.Cell class="text-right">
+                <Button variant="ghost" size="sm" onclick={() => openEditFxAssignment(assignment)}>Edit</Button>
+                <Button variant="ghost" size="sm" class="text-destructive" onclick={() => deleteFxAssignment(assignment)}>Delete</Button>
+              </Table.Cell>
+            </Table.Row>
+          {:else}
+            <Table.Row>
+              <Table.Cell colspan={4} class="text-muted-foreground">No source assignments configured.</Table.Cell>
+            </Table.Row>
+          {/each}
+        </Table.Body>
+      </Table.Root>
+
+      <div class="flex items-center justify-between mt-6 mb-2">
+        <h3 class="text-lg font-semibold">Refresh Status</h3>
+        <Button variant="secondary" size="sm" onclick={loadFxRefreshState} disabled={busy}>Reload</Button>
+      </div>
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.Head>Pair</Table.Head>
+            <Table.Head>Source</Table.Head>
+            <Table.Head>Last Success</Table.Head>
+            <Table.Head>Last Attempt</Table.Head>
+            <Table.Head>Status</Table.Head>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each fxRateRefreshState as state}
+            <Table.Row>
+              <Table.Cell class="font-mono">{state.from_currency_symbol}/{state.to_currency_symbol}</Table.Cell>
+              <Table.Cell>{state.source_name || '—'}</Table.Cell>
+              <Table.Cell>{state.last_success_date || '—'}</Table.Cell>
+              <Table.Cell>{state.last_attempt_at || '—'}</Table.Cell>
+              <Table.Cell>
+                {#if state.last_error}
+                  <Badge variant="destructive">Error</Badge>
+                {:else}
+                  <Badge variant="secondary">OK</Badge>
+                {/if}
+              </Table.Cell>
+            </Table.Row>
+            {#if state.last_error}
+              <Table.Row>
+                <Table.Cell colspan={5} class="text-xs text-destructive">{state.last_error}</Table.Cell>
+              </Table.Row>
+            {/if}
+          {:else}
+            <Table.Row>
+              <Table.Cell colspan={5} class="text-muted-foreground">No refresh status yet.</Table.Cell>
             </Table.Row>
           {/each}
         </Table.Body>
@@ -842,6 +1237,57 @@
       <Button variant="secondary" onclick={closeFxOfficialDialog}>Cancel</Button>
       <Button onclick={saveFxOfficial} disabled={busy || !newFxOfficial.rate || !newFxOfficial.source_name}>
         Add Rate
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<!-- FX Source Assignment Dialog -->
+<Dialog.Root bind:open={showFxAssignmentDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>{editingAssignment ? "Edit FX Source Assignment" : "Add FX Source Assignment"}</Dialog.Title>
+    </Dialog.Header>
+    <div class="grid gap-4 py-4">
+      <div class="grid gap-2">
+        <Label for="fx-assignment-from">From Currency</Label>
+        <select id="fx-assignment-from" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={newFxAssignment.from_currency_id}>
+          {#each currencies as c}
+            <option value={c.id}>{c.display_symbol || ''} {c.symbol} - {c.name}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="grid gap-2">
+        <Label for="fx-assignment-to">To Currency</Label>
+        <select id="fx-assignment-to" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={newFxAssignment.to_currency_id}>
+          {#each currencies as c}
+            <option value={c.id}>{c.display_symbol || ''} {c.symbol} - {c.name}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="grid gap-2">
+        <Label for="fx-assignment-source">Source</Label>
+        <select id="fx-assignment-source" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={newFxAssignment.source_id}>
+          {#each fxRateSources as s}
+            <option value={s.id}>{s.name}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="grid gap-2">
+          <Label for="fx-assignment-from-date">Effective From</Label>
+          <Input id="fx-assignment-from-date" type="date" bind:value={newFxAssignment.effective_from} />
+        </div>
+        <div class="grid gap-2">
+          <Label for="fx-assignment-to-date">Effective To</Label>
+          <Input id="fx-assignment-to-date" type="date" bind:value={newFxAssignment.effective_to} />
+        </div>
+      </div>
+    </div>
+    <Dialog.Footer>
+      <Button variant="secondary" onclick={closeFxAssignmentDialog}>Cancel</Button>
+      <Button onclick={saveFxAssignment} disabled={busy || !newFxAssignment.source_id || !newFxAssignment.effective_from}>
+        {editingAssignment ? "Update" : "Create"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
