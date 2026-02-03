@@ -228,31 +228,33 @@ pub fn run() {
                 register_launch_file(&file);
             }
 
-            // Ensure storage path exists or ask user on first run
-            let storage = match load_storage_path() {
-                Some(path) => path,
-                None => initialize_storage_location(),
-            };
+            let mut db_initialized = false;
 
-            // Ensure the saved storage path points to an accessible sqlite DB, otherwise resolve it
-            let storage = ensure_accessible_storage(storage);
-
-            // Open DB connection, run migrations, store in app state
-            let (conn, db_path) = open_and_migrate(&storage).map_err(|e| e.to_string())?;
-            {
-                let db_state = app.state::<DbState>();
-                let mut guard = db_state.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-                guard.db_path = Some(db_path);
-                guard.conn = Some(conn);
+            if let Some(storage) = load_storage_path() {
+                let db_path = crate::db::normalize_db_path(&storage);
+                if db_path.exists() {
+                    if let Ok((conn, db_path)) = open_and_migrate(&storage) {
+                        let db_state = app.state::<DbState>();
+                        let mut guard = db_state
+                            .inner
+                            .lock()
+                            .map_err(|_| "db state lock poisoned".to_string())?;
+                        guard.db_path = Some(db_path);
+                        guard.conn = Some(conn);
+                        db_initialized = true;
+                    }
+                }
             }
 
-            let db_state = app.state::<DbState>();
-            let settings = commands::load_backup_settings(Some(&db_state));
-            let scheduler = app.state::<BackupSchedulerState>();
-            commands::restart_backup_scheduler(app.handle().clone(), scheduler, settings);
+            if db_initialized {
+                let db_state = app.state::<DbState>();
+                let settings = commands::load_backup_settings(Some(&db_state));
+                let scheduler = app.state::<BackupSchedulerState>();
+                commands::restart_backup_scheduler(app.handle().clone(), scheduler, settings);
 
-            let fx_scheduler = app.state::<FxSchedulerState>();
-            fx_refresh::restart_fx_scheduler(app.handle().clone(), fx_scheduler);
+                let fx_scheduler = app.state::<FxSchedulerState>();
+                fx_refresh::restart_fx_scheduler(app.handle().clone(), fx_scheduler);
+            }
 
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(state) = load_window_state() {

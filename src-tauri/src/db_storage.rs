@@ -10,7 +10,8 @@ use crate::db::{
     db_accessible, latest_migration_version, load_storage_path, migration_versions,
     normalize_db_path, open_and_migrate, save_storage_path,
 };
-use crate::state::{BackupSchedulerState, DbState};
+use crate::fx_refresh;
+use crate::state::{BackupSchedulerState, DbState, FxSchedulerState};
 
 const SINGLE_BOOK_ID: i64 = 1;
 
@@ -264,7 +265,13 @@ fn open_and_set_storage(
 }
 
 #[command]
-pub fn validate_and_set_storage_location(db: State<DbState>, path: String) -> Result<String, String> {
+pub fn validate_and_set_storage_location(
+    app: AppHandle,
+    scheduler: State<BackupSchedulerState>,
+    fx_scheduler: State<FxSchedulerState>,
+    db: State<DbState>,
+    path: String,
+) -> Result<String, String> {
     let input = PathBuf::from(path);
 
     if !db_accessible(&input) {
@@ -281,6 +288,10 @@ pub fn validate_and_set_storage_location(db: State<DbState>, path: String) -> Re
         guard.db_path = Some(effective_db_path.clone());
         guard.conn = Some(conn);
     }
+
+    let settings = load_backup_settings(Some(&db));
+    restart_backup_scheduler(app.clone(), scheduler, settings);
+    fx_refresh::restart_fx_scheduler(app, fx_scheduler);
 
     Ok(normalize_db_path(&effective_db_path)
         .to_string_lossy()
@@ -747,7 +758,13 @@ mod tests {
 }
 
 #[command]
-pub fn create_new_storage(db: State<DbState>, path: String) -> Result<String, String> {
+pub fn create_new_storage(
+    app: AppHandle,
+    scheduler: State<BackupSchedulerState>,
+    fx_scheduler: State<FxSchedulerState>,
+    db: State<DbState>,
+    path: String,
+) -> Result<String, String> {
     let input = PathBuf::from(path);
     let db_path = normalize_db_path(&input);
 
@@ -773,6 +790,10 @@ pub fn create_new_storage(db: State<DbState>, path: String) -> Result<String, St
         guard.db_path = Some(effective_db_path.clone());
         guard.conn = Some(conn);
     }
+
+    let settings = load_backup_settings(Some(&db));
+    restart_backup_scheduler(app.clone(), scheduler, settings);
+    fx_refresh::restart_fx_scheduler(app, fx_scheduler);
 
     Ok(normalize_db_path(&effective_db_path)
         .to_string_lossy()

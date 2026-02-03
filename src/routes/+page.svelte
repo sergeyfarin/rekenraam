@@ -45,6 +45,8 @@
 
   let busy = false;
   let error = "";
+  let setupError = "";
+  let dbReady: boolean | null = null;
 
   // Balances
   let accounts: Account[] = [];
@@ -61,8 +63,61 @@
   let liabilityAccounts: { account: Account; balance: number }[] = [];
 
   onMount(async () => {
-    await loadDashboardData();
+    await checkDatabase();
   });
+
+  async function checkDatabase() {
+    busy = true;
+    error = "";
+    setupError = "";
+
+    try {
+      await invoke<string>("db_health");
+      dbReady = true;
+      await loadDashboardData();
+    } catch (e) {
+      const message = String(e);
+      dbReady = false;
+      if (!message.includes("db not initialized")) {
+        setupError = `Database error: ${message}`;
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function openDatabase() {
+    setupError = "";
+    busy = true;
+    try {
+      let selected = await invoke<string | null>("pick_storage_file");
+      if (!selected) {
+        selected = await invoke<string | null>("pick_storage_folder");
+      }
+      if (!selected) return;
+      await invoke<string>("validate_and_set_storage_location", { path: selected });
+      await checkDatabase();
+    } catch (e) {
+      setupError = `Failed to open database: ${String(e)}`;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function createDatabase() {
+    setupError = "";
+    busy = true;
+    try {
+      const selected = await invoke<string | null>("pick_storage_folder");
+      if (!selected) return;
+      await invoke<string>("create_new_storage", { path: selected });
+      await checkDatabase();
+    } catch (e) {
+      setupError = `Failed to create database: ${String(e)}`;
+    } finally {
+      busy = false;
+    }
+  }
 
   async function loadDashboardData() {
     busy = true;
@@ -160,12 +215,47 @@
       <p class="text-muted-foreground">Personal finance tracking with a local-first database.</p>
     </div>
 
-    {#if error}
+    {#if dbReady === false && setupError}
+      <Alert.Root variant="destructive">
+        <Alert.Title>Setup error</Alert.Title>
+        <Alert.Description>{setupError}</Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    {#if dbReady === true && error}
       <Alert.Root variant="destructive">
         <Alert.Title>Error</Alert.Title>
         <Alert.Description>{error}</Alert.Description>
       </Alert.Root>
     {/if}
+
+    {#if dbReady === null}
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Loading</Card.Title>
+          <Card.Description>Checking database connection…</Card.Description>
+        </Card.Header>
+      </Card.Root>
+    {:else if dbReady === false}
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Welcome to Rekenraam</Card.Title>
+          <Card.Description>
+            To get started, open an existing database or create a new one.
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <div class="flex flex-wrap gap-3">
+            <Button disabled={busy} onclick={() => !busy && openDatabase()}>
+              Open database
+            </Button>
+            <Button variant="outline" disabled={busy} onclick={() => !busy && createDatabase()}>
+              Create new database
+            </Button>
+          </div>
+        </Card.Content>
+      </Card.Root>
+    {:else}
 
     <!-- Net Worth Summary Cards -->
     <div class="grid gap-4 md:grid-cols-3">
@@ -310,5 +400,6 @@
         </Card.Content>
       </Card.Root>
     </div>
+    {/if}
   </div>
 </main>
