@@ -182,6 +182,7 @@ fn register_launch_file(file: &PathBuf) {
     create_db_placeholder(file);
 }
 
+#[allow(dead_code)]
 fn initialize_storage_location() -> PathBuf {
     let default = default_storage_dir();
     let picked = FileDialog::new()
@@ -202,6 +203,7 @@ fn initialize_storage_location() -> PathBuf {
     }
 }
 
+#[allow(dead_code)]
 fn ensure_accessible_storage(mut storage: PathBuf) -> PathBuf {
     if !db_accessible(&storage) {
         storage = resolve_accessible_db(storage.clone());

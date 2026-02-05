@@ -84,6 +84,7 @@ pub fn db_accessible(path: &PathBuf) -> bool {
     }
 }
 
+#[allow(dead_code)]
 pub fn resolve_accessible_db(mut path: PathBuf) -> PathBuf {
     if db_accessible(&path) {
         return path;
