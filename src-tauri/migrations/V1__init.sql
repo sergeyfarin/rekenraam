@@ -157,14 +157,17 @@ CREATE TABLE IF NOT EXISTS transactions (
   status      TEXT NOT NULL DEFAULT 'uncleared' CHECK (status IN ('uncleared','cleared','reconciled','void')),
   reference   TEXT,
   import_id   TEXT,
+  import_session_id INTEGER,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(payee_id) REFERENCES payees(id) ON DELETE SET NULL
+  FOREIGN KEY(payee_id) REFERENCES payees(id) ON DELETE SET NULL,
+  FOREIGN KEY(import_session_id) REFERENCES import_sessions(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_tx_book_date ON transactions(book_id, txn_date);
 CREATE INDEX IF NOT EXISTS idx_tx_book_payee ON transactions(book_id, payee_id);
+CREATE INDEX IF NOT EXISTS idx_tx_import_session ON transactions(import_session_id);
 
 CREATE TABLE IF NOT EXISTS splits (
   id            INTEGER PRIMARY KEY,
@@ -823,3 +826,1121 @@ SELECT id, 0, (strftime('%Y-%m-%dT%H:%M:%fZ','now')) FROM books WHERE name = 'Pe
 
 INSERT OR IGNORE INTO price_sources (id, name, kind)
 VALUES (1, 'Manual', 'manual');
+
+-- Consolidated migrations V2-V17
+
+-- V2: account balancing and locking
+CREATE TABLE IF NOT EXISTS account_balancings (
+  id            INTEGER PRIMARY KEY,
+  book_id       INTEGER NOT NULL,
+  account_id    INTEGER NOT NULL,
+  as_of_date    TEXT NOT NULL,
+  balance_minor INTEGER NOT NULL,
+  memo          TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  voided_at     TEXT,
+  void_reason   TEXT,
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_balancings_book ON account_balancings(book_id);
+CREATE INDEX IF NOT EXISTS idx_account_balancings_account_date ON account_balancings(account_id, as_of_date);
+CREATE INDEX IF NOT EXISTS idx_account_balancings_active ON account_balancings(account_id, voided_at);
+
+-- V3: dividend income categories
+CREATE TABLE IF NOT EXISTS dividend_income_categories (
+  id            INTEGER PRIMARY KEY,
+  book_id       INTEGER NOT NULL,
+  category_id   INTEGER NOT NULL,
+  commodity_id  INTEGER,
+  tax_withheld_minor INTEGER,
+  notes         TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE,
+  FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE SET NULL,
+  UNIQUE(book_id, category_id, commodity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dividend_income_categories_book ON dividend_income_categories(book_id);
+CREATE INDEX IF NOT EXISTS idx_dividend_income_categories_category ON dividend_income_categories(category_id);
+
+-- V4: directives + documents/events/notes/pad/balance checks
+CREATE TABLE IF NOT EXISTS account_directives (
+  id             INTEGER PRIMARY KEY,
+  book_id        INTEGER NOT NULL,
+  account_id     INTEGER NOT NULL,
+  directive_type TEXT NOT NULL CHECK (directive_type IN ('open','close')),
+  directive_date TEXT NOT NULL,
+  note           TEXT,
+  metadata       TEXT,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_directives_account_date
+  ON account_directives(account_id, directive_date);
+
+CREATE TABLE IF NOT EXISTS balance_checks (
+  id            INTEGER PRIMARY KEY,
+  book_id       INTEGER NOT NULL,
+  account_id    INTEGER NOT NULL,
+  as_of_date    TEXT NOT NULL,
+  balance_minor INTEGER NOT NULL,
+  memo          TEXT,
+  status        TEXT NOT NULL DEFAULT 'recorded' CHECK (status IN ('recorded','matched','failed')),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_balance_checks_account_date
+  ON balance_checks(account_id, as_of_date);
+
+CREATE TABLE IF NOT EXISTS pad_directives (
+  id                    INTEGER PRIMARY KEY,
+  book_id               INTEGER NOT NULL,
+  account_id            INTEGER NOT NULL,
+  pad_account_id        INTEGER NOT NULL,
+  as_of_date            TEXT NOT NULL,
+  target_balance_minor  INTEGER NOT NULL,
+  tx_id                 INTEGER,
+  memo                  TEXT,
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY(pad_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pad_directives_account_date
+  ON pad_directives(account_id, as_of_date);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id          INTEGER PRIMARY KEY,
+  book_id     INTEGER NOT NULL,
+  account_id  INTEGER,
+  tx_id       INTEGER,
+  note        TEXT NOT NULL,
+  note_date   TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_account ON notes(account_id);
+CREATE INDEX IF NOT EXISTS idx_notes_tx ON notes(tx_id);
+
+CREATE TABLE IF NOT EXISTS events (
+  id          INTEGER PRIMARY KEY,
+  book_id     INTEGER NOT NULL,
+  account_id  INTEGER,
+  tx_id       INTEGER,
+  event_type  TEXT NOT NULL,
+  event_date  TEXT NOT NULL,
+  description TEXT,
+  metadata    TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_account_date
+  ON events(account_id, event_date);
+
+CREATE TABLE IF NOT EXISTS documents (
+  id          INTEGER PRIMARY KEY,
+  book_id     INTEGER NOT NULL,
+  account_id  INTEGER,
+  tx_id       INTEGER,
+  doc_type    TEXT,
+  title       TEXT,
+  uri         TEXT,
+  mime_type   TEXT,
+  notes       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_account ON documents(account_id);
+CREATE INDEX IF NOT EXISTS idx_documents_tx ON documents(tx_id);
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_account_directives_ins
+AFTER INSERT ON account_directives
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_account_directives_upd
+AFTER UPDATE ON account_directives
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_account_directives_del
+AFTER DELETE ON account_directives
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_checks_ins
+AFTER INSERT ON balance_checks
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_checks_upd
+AFTER UPDATE ON balance_checks
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_checks_del
+AFTER DELETE ON balance_checks
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_pad_directives_ins
+AFTER INSERT ON pad_directives
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_pad_directives_upd
+AFTER UPDATE ON pad_directives
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_pad_directives_del
+AFTER DELETE ON pad_directives
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_notes_ins
+AFTER INSERT ON notes
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_notes_upd
+AFTER UPDATE ON notes
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_notes_del
+AFTER DELETE ON notes
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_events_ins
+AFTER INSERT ON events
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_events_upd
+AFTER UPDATE ON events
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_events_del
+AFTER DELETE ON events
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_documents_ins
+AFTER INSERT ON documents
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_documents_upd
+AFTER UPDATE ON documents
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_documents_del
+AFTER DELETE ON documents
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+-- V5: booking policy + lot cost basis
+ALTER TABLE accounts ADD COLUMN booking_policy TEXT NOT NULL DEFAULT 'fifo' CHECK (booking_policy IN ('fifo','lifo','strict','average'));
+ALTER TABLE lots ADD COLUMN cost_basis_minor INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_accounts_booking_policy ON accounts(booking_policy);
+
+-- V6: balance constraints
+CREATE TABLE IF NOT EXISTS balance_constraints (
+  id                INTEGER PRIMARY KEY,
+  book_id           INTEGER NOT NULL,
+  account_id        INTEGER NOT NULL,
+  min_balance_minor INTEGER,
+  max_balance_minor INTEGER,
+  sign_rule         TEXT NOT NULL DEFAULT 'any' CHECK (sign_rule IN ('any','nonnegative','nonpositive')),
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_balance_constraints_account ON balance_constraints(account_id);
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_constraints_ins
+AFTER INSERT ON balance_constraints
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_constraints_upd
+AFTER UPDATE ON balance_constraints
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_constraints_del
+AFTER DELETE ON balance_constraints
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+-- V7/V8: import rules + sessions (fully expanded)
+CREATE TABLE IF NOT EXISTS import_rules (
+  id                 INTEGER PRIMARY KEY,
+  book_id            INTEGER NOT NULL,
+  rule_kind          TEXT NOT NULL CHECK (rule_kind IN ('payee','memo','amount','date','account')),
+  match_type         TEXT NOT NULL DEFAULT 'contains' CHECK (match_type IN ('contains','equals')),
+  match_text         TEXT NOT NULL,
+  priority           INTEGER NOT NULL DEFAULT 100,
+  amount_min_minor   INTEGER,
+  amount_max_minor   INTEGER,
+  date_from          TEXT,
+  date_to            TEXT,
+  match_account_id   INTEGER,
+  target_account_id  INTEGER,
+  target_category_id INTEGER,
+  target_payee_id    INTEGER,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(match_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY(target_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY(target_category_id) REFERENCES categories(id) ON DELETE SET NULL,
+  FOREIGN KEY(target_payee_id) REFERENCES payees(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_import_rules_book_kind ON import_rules(book_id, rule_kind);
+CREATE INDEX IF NOT EXISTS idx_import_rules_priority ON import_rules(priority, id);
+
+CREATE TABLE IF NOT EXISTS import_sessions (
+  id         INTEGER PRIMARY KEY,
+  book_id    INTEGER NOT NULL,
+  source     TEXT,
+  file_name  TEXT,
+  file_hash  TEXT,
+  file_size  INTEGER,
+  status     TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','committed','abandoned')),
+  started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  committed_at TEXT,
+  notes      TEXT,
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS import_session_transactions (
+  id          INTEGER PRIMARY KEY,
+  session_id  INTEGER NOT NULL,
+  tx_id       INTEGER NOT NULL,
+  action      TEXT NOT NULL CHECK (action IN ('created','updated','validated')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(session_id) REFERENCES import_sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  UNIQUE(session_id, tx_id, action)
+);
+
+CREATE INDEX IF NOT EXISTS idx_import_session_transactions_session ON import_session_transactions(session_id);
+CREATE INDEX IF NOT EXISTS idx_import_session_transactions_tx ON import_session_transactions(tx_id);
+
+CREATE TRIGGER IF NOT EXISTS trg_bump_import_rules_ins
+AFTER INSERT ON import_rules
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_import_rules_upd
+AFTER UPDATE ON import_rules
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bump_import_rules_del
+AFTER DELETE ON import_rules
+BEGIN
+  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
+END;
+
+-- V9: reporting
+CREATE TABLE IF NOT EXISTS report_definitions (
+  id            INTEGER PRIMARY KEY,
+  book_id       INTEGER NOT NULL,
+  name          TEXT NOT NULL,
+  kind          TEXT NOT NULL DEFAULT 'custom' CHECK (kind IN ('builtin','custom')),
+  query_type    TEXT NOT NULL DEFAULT 'sql' CHECK (query_type IN ('sql','template')),
+  query_text    TEXT NOT NULL,
+  params_schema TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  UNIQUE(book_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_definitions_book ON report_definitions(book_id);
+CREATE INDEX IF NOT EXISTS idx_report_definitions_kind ON report_definitions(book_id, kind);
+
+CREATE TABLE IF NOT EXISTS report_runs (
+  id             INTEGER PRIMARY KEY,
+  book_id        INTEGER NOT NULL,
+  definition_id  INTEGER NOT NULL,
+  params_hash    TEXT NOT NULL,
+  as_of_seq      INTEGER NOT NULL,
+  result_json    TEXT NOT NULL,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(definition_id) REFERENCES report_definitions(id) ON DELETE CASCADE,
+  UNIQUE(book_id, definition_id, params_hash, as_of_seq)
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_runs_book_def ON report_runs(book_id, definition_id);
+CREATE INDEX IF NOT EXISTS idx_report_runs_book_seq ON report_runs(book_id, as_of_seq);
+
+-- V10: institutions + countries
+CREATE TABLE IF NOT EXISTS countries (
+  id         INTEGER PRIMARY KEY,
+  book_id    INTEGER NOT NULL,
+  code       TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  UNIQUE(book_id, code),
+  UNIQUE(book_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS institutions (
+  id         INTEGER PRIMARY KEY,
+  book_id    INTEGER NOT NULL,
+  name       TEXT NOT NULL,
+  kind       TEXT NOT NULL DEFAULT 'other' CHECK (kind IN ('bank','broker','credit_union','other')),
+  country_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(country_id) REFERENCES countries(id) ON DELETE SET NULL,
+  UNIQUE(book_id, name)
+);
+
+ALTER TABLE accounts ADD COLUMN institution_id INTEGER REFERENCES institutions(id);
+ALTER TABLE accounts ADD COLUMN country_id INTEGER REFERENCES countries(id);
+
+CREATE INDEX IF NOT EXISTS idx_countries_book ON countries(book_id);
+CREATE INDEX IF NOT EXISTS idx_institutions_book ON institutions(book_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_institution ON accounts(institution_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_country ON accounts(country_id);
+
+-- V11: currencies seed
+CREATE TABLE IF NOT EXISTS currencies (
+  id         INTEGER PRIMARY KEY,
+  book_id    INTEGER NOT NULL,
+  code       TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  symbol     TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  UNIQUE(book_id, code),
+  UNIQUE(book_id, name)
+);
+
+ALTER TABLE countries ADD COLUMN default_currency_id INTEGER REFERENCES currencies(id);
+
+CREATE INDEX IF NOT EXISTS idx_currencies_book ON currencies(book_id);
+CREATE INDEX IF NOT EXISTS idx_countries_currency ON countries(default_currency_id);
+
+INSERT OR IGNORE INTO currencies (book_id, code, name, symbol) VALUES
+  (1, 'AED', 'United Arab Emirates Dirham', 'د.إ'),
+  (1, 'AFN', 'Afghan Afghani', '؋'),
+  (1, 'ALL', 'Albanian Lek', 'L'),
+  (1, 'AMD', 'Armenian Dram', '֏'),
+  (1, 'ANG', 'Netherlands Antillean Guilder', 'ƒ'),
+  (1, 'AOA', 'Angolan Kwanza', 'Kz'),
+  (1, 'ARS', 'Argentine Peso', '$'),
+  (1, 'AUD', 'Australian Dollar', '$'),
+  (1, 'AWG', 'Aruban Florin', 'ƒ'),
+  (1, 'AZN', 'Azerbaijani Manat', '₼'),
+  (1, 'BAM', 'Bosnia and Herzegovina Convertible Mark', 'KM'),
+  (1, 'BBD', 'Barbados Dollar', '$'),
+  (1, 'BDT', 'Bangladeshi Taka', '৳'),
+  (1, 'BGN', 'Bulgarian Lev', 'лв'),
+  (1, 'BHD', 'Bahraini Dinar', 'ب.د'),
+  (1, 'BIF', 'Burundian Franc', 'Fr'),
+  (1, 'BMD', 'Bermudian Dollar', '$'),
+  (1, 'BND', 'Brunei Dollar', '$'),
+  (1, 'BOB', 'Bolivian Boliviano', 'Bs.'),
+  (1, 'BRL', 'Brazilian Real', 'R$'),
+  (1, 'BSD', 'Bahamian Dollar', '$'),
+  (1, 'BTN', 'Bhutanese Ngultrum', 'Nu.'),
+  (1, 'BWP', 'Botswana Pula', 'P'),
+  (1, 'BYN', 'Belarusian Ruble', 'Br'),
+  (1, 'BZD', 'Belize Dollar', '$'),
+  (1, 'CAD', 'Canadian Dollar', '$'),
+  (1, 'CDF', 'Congolese Franc', 'Fr'),
+  (1, 'CHF', 'Swiss Franc', 'Fr'),
+  (1, 'CLP', 'Chilean Peso', '$'),
+  (1, 'CNY', 'Chinese Yuan', '¥'),
+  (1, 'COP', 'Colombian Peso', '$'),
+  (1, 'CRC', 'Costa Rican Colón', '₡'),
+  (1, 'CUP', 'Cuban Peso', '$'),
+  (1, 'CVE', 'Cape Verdean Escudo', '$'),
+  (1, 'CZK', 'Czech Koruna', 'Kč'),
+  (1, 'DJF', 'Djiboutian Franc', 'Fr'),
+  (1, 'DKK', 'Danish Krone', 'kr'),
+  (1, 'DOP', 'Dominican Peso', '$'),
+  (1, 'DZD', 'Algerian Dinar', 'دج'),
+  (1, 'EGP', 'Egyptian Pound', '£'),
+  (1, 'ERN', 'Eritrean Nakfa', 'Nfk'),
+  (1, 'ETB', 'Ethiopian Birr', 'Br'),
+  (1, 'EUR', 'Euro', '€'),
+  (1, 'FJD', 'Fiji Dollar', '$'),
+  (1, 'FKP', 'Falkland Islands Pound', '£'),
+  (1, 'GBP', 'Pound Sterling', '£'),
+  (1, 'GEL', 'Georgian Lari', '₾'),
+  (1, 'GGP', 'Guernsey Pound', '£'),
+  (1, 'GHS', 'Ghanaian Cedi', '₵'),
+  (1, 'GIP', 'Gibraltar Pound', '£'),
+  (1, 'GMD', 'Gambian Dalasi', 'D'),
+  (1, 'GNF', 'Guinean Franc', 'Fr'),
+  (1, 'GTQ', 'Guatemalan Quetzal', 'Q'),
+  (1, 'GYD', 'Guyanese Dollar', '$'),
+  (1, 'HKD', 'Hong Kong Dollar', '$'),
+  (1, 'HNL', 'Honduran Lempira', 'L'),
+  (1, 'HRK', 'Croatian Kuna', 'kn'),
+  (1, 'HTG', 'Haitian Gourde', 'G'),
+  (1, 'HUF', 'Hungarian Forint', 'Ft'),
+  (1, 'IDR', 'Indonesian Rupiah', 'Rp'),
+  (1, 'ILS', 'Israeli New Shekel', '₪'),
+  (1, 'IMP', 'Manx Pound', '£'),
+  (1, 'INR', 'Indian Rupee', '₹'),
+  (1, 'IQD', 'Iraqi Dinar', 'ع.د'),
+  (1, 'IRR', 'Iranian Rial', '﷼'),
+  (1, 'ISK', 'Icelandic Króna', 'kr'),
+  (1, 'JEP', 'Jersey Pound', '£'),
+  (1, 'JMD', 'Jamaican Dollar', '$'),
+  (1, 'JOD', 'Jordanian Dinar', 'د.ا'),
+  (1, 'JPY', 'Japanese Yen', '¥'),
+  (1, 'KES', 'Kenyan Shilling', 'Sh'),
+  (1, 'KGS', 'Kyrgyzstani Som', 'с'),
+  (1, 'KHR', 'Cambodian Riel', '៛'),
+  (1, 'KID', 'Kiribati Dollar', '$'),
+  (1, 'KMF', 'Comorian Franc', 'Fr'),
+  (1, 'KPW', 'North Korean Won', '₩'),
+  (1, 'KRW', 'South Korean Won', '₩'),
+  (1, 'KWD', 'Kuwaiti Dinar', 'د.ك'),
+  (1, 'KYD', 'Cayman Islands Dollar', '$'),
+  (1, 'KZT', 'Kazakhstani Tenge', '₸'),
+  (1, 'LAK', 'Lao Kip', '₭'),
+  (1, 'LBP', 'Lebanese Pound', '£'),
+  (1, 'LKR', 'Sri Lankan Rupee', 'Rs'),
+  (1, 'LRD', 'Liberian Dollar', '$'),
+  (1, 'LSL', 'Lesotho Loti', 'L'),
+  (1, 'LYD', 'Libyan Dinar', 'ل.د'),
+  (1, 'MAD', 'Moroccan Dirham', 'د.م.'),
+  (1, 'MDL', 'Moldovan Leu', 'L'),
+  (1, 'MGA', 'Malagasy Ariary', 'Ar'),
+  (1, 'MKD', 'Macedonian Denar', 'ден'),
+  (1, 'MMK', 'Myanmar Kyat', 'Ks'),
+  (1, 'MNT', 'Mongolian Tögrög', '₮'),
+  (1, 'MOP', 'Macanese Pataca', 'P'),
+  (1, 'MRU', 'Mauritanian Ouguiya', 'UM'),
+  (1, 'MUR', 'Mauritian Rupee', '₨'),
+  (1, 'MVR', 'Maldivian Rufiyaa', 'Rf'),
+  (1, 'MWK', 'Malawian Kwacha', 'MK'),
+  (1, 'MXN', 'Mexican Peso', '$'),
+  (1, 'MYR', 'Malaysian Ringgit', 'RM'),
+  (1, 'MZN', 'Mozambican Metical', 'MT'),
+  (1, 'NAD', 'Namibian Dollar', '$'),
+  (1, 'NGN', 'Nigerian Naira', '₦'),
+  (1, 'NIO', 'Nicaraguan Córdoba', 'C$'),
+  (1, 'NOK', 'Norwegian Krone', 'kr'),
+  (1, 'NPR', 'Nepalese Rupee', '₨'),
+  (1, 'NZD', 'New Zealand Dollar', '$'),
+  (1, 'OMR', 'Omani Rial', 'ر.ع.'),
+  (1, 'PAB', 'Panamanian Balboa', 'B/.'),
+  (1, 'PEN', 'Peruvian Sol', 'S/'),
+  (1, 'PGK', 'Papua New Guinean Kina', 'K'),
+  (1, 'PHP', 'Philippine Peso', '₱'),
+  (1, 'PKR', 'Pakistani Rupee', '₨'),
+  (1, 'PLN', 'Polish Złoty', 'zł'),
+  (1, 'PYG', 'Paraguayan Guaraní', '₲'),
+  (1, 'QAR', 'Qatari Riyal', 'ر.ق'),
+  (1, 'RON', 'Romanian Leu', 'lei'),
+  (1, 'RSD', 'Serbian Dinar', 'дин'),
+  (1, 'RUB', 'Russian Ruble', '₽'),
+  (1, 'RWF', 'Rwandan Franc', 'Fr'),
+  (1, 'SAR', 'Saudi Riyal', 'ر.س'),
+  (1, 'SBD', 'Solomon Islands Dollar', '$'),
+  (1, 'SCR', 'Seychellois Rupee', '₨'),
+  (1, 'SDG', 'Sudanese Pound', '£'),
+  (1, 'SEK', 'Swedish Krona', 'kr'),
+  (1, 'SGD', 'Singapore Dollar', '$'),
+  (1, 'SHP', 'Saint Helena Pound', '£'),
+  (1, 'SLL', 'Sierra Leonean Leone', 'Le'),
+  (1, 'SOS', 'Somali Shilling', 'Sh'),
+  (1, 'SRD', 'Surinamese Dollar', '$'),
+  (1, 'SSP', 'South Sudanese Pound', '£'),
+  (1, 'STN', 'São Tomé and Príncipe Dobra', 'Db'),
+  (1, 'SYP', 'Syrian Pound', '£'),
+  (1, 'SZL', 'Swazi Lilangeni', 'L'),
+  (1, 'THB', 'Thai Baht', '฿'),
+  (1, 'TJS', 'Tajikistani Somoni', 'ЅМ'),
+  (1, 'TMT', 'Turkmenistan Manat', 'm'),
+  (1, 'TND', 'Tunisian Dinar', 'د.ت'),
+  (1, 'TOP', 'Tongan Paʻanga', 'T$'),
+  (1, 'TRY', 'Turkish Lira', '₺'),
+  (1, 'TTD', 'Trinidad and Tobago Dollar', '$'),
+  (1, 'TVD', 'Tuvaluan Dollar', '$'),
+  (1, 'TWD', 'New Taiwan Dollar', '$'),
+  (1, 'TZS', 'Tanzanian Shilling', 'Sh'),
+  (1, 'UAH', 'Ukrainian Hryvnia', '₴'),
+  (1, 'UGX', 'Ugandan Shilling', 'Sh'),
+  (1, 'USD', 'United States Dollar', '$'),
+  (1, 'UYU', 'Uruguayan Peso', '$'),
+  (1, 'UZS', 'Uzbekistani Som', 'soʻm'),
+  (1, 'VES', 'Venezuelan Bolívar Soberano', 'Bs.S'),
+  (1, 'VND', 'Vietnamese Đồng', '₫'),
+  (1, 'VUV', 'Vanuatu Vatu', 'Vt'),
+  (1, 'WST', 'Samoan Tālā', 'T'),
+  (1, 'XAF', 'Central African CFA Franc', 'Fr'),
+  (1, 'XCD', 'East Caribbean Dollar', '$'),
+  (1, 'XOF', 'West African CFA Franc', 'Fr'),
+  (1, 'XPF', 'CFP Franc', 'Fr'),
+  (1, 'YER', 'Yemeni Rial', '﷼'),
+  (1, 'ZAR', 'South African Rand', 'R'),
+  (1, 'ZMW', 'Zambian Kwacha', 'ZK'),
+  (1, 'ZWL', 'Zimbabwean Dollar', 'Z$');
+
+INSERT OR IGNORE INTO countries (book_id, code, name, default_currency_id) VALUES
+  (1, 'AF', 'Afghanistan', (SELECT id FROM currencies WHERE code='AFN' AND book_id=1)),
+  (1, 'AX', 'Åland Islands', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'AL', 'Albania', (SELECT id FROM currencies WHERE code='ALL' AND book_id=1)),
+  (1, 'DZ', 'Algeria', (SELECT id FROM currencies WHERE code='DZD' AND book_id=1)),
+  (1, 'AS', 'American Samoa', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'AD', 'Andorra', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'AO', 'Angola', (SELECT id FROM currencies WHERE code='AOA' AND book_id=1)),
+  (1, 'AI', 'Anguilla', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'AQ', 'Antarctica', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'AG', 'Antigua and Barbuda', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'AR', 'Argentina', (SELECT id FROM currencies WHERE code='ARS' AND book_id=1)),
+  (1, 'AM', 'Armenia', (SELECT id FROM currencies WHERE code='AMD' AND book_id=1)),
+  (1, 'AW', 'Aruba', (SELECT id FROM currencies WHERE code='AWG' AND book_id=1)),
+  (1, 'AU', 'Australia', (SELECT id FROM currencies WHERE code='AUD' AND book_id=1)),
+  (1, 'AT', 'Austria', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'AZ', 'Azerbaijan', (SELECT id FROM currencies WHERE code='AZN' AND book_id=1)),
+  (1, 'BS', 'Bahamas', (SELECT id FROM currencies WHERE code='BSD' AND book_id=1)),
+  (1, 'BH', 'Bahrain', (SELECT id FROM currencies WHERE code='BHD' AND book_id=1)),
+  (1, 'BD', 'Bangladesh', (SELECT id FROM currencies WHERE code='BDT' AND book_id=1)),
+  (1, 'BB', 'Barbados', (SELECT id FROM currencies WHERE code='BBD' AND book_id=1)),
+  (1, 'BY', 'Belarus', (SELECT id FROM currencies WHERE code='BYN' AND book_id=1)),
+  (1, 'BE', 'Belgium', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'BZ', 'Belize', (SELECT id FROM currencies WHERE code='BZD' AND book_id=1)),
+  (1, 'BJ', 'Benin', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'BM', 'Bermuda', (SELECT id FROM currencies WHERE code='BMD' AND book_id=1)),
+  (1, 'BT', 'Bhutan', (SELECT id FROM currencies WHERE code='BTN' AND book_id=1)),
+  (1, 'BO', 'Bolivia', (SELECT id FROM currencies WHERE code='BOB' AND book_id=1)),
+  (1, 'BQ', 'Bonaire, Sint Eustatius and Saba', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'BA', 'Bosnia and Herzegovina', (SELECT id FROM currencies WHERE code='BAM' AND book_id=1)),
+  (1, 'BW', 'Botswana', (SELECT id FROM currencies WHERE code='BWP' AND book_id=1)),
+  (1, 'BV', 'Bouvet Island', (SELECT id FROM currencies WHERE code='NOK' AND book_id=1)),
+  (1, 'BR', 'Brazil', (SELECT id FROM currencies WHERE code='BRL' AND book_id=1)),
+  (1, 'IO', 'British Indian Ocean Territory', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'BN', 'Brunei Darussalam', (SELECT id FROM currencies WHERE code='BND' AND book_id=1)),
+  (1, 'BG', 'Bulgaria', (SELECT id FROM currencies WHERE code='BGN' AND book_id=1)),
+  (1, 'BF', 'Burkina Faso', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'BI', 'Burundi', (SELECT id FROM currencies WHERE code='BIF' AND book_id=1)),
+  (1, 'CV', 'Cabo Verde', (SELECT id FROM currencies WHERE code='CVE' AND book_id=1)),
+  (1, 'KH', 'Cambodia', (SELECT id FROM currencies WHERE code='KHR' AND book_id=1)),
+  (1, 'CM', 'Cameroon', (SELECT id FROM currencies WHERE code='XAF' AND book_id=1)),
+  (1, 'CA', 'Canada', (SELECT id FROM currencies WHERE code='CAD' AND book_id=1)),
+  (1, 'KY', 'Cayman Islands', (SELECT id FROM currencies WHERE code='KYD' AND book_id=1)),
+  (1, 'CF', 'Central African Republic', (SELECT id FROM currencies WHERE code='XAF' AND book_id=1)),
+  (1, 'TD', 'Chad', (SELECT id FROM currencies WHERE code='XAF' AND book_id=1)),
+  (1, 'CL', 'Chile', (SELECT id FROM currencies WHERE code='CLP' AND book_id=1)),
+  (1, 'CN', 'China', (SELECT id FROM currencies WHERE code='CNY' AND book_id=1)),
+  (1, 'CX', 'Christmas Island', (SELECT id FROM currencies WHERE code='AUD' AND book_id=1)),
+  (1, 'CC', 'Cocos (Keeling) Islands', (SELECT id FROM currencies WHERE code='AUD' AND book_id=1)),
+  (1, 'CO', 'Colombia', (SELECT id FROM currencies WHERE code='COP' AND book_id=1)),
+  (1, 'KM', 'Comoros', (SELECT id FROM currencies WHERE code='KMF' AND book_id=1)),
+  (1, 'CD', 'Congo (Democratic Republic of the)', (SELECT id FROM currencies WHERE code='CDF' AND book_id=1)),
+  (1, 'CG', 'Congo', (SELECT id FROM currencies WHERE code='XAF' AND book_id=1)),
+  (1, 'CK', 'Cook Islands', (SELECT id FROM currencies WHERE code='NZD' AND book_id=1)),
+  (1, 'CR', 'Costa Rica', (SELECT id FROM currencies WHERE code='CRC' AND book_id=1)),
+  (1, 'CI', 'Côte d’Ivoire', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'HR', 'Croatia', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'CU', 'Cuba', (SELECT id FROM currencies WHERE code='CUP' AND book_id=1)),
+  (1, 'CW', 'Curaçao', (SELECT id FROM currencies WHERE code='ANG' AND book_id=1)),
+  (1, 'CY', 'Cyprus', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'CZ', 'Czechia', (SELECT id FROM currencies WHERE code='CZK' AND book_id=1)),
+  (1, 'DK', 'Denmark', (SELECT id FROM currencies WHERE code='DKK' AND book_id=1)),
+  (1, 'DJ', 'Djibouti', (SELECT id FROM currencies WHERE code='DJF' AND book_id=1)),
+  (1, 'DM', 'Dominica', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'DO', 'Dominican Republic', (SELECT id FROM currencies WHERE code='DOP' AND book_id=1)),
+  (1, 'EC', 'Ecuador', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'EG', 'Egypt', (SELECT id FROM currencies WHERE code='EGP' AND book_id=1)),
+  (1, 'SV', 'El Salvador', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'GQ', 'Equatorial Guinea', (SELECT id FROM currencies WHERE code='XAF' AND book_id=1)),
+  (1, 'ER', 'Eritrea', (SELECT id FROM currencies WHERE code='ERN' AND book_id=1)),
+  (1, 'EE', 'Estonia', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'SZ', 'Eswatini', (SELECT id FROM currencies WHERE code='SZL' AND book_id=1)),
+  (1, 'ET', 'Ethiopia', (SELECT id FROM currencies WHERE code='ETB' AND book_id=1)),
+  (1, 'FK', 'Falkland Islands', (SELECT id FROM currencies WHERE code='FKP' AND book_id=1)),
+  (1, 'FO', 'Faroe Islands', (SELECT id FROM currencies WHERE code='DKK' AND book_id=1)),
+  (1, 'FJ', 'Fiji', (SELECT id FROM currencies WHERE code='FJD' AND book_id=1)),
+  (1, 'FI', 'Finland', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'FR', 'France', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'GF', 'French Guiana', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'PF', 'French Polynesia', (SELECT id FROM currencies WHERE code='XPF' AND book_id=1)),
+  (1, 'TF', 'French Southern Territories', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'GA', 'Gabon', (SELECT id FROM currencies WHERE code='XAF' AND book_id=1)),
+  (1, 'GM', 'Gambia', (SELECT id FROM currencies WHERE code='GMD' AND book_id=1)),
+  (1, 'GE', 'Georgia', (SELECT id FROM currencies WHERE code='GEL' AND book_id=1)),
+  (1, 'DE', 'Germany', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'GH', 'Ghana', (SELECT id FROM currencies WHERE code='GHS' AND book_id=1)),
+  (1, 'GI', 'Gibraltar', (SELECT id FROM currencies WHERE code='GIP' AND book_id=1)),
+  (1, 'GR', 'Greece', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'GL', 'Greenland', (SELECT id FROM currencies WHERE code='DKK' AND book_id=1)),
+  (1, 'GD', 'Grenada', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'GP', 'Guadeloupe', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'GU', 'Guam', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'GT', 'Guatemala', (SELECT id FROM currencies WHERE code='GTQ' AND book_id=1)),
+  (1, 'GG', 'Guernsey', (SELECT id FROM currencies WHERE code='GGP' AND book_id=1)),
+  (1, 'GN', 'Guinea', (SELECT id FROM currencies WHERE code='GNF' AND book_id=1)),
+  (1, 'GW', 'Guinea-Bissau', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'GY', 'Guyana', (SELECT id FROM currencies WHERE code='GYD' AND book_id=1)),
+  (1, 'HT', 'Haiti', (SELECT id FROM currencies WHERE code='HTG' AND book_id=1)),
+  (1, 'HM', 'Heard Island and McDonald Islands', (SELECT id FROM currencies WHERE code='AUD' AND book_id=1)),
+  (1, 'VA', 'Holy See', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'HN', 'Honduras', (SELECT id FROM currencies WHERE code='HNL' AND book_id=1)),
+  (1, 'HK', 'Hong Kong', (SELECT id FROM currencies WHERE code='HKD' AND book_id=1)),
+  (1, 'HU', 'Hungary', (SELECT id FROM currencies WHERE code='HUF' AND book_id=1)),
+  (1, 'IS', 'Iceland', (SELECT id FROM currencies WHERE code='ISK' AND book_id=1)),
+  (1, 'IN', 'India', (SELECT id FROM currencies WHERE code='INR' AND book_id=1)),
+  (1, 'ID', 'Indonesia', (SELECT id FROM currencies WHERE code='IDR' AND book_id=1)),
+  (1, 'IR', 'Iran', (SELECT id FROM currencies WHERE code='IRR' AND book_id=1)),
+  (1, 'IQ', 'Iraq', (SELECT id FROM currencies WHERE code='IQD' AND book_id=1)),
+  (1, 'IE', 'Ireland', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'IM', 'Isle of Man', (SELECT id FROM currencies WHERE code='IMP' AND book_id=1)),
+  (1, 'IL', 'Israel', (SELECT id FROM currencies WHERE code='ILS' AND book_id=1)),
+  (1, 'IT', 'Italy', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'JM', 'Jamaica', (SELECT id FROM currencies WHERE code='JMD' AND book_id=1)),
+  (1, 'JP', 'Japan', (SELECT id FROM currencies WHERE code='JPY' AND book_id=1)),
+  (1, 'JE', 'Jersey', (SELECT id FROM currencies WHERE code='JEP' AND book_id=1)),
+  (1, 'JO', 'Jordan', (SELECT id FROM currencies WHERE code='JOD' AND book_id=1)),
+  (1, 'KZ', 'Kazakhstan', (SELECT id FROM currencies WHERE code='KZT' AND book_id=1)),
+  (1, 'KE', 'Kenya', (SELECT id FROM currencies WHERE code='KES' AND book_id=1)),
+  (1, 'KI', 'Kiribati', (SELECT id FROM currencies WHERE code='KID' AND book_id=1)),
+  (1, 'KP', 'Korea (Democratic People''s Republic of)', (SELECT id FROM currencies WHERE code='KPW' AND book_id=1)),
+  (1, 'KR', 'Korea (Republic of)', (SELECT id FROM currencies WHERE code='KRW' AND book_id=1)),
+  (1, 'KW', 'Kuwait', (SELECT id FROM currencies WHERE code='KWD' AND book_id=1)),
+  (1, 'KG', 'Kyrgyzstan', (SELECT id FROM currencies WHERE code='KGS' AND book_id=1)),
+  (1, 'LA', 'Lao People''s Democratic Republic', (SELECT id FROM currencies WHERE code='LAK' AND book_id=1)),
+  (1, 'LV', 'Latvia', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'LB', 'Lebanon', (SELECT id FROM currencies WHERE code='LBP' AND book_id=1)),
+  (1, 'LS', 'Lesotho', (SELECT id FROM currencies WHERE code='LSL' AND book_id=1)),
+  (1, 'LR', 'Liberia', (SELECT id FROM currencies WHERE code='LRD' AND book_id=1)),
+  (1, 'LY', 'Libya', (SELECT id FROM currencies WHERE code='LYD' AND book_id=1)),
+  (1, 'LI', 'Liechtenstein', (SELECT id FROM currencies WHERE code='CHF' AND book_id=1)),
+  (1, 'LT', 'Lithuania', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'LU', 'Luxembourg', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'MO', 'Macao', (SELECT id FROM currencies WHERE code='MOP' AND book_id=1)),
+  (1, 'MG', 'Madagascar', (SELECT id FROM currencies WHERE code='MGA' AND book_id=1)),
+  (1, 'MW', 'Malawi', (SELECT id FROM currencies WHERE code='MWK' AND book_id=1)),
+  (1, 'MY', 'Malaysia', (SELECT id FROM currencies WHERE code='MYR' AND book_id=1)),
+  (1, 'MV', 'Maldives', (SELECT id FROM currencies WHERE code='MVR' AND book_id=1)),
+  (1, 'ML', 'Mali', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'MT', 'Malta', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'MH', 'Marshall Islands', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'MQ', 'Martinique', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'MR', 'Mauritania', (SELECT id FROM currencies WHERE code='MRU' AND book_id=1)),
+  (1, 'MU', 'Mauritius', (SELECT id FROM currencies WHERE code='MUR' AND book_id=1)),
+  (1, 'YT', 'Mayotte', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'MX', 'Mexico', (SELECT id FROM currencies WHERE code='MXN' AND book_id=1)),
+  (1, 'FM', 'Micronesia (Federated States of)', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'MD', 'Moldova', (SELECT id FROM currencies WHERE code='MDL' AND book_id=1)),
+  (1, 'MC', 'Monaco', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'MN', 'Mongolia', (SELECT id FROM currencies WHERE code='MNT' AND book_id=1)),
+  (1, 'ME', 'Montenegro', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'MS', 'Montserrat', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'MA', 'Morocco', (SELECT id FROM currencies WHERE code='MAD' AND book_id=1)),
+  (1, 'MZ', 'Mozambique', (SELECT id FROM currencies WHERE code='MZN' AND book_id=1)),
+  (1, 'MM', 'Myanmar', (SELECT id FROM currencies WHERE code='MMK' AND book_id=1)),
+  (1, 'NA', 'Namibia', (SELECT id FROM currencies WHERE code='NAD' AND book_id=1)),
+  (1, 'NR', 'Nauru', (SELECT id FROM currencies WHERE code='AUD' AND book_id=1)),
+  (1, 'NP', 'Nepal', (SELECT id FROM currencies WHERE code='NPR' AND book_id=1)),
+  (1, 'NL', 'Netherlands', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'NC', 'New Caledonia', (SELECT id FROM currencies WHERE code='XPF' AND book_id=1)),
+  (1, 'NZ', 'New Zealand', (SELECT id FROM currencies WHERE code='NZD' AND book_id=1)),
+  (1, 'NI', 'Nicaragua', (SELECT id FROM currencies WHERE code='NIO' AND book_id=1)),
+  (1, 'NE', 'Niger', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'NG', 'Nigeria', (SELECT id FROM currencies WHERE code='NGN' AND book_id=1)),
+  (1, 'NU', 'Niue', (SELECT id FROM currencies WHERE code='NZD' AND book_id=1)),
+  (1, 'NF', 'Norfolk Island', (SELECT id FROM currencies WHERE code='AUD' AND book_id=1)),
+  (1, 'MK', 'North Macedonia', (SELECT id FROM currencies WHERE code='MKD' AND book_id=1)),
+  (1, 'MP', 'Northern Mariana Islands', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'NO', 'Norway', (SELECT id FROM currencies WHERE code='NOK' AND book_id=1)),
+  (1, 'OM', 'Oman', (SELECT id FROM currencies WHERE code='OMR' AND book_id=1)),
+  (1, 'PK', 'Pakistan', (SELECT id FROM currencies WHERE code='PKR' AND book_id=1)),
+  (1, 'PW', 'Palau', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'PS', 'Palestine, State of', (SELECT id FROM currencies WHERE code='ILS' AND book_id=1)),
+  (1, 'PA', 'Panama', (SELECT id FROM currencies WHERE code='PAB' AND book_id=1)),
+  (1, 'PG', 'Papua New Guinea', (SELECT id FROM currencies WHERE code='PGK' AND book_id=1)),
+  (1, 'PY', 'Paraguay', (SELECT id FROM currencies WHERE code='PYG' AND book_id=1)),
+  (1, 'PE', 'Peru', (SELECT id FROM currencies WHERE code='PEN' AND book_id=1)),
+  (1, 'PH', 'Philippines', (SELECT id FROM currencies WHERE code='PHP' AND book_id=1)),
+  (1, 'PN', 'Pitcairn', (SELECT id FROM currencies WHERE code='NZD' AND book_id=1)),
+  (1, 'PL', 'Poland', (SELECT id FROM currencies WHERE code='PLN' AND book_id=1)),
+  (1, 'PT', 'Portugal', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'PR', 'Puerto Rico', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'QA', 'Qatar', (SELECT id FROM currencies WHERE code='QAR' AND book_id=1)),
+  (1, 'RE', 'Réunion', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'RO', 'Romania', (SELECT id FROM currencies WHERE code='RON' AND book_id=1)),
+  (1, 'RU', 'Russian Federation', (SELECT id FROM currencies WHERE code='RUB' AND book_id=1)),
+  (1, 'RW', 'Rwanda', (SELECT id FROM currencies WHERE code='RWF' AND book_id=1)),
+  (1, 'BL', 'Saint Barthélemy', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'SH', 'Saint Helena, Ascension and Tristan da Cunha', (SELECT id FROM currencies WHERE code='SHP' AND book_id=1)),
+  (1, 'KN', 'Saint Kitts and Nevis', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'LC', 'Saint Lucia', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'MF', 'Saint Martin (French part)', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'PM', 'Saint Pierre and Miquelon', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'VC', 'Saint Vincent and the Grenadines', (SELECT id FROM currencies WHERE code='XCD' AND book_id=1)),
+  (1, 'WS', 'Samoa', (SELECT id FROM currencies WHERE code='WST' AND book_id=1)),
+  (1, 'SM', 'San Marino', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'ST', 'Sao Tome and Principe', (SELECT id FROM currencies WHERE code='STN' AND book_id=1)),
+  (1, 'SA', 'Saudi Arabia', (SELECT id FROM currencies WHERE code='SAR' AND book_id=1)),
+  (1, 'SN', 'Senegal', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'RS', 'Serbia', (SELECT id FROM currencies WHERE code='RSD' AND book_id=1)),
+  (1, 'SC', 'Seychelles', (SELECT id FROM currencies WHERE code='SCR' AND book_id=1)),
+  (1, 'SL', 'Sierra Leone', (SELECT id FROM currencies WHERE code='SLL' AND book_id=1)),
+  (1, 'SG', 'Singapore', (SELECT id FROM currencies WHERE code='SGD' AND book_id=1)),
+  (1, 'SX', 'Sint Maarten (Dutch part)', (SELECT id FROM currencies WHERE code='ANG' AND book_id=1)),
+  (1, 'SK', 'Slovakia', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'SI', 'Slovenia', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'SB', 'Solomon Islands', (SELECT id FROM currencies WHERE code='SBD' AND book_id=1)),
+  (1, 'SO', 'Somalia', (SELECT id FROM currencies WHERE code='SOS' AND book_id=1)),
+  (1, 'ZA', 'South Africa', (SELECT id FROM currencies WHERE code='ZAR' AND book_id=1)),
+  (1, 'GS', 'South Georgia and the South Sandwich Islands', (SELECT id FROM currencies WHERE code='GBP' AND book_id=1)),
+  (1, 'SS', 'South Sudan', (SELECT id FROM currencies WHERE code='SSP' AND book_id=1)),
+  (1, 'ES', 'Spain', (SELECT id FROM currencies WHERE code='EUR' AND book_id=1)),
+  (1, 'LK', 'Sri Lanka', (SELECT id FROM currencies WHERE code='LKR' AND book_id=1)),
+  (1, 'SD', 'Sudan', (SELECT id FROM currencies WHERE code='SDG' AND book_id=1)),
+  (1, 'SR', 'Suriname', (SELECT id FROM currencies WHERE code='SRD' AND book_id=1)),
+  (1, 'SJ', 'Svalbard and Jan Mayen', (SELECT id FROM currencies WHERE code='NOK' AND book_id=1)),
+  (1, 'SE', 'Sweden', (SELECT id FROM currencies WHERE code='SEK' AND book_id=1)),
+  (1, 'CH', 'Switzerland', (SELECT id FROM currencies WHERE code='CHF' AND book_id=1)),
+  (1, 'SY', 'Syrian Arab Republic', (SELECT id FROM currencies WHERE code='SYP' AND book_id=1)),
+  (1, 'TW', 'Taiwan, Province of China', (SELECT id FROM currencies WHERE code='TWD' AND book_id=1)),
+  (1, 'TJ', 'Tajikistan', (SELECT id FROM currencies WHERE code='TJS' AND book_id=1)),
+  (1, 'TZ', 'Tanzania, United Republic of', (SELECT id FROM currencies WHERE code='TZS' AND book_id=1)),
+  (1, 'TH', 'Thailand', (SELECT id FROM currencies WHERE code='THB' AND book_id=1)),
+  (1, 'TL', 'Timor-Leste', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'TG', 'Togo', (SELECT id FROM currencies WHERE code='XOF' AND book_id=1)),
+  (1, 'TK', 'Tokelau', (SELECT id FROM currencies WHERE code='NZD' AND book_id=1)),
+  (1, 'TO', 'Tonga', (SELECT id FROM currencies WHERE code='TOP' AND book_id=1)),
+  (1, 'TT', 'Trinidad and Tobago', (SELECT id FROM currencies WHERE code='TTD' AND book_id=1)),
+  (1, 'TN', 'Tunisia', (SELECT id FROM currencies WHERE code='TND' AND book_id=1)),
+  (1, 'TR', 'Turkey', (SELECT id FROM currencies WHERE code='TRY' AND book_id=1)),
+  (1, 'TM', 'Turkmenistan', (SELECT id FROM currencies WHERE code='TMT' AND book_id=1)),
+  (1, 'TC', 'Turks and Caicos Islands', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'TV', 'Tuvalu', (SELECT id FROM currencies WHERE code='TVD' AND book_id=1)),
+  (1, 'UG', 'Uganda', (SELECT id FROM currencies WHERE code='UGX' AND book_id=1)),
+  (1, 'UA', 'Ukraine', (SELECT id FROM currencies WHERE code='UAH' AND book_id=1)),
+  (1, 'AE', 'United Arab Emirates', (SELECT id FROM currencies WHERE code='AED' AND book_id=1)),
+  (1, 'GB', 'United Kingdom', (SELECT id FROM currencies WHERE code='GBP' AND book_id=1)),
+  (1, 'US', 'United States of America', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'UM', 'United States Minor Outlying Islands', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'UY', 'Uruguay', (SELECT id FROM currencies WHERE code='UYU' AND book_id=1)),
+  (1, 'UZ', 'Uzbekistan', (SELECT id FROM currencies WHERE code='UZS' AND book_id=1)),
+  (1, 'VU', 'Vanuatu', (SELECT id FROM currencies WHERE code='VUV' AND book_id=1)),
+  (1, 'VE', 'Venezuela (Bolivarian Republic of)', (SELECT id FROM currencies WHERE code='VES' AND book_id=1)),
+  (1, 'VN', 'Viet Nam', (SELECT id FROM currencies WHERE code='VND' AND book_id=1)),
+  (1, 'VG', 'Virgin Islands (British)', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'VI', 'Virgin Islands (U.S.)', (SELECT id FROM currencies WHERE code='USD' AND book_id=1)),
+  (1, 'WF', 'Wallis and Futuna', (SELECT id FROM currencies WHERE code='XPF' AND book_id=1)),
+  (1, 'EH', 'Western Sahara', (SELECT id FROM currencies WHERE code='MAD' AND book_id=1)),
+  (1, 'YE', 'Yemen', (SELECT id FROM currencies WHERE code='YER' AND book_id=1)),
+  (1, 'ZM', 'Zambia', (SELECT id FROM currencies WHERE code='ZMW' AND book_id=1)),
+  (1, 'ZW', 'Zimbabwe', (SELECT id FROM currencies WHERE code='ZWL' AND book_id=1));
+
+-- V12: backup settings
+CREATE TABLE IF NOT EXISTS backup_settings (
+  book_id          INTEGER PRIMARY KEY,
+  enabled          INTEGER NOT NULL DEFAULT 0,
+  interval_minutes INTEGER NOT NULL DEFAULT 60,
+  retention_count  INTEGER NOT NULL DEFAULT 10,
+  backup_path      TEXT,
+  backup_on_close  INTEGER NOT NULL DEFAULT 1,
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+
+INSERT OR IGNORE INTO backup_settings (book_id) VALUES (1);
+
+-- V13: currency management and FX rates
+ALTER TABLE commodities ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE commodities ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_commodities_active ON commodities(book_id, kind, is_active);
+
+CREATE TABLE IF NOT EXISTS fx_rates_daily (
+  id                 INTEGER PRIMARY KEY,
+  book_id            INTEGER NOT NULL,
+  from_currency_id   INTEGER NOT NULL,
+  to_currency_id     INTEGER NOT NULL,
+  rate_date          TEXT NOT NULL,
+  rate               REAL NOT NULL,
+  source             TEXT,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  UNIQUE(book_id, from_currency_id, to_currency_id, rate_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fx_daily_book_date ON fx_rates_daily(book_id, rate_date);
+CREATE INDEX IF NOT EXISTS idx_fx_daily_currencies ON fx_rates_daily(from_currency_id, to_currency_id);
+
+CREATE TABLE IF NOT EXISTS fx_rates_official (
+  id                 INTEGER PRIMARY KEY,
+  book_id            INTEGER NOT NULL,
+  from_currency_id   INTEGER NOT NULL,
+  to_currency_id     INTEGER NOT NULL,
+  period_type        TEXT NOT NULL CHECK (period_type IN ('monthly', 'yearly')),
+  period_year        INTEGER NOT NULL,
+  period_month       INTEGER,
+  rate               REAL NOT NULL,
+  source_name        TEXT NOT NULL,
+  source_url         TEXT,
+  source_date        TEXT,
+  notes              TEXT,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  UNIQUE(book_id, from_currency_id, to_currency_id, period_type, period_year, period_month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fx_official_book ON fx_rates_official(book_id);
+CREATE INDEX IF NOT EXISTS idx_fx_official_period ON fx_rates_official(period_type, period_year, period_month);
+CREATE INDEX IF NOT EXISTS idx_fx_official_currencies ON fx_rates_official(from_currency_id, to_currency_id);
+
+CREATE TABLE IF NOT EXISTS fx_rate_sources (
+  id           INTEGER PRIMARY KEY,
+  book_id      INTEGER NOT NULL,
+  name         TEXT NOT NULL,
+  country_code TEXT,
+  website_url  TEXT,
+  notes        TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  UNIQUE(book_id, name)
+);
+
+INSERT OR IGNORE INTO fx_rate_sources (book_id, name, country_code, website_url, notes) VALUES
+  (1, 'ECB', 'EU', 'https://www.ecb.europa.eu/stats/exchange/eurofxref/', 'European Central Bank reference rates'),
+  (1, 'IRS', 'US', 'https://www.irs.gov/individuals/international-taxpayers/yearly-average-currency-exchange-rates', 'US Internal Revenue Service yearly average rates'),
+  (1, 'HMRC', 'GB', 'https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat', 'UK HM Revenue & Customs rates'),
+  (1, 'Belastingdienst', 'NL', 'https://www.belastingdienst.nl/wps/wcm/connect/nl/koerslijst/', 'Dutch Tax Authority rates'),
+  (1, 'Federal Reserve', 'US', 'https://www.federalreserve.gov/releases/h10/current/', 'US Federal Reserve H.10 rates'),
+  (1, 'Bank of Canada', 'CA', 'https://www.bankofcanada.ca/rates/exchange/', 'Bank of Canada exchange rates'),
+  (1, 'RBA', 'AU', 'https://www.rba.gov.au/statistics/frequency/exchange-rates.html', 'Reserve Bank of Australia rates'),
+  (1, 'SNB', 'CH', 'https://www.snb.ch/en/iabout/stat/statrep/id/current_interest_exchange_rates', 'Swiss National Bank rates');
+
+UPDATE commodities
+SET is_default = 1
+WHERE book_id = 1 AND symbol = 'USD' AND kind = 'currency';
+
+INSERT OR IGNORE INTO commodities (book_id, kind, symbol, name, scale, is_active, is_default, created_at, updated_at) VALUES
+  (1, 'currency', 'EUR', 'Euro', 2, 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'GBP', 'British Pound Sterling', 2, 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'JPY', 'Japanese Yen', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CHF', 'Swiss Franc', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CAD', 'Canadian Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'AUD', 'Australian Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CNY', 'Chinese Yuan', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'INR', 'Indian Rupee', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'MXN', 'Mexican Peso', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'BRL', 'Brazilian Real', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'KRW', 'South Korean Won', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'SGD', 'Singapore Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'HKD', 'Hong Kong Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'NOK', 'Norwegian Krone', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'SEK', 'Swedish Krona', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'DKK', 'Danish Krone', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'NZD', 'New Zealand Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'ZAR', 'South African Rand', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'RUB', 'Russian Ruble', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'PLN', 'Polish Zloty', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'TRY', 'Turkish Lira', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'THB', 'Thai Baht', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'IDR', 'Indonesian Rupiah', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'MYR', 'Malaysian Ringgit', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'PHP', 'Philippine Peso', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CZK', 'Czech Koruna', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'ILS', 'Israeli New Shekel', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'AED', 'UAE Dirham', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'SAR', 'Saudi Riyal', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'TWD', 'Taiwan Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+UPDATE commodities SET is_active = 1 WHERE book_id = 1 AND symbol = 'USD' AND kind = 'currency';
+
+-- V14: currency display symbols
+ALTER TABLE commodities ADD COLUMN display_symbol TEXT;
+UPDATE commodities SET display_symbol = '$' WHERE symbol = 'USD' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '€' WHERE symbol = 'EUR' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '£' WHERE symbol = 'GBP' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '¥' WHERE symbol = 'JPY' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'Fr.' WHERE symbol = 'CHF' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'C$' WHERE symbol = 'CAD' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'A$' WHERE symbol = 'AUD' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '¥' WHERE symbol = 'CNY' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '₹' WHERE symbol = 'INR' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '$' WHERE symbol = 'MXN' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'R$' WHERE symbol = 'BRL' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '₩' WHERE symbol = 'KRW' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'S$' WHERE symbol = 'SGD' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'HK$' WHERE symbol = 'HKD' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'kr' WHERE symbol = 'NOK' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'kr' WHERE symbol = 'SEK' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'kr' WHERE symbol = 'DKK' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'NZ$' WHERE symbol = 'NZD' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'R' WHERE symbol = 'ZAR' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '₽' WHERE symbol = 'RUB' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'zł' WHERE symbol = 'PLN' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '₺' WHERE symbol = 'TRY' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '฿' WHERE symbol = 'THB' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'Rp' WHERE symbol = 'IDR' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'RM' WHERE symbol = 'MYR' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '₱' WHERE symbol = 'PHP' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'Kč' WHERE symbol = 'CZK' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '₪' WHERE symbol = 'ILS' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'د.إ' WHERE symbol = 'AED' AND kind = 'currency';
+UPDATE commodities SET display_symbol = '﷼' WHERE symbol = 'SAR' AND kind = 'currency';
+UPDATE commodities SET display_symbol = 'NT$' WHERE symbol = 'TWD' AND kind = 'currency';
+
+-- V15: FX rate refresh settings
+CREATE TABLE IF NOT EXISTS fx_rate_settings (
+  book_id            INTEGER PRIMARY KEY,
+  base_currency_id   INTEGER NOT NULL,
+  default_source_id  INTEGER,
+  refresh_enabled    INTEGER NOT NULL DEFAULT 1,
+  refresh_hour_utc   INTEGER NOT NULL DEFAULT 4,
+  refresh_minute_utc INTEGER NOT NULL DEFAULT 0,
+  max_backfill_days  INTEGER NOT NULL DEFAULT 370,
+  weekend_policy     TEXT NOT NULL DEFAULT 'skip' CHECK (weekend_policy IN ('skip', 'fill_previous', 'download')),
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(base_currency_id) REFERENCES commodities(id) ON DELETE RESTRICT,
+  FOREIGN KEY(default_source_id) REFERENCES fx_rate_sources(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS fx_rate_source_assignments (
+  id               INTEGER PRIMARY KEY,
+  book_id          INTEGER NOT NULL,
+  from_currency_id INTEGER NOT NULL,
+  to_currency_id   INTEGER NOT NULL,
+  source_id        INTEGER NOT NULL,
+  effective_from   TEXT NOT NULL,
+  effective_to     TEXT,
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES fx_rate_sources(id) ON DELETE CASCADE,
+  UNIQUE(book_id, from_currency_id, to_currency_id, effective_from)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fx_assignments_effective
+  ON fx_rate_source_assignments(book_id, from_currency_id, to_currency_id, effective_from, effective_to);
+
+CREATE TABLE IF NOT EXISTS fx_rate_refresh_state (
+  id               INTEGER PRIMARY KEY,
+  book_id          INTEGER NOT NULL,
+  from_currency_id INTEGER NOT NULL,
+  to_currency_id   INTEGER NOT NULL,
+  source_id        INTEGER NOT NULL,
+  last_success_date TEXT,
+  last_attempt_at   TEXT,
+  last_error        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES fx_rate_sources(id) ON DELETE CASCADE,
+  UNIQUE(book_id, from_currency_id, to_currency_id, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fx_refresh_state_pair
+  ON fx_rate_refresh_state(book_id, from_currency_id, to_currency_id, source_id);
+
+ALTER TABLE fx_rates_daily ADD COLUMN source_id INTEGER;
+CREATE INDEX IF NOT EXISTS idx_fx_daily_source ON fx_rates_daily(source_id);
+
+INSERT OR IGNORE INTO fx_rate_settings (book_id, base_currency_id, default_source_id)
+SELECT 1,
+       c.id,
+       (
+         SELECT id
+         FROM fx_rate_sources
+         WHERE book_id = 1 AND name IN ('ECB', 'Federal Reserve')
+         ORDER BY CASE name WHEN 'ECB' THEN 0 ELSE 1 END
+         LIMIT 1
+       )
+FROM commodities c
+WHERE c.book_id = 1 AND c.kind = 'currency' AND c.is_default = 1
+LIMIT 1;
+
+-- V16: derived FX rates
+ALTER TABLE fx_rates_daily ADD COLUMN is_derived INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE fx_rates_daily ADD COLUMN derived_via_currency_id INTEGER;
+CREATE INDEX IF NOT EXISTS idx_fx_daily_derived ON fx_rates_daily(is_derived);
+CREATE INDEX IF NOT EXISTS idx_fx_daily_derived_via ON fx_rates_daily(derived_via_currency_id);
+
+-- V17: commodities/currency sync
+INSERT OR IGNORE INTO commodities
+  (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at)
+SELECT
+  c.book_id,
+  'currency',
+  c.code,
+  c.symbol,
+  c.name,
+  2,
+  CASE WHEN c.code IN ('USD', 'EUR', 'GBP') THEN 1 ELSE 0 END,
+  CASE WHEN c.code = 'USD' THEN 1 ELSE 0 END,
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ','now')
+FROM currencies c
+WHERE c.book_id = 1;
+
+UPDATE commodities
+SET is_active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE book_id = 1 AND kind = 'currency' AND symbol IN ('USD', 'EUR', 'GBP');
+
+UPDATE commodities
+SET is_default = 1, is_active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE book_id = 1 AND kind = 'currency' AND symbol = 'USD'
+  AND NOT EXISTS (SELECT 1 FROM commodities WHERE book_id = 1 AND kind = 'currency' AND is_default = 1);

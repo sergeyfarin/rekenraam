@@ -122,22 +122,6 @@ pub fn resolve_accessible_db(mut path: PathBuf) -> PathBuf {
 
 const MIGRATIONS: &[(i32, &str)] = &[
     (1, include_str!("../migrations/V1__init.sql")),
-    (2, include_str!("../migrations/V2__account_balancing.sql")),
-    (3, include_str!("../migrations/V3__dividend_income_categories.sql")),
-    (4, include_str!("../migrations/V4__directives_and_documents.sql")),
-    (5, include_str!("../migrations/V5__booking_policy_and_cost_basis.sql")),
-    (6, include_str!("../migrations/V6__balance_constraints.sql")),
-    (7, include_str!("../migrations/V7__import_rules_sessions.sql")),
-    (8, include_str!("../migrations/V8__import_rules_extensions.sql")),
-    (9, include_str!("../migrations/V9__reporting.sql")),
-    (10, include_str!("../migrations/V10__institutions_countries.sql")),
-    (11, include_str!("../migrations/V11__currencies_seed.sql")),
-    (12, include_str!("../migrations/V12__backup_settings.sql")),
-    (13, include_str!("../migrations/V13__currency_management.sql")),
-    (14, include_str!("../migrations/V14__currency_display_symbols.sql")),
-    (15, include_str!("../migrations/V15__fx_rate_settings.sql")),
-    (16, include_str!("../migrations/V16__fx_rate_daily_provenance.sql")),
-    (17, include_str!("../migrations/V17__commodities_currency_sync.sql")),
 ];
 
 pub fn migration_versions() -> Vec<i32> {
