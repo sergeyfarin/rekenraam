@@ -15,6 +15,11 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 - V10: `V10__institutions_countries.sql` (countries + institutions + account links)
 - V11: `V11__currencies_seed.sql` (currencies table + country default currencies + seed data)
 - V12: `V12__backup_settings.sql` (backup settings stored per book)
+- V13: `V13__currency_management.sql` (currency activation/default + FX rate tables)
+- V14: `V14__currency_display_symbols.sql` (display symbols for currencies)
+- V15: `V15__fx_rate_settings.sql` (FX settings, source assignments, refresh state)
+- V16: `V16__fx_rate_daily_provenance.sql` (daily FX provenance fields)
+- V17: `V17__commodities_currency_sync.sql` (sync currencies to commodities)
 
 ### Core Entities
 **books**
@@ -23,7 +28,7 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **commodities**
 - Currencies and instruments.
-- Key fields: `id`, `book_id`, `kind`, `symbol`, `name`, `scale`.
+- Key fields: `id`, `book_id`, `kind`, `symbol`, `name`, `scale`, `is_active`, `is_default`, `display_symbol`.
 
 **accounts**
 - Accounts in a book.
@@ -45,7 +50,7 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 - ISO-like country catalog per book with optional default currency.
 
 **currencies**
-- Currency catalog per book.
+- Currency catalog per book (used as seed/reference data).
 
 **institutions**
 - Banks/brokers/credit unions per book (linked to countries).
@@ -96,9 +101,6 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 **import_sessions**
 - Import batch audit trail (`status`, timestamps, source).
 
-**import_sessions**
-- Audit trail for import batches.
-
 ### Relations and Join Tables
 **split_tags**
 - Many-to-many: `splits` ↔ `tags`.
@@ -128,6 +130,27 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **corporate_actions**
 - Stock splits/merges and related adjustments.
+
+### Currency + FX
+**fx_rates_daily**
+- Daily market rates between currencies.
+- Key fields: `from_currency_id`, `to_currency_id`, `rate_date`, `rate`, `source`, `source_id`, `is_derived`, `derived_via_currency_id`.
+
+**fx_rates_official**
+- Monthly/yearly tax authority rates.
+- Key fields: `period_type`, `period_year`, `period_month`, `rate`, `source_name`, `source_url`.
+
+**fx_rate_sources**
+- Reference list of FX sources (ECB, IRS, etc.).
+
+**fx_rate_settings**
+- Per-book refresh settings (base currency, default source, schedule, weekend policy).
+
+**fx_rate_source_assignments**
+- Source assignment per currency pair and effective date range.
+
+**fx_rate_refresh_state**
+- Refresh status and errors per currency pair and source.
 
 ### Reports + Cache
 **report_cache**
@@ -161,5 +184,6 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 - Price source validity checks.
 - `book_state.change_seq` is bumped on inserts/updates/deletes for key tables.
 
-### Seed Data (V1)
+### Seed Data (V1 + later)
 - Default book (`Personal`), base currency (`USD`), starter accounts, categories, and manual price source.
+- Currency seeds and FX sources (V11-V13) with display symbols (V14).
