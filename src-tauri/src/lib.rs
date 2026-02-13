@@ -326,6 +326,7 @@ pub fn run() {
             commands::get_account_tree,
             commands::create_account_open,
             commands::create_account_close,
+            commands::create_account_reopen,
             commands::list_account_directives,
             commands::create_balance_check,
             commands::list_balance_checks,

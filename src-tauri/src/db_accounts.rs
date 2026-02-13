@@ -655,11 +655,11 @@ fn ensure_profit_loss_system_accounts_internal(
     conn.execute(
         "INSERT INTO accounts (
             book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role,
-            previous_account_id, session_id, created_at, updated_at
+            previous_account_id, session_id, effective_at, lifecycle_event, created_at, updated_at
         )
         SELECT
             ?1, 'income', 'System Income Summary', ?2, 0, 1, 1, 'income_summary',
-            NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE NOT EXISTS (
             SELECT 1 FROM accounts a
             WHERE a.book_id = ?1
@@ -673,11 +673,11 @@ fn ensure_profit_loss_system_accounts_internal(
     conn.execute(
         "INSERT INTO accounts (
             book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role,
-            previous_account_id, session_id, created_at, updated_at
+            previous_account_id, session_id, effective_at, lifecycle_event, created_at, updated_at
         )
         SELECT
             ?1, 'expense', 'System Expense Summary', ?2, 0, 1, 1, 'expense_summary',
-            NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE NOT EXISTS (
             SELECT 1 FROM accounts a
             WHERE a.book_id = ?1
@@ -691,11 +691,11 @@ fn ensure_profit_loss_system_accounts_internal(
     conn.execute(
         "INSERT INTO accounts (
             book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role,
-            previous_account_id, session_id, created_at, updated_at
+            previous_account_id, session_id, effective_at, lifecycle_event, created_at, updated_at
         )
         SELECT
             ?1, 'equity', 'Retained Earnings', ?2, 0, 1, 1, 'retained_earnings',
-            NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE NOT EXISTS (
             SELECT 1 FROM accounts a
             WHERE a.book_id = ?1
@@ -962,10 +962,11 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
     let book_id = SINGLE_BOOK_ID;
 
     let is_closed = if input.is_closed.unwrap_or(false) { 1 } else { 0 };
+    let lifecycle_event = if is_closed == 1 { "close" } else { "open" };
 
     conn.execute(
-        "INSERT INTO accounts (book_id, parent_id, previous_account_id, session_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, is_hidden, is_system, system_role, created_at, updated_at)
-         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO accounts (book_id, parent_id, previous_account_id, session_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, is_hidden, is_system, system_role, effective_at, lifecycle_event, created_at, updated_at)
+         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, NULL, date('now'), ?11, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.parent_id,
@@ -977,6 +978,7 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
             input.country_id,
             input.number_last4,
             is_closed,
+            lifecycle_event,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -1031,12 +1033,12 @@ pub fn get_account(
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
              WHERE a.id IN chain
-               AND (?2 IS NULL OR a.created_at <= ?2)
+                             AND (?2 IS NULL OR date(a.effective_at) <= date(?2))
                AND NOT EXISTS (
                    SELECT 1 FROM accounts newer
                    WHERE newer.previous_account_id = a.id
                      AND newer.id IN chain
-                     AND (?2 IS NULL OR newer.created_at <= ?2)
+                                         AND (?2 IS NULL OR date(newer.effective_at) <= date(?2))
                )
              LIMIT 1",
             params![id, as_of_timestamp],
@@ -1068,12 +1070,12 @@ pub fn list_accounts(
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
                              WHERE a.book_id = ?1
-                                                                 AND (?2 IS NULL OR a.created_at <= ?2)
+                                                                 AND (?2 IS NULL OR date(a.effective_at) <= date(?2))
                                  AND a.is_hidden = 0
                                                                  AND NOT EXISTS (
                                                                          SELECT 1 FROM accounts newer
                                                                          WHERE newer.previous_account_id = a.id
-                                                                             AND (?2 IS NULL OR newer.created_at <= ?2)
+                                                                             AND (?2 IS NULL OR date(newer.effective_at) <= date(?2))
                                                                  )
                                  AND NOT EXISTS (
                                          SELECT 1 FROM session_reverts sr
@@ -1129,12 +1131,16 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
         "INSERT INTO accounts (
             book_id, parent_id, previous_account_id, session_id,
             type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
-            is_hidden, is_system, system_role, is_closed, created_at, updated_at
+                is_hidden, is_system, system_role, is_closed,
+                effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
+                created_at, updated_at
          )
          VALUES (
             ?1, ?2, ?3, ?4,
             ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-            ?12, ?13, ?14, ?15, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?12, ?13, ?14, ?15,
+                date('now'), 'update', NULL, NULL,
+                strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -2881,12 +2887,16 @@ pub fn set_account_booking_policy(
         "INSERT INTO accounts (
             book_id, parent_id, previous_account_id, session_id,
             type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
-            is_hidden, is_system, system_role, is_closed, created_at, updated_at
+                is_hidden, is_system, system_role, is_closed,
+                effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
+                created_at, updated_at
          )
          VALUES (
             ?1, ?2, ?3, ?4,
             ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-            ?12, ?13, ?14, ?15, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?12, ?13, ?14, ?15,
+                date('now'), 'update', NULL, NULL,
+                strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -3218,21 +3228,106 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
     Ok(roots)
 }
 
-fn create_account_directive_internal(
+fn create_account_lifecycle_directive_internal(
     conn: &rusqlite::Connection,
     directive_type: &str,
     input: AccountDirectiveCreate,
 ) -> Result<AccountDirective, String> {
-    let book_id = SINGLE_BOOK_ID;
+    let current_id = resolve_current_account_id(conn, input.account_id)?
+        .ok_or_else(|| "account not found".to_string())?;
+
+    let source: Option<(
+        i64,
+        Option<i64>,
+        String,
+        String,
+        i64,
+        String,
+        Option<i64>,
+        Option<i64>,
+        Option<String>,
+        i64,
+        i64,
+        Option<String>,
+    )> = conn
+        .query_row(
+            "SELECT book_id, parent_id, type, name, commodity_id, booking_policy, institution_id, country_id,
+                    number_last4, is_hidden, is_system, system_role
+             FROM accounts WHERE id = ?1",
+            [current_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                    row.get(11)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let (
+        book_id,
+        parent_id,
+        account_type,
+        name,
+        commodity_id,
+        booking_policy,
+        institution_id,
+        country_id,
+        number_last4,
+        is_hidden,
+        is_system,
+        system_role,
+    ) = source.ok_or_else(|| "account not found".to_string())?;
+
+    let is_closed = match directive_type {
+        "close" => 1,
+        "open" | "reopen" => 0,
+        _ => return Err("directive type must be open, close, or reopen".to_string()),
+    };
 
     conn.execute(
-        "INSERT INTO account_directives (book_id, account_id, directive_type, directive_date, note, metadata, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO accounts (
+            book_id, parent_id, previous_account_id, session_id,
+            type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
+            is_hidden, is_system, system_role, is_closed,
+            effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
+            created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, NULL,
+            ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+            ?11, ?12, ?13, ?14,
+            ?15, ?16, ?17, ?18,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
         params![
             book_id,
-            input.account_id,
-            directive_type,
+            parent_id,
+            current_id,
+            account_type,
+            name,
+            commodity_id,
+            booking_policy,
+            institution_id,
+            country_id,
+            number_last4,
+            is_hidden,
+            is_system,
+            system_role,
+            is_closed,
             input.directive_date,
+            directive_type,
             input.note,
             input.metadata,
         ],
@@ -3240,16 +3335,13 @@ fn create_account_directive_internal(
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
-    let directive = conn
-        .query_row(
-            "SELECT id, book_id, account_id, directive_type, directive_date, note, metadata, created_at
-             FROM account_directives WHERE id = ?1",
-            [id],
-            map_account_directive_row,
-        )
-        .map_err(|e| e.to_string())?;
-
-    Ok(directive)
+    conn.query_row(
+        "SELECT id, book_id, ?2 as account_id, lifecycle_event, effective_at, lifecycle_note, lifecycle_metadata, created_at
+         FROM accounts WHERE id = ?1",
+        params![id, input.account_id],
+        map_account_directive_row,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -3259,7 +3351,7 @@ pub fn create_account_open(
 ) -> Result<AccountDirective, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    create_account_directive_internal(conn, "open", input)
+    create_account_lifecycle_directive_internal(conn, "open", input)
 }
 
 #[command]
@@ -3269,7 +3361,17 @@ pub fn create_account_close(
 ) -> Result<AccountDirective, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    create_account_directive_internal(conn, "close", input)
+    create_account_lifecycle_directive_internal(conn, "close", input)
+}
+
+#[command]
+pub fn create_account_reopen(
+    db: State<DbState>,
+    input: AccountDirectiveCreate,
+) -> Result<AccountDirective, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    create_account_lifecycle_directive_internal(conn, "reopen", input)
 }
 
 #[cfg(test)]
@@ -3839,9 +3941,22 @@ mod tests {
         .expect("create close directive");
         assert_eq!(closed.directive_type, "close");
 
+        let reopened = create_account_reopen(
+            as_state(&db_state),
+            AccountDirectiveCreate {
+                book_id: 1,
+                account_id: account.id,
+                directive_date: "2025-01-01".to_string(),
+                note: Some("reopen".to_string()),
+                metadata: None,
+            },
+        )
+        .expect("create reopen directive");
+        assert_eq!(reopened.directive_type, "reopen");
+
         let directives = list_account_directives(as_state(&db_state), account.id)
             .expect("list directives");
-        assert_eq!(directives.len(), 2);
+        assert_eq!(directives.len(), 3);
 
         let check = create_balance_check(
             as_state(&db_state),
@@ -4066,14 +4181,29 @@ pub fn list_account_directives(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, account_id, directive_type, directive_date, note, metadata, created_at
-             FROM account_directives WHERE account_id = ?1
-             ORDER BY directive_date DESC, id DESC",
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_account_id
+                 FROM accounts a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_account_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM accounts a
+                 JOIN chain c ON a.previous_account_id = c.id
+             )
+             SELECT a.id, a.book_id, ?2 as account_id, a.lifecycle_event, a.effective_at,
+                    a.lifecycle_note, a.lifecycle_metadata, a.created_at
+             FROM accounts a
+             WHERE a.id IN chain
+               AND a.lifecycle_event IN ('open', 'close', 'reopen')
+             ORDER BY a.effective_at DESC, a.id DESC",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([account_id], map_account_directive_row)
+        .query_map(params![account_id, account_id], map_account_directive_row)
         .map_err(|e| e.to_string())?;
 
     let mut directives = Vec::new();

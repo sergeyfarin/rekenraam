@@ -173,6 +173,10 @@ CREATE TABLE IF NOT EXISTS accounts (
   is_system    INTEGER NOT NULL DEFAULT 0,
   system_role  TEXT,
   is_closed    INTEGER NOT NULL DEFAULT 0,
+  effective_at TEXT NOT NULL DEFAULT (date('now')),
+  lifecycle_event TEXT NOT NULL DEFAULT 'open' CHECK (lifecycle_event IN ('open','close','reopen','update')),
+  lifecycle_note TEXT,
+  lifecycle_metadata TEXT,
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
@@ -184,6 +188,27 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_accounts_book_type ON accounts(book_id, type);
+CREATE INDEX IF NOT EXISTS idx_accounts_book_effective ON accounts(book_id, effective_at);
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_effective_date_format_ins
+BEFORE INSERT ON accounts
+BEGIN
+  SELECT CASE
+    WHEN NEW.effective_at NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      OR date(NEW.effective_at) IS NULL
+      THEN RAISE(ABORT, 'effective_at must be YYYY-MM-DD')
+  END;
+
+  SELECT CASE
+    WHEN NEW.lifecycle_event = 'close' AND NEW.is_closed != 1
+      THEN RAISE(ABORT, 'close lifecycle_event requires is_closed=1')
+  END;
+
+  SELECT CASE
+    WHEN NEW.lifecycle_event IN ('open', 'reopen') AND NEW.is_closed != 0
+      THEN RAISE(ABORT, 'open/reopen lifecycle_event requires is_closed=0')
+  END;
+END;
 
 CREATE TABLE IF NOT EXISTS transactions (
   id          INTEGER PRIMARY KEY,
@@ -821,22 +846,7 @@ CREATE TABLE IF NOT EXISTS dividend_income_categories (
 CREATE INDEX IF NOT EXISTS idx_dividend_income_categories_book ON dividend_income_categories(book_id);
 CREATE INDEX IF NOT EXISTS idx_dividend_income_categories_category ON dividend_income_categories(category_id);
 
--- V4: directives + documents/events/notes/pad/balance checks
-CREATE TABLE IF NOT EXISTS account_directives (
-  id             INTEGER PRIMARY KEY,
-  book_id        INTEGER NOT NULL,
-  account_id     INTEGER NOT NULL,
-  directive_type TEXT NOT NULL CHECK (directive_type IN ('open','close')),
-  directive_date TEXT NOT NULL,
-  note           TEXT,
-  metadata       TEXT,
-  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_account_directives_account_date
-  ON account_directives(account_id, directive_date);
+-- V4: documents/events/notes/pad/balance checks
 
 CREATE TABLE IF NOT EXISTS balance_checks (
   id            INTEGER PRIMARY KEY,
@@ -931,22 +941,6 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE INDEX IF NOT EXISTS idx_documents_account ON documents(account_id);
 CREATE INDEX IF NOT EXISTS idx_documents_tx ON documents(tx_id);
-
-CREATE TRIGGER IF NOT EXISTS trg_bump_account_directives_ins
-AFTER INSERT ON account_directives
-BEGIN
-  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_account_directives_upd
-AFTER UPDATE ON account_directives
-BEGIN
-  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_account_directives_del
-AFTER DELETE ON account_directives
-BEGIN
-  UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
-END;
 
 CREATE TRIGGER IF NOT EXISTS trg_bump_balance_checks_ins
 AFTER INSERT ON balance_checks

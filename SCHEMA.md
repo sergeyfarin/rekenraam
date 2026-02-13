@@ -17,7 +17,8 @@ This document summarizes the current SQLite schema. Source of truth is `src-taur
 
 **accounts**
 - Accounts in a book.
-- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `booking_policy`, `institution_id`, `country_id`, `is_hidden`, `is_system`, `system_role`, `is_closed`.
+- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `booking_policy`, `institution_id`, `country_id`, `is_hidden`, `is_system`, `system_role`, `is_closed`, `effective_at`, `lifecycle_event`, `lifecycle_note`, `lifecycle_metadata`.
+- Lifecycle open/close/reopen/update is captured by appending new account revisions.
 
 **transactions**
 - Top-level transaction header (append-only revision model).
@@ -60,9 +61,6 @@ This document summarizes the current SQLite schema. Source of truth is `src-taur
 
 **dividend_income_categories**
 - Maps dividend income categories (optionally per commodity) for reporting and tax.
-
-**account_directives**
-- Open/close directives for accounts (audit trail).
 
 **balance_checks**
 - Balance assertion records (Beancount-style balance directives).
