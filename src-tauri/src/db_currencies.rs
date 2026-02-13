@@ -366,10 +366,17 @@ pub fn list_currencies(db: State<DbState>, book_id: i64, active_only: Option<boo
 
     let sql = if active_only.unwrap_or(false) {
         "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
-         FROM commodities WHERE book_id = ?1 AND kind = 'currency' AND is_active = 1 ORDER BY is_default DESC, symbol ASC"
+                 FROM current_commodities c
+                 WHERE c.book_id = ?1
+                     AND c.kind = 'currency'
+                     AND c.is_active = 1
+                 ORDER BY c.is_default DESC, c.symbol ASC"
     } else {
         "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
-         FROM commodities WHERE book_id = ?1 AND kind = 'currency' ORDER BY is_default DESC, is_active DESC, symbol ASC"
+                 FROM current_commodities c
+                 WHERE c.book_id = ?1
+                     AND c.kind = 'currency'
+                 ORDER BY c.is_default DESC, c.is_active DESC, c.symbol ASC"
     };
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
@@ -392,7 +399,11 @@ pub fn get_default_currency(db: State<DbState>, book_id: i64) -> Result<Option<C
     let mut stmt = conn
         .prepare(
             "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
-             FROM commodities WHERE book_id = ?1 AND kind = 'currency' AND is_default = 1 LIMIT 1",
+                         FROM current_commodities c
+                         WHERE c.book_id = ?1
+                             AND c.kind = 'currency'
+                             AND c.is_default = 1
+                         LIMIT 1",
         )
         .map_err(|e| e.to_string())?;
 
@@ -412,6 +423,22 @@ pub fn create_currency(db: State<DbState>, input: CurrencyCreate) -> Result<Curr
 
     let scale = input.scale.unwrap_or(2);
     let is_active = if input.is_active.unwrap_or(true) { 1 } else { 0 };
+
+        let duplicate_exists: Option<i64> = conn
+                .query_row(
+                        "SELECT 1 FROM current_commodities c
+                         WHERE c.book_id = ?1
+                             AND c.kind = 'currency'
+                             AND c.symbol = ?2
+                         LIMIT 1",
+                        params![book_id, input.symbol],
+                        |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?;
+        if duplicate_exists.is_some() {
+                return Err("currency with this symbol already exists".to_string());
+        }
 
     conn.execute(
         "INSERT INTO commodities (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at)
@@ -438,41 +465,65 @@ pub fn update_currency(db: State<DbState>, input: CurrencyUpdate) -> Result<Curr
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let mut updates = vec!["updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')".to_string()];
-    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let source = conn
+        .query_row(
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default
+                         FROM current_commodities c
+             WHERE c.id = ?1
+                             AND c.kind = 'currency'",
+            [input.id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
 
-    if let Some(symbol) = &input.symbol {
-        params_vec.push(Box::new(symbol.clone()));
-        updates.push(format!("symbol = ?{}", params_vec.len()));
-    }
-    if let Some(display_symbol) = &input.display_symbol {
-        params_vec.push(Box::new(display_symbol.clone()));
-        updates.push(format!("display_symbol = ?{}", params_vec.len()));
-    }
-    if let Some(name) = &input.name {
-        params_vec.push(Box::new(name.clone()));
-        updates.push(format!("name = ?{}", params_vec.len()));
-    }
-    if let Some(is_active) = input.is_active {
-        params_vec.push(Box::new(if is_active { 1i64 } else { 0i64 }));
-        updates.push(format!("is_active = ?{}", params_vec.len()));
-    }
+    let (source_id, book_id, source_symbol, source_display_symbol, source_name, source_scale, source_is_active, source_is_default) =
+        source.ok_or_else(|| "currency not found or not current".to_string())?;
 
-    params_vec.push(Box::new(input.id));
-    let sql = format!(
-        "UPDATE commodities SET {} WHERE id = ?{} AND kind = 'currency'",
-        updates.join(", "),
-        params_vec.len()
-    );
+    let new_symbol = input.symbol.or(source_symbol);
+    let new_display_symbol = input.display_symbol.or(source_display_symbol);
+    let new_name = input.name.unwrap_or(source_name);
+    let new_is_active = input
+        .is_active
+        .map(|value| if value { 1i64 } else { 0i64 })
+        .unwrap_or(source_is_active);
 
-    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO commodities
+          (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+         VALUES
+          (?1, 'currency', ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            new_symbol,
+            new_display_symbol,
+            new_name,
+            source_scale,
+            new_is_active,
+            source_is_default,
+            source_id
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
 
     let currency = conn
         .query_row(
             "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
              FROM commodities WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_currency_row,
         )
         .map_err(|e| e.to_string())?;
@@ -487,34 +538,95 @@ pub fn set_default_currency(db: State<DbState>, book_id: i64, currency_id: i64) 
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
-    // Clear existing default
-    conn.execute(
-        "UPDATE commodities SET is_default = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE book_id = ?1 AND kind = 'currency' AND is_default = 1",
-        [book_id],
-    )
-    .map_err(|e| e.to_string())?;
+    let target = conn
+        .query_row(
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default
+                         FROM current_commodities c
+             WHERE c.id = ?1
+                             AND c.kind = 'currency'",
+            [currency_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "currency not found or not current".to_string())?;
 
-    // Set new default (also ensure it's active)
-    conn.execute(
-        "UPDATE commodities SET is_default = 1, is_active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?1 AND kind = 'currency'",
-        [currency_id],
-    )
-    .map_err(|e| e.to_string())?;
+    let current_default = conn
+        .query_row(
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default
+                         FROM current_commodities c
+             WHERE c.book_id = ?1
+               AND c.kind = 'currency'
+               AND c.is_default = 1
+             LIMIT 1",
+            [book_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
 
-    // Also update book's base_commodity_id
-    conn.execute(
-        "UPDATE books SET base_commodity_id = ?1 WHERE id = ?2",
-        [currency_id, book_id],
-    )
-    .map_err(|e| e.to_string())?;
+    if let Some((default_id, default_book_id, default_symbol, default_display_symbol, default_name, default_scale, default_is_active, _)) = current_default.clone() {
+        if default_id != currency_id {
+            conn.execute(
+                "INSERT INTO commodities
+                  (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+                 VALUES
+                  (?1, 'currency', ?2, ?3, ?4, ?5, ?6, 0, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![
+                    default_book_id,
+                    default_symbol,
+                    default_display_symbol,
+                    default_name,
+                    default_scale,
+                    default_is_active,
+                    default_id
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    let mut effective_currency_id = target.0;
+    let need_target_version = target.6 == 0 || target.7 == 0 || current_default.map(|d| d.0) != Some(currency_id);
+    if need_target_version {
+        conn.execute(
+            "INSERT INTO commodities
+              (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+             VALUES
+              (?1, 'currency', ?2, ?3, ?4, ?5, 1, 1, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![target.1, target.2, target.3, target.4, target.5, target.0],
+        )
+        .map_err(|e| e.to_string())?;
+        effective_currency_id = conn.last_insert_rowid();
+    }
 
     let currency = conn
         .query_row(
             "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
              FROM commodities WHERE id = ?1",
-            [currency_id],
+            [effective_currency_id],
             map_currency_row,
         )
         .map_err(|e| e.to_string())?;
@@ -528,15 +640,34 @@ pub fn toggle_currency_active(db: State<DbState>, currency_id: i64) -> Result<Cu
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
     // Check if it's the default - can't deactivate default
-    let (is_default, is_active): (i64, i64) = conn
+    let source = conn
         .query_row(
-            "SELECT is_default, is_active FROM commodities WHERE id = ?1",
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default
+                         FROM current_commodities c
+             WHERE c.id = ?1
+                             AND c.kind = 'currency'",
             [currency_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
         )
-        .map_err(|e| e.to_string())?;
+        .optional()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "currency not found or not current".to_string())?;
 
-    if is_default != 0 {
+    let is_active = source.6;
+    let is_default = source.7;
+
+    if is_default != 0 && is_active != 0 {
         return Err("Cannot deactivate the default currency".to_string());
     }
 
@@ -557,18 +688,33 @@ pub fn toggle_currency_active(db: State<DbState>, currency_id: i64) -> Result<Cu
         }
     }
 
+    let toggled_is_active = if is_active == 0 { 1 } else { 0 };
+
     conn.execute(
-        "UPDATE commodities SET is_active = 1 - is_active, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?1 AND kind = 'currency'",
-        [currency_id],
+        "INSERT INTO commodities
+          (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+         VALUES
+          (?1, 'currency', ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            source.1,
+            source.2,
+            source.3,
+            source.4,
+            source.5,
+            toggled_is_active,
+            source.7,
+            source.0
+        ],
     )
     .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
 
     let currency = conn
         .query_row(
             "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
              FROM commodities WHERE id = ?1",
-            [currency_id],
+            [new_id],
             map_currency_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1103,7 +1249,12 @@ pub fn set_fx_rate_settings(db: State<DbState>, input: FxRateSettingsUpdate) -> 
             id
         } else {
             conn.query_row(
-                "SELECT id FROM commodities WHERE book_id = ?1 AND kind = 'currency' AND is_default = 1 LIMIT 1",
+                                "SELECT c.id
+                                 FROM current_commodities c
+                                 WHERE c.book_id = ?1
+                                     AND c.kind = 'currency'
+                                     AND c.is_default = 1
+                                 LIMIT 1",
                 [SINGLE_BOOK_ID],
                 |row| row.get(0),
             )

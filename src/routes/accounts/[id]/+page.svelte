@@ -38,6 +38,21 @@
     name: string;
   };
 
+  type Tag = {
+    id: number;
+    name: string;
+  };
+
+  type Person = {
+    id: number;
+    name: string;
+  };
+
+  type Project = {
+    id: number;
+    name: string;
+  };
+
   type Commodity = {
     id: number;
     symbol: string | null;
@@ -61,6 +76,10 @@
     commodity_id: number;
     amount_minor: number;
     category_id: number | null;
+    tag_id: number | null;
+    person_id: number | null;
+    project_id: number | null;
+    share_bps: number | null;
     memo: string | null;
   };
 
@@ -72,6 +91,14 @@
   type SplitDraft = {
     account_id: number | null;
     category_id: number | null;
+    category_input: string;
+    tag_id: number | null;
+    tag_input: string;
+    person_id: number | null;
+    person_input: string;
+    project_id: number | null;
+    project_input: string;
+    share_bps: number | null;
     amount: string;
     memo: string;
   };
@@ -104,6 +131,9 @@
   let accounts: Account[] = [];
   let categories: Category[] = [];
   let payees: Payee[] = [];
+  let tags: Tag[] = [];
+  let people: Person[] = [];
+  let projects: Project[] = [];
   let commodities: Commodity[] = [];
 
   let search = "";
@@ -121,11 +151,12 @@
   let formAccountId: number | null = null;
   let formTransferAccountId: number | null = null;
   let formPayeeId: number | null = null;
-  let formNewPayee = "";
+  let formPayeeInput = "";
   let formMemo = "";
   let formReference = "";
   let formStatus = "uncleared";
   let formCategoryId: number | null = null;
+  let formCategoryInput = "";
   let formAmount = "";
   let splitMode = false;
   let splitEditorOpen = false;
@@ -189,15 +220,21 @@
   }
 
   async function loadLookups() {
-    const [accountList, categoryList, payeeList, commodityList] = await Promise.all([
+    const [accountList, categoryList, payeeList, tagList, peopleList, projectList, commodityList] = await Promise.all([
       invoke<Account[]>("list_accounts", { bookId: 1 }),
       invoke<Category[]>("list_categories", { bookId: 1 }),
       invoke<Payee[]>("list_payees", { bookId: 1 }),
+      invoke<Tag[]>("list_tags", { bookId: 1 }),
+      invoke<Person[]>("list_people", { bookId: 1 }),
+      invoke<Project[]>("list_projects", { bookId: 1 }),
       invoke<Commodity[]>("list_commodities", { bookId: 1 })
     ]);
     accounts = accountList;
     categories = categoryList;
     payees = payeeList;
+    tags = tagList;
+    people = peopleList;
+    projects = projectList;
     commodities = commodityList;
   }
 
@@ -366,17 +403,18 @@
     formAccountId = accountId;
     formTransferAccountId = null;
     formPayeeId = null;
-    formNewPayee = "";
+    formPayeeInput = "";
     formMemo = "";
     formReference = "";
     formStatus = "uncleared";
     formCategoryId = null;
+    formCategoryInput = "";
     formAmount = "";
     splitMode = false;
     splitEditorOpen = false;
     formSplits = [
-      { account_id: accountId, category_id: null, amount: "", memo: "" },
-      { account_id: null, category_id: null, amount: "", memo: "" }
+      { account_id: accountId, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" },
+      { account_id: null, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" }
     ];
     dialogOpen = true;
   }
@@ -390,17 +428,26 @@
     formAccountId = primary.account_id;
     formTransferAccountId = transfer?.account_id ?? null;
     formPayeeId = tx.transaction.payee_id;
-    formNewPayee = "";
+    formPayeeInput = tx.transaction.payee_id ? payeeName(tx.transaction.payee_id) : "";
     formMemo = tx.transaction.memo ?? "";
     formReference = tx.transaction.reference ?? "";
     formStatus = tx.transaction.status;
     formCategoryId = primary.category_id;
+    formCategoryInput = primary.category_id ? categoryName(primary.category_id) : "";
     formAmount = formatAmountInput(primary.amount_minor, primary.commodity_id);
     splitMode = tx.splits.length > 2;
     splitEditorOpen = false;
     formSplits = tx.splits.map((split) => ({
       account_id: split.account_id,
       category_id: split.category_id,
+      category_input: split.category_id ? categoryName(split.category_id) : "",
+      tag_id: split.tag_id,
+      tag_input: split.tag_id ? tags.find((tag) => tag.id === split.tag_id)?.name ?? "" : "",
+      person_id: split.person_id,
+      person_input: split.person_id ? people.find((person) => person.id === split.person_id)?.name ?? "" : "",
+      project_id: split.project_id,
+      project_input: split.project_id ? projects.find((project) => project.id === split.project_id)?.name ?? "" : "",
+      share_bps: split.share_bps,
       amount: formatAmountInput(split.amount_minor, split.commodity_id),
       memo: split.memo ?? ""
     }));
@@ -416,8 +463,8 @@
     if (!splitMode) {
       splitMode = true;
       formSplits = [
-        { account_id: formAccountId, category_id: formCategoryId, amount: formAmount, memo: "" },
-        { account_id: formTransferAccountId, category_id: null, amount: formAmount ? `-${formAmount}` : "", memo: "" }
+        { account_id: formAccountId, category_id: formCategoryId, category_input: formCategoryInput, tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: formAmount, memo: "" },
+        { account_id: formTransferAccountId, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: formAmount ? `-${formAmount}` : "", memo: "" }
       ];
     }
     splitEditorOpen = true;
@@ -428,7 +475,141 @@
   }
 
   function addSplitRow() {
-    formSplits = [...formSplits, { account_id: null, category_id: null, amount: "", memo: "" }];
+    formSplits = [...formSplits, { account_id: null, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" }];
+  }
+
+  function toNullableInt(value: number | string | null | undefined): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? Math.trunc(n) : null;
+  }
+
+  function normalizeName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  function fuzzyMatch(query: string, candidate: string): boolean {
+    const q = normalizeName(query);
+    if (!q) return true;
+    const c = normalizeName(candidate);
+    let cursor = 0;
+    for (const ch of c) {
+      if (ch === q[cursor]) {
+        cursor += 1;
+        if (cursor === q.length) return true;
+      }
+    }
+    return false;
+  }
+
+  function fuzzyOptions<T extends { id: number; name: string }>(items: T[], query: string): T[] {
+    return items.filter((item) => fuzzyMatch(query, item.name)).slice(0, 30);
+  }
+
+  function exactMatchByName<T extends { id: number; name: string }>(items: T[], query: string): T | undefined {
+    const needle = normalizeName(query);
+    if (!needle) return undefined;
+    return items.find((item) => normalizeName(item.name) === needle);
+  }
+
+  function syncTopLevelInput(kind: "payee" | "category", value: string) {
+    if (kind === "payee") {
+      formPayeeInput = value;
+      formPayeeId = exactMatchByName(payees, value)?.id ?? null;
+      return;
+    }
+    formCategoryInput = value;
+    formCategoryId = exactMatchByName(categories, value)?.id ?? null;
+  }
+
+  function syncSplitInput(
+    split: SplitDraft,
+    field: "category" | "tag" | "person" | "project",
+    value: string
+  ) {
+    if (field === "category") {
+      split.category_input = value;
+      split.category_id = exactMatchByName(categories, value)?.id ?? null;
+    } else if (field === "tag") {
+      split.tag_input = value;
+      split.tag_id = exactMatchByName(tags, value)?.id ?? null;
+    } else if (field === "person") {
+      split.person_input = value;
+      split.person_id = exactMatchByName(people, value)?.id ?? null;
+    } else {
+      split.project_input = value;
+      split.project_id = exactMatchByName(projects, value)?.id ?? null;
+    }
+    formSplits = [...formSplits];
+  }
+
+  async function ensureEntityId(
+    kind: "payee" | "category" | "tag" | "person" | "project",
+    value: string,
+    currentId: number | null
+  ): Promise<number | null> {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (currentId) return currentId;
+
+    if (kind === "payee") {
+      const existing = exactMatchByName(payees, trimmed);
+      if (existing) return existing.id;
+      if (!window.confirm(`Create new payee \"${trimmed}\"?`)) throw new Error("Payee creation cancelled");
+      const created = await invoke<Payee>("create_payee", {
+        input: { book_id: 1, name: trimmed, kind: "person", metadata: null }
+      });
+      payees = [...payees, created];
+      return created.id;
+    }
+
+    if (kind === "category") {
+      const existing = exactMatchByName(categories, trimmed);
+      if (existing) return existing.id;
+      if (!window.confirm(`Create new category \"${trimmed}\"?`)) throw new Error("Category creation cancelled");
+      const rawKind = (window.prompt("Category kind (income, expense, transfer, other)", "expense") ?? "")
+        .trim()
+        .toLowerCase();
+      const categoryKind = ["income", "expense", "transfer", "other"].includes(rawKind)
+        ? rawKind
+        : "expense";
+      const created = await invoke<Category>("create_category", {
+        input: { book_id: 1, parent_id: null, name: trimmed, kind: categoryKind, color: null }
+      });
+      categories = [...categories, created];
+      return created.id;
+    }
+
+    if (kind === "tag") {
+      const existing = exactMatchByName(tags, trimmed);
+      if (existing) return existing.id;
+      if (!window.confirm(`Create new tag \"${trimmed}\"?`)) throw new Error("Tag creation cancelled");
+      const created = await invoke<Tag>("create_tag", {
+        input: { book_id: 1, name: trimmed, color: null }
+      });
+      tags = [...tags, created];
+      return created.id;
+    }
+
+    if (kind === "person") {
+      const existing = exactMatchByName(people, trimmed);
+      if (existing) return existing.id;
+      if (!window.confirm(`Create new person \"${trimmed}\"?`)) throw new Error("Person creation cancelled");
+      const created = await invoke<Person>("create_person", {
+        input: { book_id: 1, name: trimmed, role: "member", metadata: null }
+      });
+      people = [...people, created];
+      return created.id;
+    }
+
+    const existing = exactMatchByName(projects, trimmed);
+    if (existing) return existing.id;
+    if (!window.confirm(`Create new project \"${trimmed}\"?`)) throw new Error("Project creation cancelled");
+    const created = await invoke<Project>("create_project", {
+      input: { book_id: 1, name: trimmed, status: "active", metadata: null }
+    });
+    projects = [...projects, created];
+    return created.id;
   }
 
   function removeSplitRow(index: number) {
@@ -449,16 +630,6 @@
       total += minor;
     }
     return total;
-  }
-
-  async function ensurePayeeId(): Promise<number | null> {
-    if (formPayeeId) return formPayeeId;
-    if (!formNewPayee.trim()) return null;
-    const created = await invoke<Payee>("create_payee", {
-      input: { book_id: 1, name: formNewPayee.trim(), kind: "person", metadata: null }
-    });
-    payees = [...payees, created];
-    return created.id;
   }
 
   async function ensureCategoryAccount(kind: string | null, commodityId: number): Promise<number> {
@@ -513,7 +684,7 @@
 
   async function buildSplitsForSubmit() {
     if (splitMode) {
-      return formSplits.map((split) => {
+      return Promise.all(formSplits.map(async (split) => {
         if (!split.account_id) {
           throw new Error("All splits need an account");
         }
@@ -529,14 +700,22 @@
         if (amount_minor === null) {
           throw new Error("Invalid amount format");
         }
+        const category_id = await ensureEntityId("category", split.category_input, split.category_id);
+        const tag_id = await ensureEntityId("tag", split.tag_input, split.tag_id);
+        const person_id = await ensureEntityId("person", split.person_input, split.person_id);
+        const project_id = await ensureEntityId("project", split.project_input, split.project_id);
         return {
           account_id: split.account_id,
           commodity_id: account.commodity_id,
           amount_minor,
-          category_id: split.category_id,
+          category_id,
+          tag_id: toNullableInt(tag_id),
+          person_id: toNullableInt(person_id),
+          project_id: toNullableInt(project_id),
+          share_bps: toNullableInt(split.share_bps),
           memo: split.memo || null
         };
-      });
+      }));
     }
 
     if (!formAccountId) {
@@ -556,7 +735,9 @@
     }
 
     let transferAccountId = formTransferAccountId;
-    const kind = categoryKind(formCategoryId);
+    const formCategoryResolved = await ensureEntityId("category", formCategoryInput, formCategoryId);
+    formCategoryId = formCategoryResolved;
+    const kind = categoryKind(formCategoryResolved);
     if (!transferAccountId) {
       if (kind && kind !== "transfer") {
         transferAccountId = await ensureCategoryAccount(kind, account.commodity_id);
@@ -574,7 +755,11 @@
         account_id: account.id,
         commodity_id: account.commodity_id,
         amount_minor,
-        category_id: formCategoryId,
+        category_id: formCategoryResolved,
+        tag_id: null,
+        person_id: null,
+        project_id: null,
+        share_bps: null,
         memo: null
       },
       {
@@ -582,6 +767,10 @@
         commodity_id: transferAccount.commodity_id,
         amount_minor: -amount_minor,
         category_id: null,
+        tag_id: null,
+        person_id: null,
+        project_id: null,
+        share_bps: null,
         memo: null
       }
     ];
@@ -592,7 +781,8 @@
     submitting = true;
     error = "";
     try {
-      const payeeId = await ensurePayeeId();
+      const payeeId = await ensureEntityId("payee", formPayeeInput, formPayeeId);
+      formPayeeId = payeeId;
       const splits = await buildSplitsForSubmit();
 
       const total = splits.reduce((sum, s) => sum + s.amount_minor, 0);
@@ -655,6 +845,10 @@
             commodity_id: split.commodity_id,
             amount_minor: split.amount_minor,
             category_id: split.category_id,
+            tag_id: split.tag_id,
+            person_id: split.person_id,
+            project_id: split.project_id,
+            share_bps: split.share_bps,
             memo: split.memo
           }))
         }
@@ -962,17 +1156,19 @@
 
           <div class="form-field">
             <label class="label" for="acct-tx-payee">Payee</label>
-            <select id="acct-tx-payee" class="select" bind:value={formPayeeId}>
-              <option value="">None</option>
-              {#each payees as payee}
-                <option value={payee.id}>{payee.name}</option>
+            <input
+              id="acct-tx-payee"
+              class="input"
+              list="acct-tx-payee-options"
+              placeholder="Search or enter payee"
+              value={formPayeeInput}
+              oninput={(event) => syncTopLevelInput("payee", (event.currentTarget as HTMLInputElement).value)}
+            />
+            <datalist id="acct-tx-payee-options">
+              {#each fuzzyOptions(payees, formPayeeInput) as payee}
+                <option value={payee.name}></option>
               {/each}
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label class="label" for="acct-tx-new-payee">New payee (optional)</label>
-            <input id="acct-tx-new-payee" class="input" placeholder="Create payee" bind:value={formNewPayee} />
+            </datalist>
           </div>
 
           <div class="form-field">
@@ -987,12 +1183,20 @@
 
           <div class="form-field">
             <label class="label" for="acct-tx-category">Category</label>
-            <select id="acct-tx-category" class="select" bind:value={formCategoryId} disabled={splitMode}>
-              <option value="">None</option>
-              {#each categories as category}
-                <option value={category.id}>{category.name}</option>
+            <input
+              id="acct-tx-category"
+              class="input"
+              list="acct-tx-category-options"
+              placeholder="Search or enter category"
+              value={formCategoryInput}
+              oninput={(event) => syncTopLevelInput("category", (event.currentTarget as HTMLInputElement).value)}
+              disabled={splitMode}
+            />
+            <datalist id="acct-tx-category-options">
+              {#each fuzzyOptions(categories, formCategoryInput) as category}
+                <option value={category.name}></option>
               {/each}
-            </select>
+            </datalist>
           </div>
 
           <div class="form-field">
@@ -1040,6 +1244,10 @@
             <div class="data-row header">
               <div class="data-cell heading">Account</div>
               <div class="data-cell heading">Category</div>
+              <div class="data-cell heading">Tag</div>
+              <div class="data-cell heading">Person</div>
+              <div class="data-cell heading">Project</div>
+              <div class="data-cell heading">Share (bps)</div>
               <div class="data-cell heading amount">Amount</div>
               <div class="data-cell heading">Memo</div>
               <div class="data-cell heading action">Action</div>
@@ -1055,12 +1263,63 @@
                   </select>
                 </div>
                 <div class="data-cell">
-                  <select class="select" bind:value={split.category_id}>
-                    <option value="">None</option>
-                    {#each categories as category}
-                      <option value={category.id}>{category.name}</option>
+                  <input
+                    class="input"
+                    list={`acct-split-category-options-${idx}`}
+                    placeholder="Search/enter category"
+                    value={split.category_input}
+                    oninput={(event) => syncSplitInput(split, "category", (event.currentTarget as HTMLInputElement).value)}
+                  />
+                  <datalist id={`acct-split-category-options-${idx}`}>
+                    {#each fuzzyOptions(categories, split.category_input) as category}
+                      <option value={category.name}></option>
                     {/each}
-                  </select>
+                  </datalist>
+                </div>
+                <div class="data-cell">
+                  <input
+                    class="input"
+                    list={`acct-split-tag-options-${idx}`}
+                    placeholder="Search/enter tag"
+                    value={split.tag_input}
+                    oninput={(event) => syncSplitInput(split, "tag", (event.currentTarget as HTMLInputElement).value)}
+                  />
+                  <datalist id={`acct-split-tag-options-${idx}`}>
+                    {#each fuzzyOptions(tags, split.tag_input) as tag}
+                      <option value={tag.name}></option>
+                    {/each}
+                  </datalist>
+                </div>
+                <div class="data-cell">
+                  <input
+                    class="input"
+                    list={`acct-split-person-options-${idx}`}
+                    placeholder="Search/enter person"
+                    value={split.person_input}
+                    oninput={(event) => syncSplitInput(split, "person", (event.currentTarget as HTMLInputElement).value)}
+                  />
+                  <datalist id={`acct-split-person-options-${idx}`}>
+                    {#each fuzzyOptions(people, split.person_input) as person}
+                      <option value={person.name}></option>
+                    {/each}
+                  </datalist>
+                </div>
+                <div class="data-cell">
+                  <input
+                    class="input"
+                    list={`acct-split-project-options-${idx}`}
+                    placeholder="Search/enter project"
+                    value={split.project_input}
+                    oninput={(event) => syncSplitInput(split, "project", (event.currentTarget as HTMLInputElement).value)}
+                  />
+                  <datalist id={`acct-split-project-options-${idx}`}>
+                    {#each fuzzyOptions(projects, split.project_input) as project}
+                      <option value={project.name}></option>
+                    {/each}
+                  </datalist>
+                </div>
+                <div class="data-cell">
+                  <input class="input" type="number" bind:value={split.share_bps} placeholder="e.g. 5000" />
                 </div>
                 <div class="data-cell amount">
                   <input class="input" bind:value={split.amount} placeholder="0.00" />

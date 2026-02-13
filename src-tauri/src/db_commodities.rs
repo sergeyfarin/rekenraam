@@ -31,6 +31,18 @@ pub struct CommodityRenameInput {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct CommodityAutocompleteOption {
+    pub id: i64,
+    pub book_id: i64,
+    pub kind: String,
+    pub symbol: Option<String>,
+    pub name: String,
+    pub is_active: bool,
+    pub is_default: bool,
+    pub score: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CorporateAction {
     pub id: i64,
     pub book_id: i64,
@@ -628,7 +640,9 @@ pub fn list_commodities(db: State<DbState>, book_id: i64) -> Result<Vec<Commodit
     let mut stmt = conn
         .prepare(
             "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at, updated_at
-             FROM commodities WHERE book_id = ?1 ORDER BY name ASC",
+                         FROM current_commodities c
+                         WHERE c.book_id = ?1
+                         ORDER BY c.name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -642,6 +656,86 @@ pub fn list_commodities(db: State<DbState>, book_id: i64) -> Result<Vec<Commodit
     }
 
     Ok(commodities)
+}
+
+#[command]
+pub fn autocomplete_commodities(
+    db: State<DbState>,
+    book_id: i64,
+    query: String,
+    limit: Option<i64>,
+    active_only: Option<bool>,
+) -> Result<Vec<CommodityAutocompleteOption>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
+
+    let normalized = query.trim().to_lowercase();
+    let max_results = limit.unwrap_or(12).clamp(1, 50);
+    let active_only_flag = if active_only.unwrap_or(false) { 1 } else { 0 };
+
+    let sql = "
+        SELECT
+          c.id,
+          c.book_id,
+          c.kind,
+          c.symbol,
+          c.name,
+          c.is_active,
+          c.is_default,
+          CASE
+            WHEN lower(ifnull(c.symbol, '')) = ?2 THEN 120
+            WHEN lower(c.name) = ?2 THEN 110
+            WHEN lower(ifnull(c.symbol, '')) LIKE ?3 THEN 100
+            WHEN lower(c.name) LIKE ?3 THEN 90
+            WHEN instr(lower(ifnull(c.symbol, '')), ?2) > 0 THEN 70
+            WHEN instr(lower(c.name), ?2) > 0 THEN 60
+            ELSE 10
+          END AS score
+        FROM current_commodities c
+        WHERE c.book_id = ?1
+          AND (?6 = 0 OR c.is_active = 1)
+          AND (
+            ?2 = ''
+            OR lower(ifnull(c.symbol, '')) LIKE ?4
+            OR lower(c.name) LIKE ?4
+          )
+        ORDER BY score DESC, c.is_default DESC, c.is_active DESC, length(ifnull(c.symbol, c.name)) ASC, c.name ASC
+        LIMIT ?5";
+
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(
+            params![
+                book_id,
+                normalized,
+                format!("{}%", normalized),
+                format!("%{}%", normalized),
+                max_results,
+                active_only_flag,
+            ],
+            |row| {
+                Ok(CommodityAutocompleteOption {
+                    id: row.get(0)?,
+                    book_id: row.get(1)?,
+                    kind: row.get(2)?,
+                    symbol: row.get(3)?,
+                    name: row.get(4)?,
+                    is_active: row.get::<_, i64>(5)? != 0,
+                    is_default: row.get::<_, i64>(6)? != 0,
+                    score: row.get(7)?,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut options = Vec::new();
+    for row in rows {
+        options.push(row.map_err(|e| e.to_string())?);
+    }
+
+    Ok(options)
 }
 
 #[command]
@@ -671,13 +765,48 @@ pub fn rename_commodity(db: State<DbState>, input: CommodityRenameInput) -> Resu
 
     let book_id = SINGLE_BOOK_ID;
 
+    let source = conn
+        .query_row(
+            "SELECT id, book_id, kind, scale, is_active, is_default, display_symbol
+                         FROM current_commodities c
+                         WHERE c.id = ?1 AND c.book_id = ?2",
+            params![input.id, book_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let (source_id, source_book_id, source_kind, source_scale, source_is_active, source_is_default, source_display_symbol) =
+        source.ok_or_else(|| "commodity not found or not current".to_string())?;
+
     let rows = conn
         .execute(
-            "UPDATE commodities
-             SET symbol = ?2, name = ?3, metadata = ?4,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1 AND book_id = ?5",
-            params![input.id, input.symbol, input.name, input.metadata, book_id],
+            "INSERT INTO commodities
+              (book_id, kind, symbol, name, scale, is_active, is_default, display_symbol, metadata, previous_commodity_id, created_at, updated_at)
+             VALUES
+              (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![
+                source_book_id,
+                source_kind,
+                input.symbol,
+                input.name,
+                source_scale,
+                source_is_active,
+                source_is_default,
+                source_display_symbol,
+                input.metadata,
+                source_id
+            ],
         )
         .map_err(|e| e.to_string())?;
 
@@ -685,11 +814,13 @@ pub fn rename_commodity(db: State<DbState>, input: CommodityRenameInput) -> Resu
         return Err("commodity not found".to_string());
     }
 
+    let new_id = conn.last_insert_rowid();
+
     let commodity = conn
         .query_row(
             "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at, updated_at
              FROM commodities WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_commodity_row,
         )
         .map_err(|e| e.to_string())?;
@@ -712,7 +843,13 @@ pub fn list_corporate_actions(
         let mut stmt = conn
             .prepare(
                 "SELECT id, book_id, commodity_id, kind, ratio_num, ratio_den, effective_date, memo, tx_id, created_at
-                 FROM corporate_actions WHERE book_id = ?1 AND commodity_id = ?2
+                 FROM corporate_actions
+                 WHERE book_id = ?1
+                   AND commodity_id = ?2
+                   AND NOT EXISTS (
+                       SELECT 1 FROM corporate_actions newer
+                       WHERE newer.previous_corporate_action_id = corporate_actions.id
+                   )
                  ORDER BY effective_date DESC, id DESC",
             )
             .map_err(|e| e.to_string())?;
@@ -729,7 +866,12 @@ pub fn list_corporate_actions(
     let mut stmt = conn
         .prepare(
             "SELECT id, book_id, commodity_id, kind, ratio_num, ratio_den, effective_date, memo, tx_id, created_at
-             FROM corporate_actions WHERE book_id = ?1
+             FROM corporate_actions
+             WHERE book_id = ?1
+               AND NOT EXISTS (
+                   SELECT 1 FROM corporate_actions newer
+                   WHERE newer.previous_corporate_action_id = corporate_actions.id
+               )
              ORDER BY effective_date DESC, id DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -863,8 +1005,14 @@ pub fn apply_corporate_action_split_merge(
             }
 
             tx.execute(
-                "INSERT INTO corporate_actions (book_id, commodity_id, kind, ratio_num, ratio_den, effective_date, memo, tx_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                     "INSERT INTO corporate_actions (
+                          book_id, commodity_id, kind, ratio_num, ratio_den, effective_date, memo, tx_id,
+                          previous_corporate_action_id, session_id, created_at, updated_at
+                      )
+                      VALUES (
+                          ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                          NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                      )",
                 params![
                     book_id,
                     input.commodity_id,
@@ -1999,8 +2147,8 @@ pub fn create_price_source(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
     conn.execute(
-        "INSERT INTO price_sources (name, kind, provider, base_url, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO price_sources (name, kind, provider, base_url, previous_price_source_id, session_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![input.name, input.kind, input.provider, input.base_url],
     )
     .map_err(|e| e.to_string())?;
@@ -2019,19 +2167,30 @@ pub fn create_price_source(
 }
 
 #[command]
-pub fn list_price_sources(db: State<DbState>) -> Result<Vec<PriceSource>, String> {
+pub fn list_price_sources(
+    db: State<DbState>,
+    as_of_timestamp: Option<String>,
+) -> Result<Vec<PriceSource>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
             "SELECT id, name, kind, provider, base_url, created_at, updated_at
-             FROM price_sources ORDER BY name ASC",
+             FROM price_sources
+                         WHERE (?1 IS NULL OR price_sources.created_at <= ?1)
+                             AND NOT EXISTS (
+                                     SELECT 1
+                                     FROM price_sources newer
+                                     WHERE newer.previous_price_source_id = price_sources.id
+                                         AND (?1 IS NULL OR newer.created_at <= ?1)
+                             )
+             ORDER BY name ASC",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([], map_price_source_row)
+                .query_map(params![as_of_timestamp], map_price_source_row)
         .map_err(|e| e.to_string())?;
 
     let mut sources = Vec::new();
@@ -2043,6 +2202,49 @@ pub fn list_price_sources(db: State<DbState>) -> Result<Vec<PriceSource>, String
 }
 
 #[command]
+pub fn get_price_source(
+    db: State<DbState>,
+    id: i64,
+    as_of_timestamp: Option<String>,
+) -> Result<Option<PriceSource>, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let source = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT p.previous_price_source_id
+                 FROM price_sources p
+                 JOIN chain c ON p.id = c.id
+                 WHERE p.previous_price_source_id IS NOT NULL
+                 UNION
+                 SELECT p.id
+                 FROM price_sources p
+                 JOIN chain c ON p.previous_price_source_id = c.id
+             )
+             SELECT id, name, kind, provider, base_url, created_at, updated_at
+             FROM price_sources
+             WHERE id IN chain
+               AND (?2 IS NULL OR created_at <= ?2)
+               AND NOT EXISTS (
+                   SELECT 1 FROM price_sources newer
+                   WHERE newer.previous_price_source_id = price_sources.id
+                     AND newer.id IN chain
+                     AND (?2 IS NULL OR newer.created_at <= ?2)
+               )
+             LIMIT 1",
+            params![id, as_of_timestamp],
+            map_price_source_row,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    Ok(source)
+}
+
+#[command]
 pub fn update_price_source(
     db: State<DbState>,
     input: PriceSourceUpdate,
@@ -2050,25 +2252,50 @@ pub fn update_price_source(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let rows = conn
-        .execute(
-            "UPDATE price_sources
-             SET name = ?2, kind = ?3, provider = ?4, base_url = ?5,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![input.id, input.name, input.kind, input.provider, input.base_url],
+    let current_id: Option<i64> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION ALL
+                 SELECT p.id
+                 FROM price_sources p
+                 JOIN chain c ON p.previous_price_source_id = c.id
+             )
+             SELECT c.id
+             FROM chain c
+             WHERE NOT EXISTS (SELECT 1 FROM price_sources newer WHERE newer.previous_price_source_id = c.id)
+             LIMIT 1",
+            [input.id],
+            |row| row.get(0),
         )
+        .optional()
         .map_err(|e| e.to_string())?;
 
-    if rows == 0 {
-        return Err("price source not found".to_string());
-    }
+    let current_id = match current_id {
+        Some(id) => id,
+        None => {
+            return Err("price source not found".to_string());
+        }
+    };
+
+    conn.execute(
+        "INSERT INTO price_sources (
+            name, kind, provider, base_url, previous_price_source_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![input.name, input.kind, input.provider, input.base_url, current_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
 
     let source = conn
         .query_row(
             "SELECT id, name, kind, provider, base_url, created_at, updated_at
              FROM price_sources WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_price_source_row,
         )
         .map_err(|e| e.to_string())?;
@@ -2078,12 +2305,20 @@ pub fn update_price_source(
 
 #[command]
 pub fn delete_price_source(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    let rows = conn
-        .execute("DELETE FROM price_sources WHERE id = ?1", [id])
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM price_sources WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
         .map_err(|e| e.to_string())?;
-    Ok(rows > 0)
+    if exists.is_none() {
+        return Ok(false);
+    }
+    Err("delete_price_source is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -2096,8 +2331,8 @@ pub fn create_commodity_price_source(
     let is_primary = if input.is_primary { 1 } else { 0 };
 
     conn.execute(
-        "INSERT INTO commodity_price_sources (commodity_id, source_id, symbol, name_override, is_primary, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO commodity_price_sources (commodity_id, source_id, symbol, name_override, is_primary, previous_commodity_price_source_id, session_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             input.commodity_id,
             input.source_id,
@@ -2125,6 +2360,7 @@ pub fn create_commodity_price_source(
 pub fn list_commodity_price_sources(
     db: State<DbState>,
     commodity_id: i64,
+    as_of_timestamp: Option<String>,
 ) -> Result<Vec<CommodityPriceSource>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
@@ -2132,13 +2368,21 @@ pub fn list_commodity_price_sources(
     let mut stmt = conn
         .prepare(
             "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at, updated_at
-             FROM commodity_price_sources WHERE commodity_id = ?1
+             FROM commodity_price_sources
+             WHERE commodity_id = ?1
+                             AND (?2 IS NULL OR commodity_price_sources.created_at <= ?2)
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM commodity_price_sources newer
+                   WHERE newer.previous_commodity_price_source_id = commodity_price_sources.id
+                                         AND (?2 IS NULL OR newer.created_at <= ?2)
+               )
              ORDER BY is_primary DESC, symbol ASC",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([commodity_id], map_commodity_price_source_row)
+                .query_map(params![commodity_id, as_of_timestamp], map_commodity_price_source_row)
         .map_err(|e| e.to_string())?;
 
     let mut mappings = Vec::new();
@@ -2158,32 +2402,59 @@ pub fn update_commodity_price_source(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let is_primary = if input.is_primary { 1 } else { 0 };
 
-    let rows = conn
-        .execute(
-            "UPDATE commodity_price_sources
-             SET commodity_id = ?2, source_id = ?3, symbol = ?4, name_override = ?5, is_primary = ?6,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![
-                input.id,
-                input.commodity_id,
-                input.source_id,
-                input.symbol,
-                input.name_override,
-                is_primary,
-            ],
+    let current_id: Option<i64> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION ALL
+                 SELECT cps.id
+                 FROM commodity_price_sources cps
+                 JOIN chain c ON cps.previous_commodity_price_source_id = c.id
+             )
+             SELECT c.id
+             FROM chain c
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM commodity_price_sources newer WHERE newer.previous_commodity_price_source_id = c.id
+             )
+             LIMIT 1",
+            [input.id],
+            |row| row.get(0),
         )
+        .optional()
         .map_err(|e| e.to_string())?;
 
-    if rows == 0 {
-        return Err("commodity price source not found".to_string());
-    }
+    let current_id = match current_id {
+        Some(id) => id,
+        None => return Err("commodity price source not found".to_string()),
+    };
+
+    conn.execute(
+        "INSERT INTO commodity_price_sources (
+            commodity_id, source_id, symbol, name_override, is_primary,
+            previous_commodity_price_source_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            input.commodity_id,
+            input.source_id,
+            input.symbol,
+            input.name_override,
+            is_primary,
+            current_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
 
     let mapping = conn
         .query_row(
             "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at, updated_at
              FROM commodity_price_sources WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_commodity_price_source_row,
         )
         .map_err(|e| e.to_string())?;
@@ -2193,12 +2464,20 @@ pub fn update_commodity_price_source(
 
 #[command]
 pub fn delete_commodity_price_source(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    let rows = conn
-        .execute("DELETE FROM commodity_price_sources WHERE id = ?1", [id])
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM commodity_price_sources WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
         .map_err(|e| e.to_string())?;
-    Ok(rows > 0)
+    if exists.is_none() {
+        return Ok(false);
+    }
+    Err("delete_commodity_price_source is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -2238,7 +2517,12 @@ pub fn add_implicit_price(db: State<DbState>, tx_id: i64) -> Result<Option<Commo
 
     let base_commodity_id: Option<i64> = conn
         .query_row(
-            "SELECT base_commodity_id FROM books WHERE id = ?1",
+            "SELECT id
+             FROM current_commodities c
+             WHERE c.book_id = ?1
+               AND c.kind = 'currency'
+               AND c.is_default = 1
+             LIMIT 1",
             [SINGLE_BOOK_ID],
             |row| row.get(0),
         )
@@ -3065,7 +3349,7 @@ mod tests {
         )
         .expect("create second price source");
 
-        let list = list_price_sources(as_state(&db_state)).expect("list price sources");
+        let list = list_price_sources(as_state(&db_state), None).expect("list price sources");
         assert!(list.len() >= 2);
         assert!(list.iter().any(|s| s.name == "Alpha"));
         assert!(list.iter().any(|s| s.name == "Beta"));
@@ -3102,7 +3386,7 @@ mod tests {
             .expect("delete price source");
         assert!(deleted);
 
-        let list_after = list_price_sources(as_state(&db_state)).expect("list after delete");
+        let list_after = list_price_sources(as_state(&db_state), None).expect("list after delete");
         assert!(list_after.iter().any(|s| s.id == alpha.id));
     }
 
@@ -3152,7 +3436,7 @@ mod tests {
         )
         .expect("create secondary mapping");
 
-        let list = list_commodity_price_sources(as_state(&db_state), commodity_id)
+        let list = list_commodity_price_sources(as_state(&db_state), commodity_id, None)
             .expect("list commodity price sources");
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].id, primary.id);
@@ -3193,7 +3477,7 @@ mod tests {
             .expect("delete commodity price source");
         assert!(deleted);
 
-        let list_after = list_commodity_price_sources(as_state(&db_state), commodity_id)
+        let list_after = list_commodity_price_sources(as_state(&db_state), commodity_id, None)
             .expect("list after delete");
         assert_eq!(list_after.len(), 1);
         assert_eq!(list_after[0].id, secondary.id);
@@ -3269,5 +3553,37 @@ mod tests {
         assert_eq!(sell.allocations.len(), 1);
         assert_eq!(sell.allocations[0].lot_id, second_buy.lot_id.unwrap());
         assert_ne!(sell.allocations[0].lot_id, first_buy.lot_id.unwrap());
+    }
+
+    #[test]
+    fn test_autocomplete_commodities_fuzzy_symbol_and_name() {
+        let db_state = create_temp_db();
+
+        {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let _stock_id = create_stock_commodity(conn);
+        }
+
+        let by_symbol = autocomplete_commodities(
+            as_state(&db_state),
+            1,
+            "usd".to_string(),
+            Some(10),
+            Some(false),
+        )
+        .expect("autocomplete by symbol");
+        assert!(!by_symbol.is_empty());
+        assert_eq!(by_symbol[0].symbol.as_deref(), Some("USD"));
+
+        let by_name = autocomplete_commodities(
+            as_state(&db_state),
+            1,
+            "acm".to_string(),
+            Some(10),
+            Some(false),
+        )
+        .expect("autocomplete by name");
+        assert!(by_name.iter().any(|item| item.name == "ACME Corp"));
     }
 }

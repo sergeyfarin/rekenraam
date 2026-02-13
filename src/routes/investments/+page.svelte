@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { autocompleteCommodities, type CommodityAutocompleteOption } from "$lib/api/commodities";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -91,6 +92,10 @@
 
   // Buy/Sell dialog
   let showTradeDialog = false;
+  let tradeSecurityQuery = "";
+  let tradeSecuritySuggestions: CommodityAutocompleteOption[] = [];
+  let tradeSecuritySearching = false;
+  let tradeSecurityDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let tradeType: "buy" | "sell" = "buy";
   let tradeForm = {
     txn_date: "",
@@ -205,6 +210,8 @@
       cash_amount: "",
       memo: "",
     };
+    tradeSecurityQuery = "";
+    tradeSecuritySuggestions = [];
     showTradeDialog = true;
   }
 
@@ -219,11 +226,61 @@
       cash_amount: "",
       memo: "",
     };
+    tradeSecurityQuery = "";
+    tradeSecuritySuggestions = [];
     showTradeDialog = true;
   }
 
   function closeTradeDialog() {
+    if (tradeSecurityDebounceTimer) {
+      clearTimeout(tradeSecurityDebounceTimer);
+      tradeSecurityDebounceTimer = null;
+    }
+    tradeSecuritySuggestions = [];
     showTradeDialog = false;
+  }
+
+  async function loadTradeSecuritySuggestions(query: string) {
+    if (!query.trim()) {
+      tradeSecuritySuggestions = [];
+      return;
+    }
+
+    const securityIds = new Set(securities.map((item) => item.id));
+
+    tradeSecuritySearching = true;
+    try {
+      const options = await autocompleteCommodities({
+        query,
+        limit: 8,
+        activeOnly: true,
+        minQueryLength: 1,
+      });
+      tradeSecuritySuggestions = options.filter((item) => securityIds.has(item.id));
+    } catch (e) {
+      error = `Failed to search securities: ${String(e)}`;
+      tradeSecuritySuggestions = [];
+    } finally {
+      tradeSecuritySearching = false;
+    }
+  }
+
+  function onTradeSecurityInput(event: Event) {
+    const target = event.currentTarget as HTMLInputElement;
+    tradeSecurityQuery = target.value;
+
+    if (tradeSecurityDebounceTimer) {
+      clearTimeout(tradeSecurityDebounceTimer);
+    }
+    tradeSecurityDebounceTimer = setTimeout(() => {
+      void loadTradeSecuritySuggestions(tradeSecurityQuery);
+    }, 250);
+  }
+
+  function chooseTradeSecurity(option: CommodityAutocompleteOption) {
+    tradeForm.commodity_id = option.id;
+    tradeSecurityQuery = option.symbol ? `${option.symbol} — ${option.name}` : option.name;
+    tradeSecuritySuggestions = [];
   }
 
   async function submitTrade() {
@@ -359,6 +416,13 @@
   $: incomeAccounts = accounts.filter((a) => a.type === "income");
   $: securities = commodities.filter((c) => c.kind === "security" || c.kind === "stock" || c.kind === "mutual_fund");
   $: currencies = commodities.filter((c) => c.kind === "currency");
+  $: selectedTradeSecurity = securities.find((c) => c.id === tradeForm.commodity_id) ?? null;
+
+  onDestroy(() => {
+    if (tradeSecurityDebounceTimer) {
+      clearTimeout(tradeSecurityDebounceTimer);
+    }
+  });
 </script>
 
 <main class="py-6">
@@ -566,13 +630,29 @@
         </select>
       </div>
       <div class="space-y-2">
-        <Label for="trade-security">Security</Label>
-        <select id="trade-security" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={tradeForm.commodity_id}>
+        <Label for="trade-security-search">Security</Label>
+        <Input id="trade-security-search" value={tradeSecurityQuery} oninput={onTradeSecurityInput} placeholder="Type symbol or name..." />
+        {#if tradeSecuritySearching}
+          <p class="text-xs text-muted-foreground">Searching…</p>
+        {/if}
+        {#if tradeSecuritySuggestions.length > 0}
+          <div class="max-h-40 overflow-auto rounded-md border border-input">
+            {#each tradeSecuritySuggestions as option}
+              <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-accent" onclick={() => chooseTradeSecurity(option)}>
+                {option.symbol ? `${option.symbol} — ${option.name}` : option.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+        <select id="trade-security-select" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={tradeForm.commodity_id}>
           <option value={null}>Select security...</option>
           {#each securities as c}
             <option value={c.id}>{c.symbol || c.name}</option>
           {/each}
         </select>
+        {#if selectedTradeSecurity}
+          <p class="text-xs text-muted-foreground">Selected: {selectedTradeSecurity.symbol || selectedTradeSecurity.name}</p>
+        {/if}
       </div>
       <div class="space-y-2">
         <Label for="trade-quantity">Quantity</Label>

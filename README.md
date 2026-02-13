@@ -82,3 +82,15 @@ Current schema version (as of this commit): 17.
 
 
 add a small frontend action in Settings/Year-End that calls close_fiscal_year and shows the resulting closing transaction id + retained earnings delta.
+
+
+
+Checked V1__init.sql for tables that lack append-only immutability guards (no BEFORE UPDATE/DELETE trigger that aborts writes, unlike the section starting at V1__init.sql:2293).
+
+account_balancings, account_directives, app_runtime_session, backup_settings, balance_checks, balance_constraints, book_state, books
+commodity_prices, corporate_actions, countries, currencies, dividend_income_categories, documents, events
+fx_rate_refresh_state, fx_rate_settings, fx_rate_source_assignments, fx_rate_sources, fx_rates_daily, fx_rates_official
+import_rules, import_session_transactions, import_sessions, institutions, notes, pad_directives
+report_cache, report_definitions, report_runs, schema_migrations, session_redo_stack, session_reverts, session_undo_stack
+split_lot_allocations, split_people, split_projects, split_tags
+If you want, I can also generate the inverse list (tables that are immutable-enforced) as a quick verification checklist.

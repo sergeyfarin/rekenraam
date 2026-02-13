@@ -34,6 +34,10 @@ pub struct Split {
     pub commodity_id: i64,
     pub amount_minor: i64,
     pub category_id: Option<i64>,
+    pub tag_id: Option<i64>,
+    pub person_id: Option<i64>,
+    pub project_id: Option<i64>,
+    pub share_bps: Option<i64>,
     pub memo: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -51,6 +55,10 @@ pub struct CreateSplit {
     pub commodity_id: i64,
     pub amount_minor: i64,
     pub category_id: Option<i64>,
+    pub tag_id: Option<i64>,
+    pub person_id: Option<i64>,
+    pub project_id: Option<i64>,
+    pub share_bps: Option<i64>,
     pub memo: Option<String>,
 }
 
@@ -172,9 +180,13 @@ fn map_split_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Split> {
         commodity_id: row.get(3)?,
         amount_minor: row.get(4)?,
         category_id: row.get(5)?,
-        memo: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        tag_id: row.get(6)?,
+        person_id: row.get(7)?,
+        project_id: row.get(8)?,
+        share_bps: row.get(9)?,
+        memo: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }
 
@@ -546,7 +558,7 @@ fn fetch_transaction_with_splits(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at
+            "SELECT id, tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at, updated_at
              FROM splits WHERE tx_id = ?1 ORDER BY id ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -572,8 +584,15 @@ fn check_account_locks(
     for account_id in account_ids {
         let lock_date: Option<String> = conn
             .query_row(
-                "SELECT as_of_date FROM account_balancings
-                 WHERE account_id = ?1 AND voided_at IS NULL AND as_of_date >= ?2
+                "SELECT ab.as_of_date
+                 FROM account_balancings ab
+                 WHERE ab.account_id = ?1
+                   AND ab.voided_at IS NULL
+                   AND ab.as_of_date >= ?2
+                   AND NOT EXISTS (
+                       SELECT 1 FROM account_balancings newer
+                       WHERE newer.previous_account_balancing_id = ab.id
+                   )
                  ORDER BY as_of_date ASC LIMIT 1",
                 params![account_id, txn_date],
                 |row| row.get(0),
@@ -663,14 +682,18 @@ pub fn create_transaction_with_splits(
 
     for split in &input.splits {
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 tx_id,
                 split.account_id,
                 split.commodity_id,
                 split.amount_minor,
                 split.category_id,
+                split.tag_id,
+                split.person_id,
+                split.project_id,
+                split.share_bps,
                 split.memo,
             ],
         )
@@ -870,14 +893,18 @@ pub fn update_transaction_with_splits(
 
     for split in &input.splits {
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 new_tx_id,
                 split.account_id,
                 split.commodity_id,
                 split.amount_minor,
                 split.category_id,
+                split.tag_id,
+                split.person_id,
+                split.project_id,
+                split.share_bps,
                 split.memo,
             ],
         )
@@ -1171,6 +1198,10 @@ mod tests {
                         commodity_id,
                         amount_minor: -5000,
                         category_id: None,
+                        tag_id: None,
+                        person_id: None,
+                        project_id: None,
+                        share_bps: None,
                         memo: None,
                     },
                     CreateSplit {
@@ -1178,6 +1209,10 @@ mod tests {
                         commodity_id,
                         amount_minor: 5000,
                         category_id: None,
+                        tag_id: None,
+                        person_id: None,
+                        project_id: None,
+                        share_bps: None,
                         memo: None,
                     },
                 ],
@@ -1216,6 +1251,10 @@ mod tests {
                         commodity_id,
                         amount_minor: -7000,
                         category_id: None,
+                        tag_id: None,
+                        person_id: None,
+                        project_id: None,
+                        share_bps: None,
                         memo: None,
                     },
                     CreateSplit {
@@ -1223,6 +1262,10 @@ mod tests {
                         commodity_id,
                         amount_minor: 7000,
                         category_id: None,
+                        tag_id: None,
+                        person_id: None,
+                        project_id: None,
+                        share_bps: None,
                         memo: None,
                     },
                 ],

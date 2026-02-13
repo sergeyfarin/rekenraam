@@ -10,12 +10,14 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 CREATE TABLE IF NOT EXISTS books (
   id                INTEGER PRIMARY KEY,
+  previous_book_id  INTEGER,
+  session_id        TEXT,
   name              TEXT NOT NULL,
   kind              TEXT NOT NULL CHECK (kind IN ('personal', 'business')),
   base_commodity_id INTEGER,
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  UNIQUE(name)
+  FOREIGN KEY(previous_book_id) REFERENCES books(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS commodities (
@@ -39,13 +41,22 @@ CREATE TABLE IF NOT EXISTS commodities (
   is_default INTEGER NOT NULL DEFAULT 0,
   display_symbol TEXT,
   metadata   TEXT,
+  previous_commodity_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, kind, symbol, name)
+  FOREIGN KEY(previous_commodity_id) REFERENCES commodities(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_commodities_book_kind ON commodities(book_id, kind);
+CREATE INDEX IF NOT EXISTS idx_commodities_previous ON commodities(previous_commodity_id);
+
+CREATE VIEW IF NOT EXISTS current_commodities AS
+SELECT c.*
+FROM commodities c
+WHERE NOT EXISTS (
+  SELECT 1 FROM commodities newer WHERE newer.previous_commodity_id = c.id
+);
 
 CREATE TABLE IF NOT EXISTS commodity_prices (
   id                 INTEGER PRIMARY KEY,
@@ -115,10 +126,12 @@ CREATE TABLE IF NOT EXISTS people (
   name       TEXT NOT NULL,
   role       TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member','owner','employee','other')),
   metadata   TEXT,
+  previous_person_id INTEGER,
+  session_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(previous_person_id) REFERENCES people(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -127,16 +140,20 @@ CREATE TABLE IF NOT EXISTS projects (
   name       TEXT NOT NULL,
   status     TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
   metadata   TEXT,
+  previous_project_id INTEGER,
+  session_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(previous_project_id) REFERENCES projects(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS accounts (
   id           INTEGER PRIMARY KEY,
   book_id      INTEGER NOT NULL,
   parent_id    INTEGER,
+  previous_account_id INTEGER,
+  session_id   TEXT,
   type         TEXT NOT NULL CHECK (type IN (
     'cash', 'checking', 'savings',
     'credit', 'loan',
@@ -160,10 +177,10 @@ CREATE TABLE IF NOT EXISTS accounts (
   updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(parent_id) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY(previous_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE RESTRICT,
   FOREIGN KEY(institution_id) REFERENCES institutions(id),
-  FOREIGN KEY(country_id) REFERENCES countries(id),
-  UNIQUE(book_id, parent_id, name)
+  FOREIGN KEY(country_id) REFERENCES countries(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_accounts_book_type ON accounts(book_id, type);
@@ -239,52 +256,41 @@ END;
 CREATE TABLE IF NOT EXISTS splits (
   id            INTEGER PRIMARY KEY,
   tx_id         INTEGER NOT NULL,
+  previous_split_id INTEGER,
+  session_id    TEXT,
   account_id    INTEGER NOT NULL,
   commodity_id  INTEGER NOT NULL,
   amount_minor  INTEGER NOT NULL,
   category_id   INTEGER,
+  tag_id        INTEGER,
+  person_id     INTEGER,
+  project_id    INTEGER,
+  share_bps     INTEGER,
   memo          TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY(previous_split_id) REFERENCES splits(id) ON DELETE SET NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE RESTRICT,
-  FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE SET NULL
+  FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE SET NULL,
+  FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE SET NULL,
+  FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE SET NULL,
+  FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_splits_tx ON splits(tx_id);
 CREATE INDEX IF NOT EXISTS idx_splits_account ON splits(account_id);
 CREATE INDEX IF NOT EXISTS idx_splits_category ON splits(category_id);
-
-CREATE TABLE IF NOT EXISTS split_tags (
-  split_id INTEGER NOT NULL,
-  tag_id   INTEGER NOT NULL,
-  PRIMARY KEY(split_id, tag_id),
-  FOREIGN KEY(split_id) REFERENCES splits(id) ON DELETE CASCADE,
-  FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS split_people (
-  split_id     INTEGER NOT NULL,
-  person_id    INTEGER NOT NULL,
-  share_bps    INTEGER,
-  PRIMARY KEY(split_id, person_id),
-  FOREIGN KEY(split_id) REFERENCES splits(id) ON DELETE CASCADE,
-  FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS split_projects (
-  split_id   INTEGER NOT NULL,
-  project_id INTEGER NOT NULL,
-  share_bps  INTEGER,
-  PRIMARY KEY(split_id, project_id),
-  FOREIGN KEY(split_id) REFERENCES splits(id) ON DELETE CASCADE,
-  FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
-);
+CREATE INDEX IF NOT EXISTS idx_splits_tag ON splits(tag_id);
+CREATE INDEX IF NOT EXISTS idx_splits_person ON splits(person_id);
+CREATE INDEX IF NOT EXISTS idx_splits_project ON splits(project_id);
 
 CREATE TABLE IF NOT EXISTS lots (
   id           INTEGER PRIMARY KEY,
   book_id      INTEGER NOT NULL,
+  previous_lot_id INTEGER,
+  session_id   TEXT,
   account_id   INTEGER NOT NULL,
   commodity_id INTEGER NOT NULL,
   cost_basis_minor INTEGER NOT NULL DEFAULT 0,
@@ -294,6 +300,7 @@ CREATE TABLE IF NOT EXISTS lots (
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(previous_lot_id) REFERENCES lots(id) ON DELETE SET NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE
 );
@@ -332,6 +339,8 @@ CREATE INDEX IF NOT EXISTS idx_report_cache_book_seq ON report_cache(book_id, as
 
 CREATE TABLE IF NOT EXISTS corporate_actions (
   id              INTEGER PRIMARY KEY,
+  previous_corporate_action_id INTEGER,
+  session_id      TEXT,
   book_id         INTEGER NOT NULL,
   commodity_id    INTEGER NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN ('split', 'merge')),
@@ -341,6 +350,8 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
   memo            TEXT,
   tx_id           INTEGER,
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_corporate_action_id) REFERENCES corporate_actions(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
   FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
@@ -351,17 +362,21 @@ CREATE INDEX IF NOT EXISTS idx_corporate_actions_commodity ON corporate_actions(
 
 CREATE TABLE IF NOT EXISTS price_sources (
   id          INTEGER PRIMARY KEY,
+  previous_price_source_id INTEGER,
+  session_id  TEXT,
   name        TEXT NOT NULL,
   kind        TEXT NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','provider')),
   provider    TEXT,
   base_url    TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  UNIQUE(name)
+  FOREIGN KEY(previous_price_source_id) REFERENCES price_sources(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS commodity_price_sources (
   id            INTEGER PRIMARY KEY,
+  previous_commodity_price_source_id INTEGER,
+  session_id     TEXT,
   commodity_id  INTEGER NOT NULL,
   source_id     INTEGER NOT NULL,
   symbol        TEXT NOT NULL,
@@ -369,9 +384,9 @@ CREATE TABLE IF NOT EXISTS commodity_price_sources (
   is_primary    INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_commodity_price_source_id) REFERENCES commodity_price_sources(id) ON DELETE SET NULL,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE CASCADE,
-  UNIQUE(commodity_id, source_id, symbol)
+  FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_price_sources_kind ON price_sources(kind);
@@ -694,113 +709,6 @@ BEGIN
     WHERE book_id = (SELECT book_id FROM transactions WHERE id = OLD.tx_id);
 END;
 
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_tags_ins
-AFTER INSERT ON split_tags
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = NEW.split_id
-    );
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_tags_del
-AFTER DELETE ON split_tags
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = OLD.split_id
-    );
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_people_ins
-AFTER INSERT ON split_people
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = NEW.split_id
-    );
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_people_upd
-AFTER UPDATE ON split_people
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = NEW.split_id
-    );
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_people_del
-AFTER DELETE ON split_people
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = OLD.split_id
-    );
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_projects_ins
-AFTER INSERT ON split_projects
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = NEW.split_id
-    );
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_projects_upd
-AFTER UPDATE ON split_projects
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = NEW.split_id
-    );
-END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_split_projects_del
-AFTER DELETE ON split_projects
-BEGIN
-  UPDATE book_state
-    SET change_seq = change_seq + 1,
-        updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    WHERE book_id = (
-      SELECT t.book_id
-      FROM splits s
-      JOIN transactions t ON t.id = s.tx_id
-      WHERE s.id = OLD.split_id
-    );
-END;
-
 CREATE TRIGGER IF NOT EXISTS trg_bump_split_lot_alloc_ins
 AFTER INSERT ON split_lot_allocations
 BEGIN
@@ -843,12 +751,6 @@ VALUES (
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-UPDATE books
-SET base_commodity_id = (
-  SELECT id FROM commodities WHERE book_id = books.id AND symbol = 'USD' LIMIT 1
-)
-WHERE base_commodity_id IS NULL AND name = 'Personal';
-
 INSERT OR IGNORE INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
@@ -880,14 +782,18 @@ VALUES (1, 'Manual', 'manual');
 -- V2: account balancing and locking
 CREATE TABLE IF NOT EXISTS account_balancings (
   id            INTEGER PRIMARY KEY,
+  previous_account_balancing_id INTEGER,
+  session_id    TEXT,
   book_id       INTEGER NOT NULL,
   account_id    INTEGER NOT NULL,
   as_of_date    TEXT NOT NULL,
   balance_minor INTEGER NOT NULL,
   memo          TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   voided_at     TEXT,
   void_reason   TEXT,
+  FOREIGN KEY(previous_account_balancing_id) REFERENCES account_balancings(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
@@ -969,6 +875,8 @@ CREATE INDEX IF NOT EXISTS idx_pad_directives_account_date
 
 CREATE TABLE IF NOT EXISTS notes (
   id          INTEGER PRIMARY KEY,
+  previous_note_id INTEGER,
+  session_id  TEXT,
   book_id     INTEGER NOT NULL,
   account_id  INTEGER,
   tx_id       INTEGER,
@@ -976,6 +884,7 @@ CREATE TABLE IF NOT EXISTS notes (
   note_date   TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_note_id) REFERENCES notes(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL,
   FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
@@ -1157,6 +1066,8 @@ END;
 -- V7/V8: import rules + sessions (fully expanded)
 CREATE TABLE IF NOT EXISTS import_rules (
   id                 INTEGER PRIMARY KEY,
+  previous_import_rule_id INTEGER,
+  session_id         TEXT,
   book_id            INTEGER NOT NULL,
   rule_kind          TEXT NOT NULL CHECK (rule_kind IN ('payee','memo','amount','date','account')),
   match_type         TEXT NOT NULL DEFAULT 'contains' CHECK (match_type IN ('contains','equals')),
@@ -1172,6 +1083,7 @@ CREATE TABLE IF NOT EXISTS import_rules (
   target_payee_id    INTEGER,
   created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_import_rule_id) REFERENCES import_rules(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(match_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
   FOREIGN KEY(target_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
@@ -1275,6 +1187,8 @@ END;
 -- V9: reporting
 CREATE TABLE IF NOT EXISTS report_definitions (
   id            INTEGER PRIMARY KEY,
+  previous_report_definition_id INTEGER,
+  session_id    TEXT,
   book_id       INTEGER NOT NULL,
   name          TEXT NOT NULL,
   kind          TEXT NOT NULL DEFAULT 'custom' CHECK (kind IN ('builtin','custom')),
@@ -1283,8 +1197,8 @@ CREATE TABLE IF NOT EXISTS report_definitions (
   params_schema TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(previous_report_definition_id) REFERENCES report_definitions(id) ON DELETE SET NULL,
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_report_definitions_book ON report_definitions(book_id);
@@ -1309,29 +1223,32 @@ CREATE INDEX IF NOT EXISTS idx_report_runs_book_seq ON report_runs(book_id, as_o
 -- V10: institutions + countries
 CREATE TABLE IF NOT EXISTS countries (
   id         INTEGER PRIMARY KEY,
+  previous_country_id INTEGER,
+  session_id TEXT,
   book_id    INTEGER NOT NULL,
   code       TEXT NOT NULL,
   name       TEXT NOT NULL,
   default_currency_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_country_id) REFERENCES countries(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(default_currency_id) REFERENCES currencies(id),
-  UNIQUE(book_id, code),
-  UNIQUE(book_id, name)
+  FOREIGN KEY(default_currency_id) REFERENCES currencies(id)
 );
 
 CREATE TABLE IF NOT EXISTS institutions (
   id         INTEGER PRIMARY KEY,
+  previous_institution_id INTEGER,
+  session_id TEXT,
   book_id    INTEGER NOT NULL,
   name       TEXT NOT NULL,
   kind       TEXT NOT NULL DEFAULT 'other' CHECK (kind IN ('bank','broker','credit_union','other')),
   country_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_institution_id) REFERENCES institutions(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(country_id) REFERENCES countries(id) ON DELETE SET NULL,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(country_id) REFERENCES countries(id) ON DELETE SET NULL
 );
 
 INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
@@ -1396,7 +1313,7 @@ VALUES (
   1,
   'income',
   'System Income Summary',
-  (SELECT base_commodity_id FROM books WHERE id = 1),
+  (SELECT id FROM commodities WHERE book_id = 1 AND kind = 'currency' AND is_default = 1 LIMIT 1),
   1,
   1,
   'income_summary',
@@ -1411,7 +1328,7 @@ VALUES (
   1,
   'expense',
   'System Expense Summary',
-  (SELECT base_commodity_id FROM books WHERE id = 1),
+  (SELECT id FROM commodities WHERE book_id = 1 AND kind = 'currency' AND is_default = 1 LIMIT 1),
   1,
   1,
   'expense_summary',
@@ -1426,7 +1343,7 @@ VALUES (
   1,
   'equity',
   'Retained Earnings',
-  (SELECT base_commodity_id FROM books WHERE id = 1),
+  (SELECT id FROM commodities WHERE book_id = 1 AND kind = 'currency' AND is_default = 1 LIMIT 1),
   1,
   1,
   'retained_earnings',
@@ -1443,15 +1360,16 @@ CREATE INDEX IF NOT EXISTS idx_accounts_book_hidden ON accounts(book_id, is_hidd
 -- V11: currencies seed
 CREATE TABLE IF NOT EXISTS currencies (
   id         INTEGER PRIMARY KEY,
+  previous_currency_id INTEGER,
+  session_id TEXT,
   book_id    INTEGER NOT NULL,
   code       TEXT NOT NULL,
   name       TEXT NOT NULL,
   symbol     TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, code),
-  UNIQUE(book_id, name)
+  FOREIGN KEY(previous_currency_id) REFERENCES currencies(id) ON DELETE SET NULL,
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_currencies_book ON currencies(book_id);
@@ -2226,6 +2144,90 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_previous_unique
   ON tags(previous_tag_id)
   WHERE previous_tag_id IS NOT NULL;
 
+CREATE INDEX IF NOT EXISTS idx_people_previous ON people(previous_person_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_people_previous_unique
+  ON people(previous_person_id)
+  WHERE previous_person_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_projects_previous ON projects(previous_project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_previous_unique
+  ON projects(previous_project_id)
+  WHERE previous_project_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_accounts_previous ON accounts(previous_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_previous_unique
+  ON accounts(previous_account_id)
+  WHERE previous_account_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_lots_previous ON lots(previous_lot_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lots_previous_unique
+  ON lots(previous_lot_id)
+  WHERE previous_lot_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_splits_previous ON splits(previous_split_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_splits_previous_unique
+  ON splits(previous_split_id)
+  WHERE previous_split_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_price_sources_previous ON price_sources(previous_price_source_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_price_sources_previous_unique
+  ON price_sources(previous_price_source_id)
+  WHERE previous_price_source_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_cps_previous ON commodity_price_sources(previous_commodity_price_source_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cps_previous_unique
+  ON commodity_price_sources(previous_commodity_price_source_id)
+  WHERE previous_commodity_price_source_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_commodities_previous_unique
+  ON commodities(previous_commodity_id)
+  WHERE previous_commodity_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_books_previous ON books(previous_book_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_books_previous_unique
+  ON books(previous_book_id)
+  WHERE previous_book_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_account_balancings_previous ON account_balancings(previous_account_balancing_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_balancings_previous_unique
+  ON account_balancings(previous_account_balancing_id)
+  WHERE previous_account_balancing_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_notes_previous ON notes(previous_note_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_previous_unique
+  ON notes(previous_note_id)
+  WHERE previous_note_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_import_rules_previous ON import_rules(previous_import_rule_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_import_rules_previous_unique
+  ON import_rules(previous_import_rule_id)
+  WHERE previous_import_rule_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_report_definitions_previous ON report_definitions(previous_report_definition_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_report_definitions_previous_unique
+  ON report_definitions(previous_report_definition_id)
+  WHERE previous_report_definition_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_countries_previous ON countries(previous_country_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_countries_previous_unique
+  ON countries(previous_country_id)
+  WHERE previous_country_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_institutions_previous ON institutions(previous_institution_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_institutions_previous_unique
+  ON institutions(previous_institution_id)
+  WHERE previous_institution_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_currencies_previous ON currencies(previous_currency_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_currencies_previous_unique
+  ON currencies(previous_currency_id)
+  WHERE previous_currency_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_corporate_actions_previous ON corporate_actions(previous_corporate_action_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_corporate_actions_previous_unique
+  ON corporate_actions(previous_corporate_action_id)
+  WHERE previous_corporate_action_id IS NOT NULL;
+
 -- Immutability guards (enforce append-only behavior)
 
 CREATE TRIGGER IF NOT EXISTS trg_transactions_append_only_update
@@ -2274,6 +2276,210 @@ CREATE TRIGGER IF NOT EXISTS trg_tags_append_only_delete
 BEFORE DELETE ON tags
 BEGIN
   SELECT RAISE(ABORT, 'tags are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_commodities_append_only_update
+BEFORE UPDATE ON commodities
+BEGIN
+  SELECT RAISE(ABORT, 'commodities are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_commodities_append_only_delete
+BEFORE DELETE ON commodities
+BEGIN
+  SELECT RAISE(ABORT, 'commodities are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_people_append_only_update
+BEFORE UPDATE ON people
+BEGIN
+  SELECT RAISE(ABORT, 'people are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_people_append_only_delete
+BEFORE DELETE ON people
+BEGIN
+  SELECT RAISE(ABORT, 'people are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_projects_append_only_update
+BEFORE UPDATE ON projects
+BEGIN
+  SELECT RAISE(ABORT, 'projects are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_projects_append_only_delete
+BEFORE DELETE ON projects
+BEGIN
+  SELECT RAISE(ABORT, 'projects are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_append_only_update
+BEFORE UPDATE ON accounts
+BEGIN
+  SELECT RAISE(ABORT, 'accounts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_append_only_delete
+BEFORE DELETE ON accounts
+BEGIN
+  SELECT RAISE(ABORT, 'accounts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_lots_append_only_update
+BEFORE UPDATE ON lots
+BEGIN
+  SELECT RAISE(ABORT, 'lots are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_lots_append_only_delete
+BEFORE DELETE ON lots
+BEGIN
+  SELECT RAISE(ABORT, 'lots are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_splits_append_only_update
+BEFORE UPDATE ON splits
+BEGIN
+  SELECT RAISE(ABORT, 'splits are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_splits_append_only_delete
+BEFORE DELETE ON splits
+BEGIN
+  SELECT RAISE(ABORT, 'splits are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_price_sources_append_only_update
+BEFORE UPDATE ON price_sources
+BEGIN
+  SELECT RAISE(ABORT, 'price_sources are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_price_sources_append_only_delete
+BEFORE DELETE ON price_sources
+BEGIN
+  SELECT RAISE(ABORT, 'price_sources are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_commodity_price_sources_append_only_update
+BEFORE UPDATE ON commodity_price_sources
+BEGIN
+  SELECT RAISE(ABORT, 'commodity_price_sources are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_commodity_price_sources_append_only_delete
+BEFORE DELETE ON commodity_price_sources
+BEGIN
+  SELECT RAISE(ABORT, 'commodity_price_sources are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_books_append_only_update
+BEFORE UPDATE ON books
+BEGIN
+  SELECT RAISE(ABORT, 'books are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_books_append_only_delete
+BEFORE DELETE ON books
+BEGIN
+  SELECT RAISE(ABORT, 'books are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_account_balancings_append_only_update
+BEFORE UPDATE ON account_balancings
+BEGIN
+  SELECT RAISE(ABORT, 'account_balancings are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_account_balancings_append_only_delete
+BEFORE DELETE ON account_balancings
+BEGIN
+  SELECT RAISE(ABORT, 'account_balancings are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_currencies_append_only_update
+BEFORE UPDATE ON currencies
+BEGIN
+  SELECT RAISE(ABORT, 'currencies are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_currencies_append_only_delete
+BEFORE DELETE ON currencies
+BEGIN
+  SELECT RAISE(ABORT, 'currencies are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_corporate_actions_append_only_update
+BEFORE UPDATE ON corporate_actions
+BEGIN
+  SELECT RAISE(ABORT, 'corporate_actions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_corporate_actions_append_only_delete
+BEFORE DELETE ON corporate_actions
+BEGIN
+  SELECT RAISE(ABORT, 'corporate_actions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_countries_append_only_update
+BEFORE UPDATE ON countries
+BEGIN
+  SELECT RAISE(ABORT, 'countries are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_countries_append_only_delete
+BEFORE DELETE ON countries
+BEGIN
+  SELECT RAISE(ABORT, 'countries are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_institutions_append_only_update
+BEFORE UPDATE ON institutions
+BEGIN
+  SELECT RAISE(ABORT, 'institutions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_institutions_append_only_delete
+BEFORE DELETE ON institutions
+BEGIN
+  SELECT RAISE(ABORT, 'institutions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_report_definitions_append_only_update
+BEFORE UPDATE ON report_definitions
+BEGIN
+  SELECT RAISE(ABORT, 'report_definitions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_report_definitions_append_only_delete
+BEFORE DELETE ON report_definitions
+BEGIN
+  SELECT RAISE(ABORT, 'report_definitions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_import_rules_append_only_update
+BEFORE UPDATE ON import_rules
+BEGIN
+  SELECT RAISE(ABORT, 'import_rules are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_import_rules_append_only_delete
+BEFORE DELETE ON import_rules
+BEGIN
+  SELECT RAISE(ABORT, 'import_rules are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_notes_append_only_update
+BEFORE UPDATE ON notes
+BEGIN
+  SELECT RAISE(ABORT, 'notes are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_notes_append_only_delete
+BEFORE DELETE ON notes
+BEGIN
+  SELECT RAISE(ABORT, 'notes are append-only');
 END;
 
 -- End append-only section

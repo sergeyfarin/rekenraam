@@ -5,12 +5,11 @@ This document summarizes the current SQLite schema. Source of truth is `src-taur
 ### Migrations
 - V1: `V1__init.sql` (single consolidated migration containing all schema, triggers, and seed data)
 
-Historically, V1 includes sections labeled V2+ as logical groupings, but there are no separate migration files at runtime.
-
 ### Core Entities
 **books**
 - Ledger container. One book per dataset.
-- Key fields: `id`, `name`, `kind`, `base_commodity_id`.
+- Append-only versioned rows.
+- Key fields: `id`, `previous_book_id`, `session_id`, `name`, `kind`, `base_commodity_id`.
 
 **commodities**
 - Currencies and instruments.
@@ -35,12 +34,15 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 
 **countries**
 - ISO-like country catalog per book with optional default currency.
+- Append-only versioned rows via `previous_country_id`.
 
 **currencies**
 - Currency catalog per book (used as seed/reference data).
+- Append-only versioned rows via `previous_currency_id`.
 
 **institutions**
 - Banks/brokers/credit unions per book (linked to countries).
+- Append-only versioned rows via `previous_institution_id`.
 
 **categories**
 - Income/expense/transfer taxonomy (append-only versioned rows).
@@ -70,6 +72,7 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 
 **notes**
 - Freeform notes attached to accounts or transactions.
+- Append-only versioned rows via `previous_note_id`.
 
 **events**
 - Dated events attached to accounts or transactions.
@@ -86,6 +89,7 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 **import_rules**
 - Import matching rules for payee/memo normalization and mapping.
 - Extended with `priority`, `match_type`, amount/date ranges, and `match_account_id`.
+- Append-only versioned rows via `previous_import_rule_id`.
 
 **import_sessions**
 - Import batch audit trail (`status`, timestamps, source).
@@ -94,14 +98,11 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 - Per-session linkage to affected transactions (`created`, `updated`, `validated`).
 
 ### Relations and Join Tables
-**split_tags**
-- Many-to-many: `splits` ↔ `tags`.
-
-**split_people**
-- Many-to-many: `splits` ↔ `people` (with `share_bps`).
-
-**split_projects**
-- Many-to-many: `splits` ↔ `projects` (with `share_bps`).
+Split associations are now embedded directly in `splits` via:
+- `tag_id`
+- `person_id`
+- `project_id`
+- `share_bps`
 
 ### Investments and Pricing
 **commodity_prices**
@@ -122,6 +123,7 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 
 **corporate_actions**
 - Stock splits/merges and related adjustments.
+- Append-only versioned rows via `previous_corporate_action_id`.
 
 ### Currency + FX
 **fx_rates_daily**
@@ -150,6 +152,7 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 
 **report_definitions**
 - Stored report definitions (SQL or templates).
+- Append-only versioned rows via `previous_report_definition_id`.
 
 **report_runs**
 - Cached report results keyed by params and `as_of_seq`.
@@ -169,9 +172,14 @@ Historically, V1 includes sections labeled V2+ as logical groupings, but there a
 - Reconciliation/balancing checkpoints by account.
 - Fields: `account_id`, `as_of_date`, `balance_minor`, `voided_at`, `void_reason`.
 - When locked, older transactions are prevented from modification unless unlock/void is performed.
+- Append-only versioned rows via `previous_account_balancing_id`.
 
 ### Append-only Guards
-- `transactions`, `payees`, `categories`, and `tags` have immutability triggers that abort direct `UPDATE`/`DELETE`.
+- Immutability triggers now guard these append-only tables from direct `UPDATE`/`DELETE`:
+	`transactions`, `splits`, `accounts`, `books`, `commodities`, `payees`, `categories`, `tags`,
+	`people`, `projects`, `lots`, `price_sources`, `commodity_price_sources`,
+	`account_balancings`, `currencies`, `corporate_actions`, `countries`, `institutions`,
+	`report_definitions`, `import_rules`, and `notes`.
 - New revisions are represented by inserting new rows linked via `previous_*` columns.
 
 ### Invariants (Triggers)

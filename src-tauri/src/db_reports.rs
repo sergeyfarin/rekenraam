@@ -553,8 +553,14 @@ pub fn create_report_definition(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
     conn.execute(
-        "INSERT INTO report_definitions (book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO report_definitions (
+            book_id, name, kind, query_type, query_text, params_schema,
+            previous_report_definition_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6,
+            NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
         params![
             input.book_id,
             input.name,
@@ -587,32 +593,42 @@ pub fn update_report_definition(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let rows = conn
-        .execute(
-            "UPDATE report_definitions
-             SET name = ?2, kind = ?3, query_type = ?4, query_text = ?5, params_schema = ?6,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![
-                input.id,
-                input.name,
-                input.kind,
-                input.query_type,
-                input.query_text,
-                input.params_schema,
-            ],
-        )
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM report_definitions WHERE id = ?1", [input.id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
-
-    if rows == 0 {
+    if exists.is_none() {
         return Err("report definition not found".to_string());
     }
+
+    conn.execute(
+        "INSERT INTO report_definitions (
+            book_id, name, kind, query_type, query_text, params_schema,
+            previous_report_definition_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6,
+            ?7, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            input.book_id,
+            input.name,
+            input.kind,
+            input.query_type,
+            input.query_text,
+            input.params_schema,
+            input.id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
 
     let item = conn
         .query_row(
             "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
              FROM report_definitions WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_report_definition_row,
         )
         .map_err(|e| e.to_string())?;
@@ -622,12 +638,16 @@ pub fn update_report_definition(
 
 #[command]
 pub fn delete_report_definition(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    let rows = conn
-        .execute("DELETE FROM report_definitions WHERE id = ?1", [id])
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM report_definitions WHERE id = ?1", [id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
-    Ok(rows > 0)
+    if exists.is_none() {
+        return Ok(false);
+    }
+    Err("delete_report_definition is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -636,8 +656,27 @@ pub fn get_report_definition(db: State<DbState>, id: i64) -> Result<Option<Repor
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let item = conn
         .query_row(
-            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
-             FROM report_definitions WHERE id = ?1",
+                        "WITH RECURSIVE chain(id) AS (
+                                 SELECT ?1
+                                 UNION
+                                 SELECT a.previous_report_definition_id
+                                 FROM report_definitions a
+                                 JOIN chain c ON a.id = c.id
+                                 WHERE a.previous_report_definition_id IS NOT NULL
+                                 UNION
+                                 SELECT a.id
+                                 FROM report_definitions a
+                                 JOIN chain c ON a.previous_report_definition_id = c.id
+                         )
+                         SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+                         FROM report_definitions
+                         WHERE id IN chain
+                             AND NOT EXISTS (
+                                     SELECT 1 FROM report_definitions newer
+                                     WHERE newer.previous_report_definition_id = report_definitions.id
+                                         AND newer.id IN chain
+                             )
+                         LIMIT 1",
             [id],
             map_report_definition_row,
         )
@@ -654,7 +693,13 @@ pub fn list_report_definitions(db: State<DbState>, book_id: i64) -> Result<Vec<R
     let mut stmt = conn
         .prepare(
             "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
-             FROM report_definitions WHERE book_id = ?1 ORDER BY name ASC",
+                         FROM report_definitions
+                         WHERE book_id = ?1
+                             AND NOT EXISTS (
+                                     SELECT 1 FROM report_definitions newer
+                                     WHERE newer.previous_report_definition_id = report_definitions.id
+                             )
+                         ORDER BY name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -681,8 +726,27 @@ pub fn run_report(
 
     let definition: ReportDefinition = conn
         .query_row(
-            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
-             FROM report_definitions WHERE id = ?1",
+                        "WITH RECURSIVE chain(id) AS (
+                                 SELECT ?1
+                                 UNION
+                                 SELECT a.previous_report_definition_id
+                                 FROM report_definitions a
+                                 JOIN chain c ON a.id = c.id
+                                 WHERE a.previous_report_definition_id IS NOT NULL
+                                 UNION
+                                 SELECT a.id
+                                 FROM report_definitions a
+                                 JOIN chain c ON a.previous_report_definition_id = c.id
+                         )
+                         SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+                         FROM report_definitions
+                         WHERE id IN chain
+                             AND NOT EXISTS (
+                                     SELECT 1 FROM report_definitions newer
+                                     WHERE newer.previous_report_definition_id = report_definitions.id
+                                         AND newer.id IN chain
+                             )
+                         LIMIT 1",
             [definition_id],
             map_report_definition_row,
         )

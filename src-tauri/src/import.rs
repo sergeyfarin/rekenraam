@@ -8,6 +8,11 @@ use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
 
+fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
+    conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
+        .map_err(|e| e.to_string())
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ImportRule {
     pub id: i64,
@@ -1026,8 +1031,15 @@ fn check_account_locks(
     for account_id in account_ids {
         let lock_date: Option<String> = conn
             .query_row(
-                "SELECT as_of_date FROM account_balancings
-                 WHERE account_id = ?1 AND voided_at IS NULL AND as_of_date >= ?2
+                "SELECT ab.as_of_date
+                 FROM account_balancings ab
+                 WHERE ab.account_id = ?1
+                   AND ab.voided_at IS NULL
+                   AND ab.as_of_date >= ?2
+                   AND NOT EXISTS (
+                       SELECT 1 FROM account_balancings newer
+                       WHERE newer.previous_account_balancing_id = ab.id
+                   )
                  ORDER BY as_of_date ASC LIMIT 1",
                 params![account_id, txn_date],
                 |row| row.get(0),
@@ -1418,6 +1430,7 @@ pub fn create_import_rule(
 ) -> Result<ImportRule, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
     let rule_kind = input.rule_kind.to_lowercase();
@@ -1444,8 +1457,18 @@ pub fn create_import_rule(
     let priority = input.priority.unwrap_or(100);
 
     conn.execute(
-        "INSERT INTO import_rules (book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO import_rules (
+            book_id, rule_kind, match_type, match_text, priority,
+            amount_min_minor, amount_max_minor, date_from, date_to,
+            match_account_id, target_account_id, target_category_id, target_payee_id,
+            previous_import_rule_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, ?7, ?8, ?9,
+            ?10, ?11, ?12, ?13,
+            NULL, ?14, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
         params![
             book_id,
             rule_kind,
@@ -1460,6 +1483,7 @@ pub fn create_import_rule(
             input.target_account_id,
             input.target_category_id,
             input.target_payee_id,
+            session_id,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -1487,7 +1511,13 @@ pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportR
     let mut stmt = conn
         .prepare(
             "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at, updated_at
-             FROM import_rules WHERE book_id = ?1 ORDER BY priority ASC, id ASC",
+                         FROM import_rules
+                         WHERE book_id = ?1
+                             AND NOT EXISTS (
+                                     SELECT 1 FROM import_rules newer
+                                     WHERE newer.previous_import_rule_id = import_rules.id
+                             )
+                         ORDER BY priority ASC, id ASC",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -1504,14 +1534,18 @@ pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportR
 
 #[command]
 pub fn delete_import_rule(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
-    let rows = conn
-        .execute("DELETE FROM import_rules WHERE id = ?1", [id])
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM import_rules WHERE id = ?1", [id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Ok(false);
+    }
 
-    Ok(rows > 0)
+    Err("delete_import_rule is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -1626,7 +1660,13 @@ pub fn apply_import_rules(
     let mut stmt = conn
         .prepare(
             "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at, updated_at
-             FROM import_rules WHERE book_id = ?1 ORDER BY priority ASC, id ASC",
+                         FROM import_rules
+                         WHERE book_id = ?1
+                             AND NOT EXISTS (
+                                     SELECT 1 FROM import_rules newer
+                                     WHERE newer.previous_import_rule_id = import_rules.id
+                             )
+                         ORDER BY priority ASC, id ASC",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt

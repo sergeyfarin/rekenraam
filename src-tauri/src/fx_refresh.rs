@@ -146,7 +146,10 @@ fn prepare_refresh_tasks(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, symbol, is_active FROM commodities WHERE book_id = ?1 AND kind = 'currency'",
+                        "SELECT c.id, c.symbol, c.is_active
+                         FROM current_commodities c
+                         WHERE c.book_id = ?1
+                             AND c.kind = 'currency'",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -587,10 +590,16 @@ mod tests {
             .expect("source id");
 
         conn.execute(
-            "UPDATE commodities SET is_active = 1 WHERE id = ?1",
+            "INSERT INTO commodities
+              (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+             SELECT book_id, kind, symbol, display_symbol, name, scale, 1, is_default, id,
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             FROM commodities WHERE id = ?1",
             [eur_id],
         )
         .expect("activate eur");
+
+        let eur_current_id = conn.last_insert_rowid();
 
         let today = adjust_for_weekend("skip", Utc::now().date_naive());
         let last_success = (today - chrono::Duration::days(2)).format("%Y-%m-%d").to_string();
@@ -598,7 +607,7 @@ mod tests {
         conn.execute(
             "INSERT INTO fx_rate_refresh_state (book_id, from_currency_id, to_currency_id, source_id, last_success_date, last_attempt_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![SINGLE_BOOK_ID, eur_id, usd_id, source_id, last_success, "2025-01-01T00:00:00Z"],
+            params![SINGLE_BOOK_ID, eur_current_id, usd_id, source_id, last_success, "2025-01-01T00:00:00Z"],
         )
         .expect("insert refresh state");
 
@@ -607,7 +616,7 @@ mod tests {
         let (_settings, tasks, _symbol_map) = prepare_refresh_tasks(&db).expect("prepare");
         assert!(!tasks.is_empty());
 
-        let task = tasks.iter().find(|t| t.from_id == eur_id).expect("eur task");
+        let task = tasks.iter().find(|t| t.from_id == eur_current_id).expect("eur task");
         let expected_start = (today - chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
         assert_eq!(task.start_date, expected_start);
     }
