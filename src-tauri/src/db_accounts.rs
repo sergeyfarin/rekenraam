@@ -7,6 +7,7 @@ use tauri::{command, State};
 use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
+const BALANCING_TX_MARK: &str = "balance_adjustment";
 
 fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
     conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
@@ -439,29 +440,35 @@ pub struct BalanceCheckCreate {
     pub as_of_date: String,
     pub balance_minor: i64,
     pub memo: Option<String>,
+    pub create_balancing_tx: Option<bool>,
+    pub offset_account_id: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct PadDirective {
+pub struct BalanceAdjustment {
     pub id: i64,
     pub book_id: i64,
+    pub balance_check_id: Option<i64>,
     pub account_id: i64,
-    pub pad_account_id: i64,
+    pub offset_account_id: i64,
     pub as_of_date: String,
     pub target_balance_minor: i64,
-    pub tx_id: Option<i64>,
+    pub actual_balance_minor: i64,
+    pub adjustment_minor: i64,
+    pub tx_id: i64,
+    pub mark: String,
     pub memo: Option<String>,
     pub created_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct PadDirectiveCreate {
+pub struct BalanceAdjustmentCreate {
     pub book_id: i64,
+    pub balance_check_id: Option<i64>,
     pub account_id: i64,
-    pub pad_account_id: i64,
+    pub offset_account_id: i64,
     pub as_of_date: String,
     pub target_balance_minor: i64,
-    pub tx_id: Option<i64>,
     pub memo: Option<String>,
 }
 
@@ -881,18 +888,140 @@ fn map_balance_check_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BalanceChe
     })
 }
 
-fn map_pad_directive_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PadDirective> {
-    Ok(PadDirective {
+fn map_balance_adjustment_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BalanceAdjustment> {
+    Ok(BalanceAdjustment {
         id: row.get(0)?,
         book_id: row.get(1)?,
-        account_id: row.get(2)?,
-        pad_account_id: row.get(3)?,
-        as_of_date: row.get(4)?,
-        target_balance_minor: row.get(5)?,
-        tx_id: row.get(6)?,
-        memo: row.get(7)?,
-        created_at: row.get(8)?,
+        balance_check_id: row.get(2)?,
+        account_id: row.get(3)?,
+        offset_account_id: row.get(4)?,
+        as_of_date: row.get(5)?,
+        target_balance_minor: row.get(6)?,
+        actual_balance_minor: row.get(7)?,
+        adjustment_minor: row.get(8)?,
+        tx_id: row.get(9)?,
+        mark: row.get(10)?,
+        memo: row.get(11)?,
+        created_at: row.get(12)?,
     })
+}
+
+fn get_account_balance_minor(conn: &rusqlite::Connection, account_id: i64) -> Result<i64, String> {
+    conn.query_row(
+        "SELECT COALESCE(SUM(amount_minor), 0) FROM splits WHERE account_id = ?1",
+        [account_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn get_account_commodity_id(conn: &rusqlite::Connection, account_id: i64) -> Result<i64, String> {
+    conn.query_row(
+        "SELECT commodity_id FROM accounts WHERE id = ?1",
+        [account_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn create_marked_balance_adjustment(
+    conn: &mut rusqlite::Connection,
+    balance_check_id: Option<i64>,
+    account_id: i64,
+    offset_account_id: i64,
+    as_of_date: &str,
+    target_balance_minor: i64,
+    memo: Option<&str>,
+) -> Result<Option<BalanceAdjustment>, String> {
+    let actual_balance_minor = get_account_balance_minor(conn, account_id)?;
+    let adjustment_minor = target_balance_minor - actual_balance_minor;
+    if adjustment_minor == 0 {
+        return Ok(None);
+    }
+
+    let account_commodity_id = get_account_commodity_id(conn, account_id)?;
+    let offset_commodity_id = get_account_commodity_id(conn, offset_account_id)?;
+    if account_commodity_id != offset_commodity_id {
+        return Err("account and offset account must share the same commodity".to_string());
+    }
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let session_id = current_session_id(&tx)?;
+    let tx_memo = memo
+        .map(|m| format!("[BALANCING] {}", m))
+        .unwrap_or_else(|| "[BALANCING] Balance adjustment".to_string());
+    let happened_at_utc = format!("{}T00:00:00.000Z", as_of_date);
+
+    tx.execute(
+        "INSERT INTO transactions (
+            book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
+            payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, NULL, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+            NULL, ?4, 'cleared', ?5, NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![SINGLE_BOOK_ID, as_of_date, happened_at_utc, tx_memo, BALANCING_TX_MARK, session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tx_id = tx.last_insert_rowid();
+    clear_redo_stack(&tx, &session_id)?;
+    record_insert_change(&tx, &session_id, "transactions", tx_id)?;
+
+    tx.execute(
+        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![tx_id, account_id, account_commodity_id, adjustment_minor],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![tx_id, offset_account_id, account_commodity_id, -adjustment_minor],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "INSERT INTO balance_adjustments (
+            book_id, balance_check_id, account_id, offset_account_id, as_of_date,
+            target_balance_minor, actual_balance_minor, adjustment_minor, tx_id, mark, memo, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, ?7, ?8, ?9, ?10, ?11, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            SINGLE_BOOK_ID,
+            balance_check_id,
+            account_id,
+            offset_account_id,
+            as_of_date,
+            target_balance_minor,
+            actual_balance_minor,
+            adjustment_minor,
+            tx_id,
+            BALANCING_TX_MARK,
+            memo,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let adjustment_id = tx.last_insert_rowid();
+    tx.commit().map_err(|e| e.to_string())?;
+
+    let adjustment = conn
+        .query_row(
+            "SELECT id, book_id, balance_check_id, account_id, offset_account_id, as_of_date,
+                    target_balance_minor, actual_balance_minor, adjustment_minor, tx_id, mark, memo, created_at
+             FROM balance_adjustments WHERE id = ?1",
+            [adjustment_id],
+            map_balance_adjustment_row,
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(adjustment))
 }
 
 fn map_note_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
@@ -3966,6 +4095,8 @@ mod tests {
                 as_of_date: "2024-02-02".to_string(),
                 balance_minor: -500,
                 memo: Some("check".to_string()),
+                create_balancing_tx: Some(false),
+                offset_account_id: None,
             },
         )
         .expect("create balance check");
@@ -3975,23 +4106,23 @@ mod tests {
             .expect("list balance checks");
         assert_eq!(checks.len(), 1);
 
-        let pad = create_pad_directive(
+        let pad = create_balance_adjustment(
             as_state(&db_state),
-            PadDirectiveCreate {
+            BalanceAdjustmentCreate {
                 book_id: 1,
+                balance_check_id: Some(check.id),
                 account_id: account.id,
-                pad_account_id: account.id,
+                offset_account_id: account.id,
                 as_of_date: "2024-02-03".to_string(),
                 target_balance_minor: 0,
-                tx_id: None,
                 memo: Some("pad".to_string()),
             },
         )
-        .expect("create pad directive");
+        .expect("create balance adjustment");
         assert_eq!(pad.target_balance_minor, 0);
 
-        let pads = list_pad_directives(as_state(&db_state), account.id)
-            .expect("list pad directives");
+        let pads = list_balance_adjustments(as_state(&db_state), account.id)
+            .expect("list balance adjustments");
         assert_eq!(pads.len(), 1);
 
         let deleted = delete_balance_constraint(as_state(&db_state), constraint.id)
@@ -4224,20 +4355,53 @@ pub fn create_balance_check(
 
     let book_id = SINGLE_BOOK_ID;
 
+    let actual_balance_minor = get_account_balance_minor(conn, input.account_id)?;
+    let mut status = if actual_balance_minor == input.balance_minor {
+        "matched".to_string()
+    } else {
+        "unbalanced".to_string()
+    };
+
     conn.execute(
-        "INSERT INTO balance_checks (book_id, account_id, as_of_date, balance_minor, memo, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO balance_checks (book_id, account_id, as_of_date, balance_minor, memo, status, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.account_id,
             input.as_of_date,
             input.balance_minor,
             input.memo,
+            status,
         ],
     )
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
+    if input.create_balancing_tx.unwrap_or(false) {
+        let offset_account_id = input
+            .offset_account_id
+            .ok_or_else(|| "offset_account_id is required when create_balancing_tx is true".to_string())?;
+
+        let maybe_adjustment = create_marked_balance_adjustment(
+            conn,
+            Some(id),
+            input.account_id,
+            offset_account_id,
+            &input.as_of_date,
+            input.balance_minor,
+            input.memo.as_deref(),
+        )?;
+
+        if maybe_adjustment.is_some() {
+            status = "balanced".to_string();
+            conn.execute(
+                "UPDATE balance_checks SET status = ?2 WHERE id = ?1",
+                params![id, status],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
     let check = conn
         .query_row(
             "SELECT id, book_id, account_id, as_of_date, balance_minor, memo, status, created_at
@@ -4279,61 +4443,46 @@ pub fn list_balance_checks(
 }
 
 #[command]
-pub fn create_pad_directive(
+pub fn create_balance_adjustment(
     db: State<DbState>,
-    input: PadDirectiveCreate,
-) -> Result<PadDirective, String> {
+    input: BalanceAdjustmentCreate,
+) -> Result<BalanceAdjustment, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let book_id = SINGLE_BOOK_ID;
+    let adjustment = create_marked_balance_adjustment(
+        conn,
+        input.balance_check_id,
+        input.account_id,
+        input.offset_account_id,
+        &input.as_of_date,
+        input.target_balance_minor,
+        input.memo.as_deref(),
+    )?
+    .ok_or_else(|| "no adjustment transaction required: account already at target balance".to_string())?;
 
-    conn.execute(
-        "INSERT INTO pad_directives (book_id, account_id, pad_account_id, as_of_date, target_balance_minor, tx_id, memo, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-        params![
-            book_id,
-            input.account_id,
-            input.pad_account_id,
-            input.as_of_date,
-            input.target_balance_minor,
-            input.tx_id,
-            input.memo,
-        ],
-    )
-    .map_err(|e| e.to_string())?;
-
-    let id = conn.last_insert_rowid();
-    let directive = conn
-        .query_row(
-            "SELECT id, book_id, account_id, pad_account_id, as_of_date, target_balance_minor, tx_id, memo, created_at
-             FROM pad_directives WHERE id = ?1",
-            [id],
-            map_pad_directive_row,
-        )
-        .map_err(|e| e.to_string())?;
-
-    Ok(directive)
+    Ok(adjustment)
 }
 
 #[command]
-pub fn list_pad_directives(
+pub fn list_balance_adjustments(
     db: State<DbState>,
     account_id: i64,
-) -> Result<Vec<PadDirective>, String> {
+) -> Result<Vec<BalanceAdjustment>, String> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, account_id, pad_account_id, as_of_date, target_balance_minor, tx_id, memo, created_at
-             FROM pad_directives WHERE account_id = ?1
+            "SELECT id, book_id, balance_check_id, account_id, offset_account_id, as_of_date,
+                    target_balance_minor, actual_balance_minor, adjustment_minor, tx_id, mark, memo, created_at
+             FROM balance_adjustments WHERE account_id = ?1
              ORDER BY as_of_date DESC, id DESC",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([account_id], map_pad_directive_row)
+        .query_map([account_id], map_balance_adjustment_row)
         .map_err(|e| e.to_string())?;
 
     let mut directives = Vec::new();

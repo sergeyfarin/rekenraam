@@ -855,7 +855,7 @@ CREATE TABLE IF NOT EXISTS balance_checks (
   as_of_date    TEXT NOT NULL,
   balance_minor INTEGER NOT NULL,
   memo          TEXT,
-  status        TEXT NOT NULL DEFAULT 'recorded' CHECK (status IN ('recorded','matched','failed')),
+  status        TEXT NOT NULL DEFAULT 'recorded' CHECK (status IN ('recorded','matched','failed','unbalanced','balanced')),
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
@@ -864,24 +864,32 @@ CREATE TABLE IF NOT EXISTS balance_checks (
 CREATE INDEX IF NOT EXISTS idx_balance_checks_account_date
   ON balance_checks(account_id, as_of_date);
 
-CREATE TABLE IF NOT EXISTS pad_directives (
+CREATE TABLE IF NOT EXISTS balance_adjustments (
   id                    INTEGER PRIMARY KEY,
   book_id               INTEGER NOT NULL,
+  balance_check_id      INTEGER,
   account_id            INTEGER NOT NULL,
-  pad_account_id        INTEGER NOT NULL,
+  offset_account_id     INTEGER NOT NULL,
   as_of_date            TEXT NOT NULL,
   target_balance_minor  INTEGER NOT NULL,
-  tx_id                 INTEGER,
+  actual_balance_minor  INTEGER NOT NULL,
+  adjustment_minor      INTEGER NOT NULL,
+  tx_id                 INTEGER NOT NULL,
+  mark                  TEXT NOT NULL DEFAULT 'balance_adjustment',
   memo                  TEXT,
   created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(balance_check_id) REFERENCES balance_checks(id) ON DELETE SET NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-  FOREIGN KEY(pad_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE SET NULL
+  FOREIGN KEY(offset_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_pad_directives_account_date
-  ON pad_directives(account_id, as_of_date);
+CREATE INDEX IF NOT EXISTS idx_balance_adjustments_account_date
+  ON balance_adjustments(account_id, as_of_date);
+
+CREATE INDEX IF NOT EXISTS idx_balance_adjustments_check
+  ON balance_adjustments(balance_check_id);
 
 CREATE TABLE IF NOT EXISTS notes (
   id          INTEGER PRIMARY KEY,
@@ -958,18 +966,18 @@ BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS trg_bump_pad_directives_ins
-AFTER INSERT ON pad_directives
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_adjustments_ins
+AFTER INSERT ON balance_adjustments
 BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
 END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_pad_directives_upd
-AFTER UPDATE ON pad_directives
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_adjustments_upd
+AFTER UPDATE ON balance_adjustments
 BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
 END;
-CREATE TRIGGER IF NOT EXISTS trg_bump_pad_directives_del
-AFTER DELETE ON pad_directives
+CREATE TRIGGER IF NOT EXISTS trg_bump_balance_adjustments_del
+AFTER DELETE ON balance_adjustments
 BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
 END;
