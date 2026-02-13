@@ -1,10 +1,13 @@
 use std::{path::PathBuf, sync::Mutex};
 use tauri::async_runtime::JoinHandle;
 
+use crate::db::AuditUserHandle;
+
 #[derive(Default)]
 pub struct DbStateInner {
     pub db_path: Option<PathBuf>,
     pub conn: Option<rusqlite::Connection>,
+    pub audit_user: Option<AuditUserHandle>,
 }
 
 #[derive(Default)]

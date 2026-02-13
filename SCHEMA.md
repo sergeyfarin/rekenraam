@@ -1,25 +1,11 @@
 ## Rekenraam Database Schema
 
-This document summarizes the current SQLite schema. Source of truth is the migration files in `src-tauri/migrations`.
+This document summarizes the current SQLite schema. Source of truth is `src-tauri/migrations/V1__init.sql`.
 
 ### Migrations
-- V1: `V1__init.sql` (core domain, reports, prices, invariants, seed data)
-- V2: `V2__account_balancing.sql` (account balancing and locking)
-- V3: `V3__dividend_income_categories.sql` (dividend income category mapping)
-- V4: `V4__directives_and_documents.sql` (directives, balance checks, pad directives, notes/events/documents)
-- V5: `V5__booking_policy_and_cost_basis.sql` (account booking policy + lot cost basis)
-- V6: `V6__balance_constraints.sql` (per-account balance constraints)
-- V7: `V7__import_rules_sessions.sql` (import rules + import sessions)
-- V8: `V8__import_rules_extensions.sql` (import rule priority + match types + amount/date/account match)
-- V9: `V9__reporting.sql` (report definitions + report runs cache)
-- V10: `V10__institutions_countries.sql` (countries + institutions + account links)
-- V11: `V11__currencies_seed.sql` (currencies table + country default currencies + seed data)
-- V12: `V12__backup_settings.sql` (backup settings stored per book)
-- V13: `V13__currency_management.sql` (currency activation/default + FX rate tables)
-- V14: `V14__currency_display_symbols.sql` (display symbols for currencies)
-- V15: `V15__fx_rate_settings.sql` (FX settings, source assignments, refresh state)
-- V16: `V16__fx_rate_daily_provenance.sql` (daily FX provenance fields)
-- V17: `V17__commodities_currency_sync.sql` (sync currencies to commodities)
+- V1: `V1__init.sql` (single consolidated migration containing all schema, triggers, and seed data)
+
+Historically, V1 includes sections labeled V2+ as logical groupings, but there are no separate migration files at runtime.
 
 ### Core Entities
 **books**
@@ -32,11 +18,11 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **accounts**
 - Accounts in a book.
-- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `institution_id`, `country_id`, `is_closed`, `booking_policy`.
+- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `booking_policy`, `institution_id`, `country_id`, `is_hidden`, `is_system`, `system_role`, `is_closed`.
 
 **transactions**
-- Top-level transaction header.
-- Key fields: `id`, `book_id`, `txn_date`, `payee_id`, `memo`, `status`, `reference`, `import_id`.
+- Top-level transaction header (append-only revision model).
+- Key fields: `id`, `book_id`, `previous_tx_id`, `txn_date`, `happened_at_utc`, `posted_at_utc`, `edited_at_utc`, `payee_id`, `memo`, `status`, `reference`, `import_id`, `import_session_id`, `is_deleted`, `session_id`.
 
 **splits**
 - Line items for a transaction (double-entry style).
@@ -44,7 +30,8 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 ### Supporting Entities
 **payees**
-- Counterparties for transactions.
+- Counterparties for transactions (append-only versioned rows).
+- Key fields: `previous_payee_id`, `modified_at_utc`, `effective_at_utc`, `is_deleted`, `session_id`.
 
 **countries**
 - ISO-like country catalog per book with optional default currency.
@@ -56,10 +43,12 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 - Banks/brokers/credit unions per book (linked to countries).
 
 **categories**
-- Income/expense/transfer taxonomy.
+- Income/expense/transfer taxonomy (append-only versioned rows).
+- Key fields: `previous_category_id`, `modified_at_utc`, `effective_at_utc`, `is_deleted`, `session_id`.
 
 **tags**
-- Freeform tags for splits.
+- Freeform tags for splits (append-only versioned rows).
+- Key fields: `previous_tag_id`, `modified_at_utc`, `effective_at_utc`, `is_deleted`, `session_id`.
 
 **people**
 - People metadata for allocations.
@@ -100,6 +89,9 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 
 **import_sessions**
 - Import batch audit trail (`status`, timestamps, source).
+
+**import_session_transactions**
+- Per-session linkage to affected transactions (`created`, `updated`, `validated`).
 
 ### Relations and Join Tables
 **split_tags**
@@ -169,21 +161,34 @@ This document summarizes the current SQLite schema. Source of truth is the migra
 **book_state**
 - Change sequence for invalidation and caching.
 
-### Account Balancing / Locking (V2)
+**app_runtime_session / session_undo_stack / session_redo_stack / session_reverts**
+- Runtime/session bookkeeping for undo/redo and local revert visibility.
+
+### Account Balancing / Locking
 **account_balancings**
 - Reconciliation/balancing checkpoints by account.
 - Fields: `account_id`, `as_of_date`, `balance_minor`, `voided_at`, `void_reason`.
 - When locked, older transactions are prevented from modification unless unlock/void is performed.
+
+### Append-only Guards
+- `transactions`, `payees`, `categories`, and `tags` have immutability triggers that abort direct `UPDATE`/`DELETE`.
+- New revisions are represented by inserting new rows linked via `previous_*` columns.
 
 ### Invariants (Triggers)
 - Account commodity must belong to same book.
 - Split commodity must match account commodity.
 - Split account must belong to same book as transaction.
 - Split category must belong to same book as transaction.
+- Transaction date/time guards enforce `txn_date` as `YYYY-MM-DD` and require UTC ISO-8601 `Z` format for `happened_at_utc`, `edited_at_utc`, and optional `posted_at_utc`.
 - Commodity scale bounds enforced.
 - Price source validity checks.
 - `book_state.change_seq` is bumped on inserts/updates/deletes for key tables.
 
+### Double-entry Enforcement
+- Command-path transaction creation/update enforces at least two splits and balanced split totals (sum to zero) for user-entered journal transactions.
+- System-generated transaction flows (imports, trading/dividend helpers) write explicit paired debit/credit splits and still pass split-level schema invariants.
+
 ### Seed Data (V1 + later)
 - Default book (`Personal`), base currency (`USD`), starter accounts, categories, and manual price source.
-- Currency seeds and FX sources (V11-V13) with display symbols (V14).
+- Currency seeds, country defaults, and FX sources/settings are included in V1.
+- Starter `accounts` seed inserts are placed after `countries`/`institutions` are created so the consolidated V1 script validates in a single SQLite pass.

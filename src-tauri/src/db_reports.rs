@@ -1087,11 +1087,12 @@ mod tests {
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).expect("create temp dir");
 
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
         DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         }
     }

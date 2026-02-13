@@ -8,6 +8,36 @@ use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
 
+fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
+    conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
+        .map_err(|e| e.to_string())
+}
+
+fn clear_redo_stack(conn: &rusqlite::Connection, session_id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM session_redo_stack WHERE session_id = ?1", [session_id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn record_insert_change(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+    table_name: &str,
+    row_id: i64,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO session_undo_stack (session_id, table_name, row_id) VALUES (?1, ?2, ?3)",
+        params![session_id, table_name, row_id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM session_reverts WHERE session_id = ?1 AND table_name = ?2 AND row_id = ?3",
+        params![session_id, table_name, row_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Account {
     pub id: i64,
@@ -22,6 +52,9 @@ pub struct Account {
     pub country_name: Option<String>,
     pub number_last4: Option<String>,
     pub is_closed: bool,
+    pub is_hidden: bool,
+    pub is_system: bool,
+    pub system_role: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -51,6 +84,28 @@ pub struct AccountUpdate {
     pub country_id: Option<i64>,
     pub number_last4: Option<String>,
     pub is_closed: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProfitLossSystemAccounts {
+    pub income_summary_account_id: i64,
+    pub expense_summary_account_id: i64,
+    pub retained_earnings_account_id: i64,
+    pub commodity_id: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FiscalYearCloseInput {
+    pub close_date: String,
+    pub memo: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FiscalYearCloseResult {
+    pub tx_id: Option<i64>,
+    pub closed_accounts_count: i64,
+    pub retained_earnings_delta_minor: i64,
+    pub close_date: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -118,6 +173,7 @@ pub struct Category {
     pub id: i64,
     pub book_id: i64,
     pub parent_id: Option<i64>,
+    pub previous_category_id: Option<i64>,
     pub name: String,
     pub kind: String,
     pub color: Option<String>,
@@ -148,6 +204,7 @@ pub struct CategoryUpdate {
 pub struct Payee {
     pub id: i64,
     pub book_id: i64,
+    pub previous_payee_id: Option<i64>,
     pub name: String,
     pub kind: String,
     pub metadata: Option<String>,
@@ -176,6 +233,7 @@ pub struct PayeeUpdate {
 pub struct Tag {
     pub id: i64,
     pub book_id: i64,
+    pub previous_tag_id: Option<i64>,
     pub name: String,
     pub color: Option<String>,
     pub created_at: String,
@@ -475,6 +533,8 @@ pub struct DocumentFilter {
 
 fn map_account_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
     let is_closed: i64 = row.get(11)?;
+    let is_hidden: i64 = row.get(12)?;
+    let is_system: i64 = row.get(13)?;
     Ok(Account {
         id: row.get(0)?,
         book_id: row.get(1)?,
@@ -488,8 +548,105 @@ fn map_account_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
         country_name: row.get(9)?,
         number_last4: row.get(10)?,
         is_closed: is_closed != 0,
-        created_at: row.get(12)?,
-        updated_at: row.get(13)?,
+        is_hidden: is_hidden != 0,
+        is_system: is_system != 0,
+        system_role: row.get(14)?,
+        created_at: row.get(15)?,
+        updated_at: row.get(16)?,
+    })
+}
+
+fn validate_close_date(value: &str) -> Result<(), String> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return Err("close_date must be in YYYY-MM-DD format".to_string());
+    }
+    for (index, byte) in bytes.iter().enumerate() {
+        if index == 4 || index == 7 {
+            continue;
+        }
+        if !byte.is_ascii_digit() {
+            return Err("close_date must be in YYYY-MM-DD format".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn ensure_profit_loss_system_accounts_internal(
+    conn: &rusqlite::Connection,
+    book_id: i64,
+) -> Result<ProfitLossSystemAccounts, String> {
+    let commodity_id: i64 = conn
+        .query_row(
+            "SELECT base_commodity_id FROM books WHERE id = ?1",
+            [book_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO accounts (
+            book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role, created_at, updated_at
+        )
+        VALUES (
+            ?1, 'income', 'System Income Summary', ?2, 0, 1, 1, 'income_summary',
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        )",
+        params![book_id, commodity_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO accounts (
+            book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role, created_at, updated_at
+        )
+        VALUES (
+            ?1, 'expense', 'System Expense Summary', ?2, 0, 1, 1, 'expense_summary',
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        )",
+        params![book_id, commodity_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO accounts (
+            book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role, created_at, updated_at
+        )
+        VALUES (
+            ?1, 'equity', 'Retained Earnings', ?2, 0, 1, 1, 'retained_earnings',
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        )",
+        params![book_id, commodity_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let income_summary_account_id: i64 = conn
+        .query_row(
+            "SELECT id FROM accounts WHERE book_id = ?1 AND system_role = 'income_summary'",
+            [book_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let expense_summary_account_id: i64 = conn
+        .query_row(
+            "SELECT id FROM accounts WHERE book_id = ?1 AND system_role = 'expense_summary'",
+            [book_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let retained_earnings_account_id: i64 = conn
+        .query_row(
+            "SELECT id FROM accounts WHERE book_id = ?1 AND system_role = 'retained_earnings'",
+            [book_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(ProfitLossSystemAccounts {
+        income_summary_account_id,
+        expense_summary_account_id,
+        retained_earnings_account_id,
+        commodity_id,
     })
 }
 
@@ -540,11 +697,12 @@ fn map_category_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Category> {
         id: row.get(0)?,
         book_id: row.get(1)?,
         parent_id: row.get(2)?,
-        name: row.get(3)?,
-        kind: row.get(4)?,
-        color: row.get(5)?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        previous_category_id: row.get(3)?,
+        name: row.get(4)?,
+        kind: row.get(5)?,
+        color: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
     })
 }
 
@@ -552,11 +710,12 @@ fn map_payee_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Payee> {
     Ok(Payee {
         id: row.get(0)?,
         book_id: row.get(1)?,
-        name: row.get(2)?,
-        kind: row.get(3)?,
-        metadata: row.get(4)?,
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
+        previous_payee_id: row.get(2)?,
+        name: row.get(3)?,
+        kind: row.get(4)?,
+        metadata: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -564,10 +723,11 @@ fn map_tag_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
     Ok(Tag {
         id: row.get(0)?,
         book_id: row.get(1)?,
-        name: row.get(2)?,
-        color: row.get(3)?,
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
+        previous_tag_id: row.get(2)?,
+        name: row.get(3)?,
+        color: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
     })
 }
 
@@ -679,8 +839,8 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
     let is_closed = if input.is_closed.unwrap_or(false) { 1 } else { 0 };
 
     conn.execute(
-        "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, is_hidden, is_system, system_role, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.parent_id,
@@ -700,7 +860,7 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
         .query_row(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -722,7 +882,7 @@ pub fn get_account(db: State<DbState>, id: i64) -> Result<Option<Account>, Strin
         .prepare(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -749,11 +909,11 @@ pub fn list_accounts(db: State<DbState>, book_id: i64) -> Result<Vec<Account>, S
         .prepare(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
-             WHERE a.book_id = ?1 ORDER BY a.name ASC",
+               WHERE a.book_id = ?1 AND a.is_hidden = 0 ORDER BY a.name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -791,7 +951,7 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
                  number_last4 = ?9,
                  is_closed = ?10,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
+             WHERE id = ?1 AND is_system = 0",
             params![
                 input.id,
                 book_id,
@@ -808,6 +968,13 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
         .map_err(|e| e.to_string())?;
 
     if rows == 0 {
+        let is_system = conn
+            .query_row("SELECT is_system FROM accounts WHERE id = ?1", [input.id], |row| row.get::<_, i64>(0))
+            .optional()
+            .map_err(|e| e.to_string())?;
+        if is_system == Some(1) {
+            return Err("system accounts cannot be updated".to_string());
+        }
         return Err("account not found".to_string());
     }
 
@@ -815,7 +982,7 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
         .query_row(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -833,11 +1000,215 @@ pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
+    let is_system = conn
+        .query_row("SELECT is_system FROM accounts WHERE id = ?1", [id], |row| row.get::<_, i64>(0))
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if is_system == Some(1) {
+        return Err("system accounts cannot be deleted".to_string());
+    }
+
     let rows = conn
         .execute("DELETE FROM accounts WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
 
     Ok(rows > 0)
+}
+
+#[command]
+pub fn ensure_profit_loss_system_accounts(
+    db: State<DbState>,
+    book_id: i64,
+) -> Result<ProfitLossSystemAccounts, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let _ = book_id;
+    let book_id = SINGLE_BOOK_ID;
+    ensure_profit_loss_system_accounts_internal(conn, book_id)
+}
+
+#[command]
+pub fn close_fiscal_year(
+    db: State<DbState>,
+    input: FiscalYearCloseInput,
+) -> Result<FiscalYearCloseResult, String> {
+    validate_close_date(&input.close_date)?;
+
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+    let system_accounts = ensure_profit_loss_system_accounts_internal(&tx, book_id)?;
+    let reference = format!("year-close:{}", input.close_date);
+
+    let existing_close_id: Option<i64> = tx
+        .query_row(
+            "SELECT t.id
+             FROM transactions t
+             WHERE t.book_id = ?1
+               AND t.reference = ?2
+                             AND t.status != 'void'
+               AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+               AND NOT EXISTS (
+                 SELECT 1 FROM session_reverts sr
+                 WHERE sr.table_name = 'transactions'
+                   AND sr.row_id = t.id
+                   AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+               )
+             LIMIT 1",
+            params![book_id, reference],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if existing_close_id.is_some() {
+        return Err("fiscal year already closed for close_date".to_string());
+    }
+
+    let mut account_adjustments: Vec<(i64, i64, String)> = Vec::new();
+    let mut retained_earnings_delta_minor: i64 = 0;
+    {
+        let mut stmt = tx
+            .prepare(
+                "SELECT a.id, a.type, a.commodity_id, COALESCE(SUM(s.amount_minor), 0) AS balance_minor
+                 FROM accounts a
+                 LEFT JOIN splits s ON s.account_id = a.id
+                 LEFT JOIN transactions t ON t.id = s.tx_id
+                    AND t.book_id = ?1
+                    AND t.txn_date <= ?2
+                          AND t.status != 'void'
+                    AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+                    AND NOT EXISTS (
+                        SELECT 1 FROM session_reverts sr
+                        WHERE sr.table_name = 'transactions'
+                          AND sr.row_id = t.id
+                          AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+                    )
+                 WHERE a.book_id = ?1
+                   AND a.type IN ('income', 'expense')
+                   AND a.is_system = 0
+                 GROUP BY a.id, a.type, a.commodity_id
+                 HAVING balance_minor != 0",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![book_id, input.close_date], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+
+        for row in rows {
+            let (account_id, account_type, commodity_id, balance_minor) = row.map_err(|e| e.to_string())?;
+            if commodity_id != system_accounts.commodity_id {
+                return Err(format!(
+                    "account {} uses commodity {} but fiscal close requires base commodity {}",
+                    account_id, commodity_id, system_accounts.commodity_id
+                ));
+            }
+            account_adjustments.push((account_id, -balance_minor, account_type));
+            retained_earnings_delta_minor += balance_minor;
+        }
+    }
+
+    if account_adjustments.is_empty() {
+        tx.commit().map_err(|e| e.to_string())?;
+        return Ok(FiscalYearCloseResult {
+            tx_id: None,
+            closed_accounts_count: 0,
+            retained_earnings_delta_minor: 0,
+            close_date: input.close_date,
+        });
+    }
+
+    let mut splits: Vec<(i64, i64)> = Vec::new();
+    let mut income_summary_balance: i64 = 0;
+    let mut expense_summary_balance: i64 = 0;
+
+    for (account_id, adjustment_minor, account_type) in &account_adjustments {
+        splits.push((*account_id, *adjustment_minor));
+        let summary_amount = -*adjustment_minor;
+        if account_type == "income" {
+            splits.push((system_accounts.income_summary_account_id, summary_amount));
+            income_summary_balance += summary_amount;
+        } else {
+            splits.push((system_accounts.expense_summary_account_id, summary_amount));
+            expense_summary_balance += summary_amount;
+        }
+    }
+
+    if income_summary_balance != 0 {
+        splits.push((system_accounts.income_summary_account_id, -income_summary_balance));
+    }
+    if expense_summary_balance != 0 {
+        splits.push((system_accounts.expense_summary_account_id, -expense_summary_balance));
+    }
+    if retained_earnings_delta_minor != 0 {
+        splits.push((
+            system_accounts.retained_earnings_account_id,
+            retained_earnings_delta_minor,
+        ));
+    }
+
+    let split_sum: i64 = splits.iter().map(|(_, amount)| *amount).sum();
+    if split_sum != 0 {
+        return Err("fiscal close failed: generated splits are unbalanced".to_string());
+    }
+
+    let session_id = current_session_id(&tx)?;
+    let happened_at_utc = format!("{}T23:59:59.000Z", input.close_date);
+    let memo = input
+        .memo
+        .unwrap_or_else(|| format!("Fiscal year close {}", input.close_date));
+
+    tx.execute(
+        "INSERT INTO transactions (
+            book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
+            payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, NULL, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+            NULL, ?4, 'cleared', ?5, NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![book_id, input.close_date, happened_at_utc, memo, reference, session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tx_id = tx.last_insert_rowid();
+    clear_redo_stack(&tx, &session_id)?;
+    record_insert_change(&tx, &session_id, "transactions", tx_id)?;
+
+    for (account_id, amount_minor) in splits {
+        if amount_minor == 0 {
+            continue;
+        }
+        tx.execute(
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![
+                tx_id,
+                account_id,
+                system_accounts.commodity_id,
+                amount_minor,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(FiscalYearCloseResult {
+        tx_id: Some(tx_id),
+        closed_accounts_count: account_adjustments.len() as i64,
+        retained_earnings_delta_minor,
+        close_date: input.close_date,
+    })
 }
 
 fn validate_institution_kind(kind: &str) -> Result<(), String> {
@@ -1334,8 +1705,18 @@ pub fn list_categories(db: State<DbState>, book_id: i64) -> Result<Vec<Category>
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
-             FROM categories WHERE book_id = ?1 ORDER BY name ASC",
+                        "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
+                                        created_at, updated_at
+                         FROM categories
+                         WHERE book_id = ?1
+                             AND NOT EXISTS (SELECT 1 FROM categories newer WHERE newer.previous_category_id = categories.id)
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM session_reverts sr
+                                 WHERE sr.table_name = 'categories'
+                                     AND sr.row_id = categories.id
+                                     AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+                             )
+                         ORDER BY name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1355,20 +1736,31 @@ pub fn list_categories(db: State<DbState>, book_id: i64) -> Result<Vec<Category>
 pub fn create_category(db: State<DbState>, input: CategoryCreate) -> Result<Category, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO categories (book_id, parent_id, name, kind, color, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-        params![book_id, input.parent_id, input.name, input.kind, input.color],
+        "INSERT INTO categories (
+            book_id, parent_id, name, kind, color, previous_category_id,
+                session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, NULL,
+                ?6,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![book_id, input.parent_id, input.name, input.kind, input.color, session_id],
     )
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "categories", id)?;
     let category = conn
         .query_row(
-            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
+            "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
+                    created_at, updated_at
              FROM categories WHERE id = ?1",
             [id],
             map_category_row,
@@ -1385,7 +1777,8 @@ pub fn get_category(db: State<DbState>, id: i64) -> Result<Option<Category>, Str
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
+            "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
+                    created_at, updated_at
              FROM categories WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -1402,39 +1795,50 @@ pub fn get_category(db: State<DbState>, id: i64) -> Result<Option<Category>, Str
 pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Category, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
 
-    let rows = conn
-        .execute(
-            "UPDATE categories
-             SET book_id = ?2,
-                 parent_id = ?3,
-                 name = ?4,
-                 kind = ?5,
-                 color = ?6,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![
-                input.id,
-                book_id,
-                input.parent_id,
-                input.name,
-                input.kind,
-                input.color,
-            ],
-        )
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM categories WHERE id = ?1", [input.id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
-
-    if rows == 0 {
+    if exists.is_none() {
         return Err("category not found".to_string());
     }
 
+    conn.execute(
+        "INSERT INTO categories (
+            book_id, parent_id, name, kind, color, previous_category_id,
+                session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6,
+                ?7,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            book_id,
+            input.parent_id,
+            input.name,
+            input.kind,
+            input.color,
+            input.id,
+            session_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "categories", new_id)?;
+
     let category = conn
         .query_row(
-            "SELECT id, book_id, parent_id, name, kind, color, created_at, updated_at
+            "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
+                    created_at, updated_at
              FROM categories WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_category_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1444,14 +1848,18 @@ pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Cate
 
 #[command]
 pub fn delete_category(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
-    let rows = conn
-        .execute("DELETE FROM categories WHERE id = ?1", [id])
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM categories WHERE id = ?1", [id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Ok(false);
+    }
 
-    Ok(rows > 0)
+    Err("delete_category is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -1463,8 +1871,18 @@ pub fn list_payees(db: State<DbState>, book_id: i64) -> Result<Vec<Payee>, Strin
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
-             FROM payees WHERE book_id = ?1 ORDER BY name ASC",
+                        "SELECT id, book_id, previous_payee_id, name, kind, metadata,
+                                        created_at, updated_at
+                         FROM payees
+                         WHERE book_id = ?1
+                             AND NOT EXISTS (SELECT 1 FROM payees newer WHERE newer.previous_payee_id = payees.id)
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM session_reverts sr
+                                 WHERE sr.table_name = 'payees'
+                                     AND sr.row_id = payees.id
+                                     AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+                             )
+                         ORDER BY name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1484,20 +1902,31 @@ pub fn list_payees(db: State<DbState>, book_id: i64) -> Result<Vec<Payee>, Strin
 pub fn create_payee(db: State<DbState>, input: PayeeCreate) -> Result<Payee, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO payees (book_id, name, kind, metadata, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-        params![book_id, input.name, input.kind, input.metadata],
+        "INSERT INTO payees (
+            book_id, name, kind, metadata, previous_payee_id,
+                session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, NULL,
+                ?5,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![book_id, input.name, input.kind, input.metadata, session_id],
     )
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "payees", id)?;
     let payee = conn
         .query_row(
-            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
+            "SELECT id, book_id, previous_payee_id, name, kind, metadata,
+                    created_at, updated_at
              FROM payees WHERE id = ?1",
             [id],
             map_payee_row,
@@ -1514,7 +1943,8 @@ pub fn get_payee(db: State<DbState>, id: i64) -> Result<Option<Payee>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
+            "SELECT id, book_id, previous_payee_id, name, kind, metadata,
+                    created_at, updated_at
              FROM payees WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -1531,31 +1961,42 @@ pub fn get_payee(db: State<DbState>, id: i64) -> Result<Option<Payee>, String> {
 pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
 
-    let rows = conn
-        .execute(
-            "UPDATE payees
-             SET book_id = ?2,
-                 name = ?3,
-                 kind = ?4,
-                 metadata = ?5,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![input.id, book_id, input.name, input.kind, input.metadata],
-        )
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM payees WHERE id = ?1", [input.id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
-
-    if rows == 0 {
+    if exists.is_none() {
         return Err("payee not found".to_string());
     }
 
+    conn.execute(
+        "INSERT INTO payees (
+            book_id, name, kind, metadata, previous_payee_id,
+                session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+                ?6,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![book_id, input.name, input.kind, input.metadata, input.id, session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "payees", new_id)?;
+
     let payee = conn
         .query_row(
-            "SELECT id, book_id, name, kind, metadata, created_at, updated_at
+            "SELECT id, book_id, previous_payee_id, name, kind, metadata,
+                    created_at, updated_at
              FROM payees WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_payee_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1565,14 +2006,18 @@ pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, Str
 
 #[command]
 pub fn delete_payee(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
-    let rows = conn
-        .execute("DELETE FROM payees WHERE id = ?1", [id])
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM payees WHERE id = ?1", [id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Ok(false);
+    }
 
-    Ok(rows > 0)
+    Err("delete_payee is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -1584,8 +2029,18 @@ pub fn list_tags(db: State<DbState>, book_id: i64) -> Result<Vec<Tag>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, name, color, created_at, updated_at
-             FROM tags WHERE book_id = ?1 ORDER BY name ASC",
+                        "SELECT id, book_id, previous_tag_id, name, color,
+                                        created_at, updated_at
+                         FROM tags
+                         WHERE book_id = ?1
+                             AND NOT EXISTS (SELECT 1 FROM tags newer WHERE newer.previous_tag_id = tags.id)
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM session_reverts sr
+                                 WHERE sr.table_name = 'tags'
+                                     AND sr.row_id = tags.id
+                                     AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+                             )
+                         ORDER BY name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1605,20 +2060,31 @@ pub fn list_tags(db: State<DbState>, book_id: i64) -> Result<Vec<Tag>, String> {
 pub fn create_tag(db: State<DbState>, input: TagCreate) -> Result<Tag, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO tags (book_id, name, color, created_at, updated_at)
-         VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-        params![book_id, input.name, input.color],
+        "INSERT INTO tags (
+            book_id, name, color, previous_tag_id,
+                session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, NULL,
+                ?4,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![book_id, input.name, input.color, session_id],
     )
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "tags", id)?;
     let tag = conn
         .query_row(
-            "SELECT id, book_id, name, color, created_at, updated_at
+            "SELECT id, book_id, previous_tag_id, name, color,
+                    created_at, updated_at
              FROM tags WHERE id = ?1",
             [id],
             map_tag_row,
@@ -1635,7 +2101,8 @@ pub fn get_tag(db: State<DbState>, id: i64) -> Result<Option<Tag>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, name, color, created_at, updated_at
+            "SELECT id, book_id, previous_tag_id, name, color,
+                    created_at, updated_at
              FROM tags WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -1652,30 +2119,42 @@ pub fn get_tag(db: State<DbState>, id: i64) -> Result<Option<Tag>, String> {
 pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let book_id = SINGLE_BOOK_ID;
 
-    let rows = conn
-        .execute(
-            "UPDATE tags
-             SET book_id = ?2,
-                 name = ?3,
-                 color = ?4,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![input.id, book_id, input.name, input.color],
-        )
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM tags WHERE id = ?1", [input.id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
-
-    if rows == 0 {
+    if exists.is_none() {
         return Err("tag not found".to_string());
     }
 
+    conn.execute(
+        "INSERT INTO tags (
+            book_id, name, color, previous_tag_id,
+                session_id, created_at, updated_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4,
+                ?5,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![book_id, input.name, input.color, input.id, session_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "tags", new_id)?;
+
     let tag = conn
         .query_row(
-            "SELECT id, book_id, name, color, created_at, updated_at
+            "SELECT id, book_id, previous_tag_id, name, color,
+                    created_at, updated_at
              FROM tags WHERE id = ?1",
-            [input.id],
+            [new_id],
             map_tag_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1685,14 +2164,18 @@ pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
 
 #[command]
 pub fn delete_tag(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
-    let rows = conn
-        .execute("DELETE FROM tags WHERE id = ?1", [id])
+    let exists: Option<i64> = conn
+        .query_row("SELECT id FROM tags WHERE id = ?1", [id], |row| row.get(0))
+        .optional()
         .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Ok(false);
+    }
 
-    Ok(rows > 0)
+    Err("delete_tag is not supported in immutable mode".to_string())
 }
 
 #[command]
@@ -2146,11 +2629,12 @@ mod tests {
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).expect("create temp dir");
 
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
         DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         }
     }

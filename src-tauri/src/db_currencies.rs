@@ -1443,7 +1443,8 @@ mod tests {
 
     fn open_test_db() -> (Connection, PathBuf) {
         let temp = create_temp_dir("db");
-        open_and_migrate(&temp).expect("open and migrate")
+        let (conn, path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
+        (conn, path)
     }
 
     #[test]

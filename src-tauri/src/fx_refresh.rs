@@ -537,11 +537,12 @@ mod tests {
 
     fn create_db_state() -> DbState {
         let temp = create_temp_dir("db");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
         DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         }
     }

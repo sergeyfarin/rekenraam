@@ -1,4 +1,7 @@
 -- V1: full schema (consolidated)
+-- Maintainer note:
+-- Before editing this file in future, ask explicitly whether the change should be done
+-- as (a) a new migration file or (b) by modifying V1 directly.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -32,6 +35,9 @@ CREATE TABLE IF NOT EXISTS commodities (
   symbol     TEXT,
   name       TEXT NOT NULL,
   scale      INTEGER NOT NULL DEFAULT 2,
+  is_active  INTEGER NOT NULL DEFAULT 1,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  display_symbol TEXT,
   metadata   TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -59,42 +65,48 @@ CREATE TABLE IF NOT EXISTS commodity_prices (
 );
 
 CREATE TABLE IF NOT EXISTS payees (
-  id         INTEGER PRIMARY KEY,
-  book_id    INTEGER NOT NULL,
-  name       TEXT NOT NULL,
-  kind       TEXT NOT NULL DEFAULT 'payee' CHECK (kind IN ('payee','customer','vendor','employee','other')),
-  metadata   TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  id                INTEGER PRIMARY KEY,
+  book_id           INTEGER NOT NULL,
+  name              TEXT NOT NULL,
+  kind              TEXT NOT NULL DEFAULT 'payee' CHECK (kind IN ('payee','customer','vendor','employee','other')),
+  metadata          TEXT,
+  previous_payee_id INTEGER,
+  session_id        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(previous_payee_id) REFERENCES payees(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS categories (
-  id         INTEGER PRIMARY KEY,
-  book_id    INTEGER NOT NULL,
-  parent_id  INTEGER,
-  name       TEXT NOT NULL,
-  kind       TEXT NOT NULL DEFAULT 'expense' CHECK (kind IN ('income','expense','transfer','other')),
-  color      TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  id                   INTEGER PRIMARY KEY,
+  book_id              INTEGER NOT NULL,
+  parent_id            INTEGER,
+  name                 TEXT NOT NULL,
+  kind                 TEXT NOT NULL DEFAULT 'expense' CHECK (kind IN ('income','expense','transfer','other')),
+  color                TEXT,
+  previous_category_id INTEGER,
+  session_id           TEXT,
+  created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(parent_id) REFERENCES categories(id) ON DELETE SET NULL,
-  UNIQUE(book_id, parent_id, name)
+  FOREIGN KEY(previous_category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_categories_book_parent ON categories(book_id, parent_id);
 
 CREATE TABLE IF NOT EXISTS tags (
-  id         INTEGER PRIMARY KEY,
-  book_id    INTEGER NOT NULL,
-  name       TEXT NOT NULL,
-  color      TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  id               INTEGER PRIMARY KEY,
+  book_id          INTEGER NOT NULL,
+  name             TEXT NOT NULL,
+  color            TEXT,
+  previous_tag_id  INTEGER,
+  session_id       TEXT,
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(previous_tag_id) REFERENCES tags(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS people (
@@ -135,14 +147,22 @@ CREATE TABLE IF NOT EXISTS accounts (
   )),
   name         TEXT NOT NULL,
   commodity_id INTEGER NOT NULL,
+  booking_policy TEXT NOT NULL DEFAULT 'fifo' CHECK (booking_policy IN ('fifo','lifo','strict','average')),
   institution  TEXT,
   number_last4 TEXT,
+  institution_id INTEGER,
+  country_id   INTEGER,
+  is_hidden    INTEGER NOT NULL DEFAULT 0,
+  is_system    INTEGER NOT NULL DEFAULT 0,
+  system_role  TEXT,
   is_closed    INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(parent_id) REFERENCES accounts(id) ON DELETE SET NULL,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE RESTRICT,
+  FOREIGN KEY(institution_id) REFERENCES institutions(id),
+  FOREIGN KEY(country_id) REFERENCES countries(id),
   UNIQUE(book_id, parent_id, name)
 );
 
@@ -151,16 +171,21 @@ CREATE INDEX IF NOT EXISTS idx_accounts_book_type ON accounts(book_id, type);
 CREATE TABLE IF NOT EXISTS transactions (
   id          INTEGER PRIMARY KEY,
   book_id     INTEGER NOT NULL,
+  previous_tx_id INTEGER,
   txn_date    TEXT NOT NULL,
+  happened_at_utc TEXT NOT NULL DEFAULT (date('now')),
+  posted_at_utc TEXT,
   payee_id    INTEGER,
   memo        TEXT,
   status      TEXT NOT NULL DEFAULT 'uncleared' CHECK (status IN ('uncleared','cleared','reconciled','void')),
   reference   TEXT,
   import_id   TEXT,
   import_session_id INTEGER,
+  session_id TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(previous_tx_id) REFERENCES transactions(id) ON DELETE SET NULL,
   FOREIGN KEY(payee_id) REFERENCES payees(id) ON DELETE SET NULL,
   FOREIGN KEY(import_session_id) REFERENCES import_sessions(id) ON DELETE SET NULL
 );
@@ -168,6 +193,48 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_tx_book_date ON transactions(book_id, txn_date);
 CREATE INDEX IF NOT EXISTS idx_tx_book_payee ON transactions(book_id, payee_id);
 CREATE INDEX IF NOT EXISTS idx_tx_import_session ON transactions(import_session_id);
+
+CREATE TRIGGER IF NOT EXISTS trg_transactions_datetime_format_ins
+BEFORE INSERT ON transactions
+BEGIN
+  SELECT CASE
+    WHEN NEW.txn_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      OR date(NEW.txn_date) IS NULL
+      THEN RAISE(ABORT, 'txn_date must be YYYY-MM-DD')
+  END;
+
+  SELECT CASE
+    WHEN NOT (
+      (NEW.happened_at_utc GLOB '????-??-??' AND date(NEW.happened_at_utc) IS NOT NULL)
+      OR
+      (NEW.happened_at_utc GLOB '????-??-??T??:??*Z' AND datetime(NEW.happened_at_utc) IS NOT NULL)
+    )
+      THEN RAISE(ABORT, 'happened_at_utc must be YYYY-MM-DD or UTC ISO-8601 (Z)')
+  END;
+
+  SELECT CASE
+    WHEN NEW.posted_at_utc IS NOT NULL AND (
+      NOT (
+        (NEW.posted_at_utc GLOB '????-??-??' AND date(NEW.posted_at_utc) IS NOT NULL)
+        OR
+        (NEW.posted_at_utc GLOB '????-??-??T??:??*Z' AND datetime(NEW.posted_at_utc) IS NOT NULL)
+      )
+    )
+      THEN RAISE(ABORT, 'posted_at_utc must be YYYY-MM-DD or UTC ISO-8601 (Z) when set')
+  END;
+
+  SELECT CASE
+    WHEN NEW.created_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.created_at) IS NULL
+      THEN RAISE(ABORT, 'created_at must be UTC ISO-8601 (Z)')
+  END;
+
+  SELECT CASE
+    WHEN NEW.updated_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.updated_at) IS NULL
+      THEN RAISE(ABORT, 'updated_at must be UTC ISO-8601 (Z)')
+  END;
+END;
 
 CREATE TABLE IF NOT EXISTS splits (
   id            INTEGER PRIMARY KEY,
@@ -220,6 +287,7 @@ CREATE TABLE IF NOT EXISTS lots (
   book_id      INTEGER NOT NULL,
   account_id   INTEGER NOT NULL,
   commodity_id INTEGER NOT NULL,
+  cost_basis_minor INTEGER NOT NULL DEFAULT 0,
   opened_date  TEXT,
   closed_date  TEXT,
   notes        TEXT,
@@ -781,26 +849,6 @@ SET base_commodity_id = (
 )
 WHERE base_commodity_id IS NULL AND name = 'Personal';
 
-INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
-VALUES (
-  (SELECT id FROM books WHERE name='Personal'),
-  'cash',
-  'Cash',
-  (SELECT id FROM commodities WHERE book_id = (SELECT id FROM books WHERE name='Personal') AND symbol = 'USD'),
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-
-INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
-VALUES (
-  (SELECT id FROM books WHERE name='Personal'),
-  'checking',
-  'Checking Account',
-  (SELECT id FROM commodities WHERE book_id = (SELECT id FROM books WHERE name='Personal') AND symbol = 'USD'),
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-
 INSERT OR IGNORE INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
@@ -1072,8 +1120,6 @@ BEGIN
 END;
 
 -- V5: booking policy + lot cost basis
-ALTER TABLE accounts ADD COLUMN booking_policy TEXT NOT NULL DEFAULT 'fifo' CHECK (booking_policy IN ('fifo','lifo','strict','average'));
-ALTER TABLE lots ADD COLUMN cost_basis_minor INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_accounts_booking_policy ON accounts(booking_policy);
 
 -- V6: balance constraints
@@ -1161,6 +1207,52 @@ CREATE TABLE IF NOT EXISTS import_session_transactions (
   UNIQUE(session_id, tx_id, action)
 );
 
+CREATE TRIGGER IF NOT EXISTS trg_import_sessions_datetime_format_ins
+BEFORE INSERT ON import_sessions
+BEGIN
+  SELECT CASE
+    WHEN NEW.started_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.started_at) IS NULL
+      THEN RAISE(ABORT, 'started_at must be UTC ISO-8601 (Z)')
+  END;
+
+  SELECT CASE
+    WHEN NEW.committed_at IS NOT NULL AND (
+      NEW.committed_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.committed_at) IS NULL
+    )
+      THEN RAISE(ABORT, 'committed_at must be UTC ISO-8601 (Z) when set')
+  END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_import_sessions_datetime_format_upd
+BEFORE UPDATE OF started_at, committed_at ON import_sessions
+BEGIN
+  SELECT CASE
+    WHEN NEW.started_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.started_at) IS NULL
+      THEN RAISE(ABORT, 'started_at must be UTC ISO-8601 (Z)')
+  END;
+
+  SELECT CASE
+    WHEN NEW.committed_at IS NOT NULL AND (
+      NEW.committed_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.committed_at) IS NULL
+    )
+      THEN RAISE(ABORT, 'committed_at must be UTC ISO-8601 (Z) when set')
+  END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_import_session_transactions_datetime_format_ins
+BEFORE INSERT ON import_session_transactions
+BEGIN
+  SELECT CASE
+    WHEN NEW.created_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.created_at) IS NULL
+      THEN RAISE(ABORT, 'created_at must be UTC ISO-8601 (Z)')
+  END;
+END;
+
 CREATE INDEX IF NOT EXISTS idx_import_session_transactions_session ON import_session_transactions(session_id);
 CREATE INDEX IF NOT EXISTS idx_import_session_transactions_tx ON import_session_transactions(tx_id);
 
@@ -1220,9 +1312,11 @@ CREATE TABLE IF NOT EXISTS countries (
   book_id    INTEGER NOT NULL,
   code       TEXT NOT NULL,
   name       TEXT NOT NULL,
+  default_currency_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(default_currency_id) REFERENCES currencies(id),
   UNIQUE(book_id, code),
   UNIQUE(book_id, name)
 );
@@ -1240,13 +1334,111 @@ CREATE TABLE IF NOT EXISTS institutions (
   UNIQUE(book_id, name)
 );
 
-ALTER TABLE accounts ADD COLUMN institution_id INTEGER REFERENCES institutions(id);
-ALTER TABLE accounts ADD COLUMN country_id INTEGER REFERENCES countries(id);
+INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
+VALUES (
+  (SELECT id FROM books WHERE name='Personal'),
+  'cash',
+  'Cash',
+  (SELECT id FROM commodities WHERE book_id = (SELECT id FROM books WHERE name='Personal') AND symbol = 'USD'),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
+VALUES (
+  (SELECT id FROM books WHERE name='Personal'),
+  'checking',
+  'Checking Account',
+  (SELECT id FROM commodities WHERE book_id = (SELECT id FROM books WHERE name='Personal') AND symbol = 'USD'),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- V18: hidden/system profit & loss accounts
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_system_role_unique
+  ON accounts(book_id, system_role)
+  WHERE system_role IS NOT NULL;
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_system_role_insert_guard
+BEFORE INSERT ON accounts
+WHEN NEW.system_role IS NOT NULL
+  AND NEW.system_role NOT IN ('income_summary', 'expense_summary', 'retained_earnings')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid accounts.system_role');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_system_role_update_guard
+BEFORE UPDATE ON accounts
+WHEN NEW.system_role IS NOT NULL
+  AND NEW.system_role NOT IN ('income_summary', 'expense_summary', 'retained_earnings')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid accounts.system_role');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_system_role_requires_system_insert
+BEFORE INSERT ON accounts
+WHEN NEW.system_role IS NOT NULL AND NEW.is_system = 0
+BEGIN
+  SELECT RAISE(ABORT, 'accounts.system_role requires is_system=1');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_accounts_system_role_requires_system_update
+BEFORE UPDATE ON accounts
+WHEN NEW.system_role IS NOT NULL AND NEW.is_system = 0
+BEGIN
+  SELECT RAISE(ABORT, 'accounts.system_role requires is_system=1');
+END;
+
+INSERT OR IGNORE INTO accounts (
+  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at, updated_at
+)
+VALUES (
+  1,
+  'income',
+  'System Income Summary',
+  (SELECT base_commodity_id FROM books WHERE id = 1),
+  1,
+  1,
+  'income_summary',
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+INSERT OR IGNORE INTO accounts (
+  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at, updated_at
+)
+VALUES (
+  1,
+  'expense',
+  'System Expense Summary',
+  (SELECT base_commodity_id FROM books WHERE id = 1),
+  1,
+  1,
+  'expense_summary',
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+INSERT OR IGNORE INTO accounts (
+  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at, updated_at
+)
+VALUES (
+  1,
+  'equity',
+  'Retained Earnings',
+  (SELECT base_commodity_id FROM books WHERE id = 1),
+  1,
+  1,
+  'retained_earnings',
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
 
 CREATE INDEX IF NOT EXISTS idx_countries_book ON countries(book_id);
 CREATE INDEX IF NOT EXISTS idx_institutions_book ON institutions(book_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_institution ON accounts(institution_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_country ON accounts(country_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_book_hidden ON accounts(book_id, is_hidden);
 
 -- V11: currencies seed
 CREATE TABLE IF NOT EXISTS currencies (
@@ -1261,8 +1453,6 @@ CREATE TABLE IF NOT EXISTS currencies (
   UNIQUE(book_id, code),
   UNIQUE(book_id, name)
 );
-
-ALTER TABLE countries ADD COLUMN default_currency_id INTEGER REFERENCES currencies(id);
 
 CREATE INDEX IF NOT EXISTS idx_currencies_book ON currencies(book_id);
 CREATE INDEX IF NOT EXISTS idx_countries_currency ON countries(default_currency_id);
@@ -1696,8 +1886,6 @@ CREATE TABLE IF NOT EXISTS backup_settings (
 INSERT OR IGNORE INTO backup_settings (book_id) VALUES (1);
 
 -- V13: currency management and FX rates
-ALTER TABLE commodities ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE commodities ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_commodities_active ON commodities(book_id, kind, is_active);
 
 CREATE TABLE IF NOT EXISTS fx_rates_daily (
@@ -1708,10 +1896,15 @@ CREATE TABLE IF NOT EXISTS fx_rates_daily (
   rate_date          TEXT NOT NULL,
   rate               REAL NOT NULL,
   source             TEXT,
+  source_id          INTEGER,
+  is_derived         INTEGER NOT NULL DEFAULT 0,
+  derived_via_currency_id INTEGER,
   created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
   FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES fx_rate_sources(id) ON DELETE SET NULL,
+  FOREIGN KEY(derived_via_currency_id) REFERENCES commodities(id) ON DELETE SET NULL,
   UNIQUE(book_id, from_currency_id, to_currency_id, rate_date)
 );
 
@@ -1805,7 +1998,6 @@ INSERT OR IGNORE INTO commodities (book_id, kind, symbol, name, scale, is_active
 UPDATE commodities SET is_active = 1 WHERE book_id = 1 AND symbol = 'USD' AND kind = 'currency';
 
 -- V14: currency display symbols
-ALTER TABLE commodities ADD COLUMN display_symbol TEXT;
 UPDATE commodities SET display_symbol = '$' WHERE symbol = 'USD' AND kind = 'currency';
 UPDATE commodities SET display_symbol = '€' WHERE symbol = 'EUR' AND kind = 'currency';
 UPDATE commodities SET display_symbol = '£' WHERE symbol = 'GBP' AND kind = 'currency';
@@ -1896,7 +2088,6 @@ CREATE TABLE IF NOT EXISTS fx_rate_refresh_state (
 CREATE INDEX IF NOT EXISTS idx_fx_refresh_state_pair
   ON fx_rate_refresh_state(book_id, from_currency_id, to_currency_id, source_id);
 
-ALTER TABLE fx_rates_daily ADD COLUMN source_id INTEGER;
 CREATE INDEX IF NOT EXISTS idx_fx_daily_source ON fx_rates_daily(source_id);
 
 INSERT OR IGNORE INTO fx_rate_settings (book_id, base_currency_id, default_source_id)
@@ -1914,8 +2105,6 @@ WHERE c.book_id = 1 AND c.kind = 'currency' AND c.is_default = 1
 LIMIT 1;
 
 -- V16: derived FX rates
-ALTER TABLE fx_rates_daily ADD COLUMN is_derived INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE fx_rates_daily ADD COLUMN derived_via_currency_id INTEGER;
 CREATE INDEX IF NOT EXISTS idx_fx_daily_derived ON fx_rates_daily(is_derived);
 CREATE INDEX IF NOT EXISTS idx_fx_daily_derived_via ON fx_rates_daily(derived_via_currency_id);
 
@@ -1944,3 +2133,147 @@ UPDATE commodities
 SET is_default = 1, is_active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
 WHERE book_id = 1 AND kind = 'currency' AND symbol = 'USD'
   AND NOT EXISTS (SELECT 1 FROM commodities WHERE book_id = 1 AND kind = 'currency' AND is_default = 1);
+
+-- Append-only runtime/session metadata
+CREATE TABLE IF NOT EXISTS app_runtime_session (
+  id         TEXT PRIMARY KEY,
+  started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS session_undo_stack (
+  seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  table_name TEXT NOT NULL,
+  row_id     INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS session_redo_stack (
+  seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  table_name TEXT NOT NULL,
+  row_id     INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS session_reverts (
+  session_id  TEXT NOT NULL,
+  table_name  TEXT NOT NULL,
+  row_id      INTEGER NOT NULL,
+  reverted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY(session_id, table_name, row_id)
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_app_runtime_session_datetime_format_ins
+BEFORE INSERT ON app_runtime_session
+BEGIN
+  SELECT CASE
+    WHEN NEW.started_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.started_at) IS NULL
+      THEN RAISE(ABORT, 'started_at must be UTC ISO-8601 (Z)')
+  END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_session_undo_stack_datetime_format_ins
+BEFORE INSERT ON session_undo_stack
+BEGIN
+  SELECT CASE
+    WHEN NEW.created_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.created_at) IS NULL
+      THEN RAISE(ABORT, 'created_at must be UTC ISO-8601 (Z)')
+  END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_session_redo_stack_datetime_format_ins
+BEFORE INSERT ON session_redo_stack
+BEGIN
+  SELECT CASE
+    WHEN NEW.created_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.created_at) IS NULL
+      THEN RAISE(ABORT, 'created_at must be UTC ISO-8601 (Z)')
+  END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_session_reverts_datetime_format_ins
+BEFORE INSERT ON session_reverts
+BEGIN
+  SELECT CASE
+    WHEN NEW.reverted_at NOT GLOB '????-??-??T??:??:??*Z'
+      OR datetime(NEW.reverted_at) IS NULL
+      THEN RAISE(ABORT, 'reverted_at must be UTC ISO-8601 (Z)')
+  END;
+END;
+
+CREATE INDEX IF NOT EXISTS idx_transactions_previous_tx_id ON transactions(previous_tx_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_previous_unique
+  ON transactions(previous_tx_id)
+  WHERE previous_tx_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_payees_book_name ON payees(book_id, name);
+CREATE INDEX IF NOT EXISTS idx_payees_previous ON payees(previous_payee_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payees_previous_unique
+  ON payees(previous_payee_id)
+  WHERE previous_payee_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_categories_previous ON categories(previous_category_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_previous_unique
+  ON categories(previous_category_id)
+  WHERE previous_category_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tags_book_name ON tags(book_id, name);
+CREATE INDEX IF NOT EXISTS idx_tags_previous ON tags(previous_tag_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_previous_unique
+  ON tags(previous_tag_id)
+  WHERE previous_tag_id IS NOT NULL;
+
+-- Immutability guards (enforce append-only behavior)
+
+CREATE TRIGGER IF NOT EXISTS trg_transactions_append_only_update
+BEFORE UPDATE ON transactions
+BEGIN
+  SELECT RAISE(ABORT, 'transactions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_transactions_append_only_delete
+BEFORE DELETE ON transactions
+BEGIN
+  SELECT RAISE(ABORT, 'transactions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payees_append_only_update
+BEFORE UPDATE ON payees
+BEGIN
+  SELECT RAISE(ABORT, 'payees are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payees_append_only_delete
+BEFORE DELETE ON payees
+BEGIN
+  SELECT RAISE(ABORT, 'payees are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_categories_append_only_update
+BEFORE UPDATE ON categories
+BEGIN
+  SELECT RAISE(ABORT, 'categories are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_categories_append_only_delete
+BEFORE DELETE ON categories
+BEGIN
+  SELECT RAISE(ABORT, 'categories are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_tags_append_only_update
+BEFORE UPDATE ON tags
+BEGIN
+  SELECT RAISE(ABORT, 'tags are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_tags_append_only_delete
+BEFORE DELETE ON tags
+BEGIN
+  SELECT RAISE(ABORT, 'tags are append-only');
+END;
+
+-- End append-only section

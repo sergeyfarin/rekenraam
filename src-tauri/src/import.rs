@@ -1,4 +1,5 @@
 use csv::ReaderBuilder;
+use chrono::{Duration, NaiveDate};
 use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
@@ -92,6 +93,8 @@ pub struct ImportDraft {
     pub payee_name: Option<String>,
     pub memo: Option<String>,
     pub txn_date: Option<String>,
+    pub happened_at_utc: Option<String>,
+    pub posted_at_utc: Option<String>,
     pub amount_minor: Option<i64>,
     pub reference: Option<String>,
     pub import_id: Option<String>,
@@ -305,6 +308,48 @@ fn parse_ofx_date(raw: &str) -> Option<String> {
     Some(format_ymd(y, m, d))
 }
 
+fn parse_ofx_datetime_utc(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 14 {
+        return None;
+    }
+
+    let y: i32 = digits[0..4].parse().ok()?;
+    let m: u32 = digits[4..6].parse().ok()?;
+    let d: u32 = digits[6..8].parse().ok()?;
+    let hh: u32 = digits[8..10].parse().ok()?;
+    let mm: u32 = digits[10..12].parse().ok()?;
+    let ss: u32 = digits[12..14].parse().ok()?;
+
+    let mut dt = NaiveDate::from_ymd_opt(y, m, d)?.and_hms_opt(hh, mm, ss)?;
+
+    let offset_hours = trimmed
+        .find('[')
+        .and_then(|start| trimmed[start + 1..].find(']').map(|end| (start, end)))
+        .and_then(|(start, end)| {
+            let tz = &trimmed[start + 1..start + 1 + end];
+            let sign = if tz.starts_with('+') {
+                1_i64
+            } else if tz.starts_with('-') {
+                -1_i64
+            } else {
+                return None;
+            };
+            let hours_str: String = tz[1..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            let hours: i64 = hours_str.parse().ok()?;
+            Some(sign * hours)
+        });
+
+    let offset_hours = offset_hours?;
+    dt -= Duration::hours(offset_hours);
+
+    Some(format!("{}Z", dt.format("%Y-%m-%dT%H:%M:%S.000")))
+}
+
 fn parse_mt940_date(raw: &str) -> Option<String> {
     if raw.len() < 6 {
         return None;
@@ -387,6 +432,8 @@ fn parse_qif(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
         payee_name: None,
         memo: None,
         txn_date: None,
+        happened_at_utc: None,
+        posted_at_utc: None,
         amount_minor: None,
         reference: None,
         import_id: None,
@@ -406,6 +453,8 @@ fn parse_qif(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
                 payee_name: None,
                 memo: None,
                 txn_date: None,
+                happened_at_utc: None,
+                posted_at_utc: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -451,6 +500,8 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
         payee_name: None,
         memo: None,
         txn_date: None,
+        happened_at_utc: None,
+        posted_at_utc: None,
         amount_minor: None,
         reference: None,
         import_id: None,
@@ -468,6 +519,8 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
                 payee_name: None,
                 memo: None,
                 txn_date: None,
+                happened_at_utc: None,
+                posted_at_utc: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -488,6 +541,8 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
                 payee_name: None,
                 memo: None,
                 txn_date: None,
+                happened_at_utc: None,
+                posted_at_utc: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -502,7 +557,13 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
             continue;
         }
         if l.starts_with("<DTPOSTED>") {
-            current.txn_date = parse_ofx_date(l.replace("<DTPOSTED>", "").trim());
+            let raw = l.replace("<DTPOSTED>", "");
+            let raw = raw.trim().to_string();
+            current.txn_date = parse_ofx_date(&raw);
+            current.posted_at_utc = parse_ofx_datetime_utc(&raw);
+            if current.happened_at_utc.is_none() {
+                current.happened_at_utc = current.posted_at_utc.clone();
+            }
         } else if l.starts_with("<TRNAMT>") {
             current.amount_minor = Some(parse_amount_to_minor_with_locale(
                 &l.replace("<TRNAMT>", ""),
@@ -550,6 +611,8 @@ fn parse_hbci_mt940(
                 payee_name: None,
                 memo: None,
                 txn_date: if date.is_empty() { None } else { Some(date) },
+                happened_at_utc: None,
+                posted_at_utc: None,
                 amount_minor: Some(amount_minor),
                 reference: None,
                 import_id: None,
@@ -635,6 +698,8 @@ fn parse_csv(
             payee_name: get(payee_idx),
             memo: get(memo_idx),
             txn_date,
+            happened_at_utc: None,
+            posted_at_utc: None,
             amount_minor,
             reference: get(reference_idx),
             import_id: get(import_id_idx),
@@ -766,7 +831,13 @@ fn resolve_payee_id(
     if let Some(name) = draft.payee_name.as_ref() {
         let existing: Option<i64> = conn
             .query_row(
-                "SELECT id FROM payees WHERE book_id = ?1 AND name = ?2",
+                                "SELECT p.id
+                                 FROM payees p
+                                 WHERE p.book_id = ?1
+                                     AND p.name = ?2
+                                     AND NOT EXISTS (SELECT 1 FROM payees newer WHERE newer.previous_payee_id = p.id)
+                                 ORDER BY p.id DESC
+                                 LIMIT 1",
                 params![SINGLE_BOOK_ID, name],
                 |row| row.get(0),
             )
@@ -776,10 +847,20 @@ fn resolve_payee_id(
             return Ok(Some(id));
         }
         if create_payees {
+            let session_id: String = conn
+                .query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
+                .map_err(|e| e.to_string())?;
             conn.execute(
-                "INSERT INTO payees (book_id, name, kind, created_at, updated_at)
-                 VALUES (?1, ?2, 'payee', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-                params![SINGLE_BOOK_ID, name],
+                "INSERT INTO payees (
+                    book_id, name, kind, previous_payee_id,
+                          session_id, created_at, updated_at
+                 )
+                 VALUES (
+                    ?1, ?2, 'payee', NULL,
+                          ?3,
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 )",
+                params![SINGLE_BOOK_ID, name, session_id],
             )
             .map_err(|e| e.to_string())?;
             return Ok(Some(conn.last_insert_rowid()));
@@ -841,23 +922,62 @@ fn enrich_existing_transaction(
         || new_import_id.is_some()
         || new_session_id.is_some()
     {
+        let session_id: String = conn
+            .query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+        let (book_id, txn_date, happened_at_utc, posted_at_utc, status): (
+            i64,
+            String,
+            String,
+            Option<String>,
+            String,
+        ) = conn
+            .query_row(
+                "SELECT book_id, txn_date, happened_at_utc, posted_at_utc, status FROM transactions WHERE id = ?1",
+                [tx_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            )
+            .map_err(|e| e.to_string())?;
+
+        let resolved_payee_id = new_payee_id.or(payee_id);
+        let resolved_memo = new_memo.or(memo);
+        let resolved_reference = new_reference.or(reference);
+        let resolved_import_id = new_import_id.or(import_id);
+        let resolved_import_session_id = new_session_id.or(existing_session_id);
+
         conn.execute(
-            "UPDATE transactions
-             SET payee_id = COALESCE(?2, payee_id),
-                 memo = COALESCE(NULLIF(?3, ''), memo),
-                 reference = COALESCE(NULLIF(?4, ''), reference),
-                 import_id = COALESCE(NULLIF(?5, ''), import_id),
-                 import_session_id = COALESCE(?6, import_session_id),
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
+            "INSERT INTO transactions (
+                book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
+                payee_id, memo, status, reference, import_id, import_session_id,
+                session_id, created_at, updated_at
+             )
+             VALUES (
+                ?1, ?2, ?3, ?4, ?5,
+                ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             )",
             params![
+                book_id,
                 tx_id,
-                new_payee_id,
-                new_memo,
-                new_reference,
-                new_import_id,
-                new_session_id,
+                txn_date,
+                happened_at_utc,
+                posted_at_utc,
+                resolved_payee_id,
+                resolved_memo,
+                status,
+                resolved_reference,
+                resolved_import_id,
+                resolved_import_session_id,
+                session_id,
             ],
+        )
+        .map_err(|e| e.to_string())?;
+        let new_tx_id = conn.last_insert_rowid();
+        conn.execute("DELETE FROM session_redo_stack WHERE session_id = ?1", [session_id.as_str()])
+            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO session_undo_stack (session_id, table_name, row_id) VALUES (?1, 'transactions', ?2)",
+            params![session_id, new_tx_id],
         )
         .map_err(|e| e.to_string())?;
         return Ok(true);
@@ -1209,6 +1329,10 @@ pub fn import_transactions(
                 continue;
             }
         };
+        let happened_at_utc = draft
+            .happened_at_utc
+            .clone()
+            .unwrap_or_else(|| txn_date.clone());
         let amount_minor = match draft.amount_minor {
             Some(a) => a,
             None => {
@@ -1225,11 +1349,19 @@ pub fn import_transactions(
         let payee_id = resolve_payee_id(&tx, &draft, create_payees)?;
 
         tx.execute(
-            "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, import_session_id, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'uncleared', ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO transactions (
+                     book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
+                     payee_id, memo, status, reference, import_id, import_session_id, created_at, updated_at
+                 )
+                 VALUES (
+                     ?1, NULL, ?2, ?3, ?4,
+                     ?5, ?6, 'uncleared', ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 )",
             params![
                 SINGLE_BOOK_ID,
                 txn_date,
+                     happened_at_utc,
+                     draft.posted_at_utc,
                 payee_id,
                 draft.memo,
                 draft.reference,
@@ -1599,11 +1731,12 @@ mod tests {
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).expect("create temp dir");
 
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
         DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         }
     }
@@ -1791,6 +1924,8 @@ mod tests {
             payee_name: Some("Match Payee".to_string()),
             memo: None,
             txn_date: Some("2024-04-01".to_string()),
+            happened_at_utc: None,
+            posted_at_utc: None,
             amount_minor: Some(-2500),
             reference: None,
             import_id: Some("match-1".to_string()),
@@ -1804,6 +1939,8 @@ mod tests {
             payee_name: Some("Match Payee".to_string()),
             memo: None,
             txn_date: Some("2024-04-01".to_string()),
+            happened_at_utc: None,
+            posted_at_utc: None,
             amount_minor: Some(-2500),
             reference: None,
             import_id: Some("match-1".to_string()),
@@ -1851,6 +1988,8 @@ mod tests {
                 payee_name: Some("Missing Amount".to_string()),
                 memo: None,
                 txn_date: Some("2024-06-01".to_string()),
+                happened_at_utc: None,
+                posted_at_utc: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -1863,6 +2002,8 @@ mod tests {
                 payee_name: Some("Missing Date".to_string()),
                 memo: None,
                 txn_date: None,
+                happened_at_utc: None,
+                posted_at_utc: None,
                 amount_minor: Some(-1234),
                 reference: None,
                 import_id: None,
@@ -1908,6 +2049,8 @@ mod tests {
             payee_name: None,
             memo: Some("Duplicate Memo".to_string()),
             txn_date: Some("2024-06-05".to_string()),
+            happened_at_utc: None,
+            posted_at_utc: None,
             amount_minor: Some(-5000),
             reference: None,
             import_id: Some("dup-1".to_string()),
@@ -1929,6 +2072,8 @@ mod tests {
             payee_name: None,
             memo: Some("Duplicate Memo".to_string()),
             txn_date: Some("2024-06-05".to_string()),
+            happened_at_utc: None,
+            posted_at_utc: None,
             amount_minor: Some(-5000),
             reference: None,
             import_id: None,

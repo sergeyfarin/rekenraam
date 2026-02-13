@@ -242,6 +242,7 @@ fn checkpoint_and_close(db: &State<DbState>) -> Result<PathBuf, String> {
     }
 
     guard.conn = None;
+    guard.audit_user = None;
     Ok(db_path)
 }
 
@@ -250,7 +251,7 @@ fn open_and_set_storage(
     storage_path: &PathBuf,
     open_path: &PathBuf,
 ) -> Result<String, String> {
-    let (conn, effective_db_path) =
+    let (conn, effective_db_path, audit_user) =
         open_and_migrate(open_path).map_err(|e| format!("Migration failed: {e}"))?;
 
     save_storage_path(storage_path);
@@ -258,6 +259,7 @@ fn open_and_set_storage(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     guard.db_path = Some(effective_db_path.clone());
     guard.conn = Some(conn);
+    guard.audit_user = Some(audit_user);
 
     Ok(normalize_db_path(&effective_db_path)
         .to_string_lossy()
@@ -278,7 +280,7 @@ pub fn validate_and_set_storage_location(
         return Err("Storage location is not accessible for read/write.".to_string());
     }
 
-    let (conn, effective_db_path) =
+    let (conn, effective_db_path, audit_user) =
         open_and_migrate(&input).map_err(|e| format!("Migration failed: {e}"))?;
 
     save_storage_path(&input);
@@ -287,6 +289,7 @@ pub fn validate_and_set_storage_location(
         let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
         guard.db_path = Some(effective_db_path.clone());
         guard.conn = Some(conn);
+        guard.audit_user = Some(audit_user);
     }
 
     let settings = load_backup_settings(Some(&db));
@@ -512,7 +515,7 @@ mod tests {
     }
 
     fn account_exists(db_path: &PathBuf, name: &str) -> bool {
-        let (conn, _path) = open_and_migrate(db_path).expect("open db");
+        let (conn, _path, _audit_user) = open_and_migrate(db_path).expect("open db");
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM accounts WHERE name = ?1", [name], |row| row.get(0))
             .unwrap_or(0);
@@ -522,13 +525,14 @@ mod tests {
     #[test]
     fn test_backup_creation_and_retention() {
         let temp = create_temp_dir("backup_retention");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
         insert_account(&conn, "BackupRetentionAccount");
 
         let db_state = DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path.clone()),
                 conn: Some(conn),
+                audit_user: Some(_audit_user),
             }),
         };
 
@@ -563,13 +567,14 @@ mod tests {
     #[test]
     fn test_restore_from_backup_file() {
         let temp = create_temp_dir("restore");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
         insert_account(&conn, "AccountBeforeBackup");
 
         let db_state = DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path.clone()),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         };
 
@@ -582,6 +587,7 @@ mod tests {
                 insert_account(conn, "AccountAfterBackup");
             }
             guard.conn = None;
+            guard.audit_user = None;
         }
 
         let target = normalize_db_path(&temp);
@@ -598,7 +604,7 @@ mod tests {
     #[test]
     fn test_copy_preserves_data() {
         let temp = create_temp_dir("copy_preserves");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
         insert_account(&conn, "CopyPreserveAccount");
 
         let source = normalize_db_path(&db_path);
@@ -619,12 +625,13 @@ mod tests {
     #[test]
     fn test_backup_scheduler_timing() {
         let temp = create_temp_dir("backup_scheduler");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
 
         let db_state = DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path.clone()),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         };
 
@@ -659,7 +666,7 @@ mod tests {
     #[test]
     fn test_integrity_check_negative_case() {
         let temp = create_temp_dir("integrity_negative");
-        let (_conn, _db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (_conn, _db_path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
         drop(_conn);
 
         let db_file = normalize_db_path(&temp);
@@ -697,7 +704,7 @@ mod tests {
     #[test]
     fn test_backup_settings_db_roundtrip() {
         let temp = create_temp_dir("backup_settings_db");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
 
         let settings = BackupSettings {
             enabled: true,
@@ -726,7 +733,7 @@ mod tests {
     #[test]
     fn test_load_backup_settings_from_db_state() {
         let temp = create_temp_dir("backup_settings_state");
-        let (conn, db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
 
         let settings = BackupSettings {
             enabled: true,
@@ -742,6 +749,7 @@ mod tests {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path.clone()),
                 conn: Some(conn),
+                audit_user: Some(audit_user),
             }),
         };
 
@@ -780,7 +788,7 @@ pub fn create_new_storage(
         return Err("Storage location is not accessible for read/write.".to_string());
     }
 
-    let (conn, effective_db_path) =
+    let (conn, effective_db_path, audit_user) =
         open_and_migrate(&db_path).map_err(|e| format!("Migration failed: {e}"))?;
 
     save_storage_path(&db_path);
@@ -789,6 +797,7 @@ pub fn create_new_storage(
         let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
         guard.db_path = Some(effective_db_path.clone());
         guard.conn = Some(conn);
+        guard.audit_user = Some(audit_user);
     }
 
     let settings = load_backup_settings(Some(&db));

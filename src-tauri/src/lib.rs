@@ -235,7 +235,7 @@ pub fn run() {
             if let Some(storage) = load_storage_path() {
                 let db_path = crate::db::normalize_db_path(&storage);
                 if db_path.exists() {
-                    if let Ok((conn, db_path)) = open_and_migrate(&storage) {
+                    if let Ok((conn, db_path, audit_user)) = open_and_migrate(&storage) {
                         let db_state = app.state::<DbState>();
                         let mut guard = db_state
                             .inner
@@ -243,6 +243,7 @@ pub fn run() {
                             .map_err(|_| "db state lock poisoned".to_string())?;
                         guard.db_path = Some(db_path);
                         guard.conn = Some(conn);
+                        guard.audit_user = Some(audit_user);
                         db_initialized = true;
                     }
                 }
@@ -309,6 +310,8 @@ pub fn run() {
             commands::create_account,
             commands::get_account,
             commands::list_accounts,
+            commands::ensure_profit_loss_system_accounts,
+            commands::close_fiscal_year,
             commands::list_account_balances,
             commands::create_account_balancing,
             commands::list_account_balancings,
@@ -381,6 +384,8 @@ pub fn run() {
             commands::update_transaction_with_splits,
             commands::delete_transaction,
             commands::get_transaction_with_splits,
+            commands::undo_active_session_change,
+            commands::redo_active_session_change,
             commands::ensure_currency_trading_balances,
             commands::list_postings,
             commands::create_import_rule,
@@ -495,7 +500,7 @@ mod tests {
         fs::create_dir_all(&temp).expect("create temp dir");
 
         // Open DB and run migrations
-        let (conn, _db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, _db_path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
 
         // Check PRAGMA journal_mode
         let journal: String = conn

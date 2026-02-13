@@ -3,10 +3,56 @@ use std::{
     fs::OpenOptions,
     io::Write,
     path::PathBuf,
+    sync::{Arc, Mutex},
 };
 use rfd::FileDialog;
+use rusqlite::functions::FunctionFlags;
 
 pub const DB_FILENAME: &str = "Rekenraam-data.rekenraam";
+
+#[derive(Clone, Default)]
+pub struct AuditUserHandle {
+    user: Arc<Mutex<Option<String>>>,
+}
+
+impl AuditUserHandle {
+    pub fn set(&self, user: Option<&str>) {
+        let cleaned = user
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string());
+        if let Ok(mut guard) = self.user.lock() {
+            *guard = cleaned;
+        }
+    }
+}
+
+pub fn register_audit_user(conn: &rusqlite::Connection) -> Result<AuditUserHandle, rusqlite::Error> {
+    let handle = AuditUserHandle::default();
+    let user_ref = handle.user.clone();
+    conn.create_scalar_function("audit_user", 0, FunctionFlags::SQLITE_UTF8, move |_ctx| {
+        let value = user_ref.lock().ok().and_then(|guard| guard.clone());
+        Ok(value)
+    })?;
+    Ok(handle)
+}
+
+pub fn set_audit_user(handle: &AuditUserHandle, user: Option<&str>) {
+    handle.set(user);
+}
+
+pub fn os_login_user() -> Option<String> {
+    let candidates = ["USERNAME", "USER", "LOGNAME"];
+    for key in candidates.iter() {
+        if let Ok(value) = std::env::var(key) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
 
 pub fn normalize_db_path(path: &PathBuf) -> PathBuf {
     if path.is_dir() {
@@ -165,7 +211,9 @@ fn run_migrations(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error
     Ok(())
 }
 
-pub fn open_and_migrate(path: &PathBuf) -> Result<(rusqlite::Connection, PathBuf), rusqlite::Error> {
+pub fn open_and_migrate(
+    path: &PathBuf,
+) -> Result<(rusqlite::Connection, PathBuf, AuditUserHandle), rusqlite::Error> {
     let db = normalize_db_path(path);
     let mut conn = rusqlite::Connection::open(&db)?;
     // Enable recommended pragmas for durability and foreign key support.
@@ -173,8 +221,45 @@ pub fn open_and_migrate(path: &PathBuf) -> Result<(rusqlite::Connection, PathBuf
     conn.execute_batch(
         "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;",
     )?;
+    let audit_user = register_audit_user(&conn)?;
+    if let Some(user) = os_login_user() {
+        set_audit_user(&audit_user, Some(&user));
+    }
     run_migrations(&mut conn)?;
-    Ok((conn, db))
+        conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS app_runtime_session (
+                        id TEXT PRIMARY KEY,
+                        started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                    );
+                    CREATE TABLE IF NOT EXISTS session_undo_stack (
+                        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT NOT NULL,
+                        table_name TEXT NOT NULL,
+                        row_id INTEGER NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                    );
+                    CREATE TABLE IF NOT EXISTS session_redo_stack (
+                        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT NOT NULL,
+                        table_name TEXT NOT NULL,
+                        row_id INTEGER NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                    );
+                    CREATE TABLE IF NOT EXISTS session_reverts (
+                        session_id TEXT NOT NULL,
+                        table_name TEXT NOT NULL,
+                        row_id INTEGER NOT NULL,
+                        reverted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                        PRIMARY KEY(session_id, table_name, row_id)
+                    );
+                    DELETE FROM app_runtime_session;
+                    INSERT INTO app_runtime_session (id, started_at)
+                    VALUES (lower(hex(randomblob(16))), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+                    DELETE FROM session_undo_stack;
+                    DELETE FROM session_redo_stack;
+                    DELETE FROM session_reverts;",
+        )?;
+    Ok((conn, db, audit_user))
 }
 
 #[cfg(test)]
@@ -199,7 +284,7 @@ mod tests {
     #[test]
     fn test_report_cache_invalidation_by_book_state() {
         let temp = create_temp_dir();
-        let (conn, _db_path) = open_and_migrate(&temp).expect("open and migrate");
+        let (conn, _db_path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
 
         let book_id: i64 = conn
             .query_row("SELECT id FROM books WHERE name='Personal' LIMIT 1", [], |row| row.get(0))

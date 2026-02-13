@@ -79,3 +79,6 @@ Current schema version (as of this commit): 17.
 - Rust domain model is the source of truth.
 - Prefer small, deterministic components; avoid hidden I/O in UI code.
 - Security and privacy over convenience; no network calls without explicit consent.
+
+
+add a small frontend action in Settings/Year-End that calls close_fiscal_year and shows the resulting closing transaction id + retained earnings delta.
