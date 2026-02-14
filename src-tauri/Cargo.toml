@@ -15,22 +15,22 @@ name = "rekenraam_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.5.5", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2.10.2", features = [] }
 dirs-next = "2"
 # Use rfd for native file/folder dialogs
 rfd = "0.17.2"
 # used for debounced sleep in background task
 tokio = { version = "1", features = ["time", "macros", "rt"] }
-tauri-plugin-opener = "2"
+tauri-plugin-opener = "2.5.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.38.0", features = ["bundled", "functions"] }
 csv = "1.3"
 sha2 = "0.10"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.13.2", features = ["json", "rustls"] }
 async-trait = "0.1"
 chrono = { version = "0.4" }
 
