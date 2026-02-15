@@ -457,12 +457,13 @@ fn map_commodity_price_source_row(
 
 fn map_commodity_price_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CommodityPrice> {
     let is_manual: i64 = row.get(8)?;
+    let price_value: f64 = row.get(4)?;
     Ok(CommodityPrice {
         id: row.get(0)?,
         book_id: row.get(1)?,
         commodity_id: row.get(2)?,
         quote_commodity_id: row.get(3)?,
-        price_minor: row.get(4)?,
+        price_minor: price_value.round() as i64,
         as_of_date: row.get(5)?,
         source: row.get(6)?,
         source_id: row.get(7)?,
@@ -1801,28 +1802,29 @@ pub fn convert_positions(
         let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
         let mut price_sql = String::from(
-            "SELECT cp.commodity_id, cp.price_minor
-             FROM commodity_prices cp
+            "SELECT cp.commodity_id, cp.price_value
+             FROM current_price_observations cp
              JOIN (
-                SELECT commodity_id, MAX(as_of_date) AS max_date
-                FROM commodity_prices
-                WHERE quote_commodity_id = ?",
+            SELECT commodity_id, MAX(price_date) AS max_date
+            FROM current_price_observations
+            WHERE observation_kind = 'commodity_market' AND quote_commodity_id = ?",
         );
 
         let mut price_params: Vec<Value> = vec![Value::from(base_commodity_id)];
         if let Some(date) = &as_of_date {
-            price_sql.push_str(" AND as_of_date <= ?");
+            price_sql.push_str(" AND price_date <= ?");
             price_params.push(Value::from(date.clone()));
         }
         price_sql.push_str(" GROUP BY commodity_id) latest
-             ON latest.commodity_id = cp.commodity_id AND latest.max_date = cp.as_of_date
-             WHERE cp.quote_commodity_id = ?");
+             ON latest.commodity_id = cp.commodity_id AND latest.max_date = cp.price_date
+             WHERE cp.observation_kind = 'commodity_market' AND cp.quote_commodity_id = ?");
         price_params.push(Value::from(base_commodity_id));
 
         let mut stmt = conn.prepare(&price_sql).map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map(params_from_iter(price_params), |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                let value: f64 = row.get(1)?;
+                Ok((row.get::<_, i64>(0)?, value.round() as i64))
             })
             .map_err(|e| e.to_string())?;
 
@@ -2743,8 +2745,11 @@ pub fn add_implicit_price(db: State<DbState>, tx_id: i64) -> Result<Option<Commo
     let price_minor = (numerator / (denom as i128)) as i64;
 
     conn.execute(
-        "INSERT OR IGNORE INTO commodity_prices (book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 'implicit', NULL, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO price_observations (
+            book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date,
+            source_name, source_id, is_manual, is_derived, supersedes_observation_id, created_at
+         )
+         VALUES (?1, ?2, ?3, 'commodity_market', ?4, ?5, 'implicit', NULL, 0, 0, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             SINGLE_BOOK_ID,
             commodity_id,
@@ -2757,9 +2762,10 @@ pub fn add_implicit_price(db: State<DbState>, tx_id: i64) -> Result<Option<Commo
 
     let price = conn
         .query_row(
-            "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-             FROM commodity_prices
-             WHERE book_id = ?1 AND commodity_id = ?2 AND quote_commodity_id = ?3 AND as_of_date = ?4",
+            "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+             FROM current_price_observations
+             WHERE book_id = ?1 AND observation_kind = 'commodity_market' AND commodity_id = ?2 AND quote_commodity_id = ?3 AND price_date = ?4
+             ORDER BY created_at DESC, id DESC LIMIT 1",
             params![SINGLE_BOOK_ID, commodity_id, quote_commodity_id, txn_date],
             map_commodity_price_row,
         )
@@ -2780,10 +2786,10 @@ pub fn get_latest_price(
 
     let price = conn
         .query_row(
-            "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-             FROM commodity_prices
-             WHERE book_id = ?1 AND commodity_id = ?2 AND quote_commodity_id = ?3
-             ORDER BY as_of_date DESC, id DESC LIMIT 1",
+            "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+             FROM current_price_observations
+             WHERE book_id = ?1 AND observation_kind = 'commodity_market' AND commodity_id = ?2 AND quote_commodity_id = ?3
+             ORDER BY price_date DESC, created_at DESC, id DESC LIMIT 1",
             params![SINGLE_BOOK_ID, commodity_id, quote_commodity_id],
             map_commodity_price_row,
         )
@@ -2805,10 +2811,10 @@ pub fn get_price_on_date(
 
     let price = conn
         .query_row(
-            "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-             FROM commodity_prices
-             WHERE book_id = ?1 AND commodity_id = ?2 AND quote_commodity_id = ?3 AND as_of_date <= ?4
-             ORDER BY as_of_date DESC, id DESC LIMIT 1",
+            "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+             FROM current_price_observations
+             WHERE book_id = ?1 AND observation_kind = 'commodity_market' AND commodity_id = ?2 AND quote_commodity_id = ?3 AND price_date <= ?4
+             ORDER BY price_date DESC, created_at DESC, id DESC LIMIT 1",
             params![SINGLE_BOOK_ID, commodity_id, quote_commodity_id, as_of_date],
             map_commodity_price_row,
         )
@@ -2830,8 +2836,11 @@ pub fn create_commodity_price(
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO commodity_prices (book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO price_observations (
+            book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date,
+            source_name, source_id, is_manual, is_derived, supersedes_observation_id, created_at
+         )
+         VALUES (?1, ?2, ?3, 'commodity_market', ?4, ?5, ?6, ?7, ?8, 0, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.commodity_id,
@@ -2848,8 +2857,8 @@ pub fn create_commodity_price(
     let id = conn.last_insert_rowid();
     let price = conn
         .query_row(
-            "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-             FROM commodity_prices WHERE id = ?1",
+            "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+             FROM price_observations WHERE id = ?1",
             [id],
             map_commodity_price_row,
         )
@@ -2874,9 +2883,9 @@ pub fn list_commodity_prices(
     if let (Some(commodity_id), Some(quote_id)) = (commodity_id, quote_commodity_id) {
         let mut stmt = conn
             .prepare(
-                "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-                 FROM commodity_prices WHERE book_id = ?1 AND commodity_id = ?2 AND quote_commodity_id = ?3
-                 ORDER BY as_of_date DESC, id DESC LIMIT ?4",
+                "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+                  FROM current_price_observations WHERE book_id = ?1 AND observation_kind = 'commodity_market' AND commodity_id = ?2 AND quote_commodity_id = ?3
+                  ORDER BY price_date DESC, created_at DESC, id DESC LIMIT ?4",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
@@ -2895,9 +2904,9 @@ pub fn list_commodity_prices(
     if let Some(commodity_id) = commodity_id {
         let mut stmt = conn
             .prepare(
-                "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-                 FROM commodity_prices WHERE book_id = ?1 AND commodity_id = ?2
-                 ORDER BY as_of_date DESC, id DESC LIMIT ?3",
+                "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+                  FROM current_price_observations WHERE book_id = ?1 AND observation_kind = 'commodity_market' AND commodity_id = ?2
+                  ORDER BY price_date DESC, created_at DESC, id DESC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
@@ -2913,9 +2922,9 @@ pub fn list_commodity_prices(
     if let Some(quote_id) = quote_commodity_id {
         let mut stmt = conn
             .prepare(
-                "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-                 FROM commodity_prices WHERE book_id = ?1 AND quote_commodity_id = ?2
-                 ORDER BY as_of_date DESC, id DESC LIMIT ?3",
+                "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+                  FROM current_price_observations WHERE book_id = ?1 AND observation_kind = 'commodity_market' AND quote_commodity_id = ?2
+                  ORDER BY price_date DESC, created_at DESC, id DESC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
@@ -2930,9 +2939,9 @@ pub fn list_commodity_prices(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-             FROM commodity_prices WHERE book_id = ?1
-             ORDER BY as_of_date DESC, id DESC LIMIT ?2",
+              "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+               FROM current_price_observations WHERE book_id = ?1 AND observation_kind = 'commodity_market'
+               ORDER BY price_date DESC, created_at DESC, id DESC LIMIT ?2",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -2957,35 +2966,46 @@ pub fn update_commodity_price(
 
     let book_id = SINGLE_BOOK_ID;
 
-    let rows = conn
-        .execute(
-            "UPDATE commodity_prices
-             SET book_id = ?2, commodity_id = ?3, quote_commodity_id = ?4, price_minor = ?5, as_of_date = ?6,
-                 source = ?7, source_id = ?8, is_manual = ?9
-             WHERE id = ?1",
-            params![
-                input.id,
-                book_id,
-                input.commodity_id,
-                input.quote_commodity_id,
-                input.price_minor,
-                input.as_of_date,
-                input.source,
-                input.source_id,
-                is_manual,
-            ],
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM current_price_observations WHERE id = ?1 AND observation_kind = 'commodity_market'",
+            [input.id],
+            |row| row.get(0),
         )
+        .optional()
         .map_err(|e| e.to_string())?;
 
-    if rows == 0 {
+    if exists.is_none() {
         return Err("commodity price not found".to_string());
     }
 
+    conn.execute(
+        "INSERT INTO price_observations (
+            book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date,
+            source_name, source_id, is_manual, is_derived, supersedes_observation_id, created_at
+         )
+         VALUES (?1, ?2, ?3, 'commodity_market', ?4, ?5, ?6, ?7, ?8, 0, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            input.commodity_id,
+            input.quote_commodity_id,
+            input.price_minor as f64,
+            input.as_of_date,
+            input.source,
+            input.source_id,
+            is_manual,
+            input.id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
+
     let price = conn
         .query_row(
-            "SELECT id, book_id, commodity_id, quote_commodity_id, price_minor, as_of_date, source, source_id, is_manual, created_at
-             FROM commodity_prices WHERE id = ?1",
-            [input.id],
+            "SELECT id, book_id, commodity_id, quote_commodity_id, price_value, price_date, source_name, source_id, is_manual, created_at
+             FROM price_observations WHERE id = ?1",
+            [new_id],
             map_commodity_price_row,
         )
         .map_err(|e| e.to_string())?;
@@ -2995,12 +3015,9 @@ pub fn update_commodity_price(
 
 #[command]
 pub fn delete_commodity_price(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    let rows = conn
-        .execute("DELETE FROM commodity_prices WHERE id = ?1", [id])
-        .map_err(|e| e.to_string())?;
-    Ok(rows > 0)
+    let _ = db;
+    let _ = id;
+    Err("commodity prices are append-only; insert a superseding observation instead".to_string())
 }
 
 #[allow(dead_code)]

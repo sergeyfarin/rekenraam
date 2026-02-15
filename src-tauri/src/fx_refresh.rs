@@ -236,15 +236,15 @@ async fn refresh_pair(
             symbol_to_id.get(&rate.quote).copied(),
         ) {
             tx.execute(
-                "INSERT OR REPLACE INTO fx_rates_daily
-                 (book_id, from_currency_id, to_currency_id, rate_date, rate, source, source_id, is_derived, derived_via_currency_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO price_observations
+                 (book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date, source_name, source_id, is_manual, is_derived, derived_via_commodity_id, created_at)
+                 VALUES (?1, ?2, ?3, 'fx_daily', ?4, ?5, ?6, ?7, 0, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![
                     SINGLE_BOOK_ID,
                     from_id,
                     to_id,
-                    rate.date,
                     rate.rate,
+                    rate.date,
                     rate.source_name,
                     task.source_id,
                     rate.is_derived as i64,
@@ -262,15 +262,15 @@ async fn refresh_pair(
             symbol_to_id.get(&rate.quote).copied(),
         ) {
             tx.execute(
-                "INSERT OR REPLACE INTO fx_rates_daily
-                 (book_id, from_currency_id, to_currency_id, rate_date, rate, source, source_id, is_derived, derived_via_currency_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO price_observations
+                 (book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date, source_name, source_id, is_manual, is_derived, derived_via_commodity_id, created_at)
+                 VALUES (?1, ?2, ?3, 'fx_daily', ?4, ?5, ?6, ?7, 0, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![
                     SINGLE_BOOK_ID,
                     from_id,
                     to_id,
-                    rate.date,
                     rate.rate,
+                    rate.date,
                     rate.source_name,
                     task.source_id,
                     1i64,
@@ -283,10 +283,10 @@ async fn refresh_pair(
     }
 
     tx.execute(
-        "INSERT INTO fx_rate_refresh_state
-         (book_id, from_currency_id, to_currency_id, source_id, last_success_date, last_attempt_at, last_error, created_at, updated_at)
+        "INSERT INTO pricing_refresh_state
+         (book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-         ON CONFLICT(book_id, from_currency_id, to_currency_id, source_id) DO UPDATE SET
+         ON CONFLICT(book_id, commodity_id, quote_commodity_id, source_id) DO UPDATE SET
             last_success_date = excluded.last_success_date,
             last_attempt_at = excluded.last_attempt_at,
             last_error = NULL,
@@ -312,10 +312,10 @@ fn record_refresh_error(db: &DbState, task: &PairTask, err: &str) -> Result<(), 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     conn.execute(
-        "INSERT INTO fx_rate_refresh_state
-         (book_id, from_currency_id, to_currency_id, source_id, last_success_date, last_attempt_at, last_error, created_at, updated_at)
+        "INSERT INTO pricing_refresh_state
+         (book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-         ON CONFLICT(book_id, from_currency_id, to_currency_id, source_id) DO UPDATE SET
+         ON CONFLICT(book_id, commodity_id, quote_commodity_id, source_id) DO UPDATE SET
             last_attempt_at = excluded.last_attempt_at,
             last_error = excluded.last_error,
             updated_at = excluded.updated_at",
@@ -432,11 +432,12 @@ fn load_fx_settings(db: &DbState) -> Result<Option<FxSettingsRow>, String> {
 fn load_fx_settings_row(conn: &rusqlite::Connection) -> Result<Option<FxSettingsRow>, String> {
     conn
         .query_row(
-            "SELECT s.base_currency_id, c.symbol, s.default_source_id,
-                    s.refresh_enabled, s.refresh_hour_utc, s.refresh_minute_utc, s.max_backfill_days, s.weekend_policy
-             FROM fx_rate_settings s
-             LEFT JOIN commodities c ON s.base_currency_id = c.id
-             WHERE s.book_id = ?1
+            "SELECT b.base_commodity_id, c.symbol, p.default_source_id,
+                p.refresh_enabled, p.refresh_hour_utc, p.refresh_minute_utc, p.max_backfill_days, p.weekend_policy
+             FROM current_pricing_policies p
+             JOIN current_book_base_currency_history b ON b.book_id = p.book_id
+             LEFT JOIN commodities c ON b.base_commodity_id = c.id
+             WHERE p.book_id = ?1
              LIMIT 1",
             [SINGLE_BOOK_ID],
             |row| {
@@ -467,15 +468,15 @@ fn resolve_source_for_pair(
 ) -> Result<(i64, String), String> {
     let assignment: Option<(i64, String)> = conn
         .query_row(
-            "SELECT a.source_id, s.name
-             FROM fx_rate_source_assignments a
-             JOIN fx_rate_sources s ON a.source_id = s.id
+                        "SELECT a.source_id, s.name
+                         FROM current_pricing_source_assignments a
+                         JOIN price_sources s ON a.source_id = s.id
              WHERE a.book_id = ?1
-               AND a.from_currency_id = ?2
-               AND a.to_currency_id = ?3
+                             AND a.commodity_id = ?2
+                             AND a.quote_commodity_id = ?3
                AND a.effective_from <= ?4
                AND (a.effective_to IS NULL OR a.effective_to >= ?4)
-             ORDER BY a.effective_from DESC
+                         ORDER BY a.priority ASC, a.effective_from DESC
              LIMIT 1",
             params![SINGLE_BOOK_ID, from_id, to_id, on_date],
             |row| Ok((row.get(0)?, row.get(1)?)),
@@ -490,7 +491,7 @@ fn resolve_source_for_pair(
     let default_id = default_source_id.ok_or_else(|| "No default FX source configured".to_string())?;
     let name: String = conn
         .query_row(
-            "SELECT name FROM fx_rate_sources WHERE id = ?1",
+            "SELECT name FROM price_sources WHERE id = ?1",
             [default_id],
             |row| row.get(0),
         )
@@ -507,8 +508,8 @@ fn get_last_success_date(
 ) -> Result<Option<String>, String> {
     conn
         .query_row(
-            "SELECT last_success_date FROM fx_rate_refresh_state
-             WHERE book_id = ?1 AND from_currency_id = ?2 AND to_currency_id = ?3 AND source_id = ?4",
+            "SELECT last_success_date FROM pricing_refresh_state
+             WHERE book_id = ?1 AND commodity_id = ?2 AND quote_commodity_id = ?3 AND source_id = ?4",
             params![SINGLE_BOOK_ID, from_id, to_id, source_id],
             |row| row.get(0),
         )
@@ -583,7 +584,7 @@ mod tests {
             .expect("usd id");
         let source_id: i64 = conn
             .query_row(
-                "SELECT id FROM fx_rate_sources WHERE name='ECB' LIMIT 1",
+                "SELECT id FROM price_sources WHERE name='ECB' LIMIT 1",
                 [],
                 |row| row.get(0),
             )
@@ -605,7 +606,7 @@ mod tests {
         let last_success = (today - chrono::Duration::days(2)).format("%Y-%m-%d").to_string();
 
         conn.execute(
-            "INSERT INTO fx_rate_refresh_state (book_id, from_currency_id, to_currency_id, source_id, last_success_date, last_attempt_at)
+            "INSERT INTO pricing_refresh_state (book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![SINGLE_BOOK_ID, eur_current_id, usd_id, source_id, last_success, "2025-01-01T00:00:00Z"],
         )

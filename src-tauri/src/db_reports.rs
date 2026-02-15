@@ -812,6 +812,22 @@ pub fn run_report(
 
     let params_hash = hash_params(&params_json)?;
     let as_of_seq = get_change_seq(conn, definition.book_id)?;
+    let pricing_mode = params_json
+        .get("pricing_mode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("latest_corrected")
+        .to_string();
+    if pricing_mode != "latest_corrected" && pricing_mode != "frozen" {
+        return Err("pricing_mode must be 'latest_corrected' or 'frozen'".to_string());
+    }
+    let pricing_policy_id = params_json.get("pricing_policy_id").and_then(|v| v.as_i64());
+    let pricing_policy_version = params_json
+        .get("pricing_policy_version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let valuation_snapshot_id = params_json
+        .get("valuation_snapshot_id")
+        .and_then(|v| v.as_i64());
 
     let cached_json: Option<String> = conn
         .query_row(
@@ -892,9 +908,21 @@ pub fn run_report(
     let serialized = serde_json::to_string(&result_json).map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO report_runs (book_id, definition_id, params_hash, as_of_seq, result_json, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-        params![definition.book_id, definition_id, params_hash, as_of_seq, serialized],
+        "INSERT INTO report_runs
+            (book_id, definition_id, params_hash, as_of_seq, pricing_mode, pricing_policy_id, pricing_policy_version, valuation_snapshot_id, pricing_resolved_at, result_json, created_at)
+         VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            definition.book_id,
+            definition_id,
+            params_hash,
+            as_of_seq,
+            pricing_mode,
+            pricing_policy_id,
+            pricing_policy_version,
+            valuation_snapshot_id,
+            serialized,
+        ],
     )
     .map_err(|e| e.to_string())?;
 

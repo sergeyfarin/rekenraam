@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::NaiveDate;
 use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
@@ -627,6 +628,10 @@ fn validate_close_date(value: &str) -> Result<(), String> {
             return Err("close_date must be in YYYY-MM-DD format".to_string());
         }
     }
+
+    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map_err(|_| "close_date must be a valid calendar date in YYYY-MM-DD format".to_string())?;
+
     Ok(())
 }
 
@@ -1443,25 +1448,28 @@ pub fn close_fiscal_year(
     {
         let mut stmt = tx
             .prepare(
-                "SELECT a.id, a.type, a.commodity_id, COALESCE(SUM(s.amount_minor), 0) AS balance_minor
-                 FROM accounts a
-                 LEFT JOIN splits s ON s.account_id = a.id
-                 LEFT JOIN transactions t ON t.id = s.tx_id
-                    AND t.book_id = ?1
-                    AND t.occurred_date <= ?2
-                          AND t.status != 'void'
-                    AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
-                    AND NOT EXISTS (
-                        SELECT 1 FROM session_reverts sr
-                        WHERE sr.table_name = 'transactions'
-                          AND sr.row_id = t.id
-                          AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
-                    )
-                 WHERE a.book_id = ?1
-                   AND a.type IN ('income', 'expense')
-                   AND a.is_system = 0
-                 GROUP BY a.id, a.type, a.commodity_id
-                 HAVING balance_minor != 0",
+                                "SELECT a.id, a.type, a.commodity_id, COALESCE(b.balance_minor, 0) AS balance_minor
+                                 FROM accounts a
+                                 LEFT JOIN (
+                                         SELECT s.account_id, SUM(s.amount_minor) AS balance_minor
+                                         FROM splits s
+                                         JOIN transactions t ON t.id = s.tx_id
+                                         WHERE t.book_id = ?1
+                                             AND t.occurred_date <= ?2
+                                             AND t.status != 'void'
+                                             AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+                                             AND NOT EXISTS (
+                                                     SELECT 1 FROM session_reverts sr
+                                                     WHERE sr.table_name = 'transactions'
+                                                         AND sr.row_id = t.id
+                                                         AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+                                             )
+                                         GROUP BY s.account_id
+                                 ) b ON b.account_id = a.id
+                                 WHERE a.book_id = ?1
+                                     AND a.type IN ('income', 'expense')
+                                     AND a.is_system = 0
+                                     AND COALESCE(b.balance_minor, 0) != 0",
             )
             .map_err(|e| e.to_string())?;
 
@@ -4608,6 +4616,211 @@ mod tests {
 
         let deleted_doc = delete_document(as_state(&db_state), doc.id).expect("delete document");
         assert!(deleted_doc);
+    }
+
+    #[test]
+    fn test_close_fiscal_year_excludes_future_void_and_reverted_transactions() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let income_account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "income".to_string(),
+                name: "Sales Income".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create income account");
+
+        let offset_equity = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "equity".to_string(),
+                name: "Opening Equity".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create offset equity account");
+
+        {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+
+            let insert_tx = |conn: &rusqlite::Connection, occurred_date: &str, status: &str| -> i64 {
+                conn.execute(
+                    "INSERT INTO transactions (book_id, occurred_date, status, created_at)
+                     VALUES (1, ?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    params![occurred_date, status],
+                )
+                .expect("insert tx");
+                conn.last_insert_rowid()
+            };
+
+            let insert_balanced_pair = |conn: &rusqlite::Connection, tx_id: i64, amount_minor: i64| {
+                conn.execute(
+                    "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                     VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    params![tx_id, income_account.id, commodity_id, amount_minor],
+                )
+                .expect("insert income split");
+                conn.execute(
+                    "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                     VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    params![tx_id, offset_equity.id, commodity_id, -amount_minor],
+                )
+                .expect("insert offset split");
+            };
+
+            let included_tx = insert_tx(conn, "2024-12-31", "cleared");
+            insert_balanced_pair(conn, included_tx, 1000);
+
+            let future_tx = insert_tx(conn, "2025-01-01", "cleared");
+            insert_balanced_pair(conn, future_tx, 2000);
+
+            let void_tx = insert_tx(conn, "2024-12-31", "void");
+            insert_balanced_pair(conn, void_tx, 3000);
+
+            let reverted_tx = insert_tx(conn, "2024-12-31", "cleared");
+            insert_balanced_pair(conn, reverted_tx, 4000);
+
+            let session_id = current_session_id(conn).expect("current session id");
+            conn.execute(
+                "INSERT INTO session_reverts (session_id, table_name, row_id)
+                 VALUES (?1, 'transactions', ?2)",
+                params![session_id, reverted_tx],
+            )
+            .expect("mark tx as reverted in current session");
+        }
+
+        let close_result = close_fiscal_year(
+            as_state(&db_state),
+            FiscalYearCloseInput {
+                close_date: "2024-12-31".to_string(),
+                memo: Some("Year End Close".to_string()),
+            },
+        )
+        .expect("close fiscal year");
+
+        assert_eq!(close_result.closed_accounts_count, 1);
+        assert_eq!(close_result.retained_earnings_delta_minor, 1000);
+
+        let system_accounts = ensure_profit_loss_system_accounts(as_state(&db_state), 1)
+            .expect("ensure system accounts");
+
+        let close_tx_id = close_result.tx_id.expect("close tx id");
+        let retained_earnings_split_minor = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            conn.query_row(
+                "SELECT amount_minor
+                 FROM splits
+                 WHERE tx_id = ?1 AND account_id = ?2",
+                params![close_tx_id, system_accounts.retained_earnings_account_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("retained earnings split")
+        };
+        assert_eq!(retained_earnings_split_minor, 1000);
+    }
+
+    #[test]
+    fn test_close_fiscal_year_same_date_twice_returns_already_closed_error() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let income_account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "income".to_string(),
+                name: "Recurring Income".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create income account");
+
+        let offset_equity = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "equity".to_string(),
+                name: "Offset Equity".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create offset equity account");
+
+        {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+            conn.execute(
+                "INSERT INTO transactions (book_id, occurred_date, status, created_at)
+                 VALUES (1, '2024-12-31', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [],
+            )
+            .expect("insert source tx");
+            let source_tx_id = conn.last_insert_rowid();
+
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, 1500, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![source_tx_id, income_account.id, commodity_id],
+            )
+            .expect("insert income split");
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -1500, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![source_tx_id, offset_equity.id, commodity_id],
+            )
+            .expect("insert offset split");
+        }
+
+        let first_close = close_fiscal_year(
+            as_state(&db_state),
+            FiscalYearCloseInput {
+                close_date: "2024-12-31".to_string(),
+                memo: Some("Year End Close".to_string()),
+            },
+        )
+        .expect("first close should succeed");
+        assert!(first_close.tx_id.is_some());
+
+        let second_close_err = close_fiscal_year(
+            as_state(&db_state),
+            FiscalYearCloseInput {
+                close_date: "2024-12-31".to_string(),
+                memo: Some("Year End Close Retry".to_string()),
+            },
+        )
+        .expect_err("second close on same date should fail");
+
+        assert!(
+            second_close_err.contains("fiscal year already closed for close_date"),
+            "unexpected error: {second_close_err}"
+        );
     }
 }
 

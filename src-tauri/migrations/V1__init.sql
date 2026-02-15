@@ -59,23 +59,72 @@ WHERE NOT EXISTS (
   SELECT 1 FROM commodities newer WHERE newer.previous_commodity_id = c.id
 );
 
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS commodity_prices (
-  id                 INTEGER PRIMARY KEY,
-  book_id            INTEGER NOT NULL,
-  commodity_id       INTEGER NOT NULL,
-  quote_commodity_id INTEGER NOT NULL,
-  price_minor        INTEGER NOT NULL,
-  as_of_date         TEXT NOT NULL,
-  source             TEXT,
-  source_id          INTEGER,
-  is_manual          INTEGER NOT NULL DEFAULT 1,
-  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+-- mutability: immutable rows (append-only enforced)
+CREATE TABLE IF NOT EXISTS price_ingest_runs (
+  id                INTEGER PRIMARY KEY,
+  book_id           INTEGER NOT NULL,
+  source_id         INTEGER,
+  requested_by      TEXT,
+  started_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  completed_at      TEXT,
+  status            TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running','succeeded','failed')),
+  error_message     TEXT,
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE SET NULL
+);
+
+-- mutability: immutable rows (append-only enforced)
+CREATE TABLE IF NOT EXISTS price_observations (
+  id                        INTEGER PRIMARY KEY,
+  book_id                   INTEGER NOT NULL,
+  commodity_id              INTEGER NOT NULL,
+  quote_commodity_id        INTEGER NOT NULL,
+  observation_kind          TEXT NOT NULL CHECK (observation_kind IN ('commodity_market','fx_daily','fx_official')),
+  price_value               REAL NOT NULL,
+  price_date                TEXT NOT NULL,
+  effective_at_utc          TEXT,
+  period_type               TEXT CHECK (period_type IN ('monthly', 'yearly')),
+  period_year               INTEGER,
+  period_month              INTEGER,
+  source_name               TEXT,
+  source_url                TEXT,
+  source_date               TEXT,
+  source_id                 INTEGER,
+  provider_symbol           TEXT,
+  is_manual                 INTEGER NOT NULL DEFAULT 0,
+  is_derived                INTEGER NOT NULL DEFAULT 0,
+  derived_via_commodity_id  INTEGER,
+  triangulation_path_json   TEXT,
+  triangulation_residual_ppm INTEGER,
+  ingest_run_id             INTEGER,
+  supersedes_observation_id INTEGER,
+  created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
   FOREIGN KEY(quote_commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  UNIQUE(book_id, commodity_id, quote_commodity_id, as_of_date)
+  FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE SET NULL,
+  FOREIGN KEY(derived_via_commodity_id) REFERENCES commodities(id) ON DELETE SET NULL,
+  FOREIGN KEY(ingest_run_id) REFERENCES price_ingest_runs(id) ON DELETE SET NULL,
+  FOREIGN KEY(supersedes_observation_id) REFERENCES price_observations(id) ON DELETE SET NULL
 );
+
+CREATE VIEW IF NOT EXISTS current_price_observations AS
+SELECT p.*
+FROM price_observations p
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM price_observations newer
+  WHERE newer.supersedes_observation_id = p.id
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_obs_lookup
+  ON price_observations(book_id, commodity_id, quote_commodity_id, price_date, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_price_obs_kind_date
+  ON price_observations(book_id, observation_kind, price_date);
+CREATE INDEX IF NOT EXISTS idx_price_obs_source
+  ON price_observations(source_id);
+CREATE INDEX IF NOT EXISTS idx_price_obs_supersedes
+  ON price_observations(supersedes_observation_id);
 
 -- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS payees (
@@ -350,7 +399,7 @@ CREATE TABLE IF NOT EXISTS lots (
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE
 );
 
--- mutability: mutable rows
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS split_lot_allocations (
   split_id       INTEGER NOT NULL,
   lot_id         INTEGER NOT NULL,
@@ -444,7 +493,7 @@ CREATE TABLE IF NOT EXISTS commodity_price_sources (
 
 CREATE INDEX IF NOT EXISTS idx_price_sources_kind ON price_sources(kind);
 CREATE INDEX IF NOT EXISTS idx_cps_commodity_primary ON commodity_price_sources(commodity_id, is_primary);
-CREATE INDEX IF NOT EXISTS idx_prices_source ON commodity_prices(source_id);
+CREATE INDEX IF NOT EXISTS idx_prices_source ON price_observations(source_id);
 
 -- Invariants
 CREATE TRIGGER IF NOT EXISTS trg_accounts_commodity_book_ins
@@ -592,7 +641,7 @@ END;
 
 -- Price source validity
 CREATE TRIGGER IF NOT EXISTS trg_prices_source_valid
-BEFORE INSERT ON commodity_prices
+BEFORE INSERT ON price_observations
 WHEN NEW.source_id IS NOT NULL
 BEGIN
   SELECT
@@ -738,17 +787,17 @@ BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_bump_prices_ins
-AFTER INSERT ON commodity_prices
+AFTER INSERT ON price_observations
 BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
 END;
 CREATE TRIGGER IF NOT EXISTS trg_bump_prices_upd
-AFTER UPDATE ON commodity_prices
+AFTER UPDATE ON price_observations
 BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = NEW.book_id;
 END;
 CREATE TRIGGER IF NOT EXISTS trg_bump_prices_del
-AFTER DELETE ON commodity_prices
+AFTER DELETE ON price_observations
 BEGIN
   UPDATE book_state SET change_seq = change_seq + 1, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE book_id = OLD.book_id;
 END;
@@ -1271,17 +1320,23 @@ CREATE TABLE IF NOT EXISTS report_definitions (
 CREATE INDEX IF NOT EXISTS idx_report_definitions_book ON report_definitions(book_id);
 CREATE INDEX IF NOT EXISTS idx_report_definitions_kind ON report_definitions(book_id, kind);
 
--- mutability: mutable rows
+-- mutability: immutable rows (append-only enforced; delete allowed for retention pruning)
 CREATE TABLE IF NOT EXISTS report_runs (
   id             INTEGER PRIMARY KEY,
   book_id        INTEGER NOT NULL,
   definition_id  INTEGER NOT NULL,
   params_hash    TEXT NOT NULL,
   as_of_seq      INTEGER NOT NULL,
+  pricing_mode   TEXT NOT NULL DEFAULT 'latest_corrected' CHECK (pricing_mode IN ('frozen','latest_corrected')),
+  pricing_policy_id INTEGER,
+  pricing_policy_version TEXT,
+  valuation_snapshot_id INTEGER,
+  pricing_resolved_at TEXT,
   result_json    TEXT NOT NULL,
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(definition_id) REFERENCES report_definitions(id) ON DELETE CASCADE,
+  FOREIGN KEY(pricing_policy_id) REFERENCES pricing_policies(id) ON DELETE SET NULL,
   UNIQUE(book_id, definition_id, params_hash, as_of_seq)
 );
 
@@ -1870,79 +1925,155 @@ INSERT OR IGNORE INTO backup_settings (book_id) VALUES (1);
 -- V13: currency management and FX rates
 CREATE INDEX IF NOT EXISTS idx_commodities_active ON commodities(book_id, kind, is_active);
 
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS fx_rates_daily (
-  id                 INTEGER PRIMARY KEY,
-  book_id            INTEGER NOT NULL,
-  from_currency_id   INTEGER NOT NULL,
-  to_currency_id     INTEGER NOT NULL,
-  rate_date          TEXT NOT NULL,
-  rate               REAL NOT NULL,
-  source             TEXT,
-  source_id          INTEGER,
-  is_derived         INTEGER NOT NULL DEFAULT 0,
-  derived_via_currency_id INTEGER,
-  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+-- mutability: immutable rows (append-only enforced)
+CREATE TABLE IF NOT EXISTS pricing_policies (
+  id                        INTEGER PRIMARY KEY,
+  previous_pricing_policy_id INTEGER,
+  session_id                TEXT,
+  book_id                   INTEGER NOT NULL,
+  name                      TEXT NOT NULL,
+  mode                      TEXT NOT NULL DEFAULT 'latest_corrected' CHECK (mode IN ('frozen','latest_corrected')),
+  refresh_enabled           INTEGER NOT NULL DEFAULT 1,
+  refresh_hour_utc          INTEGER NOT NULL DEFAULT 4,
+  refresh_minute_utc        INTEGER NOT NULL DEFAULT 0,
+  max_backfill_days         INTEGER NOT NULL DEFAULT 370,
+  weekend_policy            TEXT NOT NULL DEFAULT 'skip' CHECK (weekend_policy IN ('skip', 'fill_previous', 'download')),
+  staleness_max_days        INTEGER NOT NULL DEFAULT 7,
+  triangulation_max_hops    INTEGER NOT NULL DEFAULT 2,
+  rounding_mode             TEXT NOT NULL DEFAULT 'bankers' CHECK (rounding_mode IN ('bankers','half_up','down')),
+  prefer_official_fx        INTEGER NOT NULL DEFAULT 0,
+  default_source_id         INTEGER,
+  created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_pricing_policy_id) REFERENCES pricing_policies(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(source_id) REFERENCES fx_rate_sources(id) ON DELETE SET NULL,
-  FOREIGN KEY(derived_via_currency_id) REFERENCES commodities(id) ON DELETE SET NULL,
-  UNIQUE(book_id, from_currency_id, to_currency_id, rate_date)
+  FOREIGN KEY(default_source_id) REFERENCES price_sources(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_fx_daily_book_date ON fx_rates_daily(book_id, rate_date);
-CREATE INDEX IF NOT EXISTS idx_fx_daily_currencies ON fx_rates_daily(from_currency_id, to_currency_id);
-
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS fx_rates_official (
+CREATE TABLE IF NOT EXISTS pricing_source_assignments (
   id                 INTEGER PRIMARY KEY,
+  previous_pricing_source_assignment_id INTEGER,
   book_id            INTEGER NOT NULL,
-  from_currency_id   INTEGER NOT NULL,
-  to_currency_id     INTEGER NOT NULL,
-  period_type        TEXT NOT NULL CHECK (period_type IN ('monthly', 'yearly')),
-  period_year        INTEGER NOT NULL,
-  period_month       INTEGER,
-  rate               REAL NOT NULL,
-  source_name        TEXT NOT NULL,
-  source_url         TEXT,
-  source_date        TEXT,
-  notes              TEXT,
+  commodity_id       INTEGER NOT NULL,
+  quote_commodity_id INTEGER NOT NULL,
+  source_id          INTEGER NOT NULL,
+  priority           INTEGER NOT NULL DEFAULT 100,
+  effective_from     TEXT NOT NULL,
+  effective_to       TEXT,
   created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_pricing_source_assignment_id) REFERENCES pricing_source_assignments(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  UNIQUE(book_id, from_currency_id, to_currency_id, period_type, period_year, period_month)
+  FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(quote_commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_fx_official_book ON fx_rates_official(book_id);
-CREATE INDEX IF NOT EXISTS idx_fx_official_period ON fx_rates_official(period_type, period_year, period_month);
-CREATE INDEX IF NOT EXISTS idx_fx_official_currencies ON fx_rates_official(from_currency_id, to_currency_id);
-
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS fx_rate_sources (
-  id           INTEGER PRIMARY KEY,
-  book_id      INTEGER NOT NULL,
-  name         TEXT NOT NULL,
-  country_code TEXT,
-  website_url  TEXT,
-  notes        TEXT,
-  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+CREATE TABLE IF NOT EXISTS book_base_currency_history (
+  id                 INTEGER PRIMARY KEY,
+  previous_book_base_currency_history_id INTEGER,
+  book_id            INTEGER NOT NULL,
+  base_commodity_id  INTEGER NOT NULL,
+  effective_from     TEXT NOT NULL,
+  effective_to       TEXT,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(previous_book_base_currency_history_id) REFERENCES book_base_currency_history(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  UNIQUE(book_id, name)
+  FOREIGN KEY(base_commodity_id) REFERENCES commodities(id) ON DELETE RESTRICT
 );
 
-INSERT OR IGNORE INTO fx_rate_sources (book_id, name, country_code, website_url, notes) VALUES
-  (1, 'ECB', 'EU', 'https://www.ecb.europa.eu/stats/exchange/eurofxref/', 'European Central Bank reference rates'),
-  (1, 'IRS', 'US', 'https://www.irs.gov/individuals/international-taxpayers/yearly-average-currency-exchange-rates', 'US Internal Revenue Service yearly average rates'),
-  (1, 'HMRC', 'GB', 'https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat', 'UK HM Revenue & Customs rates'),
-  (1, 'Belastingdienst', 'NL', 'https://www.belastingdienst.nl/wps/wcm/connect/nl/koerslijst/', 'Dutch Tax Authority rates'),
-  (1, 'Federal Reserve', 'US', 'https://www.federalreserve.gov/releases/h10/current/', 'US Federal Reserve H.10 rates'),
-  (1, 'Bank of Canada', 'CA', 'https://www.bankofcanada.ca/rates/exchange/', 'Bank of Canada exchange rates'),
-  (1, 'RBA', 'AU', 'https://www.rba.gov.au/statistics/frequency/exchange-rates.html', 'Reserve Bank of Australia rates'),
-  (1, 'SNB', 'CH', 'https://www.snb.ch/en/iabout/stat/statrep/id/current_interest_exchange_rates', 'Swiss National Bank rates');
+CREATE TABLE IF NOT EXISTS pricing_refresh_state (
+  id                INTEGER PRIMARY KEY,
+  book_id           INTEGER NOT NULL,
+  commodity_id      INTEGER NOT NULL,
+  quote_commodity_id INTEGER NOT NULL,
+  source_id         INTEGER NOT NULL,
+  last_success_date TEXT,
+  last_attempt_at   TEXT,
+  last_error        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(quote_commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE CASCADE,
+  UNIQUE(book_id, commodity_id, quote_commodity_id, source_id)
+);
+
+-- mutability: immutable rows (append-only enforced)
+CREATE TABLE IF NOT EXISTS valuation_snapshots (
+  id                 INTEGER PRIMARY KEY,
+  book_id            INTEGER NOT NULL,
+  pricing_policy_id  INTEGER,
+  mode               TEXT NOT NULL CHECK (mode IN ('frozen','latest_corrected')),
+  snapshot_date      TEXT,
+  snapshot_json      TEXT,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY(pricing_policy_id) REFERENCES pricing_policies(id) ON DELETE SET NULL
+);
+
+-- mutability: immutable rows (append-only enforced)
+CREATE TABLE IF NOT EXISTS valuation_snapshot_items (
+  id                       INTEGER PRIMARY KEY,
+  snapshot_id              INTEGER NOT NULL,
+  line_key                 TEXT NOT NULL,
+  commodity_id             INTEGER,
+  quote_commodity_id       INTEGER,
+  price_observation_id     INTEGER,
+  conversion_path_json     TEXT,
+  triangulation_residual_ppm INTEGER,
+  created_at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY(snapshot_id) REFERENCES valuation_snapshots(id) ON DELETE CASCADE,
+  FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE SET NULL,
+  FOREIGN KEY(quote_commodity_id) REFERENCES commodities(id) ON DELETE SET NULL,
+  FOREIGN KEY(price_observation_id) REFERENCES price_observations(id) ON DELETE SET NULL,
+  UNIQUE(snapshot_id, line_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_obs_fx_daily
+  ON price_observations(book_id, observation_kind, commodity_id, quote_commodity_id, price_date);
+CREATE INDEX IF NOT EXISTS idx_pricing_assignments_effective
+  ON pricing_source_assignments(book_id, commodity_id, quote_commodity_id, effective_from, effective_to, priority);
+CREATE INDEX IF NOT EXISTS idx_pricing_refresh_state_pair
+  ON pricing_refresh_state(book_id, commodity_id, quote_commodity_id, source_id);
+
+CREATE VIEW IF NOT EXISTS current_pricing_policies AS
+SELECT p.*
+FROM pricing_policies p
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM pricing_policies newer
+  WHERE newer.previous_pricing_policy_id = p.id
+);
+
+CREATE VIEW IF NOT EXISTS current_pricing_source_assignments AS
+SELECT a.*
+FROM pricing_source_assignments a
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM pricing_source_assignments newer
+  WHERE newer.previous_pricing_source_assignment_id = a.id
+);
+
+CREATE VIEW IF NOT EXISTS current_book_base_currency_history AS
+SELECT b.*
+FROM book_base_currency_history b
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM book_base_currency_history newer
+  WHERE newer.previous_book_base_currency_history_id = b.id
+);
+
+INSERT OR IGNORE INTO price_sources (id, name, kind, provider, base_url)
+VALUES
+  (1001, 'ECB', 'provider', 'ECB', 'https://www.ecb.europa.eu/stats/exchange/eurofxref/'),
+  (1002, 'IRS', 'provider', 'IRS', 'https://www.irs.gov/individuals/international-taxpayers/yearly-average-currency-exchange-rates'),
+  (1003, 'HMRC', 'provider', 'HMRC', 'https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat'),
+  (1004, 'Belastingdienst', 'provider', 'Belastingdienst', 'https://www.belastingdienst.nl/wps/wcm/connect/nl/koerslijst/'),
+  (1005, 'Federal Reserve', 'provider', 'Federal Reserve', 'https://www.federalreserve.gov/releases/h10/current/'),
+  (1006, 'Bank of Canada', 'provider', 'Bank of Canada', 'https://www.bankofcanada.ca/rates/exchange/'),
+  (1007, 'RBA', 'provider', 'RBA', 'https://www.rba.gov.au/statistics/frequency/exchange-rates.html'),
+  (1008, 'SNB', 'provider', 'SNB', 'https://www.snb.ch/en/iabout/stat/statrep/id/current_interest_exchange_rates');
 
 UPDATE commodities
 SET is_default = 1
@@ -2015,86 +2146,39 @@ UPDATE commodities SET display_symbol = 'د.إ' WHERE symbol = 'AED' AND kind = 
 UPDATE commodities SET display_symbol = '﷼' WHERE symbol = 'SAR' AND kind = 'currency';
 UPDATE commodities SET display_symbol = 'NT$' WHERE symbol = 'TWD' AND kind = 'currency';
 
--- V15: FX rate refresh settings
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS fx_rate_settings (
-  book_id            INTEGER PRIMARY KEY,
-  base_currency_id   INTEGER NOT NULL,
-  default_source_id  INTEGER,
-  refresh_enabled    INTEGER NOT NULL DEFAULT 1,
-  refresh_hour_utc   INTEGER NOT NULL DEFAULT 4,
-  refresh_minute_utc INTEGER NOT NULL DEFAULT 0,
-  max_backfill_days  INTEGER NOT NULL DEFAULT 370,
-  weekend_policy     TEXT NOT NULL DEFAULT 'skip' CHECK (weekend_policy IN ('skip', 'fill_previous', 'download')),
-  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(base_currency_id) REFERENCES commodities(id) ON DELETE RESTRICT,
-  FOREIGN KEY(default_source_id) REFERENCES fx_rate_sources(id) ON DELETE SET NULL
-);
-
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS fx_rate_source_assignments (
-  id               INTEGER PRIMARY KEY,
-  book_id          INTEGER NOT NULL,
-  from_currency_id INTEGER NOT NULL,
-  to_currency_id   INTEGER NOT NULL,
-  source_id        INTEGER NOT NULL,
-  effective_from   TEXT NOT NULL,
-  effective_to     TEXT,
-  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(source_id) REFERENCES fx_rate_sources(id) ON DELETE CASCADE,
-  UNIQUE(book_id, from_currency_id, to_currency_id, effective_from)
-);
-
-CREATE INDEX IF NOT EXISTS idx_fx_assignments_effective
-  ON fx_rate_source_assignments(book_id, from_currency_id, to_currency_id, effective_from, effective_to);
-
--- mutability: mutable rows
-CREATE TABLE IF NOT EXISTS fx_rate_refresh_state (
-  id               INTEGER PRIMARY KEY,
-  book_id          INTEGER NOT NULL,
-  from_currency_id INTEGER NOT NULL,
-  to_currency_id   INTEGER NOT NULL,
-  source_id        INTEGER NOT NULL,
-  last_success_date TEXT,
-  last_attempt_at   TEXT,
-  last_error        TEXT,
-  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
-  FOREIGN KEY(from_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(to_currency_id) REFERENCES commodities(id) ON DELETE CASCADE,
-  FOREIGN KEY(source_id) REFERENCES fx_rate_sources(id) ON DELETE CASCADE,
-  UNIQUE(book_id, from_currency_id, to_currency_id, source_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_fx_refresh_state_pair
-  ON fx_rate_refresh_state(book_id, from_currency_id, to_currency_id, source_id);
-
-CREATE INDEX IF NOT EXISTS idx_fx_daily_source ON fx_rates_daily(source_id);
-
-INSERT OR IGNORE INTO fx_rate_settings (book_id, base_currency_id, default_source_id)
+-- V15: pricing policy, base currency history, and refresh state
+INSERT OR IGNORE INTO pricing_policies (
+  id, book_id, name, mode, refresh_enabled, refresh_hour_utc, refresh_minute_utc, max_backfill_days, weekend_policy,
+  staleness_max_days, triangulation_max_hops, rounding_mode, prefer_official_fx, default_source_id
+)
 SELECT 1,
-       c.id,
+       1,
+       'Default policy',
+       'latest_corrected',
+       1,
+       4,
+       0,
+       370,
+       'skip',
+       7,
+       2,
+       'bankers',
+       0,
        (
          SELECT id
-         FROM fx_rate_sources
-         WHERE book_id = 1 AND name IN ('ECB', 'Federal Reserve')
+         FROM price_sources
+         WHERE name IN ('ECB', 'Federal Reserve')
          ORDER BY CASE name WHEN 'ECB' THEN 0 ELSE 1 END
          LIMIT 1
-       )
+       );
+
+INSERT OR IGNORE INTO book_base_currency_history (book_id, base_commodity_id, effective_from)
+SELECT 1,
+       c.id,
+       '1900-01-01'
 FROM commodities c
 WHERE c.book_id = 1 AND c.kind = 'currency' AND c.is_default = 1
 LIMIT 1;
-
--- V16: derived FX rates
-CREATE INDEX IF NOT EXISTS idx_fx_daily_derived ON fx_rates_daily(is_derived);
-CREATE INDEX IF NOT EXISTS idx_fx_daily_derived_via ON fx_rates_daily(derived_via_currency_id);
 
 -- V17: commodities/currency sync
 INSERT OR IGNORE INTO commodities
@@ -2301,6 +2385,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_corporate_actions_previous_unique
   ON corporate_actions(previous_corporate_action_id)
   WHERE previous_corporate_action_id IS NOT NULL;
 
+CREATE INDEX IF NOT EXISTS idx_pricing_policies_previous ON pricing_policies(previous_pricing_policy_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pricing_policies_previous_unique
+  ON pricing_policies(previous_pricing_policy_id)
+  WHERE previous_pricing_policy_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_pricing_source_assignments_previous ON pricing_source_assignments(previous_pricing_source_assignment_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pricing_source_assignments_previous_unique
+  ON pricing_source_assignments(previous_pricing_source_assignment_id)
+  WHERE previous_pricing_source_assignment_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_book_base_currency_history_previous ON book_base_currency_history(previous_book_base_currency_history_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_book_base_currency_history_previous_unique
+  ON book_base_currency_history(previous_book_base_currency_history_id)
+  WHERE previous_book_base_currency_history_id IS NOT NULL;
+
 -- Immutability guards (enforce append-only behavior)
 
 CREATE TRIGGER IF NOT EXISTS trg_transactions_append_only_update
@@ -2447,6 +2546,18 @@ BEGIN
   SELECT RAISE(ABORT, 'commodity_price_sources are append-only');
 END;
 
+CREATE TRIGGER IF NOT EXISTS trg_price_observations_append_only_update
+BEFORE UPDATE ON price_observations
+BEGIN
+  SELECT RAISE(ABORT, 'price_observations are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_price_observations_append_only_delete
+BEFORE DELETE ON price_observations
+BEGIN
+  SELECT RAISE(ABORT, 'price_observations are append-only');
+END;
+
 CREATE TRIGGER IF NOT EXISTS trg_books_append_only_update
 BEFORE UPDATE ON books
 BEGIN
@@ -2553,6 +2664,96 @@ CREATE TRIGGER IF NOT EXISTS trg_notes_append_only_delete
 BEFORE DELETE ON notes
 BEGIN
   SELECT RAISE(ABORT, 'notes are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_price_ingest_runs_append_only_update
+BEFORE UPDATE ON price_ingest_runs
+BEGIN
+  SELECT RAISE(ABORT, 'price_ingest_runs are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_price_ingest_runs_append_only_delete
+BEFORE DELETE ON price_ingest_runs
+BEGIN
+  SELECT RAISE(ABORT, 'price_ingest_runs are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_split_lot_allocations_append_only_update
+BEFORE UPDATE ON split_lot_allocations
+BEGIN
+  SELECT RAISE(ABORT, 'split_lot_allocations are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_split_lot_allocations_append_only_delete
+BEFORE DELETE ON split_lot_allocations
+BEGIN
+  SELECT RAISE(ABORT, 'split_lot_allocations are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_report_runs_append_only_update
+BEFORE UPDATE ON report_runs
+BEGIN
+  SELECT RAISE(ABORT, 'report_runs are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_pricing_policies_append_only_update
+BEFORE UPDATE ON pricing_policies
+BEGIN
+  SELECT RAISE(ABORT, 'pricing_policies are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_pricing_policies_append_only_delete
+BEFORE DELETE ON pricing_policies
+BEGIN
+  SELECT RAISE(ABORT, 'pricing_policies are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_pricing_source_assignments_append_only_update
+BEFORE UPDATE ON pricing_source_assignments
+BEGIN
+  SELECT RAISE(ABORT, 'pricing_source_assignments are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_pricing_source_assignments_append_only_delete
+BEFORE DELETE ON pricing_source_assignments
+BEGIN
+  SELECT RAISE(ABORT, 'pricing_source_assignments are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_book_base_currency_history_append_only_update
+BEFORE UPDATE ON book_base_currency_history
+BEGIN
+  SELECT RAISE(ABORT, 'book_base_currency_history are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_book_base_currency_history_append_only_delete
+BEFORE DELETE ON book_base_currency_history
+BEGIN
+  SELECT RAISE(ABORT, 'book_base_currency_history are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_valuation_snapshots_append_only_update
+BEFORE UPDATE ON valuation_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'valuation_snapshots are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_valuation_snapshots_append_only_delete
+BEFORE DELETE ON valuation_snapshots
+BEGIN
+  SELECT RAISE(ABORT, 'valuation_snapshots are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_valuation_snapshot_items_append_only_update
+BEFORE UPDATE ON valuation_snapshot_items
+BEGIN
+  SELECT RAISE(ABORT, 'valuation_snapshot_items are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_valuation_snapshot_items_append_only_delete
+BEFORE DELETE ON valuation_snapshot_items
+BEGIN
+  SELECT RAISE(ABORT, 'valuation_snapshot_items are append-only');
 END;
 
 -- End append-only section

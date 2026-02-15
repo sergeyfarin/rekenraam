@@ -744,19 +744,19 @@ pub fn list_fx_rates_daily(
 
     if let Some(from_id) = from_currency_id {
         params_vec.push(Box::new(from_id));
-        conditions.push(format!("r.from_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("r.commodity_id = ?{}", params_vec.len()));
     }
     if let Some(to_id) = to_currency_id {
         params_vec.push(Box::new(to_id));
-        conditions.push(format!("r.to_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("r.quote_commodity_id = ?{}", params_vec.len()));
     }
     if let Some(start) = start_date {
         params_vec.push(Box::new(start));
-        conditions.push(format!("r.rate_date >= ?{}", params_vec.len()));
+        conditions.push(format!("r.price_date >= ?{}", params_vec.len()));
     }
     if let Some(end) = end_date {
         params_vec.push(Box::new(end));
-        conditions.push(format!("r.rate_date <= ?{}", params_vec.len()));
+        conditions.push(format!("r.price_date <= ?{}", params_vec.len()));
     }
 
     let limit_clause = if let Some(l) = limit {
@@ -767,12 +767,28 @@ pub fn list_fx_rates_daily(
 
     let sql = format!(
         "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
-                r.rate_date, r.rate, r.source, r.source_id, r.is_derived, r.derived_via_currency_id, r.created_at
-         FROM fx_rates_daily r
-         LEFT JOIN commodities fc ON r.from_currency_id = fc.id
-         LEFT JOIN commodities tc ON r.to_currency_id = tc.id
-         WHERE {}
-         ORDER BY r.rate_date DESC{}",
+              r.rate_date, r.rate, r.source, r.source_id, r.is_derived, r.derived_via_currency_id, r.created_at
+          FROM (
+             SELECT id, book_id,
+                 commodity_id AS from_currency_id,
+                 quote_commodity_id AS to_currency_id,
+                 price_date AS rate_date,
+                 price_value AS rate,
+                 source_name AS source,
+                 source_id,
+                 is_derived,
+                 derived_via_commodity_id AS derived_via_currency_id,
+                 created_at,
+                 commodity_id,
+                 quote_commodity_id,
+                 price_date
+             FROM current_price_observations
+             WHERE observation_kind = 'fx_daily'
+          ) r
+          LEFT JOIN commodities fc ON r.from_currency_id = fc.id
+          LEFT JOIN commodities tc ON r.to_currency_id = tc.id
+          WHERE {}
+          ORDER BY r.rate_date DESC{}",
         conditions.join(" AND "),
         limit_clause
     );
@@ -797,14 +813,16 @@ pub fn create_fx_rate_daily(db: State<DbState>, input: FxRateDailyCreate) -> Res
     let is_derived = input.is_derived.unwrap_or(false) as i64;
 
     conn.execute(
-        "INSERT OR REPLACE INTO fx_rates_daily (book_id, from_currency_id, to_currency_id, rate_date, rate, source, source_id, is_derived, derived_via_currency_id, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO price_observations
+         (book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date,
+          source_name, source_id, is_manual, is_derived, derived_via_commodity_id, created_at)
+         VALUES (?1, ?2, ?3, 'fx_daily', ?4, ?5, ?6, ?7, 0, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.from_currency_id,
             input.to_currency_id,
-            input.rate_date,
             input.rate,
+            input.rate_date,
             input.source,
             input.source_id,
             is_derived,
@@ -816,12 +834,25 @@ pub fn create_fx_rate_daily(db: State<DbState>, input: FxRateDailyCreate) -> Res
     let id = conn.last_insert_rowid();
     let rate = conn
         .query_row(
-            "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
-                    r.rate_date, r.rate, r.source, r.source_id, r.is_derived, r.derived_via_currency_id, r.created_at
-             FROM fx_rates_daily r
-             LEFT JOIN commodities fc ON r.from_currency_id = fc.id
-             LEFT JOIN commodities tc ON r.to_currency_id = tc.id
-             WHERE r.id = ?1",
+             "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
+                  r.rate_date, r.rate, r.source, r.source_id, r.is_derived, r.derived_via_currency_id, r.created_at
+              FROM (
+              SELECT id, book_id,
+                  commodity_id AS from_currency_id,
+                  quote_commodity_id AS to_currency_id,
+                  price_date AS rate_date,
+                  price_value AS rate,
+                  source_name AS source,
+                  source_id,
+                  is_derived,
+                  derived_via_commodity_id AS derived_via_currency_id,
+                  created_at
+              FROM price_observations
+              WHERE observation_kind = 'fx_daily'
+              ) r
+              LEFT JOIN commodities fc ON r.from_currency_id = fc.id
+              LEFT JOIN commodities tc ON r.to_currency_id = tc.id
+              WHERE r.id = ?1",
             [id],
             map_fx_rate_daily_row,
         )
@@ -832,13 +863,9 @@ pub fn create_fx_rate_daily(db: State<DbState>, input: FxRateDailyCreate) -> Res
 
 #[command]
 pub fn delete_fx_rate_daily(db: State<DbState>, id: i64) -> Result<(), String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-
-    conn.execute("DELETE FROM fx_rates_daily WHERE id = ?1", [id])
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
+    let _ = db;
+    let _ = id;
+    Err("FX rates are append-only; insert a superseding observation instead".to_string())
 }
 
 #[command]
@@ -857,9 +884,9 @@ pub fn get_fx_rate_for_date(
     // First try exact date, then find closest earlier date
     let rate: Option<f64> = conn
         .query_row(
-            "SELECT rate FROM fx_rates_daily
-             WHERE book_id = ?1 AND from_currency_id = ?2 AND to_currency_id = ?3 AND rate_date <= ?4
-             ORDER BY rate_date DESC LIMIT 1",
+            "SELECT price_value FROM current_price_observations
+             WHERE book_id = ?1 AND observation_kind = 'fx_daily' AND commodity_id = ?2 AND quote_commodity_id = ?3 AND price_date <= ?4
+             ORDER BY price_date DESC, created_at DESC LIMIT 1",
             params![book_id, from_currency_id, to_currency_id, date],
             |row| row.get(0),
         )
@@ -892,11 +919,11 @@ pub fn list_fx_rates_official(
 
     if let Some(from_id) = from_currency_id {
         params_vec.push(Box::new(from_id));
-        conditions.push(format!("r.from_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("r.commodity_id = ?{}", params_vec.len()));
     }
     if let Some(to_id) = to_currency_id {
         params_vec.push(Box::new(to_id));
-        conditions.push(format!("r.to_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("r.quote_commodity_id = ?{}", params_vec.len()));
     }
     if let Some(pt) = period_type {
         params_vec.push(Box::new(pt));
@@ -911,7 +938,25 @@ pub fn list_fx_rates_official(
         "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                 r.period_type, r.period_year, r.period_month, r.rate,
                 r.source_name, r.source_url, r.source_date, r.notes, r.created_at, r.updated_at
-         FROM fx_rates_official r
+          FROM (
+             SELECT id, book_id,
+                 commodity_id AS from_currency_id,
+                 quote_commodity_id AS to_currency_id,
+                 period_type,
+                 period_year,
+                 period_month,
+                 price_value AS rate,
+                 source_name,
+                 source_url,
+                 source_date,
+                 triangulation_path_json AS notes,
+                 created_at,
+                 created_at AS updated_at,
+                 commodity_id,
+                 quote_commodity_id
+             FROM current_price_observations
+             WHERE observation_kind = 'fx_official'
+          ) r
          LEFT JOIN commodities fc ON r.from_currency_id = fc.id
          LEFT JOIN commodities tc ON r.to_currency_id = tc.id
          WHERE {}
@@ -937,19 +982,23 @@ pub fn create_fx_rate_official(db: State<DbState>, input: FxRateOfficialCreate) 
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT OR REPLACE INTO fx_rates_official
-         (book_id, from_currency_id, to_currency_id, period_type, period_year, period_month, rate,
-          source_name, source_url, source_date, notes, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                 strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO price_observations
+         (book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date,
+          period_type, period_year, period_month, source_name, source_url, source_date,
+          triangulation_path_json, is_manual, is_derived, created_at)
+         VALUES (?1, ?2, ?3, 'fx_official', ?4, COALESCE(?5, printf('%04d-%02d-01', ?6, COALESCE(?7, 1))),
+                 ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.from_currency_id,
             input.to_currency_id,
+            input.rate,
+            input.source_date,
+            input.period_year,
+            input.period_month,
             input.period_type,
             input.period_year,
             input.period_month,
-            input.rate,
             input.source_name,
             input.source_url,
             input.source_date,
@@ -964,7 +1013,23 @@ pub fn create_fx_rate_official(db: State<DbState>, input: FxRateOfficialCreate) 
             "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                     r.period_type, r.period_year, r.period_month, r.rate,
                     r.source_name, r.source_url, r.source_date, r.notes, r.created_at, r.updated_at
-             FROM fx_rates_official r
+              FROM (
+              SELECT id, book_id,
+                  commodity_id AS from_currency_id,
+                  quote_commodity_id AS to_currency_id,
+                  period_type,
+                  period_year,
+                  period_month,
+                  price_value AS rate,
+                  source_name,
+                  source_url,
+                  source_date,
+                  triangulation_path_json AS notes,
+                  created_at,
+                  created_at AS updated_at
+              FROM price_observations
+              WHERE observation_kind = 'fx_official'
+              ) r
              LEFT JOIN commodities fc ON r.from_currency_id = fc.id
              LEFT JOIN commodities tc ON r.to_currency_id = tc.id
              WHERE r.id = ?1",
@@ -981,50 +1046,84 @@ pub fn update_fx_rate_official(db: State<DbState>, input: FxRateOfficialUpdate) 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let mut updates = vec!["updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')".to_string()];
-    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let current = conn
+        .query_row(
+            "SELECT commodity_id, quote_commodity_id, period_type, period_year, period_month, price_value, source_name, source_url, source_date, triangulation_path_json
+             FROM current_price_observations
+             WHERE id = ?1 AND observation_kind = 'fx_official'",
+            [input.id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, f64>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                ))
+            },
+        )
+        .map_err(|e| e.to_string())?;
 
-    if let Some(rate) = input.rate {
-        params_vec.push(Box::new(rate));
-        updates.push(format!("rate = ?{}", params_vec.len()));
-    }
-    if let Some(source_name) = &input.source_name {
-        params_vec.push(Box::new(source_name.clone()));
-        updates.push(format!("source_name = ?{}", params_vec.len()));
-    }
-    if let Some(source_url) = &input.source_url {
-        params_vec.push(Box::new(source_url.clone()));
-        updates.push(format!("source_url = ?{}", params_vec.len()));
-    }
-    if let Some(source_date) = &input.source_date {
-        params_vec.push(Box::new(source_date.clone()));
-        updates.push(format!("source_date = ?{}", params_vec.len()));
-    }
-    if let Some(notes) = &input.notes {
-        params_vec.push(Box::new(notes.clone()));
-        updates.push(format!("notes = ?{}", params_vec.len()));
-    }
+    conn.execute(
+        "INSERT INTO price_observations
+         (book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_date,
+          period_type, period_year, period_month, source_name, source_url, source_date,
+          triangulation_path_json, supersedes_observation_id, created_at)
+         VALUES (?1, ?2, ?3, 'fx_official', ?4, COALESCE(?5, printf('%04d-%02d-01', ?6, COALESCE(?7, 1))),
+                 ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            SINGLE_BOOK_ID,
+            current.0,
+            current.1,
+            input.rate.unwrap_or(current.5),
+            input.source_date.clone().or(current.8.clone()),
+            current.3,
+            current.4,
+            current.2,
+            current.3,
+            current.4,
+            input.source_name.unwrap_or(current.6),
+            input.source_url.or(current.7),
+            input.source_date.or(current.8),
+            input.notes.or(current.9),
+            input.id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
 
-    params_vec.push(Box::new(input.id));
-    let sql = format!(
-        "UPDATE fx_rates_official SET {} WHERE id = ?{}",
-        updates.join(", "),
-        params_vec.len()
-    );
-
-    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+    let new_id = conn.last_insert_rowid();
 
     let rate = conn
         .query_row(
             "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                     r.period_type, r.period_year, r.period_month, r.rate,
                     r.source_name, r.source_url, r.source_date, r.notes, r.created_at, r.updated_at
-             FROM fx_rates_official r
+                 FROM (
+                     SELECT id, book_id,
+                              commodity_id AS from_currency_id,
+                              quote_commodity_id AS to_currency_id,
+                              period_type,
+                              period_year,
+                              period_month,
+                              price_value AS rate,
+                              source_name,
+                              source_url,
+                              source_date,
+                              triangulation_path_json AS notes,
+                              created_at,
+                              created_at AS updated_at
+                     FROM price_observations
+                     WHERE observation_kind = 'fx_official'
+                 ) r
              LEFT JOIN commodities fc ON r.from_currency_id = fc.id
              LEFT JOIN commodities tc ON r.to_currency_id = tc.id
              WHERE r.id = ?1",
-            [input.id],
+                [new_id],
             map_fx_rate_official_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1034,13 +1133,9 @@ pub fn update_fx_rate_official(db: State<DbState>, input: FxRateOfficialUpdate) 
 
 #[command]
 pub fn delete_fx_rate_official(db: State<DbState>, id: i64) -> Result<(), String> {
-    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-
-    conn.execute("DELETE FROM fx_rates_official WHERE id = ?1", [id])
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
+    let _ = db;
+    let _ = id;
+    Err("Official FX rates are append-only; insert a superseding observation instead".to_string())
 }
 
 #[command]
@@ -1062,20 +1157,52 @@ pub fn get_official_rate_for_period(
         "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                 r.period_type, r.period_year, r.period_month, r.rate,
                 r.source_name, r.source_url, r.source_date, r.notes, r.created_at, r.updated_at
-         FROM fx_rates_official r
+             FROM (
+                SELECT id, book_id,
+                   commodity_id AS from_currency_id,
+                   quote_commodity_id AS to_currency_id,
+                   period_type,
+                   period_year,
+                   period_month,
+                   price_value AS rate,
+                   source_name,
+                   source_url,
+                   source_date,
+                   triangulation_path_json AS notes,
+                   created_at,
+                   created_at AS updated_at
+                FROM current_price_observations
+                WHERE observation_kind = 'fx_official'
+             ) r
          LEFT JOIN commodities fc ON r.from_currency_id = fc.id
          LEFT JOIN commodities tc ON r.to_currency_id = tc.id
-         WHERE r.book_id = ?1 AND r.from_currency_id = ?2 AND r.to_currency_id = ?3
+             WHERE r.book_id = ?1 AND r.from_currency_id = ?2 AND r.to_currency_id = ?3
            AND r.period_type = ?4 AND r.period_year = ?5 AND r.period_month = ?6
          LIMIT 1"
     } else {
         "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                 r.period_type, r.period_year, r.period_month, r.rate,
                 r.source_name, r.source_url, r.source_date, r.notes, r.created_at, r.updated_at
-         FROM fx_rates_official r
+             FROM (
+                SELECT id, book_id,
+                   commodity_id AS from_currency_id,
+                   quote_commodity_id AS to_currency_id,
+                   period_type,
+                   period_year,
+                   period_month,
+                   price_value AS rate,
+                   source_name,
+                   source_url,
+                   source_date,
+                   triangulation_path_json AS notes,
+                   created_at,
+                   created_at AS updated_at
+                FROM current_price_observations
+                WHERE observation_kind = 'fx_official'
+             ) r
          LEFT JOIN commodities fc ON r.from_currency_id = fc.id
          LEFT JOIN commodities tc ON r.to_currency_id = tc.id
-         WHERE r.book_id = ?1 AND r.from_currency_id = ?2 AND r.to_currency_id = ?3
+             WHERE r.book_id = ?1 AND r.from_currency_id = ?2 AND r.to_currency_id = ?3
            AND r.period_type = ?4 AND r.period_year = ?5 AND r.period_month IS NULL
          LIMIT 1"
     };
@@ -1114,8 +1241,8 @@ pub fn list_fx_rate_sources(db: State<DbState>, book_id: i64) -> Result<Vec<FxRa
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, name, country_code, website_url, notes, created_at, updated_at
-             FROM fx_rate_sources WHERE book_id = ?1 ORDER BY name ASC",
+            "SELECT id, ?1 AS book_id, name, provider AS country_code, base_url AS website_url, NULL AS notes, created_at, created_at AS updated_at
+             FROM price_sources ORDER BY name ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1135,18 +1262,18 @@ pub fn create_fx_rate_source(db: State<DbState>, input: FxRateSourceCreate) -> R
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO fx_rate_sources (book_id, name, country_code, website_url, notes, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-        params![book_id, input.name, input.country_code, input.website_url, input.notes],
+        "INSERT INTO price_sources (name, kind, provider, base_url, created_at)
+         VALUES (?1, 'provider', ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![input.name, input.country_code, input.website_url],
     )
     .map_err(|e| e.to_string())?;
 
     let id = conn.last_insert_rowid();
     let source = conn
         .query_row(
-            "SELECT id, book_id, name, country_code, website_url, notes, created_at, updated_at
-             FROM fx_rate_sources WHERE id = ?1",
-            [id],
+            "SELECT id, ?2 AS book_id, name, provider AS country_code, base_url AS website_url, NULL AS notes, created_at, created_at AS updated_at
+             FROM price_sources WHERE id = ?1",
+            params![id, book_id],
             map_fx_rate_source_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1167,13 +1294,14 @@ pub fn get_fx_rate_settings(db: State<DbState>, book_id: i64) -> Result<Option<F
 
     let row = conn
         .query_row(
-            "SELECT s.book_id, s.base_currency_id, c.symbol, s.default_source_id, src.name,
-                    s.refresh_enabled, s.refresh_hour_utc, s.refresh_minute_utc, s.max_backfill_days,
-                    s.weekend_policy, s.created_at, s.updated_at
-             FROM fx_rate_settings s
-             LEFT JOIN commodities c ON s.base_currency_id = c.id
-             LEFT JOIN fx_rate_sources src ON s.default_source_id = src.id
-             WHERE s.book_id = ?1
+            "SELECT p.book_id, b.base_commodity_id, c.symbol, p.default_source_id, src.name,
+                    p.refresh_enabled, p.refresh_hour_utc, p.refresh_minute_utc, p.max_backfill_days,
+                    p.weekend_policy, p.created_at, p.created_at AS updated_at
+             FROM current_pricing_policies p
+             JOIN current_book_base_currency_history b ON b.book_id = p.book_id
+             LEFT JOIN commodities c ON b.base_commodity_id = c.id
+             LEFT JOIN price_sources src ON p.default_source_id = src.id
+             WHERE p.book_id = ?1
              LIMIT 1",
             [book_id],
             map_fx_rate_settings_row,
@@ -1189,59 +1317,100 @@ pub fn set_fx_rate_settings(db: State<DbState>, input: FxRateSettingsUpdate) -> 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let existing: Option<FxRateSettings> = conn
+    let existing: Option<(i64, String, String, i64, i64, i64, i64, String, Option<i64>, i64, i64)> = conn
         .query_row(
-            "SELECT s.book_id, s.base_currency_id, c.symbol, s.default_source_id, src.name,
-                    s.refresh_enabled, s.refresh_hour_utc, s.refresh_minute_utc, s.max_backfill_days,
-                    s.weekend_policy, s.created_at, s.updated_at
-             FROM fx_rate_settings s
-             LEFT JOIN commodities c ON s.base_currency_id = c.id
-             LEFT JOIN fx_rate_sources src ON s.default_source_id = src.id
-             WHERE s.book_id = ?1
+            "SELECT p.id, p.name, p.mode, p.refresh_enabled, p.refresh_hour_utc, p.refresh_minute_utc,
+                    p.max_backfill_days, p.weekend_policy, p.default_source_id,
+                    b.id, b.base_commodity_id
+             FROM current_pricing_policies p
+             JOIN current_book_base_currency_history b ON b.book_id = p.book_id
+             WHERE p.book_id = ?1
              LIMIT 1",
             [SINGLE_BOOK_ID],
-            map_fx_rate_settings_row,
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                ))
+            },
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    if let Some(current) = existing {
-        let mut updates = vec!["updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')".to_string()];
-        let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    if let Some((
+        policy_id,
+        policy_name,
+        policy_mode,
+        refresh_enabled_old,
+        refresh_hour_old,
+        refresh_minute_old,
+        max_backfill_days_old,
+        weekend_policy_old,
+        default_source_id_old,
+        base_history_id,
+        current_base_currency_id,
+    )) = existing
+    {
+        let next_default_source_id = input.default_source_id.or(default_source_id_old);
+        let next_refresh_enabled = input.refresh_enabled.unwrap_or(refresh_enabled_old != 0) as i64;
+        let next_refresh_hour_utc = input.refresh_hour_utc.unwrap_or(refresh_hour_old);
+        let next_refresh_minute_utc = input.refresh_minute_utc.unwrap_or(refresh_minute_old);
+        let next_max_backfill_days = input.max_backfill_days.unwrap_or(max_backfill_days_old);
+        let next_weekend_policy = input.weekend_policy.unwrap_or_else(|| weekend_policy_old.clone());
 
-        if let Some(base_id) = input.base_currency_id {
-            params_vec.push(Box::new(base_id));
-            updates.push(format!("base_currency_id = ?{}", params_vec.len()));
-        }
-        if let Some(default_source_id) = input.default_source_id {
-            params_vec.push(Box::new(default_source_id));
-            updates.push(format!("default_source_id = ?{}", params_vec.len()));
-        }
-        if let Some(enabled) = input.refresh_enabled {
-            params_vec.push(Box::new(enabled as i64));
-            updates.push(format!("refresh_enabled = ?{}", params_vec.len()));
-        }
-        if let Some(hour) = input.refresh_hour_utc {
-            params_vec.push(Box::new(hour));
-            updates.push(format!("refresh_hour_utc = ?{}", params_vec.len()));
-        }
-        if let Some(minute) = input.refresh_minute_utc {
-            params_vec.push(Box::new(minute));
-            updates.push(format!("refresh_minute_utc = ?{}", params_vec.len()));
-        }
-        if let Some(days) = input.max_backfill_days {
-            params_vec.push(Box::new(days));
-            updates.push(format!("max_backfill_days = ?{}", params_vec.len()));
-        }
-        if let Some(policy) = input.weekend_policy {
-            params_vec.push(Box::new(policy));
-            updates.push(format!("weekend_policy = ?{}", params_vec.len()));
+        let policy_changed = next_default_source_id != default_source_id_old
+            || next_refresh_enabled != refresh_enabled_old
+            || next_refresh_hour_utc != refresh_hour_old
+            || next_refresh_minute_utc != refresh_minute_old
+            || next_max_backfill_days != max_backfill_days_old
+            || next_weekend_policy != weekend_policy_old;
+
+        if policy_changed {
+            conn.execute(
+                "INSERT INTO pricing_policies
+                    (previous_pricing_policy_id, book_id, name, mode, refresh_enabled, refresh_hour_utc,
+                     refresh_minute_utc, max_backfill_days, weekend_policy, staleness_max_days,
+                     triangulation_max_hops, rounding_mode, prefer_official_fx, default_source_id, created_at)
+                 SELECT ?1, book_id, ?2, ?3, ?4, ?5, ?6, ?7, ?8, staleness_max_days,
+                        triangulation_max_hops, rounding_mode, prefer_official_fx, ?9,
+                        strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 FROM pricing_policies
+                 WHERE id = ?1",
+                params![
+                    policy_id,
+                    policy_name,
+                    policy_mode,
+                    next_refresh_enabled,
+                    next_refresh_hour_utc,
+                    next_refresh_minute_utc,
+                    next_max_backfill_days,
+                    next_weekend_policy,
+                    next_default_source_id,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         }
 
-        params_vec.push(Box::new(current.book_id));
-        let sql = format!("UPDATE fx_rate_settings SET {} WHERE book_id = ?{}", updates.join(", "), params_vec.len());
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-        conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+        if let Some(new_base_id) = input.base_currency_id {
+            if new_base_id != current_base_currency_id {
+                conn.execute(
+                    "INSERT INTO book_base_currency_history
+                        (previous_book_base_currency_history_id, book_id, base_commodity_id, effective_from, effective_to, created_at)
+                     VALUES (?1, ?2, ?3, date('now'), NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    params![base_history_id, SINGLE_BOOK_ID, new_base_id],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
     } else {
         let base_currency_id = if let Some(id) = input.base_currency_id {
             id
@@ -1266,32 +1435,40 @@ pub fn set_fx_rate_settings(db: State<DbState>, input: FxRateSettingsUpdate) -> 
         let weekend_policy = input.weekend_policy.unwrap_or_else(|| "skip".to_string());
 
         conn.execute(
-            "INSERT INTO fx_rate_settings
-                (book_id, base_currency_id, default_source_id, refresh_enabled, refresh_hour_utc, refresh_minute_utc, max_backfill_days, weekend_policy, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO pricing_policies
+                (previous_pricing_policy_id, book_id, name, mode, refresh_enabled, refresh_hour_utc, refresh_minute_utc, max_backfill_days, weekend_policy, staleness_max_days, triangulation_max_hops, rounding_mode, prefer_official_fx, default_source_id, created_at)
+             VALUES (?1, ?2, 'Default policy', 'latest_corrected', ?3, ?4, ?5, ?6, ?7, 7, 2, 'bankers', 0, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
+                Option::<i64>::None,
                 SINGLE_BOOK_ID,
-                base_currency_id,
-                input.default_source_id,
                 refresh_enabled,
                 refresh_hour_utc,
                 refresh_minute_utc,
                 max_backfill_days,
-                weekend_policy
+                weekend_policy,
+                input.default_source_id,
             ],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "INSERT INTO book_base_currency_history (previous_book_base_currency_history_id, book_id, base_commodity_id, effective_from, effective_to, created_at)
+             VALUES (?1, ?2, ?3, date('now'), NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![Option::<i64>::None, SINGLE_BOOK_ID, base_currency_id],
         )
         .map_err(|e| e.to_string())?;
     }
 
     let updated = conn
         .query_row(
-            "SELECT s.book_id, s.base_currency_id, c.symbol, s.default_source_id, src.name,
-                    s.refresh_enabled, s.refresh_hour_utc, s.refresh_minute_utc, s.max_backfill_days,
-                    s.weekend_policy, s.created_at, s.updated_at
-             FROM fx_rate_settings s
-             LEFT JOIN commodities c ON s.base_currency_id = c.id
-             LEFT JOIN fx_rate_sources src ON s.default_source_id = src.id
-             WHERE s.book_id = ?1
+            "SELECT p.book_id, b.base_commodity_id, c.symbol, p.default_source_id, src.name,
+                    p.refresh_enabled, p.refresh_hour_utc, p.refresh_minute_utc, p.max_backfill_days,
+                    p.weekend_policy, p.created_at, p.created_at AS updated_at
+             FROM current_pricing_policies p
+             JOIN current_book_base_currency_history b ON b.book_id = p.book_id
+             LEFT JOIN commodities c ON b.base_commodity_id = c.id
+             LEFT JOIN price_sources src ON p.default_source_id = src.id
+             WHERE p.book_id = ?1
              LIMIT 1",
             [SINGLE_BOOK_ID],
             map_fx_rate_settings_row,
@@ -1319,11 +1496,11 @@ pub fn list_fx_rate_source_assignments(
 
     if let Some(from_id) = from_currency_id {
         params_vec.push(Box::new(from_id));
-        conditions.push(format!("a.from_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("a.commodity_id = ?{}", params_vec.len()));
     }
     if let Some(to_id) = to_currency_id {
         params_vec.push(Box::new(to_id));
-        conditions.push(format!("a.to_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("a.quote_commodity_id = ?{}", params_vec.len()));
     }
     if let Some(date) = on_date {
         let date_start = date.clone();
@@ -1336,10 +1513,22 @@ pub fn list_fx_rate_source_assignments(
     let sql = format!(
         "SELECT a.id, a.book_id, a.from_currency_id, fc.symbol, a.to_currency_id, tc.symbol,
                 a.source_id, s.name, a.effective_from, a.effective_to, a.created_at, a.updated_at
-         FROM fx_rate_source_assignments a
-         LEFT JOIN commodities fc ON a.from_currency_id = fc.id
-         LEFT JOIN commodities tc ON a.to_currency_id = tc.id
-         LEFT JOIN fx_rate_sources s ON a.source_id = s.id
+          FROM (
+             SELECT id, book_id,
+                 commodity_id AS from_currency_id,
+                 quote_commodity_id AS to_currency_id,
+                 source_id,
+                 effective_from,
+                 effective_to,
+                 created_at,
+                 updated_at,
+                 commodity_id,
+                 quote_commodity_id
+             FROM current_pricing_source_assignments
+          ) a
+          LEFT JOIN commodities fc ON a.from_currency_id = fc.id
+          LEFT JOIN commodities tc ON a.to_currency_id = tc.id
+          LEFT JOIN price_sources s ON a.source_id = s.id
          WHERE {}
          ORDER BY a.effective_from DESC",
         conditions.join(" AND ")
@@ -1367,9 +1556,9 @@ pub fn create_fx_rate_source_assignment(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
     conn.execute(
-        "INSERT INTO fx_rate_source_assignments
-            (book_id, from_currency_id, to_currency_id, source_id, effective_from, effective_to, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO pricing_source_assignments
+            (previous_pricing_source_assignment_id, book_id, commodity_id, quote_commodity_id, source_id, priority, effective_from, effective_to, created_at, updated_at)
+         VALUES (NULL, ?1, ?2, ?3, ?4, 100, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             SINGLE_BOOK_ID,
             input.from_currency_id,
@@ -1386,10 +1575,20 @@ pub fn create_fx_rate_source_assignment(
         .query_row(
             "SELECT a.id, a.book_id, a.from_currency_id, fc.symbol, a.to_currency_id, tc.symbol,
                     a.source_id, s.name, a.effective_from, a.effective_to, a.created_at, a.updated_at
-             FROM fx_rate_source_assignments a
-             LEFT JOIN commodities fc ON a.from_currency_id = fc.id
-             LEFT JOIN commodities tc ON a.to_currency_id = tc.id
-             LEFT JOIN fx_rate_sources s ON a.source_id = s.id
+                  FROM (
+                  SELECT id, book_id,
+                      commodity_id AS from_currency_id,
+                      quote_commodity_id AS to_currency_id,
+                      source_id,
+                      effective_from,
+                      effective_to,
+                      created_at,
+                      updated_at
+                  FROM current_pricing_source_assignments
+                  ) a
+                  LEFT JOIN commodities fc ON a.from_currency_id = fc.id
+                  LEFT JOIN commodities tc ON a.to_currency_id = tc.id
+                  LEFT JOIN price_sources s ON a.source_id = s.id
              WHERE a.id = ?1",
             [id],
             map_fx_rate_source_assignment_row,
@@ -1407,42 +1606,72 @@ pub fn update_fx_rate_source_assignment(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let mut updates = vec!["updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')".to_string()];
-    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let current: Option<(i64, i64, i64, i64, i64, String, Option<String>)> = conn
+        .query_row(
+            "SELECT id, book_id, commodity_id, quote_commodity_id, source_id, effective_from, effective_to
+             FROM current_pricing_source_assignments
+             WHERE id = ?1",
+            [input.id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
 
-    if let Some(source_id) = input.source_id {
-        params_vec.push(Box::new(source_id));
-        updates.push(format!("source_id = ?{}", params_vec.len()));
-    }
-    if let Some(effective_from) = input.effective_from {
-        params_vec.push(Box::new(effective_from));
-        updates.push(format!("effective_from = ?{}", params_vec.len()));
-    }
-    if let Some(effective_to) = input.effective_to {
-        params_vec.push(Box::new(effective_to));
-        updates.push(format!("effective_to = ?{}", params_vec.len()));
-    }
+    let (id, book_id, commodity_id, quote_commodity_id, source_id_old, effective_from_old, effective_to_old) =
+        current.ok_or_else(|| "assignment not found".to_string())?;
 
-    params_vec.push(Box::new(input.id));
-    let sql = format!(
-        "UPDATE fx_rate_source_assignments SET {} WHERE id = ?{}",
-        updates.join(", "),
-        params_vec.len()
-    );
+    let next_source_id = input.source_id.unwrap_or(source_id_old);
+    let next_effective_from = input.effective_from.unwrap_or(effective_from_old);
+    let next_effective_to = input.effective_to.or(effective_to_old);
 
-    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice()).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO pricing_source_assignments
+            (previous_pricing_source_assignment_id, book_id, commodity_id, quote_commodity_id, source_id, priority, effective_from, effective_to, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 100, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            id,
+            book_id,
+            commodity_id,
+            quote_commodity_id,
+            next_source_id,
+            next_effective_from,
+            next_effective_to,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_id = conn.last_insert_rowid();
 
     let assignment = conn
         .query_row(
             "SELECT a.id, a.book_id, a.from_currency_id, fc.symbol, a.to_currency_id, tc.symbol,
                     a.source_id, s.name, a.effective_from, a.effective_to, a.created_at, a.updated_at
-             FROM fx_rate_source_assignments a
-             LEFT JOIN commodities fc ON a.from_currency_id = fc.id
-             LEFT JOIN commodities tc ON a.to_currency_id = tc.id
-             LEFT JOIN fx_rate_sources s ON a.source_id = s.id
+                  FROM (
+                  SELECT id, book_id,
+                      commodity_id AS from_currency_id,
+                      quote_commodity_id AS to_currency_id,
+                      source_id,
+                      effective_from,
+                      effective_to,
+                      created_at,
+                      updated_at
+                  FROM current_pricing_source_assignments
+                  ) a
+                  LEFT JOIN commodities fc ON a.from_currency_id = fc.id
+                  LEFT JOIN commodities tc ON a.to_currency_id = tc.id
+                  LEFT JOIN price_sources s ON a.source_id = s.id
              WHERE a.id = ?1",
-            [input.id],
+            [new_id],
             map_fx_rate_source_assignment_row,
         )
         .map_err(|e| e.to_string())?;
@@ -1455,8 +1684,27 @@ pub fn delete_fx_rate_source_assignment(db: State<DbState>, id: i64) -> Result<(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    conn.execute("DELETE FROM fx_rate_source_assignments WHERE id = ?1", [id])
+    let closed_rows = conn
+        .execute(
+            "INSERT INTO pricing_source_assignments
+                (previous_pricing_source_assignment_id, book_id, commodity_id, quote_commodity_id, source_id, priority, effective_from, effective_to, created_at, updated_at)
+             SELECT id, book_id, commodity_id, quote_commodity_id, source_id, priority, effective_from,
+                    CASE
+                      WHEN effective_to IS NOT NULL THEN effective_to
+                      WHEN effective_from > date('now') THEN effective_from
+                      ELSE date('now')
+                    END,
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                    strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             FROM current_pricing_source_assignments
+             WHERE id = ?1",
+            [id],
+        )
         .map_err(|e| e.to_string())?;
+
+    if closed_rows == 0 {
+        return Err("assignment not found".to_string());
+    }
 
     Ok(())
 }
@@ -1479,11 +1727,11 @@ pub fn list_fx_rate_refresh_state(
 
     if let Some(from_id) = from_currency_id {
         params_vec.push(Box::new(from_id));
-        conditions.push(format!("r.from_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("r.commodity_id = ?{}", params_vec.len()));
     }
     if let Some(to_id) = to_currency_id {
         params_vec.push(Box::new(to_id));
-        conditions.push(format!("r.to_currency_id = ?{}", params_vec.len()));
+        conditions.push(format!("r.quote_commodity_id = ?{}", params_vec.len()));
     }
     if let Some(source_id) = source_id {
         params_vec.push(Box::new(source_id));
@@ -1494,10 +1742,23 @@ pub fn list_fx_rate_refresh_state(
         "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                 r.source_id, s.name, r.last_success_date, r.last_attempt_at, r.last_error,
                 r.created_at, r.updated_at
-         FROM fx_rate_refresh_state r
-         LEFT JOIN commodities fc ON r.from_currency_id = fc.id
-         LEFT JOIN commodities tc ON r.to_currency_id = tc.id
-         LEFT JOIN fx_rate_sources s ON r.source_id = s.id
+          FROM (
+             SELECT id, book_id,
+                 commodity_id AS from_currency_id,
+                 quote_commodity_id AS to_currency_id,
+                 source_id,
+                 last_success_date,
+                 last_attempt_at,
+                 last_error,
+                 created_at,
+                 updated_at,
+                 commodity_id,
+                 quote_commodity_id
+             FROM pricing_refresh_state
+          ) r
+          LEFT JOIN commodities fc ON r.from_currency_id = fc.id
+          LEFT JOIN commodities tc ON r.to_currency_id = tc.id
+          LEFT JOIN price_sources s ON r.source_id = s.id
          WHERE {}
          ORDER BY r.from_currency_id, r.to_currency_id",
         conditions.join(" AND ")
@@ -1525,10 +1786,10 @@ pub fn upsert_fx_rate_refresh_state(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
     conn.execute(
-        "INSERT INTO fx_rate_refresh_state
-            (book_id, from_currency_id, to_currency_id, source_id, last_success_date, last_attempt_at, last_error, created_at, updated_at)
+          "INSERT INTO pricing_refresh_state
+                (book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-         ON CONFLICT(book_id, from_currency_id, to_currency_id, source_id) DO UPDATE SET
+            ON CONFLICT(book_id, commodity_id, quote_commodity_id, source_id) DO UPDATE SET
             last_success_date = excluded.last_success_date,
             last_attempt_at = excluded.last_attempt_at,
             last_error = excluded.last_error,
@@ -1550,11 +1811,22 @@ pub fn upsert_fx_rate_refresh_state(
             "SELECT r.id, r.book_id, r.from_currency_id, fc.symbol, r.to_currency_id, tc.symbol,
                     r.source_id, s.name, r.last_success_date, r.last_attempt_at, r.last_error,
                     r.created_at, r.updated_at
-             FROM fx_rate_refresh_state r
-             LEFT JOIN commodities fc ON r.from_currency_id = fc.id
-             LEFT JOIN commodities tc ON r.to_currency_id = tc.id
-             LEFT JOIN fx_rate_sources s ON r.source_id = s.id
-             WHERE r.book_id = ?1 AND r.from_currency_id = ?2 AND r.to_currency_id = ?3 AND r.source_id = ?4
+                  FROM (
+                  SELECT id, book_id,
+                      commodity_id AS from_currency_id,
+                      quote_commodity_id AS to_currency_id,
+                      source_id,
+                      last_success_date,
+                      last_attempt_at,
+                      last_error,
+                      created_at,
+                      updated_at
+                  FROM pricing_refresh_state
+                  ) r
+                  LEFT JOIN commodities fc ON r.from_currency_id = fc.id
+                  LEFT JOIN commodities tc ON r.to_currency_id = tc.id
+                  LEFT JOIN price_sources s ON r.source_id = s.id
+                  WHERE r.book_id = ?1 AND r.from_currency_id = ?2 AND r.to_currency_id = ?3 AND r.source_id = ?4
              LIMIT 1",
             params![
                 SINGLE_BOOK_ID,
@@ -1573,9 +1845,11 @@ pub fn upsert_fx_rate_refresh_state(
 mod tests {
     use super::*;
     use crate::db::open_and_migrate;
+    use crate::state::{DbState, DbStateInner};
     use rusqlite::Connection;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn create_temp_dir(name: &str) -> PathBuf {
@@ -1594,6 +1868,298 @@ mod tests {
         let temp = create_temp_dir("db");
         let (conn, path, _audit_user) = open_and_migrate(&temp).expect("open and migrate");
         (conn, path)
+    }
+
+    fn create_db_state() -> DbState {
+        let temp = create_temp_dir("state");
+        let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
+        DbState {
+            inner: Mutex::new(DbStateInner {
+                db_path: Some(db_path),
+                conn: Some(conn),
+                audit_user: Some(audit_user),
+            }),
+        }
+    }
+
+    fn as_state<'a>(db: &'a DbState) -> State<'a, DbState> {
+        unsafe { std::mem::transmute::<&'a DbState, State<'a, DbState>>(db) }
+    }
+
+    #[test]
+    fn test_fx_settings_and_assignments_are_append_only() {
+        let db_state = create_db_state();
+
+        let (eur_id, usd_id, ecb_id, hmrc_id, policy_before, assignment_before) = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+            let eur_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM commodities WHERE symbol='EUR' AND kind='currency' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("eur id");
+            let usd_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM commodities WHERE symbol='USD' AND kind='currency' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("usd id");
+            let ecb_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM price_sources WHERE name='ECB' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("ecb id");
+            let hmrc_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM price_sources WHERE name='HMRC' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("hmrc id");
+            let policy_before: i64 = conn
+                .query_row("SELECT COUNT(*) FROM pricing_policies", [], |row| row.get(0))
+                .expect("policy count");
+            let assignment_before: i64 = conn
+                .query_row("SELECT COUNT(*) FROM pricing_source_assignments", [], |row| row.get(0))
+                .expect("assignment count");
+            (eur_id, usd_id, ecb_id, hmrc_id, policy_before, assignment_before)
+        };
+
+        let settings = set_fx_rate_settings(
+            as_state(&db_state),
+            FxRateSettingsUpdate {
+                base_currency_id: None,
+                default_source_id: Some(ecb_id),
+                refresh_enabled: Some(true),
+                refresh_hour_utc: Some(6),
+                refresh_minute_utc: Some(15),
+                max_backfill_days: Some(120),
+                weekend_policy: Some("skip".to_string()),
+            },
+        )
+        .expect("set fx settings");
+        assert_eq!(settings.refresh_hour_utc, 6);
+        assert_eq!(settings.refresh_minute_utc, 15);
+        assert_eq!(settings.max_backfill_days, 120);
+
+        let policy_after: i64 = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+            conn.query_row("SELECT COUNT(*) FROM pricing_policies", [], |row| row.get(0))
+                .expect("policy count after")
+        };
+        assert_eq!(policy_after, policy_before + 1);
+
+        let created = create_fx_rate_source_assignment(
+            as_state(&db_state),
+            FxRateSourceAssignmentCreate {
+                from_currency_id: eur_id,
+                to_currency_id: usd_id,
+                source_id: ecb_id,
+                effective_from: "2025-01-01".to_string(),
+                effective_to: None,
+            },
+        )
+        .expect("create assignment");
+
+        let updated = update_fx_rate_source_assignment(
+            as_state(&db_state),
+            FxRateSourceAssignmentUpdate {
+                id: created.id,
+                source_id: Some(hmrc_id),
+                effective_from: None,
+                effective_to: None,
+            },
+        )
+        .expect("update assignment");
+        assert_ne!(updated.id, created.id);
+        assert_eq!(updated.source_id, hmrc_id);
+
+        delete_fx_rate_source_assignment(as_state(&db_state), updated.id).expect("close assignment");
+
+        let (assignment_after, current_effective_to_is_set): (i64, i64) = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+            let assignment_after: i64 = conn
+                .query_row("SELECT COUNT(*) FROM pricing_source_assignments", [], |row| row.get(0))
+                .expect("assignment count after");
+            let current_effective_to_is_set: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM current_pricing_source_assignments
+                     WHERE book_id = 1 AND commodity_id = ?1 AND quote_commodity_id = ?2 AND effective_to IS NOT NULL",
+                    params![eur_id, usd_id],
+                    |row| row.get(0),
+                )
+                .expect("current closed assignment check");
+            (assignment_after, current_effective_to_is_set)
+        };
+
+        assert_eq!(assignment_after, assignment_before + 3);
+        assert_eq!(current_effective_to_is_set, 1);
+    }
+
+    #[test]
+    fn test_base_currency_change_creates_history_revision_chain() {
+        let db_state = create_db_state();
+
+        let (usd_id, eur_id, history_before, current_history_before, current_base_before) = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+
+            let usd_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM commodities WHERE symbol='USD' AND kind='currency' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("usd id");
+            let eur_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM commodities WHERE symbol='EUR' AND kind='currency' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("eur id");
+            let history_before: i64 = conn
+                .query_row("SELECT COUNT(*) FROM book_base_currency_history", [], |row| row.get(0))
+                .expect("history count before");
+            let (current_history_before, current_base_before): (i64, i64) = conn
+                .query_row(
+                    "SELECT id, base_commodity_id FROM current_book_base_currency_history WHERE book_id = 1 LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .expect("current history before");
+
+            (usd_id, eur_id, history_before, current_history_before, current_base_before)
+        };
+
+        assert_eq!(current_base_before, usd_id);
+
+        let updated = set_fx_rate_settings(
+            as_state(&db_state),
+            FxRateSettingsUpdate {
+                base_currency_id: Some(eur_id),
+                default_source_id: None,
+                refresh_enabled: None,
+                refresh_hour_utc: None,
+                refresh_minute_utc: None,
+                max_backfill_days: None,
+                weekend_policy: None,
+            },
+        )
+        .expect("set base currency to eur");
+        assert_eq!(updated.base_currency_id, eur_id);
+
+        let (history_after, current_history_after, current_base_after, previous_link): (i64, i64, i64, i64) = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+
+            let history_after: i64 = conn
+                .query_row("SELECT COUNT(*) FROM book_base_currency_history", [], |row| row.get(0))
+                .expect("history count after");
+            let (current_history_after, current_base_after): (i64, i64) = conn
+                .query_row(
+                    "SELECT id, base_commodity_id FROM current_book_base_currency_history WHERE book_id = 1 LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .expect("current history after");
+            let previous_link: i64 = conn
+                .query_row(
+                    "SELECT previous_book_base_currency_history_id
+                     FROM book_base_currency_history
+                     WHERE id = ?1",
+                    [current_history_after],
+                    |row| row.get(0),
+                )
+                .expect("previous link");
+
+            (history_after, current_history_after, current_base_after, previous_link)
+        };
+
+        assert_eq!(history_after, history_before + 1);
+        assert_ne!(current_history_after, current_history_before);
+        assert_eq!(current_base_after, eur_id);
+        assert_eq!(previous_link, current_history_before);
+    }
+
+    #[test]
+    fn test_base_currency_noop_does_not_create_history_revision() {
+        let db_state = create_db_state();
+
+        let (usd_id, history_before, current_history_before, policy_before) = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+
+            let usd_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM commodities WHERE symbol='USD' AND kind='currency' LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("usd id");
+            let history_before: i64 = conn
+                .query_row("SELECT COUNT(*) FROM book_base_currency_history", [], |row| row.get(0))
+                .expect("history count before");
+            let current_history_before: i64 = conn
+                .query_row(
+                    "SELECT id FROM current_book_base_currency_history WHERE book_id = 1 LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("current history before");
+            let policy_before: i64 = conn
+                .query_row("SELECT COUNT(*) FROM pricing_policies", [], |row| row.get(0))
+                .expect("policy count before");
+
+            (usd_id, history_before, current_history_before, policy_before)
+        };
+
+        let updated = set_fx_rate_settings(
+            as_state(&db_state),
+            FxRateSettingsUpdate {
+                base_currency_id: Some(usd_id),
+                default_source_id: None,
+                refresh_enabled: None,
+                refresh_hour_utc: None,
+                refresh_minute_utc: None,
+                max_backfill_days: None,
+                weekend_policy: None,
+            },
+        )
+        .expect("set same base currency");
+        assert_eq!(updated.base_currency_id, usd_id);
+
+        let (history_after, current_history_after, policy_after): (i64, i64, i64) = {
+            let guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_ref().expect("conn");
+
+            let history_after: i64 = conn
+                .query_row("SELECT COUNT(*) FROM book_base_currency_history", [], |row| row.get(0))
+                .expect("history count after");
+            let current_history_after: i64 = conn
+                .query_row(
+                    "SELECT id FROM current_book_base_currency_history WHERE book_id = 1 LIMIT 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("current history after");
+            let policy_after: i64 = conn
+                .query_row("SELECT COUNT(*) FROM pricing_policies", [], |row| row.get(0))
+                .expect("policy count after");
+
+            (history_after, current_history_after, policy_after)
+        };
+
+        assert_eq!(history_after, history_before);
+        assert_eq!(current_history_after, current_history_before);
+        assert_eq!(policy_after, policy_before);
     }
 
     #[test]
