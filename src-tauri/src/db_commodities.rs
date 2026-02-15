@@ -584,6 +584,40 @@ fn account_booking_policy(
     Ok(policy.unwrap_or_else(|| "fifo".to_string()).to_lowercase())
 }
 
+fn insert_split_lot_allocation(
+    conn: &rusqlite::Transaction<'_>,
+    split_id: i64,
+    lot_id: i64,
+    quantity_minor: i64,
+) -> Result<(), String> {
+    let is_compatible: Option<i64> = conn
+        .query_row(
+            "SELECT 1
+             FROM splits s
+             JOIN lots l ON l.id = ?2
+             WHERE s.id = ?1
+               AND s.account_id = l.account_id
+               AND s.commodity_id = l.commodity_id",
+            params![split_id, lot_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    if is_compatible.is_none() {
+        return Err("lot and split must share account_id and commodity_id".to_string());
+    }
+
+    conn.execute(
+        "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
+         VALUES (?1, ?2, ?3)",
+        params![split_id, lot_id, quantity_minor],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 
 fn plan_average_allocations(
     lots: &[(i64, Option<String>, i64)],
@@ -1199,12 +1233,7 @@ pub fn create_reinvest_dividend(
 
     let lot_id = tx.last_insert_rowid();
 
-    tx.execute(
-        "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-         VALUES (?1, ?2, ?3)",
-        params![security_split_id, lot_id, input.quantity_minor],
-    )
-    .map_err(|e| e.to_string())?;
+    insert_split_lot_allocation(&tx, security_split_id, lot_id, input.quantity_minor)?;
 
     tx.commit().map_err(|e| e.to_string())?;
 
@@ -1283,12 +1312,7 @@ pub fn buy_commodity(
 
     let lot_id = tx.last_insert_rowid();
 
-    tx.execute(
-        "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-         VALUES (?1, ?2, ?3)",
-        params![security_split_id, lot_id, input.quantity_minor],
-    )
-    .map_err(|e| e.to_string())?;
+    insert_split_lot_allocation(&tx, security_split_id, lot_id, input.quantity_minor)?;
 
     tx.commit().map_err(|e| e.to_string())?;
 
@@ -1402,12 +1426,12 @@ pub fn sell_commodity(
                 return Err("insufficient lot quantity for custom allocation".to_string());
             }
 
-            tx.execute(
-                "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-                 VALUES (?1, ?2, ?3)",
-                params![security_split_id, alloc.lot_id, -alloc.quantity_minor],
-            )
-            .map_err(|e| e.to_string())?;
+            insert_split_lot_allocation(
+                &tx,
+                security_split_id,
+                alloc.lot_id,
+                -alloc.quantity_minor,
+            )?;
 
             allocations.push(TradeAllocation {
                 lot_id: alloc.lot_id,
@@ -1425,12 +1449,7 @@ pub fn sell_commodity(
             if alloc_qty <= 0 {
                 continue;
             }
-            tx.execute(
-                "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-                 VALUES (?1, ?2, ?3)",
-                params![security_split_id, lot_id, -alloc_qty],
-            )
-            .map_err(|e| e.to_string())?;
+            insert_split_lot_allocation(&tx, security_split_id, lot_id, -alloc_qty)?;
             allocations.push(TradeAllocation {
                 lot_id,
                 quantity_minor: alloc_qty,
@@ -1451,12 +1470,7 @@ pub fn sell_commodity(
             .map_err(|e| e.to_string())?;
 
             let lot_id = tx.last_insert_rowid();
-            tx.execute(
-                "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-                 VALUES (?1, ?2, ?3)",
-                params![security_split_id, lot_id, -remaining],
-            )
-            .map_err(|e| e.to_string())?;
+            insert_split_lot_allocation(&tx, security_split_id, lot_id, -remaining)?;
 
             allocations.push(TradeAllocation {
                 lot_id,
@@ -1478,12 +1492,7 @@ pub fn sell_commodity(
             }
 
             let take = std::cmp::min(remaining, *balance);
-            tx.execute(
-                "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-                 VALUES (?1, ?2, ?3)",
-                params![security_split_id, lot_id, -take],
-            )
-            .map_err(|e| e.to_string())?;
+            insert_split_lot_allocation(&tx, security_split_id, *lot_id, -take)?;
             allocations.push(TradeAllocation {
                 lot_id: *lot_id,
                 quantity_minor: take,
@@ -1504,12 +1513,7 @@ pub fn sell_commodity(
             .map_err(|e| e.to_string())?;
 
             let lot_id = tx.last_insert_rowid();
-            tx.execute(
-                "INSERT INTO split_lot_allocations (split_id, lot_id, quantity_minor)
-                 VALUES (?1, ?2, ?3)",
-                params![security_split_id, lot_id, -remaining],
-            )
-            .map_err(|e| e.to_string())?;
+            insert_split_lot_allocation(&tx, security_split_id, lot_id, -remaining)?;
 
             allocations.push(TradeAllocation {
                 lot_id,

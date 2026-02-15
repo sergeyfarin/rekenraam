@@ -360,6 +360,11 @@ CREATE TABLE IF NOT EXISTS split_lot_allocations (
   FOREIGN KEY(lot_id) REFERENCES lots(id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_lots_account_commodity_opened
+  ON lots(account_id, commodity_id, opened_date, id);
+CREATE INDEX IF NOT EXISTS idx_split_lot_allocations_lot_split
+  ON split_lot_allocations(lot_id, split_id);
+
 -- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS book_state (
   book_id     INTEGER PRIMARY KEY,
@@ -521,6 +526,38 @@ BEGIN
     CASE
       WHEN (SELECT book_id FROM categories WHERE id = NEW.category_id) != (SELECT book_id FROM transactions WHERE id = NEW.tx_id)
       THEN RAISE(ABORT, 'split category must belong to same book as transaction')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_split_lot_allocations_match_split_lot_ins
+BEFORE INSERT ON split_lot_allocations
+BEGIN
+  SELECT
+    CASE
+      WHEN (SELECT account_id FROM splits WHERE id = NEW.split_id) != (SELECT account_id FROM lots WHERE id = NEW.lot_id)
+      THEN RAISE(ABORT, 'split_lot_allocation lot account must match split account')
+    END;
+
+  SELECT
+    CASE
+      WHEN (SELECT commodity_id FROM splits WHERE id = NEW.split_id) != (SELECT commodity_id FROM lots WHERE id = NEW.lot_id)
+      THEN RAISE(ABORT, 'split_lot_allocation lot commodity must match split commodity')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_split_lot_allocations_match_split_lot_upd
+BEFORE UPDATE OF split_id, lot_id ON split_lot_allocations
+BEGIN
+  SELECT
+    CASE
+      WHEN (SELECT account_id FROM splits WHERE id = NEW.split_id) != (SELECT account_id FROM lots WHERE id = NEW.lot_id)
+      THEN RAISE(ABORT, 'split_lot_allocation lot account must match split account')
+    END;
+
+  SELECT
+    CASE
+      WHEN (SELECT commodity_id FROM splits WHERE id = NEW.split_id) != (SELECT commodity_id FROM lots WHERE id = NEW.lot_id)
+      THEN RAISE(ABORT, 'split_lot_allocation lot commodity must match split commodity')
     END;
 END;
 
