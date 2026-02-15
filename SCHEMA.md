@@ -1,200 +1,139 @@
 ## Rekenraam Database Schema
 
-This document summarizes the current SQLite schema. Source of truth is `src-tauri/migrations/V1__init.sql`.
+This file summarizes the current SQLite schema.
+Source of truth: `src-tauri/migrations/V1__init.sql`.
 
-### Migrations
-- V1: `V1__init.sql` (single consolidated migration containing all schema, triggers, and seed data)
+## Migration Model
 
-### Core Entities
-**books**
-- Ledger container. One book per dataset.
-- Append-only versioned rows.
-- Key fields: `id`, `previous_book_id`, `session_id`, `name`, `kind`, `base_commodity_id`.
+- Single consolidated migration: `V1__init.sql` (includes historical V1..V18 schema changes, triggers, indexes, and seed data).
 
-**commodities**
-- Currencies and instruments.
-- Key fields: `id`, `book_id`, `kind`, `symbol`, `name`, `scale`, `is_active`, `is_default`, `display_symbol`.
+## Schema Objects
 
-**accounts**
-- Accounts in a book.
-- Key fields: `id`, `book_id`, `parent_id`, `type`, `name`, `commodity_id`, `booking_policy`, `institution_id`, `country_id`, `is_hidden`, `is_system`, `system_role`, `is_closed`, `effective_at`, `lifecycle_event`, `lifecycle_note`, `lifecycle_metadata`.
-- Lifecycle open/close/reopen/update is captured by appending new account revisions.
+### Tables
 
-**transactions**
-- Top-level transaction header (append-only revision model).
-- Key fields: `id`, `book_id`, `previous_tx_id`, `txn_date`, `happened_at_utc`, `posted_at_utc`, `edited_at_utc`, `payee_id`, `memo`, `status`, `reference`, `import_id`, `import_session_id`, `is_deleted`, `session_id`.
+`schema_migrations`  
+`books`  
+`commodities`  
+`commodity_prices`  
+`payees`  
+`categories`  
+`tags`  
+`people`  
+`projects`  
+`accounts`  
+`transactions`  
+`splits`  
+`lots`  
+`split_lot_allocations`  
+`book_state`  
+`report_cache`  
+`corporate_actions`  
+`price_sources`  
+`commodity_price_sources`  
+`account_balancings`  
+`dividend_income_categories`  
+`balance_checks`  
+`balance_adjustments`  
+`notes`  
+`events`  
+`documents`  
+`balance_constraints`  
+`import_rules`  
+`import_sessions`  
+`import_session_transactions`  
+`report_definitions`  
+`report_runs`  
+`countries`  
+`institutions`  
+`currencies`  
+`backup_settings`  
+`fx_rates_daily`  
+`fx_rates_official`  
+`fx_rate_sources`  
+`fx_rate_settings`  
+`fx_rate_source_assignments`  
+`fx_rate_refresh_state`  
+`app_runtime_session`  
+`session_undo_stack`  
+`session_redo_stack`  
+`session_reverts`
 
-**splits**
-- Line items for a transaction (double-entry style).
-- Key fields: `id`, `tx_id`, `account_id`, `commodity_id`, `amount_minor`, `category_id`, `memo`.
+### Views
 
-### Supporting Entities
-**payees**
-- Counterparties for transactions (append-only versioned rows).
-- Key fields: `previous_payee_id`, `modified_at_utc`, `effective_at_utc`, `is_deleted`, `session_id`.
+- `current_commodities`: rows in `commodities` with no newer revision (`newer.previous_commodity_id = c.id`).
 
-**countries**
-- ISO-like country catalog per book with optional default currency.
-- Append-only versioned rows via `previous_country_id`.
+## Core Domain Notes
 
-**currencies**
-- Currency catalog per book (used as seed/reference data).
-- Append-only versioned rows via `previous_currency_id`.
+- `books`: ledger container with append-only revision linkage via `previous_book_id`.
+- `commodities`: currencies + instruments (`kind` enum), with precision (`scale`) and active/default flags.
+- `accounts`: append-only account lifecycle (`lifecycle_event` in `open|close|reopen|update`) and ownership metadata (`institution_id`, `country_id`, `is_system`, `system_role`).
+- `transactions`: append-only header model with date/time fields: `occurred_date`, optional `occurred_at_utc` + `occurred_tz`, `posted_date`, optional `posted_at_utc` + `posted_tz`.
+- `splits`: append-only line items with embedded tagging/allocation columns (`tag_id`, `person_id`, `project_id`, `share_bps`), plus revision linkage via `previous_split_id`.
 
-**institutions**
-- Banks/brokers/credit unions per book (linked to countries).
-- Append-only versioned rows via `previous_institution_id`.
+## Supporting Domains
 
-**categories**
-- Income/expense/transfer taxonomy (append-only versioned rows).
-- Key fields: `previous_category_id`, `modified_at_utc`, `effective_at_utc`, `is_deleted`, `session_id`.
+- Classification and counterparties: `payees`, `categories`, `tags`, `people`, `projects`.
+- Investment and pricing: `commodity_prices`, `price_sources`, `commodity_price_sources`, `lots`, `split_lot_allocations`, `corporate_actions`, `dividend_income_categories`.
+- Reconciliation and controls: `account_balancings`, `balance_checks`, `balance_adjustments`, `balance_constraints`.
+- Attachments/annotations: `notes`, `events`, `documents`.
+- Import pipeline: `import_rules`, `import_sessions`, `import_session_transactions`.
+- Reporting: `report_cache`, `report_definitions`, `report_runs`.
+- Geography/reference: `countries`, `institutions`, `currencies`.
+- FX stack: `fx_rates_daily`, `fx_rates_official`, `fx_rate_sources`, `fx_rate_settings`, `fx_rate_source_assignments`, `fx_rate_refresh_state`.
+- Runtime/session state: `book_state`, `app_runtime_session`, `session_undo_stack`, `session_redo_stack`, `session_reverts`, `schema_migrations`.
 
-**tags**
-- Freeform tags for splits (append-only versioned rows).
-- Key fields: `previous_tag_id`, `modified_at_utc`, `effective_at_utc`, `is_deleted`, `session_id`.
+## Mutability Model
 
-**people**
-- People metadata for allocations.
+### Append-only tables (revisioned)
 
-**projects**
-- Project/cost center grouping.
+`books`, `commodities`, `payees`, `categories`, `tags`, `people`, `projects`, `accounts`, `transactions`, `splits`, `lots`, `corporate_actions`, `price_sources`, `commodity_price_sources`, `account_balancings`, `notes`, `import_rules`, `report_definitions`, `countries`, `institutions`, `currencies`.
 
-**dividend_income_categories**
-- Maps dividend income categories (optionally per commodity) for reporting and tax.
+### Mutable tables
 
-**balance_checks**
-- Balance assertion records (Beancount-style balance directives).
+`schema_migrations`, `commodity_prices`, `split_lot_allocations`, `book_state`, `report_cache`, `dividend_income_categories`, `balance_checks`, `balance_adjustments`, `events`, `documents`, `balance_constraints`, `import_sessions`, `import_session_transactions`, `report_runs`, `backup_settings`, `fx_rates_daily`, `fx_rates_official`, `fx_rate_sources`, `fx_rate_settings`, `fx_rate_source_assignments`, `fx_rate_refresh_state`, `app_runtime_session`, `session_undo_stack`, `session_redo_stack`, `session_reverts`.
 
-**pad_directives**
-- Pad directives linking target balance and optional pad transaction.
+## Trigger-Enforced Invariants
 
-**notes**
-- Freeform notes attached to accounts or transactions.
-- Append-only versioned rows via `previous_note_id`.
+- Account commodity must belong to same book as account (`trg_accounts_commodity_book_*`).
+- Split commodity must match account commodity (`trg_splits_commodity_matches_account_*`).
+- Split account book must match transaction book (`trg_splits_book_matches_txn_*`).
+- Split category book must match transaction book when category set (`trg_splits_category_book_matches_txn_*`).
+- Split-lot allocation requires matching account and commodity between split and lot (`trg_split_lot_allocations_match_split_lot_*`).
+- Commodity precision bounds: `scale` must be 0..9 (`trg_currency_scale_bounds_*`, `trg_non_currency_scale_bounds_*`).
+- `commodity_prices.source_id` must reference an existing `price_sources` row (`trg_prices_source_valid`).
+- `accounts.system_role` restricted to `income_summary|expense_summary|retained_earnings` and requires `is_system=1` (`trg_accounts_system_role_*`).
 
-**events**
-- Dated events attached to accounts or transactions.
+## Date/Time Format Guards
 
-**documents**
-- Document references attached to accounts or transactions.
+- `accounts.effective_at` must be `YYYY-MM-DD` (`trg_accounts_effective_date_format_ins`).
+- `transactions` guards:
+	- `occurred_date` and `posted_date` must be `YYYY-MM-DD`.
+	- `occurred_at_utc` / `posted_at_utc` (if set) must be UTC ISO-8601 with `Z`.
+	- `occurred_tz` / `posted_tz` required and must look like IANA TZ (`*/*`) when corresponding UTC value is set.
+	- `created_at` must be UTC ISO-8601 with `Z`.
+- `import_sessions.started_at`, optional `committed_at`, and `import_session_transactions.created_at` are validated as UTC ISO-8601 with `Z`.
+- Runtime session tables validate UTC ISO-8601 timestamps (`trg_app_runtime_session_datetime_format_ins`, `trg_session_*_datetime_format_ins`).
 
-**backup_settings**
-- Backup schedule and retention configuration per book.
+## Book State / Change Sequence
 
-**balance_constraints**
-- Per-account balance rules (min/max, sign enforcement).
+- `trg_books_insert_state` ensures `book_state` row exists for each book.
+- `book_state.change_seq` auto-bumps on insert/update/delete for key tables, including:
+	- core: `accounts`, `transactions`, `splits`, `commodities`, `lots`, `split_lot_allocations`
+	- classification/support: `categories`, `tags`, `payees`, `people`, `projects`
+	- pricing/reconciliation/docs: `commodity_prices`, `balance_checks`, `balance_adjustments`, `notes`, `events`, `documents`, `balance_constraints`
+	- import rules: `import_rules`
 
-**import_rules**
-- Import matching rules for payee/memo normalization and mapping.
-- Extended with `priority`, `match_type`, amount/date ranges, and `match_account_id`.
-- Append-only versioned rows via `previous_import_rule_id`.
+## Append-only Enforcement
 
-**import_sessions**
-- Import batch audit trail (`status`, timestamps, source).
+- Direct `UPDATE`/`DELETE` is blocked by triggers for append-only tables:
+	`transactions`, `payees`, `categories`, `tags`, `commodities`, `people`, `projects`, `accounts`, `lots`, `splits`, `price_sources`, `commodity_price_sources`, `books`, `account_balancings`, `currencies`, `corporate_actions`, `countries`, `institutions`, `report_definitions`, `import_rules`, `notes`.
+- New versions are inserted and linked via the relevant `previous_*` column.
+- Partial unique indexes on `previous_*` columns enforce one-to-one revision chains (where applicable).
 
-**import_session_transactions**
-- Per-session linkage to affected transactions (`created`, `updated`, `validated`).
+## Seed Data (Consolidated V1)
 
-### Relations and Join Tables
-Split associations are now embedded directly in `splits` via:
-- `tag_id`
-- `person_id`
-- `project_id`
-- `share_bps`
-
-### Investments and Pricing
-**commodity_prices**
-- Price history for commodities (quoted in another commodity).
-
-**price_sources**
-- Price providers.
-
-**commodity_price_sources**
-- Mapping of commodity ↔ source with symbol overrides.
-
-**lots**
-- Investment lots.
-- Adds `cost_basis_minor` for lot cost basis tracking.
-
-**split_lot_allocations**
-- Allocation of split quantities to lots.
-
-**corporate_actions**
-- Stock splits/merges and related adjustments.
-- Append-only versioned rows via `previous_corporate_action_id`.
-
-### Currency + FX
-**fx_rates_daily**
-- Daily market rates between currencies.
-- Key fields: `from_currency_id`, `to_currency_id`, `rate_date`, `rate`, `source`, `source_id`, `is_derived`, `derived_via_currency_id`.
-
-**fx_rates_official**
-- Monthly/yearly tax authority rates.
-- Key fields: `period_type`, `period_year`, `period_month`, `rate`, `source_name`, `source_url`.
-
-**fx_rate_sources**
-- Reference list of FX sources (ECB, IRS, etc.).
-
-**fx_rate_settings**
-- Per-book refresh settings (base currency, default source, schedule, weekend policy).
-
-**fx_rate_source_assignments**
-- Source assignment per currency pair and effective date range.
-
-**fx_rate_refresh_state**
-- Refresh status and errors per currency pair and source.
-
-### Reports + Cache
-**report_cache**
-- Cached report snapshots keyed by params and `as_of_seq`.
-
-**report_definitions**
-- Stored report definitions (SQL or templates).
-- Append-only versioned rows via `previous_report_definition_id`.
-
-**report_runs**
-- Cached report results keyed by params and `as_of_seq`.
-
-### System State
-**schema_migrations**
-- Applied migrations.
-
-**book_state**
-- Change sequence for invalidation and caching.
-
-**app_runtime_session / session_undo_stack / session_redo_stack / session_reverts**
-- Runtime/session bookkeeping for undo/redo and local revert visibility.
-
-### Account Balancing / Locking
-**account_balancings**
-- Reconciliation/balancing checkpoints by account.
-- Fields: `account_id`, `as_of_date`, `balance_minor`, `voided_at`, `void_reason`.
-- When locked, older transactions are prevented from modification unless unlock/void is performed.
-- Append-only versioned rows via `previous_account_balancing_id`.
-
-### Append-only Guards
-- Immutability triggers now guard these append-only tables from direct `UPDATE`/`DELETE`:
-	`transactions`, `splits`, `accounts`, `books`, `commodities`, `payees`, `categories`, `tags`,
-	`people`, `projects`, `lots`, `price_sources`, `commodity_price_sources`,
-	`account_balancings`, `currencies`, `corporate_actions`, `countries`, `institutions`,
-	`report_definitions`, `import_rules`, and `notes`.
-- New revisions are represented by inserting new rows linked via `previous_*` columns.
-
-### Invariants (Triggers)
-- Account commodity must belong to same book.
-- Split commodity must match account commodity.
-- Split account must belong to same book as transaction.
-- Split category must belong to same book as transaction.
-- Transaction date/time guards enforce `txn_date` as `YYYY-MM-DD` and require UTC ISO-8601 `Z` format for `happened_at_utc`, `edited_at_utc`, and optional `posted_at_utc`.
-- Commodity scale bounds enforced.
-- Price source validity checks.
-- `book_state.change_seq` is bumped on inserts/updates/deletes for key tables.
-
-### Double-entry Enforcement
-- Command-path transaction creation/update enforces at least two splits and balanced split totals (sum to zero) for user-entered journal transactions.
-- System-generated transaction flows (imports, trading/dividend helpers) write explicit paired debit/credit splits and still pass split-level schema invariants.
-
-### Seed Data (V1 + later)
-- Default book (`Personal`), base currency (`USD`), starter accounts, categories, and manual price source.
-- Currency seeds, country defaults, and FX sources/settings are included in V1.
-- Starter `accounts` seed inserts are placed after `countries`/`institutions` are created so the consolidated V1 script validates in a single SQLite pass.
+- Inserts default `books` row (`Personal`) and initial `commodities` (`USD`).
+- Seeds starter categories (`Groceries`, `Salary`) and starter accounts (`Cash`, `Checking Account`) plus hidden system accounts (`income_summary`, `expense_summary`, `retained_earnings`).
+- Seeds `price_sources` with `Manual` and `fx_rate_sources` with providers (ECB, IRS, HMRC, etc.).
+- Seeds `currencies` and `countries` reference data and initializes `backup_settings` and `fx_rate_settings` for book 1.
+- Includes commodity normalization/sync updates (`display_symbol`, `is_default`, `is_active`) across consolidated migration sections.
