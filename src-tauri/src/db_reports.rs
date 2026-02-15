@@ -8,6 +8,8 @@ use tauri::{command, State};
 
 use crate::state::DbState;
 
+const VOID_SESSION_PREFIX: &str = "void:";
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ReportDefinition {
     pub id: i64,
@@ -18,7 +20,6 @@ pub struct ReportDefinition {
     pub query_text: String,
     pub params_schema: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -151,7 +152,6 @@ fn map_report_definition_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Report
         query_text: row.get(5)?,
         params_schema: row.get(6)?,
         created_at: row.get(7)?,
-        updated_at: row.get(8)?,
     })
 }
 
@@ -502,7 +502,7 @@ pub fn list_builtin_reports() -> Result<Vec<BuiltinReport>, String> {
     let mut items = Vec::new();
 
     let balances_schema = "{\"required\":[\"book_id\"],\"allowed\":[\"book_id\",\"date_to\",\"account_ids\",\"include_closed\",\"limit\"],\"types\":{\"book_id\":\"integer\",\"date_to\":\"string\",\"account_ids\":\"array:integer\",\"include_closed\":\"boolean\",\"limit\":\"integer\"},\"date_fields\":[\"date_to\"]}";
-    let balances_template = r#"{"sql":"SELECT a.id AS account_id, a.name AS account_name, a.commodity_id, COALESCE(SUM(s.amount_minor),0) AS balance_minor FROM accounts a LEFT JOIN splits s ON s.account_id = a.id LEFT JOIN transactions t ON t.id = s.tx_id AND (?2 IS NULL OR t.txn_date <= ?2) WHERE a.book_id = ?1 AND (?3 = 1 OR a.is_closed = 0) GROUP BY a.id, a.name, a.commodity_id ORDER BY a.name ASC","param_order":["book_id","date_to","include_closed"],"filters":[{"param":"account_ids","clause":"AND a.id IN (SELECT value FROM json_each(?4))"}]}"#;
+    let balances_template = r#"{"sql":"SELECT a.id AS account_id, a.name AS account_name, a.commodity_id, COALESCE(SUM(s.amount_minor),0) AS balance_minor FROM accounts a LEFT JOIN splits s ON s.account_id = a.id LEFT JOIN transactions t ON t.id = s.tx_id AND (?2 IS NULL OR t.occurred_date <= ?2) WHERE a.book_id = ?1 AND (?3 = 1 OR a.is_closed = 0) GROUP BY a.id, a.name, a.commodity_id ORDER BY a.name ASC","param_order":["book_id","date_to","include_closed"],"filters":[{"param":"account_ids","clause":"AND a.id IN (SELECT value FROM json_each(?4))"}]}"#;
     items.push(BuiltinReport {
         name: "account_balances".to_string(),
         description: "Account balances as of a date".to_string(),
@@ -512,7 +512,7 @@ pub fn list_builtin_reports() -> Result<Vec<BuiltinReport>, String> {
     });
 
     let cashflow_schema = "{\"required\":[\"book_id\"],\"allowed\":[\"book_id\",\"date_from\",\"date_to\",\"group_by\",\"limit\"],\"types\":{\"book_id\":\"integer\",\"date_from\":\"string\",\"date_to\":\"string\",\"group_by\":\"string\",\"limit\":\"integer\"},\"enums\":{\"group_by\":[\"month\",\"quarter\",\"year\",\"day\"]},\"date_fields\":[\"date_from\",\"date_to\"]}";
-    let cashflow_template = r#"{"sql":"SELECT substr(t.txn_date,1,7) || '-01' AS period_start, SUM(CASE WHEN s.amount_minor > 0 THEN s.amount_minor ELSE 0 END) AS inflow_minor, SUM(CASE WHEN s.amount_minor < 0 THEN -s.amount_minor ELSE 0 END) AS outflow_minor, SUM(s.amount_minor) AS net_minor FROM transactions t JOIN splits s ON s.tx_id = t.id LEFT JOIN categories c ON c.id = s.category_id WHERE t.book_id = ?1 AND (?2 IS NULL OR t.txn_date >= ?2) AND (?3 IS NULL OR t.txn_date <= ?3) AND c.kind IN ('income','expense') GROUP BY period_start ORDER BY period_start ASC","param_order":["book_id","date_from","date_to"]}"#;
+    let cashflow_template = r#"{"sql":"SELECT substr(t.occurred_date,1,7) || '-01' AS period_start, SUM(CASE WHEN s.amount_minor > 0 THEN s.amount_minor ELSE 0 END) AS inflow_minor, SUM(CASE WHEN s.amount_minor < 0 THEN -s.amount_minor ELSE 0 END) AS outflow_minor, SUM(s.amount_minor) AS net_minor FROM transactions t JOIN splits s ON s.tx_id = t.id LEFT JOIN categories c ON c.id = s.category_id WHERE t.book_id = ?1 AND (?2 IS NULL OR t.occurred_date >= ?2) AND (?3 IS NULL OR t.occurred_date <= ?3) AND c.kind IN ('income','expense') GROUP BY period_start ORDER BY period_start ASC","param_order":["book_id","date_from","date_to"]}"#;
     items.push(BuiltinReport {
         name: "cashflow".to_string(),
         description: "Cashflow totals grouped by period".to_string(),
@@ -522,7 +522,7 @@ pub fn list_builtin_reports() -> Result<Vec<BuiltinReport>, String> {
     });
 
     let category_schema = "{\"required\":[\"book_id\"],\"allowed\":[\"book_id\",\"date_from\",\"date_to\",\"category_ids\",\"limit\"],\"types\":{\"book_id\":\"integer\",\"date_from\":\"string\",\"date_to\":\"string\",\"category_ids\":\"array:integer\",\"limit\":\"integer\"},\"date_fields\":[\"date_from\",\"date_to\"]}";
-    let category_template = r#"{"sql":"SELECT c.id AS category_id, c.name AS category_name, COALESCE(SUM(s.amount_minor),0) AS total_minor FROM categories c LEFT JOIN splits s ON s.category_id = c.id LEFT JOIN transactions t ON t.id = s.tx_id WHERE c.book_id = ?1 AND c.kind = 'expense' AND (?2 IS NULL OR t.txn_date >= ?2) AND (?3 IS NULL OR t.txn_date <= ?3) GROUP BY c.id, c.name ORDER BY total_minor DESC, c.name ASC","param_order":["book_id","date_from","date_to"],"filters":[{"param":"category_ids","clause":"AND c.id IN (SELECT value FROM json_each(?4))"}]}"#;
+    let category_template = r#"{"sql":"SELECT c.id AS category_id, c.name AS category_name, COALESCE(SUM(s.amount_minor),0) AS total_minor FROM categories c LEFT JOIN splits s ON s.category_id = c.id LEFT JOIN transactions t ON t.id = s.tx_id WHERE c.book_id = ?1 AND c.kind = 'expense' AND (?2 IS NULL OR t.occurred_date >= ?2) AND (?3 IS NULL OR t.occurred_date <= ?3) GROUP BY c.id, c.name ORDER BY total_minor DESC, c.name ASC","param_order":["book_id","date_from","date_to"],"filters":[{"param":"category_ids","clause":"AND c.id IN (SELECT value FROM json_each(?4))"}]}"#;
     items.push(BuiltinReport {
         name: "category_spend".to_string(),
         description: "Spend totals by category".to_string(),
@@ -532,7 +532,7 @@ pub fn list_builtin_reports() -> Result<Vec<BuiltinReport>, String> {
     });
 
     let payee_schema = "{\"required\":[\"book_id\"],\"allowed\":[\"book_id\",\"date_from\",\"date_to\",\"payee_ids\",\"limit\"],\"types\":{\"book_id\":\"integer\",\"date_from\":\"string\",\"date_to\":\"string\",\"payee_ids\":\"array:integer\",\"limit\":\"integer\"},\"date_fields\":[\"date_from\",\"date_to\"]}";
-    let payee_template = r#"{"sql":"SELECT p.id AS payee_id, p.name AS payee_name, COALESCE(SUM(s.amount_minor),0) AS total_minor FROM payees p JOIN transactions t ON t.payee_id = p.id JOIN splits s ON s.tx_id = t.id WHERE p.book_id = ?1 AND (?2 IS NULL OR t.txn_date >= ?2) AND (?3 IS NULL OR t.txn_date <= ?3) GROUP BY p.id, p.name ORDER BY total_minor DESC, p.name ASC","param_order":["book_id","date_from","date_to"],"filters":[{"param":"payee_ids","clause":"AND p.id IN (SELECT value FROM json_each(?4))"}]}"#;
+    let payee_template = r#"{"sql":"SELECT p.id AS payee_id, p.name AS payee_name, COALESCE(SUM(s.amount_minor),0) AS total_minor FROM payees p JOIN transactions t ON t.payee_id = p.id JOIN splits s ON s.tx_id = t.id WHERE p.book_id = ?1 AND (?2 IS NULL OR t.occurred_date >= ?2) AND (?3 IS NULL OR t.occurred_date <= ?3) GROUP BY p.id, p.name ORDER BY total_minor DESC, p.name ASC","param_order":["book_id","date_from","date_to"],"filters":[{"param":"payee_ids","clause":"AND p.id IN (SELECT value FROM json_each(?4))"}]}"#;
     items.push(BuiltinReport {
         name: "payee_totals".to_string(),
         description: "Totals by payee".to_string(),
@@ -555,11 +555,11 @@ pub fn create_report_definition(
     conn.execute(
         "INSERT INTO report_definitions (
             book_id, name, kind, query_type, query_text, params_schema,
-            previous_report_definition_id, session_id, created_at, updated_at
+                previous_report_definition_id, session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6,
-            NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             input.book_id,
@@ -575,7 +575,7 @@ pub fn create_report_definition(
     let id = conn.last_insert_rowid();
     let item = conn
         .query_row(
-            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at
              FROM report_definitions WHERE id = ?1",
             [id],
             map_report_definition_row,
@@ -604,11 +604,11 @@ pub fn update_report_definition(
     conn.execute(
         "INSERT INTO report_definitions (
             book_id, name, kind, query_type, query_text, params_schema,
-            previous_report_definition_id, session_id, created_at, updated_at
+                previous_report_definition_id, session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6,
-            ?7, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?7, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             input.book_id,
@@ -626,7 +626,7 @@ pub fn update_report_definition(
 
     let item = conn
         .query_row(
-            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at
              FROM report_definitions WHERE id = ?1",
             [new_id],
             map_report_definition_row,
@@ -638,16 +638,65 @@ pub fn update_report_definition(
 
 #[command]
 pub fn delete_report_definition(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM report_definitions WHERE id = ?1", [id], |row| row.get(0))
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let source: Option<(i64, i64, String, String, String, String, Option<String>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_report_definition_id
+                 FROM report_definitions a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_report_definition_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM report_definitions a
+                 JOIN chain c ON a.previous_report_definition_id = c.id
+             )
+             SELECT id, book_id, name, kind, query_type, query_text, params_schema
+             FROM report_definitions
+             WHERE id IN chain
+               AND (report_definitions.session_id IS NULL OR report_definitions.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM report_definitions newer
+                   WHERE newer.previous_report_definition_id = report_definitions.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
+
+    let Some((current_id, book_id, name, kind, query_type, query_text, params_schema)) = source else {
         return Ok(false);
-    }
-    Err("delete_report_definition is not supported in immutable mode".to_string())
+    };
+
+    conn.execute(
+        "INSERT INTO report_definitions (
+            book_id, name, kind, query_type, query_text, params_schema,
+            previous_report_definition_id, session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6,
+            ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            book_id,
+            name,
+            kind,
+            query_type,
+            query_text,
+            params_schema,
+            current_id,
+            format!("{}delete", VOID_SESSION_PREFIX),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(true)
 }
 
 #[command]
@@ -668,9 +717,10 @@ pub fn get_report_definition(db: State<DbState>, id: i64) -> Result<Option<Repor
                                  FROM report_definitions a
                                  JOIN chain c ON a.previous_report_definition_id = c.id
                          )
-                         SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+                         SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at
                          FROM report_definitions
                          WHERE id IN chain
+                            AND (report_definitions.session_id IS NULL OR report_definitions.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM report_definitions newer
                                      WHERE newer.previous_report_definition_id = report_definitions.id
@@ -692,9 +742,10 @@ pub fn list_report_definitions(db: State<DbState>, book_id: i64) -> Result<Vec<R
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+            "SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at
                          FROM report_definitions
                          WHERE book_id = ?1
+                            AND (report_definitions.session_id IS NULL OR report_definitions.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM report_definitions newer
                                      WHERE newer.previous_report_definition_id = report_definitions.id
@@ -738,9 +789,10 @@ pub fn run_report(
                                  FROM report_definitions a
                                  JOIN chain c ON a.previous_report_definition_id = c.id
                          )
-                         SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at, updated_at
+                         SELECT id, book_id, name, kind, query_type, query_text, params_schema, created_at
                          FROM report_definitions
                          WHERE id IN chain
+                            AND (report_definitions.session_id IS NULL OR report_definitions.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM report_definitions newer
                                      WHERE newer.previous_report_definition_id = report_definitions.id
@@ -868,7 +920,7 @@ pub fn report_account_balances(
         "SELECT a.id, a.name, a.commodity_id, COALESCE(SUM(s.amount_minor), 0) AS balance_minor
          FROM accounts a
          LEFT JOIN splits s ON s.account_id = a.id
-         LEFT JOIN transactions t ON t.id = s.tx_id AND (?2 IS NULL OR t.txn_date <= ?2)
+         LEFT JOIN transactions t ON t.id = s.tx_id AND (?2 IS NULL OR t.occurred_date <= ?2)
          WHERE a.book_id = ?1 AND (?3 = 1 OR a.is_closed = 0)",
     );
     let mut params: Vec<Value> = vec![
@@ -922,10 +974,10 @@ pub fn report_cashflow(
 
     let group_by = input.group_by.unwrap_or_else(|| "month".to_string());
     let period_expr = match group_by.as_str() {
-        "year" => "substr(t.txn_date,1,4) || '-01-01'",
-        "quarter" => "printf('%s-%02d-01', substr(t.txn_date,1,4), ((cast(substr(t.txn_date,6,2) as int)-1)/3)*3+1)",
-        "day" => "t.txn_date",
-        _ => "substr(t.txn_date,1,7) || '-01'",
+        "year" => "substr(t.occurred_date,1,4) || '-01-01'",
+        "quarter" => "printf('%s-%02d-01', substr(t.occurred_date,1,4), ((cast(substr(t.occurred_date,6,2) as int)-1)/3)*3+1)",
+        "day" => "t.occurred_date",
+        _ => "substr(t.occurred_date,1,7) || '-01'",
     };
 
     let sql = format!(
@@ -937,8 +989,8 @@ pub fn report_cashflow(
          JOIN splits s ON s.tx_id = t.id
          LEFT JOIN categories c ON c.id = s.category_id
          WHERE t.book_id = ?1
-           AND (?2 IS NULL OR t.txn_date >= ?2)
-           AND (?3 IS NULL OR t.txn_date <= ?3)
+           AND (?2 IS NULL OR t.occurred_date >= ?2)
+           AND (?3 IS NULL OR t.occurred_date <= ?3)
            AND c.kind IN ('income','expense')
          GROUP BY period_start
          ORDER BY period_start ASC"
@@ -990,8 +1042,8 @@ pub fn report_category_spend(
          LEFT JOIN splits s ON s.category_id = c.id
          LEFT JOIN transactions t ON t.id = s.tx_id
          WHERE c.book_id = ?1 AND c.kind = 'expense'
-           AND (?2 IS NULL OR t.txn_date >= ?2)
-           AND (?3 IS NULL OR t.txn_date <= ?3)",
+           AND (?2 IS NULL OR t.occurred_date >= ?2)
+           AND (?3 IS NULL OR t.occurred_date <= ?3)",
     );
 
     let mut params: Vec<Value> = vec![
@@ -1051,8 +1103,8 @@ pub fn report_payee_totals(
          JOIN transactions t ON t.payee_id = p.id
          JOIN splits s ON s.tx_id = t.id
          WHERE p.book_id = ?1
-           AND (?2 IS NULL OR t.txn_date >= ?2)
-           AND (?3 IS NULL OR t.txn_date <= ?3)",
+           AND (?2 IS NULL OR t.occurred_date >= ?2)
+           AND (?3 IS NULL OR t.occurred_date <= ?3)",
     );
 
     let mut params: Vec<Value> = vec![
@@ -1177,7 +1229,7 @@ mod tests {
 
     fn insert_transaction(
         conn: &rusqlite::Connection,
-        txn_date: &str,
+        occurred_date: &str,
         payee_id: i64,
         checking_id: i64,
         cash_id: i64,
@@ -1186,23 +1238,23 @@ mod tests {
         amount_minor: i64,
     ) {
         conn.execute(
-            "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, created_at, updated_at)
-             VALUES (1, ?1, ?2, 'memo', 'cleared', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
-            params![txn_date, payee_id],
+            "INSERT INTO transactions (book_id, occurred_date, payee_id, memo, status, reference, import_id, created_at)
+             VALUES (1, ?1, ?2, 'memo', 'cleared', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![occurred_date, payee_id],
         )
         .expect("insert tx");
         let tx_id = conn.last_insert_rowid();
 
         conn.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'groceries', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'groceries', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![tx_id, checking_id, usd_id, -amount_minor, grocery_category_id],
         )
         .expect("insert split1");
 
         conn.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, NULL, 'counter', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, NULL, 'counter', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![tx_id, cash_id, usd_id, amount_minor],
         )
         .expect("insert split2");
@@ -1268,8 +1320,8 @@ mod tests {
             let guard = db_state.inner.lock().expect("lock db");
             let conn = guard.conn.as_ref().expect("conn");
             conn.execute(
-                "INSERT INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
-                 VALUES (1, NULL, 'Cache Bump', 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO categories (book_id, parent_id, name, kind, created_at)
+                 VALUES (1, NULL, 'Cache Bump', 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert category");
@@ -1362,8 +1414,8 @@ mod tests {
             let grocery_id = lookup_id(conn, "categories", "Groceries");
 
             conn.execute(
-                "INSERT INTO payees (book_id, name, kind, created_at, updated_at)
-                 VALUES (1, 'Test Store', 'payee', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO payees (book_id, name, kind, created_at)
+                 VALUES (1, 'Test Store', 'payee', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert payee");
@@ -1521,7 +1573,7 @@ mod tests {
     fn test_template_filters_and_prune_runs() {
         let db_state = create_temp_db();
 
-        let template = r#"{"sql":"SELECT t.txn_date AS txn_date FROM transactions t WHERE t.book_id = ?1","param_order":["book_id"],"filters":[{"param":"date_from","clause":"AND t.txn_date >= ?"}]}"#;
+        let template = r#"{"sql":"SELECT t.occurred_date AS occurred_date FROM transactions t WHERE t.book_id = ?1","param_order":["book_id"],"filters":[{"param":"date_from","clause":"AND t.occurred_date >= ?"}]}"#;
         let definition = create_report_definition(
             as_state(&db_state),
             ReportDefinitionCreate {
@@ -1539,14 +1591,14 @@ mod tests {
             let guard = db_state.inner.lock().expect("lock db");
             let conn = guard.conn.as_ref().expect("conn");
             conn.execute(
-                "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, created_at, updated_at)
-                 VALUES (1, '2024-01-01', NULL, NULL, 'cleared', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO transactions (book_id, occurred_date, payee_id, memo, status, reference, import_id, created_at)
+                 VALUES (1, '2024-01-01', NULL, NULL, 'cleared', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert tx1");
             conn.execute(
-                "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, created_at, updated_at)
-                 VALUES (1, '2024-02-01', NULL, NULL, 'cleared', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO transactions (book_id, occurred_date, payee_id, memo, status, reference, import_id, created_at)
+                 VALUES (1, '2024-02-01', NULL, NULL, 'cleared', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert tx2");
@@ -1576,8 +1628,8 @@ mod tests {
             let guard = db_state.inner.lock().expect("lock db");
             let conn = guard.conn.as_ref().expect("conn");
             conn.execute(
-                "INSERT INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
-                 VALUES (1, NULL, 'Prune Bump', 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO categories (book_id, parent_id, name, kind, created_at)
+                 VALUES (1, NULL, 'Prune Bump', 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert category");

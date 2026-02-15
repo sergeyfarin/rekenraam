@@ -7,6 +7,7 @@ use tauri::{command, State};
 use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
+const VOID_SESSION_PREFIX: &str = "void:";
 
 fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
     conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
@@ -30,7 +31,6 @@ pub struct ImportRule {
     pub target_category_id: Option<i64>,
     pub target_payee_id: Option<i64>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -99,7 +99,9 @@ pub struct ImportDraft {
     pub memo: Option<String>,
     pub txn_date: Option<String>,
     pub happened_at_utc: Option<String>,
+    pub posted_date: Option<String>,
     pub posted_at_utc: Option<String>,
+    pub posted_tz: Option<String>,
     pub amount_minor: Option<i64>,
     pub reference: Option<String>,
     pub import_id: Option<String>,
@@ -175,7 +177,6 @@ fn map_import_rule_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImportRule> 
         target_category_id: row.get(12)?,
         target_payee_id: row.get(13)?,
         created_at: row.get(14)?,
-        updated_at: row.get(15)?,
     })
 }
 
@@ -438,7 +439,9 @@ fn parse_qif(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
         memo: None,
         txn_date: None,
         happened_at_utc: None,
+        posted_date: None,
         posted_at_utc: None,
+        posted_tz: None,
         amount_minor: None,
         reference: None,
         import_id: None,
@@ -459,7 +462,9 @@ fn parse_qif(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
                 memo: None,
                 txn_date: None,
                 happened_at_utc: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -506,7 +511,9 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
         memo: None,
         txn_date: None,
         happened_at_utc: None,
+        posted_date: None,
         posted_at_utc: None,
+        posted_tz: None,
         amount_minor: None,
         reference: None,
         import_id: None,
@@ -525,7 +532,9 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
                 memo: None,
                 txn_date: None,
                 happened_at_utc: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -547,7 +556,9 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
                 memo: None,
                 txn_date: None,
                 happened_at_utc: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -565,7 +576,11 @@ fn parse_ofx(content: &str, locale: Option<&ImportLocaleOptions>) -> Result<Vec<
             let raw = l.replace("<DTPOSTED>", "");
             let raw = raw.trim().to_string();
             current.txn_date = parse_ofx_date(&raw);
+            current.posted_date = parse_ofx_date(&raw);
             current.posted_at_utc = parse_ofx_datetime_utc(&raw);
+            if current.posted_at_utc.is_some() {
+                current.posted_tz = Some("Etc/UTC".to_string());
+            }
             if current.happened_at_utc.is_none() {
                 current.happened_at_utc = current.posted_at_utc.clone();
             }
@@ -617,7 +632,9 @@ fn parse_hbci_mt940(
                 memo: None,
                 txn_date: if date.is_empty() { None } else { Some(date) },
                 happened_at_utc: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 amount_minor: Some(amount_minor),
                 reference: None,
                 import_id: None,
@@ -704,7 +721,9 @@ fn parse_csv(
             memo: get(memo_idx),
             txn_date,
             happened_at_utc: None,
+            posted_date: None,
             posted_at_utc: None,
+            posted_tz: None,
             amount_minor,
             reference: get(reference_idx),
             import_id: get(import_id_idx),
@@ -798,7 +817,7 @@ fn find_matching_tx(
              FROM transactions t
              JOIN splits s ON s.tx_id = t.id
              LEFT JOIN payees p ON p.id = t.payee_id
-             WHERE s.account_id = ?1 AND t.txn_date = ?2 AND s.amount_minor = ?3",
+             WHERE s.account_id = ?1 AND t.occurred_date = ?2 AND s.amount_minor = ?3",
         );
         let mut params: Vec<Value> = vec![
             Value::from(account_id),
@@ -858,12 +877,12 @@ fn resolve_payee_id(
             conn.execute(
                 "INSERT INTO payees (
                     book_id, name, kind, previous_payee_id,
-                          session_id, created_at, updated_at
+                          session_id, created_at
                  )
                  VALUES (
                     ?1, ?2, 'payee', NULL,
                           ?3,
-                    strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                      strftime('%Y-%m-%dT%H:%M:%fZ','now')
                  )",
                 params![SINGLE_BOOK_ID, name, session_id],
             )
@@ -930,17 +949,20 @@ fn enrich_existing_transaction(
         let session_id: String = conn
             .query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
             .map_err(|e| e.to_string())?;
-        let (book_id, txn_date, happened_at_utc, posted_at_utc, status): (
+        let (book_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz, status): (
             i64,
             String,
+            Option<String>,
+            Option<String>,
             String,
+            Option<String>,
             Option<String>,
             String,
         ) = conn
             .query_row(
-                "SELECT book_id, txn_date, happened_at_utc, posted_at_utc, status FROM transactions WHERE id = ?1",
+                "SELECT book_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz, status FROM transactions WHERE id = ?1",
                 [tx_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?)),
             )
             .map_err(|e| e.to_string())?;
 
@@ -952,21 +974,24 @@ fn enrich_existing_transaction(
 
         conn.execute(
             "INSERT INTO transactions (
-                book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
+                book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
                 payee_id, memo, status, reference, import_id, import_session_id,
-                session_id, created_at, updated_at
+                     session_id, created_at
              )
              VALUES (
-                ?1, ?2, ?3, ?4, ?5,
-                ?6, ?7, ?8, ?9, ?10, ?11,
-                ?12, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                ?9, ?10, ?11, ?12, ?13, ?14,
+                     ?15, strftime('%Y-%m-%dT%H:%M:%fZ','now')
              )",
             params![
                 book_id,
                 tx_id,
-                txn_date,
-                happened_at_utc,
+                occurred_date,
+                occurred_at_utc,
+                occurred_tz,
+                posted_date,
                 posted_at_utc,
+                posted_tz,
                 resolved_payee_id,
                 resolved_memo,
                 status,
@@ -1070,7 +1095,7 @@ fn check_account_locks(
 fn check_transaction_locks(conn: &rusqlite::Connection, tx_id: i64) -> Result<(), String> {
     let txn_date: Option<String> = conn
         .query_row(
-            "SELECT txn_date FROM transactions WHERE id = ?1",
+            "SELECT occurred_date FROM transactions WHERE id = ?1",
             [tx_id],
             |row| row.get(0),
         )
@@ -1264,8 +1289,8 @@ pub fn import_transactions(
 
     let imbalance_account_id = if imbalance_account_id == 0 {
         tx.execute(
-            "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, is_closed, created_at, updated_at)
-             VALUES (?1, NULL, 'equity', 'Imbalance-Import', ?2, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, is_closed, created_at)
+             VALUES (?1, NULL, 'equity', 'Imbalance-Import', ?2, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![SINGLE_BOOK_ID, account_commodity_id],
         )
         .map_err(|e| e.to_string())?;
@@ -1341,9 +1366,20 @@ pub fn import_transactions(
                 continue;
             }
         };
-        let happened_at_utc = draft
-            .happened_at_utc
+        let occurred_at_utc = draft.happened_at_utc.clone();
+        let occurred_tz = occurred_at_utc
+            .as_ref()
+            .map(|_| "Etc/UTC".to_string());
+        let posted_at_utc = draft.posted_at_utc.clone();
+        let posted_tz = if posted_at_utc.is_some() {
+            draft.posted_tz.clone().or_else(|| Some("Etc/UTC".to_string()))
+        } else {
+            draft.posted_tz.clone()
+        };
+        let posted_date = draft
+            .posted_date
             .clone()
+            .or_else(|| posted_at_utc.as_ref().and_then(|value| value.get(0..10).map(|v| v.to_string())))
             .unwrap_or_else(|| txn_date.clone());
         let amount_minor = match draft.amount_minor {
             Some(a) => a,
@@ -1362,18 +1398,21 @@ pub fn import_transactions(
 
         tx.execute(
                 "INSERT INTO transactions (
-                     book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-                     payee_id, memo, status, reference, import_id, import_session_id, created_at, updated_at
+                     book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+                     payee_id, memo, status, reference, import_id, import_session_id, created_at
                  )
                  VALUES (
-                     ?1, NULL, ?2, ?3, ?4,
-                     ?5, ?6, 'uncleared', ?7, ?8, ?9, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                     ?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7,
+                     ?8, ?9, 'uncleared', ?10, ?11, ?12, strftime('%Y-%m-%dT%H:%M:%fZ','now')
                  )",
             params![
                 SINGLE_BOOK_ID,
                 txn_date,
-                     happened_at_utc,
-                     draft.posted_at_utc,
+                occurred_at_utc,
+                occurred_tz,
+                posted_date,
+                posted_at_utc,
+                posted_tz,
                 payee_id,
                 draft.memo,
                 draft.reference,
@@ -1386,8 +1425,8 @@ pub fn import_transactions(
         let tx_id = tx.last_insert_rowid();
 
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 tx_id,
                 target_account_id,
@@ -1400,8 +1439,8 @@ pub fn import_transactions(
         .map_err(|e| e.to_string())?;
 
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+             VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![tx_id, imbalance_account_id, account_commodity_id, -amount_minor],
         )
         .map_err(|e| e.to_string())?;
@@ -1461,13 +1500,13 @@ pub fn create_import_rule(
             book_id, rule_kind, match_type, match_text, priority,
             amount_min_minor, amount_max_minor, date_from, date_to,
             match_account_id, target_account_id, target_category_id, target_payee_id,
-            previous_import_rule_id, session_id, created_at, updated_at
+                previous_import_rule_id, session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5,
             ?6, ?7, ?8, ?9,
             ?10, ?11, ?12, ?13,
-            NULL, ?14, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                NULL, ?14, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -1491,7 +1530,7 @@ pub fn create_import_rule(
     let id = conn.last_insert_rowid();
     let rule = conn
         .query_row(
-            "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at, updated_at
+            "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at
              FROM import_rules WHERE id = ?1",
             [id],
             map_import_rule_row,
@@ -1510,9 +1549,10 @@ pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportR
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at, updated_at
+            "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at
                          FROM import_rules
                          WHERE book_id = ?1
+                            AND (import_rules.session_id IS NULL OR import_rules.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM import_rules newer
                                      WHERE newer.previous_import_rule_id = import_rules.id
@@ -1534,18 +1574,96 @@ pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportR
 
 #[command]
 pub fn delete_import_rule(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM import_rules WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, String, String, String, i64, Option<i64>, Option<i64>, Option<String>, Option<String>, Option<i64>, Option<i64>, Option<i64>, Option<i64>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_import_rule_id
+                 FROM import_rules a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_import_rule_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM import_rules a
+                 JOIN chain c ON a.previous_import_rule_id = c.id
+             )
+             SELECT id, book_id, rule_kind, match_type, match_text, priority,
+                    amount_min_minor, amount_max_minor, date_from, date_to,
+                    match_account_id, target_account_id, target_category_id, target_payee_id
+             FROM import_rules
+             WHERE id IN chain
+               AND (import_rules.session_id IS NULL OR import_rules.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM import_rules newer
+                   WHERE newer.previous_import_rule_id = import_rules.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                    row.get(11)?,
+                    row.get(12)?,
+                    row.get(13)?,
+                ))
+            },
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_import_rule is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO import_rules (
+            book_id, rule_kind, match_type, match_text, priority,
+            amount_min_minor, amount_max_minor, date_from, date_to,
+            match_account_id, target_account_id, target_category_id, target_payee_id,
+            previous_import_rule_id, session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, ?7, ?8, ?9,
+            ?10, ?11, ?12, ?13,
+            ?14, ?15, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            book_id,
+            rule_kind,
+            match_type,
+            match_text,
+            priority,
+            amount_min_minor,
+            amount_max_minor,
+            date_from,
+            date_to,
+            match_account_id,
+            target_account_id,
+            target_category_id,
+            target_payee_id,
+            current_id,
+            format!("{}delete", VOID_SESSION_PREFIX),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(true)
 }
 
 #[command]
@@ -1659,9 +1777,10 @@ pub fn apply_import_rules(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at, updated_at
+            "SELECT id, book_id, rule_kind, match_type, match_text, priority, amount_min_minor, amount_max_minor, date_from, date_to, match_account_id, target_account_id, target_category_id, target_payee_id, created_at
                          FROM import_rules
                          WHERE book_id = ?1
+                            AND (import_rules.session_id IS NULL OR import_rules.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM import_rules newer
                                      WHERE newer.previous_import_rule_id = import_rules.id
@@ -1965,7 +2084,9 @@ mod tests {
             memo: None,
             txn_date: Some("2024-04-01".to_string()),
             happened_at_utc: None,
+            posted_date: None,
             posted_at_utc: None,
+            posted_tz: None,
             amount_minor: Some(-2500),
             reference: None,
             import_id: Some("match-1".to_string()),
@@ -1980,7 +2101,9 @@ mod tests {
             memo: None,
             txn_date: Some("2024-04-01".to_string()),
             happened_at_utc: None,
+            posted_date: None,
             posted_at_utc: None,
+            posted_tz: None,
             amount_minor: Some(-2500),
             reference: None,
             import_id: Some("match-1".to_string()),
@@ -2029,7 +2152,9 @@ mod tests {
                 memo: None,
                 txn_date: Some("2024-06-01".to_string()),
                 happened_at_utc: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 amount_minor: None,
                 reference: None,
                 import_id: None,
@@ -2043,7 +2168,9 @@ mod tests {
                 memo: None,
                 txn_date: None,
                 happened_at_utc: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 amount_minor: Some(-1234),
                 reference: None,
                 import_id: None,
@@ -2070,15 +2197,15 @@ mod tests {
             let mut guard = db_state.inner.lock().expect("lock db");
             let conn = guard.conn.as_mut().expect("conn");
             conn.execute(
-                "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, created_at, updated_at)
-                 VALUES (1, '2024-06-05', NULL, 'Duplicate Memo', 'cleared', NULL, 'dup-1', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO transactions (book_id, occurred_date, payee_id, memo, status, reference, import_id, created_at)
+                 VALUES (1, '2024-06-05', NULL, 'Duplicate Memo', 'cleared', NULL, 'dup-1', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert tx");
             let tx_id = conn.last_insert_rowid();
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, -5000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -5000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx_id, checking_id, commodity_id],
             )
             .expect("insert split");
@@ -2090,7 +2217,9 @@ mod tests {
             memo: Some("Duplicate Memo".to_string()),
             txn_date: Some("2024-06-05".to_string()),
             happened_at_utc: None,
+            posted_date: None,
             posted_at_utc: None,
+            posted_tz: None,
             amount_minor: Some(-5000),
             reference: None,
             import_id: Some("dup-1".to_string()),
@@ -2113,7 +2242,9 @@ mod tests {
             memo: Some("Duplicate Memo".to_string()),
             txn_date: Some("2024-06-05".to_string()),
             happened_at_utc: None,
+            posted_date: None,
             posted_at_utc: None,
+            posted_tz: None,
             amount_minor: Some(-5000),
             reference: None,
             import_id: None,

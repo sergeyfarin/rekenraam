@@ -21,7 +21,6 @@ pub struct Currency {
     pub is_active: bool,
     pub is_default: bool,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -245,7 +244,6 @@ fn map_currency_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Currency> {
         is_active: row.get::<_, i64>(6)? != 0,
         is_default: row.get::<_, i64>(7)? != 0,
         created_at: row.get(8)?,
-        updated_at: row.get(9)?,
     })
 }
 
@@ -365,14 +363,14 @@ pub fn list_currencies(db: State<DbState>, book_id: i64, active_only: Option<boo
     let book_id = SINGLE_BOOK_ID;
 
     let sql = if active_only.unwrap_or(false) {
-        "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+        "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
                  FROM current_commodities c
                  WHERE c.book_id = ?1
                      AND c.kind = 'currency'
                      AND c.is_active = 1
                  ORDER BY c.is_default DESC, c.symbol ASC"
     } else {
-        "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+        "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
                  FROM current_commodities c
                  WHERE c.book_id = ?1
                      AND c.kind = 'currency'
@@ -398,7 +396,7 @@ pub fn get_default_currency(db: State<DbState>, book_id: i64) -> Result<Option<C
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
                          FROM current_commodities c
                          WHERE c.book_id = ?1
                              AND c.kind = 'currency'
@@ -441,8 +439,8 @@ pub fn create_currency(db: State<DbState>, input: CurrencyCreate) -> Result<Curr
         }
 
     conn.execute(
-        "INSERT INTO commodities (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at)
-         VALUES (?1, 'currency', ?2, ?3, ?4, ?5, ?6, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO commodities (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, created_at)
+         VALUES (?1, 'currency', ?2, ?3, ?4, ?5, ?6, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, input.symbol, input.display_symbol, input.name, scale, is_active],
     )
     .map_err(|e| e.to_string())?;
@@ -450,7 +448,7 @@ pub fn create_currency(db: State<DbState>, input: CurrencyCreate) -> Result<Curr
     let id = conn.last_insert_rowid();
     let currency = conn
         .query_row(
-            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
              FROM commodities WHERE id = ?1",
             [id],
             map_currency_row,
@@ -501,9 +499,9 @@ pub fn update_currency(db: State<DbState>, input: CurrencyUpdate) -> Result<Curr
 
     conn.execute(
         "INSERT INTO commodities
-          (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+          (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at)
          VALUES
-          (?1, 'currency', ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+          (?1, 'currency', ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             new_symbol,
@@ -521,7 +519,7 @@ pub fn update_currency(db: State<DbState>, input: CurrencyUpdate) -> Result<Curr
 
     let currency = conn
         .query_row(
-            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
              FROM commodities WHERE id = ?1",
             [new_id],
             map_currency_row,
@@ -591,9 +589,9 @@ pub fn set_default_currency(db: State<DbState>, book_id: i64, currency_id: i64) 
         if default_id != currency_id {
             conn.execute(
                 "INSERT INTO commodities
-                  (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+                  (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at)
                  VALUES
-                  (?1, 'currency', ?2, ?3, ?4, ?5, ?6, 0, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                  (?1, 'currency', ?2, ?3, ?4, ?5, ?6, 0, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![
                     default_book_id,
                     default_symbol,
@@ -613,9 +611,9 @@ pub fn set_default_currency(db: State<DbState>, book_id: i64, currency_id: i64) 
     if need_target_version {
         conn.execute(
             "INSERT INTO commodities
-              (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+              (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at)
              VALUES
-              (?1, 'currency', ?2, ?3, ?4, ?5, 1, 1, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+              (?1, 'currency', ?2, ?3, ?4, ?5, 1, 1, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![target.1, target.2, target.3, target.4, target.5, target.0],
         )
         .map_err(|e| e.to_string())?;
@@ -624,7 +622,7 @@ pub fn set_default_currency(db: State<DbState>, book_id: i64, currency_id: i64) 
 
     let currency = conn
         .query_row(
-            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
              FROM commodities WHERE id = ?1",
             [effective_currency_id],
             map_currency_row,
@@ -692,9 +690,9 @@ pub fn toggle_currency_active(db: State<DbState>, currency_id: i64) -> Result<Cu
 
     conn.execute(
         "INSERT INTO commodities
-          (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+          (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at)
          VALUES
-          (?1, 'currency', ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+          (?1, 'currency', ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             source.1,
             source.2,
@@ -712,7 +710,7 @@ pub fn toggle_currency_active(db: State<DbState>, currency_id: i64) -> Result<Cu
 
     let currency = conn
         .query_row(
-            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at
+            "SELECT id, book_id, symbol, display_symbol, name, scale, is_active, is_default, created_at
              FROM commodities WHERE id = ?1",
             [new_id],
             map_currency_row,

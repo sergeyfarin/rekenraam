@@ -4,10 +4,12 @@
 -- as (a) a new migration file or (b) by modifying V1 directly.
 PRAGMA foreign_keys = ON;
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version INTEGER PRIMARY KEY
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS books (
   id                INTEGER PRIMARY KEY,
   previous_book_id  INTEGER,
@@ -16,10 +18,10 @@ CREATE TABLE IF NOT EXISTS books (
   kind              TEXT NOT NULL CHECK (kind IN ('personal', 'business')),
   base_commodity_id INTEGER,
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_book_id) REFERENCES books(id) ON DELETE SET NULL
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS commodities (
   id         INTEGER PRIMARY KEY,
   book_id    INTEGER NOT NULL,
@@ -43,7 +45,6 @@ CREATE TABLE IF NOT EXISTS commodities (
   metadata   TEXT,
   previous_commodity_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_commodity_id) REFERENCES commodities(id) ON DELETE SET NULL
 );
@@ -58,6 +59,7 @@ WHERE NOT EXISTS (
   SELECT 1 FROM commodities newer WHERE newer.previous_commodity_id = c.id
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS commodity_prices (
   id                 INTEGER PRIMARY KEY,
   book_id            INTEGER NOT NULL,
@@ -75,6 +77,7 @@ CREATE TABLE IF NOT EXISTS commodity_prices (
   UNIQUE(book_id, commodity_id, quote_commodity_id, as_of_date)
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS payees (
   id                INTEGER PRIMARY KEY,
   book_id           INTEGER NOT NULL,
@@ -84,11 +87,11 @@ CREATE TABLE IF NOT EXISTS payees (
   previous_payee_id INTEGER,
   session_id        TEXT,
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_payee_id) REFERENCES payees(id) ON DELETE SET NULL
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS categories (
   id                   INTEGER PRIMARY KEY,
   book_id              INTEGER NOT NULL,
@@ -99,7 +102,6 @@ CREATE TABLE IF NOT EXISTS categories (
   previous_category_id INTEGER,
   session_id           TEXT,
   created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(parent_id) REFERENCES categories(id) ON DELETE SET NULL,
   FOREIGN KEY(previous_category_id) REFERENCES categories(id) ON DELETE SET NULL
@@ -107,6 +109,7 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE INDEX IF NOT EXISTS idx_categories_book_parent ON categories(book_id, parent_id);
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS tags (
   id               INTEGER PRIMARY KEY,
   book_id          INTEGER NOT NULL,
@@ -115,11 +118,11 @@ CREATE TABLE IF NOT EXISTS tags (
   previous_tag_id  INTEGER,
   session_id       TEXT,
   created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_tag_id) REFERENCES tags(id) ON DELETE SET NULL
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS people (
   id         INTEGER PRIMARY KEY,
   book_id    INTEGER NOT NULL,
@@ -129,11 +132,11 @@ CREATE TABLE IF NOT EXISTS people (
   previous_person_id INTEGER,
   session_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_person_id) REFERENCES people(id) ON DELETE SET NULL
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS projects (
   id         INTEGER PRIMARY KEY,
   book_id    INTEGER NOT NULL,
@@ -143,11 +146,11 @@ CREATE TABLE IF NOT EXISTS projects (
   previous_project_id INTEGER,
   session_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_project_id) REFERENCES projects(id) ON DELETE SET NULL
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS accounts (
   id           INTEGER PRIMARY KEY,
   book_id      INTEGER NOT NULL,
@@ -178,7 +181,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   lifecycle_note TEXT,
   lifecycle_metadata TEXT,
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(parent_id) REFERENCES accounts(id) ON DELETE SET NULL,
   FOREIGN KEY(previous_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
@@ -210,13 +212,17 @@ BEGIN
   END;
 END;
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS transactions (
   id          INTEGER PRIMARY KEY,
   book_id     INTEGER NOT NULL,
   previous_tx_id INTEGER,
-  txn_date    TEXT NOT NULL,
-  happened_at_utc TEXT NOT NULL DEFAULT (date('now')),
+  occurred_date    TEXT NOT NULL,
+  occurred_at_utc TEXT,
+  occurred_tz  TEXT,
+  posted_date TEXT NOT NULL DEFAULT (date('now')),
   posted_at_utc TEXT,
+  posted_tz TEXT,
   payee_id    INTEGER,
   memo        TEXT,
   status      TEXT NOT NULL DEFAULT 'uncleared' CHECK (status IN ('uncleared','cleared','reconciled','void')),
@@ -225,14 +231,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   import_session_id INTEGER,
   session_id TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_tx_id) REFERENCES transactions(id) ON DELETE SET NULL,
   FOREIGN KEY(payee_id) REFERENCES payees(id) ON DELETE SET NULL,
   FOREIGN KEY(import_session_id) REFERENCES import_sessions(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_tx_book_date ON transactions(book_id, txn_date);
+CREATE INDEX IF NOT EXISTS idx_tx_book_date ON transactions(book_id, occurred_date);
 CREATE INDEX IF NOT EXISTS idx_tx_book_payee ON transactions(book_id, payee_id);
 CREATE INDEX IF NOT EXISTS idx_tx_import_session ON transactions(import_session_id);
 
@@ -240,29 +245,49 @@ CREATE TRIGGER IF NOT EXISTS trg_transactions_datetime_format_ins
 BEFORE INSERT ON transactions
 BEGIN
   SELECT CASE
-    WHEN NEW.txn_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-      OR date(NEW.txn_date) IS NULL
-      THEN RAISE(ABORT, 'txn_date must be YYYY-MM-DD')
+    WHEN NEW.occurred_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      OR date(NEW.occurred_date) IS NULL
+      THEN RAISE(ABORT, 'occurred_date must be YYYY-MM-DD')
   END;
 
   SELECT CASE
-    WHEN NOT (
-      (NEW.happened_at_utc GLOB '????-??-??' AND date(NEW.happened_at_utc) IS NOT NULL)
-      OR
-      (NEW.happened_at_utc GLOB '????-??-??T??:??*Z' AND datetime(NEW.happened_at_utc) IS NOT NULL)
+    WHEN NEW.occurred_at_utc IS NOT NULL AND (
+      NEW.occurred_at_utc NOT GLOB '????-??-??T??:??*Z'
+      OR datetime(NEW.occurred_at_utc) IS NULL
     )
-      THEN RAISE(ABORT, 'happened_at_utc must be YYYY-MM-DD or UTC ISO-8601 (Z)')
+      THEN RAISE(ABORT, 'occurred_at_utc must be UTC ISO-8601 (Z) when set')
+  END;
+
+  SELECT CASE
+    WHEN NEW.occurred_at_utc IS NOT NULL AND (
+      NEW.occurred_tz IS NULL
+      OR trim(NEW.occurred_tz) = ''
+      OR NEW.occurred_tz NOT GLOB '*/*'
+    )
+      THEN RAISE(ABORT, 'occurred_tz must be an IANA timezone (e.g. Area/City) when occurred_at_utc is set')
+  END;
+
+  SELECT CASE
+    WHEN NEW.posted_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      OR date(NEW.posted_date) IS NULL
+      THEN RAISE(ABORT, 'posted_date must be YYYY-MM-DD')
   END;
 
   SELECT CASE
     WHEN NEW.posted_at_utc IS NOT NULL AND (
-      NOT (
-        (NEW.posted_at_utc GLOB '????-??-??' AND date(NEW.posted_at_utc) IS NOT NULL)
-        OR
-        (NEW.posted_at_utc GLOB '????-??-??T??:??*Z' AND datetime(NEW.posted_at_utc) IS NOT NULL)
-      )
+      NEW.posted_at_utc NOT GLOB '????-??-??T??:??*Z'
+      OR datetime(NEW.posted_at_utc) IS NULL
     )
-      THEN RAISE(ABORT, 'posted_at_utc must be YYYY-MM-DD or UTC ISO-8601 (Z) when set')
+      THEN RAISE(ABORT, 'posted_at_utc must be UTC ISO-8601 (Z) when set')
+  END;
+
+  SELECT CASE
+    WHEN NEW.posted_at_utc IS NOT NULL AND (
+      NEW.posted_tz IS NULL
+      OR trim(NEW.posted_tz) = ''
+      OR NEW.posted_tz NOT GLOB '*/*'
+    )
+      THEN RAISE(ABORT, 'posted_tz must be an IANA timezone (e.g. Area/City) when posted_at_utc is set')
   END;
 
   SELECT CASE
@@ -271,13 +296,9 @@ BEGIN
       THEN RAISE(ABORT, 'created_at must be UTC ISO-8601 (Z)')
   END;
 
-  SELECT CASE
-    WHEN NEW.updated_at NOT GLOB '????-??-??T??:??:??*Z'
-      OR datetime(NEW.updated_at) IS NULL
-      THEN RAISE(ABORT, 'updated_at must be UTC ISO-8601 (Z)')
-  END;
 END;
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS splits (
   id            INTEGER PRIMARY KEY,
   tx_id         INTEGER NOT NULL,
@@ -293,7 +314,6 @@ CREATE TABLE IF NOT EXISTS splits (
   share_bps     INTEGER,
   memo          TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(tx_id) REFERENCES transactions(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_split_id) REFERENCES splits(id) ON DELETE SET NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
@@ -311,6 +331,7 @@ CREATE INDEX IF NOT EXISTS idx_splits_tag ON splits(tag_id);
 CREATE INDEX IF NOT EXISTS idx_splits_person ON splits(person_id);
 CREATE INDEX IF NOT EXISTS idx_splits_project ON splits(project_id);
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS lots (
   id           INTEGER PRIMARY KEY,
   book_id      INTEGER NOT NULL,
@@ -323,13 +344,13 @@ CREATE TABLE IF NOT EXISTS lots (
   closed_date  TEXT,
   notes        TEXT,
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(previous_lot_id) REFERENCES lots(id) ON DELETE SET NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS split_lot_allocations (
   split_id       INTEGER NOT NULL,
   lot_id         INTEGER NOT NULL,
@@ -339,6 +360,7 @@ CREATE TABLE IF NOT EXISTS split_lot_allocations (
   FOREIGN KEY(lot_id) REFERENCES lots(id) ON DELETE CASCADE
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS book_state (
   book_id     INTEGER PRIMARY KEY,
   change_seq  INTEGER NOT NULL DEFAULT 0,
@@ -346,6 +368,7 @@ CREATE TABLE IF NOT EXISTS book_state (
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS report_cache (
   id           INTEGER PRIMARY KEY,
   book_id      INTEGER NOT NULL,
@@ -362,6 +385,7 @@ CREATE TABLE IF NOT EXISTS report_cache (
 CREATE INDEX IF NOT EXISTS idx_report_cache_book_type ON report_cache(book_id, report_type);
 CREATE INDEX IF NOT EXISTS idx_report_cache_book_seq ON report_cache(book_id, as_of_seq);
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS corporate_actions (
   id              INTEGER PRIMARY KEY,
   previous_corporate_action_id INTEGER,
@@ -375,7 +399,6 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
   memo            TEXT,
   tx_id           INTEGER,
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_corporate_action_id) REFERENCES corporate_actions(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
@@ -385,6 +408,7 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
 CREATE INDEX IF NOT EXISTS idx_corporate_actions_book ON corporate_actions(book_id, effective_date);
 CREATE INDEX IF NOT EXISTS idx_corporate_actions_commodity ON corporate_actions(commodity_id, effective_date);
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS price_sources (
   id          INTEGER PRIMARY KEY,
   previous_price_source_id INTEGER,
@@ -394,10 +418,10 @@ CREATE TABLE IF NOT EXISTS price_sources (
   provider    TEXT,
   base_url    TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_price_source_id) REFERENCES price_sources(id) ON DELETE SET NULL
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS commodity_price_sources (
   id            INTEGER PRIMARY KEY,
   previous_commodity_price_source_id INTEGER,
@@ -408,7 +432,6 @@ CREATE TABLE IF NOT EXISTS commodity_price_sources (
   name_override TEXT,
   is_primary    INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_commodity_price_source_id) REFERENCES commodity_price_sources(id) ON DELETE SET NULL,
   FOREIGN KEY(commodity_id) REFERENCES commodities(id) ON DELETE CASCADE,
   FOREIGN KEY(source_id) REFERENCES price_sources(id) ON DELETE CASCADE
@@ -762,37 +785,34 @@ BEGIN
 END;
 
 -- Seed data
-INSERT OR IGNORE INTO books (id, name, kind, created_at, updated_at)
-VALUES (1, 'Personal', 'personal', (strftime('%Y-%m-%dT%H:%M:%fZ','now')), (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
+INSERT OR IGNORE INTO books (id, name, kind, created_at)
+VALUES (1, 'Personal', 'personal', (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
 
-INSERT OR IGNORE INTO commodities (book_id, kind, symbol, name, scale, created_at, updated_at)
+INSERT OR IGNORE INTO commodities (book_id, kind, symbol, name, scale, created_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
   'currency',
   'USD',
   'US Dollar',
   2,
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-INSERT OR IGNORE INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
+INSERT OR IGNORE INTO categories (book_id, parent_id, name, kind, created_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
   NULL,
   'Groceries',
   'expense',
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-INSERT OR IGNORE INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
+INSERT OR IGNORE INTO categories (book_id, parent_id, name, kind, created_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
   NULL,
   'Salary',
   'income',
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -805,6 +825,7 @@ VALUES (1, 'Manual', 'manual');
 -- Consolidated migrations V2-V17
 
 -- V2: account balancing and locking
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS account_balancings (
   id            INTEGER PRIMARY KEY,
   previous_account_balancing_id INTEGER,
@@ -815,7 +836,6 @@ CREATE TABLE IF NOT EXISTS account_balancings (
   balance_minor INTEGER NOT NULL,
   memo          TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   voided_at     TEXT,
   void_reason   TEXT,
   FOREIGN KEY(previous_account_balancing_id) REFERENCES account_balancings(id) ON DELETE SET NULL,
@@ -828,6 +848,7 @@ CREATE INDEX IF NOT EXISTS idx_account_balancings_account_date ON account_balanc
 CREATE INDEX IF NOT EXISTS idx_account_balancings_active ON account_balancings(account_id, voided_at);
 
 -- V3: dividend income categories
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS dividend_income_categories (
   id            INTEGER PRIMARY KEY,
   book_id       INTEGER NOT NULL,
@@ -848,6 +869,7 @@ CREATE INDEX IF NOT EXISTS idx_dividend_income_categories_category ON dividend_i
 
 -- V4: documents/events/notes/pad/balance checks
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS balance_checks (
   id            INTEGER PRIMARY KEY,
   book_id       INTEGER NOT NULL,
@@ -864,6 +886,7 @@ CREATE TABLE IF NOT EXISTS balance_checks (
 CREATE INDEX IF NOT EXISTS idx_balance_checks_account_date
   ON balance_checks(account_id, as_of_date);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS balance_adjustments (
   id                    INTEGER PRIMARY KEY,
   book_id               INTEGER NOT NULL,
@@ -891,6 +914,7 @@ CREATE INDEX IF NOT EXISTS idx_balance_adjustments_account_date
 CREATE INDEX IF NOT EXISTS idx_balance_adjustments_check
   ON balance_adjustments(balance_check_id);
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS notes (
   id          INTEGER PRIMARY KEY,
   previous_note_id INTEGER,
@@ -901,7 +925,6 @@ CREATE TABLE IF NOT EXISTS notes (
   note        TEXT NOT NULL,
   note_date   TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_note_id) REFERENCES notes(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL,
@@ -911,6 +934,7 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE INDEX IF NOT EXISTS idx_notes_account ON notes(account_id);
 CREATE INDEX IF NOT EXISTS idx_notes_tx ON notes(tx_id);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS events (
   id          INTEGER PRIMARY KEY,
   book_id     INTEGER NOT NULL,
@@ -930,6 +954,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_account_date
   ON events(account_id, event_date);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS documents (
   id          INTEGER PRIMARY KEY,
   book_id     INTEGER NOT NULL,
@@ -1034,6 +1059,7 @@ END;
 CREATE INDEX IF NOT EXISTS idx_accounts_booking_policy ON accounts(booking_policy);
 
 -- V6: balance constraints
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS balance_constraints (
   id                INTEGER PRIMARY KEY,
   book_id           INTEGER NOT NULL,
@@ -1066,6 +1092,7 @@ BEGIN
 END;
 
 -- V7/V8: import rules + sessions (fully expanded)
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS import_rules (
   id                 INTEGER PRIMARY KEY,
   previous_import_rule_id INTEGER,
@@ -1084,7 +1111,6 @@ CREATE TABLE IF NOT EXISTS import_rules (
   target_category_id INTEGER,
   target_payee_id    INTEGER,
   created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_import_rule_id) REFERENCES import_rules(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(match_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
@@ -1096,6 +1122,7 @@ CREATE TABLE IF NOT EXISTS import_rules (
 CREATE INDEX IF NOT EXISTS idx_import_rules_book_kind ON import_rules(book_id, rule_kind);
 CREATE INDEX IF NOT EXISTS idx_import_rules_priority ON import_rules(priority, id);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS import_sessions (
   id         INTEGER PRIMARY KEY,
   book_id    INTEGER NOT NULL,
@@ -1110,6 +1137,7 @@ CREATE TABLE IF NOT EXISTS import_sessions (
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS import_session_transactions (
   id          INTEGER PRIMARY KEY,
   session_id  INTEGER NOT NULL,
@@ -1187,6 +1215,7 @@ BEGIN
 END;
 
 -- V9: reporting
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS report_definitions (
   id            INTEGER PRIMARY KEY,
   previous_report_definition_id INTEGER,
@@ -1198,7 +1227,6 @@ CREATE TABLE IF NOT EXISTS report_definitions (
   query_text    TEXT NOT NULL,
   params_schema TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_report_definition_id) REFERENCES report_definitions(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
 );
@@ -1206,6 +1234,7 @@ CREATE TABLE IF NOT EXISTS report_definitions (
 CREATE INDEX IF NOT EXISTS idx_report_definitions_book ON report_definitions(book_id);
 CREATE INDEX IF NOT EXISTS idx_report_definitions_kind ON report_definitions(book_id, kind);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS report_runs (
   id             INTEGER PRIMARY KEY,
   book_id        INTEGER NOT NULL,
@@ -1223,6 +1252,7 @@ CREATE INDEX IF NOT EXISTS idx_report_runs_book_def ON report_runs(book_id, defi
 CREATE INDEX IF NOT EXISTS idx_report_runs_book_seq ON report_runs(book_id, as_of_seq);
 
 -- V10: institutions + countries
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS countries (
   id         INTEGER PRIMARY KEY,
   previous_country_id INTEGER,
@@ -1232,12 +1262,12 @@ CREATE TABLE IF NOT EXISTS countries (
   name       TEXT NOT NULL,
   default_currency_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_country_id) REFERENCES countries(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(default_currency_id) REFERENCES currencies(id)
 );
 
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS institutions (
   id         INTEGER PRIMARY KEY,
   previous_institution_id INTEGER,
@@ -1247,29 +1277,26 @@ CREATE TABLE IF NOT EXISTS institutions (
   kind       TEXT NOT NULL DEFAULT 'other' CHECK (kind IN ('bank','broker','credit_union','other')),
   country_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_institution_id) REFERENCES institutions(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   FOREIGN KEY(country_id) REFERENCES countries(id) ON DELETE SET NULL
 );
 
-INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
+INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
   'cash',
   'Cash',
   (SELECT id FROM commodities WHERE book_id = (SELECT id FROM books WHERE name='Personal') AND symbol = 'USD'),
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at, updated_at)
+INSERT OR IGNORE INTO accounts (book_id, type, name, commodity_id, created_at)
 VALUES (
   (SELECT id FROM books WHERE name='Personal'),
   'checking',
   'Checking Account',
   (SELECT id FROM commodities WHERE book_id = (SELECT id FROM books WHERE name='Personal') AND symbol = 'USD'),
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -1309,7 +1336,7 @@ BEGIN
 END;
 
 INSERT OR IGNORE INTO accounts (
-  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at, updated_at
+  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at
 )
 VALUES (
   1,
@@ -1319,12 +1346,11 @@ VALUES (
   1,
   1,
   'income_summary',
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 INSERT OR IGNORE INTO accounts (
-  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at, updated_at
+  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at
 )
 VALUES (
   1,
@@ -1334,12 +1360,11 @@ VALUES (
   1,
   1,
   'expense_summary',
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 INSERT OR IGNORE INTO accounts (
-  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at, updated_at
+  book_id, type, name, commodity_id, is_hidden, is_system, system_role, created_at
 )
 VALUES (
   1,
@@ -1349,7 +1374,6 @@ VALUES (
   1,
   1,
   'retained_earnings',
-  (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -1360,6 +1384,7 @@ CREATE INDEX IF NOT EXISTS idx_accounts_country ON accounts(country_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_book_hidden ON accounts(book_id, is_hidden);
 
 -- V11: currencies seed
+-- mutability: immutable rows (append-only enforced)
 CREATE TABLE IF NOT EXISTS currencies (
   id         INTEGER PRIMARY KEY,
   previous_currency_id INTEGER,
@@ -1369,7 +1394,6 @@ CREATE TABLE IF NOT EXISTS currencies (
   name       TEXT NOT NULL,
   symbol     TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY(previous_currency_id) REFERENCES currencies(id) ON DELETE SET NULL,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
 );
@@ -1791,6 +1815,7 @@ INSERT OR IGNORE INTO countries (book_id, code, name, default_currency_id) VALUE
   (1, 'ZW', 'Zimbabwe', (SELECT id FROM currencies WHERE code='ZWL' AND book_id=1));
 
 -- V12: backup settings
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS backup_settings (
   book_id          INTEGER PRIMARY KEY,
   enabled          INTEGER NOT NULL DEFAULT 0,
@@ -1808,6 +1833,7 @@ INSERT OR IGNORE INTO backup_settings (book_id) VALUES (1);
 -- V13: currency management and FX rates
 CREATE INDEX IF NOT EXISTS idx_commodities_active ON commodities(book_id, kind, is_active);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS fx_rates_daily (
   id                 INTEGER PRIMARY KEY,
   book_id            INTEGER NOT NULL,
@@ -1831,6 +1857,7 @@ CREATE TABLE IF NOT EXISTS fx_rates_daily (
 CREATE INDEX IF NOT EXISTS idx_fx_daily_book_date ON fx_rates_daily(book_id, rate_date);
 CREATE INDEX IF NOT EXISTS idx_fx_daily_currencies ON fx_rates_daily(from_currency_id, to_currency_id);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS fx_rates_official (
   id                 INTEGER PRIMARY KEY,
   book_id            INTEGER NOT NULL,
@@ -1856,6 +1883,7 @@ CREATE INDEX IF NOT EXISTS idx_fx_official_book ON fx_rates_official(book_id);
 CREATE INDEX IF NOT EXISTS idx_fx_official_period ON fx_rates_official(period_type, period_year, period_month);
 CREATE INDEX IF NOT EXISTS idx_fx_official_currencies ON fx_rates_official(from_currency_id, to_currency_id);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS fx_rate_sources (
   id           INTEGER PRIMARY KEY,
   book_id      INTEGER NOT NULL,
@@ -1883,37 +1911,37 @@ UPDATE commodities
 SET is_default = 1
 WHERE book_id = 1 AND symbol = 'USD' AND kind = 'currency';
 
-INSERT OR IGNORE INTO commodities (book_id, kind, symbol, name, scale, is_active, is_default, created_at, updated_at) VALUES
-  (1, 'currency', 'EUR', 'Euro', 2, 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'GBP', 'British Pound Sterling', 2, 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'JPY', 'Japanese Yen', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'CHF', 'Swiss Franc', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'CAD', 'Canadian Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'AUD', 'Australian Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'CNY', 'Chinese Yuan', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'INR', 'Indian Rupee', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'MXN', 'Mexican Peso', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'BRL', 'Brazilian Real', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'KRW', 'South Korean Won', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'SGD', 'Singapore Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'HKD', 'Hong Kong Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'NOK', 'Norwegian Krone', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'SEK', 'Swedish Krona', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'DKK', 'Danish Krone', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'NZD', 'New Zealand Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'ZAR', 'South African Rand', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'RUB', 'Russian Ruble', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'PLN', 'Polish Zloty', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'TRY', 'Turkish Lira', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'THB', 'Thai Baht', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'IDR', 'Indonesian Rupiah', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'MYR', 'Malaysian Ringgit', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'PHP', 'Philippine Peso', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'CZK', 'Czech Koruna', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'ILS', 'Israeli New Shekel', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'AED', 'UAE Dirham', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'SAR', 'Saudi Riyal', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  (1, 'currency', 'TWD', 'Taiwan Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT OR IGNORE INTO commodities (book_id, kind, symbol, name, scale, is_active, is_default, created_at) VALUES
+  (1, 'currency', 'EUR', 'Euro', 2, 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'GBP', 'British Pound Sterling', 2, 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'JPY', 'Japanese Yen', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CHF', 'Swiss Franc', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CAD', 'Canadian Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'AUD', 'Australian Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CNY', 'Chinese Yuan', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'INR', 'Indian Rupee', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'MXN', 'Mexican Peso', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'BRL', 'Brazilian Real', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'KRW', 'South Korean Won', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'SGD', 'Singapore Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'HKD', 'Hong Kong Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'NOK', 'Norwegian Krone', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'SEK', 'Swedish Krona', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'DKK', 'Danish Krone', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'NZD', 'New Zealand Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'ZAR', 'South African Rand', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'RUB', 'Russian Ruble', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'PLN', 'Polish Zloty', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'TRY', 'Turkish Lira', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'THB', 'Thai Baht', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'IDR', 'Indonesian Rupiah', 0, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'MYR', 'Malaysian Ringgit', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'PHP', 'Philippine Peso', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'CZK', 'Czech Koruna', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'ILS', 'Israeli New Shekel', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'AED', 'UAE Dirham', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'SAR', 'Saudi Riyal', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (1, 'currency', 'TWD', 'Taiwan Dollar', 2, 0, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 UPDATE commodities SET is_active = 1 WHERE book_id = 1 AND symbol = 'USD' AND kind = 'currency';
 
@@ -1951,6 +1979,7 @@ UPDATE commodities SET display_symbol = '﷼' WHERE symbol = 'SAR' AND kind = 'c
 UPDATE commodities SET display_symbol = 'NT$' WHERE symbol = 'TWD' AND kind = 'currency';
 
 -- V15: FX rate refresh settings
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS fx_rate_settings (
   book_id            INTEGER PRIMARY KEY,
   base_currency_id   INTEGER NOT NULL,
@@ -1967,6 +1996,7 @@ CREATE TABLE IF NOT EXISTS fx_rate_settings (
   FOREIGN KEY(default_source_id) REFERENCES fx_rate_sources(id) ON DELETE SET NULL
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS fx_rate_source_assignments (
   id               INTEGER PRIMARY KEY,
   book_id          INTEGER NOT NULL,
@@ -1987,6 +2017,7 @@ CREATE TABLE IF NOT EXISTS fx_rate_source_assignments (
 CREATE INDEX IF NOT EXISTS idx_fx_assignments_effective
   ON fx_rate_source_assignments(book_id, from_currency_id, to_currency_id, effective_from, effective_to);
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS fx_rate_refresh_state (
   id               INTEGER PRIMARY KEY,
   book_id          INTEGER NOT NULL,
@@ -2030,7 +2061,7 @@ CREATE INDEX IF NOT EXISTS idx_fx_daily_derived_via ON fx_rates_daily(derived_vi
 
 -- V17: commodities/currency sync
 INSERT OR IGNORE INTO commodities
-  (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, created_at, updated_at)
+  (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, created_at)
 SELECT
   c.book_id,
   'currency',
@@ -2040,26 +2071,27 @@ SELECT
   2,
   CASE WHEN c.code IN ('USD', 'EUR', 'GBP') THEN 1 ELSE 0 END,
   CASE WHEN c.code = 'USD' THEN 1 ELSE 0 END,
-  strftime('%Y-%m-%dT%H:%M:%fZ','now'),
   strftime('%Y-%m-%dT%H:%M:%fZ','now')
 FROM currencies c
 WHERE c.book_id = 1;
 
 UPDATE commodities
-SET is_active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+SET is_active = 1
 WHERE book_id = 1 AND kind = 'currency' AND symbol IN ('USD', 'EUR', 'GBP');
 
 UPDATE commodities
-SET is_default = 1, is_active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+SET is_default = 1, is_active = 1
 WHERE book_id = 1 AND kind = 'currency' AND symbol = 'USD'
   AND NOT EXISTS (SELECT 1 FROM commodities WHERE book_id = 1 AND kind = 'currency' AND is_default = 1);
 
 -- Append-only runtime/session metadata
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS app_runtime_session (
   id         TEXT PRIMARY KEY,
   started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS session_undo_stack (
   seq        INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id TEXT NOT NULL,
@@ -2068,6 +2100,7 @@ CREATE TABLE IF NOT EXISTS session_undo_stack (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS session_redo_stack (
   seq        INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id TEXT NOT NULL,
@@ -2076,6 +2109,7 @@ CREATE TABLE IF NOT EXISTS session_redo_stack (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- mutability: mutable rows
 CREATE TABLE IF NOT EXISTS session_reverts (
   session_id  TEXT NOT NULL,
   table_name  TEXT NOT NULL,

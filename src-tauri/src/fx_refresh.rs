@@ -591,9 +591,9 @@ mod tests {
 
         conn.execute(
             "INSERT INTO commodities
-              (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at, updated_at)
+                            (book_id, kind, symbol, display_symbol, name, scale, is_active, is_default, previous_commodity_id, created_at)
              SELECT book_id, kind, symbol, display_symbol, name, scale, 1, is_default, id,
-                    strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                                        strftime('%Y-%m-%dT%H:%M:%fZ','now')
              FROM commodities WHERE id = ?1",
             [eur_id],
         )

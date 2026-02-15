@@ -14,16 +14,18 @@ pub struct Transaction {
     pub id: i64,
     pub book_id: i64,
     pub previous_tx_id: Option<i64>,
-    pub txn_date: String,
-    pub happened_at_utc: String,
+    pub occurred_date: String,
+    pub occurred_at_utc: Option<String>,
+    pub occurred_tz: Option<String>,
+    pub posted_date: String,
     pub posted_at_utc: Option<String>,
+    pub posted_tz: Option<String>,
     pub payee_id: Option<i64>,
     pub memo: Option<String>,
     pub status: String,
     pub reference: Option<String>,
     pub import_id: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -40,7 +42,6 @@ pub struct Split {
     pub share_bps: Option<i64>,
     pub memo: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -65,9 +66,12 @@ pub struct CreateSplit {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateTransactionInput {
     pub book_id: i64,
-    pub txn_date: String,
-    pub happened_at_utc: Option<String>,
+    pub occurred_date: String,
+    pub occurred_at_utc: Option<String>,
+    pub occurred_tz: Option<String>,
+    pub posted_date: Option<String>,
     pub posted_at_utc: Option<String>,
+    pub posted_tz: Option<String>,
     pub payee_id: Option<i64>,
     pub memo: Option<String>,
     pub status: Option<String>,
@@ -80,9 +84,12 @@ pub struct CreateTransactionInput {
 pub struct UpdateTransactionInput {
     pub id: i64,
     pub book_id: i64,
-    pub txn_date: String,
-    pub happened_at_utc: Option<String>,
+    pub occurred_date: String,
+    pub occurred_at_utc: Option<String>,
+    pub occurred_tz: Option<String>,
+    pub posted_date: Option<String>,
     pub posted_at_utc: Option<String>,
+    pub posted_tz: Option<String>,
     pub payee_id: Option<i64>,
     pub memo: Option<String>,
     pub status: Option<String>,
@@ -106,7 +113,7 @@ pub struct ListTransactionsFilter {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RegisterEntry {
     pub tx_id: i64,
-    pub txn_date: String,
+    pub occurred_date: String,
     pub payee_id: Option<i64>,
     pub payee_name: Option<String>,
     pub memo: Option<String>,
@@ -123,7 +130,7 @@ pub struct RegisterEntry {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RegisterEntryWithBalance {
     pub tx_id: i64,
-    pub txn_date: String,
+    pub occurred_date: String,
     pub payee_id: Option<i64>,
     pub payee_name: Option<String>,
     pub memo: Option<String>,
@@ -141,7 +148,7 @@ pub struct RegisterEntryWithBalance {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PostingEntry {
     pub tx_id: i64,
-    pub txn_date: String,
+    pub occurred_date: String,
     pub payee_id: Option<i64>,
     pub payee_name: Option<String>,
     pub memo: Option<String>,
@@ -159,16 +166,18 @@ fn map_transaction_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Transaction>
         id: row.get(0)?,
         book_id: row.get(1)?,
         previous_tx_id: row.get(2)?,
-        txn_date: row.get(3)?,
-        happened_at_utc: row.get(4)?,
-        posted_at_utc: row.get(5)?,
-        payee_id: row.get(6)?,
-        memo: row.get(7)?,
-        status: row.get(8)?,
-        reference: row.get(9)?,
-        import_id: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        occurred_date: row.get(3)?,
+        occurred_at_utc: row.get(4)?,
+        occurred_tz: row.get(5)?,
+        posted_date: row.get(6)?,
+        posted_at_utc: row.get(7)?,
+        posted_tz: row.get(8)?,
+        payee_id: row.get(9)?,
+        memo: row.get(10)?,
+        status: row.get(11)?,
+        reference: row.get(12)?,
+        import_id: row.get(13)?,
+        created_at: row.get(14)?,
     })
 }
 
@@ -186,14 +195,13 @@ fn map_split_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Split> {
         share_bps: row.get(9)?,
         memo: row.get(10)?,
         created_at: row.get(11)?,
-        updated_at: row.get(12)?,
     })
 }
 
 fn map_register_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegisterEntry> {
     Ok(RegisterEntry {
         tx_id: row.get(0)?,
-        txn_date: row.get(1)?,
+        occurred_date: row.get(1)?,
         payee_id: row.get(2)?,
         payee_name: row.get(3)?,
         memo: row.get(4)?,
@@ -211,7 +219,7 @@ fn map_register_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegisterEntry> 
 fn map_register_balance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegisterEntryWithBalance> {
     Ok(RegisterEntryWithBalance {
         tx_id: row.get(0)?,
-        txn_date: row.get(1)?,
+        occurred_date: row.get(1)?,
         payee_id: row.get(2)?,
         payee_name: row.get(3)?,
         memo: row.get(4)?,
@@ -230,7 +238,7 @@ fn map_register_balance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Registe
 fn map_posting_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PostingEntry> {
     Ok(PostingEntry {
         tx_id: row.get(0)?,
-        txn_date: row.get(1)?,
+        occurred_date: row.get(1)?,
         payee_id: row.get(2)?,
         payee_name: row.get(3)?,
         memo: row.get(4)?,
@@ -244,31 +252,33 @@ fn map_posting_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PostingEntry> {
     })
 }
 
-fn ensure_txn_date_format(txn_date: &str) -> Result<(), String> {
-    NaiveDate::parse_from_str(txn_date.trim(), "%Y-%m-%d")
+fn ensure_occurred_date_format(occurred_date: &str) -> Result<(), String> {
+    NaiveDate::parse_from_str(occurred_date.trim(), "%Y-%m-%d")
         .map(|_| ())
-        .map_err(|_| "txn_date must be in YYYY-MM-DD format".to_string())
+        .map_err(|_| "occurred_date must be in YYYY-MM-DD format".to_string())
 }
 
-fn normalize_date_or_utc_timestamp(value: &str, field_name: &str) -> Result<String, String> {
+fn ensure_posted_date_format(posted_date: &str) -> Result<(), String> {
+    NaiveDate::parse_from_str(posted_date.trim(), "%Y-%m-%d")
+        .map(|_| ())
+        .map_err(|_| "posted_date must be in YYYY-MM-DD format".to_string())
+}
+
+fn normalize_utc_timestamp(value: &str, field_name: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(format!("{field_name} cannot be empty"));
     }
 
-    if NaiveDate::parse_from_str(trimmed, "%Y-%m-%d").is_ok() {
-        return Ok(trimmed.to_string());
-    }
-
     let parsed = DateTime::parse_from_rfc3339(trimmed)
-        .map_err(|_| format!("{field_name} must be YYYY-MM-DD or a valid ISO-8601 UTC timestamp"))?;
+        .map_err(|_| format!("{field_name} must be a valid ISO-8601 UTC timestamp"))?;
     Ok(parsed
         .with_timezone(&Utc)
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string())
 }
 
-fn normalize_optional_date_or_utc_timestamp(
+fn normalize_optional_utc_timestamp(
     value: Option<&str>,
     field_name: &str,
 ) -> Result<Option<String>, String> {
@@ -277,20 +287,24 @@ fn normalize_optional_date_or_utc_timestamp(
         if trimmed.is_empty() {
             return Ok(None);
         }
-        return normalize_date_or_utc_timestamp(trimmed, field_name).map(Some);
+        return normalize_utc_timestamp(trimmed, field_name).map(Some);
     }
     Ok(None)
 }
 
-fn effective_happened_at_utc(txn_date: &str, happened_at_utc: Option<&str>) -> Result<String, String> {
-    ensure_txn_date_format(txn_date)?;
-    if let Some(value) = happened_at_utc {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return normalize_date_or_utc_timestamp(trimmed, "happened_at_utc");
-        }
+fn resolve_tz(
+    value: Option<&str>,
+    field_name: &str,
+    required_when_timestamp: bool,
+) -> Result<Option<String>, String> {
+    let normalized = value
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string());
+    if required_when_timestamp && normalized.is_none() {
+        return Err(format!("{field_name} is required when timestamp is set"));
     }
-    Ok(txn_date.to_string())
+    Ok(normalized)
 }
 
 fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
@@ -340,7 +354,7 @@ pub fn list_account_register(
         .prepare(
             "SELECT
                 t.id,
-                t.txn_date,
+                t.occurred_date,
                 t.payee_id,
                 p.name,
                 t.memo,
@@ -366,7 +380,7 @@ pub fn list_account_register(
                                      AND sr.row_id = t.id
                                      AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
                              )
-             ORDER BY t.txn_date DESC, t.id DESC, s.id ASC
+             ORDER BY t.occurred_date DESC, COALESCE(t.occurred_at_utc, t.posted_at_utc) DESC, t.id DESC, s.id ASC
              LIMIT ?2 OFFSET ?3",
         )
         .map_err(|e| e.to_string())?;
@@ -401,7 +415,7 @@ pub fn list_account_register_with_balance(
             "WITH base AS (
                 SELECT
                     t.id AS tx_id,
-                    t.txn_date,
+                    t.occurred_date,
                     t.payee_id,
                     p.name AS payee_name,
                     t.memo,
@@ -414,7 +428,7 @@ pub fn list_account_register_with_balance(
                     s.category_id,
                     c.name AS category_name,
                     SUM(s.amount_minor) OVER (
-                        ORDER BY t.txn_date ASC, t.id ASC, s.id ASC
+                        ORDER BY t.occurred_date ASC, COALESCE(t.occurred_at_utc, t.posted_at_utc) ASC, t.id ASC, s.id ASC
                     ) AS running_balance_minor
                 FROM splits s
                 JOIN transactions t ON t.id = s.tx_id
@@ -433,7 +447,7 @@ pub fn list_account_register_with_balance(
             )
             SELECT
                 tx_id,
-                txn_date,
+                occurred_date,
                 payee_id,
                 payee_name,
                 memo,
@@ -447,7 +461,7 @@ pub fn list_account_register_with_balance(
                 category_name,
                 running_balance_minor
             FROM base
-            ORDER BY txn_date DESC, tx_id DESC, split_id ASC
+            ORDER BY occurred_date DESC, tx_id DESC, split_id ASC
             LIMIT ?2 OFFSET ?3",
         )
         .map_err(|e| e.to_string())?;
@@ -482,7 +496,7 @@ pub fn list_postings(
     let mut sql = String::from(
         "SELECT
             t.id,
-            t.txn_date,
+            t.occurred_date,
             t.payee_id,
             p.name,
             t.memo,
@@ -510,15 +524,15 @@ pub fn list_postings(
     let mut params: Vec<Value> = vec![Value::from(account_id)];
 
     if let Some(date_from) = date_from {
-        sql.push_str(" AND t.txn_date >= ?");
+        sql.push_str(" AND t.occurred_date >= ?");
         params.push(Value::from(date_from));
     }
     if let Some(date_to) = date_to {
-        sql.push_str(" AND t.txn_date <= ?");
+        sql.push_str(" AND t.occurred_date <= ?");
         params.push(Value::from(date_to));
     }
 
-    sql.push_str(" ORDER BY t.txn_date DESC, t.id DESC, s.id ASC LIMIT ? OFFSET ?");
+    sql.push_str(" ORDER BY t.occurred_date DESC, COALESCE(t.occurred_at_utc, t.posted_at_utc) DESC, t.id DESC, s.id ASC LIMIT ? OFFSET ?");
     params.push(Value::from(limit));
     params.push(Value::from(offset));
 
@@ -541,8 +555,8 @@ fn fetch_transaction_with_splits(
 ) -> Result<TransactionWithSplits, String> {
     let transaction = conn
         .query_row(
-                        "SELECT id, book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-                                        payee_id, memo, status, reference, import_id, created_at, updated_at
+                        "SELECT id, book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+                                        payee_id, memo, status, reference, import_id, created_at
                          FROM transactions
                          WHERE id = ?1
                              AND NOT EXISTS (
@@ -558,7 +572,7 @@ fn fetch_transaction_with_splits(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at, updated_at
+            "SELECT id, tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at
              FROM splits WHERE tx_id = ?1 ORDER BY id ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -577,7 +591,7 @@ fn fetch_transaction_with_splits(
 
 fn check_account_locks(
     conn: &rusqlite::Connection,
-    txn_date: &str,
+    occurred_date: &str,
     account_ids: &HashSet<i64>,
 ) -> Result<(), String> {
     let mut locked = Vec::new();
@@ -594,7 +608,7 @@ fn check_account_locks(
                        WHERE newer.previous_account_balancing_id = ab.id
                    )
                  ORDER BY as_of_date ASC LIMIT 1",
-                params![account_id, txn_date],
+                params![account_id, occurred_date],
                 |row| row.get(0),
             )
             .optional()
@@ -613,7 +627,7 @@ fn check_account_locks(
             .join(", ");
         return Err(format!(
             "cannot post transaction dated {} to locked accounts: {}",
-            txn_date, details
+            occurred_date, details
         ));
     }
 
@@ -645,27 +659,57 @@ pub fn create_transaction_with_splits(
     for split in &input.splits {
         accounts.insert(split.account_id);
     }
-    check_account_locks(&tx, &input.txn_date, &accounts)?;
+    check_account_locks(&tx, &input.occurred_date, &accounts)?;
 
-    ensure_txn_date_format(&input.txn_date)?;
+    ensure_occurred_date_format(&input.occurred_date)?;
     let status = input.status.unwrap_or_else(|| "uncleared".to_string());
-    let happened_at_utc = effective_happened_at_utc(&input.txn_date, input.happened_at_utc.as_deref())?;
-    let posted_at_utc = normalize_optional_date_or_utc_timestamp(input.posted_at_utc.as_deref(), "posted_at_utc")?;
+    let occurred_at_utc = normalize_optional_utc_timestamp(input.occurred_at_utc.as_deref(), "occurred_at_utc")?;
+    let occurred_tz = match occurred_at_utc.as_ref() {
+        Some(_) => {
+            let tz = input
+                .occurred_tz
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| "occurred_tz is required when occurred_at_utc is set".to_string())?;
+            Some(tz.to_string())
+        }
+        None => input
+            .occurred_tz
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string()),
+    };
+    let posted_at_utc = normalize_optional_utc_timestamp(input.posted_at_utc.as_deref(), "posted_at_utc")?;
+    let posted_tz = resolve_tz(input.posted_tz.as_deref(), "posted_tz", posted_at_utc.is_some())?;
+    let posted_date = input
+        .posted_date
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string())
+        .or_else(|| posted_at_utc.as_ref().and_then(|value| value.get(0..10).map(|v| v.to_string())))
+        .unwrap_or_else(|| input.occurred_date.clone());
+    ensure_posted_date_format(&posted_date)?;
 
     tx.execute(
         "INSERT INTO transactions (
-                book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-                payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+                book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+              payee_id, memo, status, reference, import_id, session_id, created_at
          )
          VALUES (
-                ?1, NULL, ?2, ?3, ?4,
-                ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7,
+              ?8, ?9, ?10, ?11, ?12, ?13, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
-            input.txn_date,
-            happened_at_utc,
+            input.occurred_date,
+            occurred_at_utc,
+            occurred_tz,
+            posted_date,
             posted_at_utc,
+            posted_tz,
             input.payee_id,
             input.memo,
             status,
@@ -682,8 +726,8 @@ pub fn create_transaction_with_splits(
 
     for split in &input.splits {
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 tx_id,
                 split.account_id,
@@ -770,12 +814,12 @@ pub fn list_transactions(
     }
 
     if let Some(date_from) = filter.date_from {
-        sql.push_str(" AND t.txn_date >= ?");
+        sql.push_str(" AND t.occurred_date >= ?");
         params.push(Value::from(date_from));
     }
 
     if let Some(date_to) = filter.date_to {
-        sql.push_str(" AND t.txn_date <= ?");
+        sql.push_str(" AND t.occurred_date <= ?");
         params.push(Value::from(date_to));
     }
 
@@ -787,7 +831,7 @@ pub fn list_transactions(
         params.push(Value::from(like));
     }
 
-    sql.push_str(" ORDER BY t.txn_date DESC, t.id DESC LIMIT ? OFFSET ?");
+    sql.push_str(" ORDER BY t.occurred_date DESC, COALESCE(t.occurred_at_utc, t.posted_at_utc) DESC, t.id DESC LIMIT ? OFFSET ?");
     params.push(Value::from(limit));
     params.push(Value::from(offset));
 
@@ -855,28 +899,58 @@ pub fn update_transaction_with_splits(
     for split in &input.splits {
         accounts.insert(split.account_id);
     }
-    check_account_locks(&tx, &input.txn_date, &accounts)?;
+    check_account_locks(&tx, &input.occurred_date, &accounts)?;
 
-    ensure_txn_date_format(&input.txn_date)?;
+    ensure_occurred_date_format(&input.occurred_date)?;
     let status = input.status.unwrap_or_else(|| "uncleared".to_string());
-    let happened_at_utc = effective_happened_at_utc(&input.txn_date, input.happened_at_utc.as_deref())?;
-    let posted_at_utc = normalize_optional_date_or_utc_timestamp(input.posted_at_utc.as_deref(), "posted_at_utc")?;
+    let occurred_at_utc = normalize_optional_utc_timestamp(input.occurred_at_utc.as_deref(), "occurred_at_utc")?;
+    let occurred_tz = match occurred_at_utc.as_ref() {
+        Some(_) => {
+            let tz = input
+                .occurred_tz
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| "occurred_tz is required when occurred_at_utc is set".to_string())?;
+            Some(tz.to_string())
+        }
+        None => input
+            .occurred_tz
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string()),
+    };
+    let posted_at_utc = normalize_optional_utc_timestamp(input.posted_at_utc.as_deref(), "posted_at_utc")?;
+    let posted_tz = resolve_tz(input.posted_tz.as_deref(), "posted_tz", posted_at_utc.is_some())?;
+    let posted_date = input
+        .posted_date
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string())
+        .or_else(|| posted_at_utc.as_ref().and_then(|value| value.get(0..10).map(|v| v.to_string())))
+        .unwrap_or_else(|| input.occurred_date.clone());
+    ensure_posted_date_format(&posted_date)?;
 
     tx.execute(
         "INSERT INTO transactions (
-                book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-                payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+                book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+              payee_id, memo, status, reference, import_id, session_id, created_at
          )
          VALUES (
-                ?1, ?2, ?3, ?4, ?5,
-                ?6, ?7, ?8, ?9, ?10, ?11, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+              ?9, ?10, ?11, ?12, ?13, ?14, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
             input.id,
-            input.txn_date,
-            happened_at_utc,
+            input.occurred_date,
+            occurred_at_utc,
+            occurred_tz,
+            posted_date,
             posted_at_utc,
+            posted_tz,
             input.payee_id,
             input.memo,
             status,
@@ -893,8 +967,8 @@ pub fn update_transaction_with_splits(
 
     for split in &input.splits {
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 new_tx_id,
                 split.account_id,
@@ -922,9 +996,9 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let session_id = current_session_id(&tx)?;
 
-    let txn_date: Option<String> = tx
+    let occurred_date: Option<String> = tx
         .query_row(
-                        "SELECT txn_date
+                        "SELECT occurred_date
                          FROM transactions
                          WHERE id = ?1
                              AND status != 'void'
@@ -941,7 +1015,7 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
         .optional()
         .map_err(|e| e.to_string())?;
 
-    let txn_date = match txn_date {
+    let occurred_date = match occurred_date {
         Some(date) => date,
         None => return Ok(false),
     };
@@ -958,18 +1032,21 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
         accounts.insert(row.map_err(|e| e.to_string())?);
     }
     drop(stmt);
-    check_account_locks(&tx, &txn_date, &accounts)?;
+    check_account_locks(&tx, &occurred_date, &accounts)?;
 
-    let (payee_id, memo, reference, import_id, happened_at_utc, posted_at_utc): (
+    let (payee_id, memo, reference, import_id, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz): (
         Option<i64>,
+        Option<String>,
+        Option<String>,
         Option<String>,
         Option<String>,
         Option<String>,
         String,
         Option<String>,
+        Option<String>,
     ) = tx
         .query_row(
-            "SELECT payee_id, memo, reference, import_id, happened_at_utc, posted_at_utc
+            "SELECT payee_id, memo, reference, import_id, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz
              FROM transactions WHERE id = ?1",
             [id],
             |row| {
@@ -980,6 +1057,9 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
                     row.get(3)?,
                     row.get(4)?,
                     row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
                 ))
             },
         )
@@ -987,19 +1067,22 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
 
     tx.execute(
         "INSERT INTO transactions (
-            book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-            payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+            book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+                payee_id, memo, status, reference, import_id, session_id, created_at
          )
          VALUES (
-            ?1, ?2, ?3, ?4, ?5,
-            ?6, ?7, 'void', ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                ?9, ?10, 'void', ?11, ?12, ?13, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             SINGLE_BOOK_ID,
             id,
-            txn_date,
-            happened_at_utc,
+            occurred_date,
+            occurred_at_utc,
+            occurred_tz,
+            posted_date,
             posted_at_utc,
+            posted_tz,
             payee_id,
             memo,
             reference,
@@ -1184,9 +1267,12 @@ mod tests {
             as_state(&db_state),
             CreateTransactionInput {
                 book_id: 1,
-                txn_date: "2024-02-01".to_string(),
-                happened_at_utc: None,
+                occurred_date: "2024-02-01".to_string(),
+                occurred_at_utc: None,
+                occurred_tz: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 payee_id: None,
                 memo: Some("Groceries".to_string()),
                 status: Some("cleared".to_string()),
@@ -1220,7 +1306,7 @@ mod tests {
         )
         .expect("create transaction");
         assert_eq!(created.splits.len(), 2);
-        assert_eq!(created.transaction.happened_at_utc, "2024-02-01");
+        assert_eq!(created.transaction.occurred_at_utc, None);
 
         let register = list_account_register_with_balance(
             as_state(&db_state),
@@ -1237,9 +1323,12 @@ mod tests {
             UpdateTransactionInput {
                 id: created.transaction.id,
                 book_id: 1,
-                txn_date: "2024-02-01".to_string(),
-                happened_at_utc: None,
+                occurred_date: "2024-02-01".to_string(),
+                occurred_at_utc: None,
+                occurred_tz: None,
+                posted_date: None,
                 posted_at_utc: None,
+                posted_tz: None,
                 payee_id: None,
                 memo: Some("Groceries updated".to_string()),
                 status: Some("cleared".to_string()),
@@ -1288,12 +1377,7 @@ mod tests {
     #[test]
     fn test_normalize_date_or_utc_timestamp() {
         assert_eq!(
-            normalize_date_or_utc_timestamp("2024-02-01", "happened_at_utc").expect("date value"),
-            "2024-02-01"
-        );
-
-        assert_eq!(
-            normalize_date_or_utc_timestamp("2024-02-01T10:00:00+02:00", "posted_at_utc")
+            normalize_utc_timestamp("2024-02-01T10:00:00+02:00", "posted_at_utc")
                 .expect("timestamp value"),
             "2024-02-01T08:00:00.000Z"
         );
@@ -1352,8 +1436,8 @@ pub fn ensure_currency_trading_balances(
 
             let trading_account_id = if trading_account_id == 0 {
                 tx.execute(
-                    "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, is_closed, created_at, updated_at)
-                     VALUES (?1, NULL, 'equity', 'Currency Trading', ?2, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, is_closed, created_at)
+                     VALUES (?1, NULL, 'equity', 'Currency Trading', ?2, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                     params![book_id, commodity_id],
                 )
                 .map_err(|e| e.to_string())?;
@@ -1363,8 +1447,8 @@ pub fn ensure_currency_trading_balances(
             };
 
             tx.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx_id, trading_account_id, commodity_id, -net_amount],
             )
             .map_err(|e| e.to_string())?;

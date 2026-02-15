@@ -316,8 +316,8 @@ mod tests {
 
         let category_name = format!("Test Category {initial_seq}");
         conn.execute(
-            "INSERT INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
-             VALUES (?1, NULL, ?2, 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO categories (book_id, parent_id, name, kind, created_at)
+             VALUES (?1, NULL, ?2, 'expense', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![book_id, category_name],
         )
         .expect("insert category");

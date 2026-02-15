@@ -8,6 +8,7 @@ use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
 const BALANCING_TX_MARK: &str = "balance_adjustment";
+const VOID_SESSION_PREFIX: &str = "void:";
 
 fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
     conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
@@ -77,7 +78,6 @@ pub struct Account {
     pub is_system: bool,
     pub system_role: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -140,7 +140,6 @@ pub struct Country {
     pub currency_name: Option<String>,
     pub currency_symbol: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -169,7 +168,6 @@ pub struct Institution {
     pub country_id: Option<i64>,
     pub country_name: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -199,7 +197,6 @@ pub struct Category {
     pub kind: String,
     pub color: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -230,7 +227,6 @@ pub struct Payee {
     pub kind: String,
     pub metadata: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -258,7 +254,6 @@ pub struct Tag {
     pub name: String,
     pub color: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -285,7 +280,6 @@ pub struct Person {
     pub role: String,
     pub metadata: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -305,7 +299,6 @@ pub struct Project {
     pub status: String,
     pub metadata: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -481,7 +474,6 @@ pub struct Note {
     pub note: String,
     pub note_date: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -619,7 +611,6 @@ fn map_account_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
         is_system: is_system != 0,
         system_role: row.get(14)?,
         created_at: row.get(15)?,
-        updated_at: row.get(16)?,
     })
 }
 
@@ -662,11 +653,11 @@ fn ensure_profit_loss_system_accounts_internal(
     conn.execute(
         "INSERT INTO accounts (
             book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role,
-            previous_account_id, session_id, effective_at, lifecycle_event, created_at, updated_at
+            previous_account_id, session_id, effective_at, lifecycle_event, created_at
         )
         SELECT
             ?1, 'income', 'System Income Summary', ?2, 0, 1, 1, 'income_summary',
-            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE NOT EXISTS (
             SELECT 1 FROM accounts a
             WHERE a.book_id = ?1
@@ -680,11 +671,11 @@ fn ensure_profit_loss_system_accounts_internal(
     conn.execute(
         "INSERT INTO accounts (
             book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role,
-            previous_account_id, session_id, effective_at, lifecycle_event, created_at, updated_at
+            previous_account_id, session_id, effective_at, lifecycle_event, created_at
         )
         SELECT
             ?1, 'expense', 'System Expense Summary', ?2, 0, 1, 1, 'expense_summary',
-            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE NOT EXISTS (
             SELECT 1 FROM accounts a
             WHERE a.book_id = ?1
@@ -698,11 +689,11 @@ fn ensure_profit_loss_system_accounts_internal(
     conn.execute(
         "INSERT INTO accounts (
             book_id, type, name, commodity_id, is_closed, is_hidden, is_system, system_role,
-            previous_account_id, session_id, effective_at, lifecycle_event, created_at, updated_at
+            previous_account_id, session_id, effective_at, lifecycle_event, created_at
         )
         SELECT
             ?1, 'equity', 'Retained Earnings', ?2, 0, 1, 1, 'retained_earnings',
-            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            NULL, NULL, date('now'), 'open', strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE NOT EXISTS (
             SELECT 1 FROM accounts a
             WHERE a.book_id = ?1
@@ -766,7 +757,6 @@ fn map_country_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Country> {
         currency_name: row.get(6)?,
         currency_symbol: row.get(7)?,
         created_at: row.get(8)?,
-        updated_at: row.get(9)?,
     })
 }
 
@@ -779,7 +769,6 @@ fn map_institution_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Institution>
         country_id: row.get(4)?,
         country_name: row.get(5)?,
         created_at: row.get(6)?,
-        updated_at: row.get(7)?,
     })
 }
 
@@ -807,7 +796,6 @@ fn map_category_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Category> {
         kind: row.get(5)?,
         color: row.get(6)?,
         created_at: row.get(7)?,
-        updated_at: row.get(8)?,
     })
 }
 
@@ -820,7 +808,6 @@ fn map_payee_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Payee> {
         kind: row.get(4)?,
         metadata: row.get(5)?,
         created_at: row.get(6)?,
-        updated_at: row.get(7)?,
     })
 }
 
@@ -832,7 +819,6 @@ fn map_tag_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
         name: row.get(3)?,
         color: row.get(4)?,
         created_at: row.get(5)?,
-        updated_at: row.get(6)?,
     })
 }
 
@@ -845,7 +831,6 @@ fn map_person_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Person> {
         role: row.get(4)?,
         metadata: row.get(5)?,
         created_at: row.get(6)?,
-        updated_at: row.get(7)?,
     })
 }
 
@@ -858,7 +843,6 @@ fn map_project_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Project> {
         status: row.get(4)?,
         metadata: row.get(5)?,
         created_at: row.get(6)?,
-        updated_at: row.get(7)?,
     })
 }
 
@@ -950,18 +934,26 @@ fn create_marked_balance_adjustment(
     let tx_memo = memo
         .map(|m| format!("[BALANCING] {}", m))
         .unwrap_or_else(|| "[BALANCING] Balance adjustment".to_string());
-    let happened_at_utc = format!("{}T00:00:00.000Z", as_of_date);
+    let occurred_at_utc = format!("{}T00:00:00.000Z", as_of_date);
 
     tx.execute(
         "INSERT INTO transactions (
-            book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-            payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+                book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+            payee_id, memo, status, reference, import_id, session_id, created_at
          )
          VALUES (
-            ?1, NULL, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'),
-            NULL, ?4, 'cleared', ?5, NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?1, NULL, ?2, ?3, ?4, date('now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Etc/UTC',
+                NULL, ?5, 'cleared', ?6, NULL, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
-        params![SINGLE_BOOK_ID, as_of_date, happened_at_utc, tx_memo, BALANCING_TX_MARK, session_id],
+        params![
+            SINGLE_BOOK_ID,
+            as_of_date,
+            occurred_at_utc,
+            "Etc/UTC",
+            tx_memo,
+            BALANCING_TX_MARK,
+            session_id
+        ],
     )
     .map_err(|e| e.to_string())?;
 
@@ -970,15 +962,15 @@ fn create_marked_balance_adjustment(
     record_insert_change(&tx, &session_id, "transactions", tx_id)?;
 
     tx.execute(
-        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![tx_id, account_id, account_commodity_id, adjustment_minor],
     )
     .map_err(|e| e.to_string())?;
 
     tx.execute(
-        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![tx_id, offset_account_id, account_commodity_id, -adjustment_minor],
     )
     .map_err(|e| e.to_string())?;
@@ -1033,7 +1025,6 @@ fn map_note_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
         note: row.get(4)?,
         note_date: row.get(5)?,
         created_at: row.get(6)?,
-        updated_at: row.get(7)?,
     })
 }
 
@@ -1094,8 +1085,8 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
     let lifecycle_event = if is_closed == 1 { "close" } else { "open" };
 
     conn.execute(
-        "INSERT INTO accounts (book_id, parent_id, previous_account_id, session_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, is_hidden, is_system, system_role, effective_at, lifecycle_event, created_at, updated_at)
-         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, NULL, date('now'), ?11, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO accounts (book_id, parent_id, previous_account_id, session_id, type, name, commodity_id, institution_id, country_id, number_last4, is_closed, is_hidden, is_system, system_role, effective_at, lifecycle_event, created_at)
+         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, NULL, date('now'), ?11, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.parent_id,
@@ -1119,7 +1110,7 @@ pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Accoun
         .query_row(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -1157,7 +1148,7 @@ pub fn get_account(
              )
              SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
+                      a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -1194,7 +1185,7 @@ pub fn list_accounts(
         .prepare(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -1262,14 +1253,14 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
             type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
                 is_hidden, is_system, system_role, is_closed,
                 effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
-                created_at, updated_at
+                created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4,
             ?5, ?6, ?7, ?8, ?9, ?10, ?11,
                 ?12, ?13, ?14, ?15,
                 date('now'), 'update', NULL, NULL,
-                strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -1299,7 +1290,7 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
         .query_row(
             "SELECT a.id, a.book_id, a.parent_id, a.type, a.name, a.commodity_id,
                     a.institution_id, i.name, a.country_id, c.name,
-                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at, a.updated_at
+                    a.number_last4, a.is_closed, a.is_hidden, a.is_system, a.system_role, a.created_at
              FROM accounts a
              LEFT JOIN institutions i ON a.institution_id = i.id
              LEFT JOIN countries c ON a.country_id = c.id
@@ -1314,23 +1305,85 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
 
 #[command]
 pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
     let current_id = resolve_current_account_id(conn, id)?;
     if current_id.is_none() {
         return Ok(false);
     }
+    let current_id = current_id.unwrap();
 
     let is_system = conn
-        .query_row("SELECT is_system FROM accounts WHERE id = ?1", [current_id.unwrap()], |row| row.get::<_, i64>(0))
+        .query_row("SELECT is_system FROM accounts WHERE id = ?1", [current_id], |row| row.get::<_, i64>(0))
         .optional()
         .map_err(|e| e.to_string())?;
     if is_system == Some(1) {
         return Err("system accounts cannot be deleted".to_string());
     }
 
-    Err("delete_account is not supported in immutable mode".to_string())
+    let source: (i64, Option<i64>, String, String, i64, String, Option<i64>, Option<i64>, Option<String>, i64, i64, Option<String>) = conn
+        .query_row(
+            "SELECT book_id, parent_id, type, name, commodity_id, booking_policy, institution_id, country_id, number_last4, is_system, is_hidden, system_role
+             FROM accounts WHERE id = ?1",
+            [current_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                    row.get(11)?,
+                ))
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO accounts (
+            book_id, parent_id, previous_account_id, session_id,
+            type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
+            is_hidden, is_system, system_role, is_closed,
+            effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
+            created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4,
+            ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+            1, ?12, ?13, 1,
+            date('now'), 'close', 'deleted', NULL,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            source.0,
+            source.1,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+            source.2,
+            source.3,
+            source.4,
+            source.5,
+            source.6,
+            source.7,
+            source.8,
+            source.9,
+            source.11,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "accounts", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]
@@ -1395,7 +1448,7 @@ pub fn close_fiscal_year(
                  LEFT JOIN splits s ON s.account_id = a.id
                  LEFT JOIN transactions t ON t.id = s.tx_id
                     AND t.book_id = ?1
-                    AND t.txn_date <= ?2
+                    AND t.occurred_date <= ?2
                           AND t.status != 'void'
                     AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
                     AND NOT EXISTS (
@@ -1481,21 +1534,29 @@ pub fn close_fiscal_year(
     }
 
     let session_id = current_session_id(&tx)?;
-    let happened_at_utc = format!("{}T23:59:59.000Z", input.close_date);
+    let occurred_at_utc = format!("{}T23:59:59.000Z", input.close_date);
     let memo = input
         .memo
         .unwrap_or_else(|| format!("Fiscal year close {}", input.close_date));
 
     tx.execute(
         "INSERT INTO transactions (
-            book_id, previous_tx_id, txn_date, happened_at_utc, posted_at_utc,
-            payee_id, memo, status, reference, import_id, session_id, created_at, updated_at
+                book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz,
+            payee_id, memo, status, reference, import_id, session_id, created_at
          )
          VALUES (
-            ?1, NULL, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ','now'),
-            NULL, ?4, 'cleared', ?5, NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                ?1, NULL, ?2, ?3, ?4, date('now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Etc/UTC',
+                NULL, ?5, 'cleared', ?6, NULL, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
-        params![book_id, input.close_date, happened_at_utc, memo, reference, session_id],
+        params![
+            book_id,
+            input.close_date,
+            occurred_at_utc,
+            "Etc/UTC",
+            memo,
+            reference,
+            session_id
+        ],
     )
     .map_err(|e| e.to_string())?;
 
@@ -1508,8 +1569,8 @@ pub fn close_fiscal_year(
             continue;
         }
         tx.execute(
-            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 tx_id,
                 account_id,
@@ -1546,10 +1607,11 @@ pub fn list_countries(db: State<DbState>, book_id: i64) -> Result<Vec<Country>, 
     let mut stmt = conn
         .prepare(
             "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
-                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+                    cur.code, cur.name, cur.symbol, c.created_at
              FROM countries c
              LEFT JOIN currencies cur ON c.default_currency_id = cur.id
                          WHERE c.book_id = ?1
+                            AND (c.session_id IS NULL OR c.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM countries newer
                                      WHERE newer.previous_country_id = c.id
@@ -1585,8 +1647,8 @@ pub fn create_country(db: State<DbState>, input: CountryCreate) -> Result<Countr
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO countries (book_id, code, name, default_currency_id, previous_country_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, NULL, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO countries (book_id, code, name, default_currency_id, previous_country_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, input.code, input.name, input.default_currency_id, session_id],
     )
     .map_err(|e| e.to_string())?;
@@ -1597,7 +1659,7 @@ pub fn create_country(db: State<DbState>, input: CountryCreate) -> Result<Countr
     let item = conn
         .query_row(
             "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
-                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+                    cur.code, cur.name, cur.symbol, c.created_at
              FROM countries c
              LEFT JOIN currencies cur ON c.default_currency_id = cur.id
              WHERE c.id = ?1",
@@ -1629,10 +1691,11 @@ pub fn get_country(db: State<DbState>, id: i64) -> Result<Option<Country>, Strin
                  JOIN chain c ON a.previous_country_id = c.id
              )
              SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
-                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+                      cur.code, cur.name, cur.symbol, c.created_at
              FROM countries c
              LEFT JOIN currencies cur ON c.default_currency_id = cur.id
              WHERE c.id IN chain
+                             AND (c.session_id IS NULL OR c.session_id NOT LIKE 'void:%')
                AND NOT EXISTS (
                    SELECT 1 FROM countries newer
                    WHERE newer.previous_country_id = c.id
@@ -1664,8 +1727,8 @@ pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Countr
     }
 
     conn.execute(
-        "INSERT INTO countries (book_id, code, name, default_currency_id, previous_country_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO countries (book_id, code, name, default_currency_id, previous_country_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, input.code, input.name, input.default_currency_id, input.id, session_id],
     )
     .map_err(|e| e.to_string())?;
@@ -1677,7 +1740,7 @@ pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Countr
     let item = conn
         .query_row(
             "SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id,
-                    cur.code, cur.name, cur.symbol, c.created_at, c.updated_at
+                    cur.code, cur.name, cur.symbol, c.created_at
              FROM countries c
              LEFT JOIN currencies cur ON c.default_currency_id = cur.id
              WHERE c.id = ?1",
@@ -1691,18 +1754,62 @@ pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Countr
 
 #[command]
 pub fn delete_country(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM countries WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, String, String, Option<i64>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_country_id
+                 FROM countries a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_country_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM countries a
+                 JOIN chain c ON a.previous_country_id = c.id
+             )
+             SELECT c.id, c.book_id, c.code, c.name, c.default_currency_id
+             FROM countries c
+             WHERE c.id IN chain
+               AND (c.session_id IS NULL OR c.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM countries newer
+                   WHERE newer.previous_country_id = c.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_country is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, code, name, default_currency_id)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO countries (book_id, code, name, default_currency_id, previous_country_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            code,
+            name,
+            default_currency_id,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "countries", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]
@@ -1714,10 +1821,11 @@ pub fn list_institutions(db: State<DbState>, book_id: i64) -> Result<Vec<Institu
 
     let mut stmt = conn
         .prepare(
-            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at
              FROM institutions i
              LEFT JOIN countries c ON i.country_id = c.id
                          WHERE i.book_id = ?1
+                            AND (i.session_id IS NULL OR i.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1 FROM institutions newer
                                      WHERE newer.previous_institution_id = i.id
@@ -1756,8 +1864,8 @@ pub fn create_institution(db: State<DbState>, input: InstitutionCreate) -> Resul
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO institutions (book_id, name, kind, country_id, previous_institution_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, NULL, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO institutions (book_id, name, kind, country_id, previous_institution_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, input.name, kind, input.country_id, session_id],
     )
     .map_err(|e| e.to_string())?;
@@ -1767,7 +1875,7 @@ pub fn create_institution(db: State<DbState>, input: InstitutionCreate) -> Resul
     record_insert_change(conn, &session_id, "institutions", id)?;
     let item = conn
         .query_row(
-            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at
              FROM institutions i
              LEFT JOIN countries c ON i.country_id = c.id
              WHERE i.id = ?1",
@@ -1798,10 +1906,11 @@ pub fn get_institution(db: State<DbState>, id: i64) -> Result<Option<Institution
                  FROM institutions a
                  JOIN chain c ON a.previous_institution_id = c.id
              )
-             SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+             SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at
              FROM institutions i
              LEFT JOIN countries c ON i.country_id = c.id
              WHERE i.id IN chain
+                             AND (i.session_id IS NULL OR i.session_id NOT LIKE 'void:%')
                AND NOT EXISTS (
                    SELECT 1 FROM institutions newer
                    WHERE newer.previous_institution_id = i.id
@@ -1836,8 +1945,8 @@ pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Resul
     }
 
     conn.execute(
-        "INSERT INTO institutions (book_id, name, kind, country_id, previous_institution_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO institutions (book_id, name, kind, country_id, previous_institution_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, input.name, kind, input.country_id, input.id, session_id],
     )
     .map_err(|e| e.to_string())?;
@@ -1848,7 +1957,7 @@ pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Resul
 
     let item = conn
         .query_row(
-            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at, i.updated_at
+            "SELECT i.id, i.book_id, i.name, i.kind, i.country_id, c.name, i.created_at
              FROM institutions i
              LEFT JOIN countries c ON i.country_id = c.id
              WHERE i.id = ?1",
@@ -1862,18 +1971,62 @@ pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Resul
 
 #[command]
 pub fn delete_institution(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM institutions WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, String, String, Option<i64>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_institution_id
+                 FROM institutions a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_institution_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM institutions a
+                 JOIN chain c ON a.previous_institution_id = c.id
+             )
+             SELECT i.id, i.book_id, i.name, i.kind, i.country_id
+             FROM institutions i
+             WHERE i.id IN chain
+               AND (i.session_id IS NULL OR i.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM institutions newer
+                   WHERE newer.previous_institution_id = i.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_institution is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, name, kind, country_id)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO institutions (book_id, name, kind, country_id, previous_institution_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            name,
+            kind,
+            country_id,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "institutions", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]
@@ -2018,11 +2171,11 @@ pub fn create_account_balancing(
     tx.execute(
         "INSERT INTO account_balancings (
             book_id, account_id, as_of_date, balance_minor, memo, voided_at, void_reason,
-            previous_account_balancing_id, session_id, created_at, updated_at
+                previous_account_balancing_id, session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5, NULL, NULL,
-            NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -2132,13 +2285,13 @@ pub fn unlock_account_balancings(
         tx.execute(
             "INSERT INTO account_balancings (
                 book_id, account_id, as_of_date, balance_minor, memo, voided_at, void_reason,
-                previous_account_balancing_id, session_id, created_at, updated_at
+                     previous_account_balancing_id, session_id, created_at
              )
              SELECT
                 book_id, account_id, as_of_date, balance_minor, memo,
                 strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?1,
                 id, ?2,
-                strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                     strftime('%Y-%m-%dT%H:%M:%fZ','now')
              FROM account_balancings
              WHERE id = ?3",
             params![input.reason, session_id, id],
@@ -2169,9 +2322,10 @@ pub fn list_categories(
     let mut stmt = conn
         .prepare(
                         "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
-                                        created_at, updated_at
+                                        created_at
                          FROM categories
                          WHERE book_id = ?1
+                            AND (categories.session_id IS NULL OR categories.session_id NOT LIKE 'void:%')
                              AND (?2 IS NULL OR categories.created_at <= ?2)
                              AND NOT EXISTS (
                                  SELECT 1 FROM categories newer
@@ -2211,12 +2365,12 @@ pub fn create_category(db: State<DbState>, input: CategoryCreate) -> Result<Cate
     conn.execute(
         "INSERT INTO categories (
             book_id, parent_id, name, kind, color, previous_category_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5, NULL,
                 ?6,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.parent_id, input.name, input.kind, input.color, session_id],
     )
@@ -2228,7 +2382,7 @@ pub fn create_category(db: State<DbState>, input: CategoryCreate) -> Result<Cate
     let category = conn
         .query_row(
             "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
-                    created_at, updated_at
+                    created_at
              FROM categories WHERE id = ?1",
             [id],
             map_category_row,
@@ -2262,9 +2416,10 @@ pub fn get_category(
                  JOIN chain c ON a.previous_category_id = c.id
              )
              SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
-                    created_at, updated_at
+                      created_at
              FROM categories
              WHERE id IN chain
+                             AND (categories.session_id IS NULL OR categories.session_id NOT LIKE 'void:%')
                AND (?2 IS NULL OR created_at <= ?2)
                AND NOT EXISTS (
                    SELECT 1 FROM categories newer
@@ -2301,12 +2456,12 @@ pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Cate
     conn.execute(
         "INSERT INTO categories (
             book_id, parent_id, name, kind, color, previous_category_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6,
                 ?7,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -2327,7 +2482,7 @@ pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Cate
     let category = conn
         .query_row(
             "SELECT id, book_id, parent_id, previous_category_id, name, kind, color,
-                    created_at, updated_at
+                    created_at
              FROM categories WHERE id = ?1",
             [new_id],
             map_category_row,
@@ -2339,18 +2494,69 @@ pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Cate
 
 #[command]
 pub fn delete_category(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM categories WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, Option<i64>, String, String, Option<String>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_category_id
+                 FROM categories a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_category_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM categories a
+                 JOIN chain c ON a.previous_category_id = c.id
+             )
+             SELECT id, book_id, parent_id, name, kind, color
+             FROM categories
+             WHERE id IN chain
+               AND (categories.session_id IS NULL OR categories.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM categories newer
+                   WHERE newer.previous_category_id = categories.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_category is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, parent_id, name, kind, color)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO categories (
+            book_id, parent_id, name, kind, color, previous_category_id,
+            session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6,
+            ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            book_id,
+            parent_id,
+            name,
+            kind,
+            color,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "categories", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]
@@ -2367,9 +2573,10 @@ pub fn list_payees(
     let mut stmt = conn
         .prepare(
                         "SELECT id, book_id, previous_payee_id, name, kind, metadata,
-                                        created_at, updated_at
+                                        created_at
                          FROM payees
                          WHERE book_id = ?1
+                            AND (payees.session_id IS NULL OR payees.session_id NOT LIKE 'void:%')
                              AND (?2 IS NULL OR payees.created_at <= ?2)
                              AND NOT EXISTS (
                                  SELECT 1 FROM payees newer
@@ -2409,12 +2616,12 @@ pub fn create_payee(db: State<DbState>, input: PayeeCreate) -> Result<Payee, Str
     conn.execute(
         "INSERT INTO payees (
             book_id, name, kind, metadata, previous_payee_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, NULL,
                 ?5,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.name, input.kind, input.metadata, session_id],
     )
@@ -2426,7 +2633,7 @@ pub fn create_payee(db: State<DbState>, input: PayeeCreate) -> Result<Payee, Str
     let payee = conn
         .query_row(
             "SELECT id, book_id, previous_payee_id, name, kind, metadata,
-                    created_at, updated_at
+                    created_at
              FROM payees WHERE id = ?1",
             [id],
             map_payee_row,
@@ -2460,9 +2667,10 @@ pub fn get_payee(
                  JOIN chain c ON a.previous_payee_id = c.id
              )
              SELECT id, book_id, previous_payee_id, name, kind, metadata,
-                    created_at, updated_at
+                      created_at
              FROM payees
              WHERE id IN chain
+                             AND (payees.session_id IS NULL OR payees.session_id NOT LIKE 'void:%')
                AND (?2 IS NULL OR created_at <= ?2)
                AND NOT EXISTS (
                    SELECT 1 FROM payees newer
@@ -2499,12 +2707,12 @@ pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, Str
     conn.execute(
         "INSERT INTO payees (
             book_id, name, kind, metadata, previous_payee_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5,
                 ?6,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.name, input.kind, input.metadata, input.id, session_id],
     )
@@ -2517,7 +2725,7 @@ pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, Str
     let payee = conn
         .query_row(
             "SELECT id, book_id, previous_payee_id, name, kind, metadata,
-                    created_at, updated_at
+                    created_at
              FROM payees WHERE id = ?1",
             [new_id],
             map_payee_row,
@@ -2529,18 +2737,68 @@ pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, Str
 
 #[command]
 pub fn delete_payee(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM payees WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, String, String, Option<String>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_payee_id
+                 FROM payees a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_payee_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM payees a
+                 JOIN chain c ON a.previous_payee_id = c.id
+             )
+             SELECT id, book_id, name, kind, metadata
+             FROM payees
+             WHERE id IN chain
+               AND (payees.session_id IS NULL OR payees.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM payees newer
+                   WHERE newer.previous_payee_id = payees.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_payee is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, name, kind, metadata)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO payees (
+            book_id, name, kind, metadata, previous_payee_id,
+            session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            book_id,
+            name,
+            kind,
+            metadata,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "payees", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]
@@ -2557,9 +2815,10 @@ pub fn list_tags(
     let mut stmt = conn
         .prepare(
                         "SELECT id, book_id, previous_tag_id, name, color,
-                                        created_at, updated_at
+                                        created_at
                          FROM tags
                          WHERE book_id = ?1
+                            AND (tags.session_id IS NULL OR tags.session_id NOT LIKE 'void:%')
                              AND (?2 IS NULL OR tags.created_at <= ?2)
                              AND NOT EXISTS (
                                  SELECT 1 FROM tags newer
@@ -2599,12 +2858,12 @@ pub fn create_tag(db: State<DbState>, input: TagCreate) -> Result<Tag, String> {
     conn.execute(
         "INSERT INTO tags (
             book_id, name, color, previous_tag_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, NULL,
                 ?4,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.name, input.color, session_id],
     )
@@ -2616,7 +2875,7 @@ pub fn create_tag(db: State<DbState>, input: TagCreate) -> Result<Tag, String> {
     let tag = conn
         .query_row(
             "SELECT id, book_id, previous_tag_id, name, color,
-                    created_at, updated_at
+                    created_at
              FROM tags WHERE id = ?1",
             [id],
             map_tag_row,
@@ -2650,9 +2909,10 @@ pub fn get_tag(
                  JOIN chain c ON a.previous_tag_id = c.id
              )
              SELECT id, book_id, previous_tag_id, name, color,
-                    created_at, updated_at
+                      created_at
              FROM tags
              WHERE id IN chain
+                             AND (tags.session_id IS NULL OR tags.session_id NOT LIKE 'void:%')
                AND (?2 IS NULL OR created_at <= ?2)
                AND NOT EXISTS (
                    SELECT 1 FROM tags newer
@@ -2689,12 +2949,12 @@ pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
     conn.execute(
         "INSERT INTO tags (
             book_id, name, color, previous_tag_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4,
                 ?5,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.name, input.color, input.id, session_id],
     )
@@ -2707,7 +2967,7 @@ pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
     let tag = conn
         .query_row(
             "SELECT id, book_id, previous_tag_id, name, color,
-                    created_at, updated_at
+                    created_at
              FROM tags WHERE id = ?1",
             [new_id],
             map_tag_row,
@@ -2719,18 +2979,67 @@ pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
 
 #[command]
 pub fn delete_tag(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM tags WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, String, Option<String>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_tag_id
+                 FROM tags a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_tag_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM tags a
+                 JOIN chain c ON a.previous_tag_id = c.id
+             )
+             SELECT id, book_id, name, color
+             FROM tags
+             WHERE id IN chain
+               AND (tags.session_id IS NULL OR tags.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM tags newer
+                   WHERE newer.previous_tag_id = tags.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_tag is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, name, color)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO tags (
+            book_id, name, color, previous_tag_id,
+            session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4,
+            ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            book_id,
+            name,
+            color,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "tags", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]
@@ -2747,7 +3056,7 @@ pub fn list_people(
     let mut stmt = conn
         .prepare(
                         "SELECT id, book_id, previous_person_id, name, role, metadata,
-                                        created_at, updated_at
+                                        created_at
                          FROM people
                          WHERE book_id = ?1
                              AND (?2 IS NULL OR people.created_at <= ?2)
@@ -2789,12 +3098,12 @@ pub fn create_person(db: State<DbState>, input: PersonCreate) -> Result<Person, 
     conn.execute(
         "INSERT INTO people (
             book_id, name, role, metadata, previous_person_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, NULL,
                 ?5,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.name, input.role, input.metadata, session_id],
     )
@@ -2806,7 +3115,7 @@ pub fn create_person(db: State<DbState>, input: PersonCreate) -> Result<Person, 
     let person = conn
         .query_row(
             "SELECT id, book_id, previous_person_id, name, role, metadata,
-                    created_at, updated_at
+                    created_at
              FROM people WHERE id = ?1",
             [id],
             map_person_row,
@@ -2830,7 +3139,7 @@ pub fn list_projects(
     let mut stmt = conn
         .prepare(
                         "SELECT id, book_id, previous_project_id, name, status, metadata,
-                                        created_at, updated_at
+                                        created_at
                          FROM projects
                          WHERE book_id = ?1
                              AND (?2 IS NULL OR projects.created_at <= ?2)
@@ -2872,12 +3181,12 @@ pub fn create_project(db: State<DbState>, input: ProjectCreate) -> Result<Projec
     conn.execute(
         "INSERT INTO projects (
             book_id, name, status, metadata, previous_project_id,
-                session_id, created_at, updated_at
+                session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, NULL,
                 ?5,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![book_id, input.name, input.status, input.metadata, session_id],
     )
@@ -2889,7 +3198,7 @@ pub fn create_project(db: State<DbState>, input: ProjectCreate) -> Result<Projec
     let project = conn
         .query_row(
             "SELECT id, book_id, previous_project_id, name, status, metadata,
-                    created_at, updated_at
+                    created_at
              FROM projects WHERE id = ?1",
             [id],
             map_project_row,
@@ -3018,14 +3327,14 @@ pub fn set_account_booking_policy(
             type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
                 is_hidden, is_system, system_role, is_closed,
                 effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
-                created_at, updated_at
+                created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4,
             ?5, ?6, ?7, ?8, ?9, ?10, ?11,
                 ?12, ?13, ?14, ?15,
                 date('now'), 'update', NULL, NULL,
-                strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -3431,14 +3740,14 @@ fn create_account_lifecycle_directive_internal(
             type, name, commodity_id, booking_policy, institution_id, country_id, number_last4,
             is_hidden, is_system, system_role, is_closed,
             effective_at, lifecycle_event, lifecycle_note, lifecycle_metadata,
-            created_at, updated_at
+                created_at
          )
          VALUES (
             ?1, ?2, ?3, NULL,
             ?4, ?5, ?6, ?7, ?8, ?9, ?10,
             ?11, ?12, ?13, ?14,
             ?15, ?16, ?17, ?18,
-            strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             book_id,
@@ -3681,7 +3990,7 @@ mod tests {
         assert_eq!(updated.name, "Renamed Cash");
 
         let list = list_accounts(as_state(&db_state), 1, None).expect("list accounts");
-        assert!(list.iter().any(|a| a.id == created.id));
+        assert!(list.iter().any(|a| a.id == updated.id));
 
         let deleted = delete_account(as_state(&db_state), created.id).expect("delete account");
         assert!(deleted);
@@ -3778,8 +4087,8 @@ mod tests {
 
             let insert_tx = |conn: &rusqlite::Connection| -> i64 {
                 conn.execute(
-                    "INSERT INTO transactions (book_id, txn_date, status, created_at, updated_at)
-                     VALUES (1, '2024-06-01', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    "INSERT INTO transactions (book_id, occurred_date, status, created_at)
+                     VALUES (1, '2024-06-01', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                     [],
                 )
                 .expect("insert tx");
@@ -3788,56 +4097,56 @@ mod tests {
 
             let tx1 = insert_tx(conn);
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 1000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, 1000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx1, parent.id, commodity_id],
             )
             .expect("insert parent split");
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, -1000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -1000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx1, equity.id, commodity_id],
             )
             .expect("insert equity split 1");
 
             let tx2 = insert_tx(conn);
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 2000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, 2000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx2, child.id, commodity_id],
             )
             .expect("insert child split");
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, -2000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -2000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx2, equity.id, commodity_id],
             )
             .expect("insert equity split 2");
 
             let tx3 = insert_tx(conn);
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 3000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, 3000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx3, income.id, commodity_id],
             )
             .expect("insert income split");
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, -3000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -3000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx3, equity.id, commodity_id],
             )
             .expect("insert equity split 3");
 
             let tx4 = insert_tx(conn);
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, -4000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -4000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx4, expense.id, commodity_id],
             )
             .expect("insert expense split");
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 4000, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, 4000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx4, equity.id, commodity_id],
             )
             .expect("insert equity split 4");
@@ -4010,8 +4319,8 @@ mod tests {
             let mut guard = db_state.inner.lock().expect("lock db");
             let conn = guard.conn.as_mut().expect("conn");
             conn.execute(
-                "INSERT INTO transactions (book_id, txn_date, status, created_at, updated_at)
-                 VALUES (1, '2024-02-02', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO transactions (book_id, occurred_date, status, created_at)
+                 VALUES (1, '2024-02-02', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert tx");
@@ -4027,14 +4336,14 @@ mod tests {
             let offset_id = conn.last_insert_rowid();
 
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, -500, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -500, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx_id, account.id, commodity_id],
             )
             .expect("insert negative split");
             conn.execute(
-                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 500, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, 500, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![tx_id, offset_id, commodity_id],
             )
             .expect("insert offset split");
@@ -4085,7 +4394,7 @@ mod tests {
 
         let directives = list_account_directives(as_state(&db_state), account.id)
             .expect("list directives");
-        assert_eq!(directives.len(), 3);
+        assert_eq!(directives.len(), 4);
 
         let check = create_balance_check(
             as_state(&db_state),
@@ -4155,8 +4464,8 @@ mod tests {
             let mut guard = db_state.inner.lock().expect("lock db");
             let conn = guard.conn.as_mut().expect("conn");
             conn.execute(
-                "INSERT INTO transactions (book_id, txn_date, status, created_at, updated_at)
-                 VALUES (1, '2024-05-01', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO transactions (book_id, occurred_date, status, created_at)
+                 VALUES (1, '2024-05-01', 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert tx");
@@ -4502,8 +4811,8 @@ pub fn create_note(db: State<DbState>, input: NoteCreate) -> Result<Note, String
     let book_id = SINGLE_BOOK_ID;
 
     conn.execute(
-        "INSERT INTO notes (book_id, account_id, tx_id, note, note_date, previous_note_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO notes (book_id, account_id, tx_id, note, note_date, previous_note_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, input.account_id, input.tx_id, input.note, input.note_date, session_id],
     )
     .map_err(|e| e.to_string())?;
@@ -4513,7 +4822,7 @@ pub fn create_note(db: State<DbState>, input: NoteCreate) -> Result<Note, String
     record_insert_change(conn, &session_id, "notes", id)?;
     let note = conn
         .query_row(
-            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at
              FROM notes WHERE id = ?1",
             [id],
             map_note_row,
@@ -4529,9 +4838,10 @@ pub fn list_notes(db: State<DbState>, filter: NoteFilter) -> Result<Vec<Note>, S
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut sql = String::from(
-        "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+        "SELECT id, book_id, account_id, tx_id, note, note_date, created_at
                  FROM notes
                  WHERE book_id = ?
+                    AND (notes.session_id IS NULL OR notes.session_id NOT LIKE 'void:%')
                      AND NOT EXISTS (
                              SELECT 1 FROM notes newer
                              WHERE newer.previous_note_id = notes.id
@@ -4588,9 +4898,10 @@ pub fn get_note(db: State<DbState>, id: i64) -> Result<Option<Note>, String> {
                  FROM notes a
                  JOIN chain c ON a.previous_note_id = c.id
              )
-             SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+             SELECT id, book_id, account_id, tx_id, note, note_date, created_at
              FROM notes
              WHERE id IN chain
+                             AND (notes.session_id IS NULL OR notes.session_id NOT LIKE 'void:%')
                AND NOT EXISTS (
                    SELECT 1 FROM notes newer
                    WHERE newer.previous_note_id = notes.id
@@ -4622,8 +4933,8 @@ pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String
     }
 
     conn.execute(
-        "INSERT INTO notes (book_id, account_id, tx_id, note, note_date, previous_note_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO notes (book_id, account_id, tx_id, note, note_date, previous_note_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.account_id,
@@ -4642,7 +4953,7 @@ pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String
 
     let note = conn
         .query_row(
-            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at, updated_at
+            "SELECT id, book_id, account_id, tx_id, note, note_date, created_at
              FROM notes WHERE id = ?1",
             [new_id],
             map_note_row,
@@ -4654,18 +4965,63 @@ pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String
 
 #[command]
 pub fn delete_note(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let session_id = current_session_id(conn)?;
 
-    let exists: Option<i64> = conn
-        .query_row("SELECT id FROM notes WHERE id = ?1", [id], |row| row.get(0))
+    let source: Option<(i64, i64, Option<i64>, Option<i64>, String, Option<String>)> = conn
+        .query_row(
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT a.previous_note_id
+                 FROM notes a
+                 JOIN chain c ON a.id = c.id
+                 WHERE a.previous_note_id IS NOT NULL
+                 UNION
+                 SELECT a.id
+                 FROM notes a
+                 JOIN chain c ON a.previous_note_id = c.id
+             )
+             SELECT id, book_id, account_id, tx_id, note, note_date
+             FROM notes
+             WHERE id IN chain
+               AND (notes.session_id IS NULL OR notes.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM notes newer
+                   WHERE newer.previous_note_id = notes.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+        )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
-        return Ok(false);
-    }
 
-    Err("delete_note is not supported in immutable mode".to_string())
+    let Some((current_id, book_id, account_id, tx_id, note, note_date)) = source else {
+        return Ok(false);
+    };
+
+    conn.execute(
+        "INSERT INTO notes (book_id, account_id, tx_id, note, note_date, previous_note_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![
+            book_id,
+            account_id,
+            tx_id,
+            note,
+            note_date,
+            current_id,
+            format!("{}{}", VOID_SESSION_PREFIX, session_id),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let tombstone_id = conn.last_insert_rowid();
+    clear_redo_stack(conn, &session_id)?;
+    record_insert_change(conn, &session_id, "notes", tombstone_id)?;
+    Ok(true)
 }
 
 #[command]

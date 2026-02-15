@@ -7,6 +7,7 @@ use tauri::{command, State};
 use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
+const VOID_SESSION_PREFIX: &str = "void:";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Commodity {
@@ -18,7 +19,6 @@ pub struct Commodity {
     pub scale: i64,
     pub metadata: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -80,7 +80,6 @@ pub struct PriceSource {
     pub provider: Option<String>,
     pub base_url: Option<String>,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -109,7 +108,6 @@ pub struct CommodityPriceSource {
     pub name_override: Option<String>,
     pub is_primary: bool,
     pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -413,7 +411,6 @@ fn map_commodity_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Commodity> {
         scale: row.get(5)?,
         metadata: row.get(6)?,
         created_at: row.get(7)?,
-        updated_at: row.get(8)?,
     })
 }
 
@@ -440,7 +437,6 @@ fn map_price_source_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PriceSource
         provider: row.get(3)?,
         base_url: row.get(4)?,
         created_at: row.get(5)?,
-        updated_at: row.get(6)?,
     })
 }
 
@@ -456,7 +452,6 @@ fn map_commodity_price_source_row(
         name_override: row.get(4)?,
         is_primary: is_primary != 0,
         created_at: row.get(6)?,
-        updated_at: row.get(7)?,
     })
 }
 
@@ -504,8 +499,8 @@ fn insert_transaction_header(
 ) -> Result<i64, String> {
     let status = status.unwrap_or_else(|| "cleared".to_string());
     conn.execute(
-        "INSERT INTO transactions (book_id, txn_date, payee_id, memo, status, reference, import_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO transactions (book_id, occurred_date, payee_id, memo, status, reference, import_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![book_id, txn_date, payee_id, memo, status, reference, import_id],
     )
     .map_err(|e| e.to_string())?;
@@ -523,8 +518,8 @@ fn insert_split(
     memo: Option<String>,
 ) -> Result<i64, String> {
     conn.execute(
-        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, memo, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![tx_id, account_id, commodity_id, amount_minor, category_id, memo],
     )
     .map_err(|e| e.to_string())?;
@@ -639,7 +634,7 @@ pub fn list_commodities(db: State<DbState>, book_id: i64) -> Result<Vec<Commodit
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at, updated_at
+            "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at
                          FROM current_commodities c
                          WHERE c.book_id = ?1
                          ORDER BY c.name ASC",
@@ -745,7 +740,7 @@ pub fn get_commodity(db: State<DbState>, id: i64) -> Result<Option<Commodity>, S
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at, updated_at
+            "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at
              FROM commodities WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -792,9 +787,9 @@ pub fn rename_commodity(db: State<DbState>, input: CommodityRenameInput) -> Resu
     let rows = conn
         .execute(
             "INSERT INTO commodities
-              (book_id, kind, symbol, name, scale, is_active, is_default, display_symbol, metadata, previous_commodity_id, created_at, updated_at)
+                            (book_id, kind, symbol, name, scale, is_active, is_default, display_symbol, metadata, previous_commodity_id, created_at)
              VALUES
-              (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             params![
                 source_book_id,
                 source_kind,
@@ -818,7 +813,7 @@ pub fn rename_commodity(db: State<DbState>, input: CommodityRenameInput) -> Resu
 
     let commodity = conn
         .query_row(
-            "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at, updated_at
+            "SELECT id, book_id, kind, symbol, name, scale, metadata, created_at
              FROM commodities WHERE id = ?1",
             [new_id],
             map_commodity_row,
@@ -922,8 +917,8 @@ pub fn apply_corporate_action_split_merge(
 
             let equity_account_id = if equity_account_id == 0 {
                 tx.execute(
-                    "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, is_closed, created_at, updated_at)
-                 VALUES (?1, NULL, 'equity', 'Corporate Actions', ?2, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    "INSERT INTO accounts (book_id, parent_id, type, name, commodity_id, is_closed, created_at)
+                 VALUES (?1, NULL, 'equity', 'Corporate Actions', ?2, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                     params![book_id, input.commodity_id],
                 )
                 .map_err(|e| e.to_string())?;
@@ -976,8 +971,8 @@ pub fn apply_corporate_action_split_merge(
                     .unwrap_or_else(|| format!("Corporate action: {} {}/{}", kind, input.ratio_num, input.ratio_den));
 
                 tx.execute(
-                    "INSERT INTO transactions (book_id, txn_date, memo, status, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    "INSERT INTO transactions (book_id, occurred_date, memo, status, created_at)
+                 VALUES (?1, ?2, ?3, 'cleared', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                     params![book_id, input.effective_date, memo],
                 )
                 .map_err(|e| e.to_string())?;
@@ -989,16 +984,16 @@ pub fn apply_corporate_action_split_merge(
                 for (account_id, delta) in &adjustments {
                     total_delta += *delta;
                     tx.execute(
-                        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                        "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                     VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                         params![tx_id, account_id, input.commodity_id, *delta],
                     )
                     .map_err(|e| e.to_string())?;
                 }
 
                 tx.execute(
-                    "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                    "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                     params![tx_id, equity_account_id, input.commodity_id, -total_delta],
                 )
                 .map_err(|e| e.to_string())?;
@@ -1007,11 +1002,11 @@ pub fn apply_corporate_action_split_merge(
             tx.execute(
                      "INSERT INTO corporate_actions (
                           book_id, commodity_id, kind, ratio_num, ratio_den, effective_date, memo, tx_id,
-                          previous_corporate_action_id, session_id, created_at, updated_at
+                          previous_corporate_action_id, session_id, created_at
                       )
                       VALUES (
                           ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
-                          NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                          NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
                       )",
                 params![
                     book_id,
@@ -1190,8 +1185,8 @@ pub fn create_reinvest_dividend(
     )?;
 
     tx.execute(
-        "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, cost_basis_minor, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, cost_basis_minor, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.investment_account_id,
@@ -1274,8 +1269,8 @@ pub fn buy_commodity(
     )?;
 
     tx.execute(
-        "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, cost_basis_minor, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, cost_basis_minor, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             book_id,
             input.investment_account_id,
@@ -1449,8 +1444,8 @@ pub fn sell_commodity(
             }
 
             tx.execute(
-                "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, notes, cost_basis_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, 'Short sale', 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, notes, cost_basis_minor, created_at)
+                 VALUES (?1, ?2, ?3, ?4, 'Short sale', 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![book_id, input.investment_account_id, input.commodity_id, input.txn_date],
             )
             .map_err(|e| e.to_string())?;
@@ -1502,8 +1497,8 @@ pub fn sell_commodity(
             }
 
             tx.execute(
-                "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, notes, cost_basis_minor, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, 'Short sale', 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO lots (book_id, account_id, commodity_id, opened_date, notes, cost_basis_minor, created_at)
+                 VALUES (?1, ?2, ?3, ?4, 'Short sale', 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 params![book_id, input.investment_account_id, input.commodity_id, input.txn_date],
             )
             .map_err(|e| e.to_string())?;
@@ -1680,7 +1675,7 @@ pub fn get_positions(
              JOIN transactions t ON t.id = s.tx_id
              JOIN commodities c ON c.id = s.commodity_id
              WHERE a.book_id = ?1
-               AND (?2 IS NULL OR t.txn_date <= ?2)
+                             AND (?2 IS NULL OR t.occurred_date <= ?2)
              GROUP BY a.id, s.commodity_id
              HAVING balance_minor != 0
              ORDER BY a.name ASC, c.name ASC",
@@ -1721,7 +1716,7 @@ pub fn get_positions(
              LEFT JOIN splits s ON s.id = sla.split_id
              LEFT JOIN transactions t ON t.id = s.tx_id
              WHERE l.book_id = ?1
-               AND (?2 IS NULL OR t.txn_date <= ?2 OR t.txn_date IS NULL)
+                             AND (?2 IS NULL OR t.occurred_date <= ?2 OR t.occurred_date IS NULL)
              GROUP BY l.id
              HAVING balance_minor != 0
              ORDER BY l.opened_date ASC, l.id ASC",
@@ -2001,7 +1996,7 @@ pub fn realized_gains_report(
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut sql = String::from(
-        "SELECT t.id, t.txn_date, s.commodity_id, sla.lot_id, ABS(sla.quantity_minor) AS qty
+        "SELECT t.id, t.occurred_date, s.commodity_id, sla.lot_id, ABS(sla.quantity_minor) AS qty
          FROM split_lot_allocations sla
          JOIN splits s ON s.id = sla.split_id
          JOIN transactions t ON t.id = s.tx_id
@@ -2009,14 +2004,14 @@ pub fn realized_gains_report(
     );
     let mut params: Vec<Value> = Vec::new();
     if let Some(date_from) = date_from {
-        sql.push_str(" AND t.txn_date >= ?");
+        sql.push_str(" AND t.occurred_date >= ?");
         params.push(Value::from(date_from));
     }
     if let Some(date_to) = date_to {
-        sql.push_str(" AND t.txn_date <= ?");
+        sql.push_str(" AND t.occurred_date <= ?");
         params.push(Value::from(date_to));
     }
-    sql.push_str(" ORDER BY t.txn_date ASC, t.id ASC");
+    sql.push_str(" ORDER BY t.occurred_date ASC, t.id ASC");
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -2146,9 +2141,29 @@ pub fn create_price_source(
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
+    let duplicate: Option<i64> = conn
+        .query_row(
+            "SELECT ps.id
+             FROM price_sources ps
+             WHERE lower(ps.name) = lower(?1)
+               AND (ps.session_id IS NULL OR ps.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM price_sources newer
+                   WHERE newer.previous_price_source_id = ps.id
+               )
+             LIMIT 1",
+            [input.name.as_str()],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if duplicate.is_some() {
+        return Err("unique constraint: price source name already exists".to_string());
+    }
+
     conn.execute(
-        "INSERT INTO price_sources (name, kind, provider, base_url, previous_price_source_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO price_sources (name, kind, provider, base_url, previous_price_source_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![input.name, input.kind, input.provider, input.base_url],
     )
     .map_err(|e| e.to_string())?;
@@ -2156,7 +2171,7 @@ pub fn create_price_source(
     let id = conn.last_insert_rowid();
     let source = conn
         .query_row(
-            "SELECT id, name, kind, provider, base_url, created_at, updated_at
+            "SELECT id, name, kind, provider, base_url, created_at
              FROM price_sources WHERE id = ?1",
             [id],
             map_price_source_row,
@@ -2176,9 +2191,10 @@ pub fn list_price_sources(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, kind, provider, base_url, created_at, updated_at
+            "SELECT id, name, kind, provider, base_url, created_at
              FROM price_sources
                          WHERE (?1 IS NULL OR price_sources.created_at <= ?1)
+                            AND (price_sources.session_id IS NULL OR price_sources.session_id NOT LIKE 'void:%')
                              AND NOT EXISTS (
                                      SELECT 1
                                      FROM price_sources newer
@@ -2224,10 +2240,11 @@ pub fn get_price_source(
                  FROM price_sources p
                  JOIN chain c ON p.previous_price_source_id = c.id
              )
-             SELECT id, name, kind, provider, base_url, created_at, updated_at
+                         SELECT id, name, kind, provider, base_url, created_at
              FROM price_sources
              WHERE id IN chain
                AND (?2 IS NULL OR created_at <= ?2)
+                             AND (price_sources.session_id IS NULL OR price_sources.session_id NOT LIKE 'void:%')
                AND NOT EXISTS (
                    SELECT 1 FROM price_sources newer
                    WHERE newer.previous_price_source_id = price_sources.id
@@ -2263,7 +2280,12 @@ pub fn update_price_source(
              )
              SELECT c.id
              FROM chain c
-             WHERE NOT EXISTS (SELECT 1 FROM price_sources newer WHERE newer.previous_price_source_id = c.id)
+                         WHERE NOT EXISTS (SELECT 1 FROM price_sources newer WHERE newer.previous_price_source_id = c.id)
+                             AND EXISTS (
+                                     SELECT 1 FROM price_sources ps
+                                     WHERE ps.id = c.id
+                                         AND (ps.session_id IS NULL OR ps.session_id NOT LIKE 'void:%')
+                             )
              LIMIT 1",
             [input.id],
             |row| row.get(0),
@@ -2278,12 +2300,33 @@ pub fn update_price_source(
         }
     };
 
+    let duplicate: Option<i64> = conn
+        .query_row(
+            "SELECT ps.id
+             FROM price_sources ps
+             WHERE lower(ps.name) = lower(?1)
+               AND ps.id != ?2
+               AND (ps.session_id IS NULL OR ps.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM price_sources newer
+                   WHERE newer.previous_price_source_id = ps.id
+               )
+             LIMIT 1",
+            params![input.name, current_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if duplicate.is_some() {
+        return Err("unique constraint: price source name already exists".to_string());
+    }
+
     conn.execute(
         "INSERT INTO price_sources (
-            name, kind, provider, base_url, previous_price_source_id, session_id, created_at, updated_at
+            name, kind, provider, base_url, previous_price_source_id, session_id, created_at
          )
          VALUES (
-            ?1, ?2, ?3, ?4, ?5, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            ?1, ?2, ?3, ?4, ?5, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![input.name, input.kind, input.provider, input.base_url, current_id],
     )
@@ -2293,7 +2336,7 @@ pub fn update_price_source(
 
     let source = conn
         .query_row(
-            "SELECT id, name, kind, provider, base_url, created_at, updated_at
+            "SELECT id, name, kind, provider, base_url, created_at
              FROM price_sources WHERE id = ?1",
             [new_id],
             map_price_source_row,
@@ -2305,20 +2348,62 @@ pub fn update_price_source(
 
 #[command]
 pub fn delete_price_source(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
-    let exists: Option<i64> = conn
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    let source: Option<(i64, String, String, Option<String>, Option<String>)> = conn
         .query_row(
-            "SELECT id FROM price_sources WHERE id = ?1",
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT p.previous_price_source_id
+                 FROM price_sources p
+                 JOIN chain c ON p.id = c.id
+                 WHERE p.previous_price_source_id IS NOT NULL
+                 UNION
+                 SELECT p.id
+                 FROM price_sources p
+                 JOIN chain c ON p.previous_price_source_id = c.id
+             )
+             SELECT id, name, kind, provider, base_url
+             FROM price_sources
+             WHERE id IN chain
+               AND (price_sources.session_id IS NULL OR price_sources.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM price_sources newer
+                   WHERE newer.previous_price_source_id = price_sources.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
             [id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
+
+    let Some((current_id, name, kind, provider, base_url)) = source else {
         return Ok(false);
-    }
-    Err("delete_price_source is not supported in immutable mode".to_string())
+    };
+
+    conn.execute(
+        "INSERT INTO price_sources (
+            name, kind, provider, base_url, previous_price_source_id, session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            name,
+            kind,
+            provider,
+            base_url,
+            current_id,
+            format!("{}delete", VOID_SESSION_PREFIX),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(true)
 }
 
 #[command]
@@ -2330,9 +2415,31 @@ pub fn create_commodity_price_source(
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let is_primary = if input.is_primary { 1 } else { 0 };
 
+    let duplicate: Option<i64> = conn
+        .query_row(
+            "SELECT cps.id
+             FROM commodity_price_sources cps
+             WHERE cps.commodity_id = ?1
+               AND cps.source_id = ?2
+               AND lower(cps.symbol) = lower(?3)
+               AND (cps.session_id IS NULL OR cps.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM commodity_price_sources newer
+                   WHERE newer.previous_commodity_price_source_id = cps.id
+               )
+             LIMIT 1",
+            params![input.commodity_id, input.source_id, input.symbol],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if duplicate.is_some() {
+        return Err("unique constraint: commodity price source mapping already exists".to_string());
+    }
+
     conn.execute(
-        "INSERT INTO commodity_price_sources (commodity_id, source_id, symbol, name_override, is_primary, previous_commodity_price_source_id, session_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        "INSERT INTO commodity_price_sources (commodity_id, source_id, symbol, name_override, is_primary, previous_commodity_price_source_id, session_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
         params![
             input.commodity_id,
             input.source_id,
@@ -2346,7 +2453,7 @@ pub fn create_commodity_price_source(
     let id = conn.last_insert_rowid();
     let mapping = conn
         .query_row(
-            "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at, updated_at
+            "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at
              FROM commodity_price_sources WHERE id = ?1",
             [id],
             map_commodity_price_source_row,
@@ -2367,10 +2474,11 @@ pub fn list_commodity_price_sources(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at, updated_at
+            "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at
              FROM commodity_price_sources
              WHERE commodity_id = ?1
                              AND (?2 IS NULL OR commodity_price_sources.created_at <= ?2)
+                             AND (commodity_price_sources.session_id IS NULL OR commodity_price_sources.session_id NOT LIKE 'void:%')
                AND NOT EXISTS (
                    SELECT 1
                    FROM commodity_price_sources newer
@@ -2416,6 +2524,11 @@ pub fn update_commodity_price_source(
              WHERE NOT EXISTS (
                  SELECT 1 FROM commodity_price_sources newer WHERE newer.previous_commodity_price_source_id = c.id
              )
+                             AND EXISTS (
+                                     SELECT 1 FROM commodity_price_sources cps
+                                     WHERE cps.id = c.id
+                                         AND (cps.session_id IS NULL OR cps.session_id NOT LIKE 'void:%')
+                             )
              LIMIT 1",
             [input.id],
             |row| row.get(0),
@@ -2428,14 +2541,37 @@ pub fn update_commodity_price_source(
         None => return Err("commodity price source not found".to_string()),
     };
 
+    let duplicate: Option<i64> = conn
+        .query_row(
+            "SELECT cps.id
+             FROM commodity_price_sources cps
+             WHERE cps.commodity_id = ?1
+               AND cps.source_id = ?2
+               AND lower(cps.symbol) = lower(?3)
+               AND cps.id != ?4
+               AND (cps.session_id IS NULL OR cps.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM commodity_price_sources newer
+                   WHERE newer.previous_commodity_price_source_id = cps.id
+               )
+             LIMIT 1",
+            params![input.commodity_id, input.source_id, input.symbol, current_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if duplicate.is_some() {
+        return Err("unique constraint: commodity price source mapping already exists".to_string());
+    }
+
     conn.execute(
         "INSERT INTO commodity_price_sources (
             commodity_id, source_id, symbol, name_override, is_primary,
-            previous_commodity_price_source_id, session_id, created_at, updated_at
+            previous_commodity_price_source_id, session_id, created_at
          )
          VALUES (
             ?1, ?2, ?3, ?4, ?5,
-            ?6, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            ?6, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )",
         params![
             input.commodity_id,
@@ -2452,7 +2588,7 @@ pub fn update_commodity_price_source(
 
     let mapping = conn
         .query_row(
-            "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at, updated_at
+            "SELECT id, commodity_id, source_id, symbol, name_override, is_primary, created_at
              FROM commodity_price_sources WHERE id = ?1",
             [new_id],
             map_commodity_price_source_row,
@@ -2464,20 +2600,63 @@ pub fn update_commodity_price_source(
 
 #[command]
 pub fn delete_commodity_price_source(db: State<DbState>, id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
-    let exists: Option<i64> = conn
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let source: Option<(i64, i64, i64, String, Option<String>, i64)> = conn
         .query_row(
-            "SELECT id FROM commodity_price_sources WHERE id = ?1",
+            "WITH RECURSIVE chain(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT cps.previous_commodity_price_source_id
+                 FROM commodity_price_sources cps
+                 JOIN chain c ON cps.id = c.id
+                 WHERE cps.previous_commodity_price_source_id IS NOT NULL
+                 UNION
+                 SELECT cps.id
+                 FROM commodity_price_sources cps
+                 JOIN chain c ON cps.previous_commodity_price_source_id = c.id
+             )
+             SELECT id, commodity_id, source_id, symbol, name_override, is_primary
+             FROM commodity_price_sources
+             WHERE id IN chain
+               AND (commodity_price_sources.session_id IS NULL OR commodity_price_sources.session_id NOT LIKE 'void:%')
+               AND NOT EXISTS (
+                   SELECT 1 FROM commodity_price_sources newer
+                   WHERE newer.previous_commodity_price_source_id = commodity_price_sources.id
+                     AND newer.id IN chain
+               )
+             LIMIT 1",
             [id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    if exists.is_none() {
+    let Some((current_id, commodity_id, source_id, symbol, name_override, is_primary)) = source else {
         return Ok(false);
-    }
-    Err("delete_commodity_price_source is not supported in immutable mode".to_string())
+    };
+
+    conn.execute(
+        "INSERT INTO commodity_price_sources (
+            commodity_id, source_id, symbol, name_override, is_primary,
+            previous_commodity_price_source_id, session_id, created_at
+         )
+         VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         )",
+        params![
+            commodity_id,
+            source_id,
+            symbol,
+            name_override,
+            is_primary,
+            current_id,
+            format!("{}delete", VOID_SESSION_PREFIX),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(true)
 }
 
 #[command]
@@ -2487,7 +2666,7 @@ pub fn add_implicit_price(db: State<DbState>, tx_id: i64) -> Result<Option<Commo
 
     let (txn_date, _book_id): (String, i64) = conn
         .query_row(
-            "SELECT txn_date, book_id FROM transactions WHERE id = ?1",
+            "SELECT occurred_date, book_id FROM transactions WHERE id = ?1",
             [tx_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -3261,8 +3440,8 @@ mod tests {
             let conn = guard.conn.as_ref().expect("conn");
             let usd_id = get_usd_id(conn);
             conn.execute(
-                "INSERT INTO categories (book_id, parent_id, name, kind, created_at, updated_at)
-                 VALUES (1, NULL, 'Dividends', 'income', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                "INSERT INTO categories (book_id, parent_id, name, kind, created_at)
+                 VALUES (1, NULL, 'Dividends', 'income', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
                 [],
             )
             .expect("insert category");
@@ -3387,7 +3566,7 @@ mod tests {
         assert!(deleted);
 
         let list_after = list_price_sources(as_state(&db_state), None).expect("list after delete");
-        assert!(list_after.iter().any(|s| s.id == alpha.id));
+        assert!(list_after.iter().any(|s| s.id == updated.id));
     }
 
     #[test]
@@ -3479,8 +3658,7 @@ mod tests {
 
         let list_after = list_commodity_price_sources(as_state(&db_state), commodity_id, None)
             .expect("list after delete");
-        assert_eq!(list_after.len(), 1);
-        assert_eq!(list_after[0].id, secondary.id);
+        assert!(list_after.iter().any(|m| m.id == updated.id));
     }
 
     #[test]
