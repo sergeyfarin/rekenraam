@@ -2168,7 +2168,7 @@ mod tests {
 
         let mut columns = Vec::new();
         let mut stmt = conn
-            .prepare("PRAGMA table_info(fx_rates_daily)")
+            .prepare("PRAGMA table_info(price_observations)")
             .expect("prepare pragma");
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(1))
@@ -2179,11 +2179,11 @@ mod tests {
 
         assert!(columns.contains(&"source_id".to_string()));
         assert!(columns.contains(&"is_derived".to_string()));
-        assert!(columns.contains(&"derived_via_currency_id".to_string()));
+        assert!(columns.contains(&"derived_via_commodity_id".to_string()));
 
         let settings_exists: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='fx_rate_settings'",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pricing_policies'",
                 [],
                 |row| row.get(0),
             )
@@ -2192,7 +2192,7 @@ mod tests {
 
         let refresh_exists: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='fx_rate_refresh_state'",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pricing_refresh_state'",
                 [],
                 |row| row.get(0),
             )
@@ -2205,7 +2205,7 @@ mod tests {
         let (conn, _path) = open_test_db();
 
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM fx_rate_settings", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM pricing_policies", [], |row| row.get(0))
             .expect("settings count");
         assert!(count >= 1);
     }
@@ -2230,15 +2230,15 @@ mod tests {
             .expect("usd id");
         let source_id: i64 = conn
             .query_row(
-                "SELECT id FROM fx_rate_sources WHERE name='ECB' LIMIT 1",
+                "SELECT id FROM price_sources WHERE name='ECB' LIMIT 1",
                 [],
                 |row| row.get(0),
             )
             .expect("source id");
 
         conn.execute(
-            "INSERT INTO fx_rate_refresh_state
-             (book_id, from_currency_id, to_currency_id, source_id, last_success_date, last_attempt_at, last_error)
+            "INSERT INTO pricing_refresh_state
+             (book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![SINGLE_BOOK_ID, from_id, to_id, source_id, "2025-12-30", "2025-12-31T00:00:00Z", "oops"],
         )
@@ -2246,7 +2246,7 @@ mod tests {
 
         let last_success: String = conn
             .query_row(
-                "SELECT last_success_date FROM fx_rate_refresh_state WHERE source_id = ?1",
+                "SELECT last_success_date FROM pricing_refresh_state WHERE source_id = ?1",
                 [source_id],
                 |row| row.get(0),
             )

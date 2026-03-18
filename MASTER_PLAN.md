@@ -122,17 +122,9 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 
 **Gaps found during Sprint 0.1 (recorded for tracking):**
 - `list_account_balances()` and `get_account_tree()` had the same unfiltered balance bug as `get_account_balance_minor()` — fixed in same sprint (not originally listed)
-- Build environment note: WSL2 environment requires GTK dev libraries (`sudo apt install libgtk-3-dev`) to run `cargo test`. Code is type-correct; run tests on Windows/macOS or after installing GTK dev libs.
+- `db_currencies.rs` tests referenced old renamed tables (`fx_rate_sources`, `fx_rate_settings`, `fx_rate_refresh_state`, `fx_rates_daily`, `derived_via_currency_id`) — updated to current schema names in same sprint
 
-**Verify when environment is set up:**
-```bash
-cd src-tauri
-sudo apt install -y libgtk-3-dev libglib2.0-dev libwebkit2gtk-4.1-dev
-cargo test test_balance_excludes_voided_transactions
-cargo test test_balance_excludes_superseded_transactions
-cargo test test_validate_account_type
-cargo test test_escape_like
-```
+**Verified 2026-03-18:** `cargo test` → **67 passed, 0 failed**
 
 ---
 

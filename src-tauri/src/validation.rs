@@ -79,7 +79,9 @@ pub const MAX_AMOUNT_MINOR: i64 = 1_000_000_000_000_00; // 10 billion in minor u
 
 /// Validate that `amount` is within acceptable bounds.
 pub fn validate_amount_minor(amount: i64) -> Result<(), String> {
-    if amount.abs() > MAX_AMOUNT_MINOR {
+    // Use saturating_abs so i64::MIN (which has no positive i64 counterpart) is
+    // treated as i64::MAX, which is guaranteed to exceed MAX_AMOUNT_MINOR.
+    if amount.saturating_abs() > MAX_AMOUNT_MINOR {
         return Err(format!(
             "amount_minor {} exceeds the maximum of ±{} (overflow guard)",
             amount, MAX_AMOUNT_MINOR
