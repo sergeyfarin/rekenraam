@@ -1,7 +1,7 @@
 ## Rekenraam Database Schema
 
-This file summarizes the current SQLite schema.
 Source of truth: `src-tauri/migrations/V1__init.sql`.
+For the development roadmap and planned schema changes, see [MASTER_PLAN.md](MASTER_PLAN.md).
 
 ## Migration Model
 
