@@ -2,7 +2,7 @@
 
 > **Single source of truth.** This document supersedes all previous planning files
 > (`IMPLEMENTATION_PLAN.md`, `IMPORT_PLAN.md`, `1.MD`, and `OLD_TODOS/`).
-> Last updated: 2026-03-18 (Sprint 1.2)
+> Last updated: 2026-03-18 (Stage 1 complete — re-prioritized Stage 2–7)
 
 ---
 
@@ -39,40 +39,43 @@ offline-capable, extensible to sync.
 ### What works ✅
 - Storage lifecycle: SQLite with WAL, versioned migrations (V18+), backup/restore
 - Account CRUD + tree view with rollup balances
-- Transaction/split create + edit with double-entry
-- Account register with running balance
+- Transaction/split create + edit with double-entry; bulk void/delete, duplication, smart date parsing, payee auto-fill
+- Account register with running balance, server-side filters + sort, infinite scroll
+- Dashboard: net worth summary, asset/liability account list, recent transactions, quick actions
 - Investment: holdings, lots, buy/sell/dividend, realized/unrealized gains
 - FX: rate scheduler, source providers, daily/official rates
-- Reports: cashflow, category spend, payee totals, gains
-- Settings: categories, payees, tags, commodities, institutions, DB management
+- Reports: tabular cashflow, category spend, payee totals, gains (all with date filters)
+- Settings: categories, payees, tags, commodities, institutions, DB management, year-end close
 - UI: shadcn-svelte + Tailwind 4 component library
+- Onboarding: welcome screen with Create/Open on first launch
+- Input validation: account type, tx status, name/memo length, amount bounds, LIKE escaping
+- Balance correctness: void/supersede/revert properly excluded from all balance queries
 
 ### What is incomplete or missing ⚠️
 
-**Critical bugs:**
-- Balance calculations include voided/superseded transactions (data integrity)
-
 **Missing MVP features:**
-- ~~Onboarding flow~~ ✅ Done Sprint 1.1
-- ~~Transaction filters incomplete~~ ✅ Done Sprint 1.1 (server-side, infinite scroll)
-- ~~Year-end close UI~~ ✅ Done Sprint 1.1
 - Reconciliation wizard (backend exists, no UI workflow) — Sprint 3.1
+- Import wizard UI (parsers exist, no UI pipeline) — Stage 4
+- Charts on reports page (data APIs exist, only tabular display) — Sprint 7.2 (pulled forward)
+- Scheduled transactions + reminders — Stage 5
+- Budgeting — Stage 6
 
-**Missing product features:**
-- Scheduled transactions + reminders
-- Budgeting (no schema, no UI)
-- Import wizard UI (parsers exist, no UI pipeline)
-- Charts + visual reports
-- Tax features
+**Minor polish gaps (noted during Stage 1):**
+- Split balance hint shows raw minor units, not commodity-formatted — Sprint 2.1
+- `window.confirm()` for bulk actions — replace with Dialog — Sprint 2.1
+- Dashboard: account types hardcoded in frontend (`assetTypes`/`liabilityTypes` arrays) — should derive from backend enum
+- Dashboard: `formatCurrency` divides by 100 regardless of commodity scale — not multi-currency safe
+- Dashboard: recent transactions amount calculation naive for complex splits
+- Planning page (`/planning`) is an empty placeholder
+- No keyboard shortcut strategy (design philosophy mentions keyboard nav but no implementation plan)
 
 **Technical debt:**
-- 5 tests for 19,000+ lines of Rust (virtually no coverage)
-- All errors are `String` — frontend cannot distinguish error types
-- Single `std::sync::Mutex` blocks UI during long operations
-- Hardcoded `SINGLE_BOOK_ID = 1` in 6 files
-- No logging or observability
-- No pagination metadata on list endpoints
-- No UUIDs (required for future sync)
+- All errors are `String` — frontend cannot distinguish error types — Sprint 2.1
+- Single `std::sync::Mutex` blocks UI during long operations — Sprint 2.2
+- Hardcoded `SINGLE_BOOK_ID = 1` in 6 files — Sprint 10.2
+- No logging or observability — Sprint 2.1
+- No pagination metadata on list endpoints (except `list_transactions`) — Sprint 2.1
+- No UUIDs (required for future sync) — Sprint 10.1
 
 ---
 
@@ -175,9 +178,13 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 
 ---
 
-### Stage 2 — Code Quality Foundation  *(required before scaling the codebase)*
+### Stage 2 — Code Quality Foundation  *(can run in parallel with Stage 3)*
 
-**Sprint 2.1 — Structured Errors + Deduplication (2 weeks)**
+> Stage 2 sprints are independent of Stage 3 and Stage 4.1. Start Stage 3 immediately
+> while Stage 2 proceeds in the background. Stage 4.2 import wizard benefits from AppError
+> for error feedback, so complete Sprint 2.1 before Sprint 4.2.
+
+**Sprint 2.1 — Structured Errors + UX Polish (2 weeks)**
 
 | Task | File(s) | Detail |
 |------|---------|--------|
@@ -185,8 +192,12 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 | Migrate error types | All command modules | Replace `Result<T, String>` with `Result<T, AppError>`. Start with `db_transactions.rs`. |
 | Extract `session.rs` | `session.rs` (new) | Move `current_session_id()`, `clear_redo_stack()`, `record_insert_change()` — deduplicate from 3 files |
 | Add `tracing` logging | `Cargo.toml`, `lib.rs`, all modules | `info!` at command entry/exit; `error!` at every error path; `info!` for FX refresh, backup, migration. File rotation in app data dir. |
-| Pagination metadata | `pagination.rs` (new) | `PaginatedResult<T> { items, total_count, has_more }`. Apply to all list commands. Update frontend accordingly. |
+| Pagination metadata | `pagination.rs` (new) | `PaginatedResult<T> { items, total_count, has_more }`. Apply to unbounded list commands (accounts, payees, categories, tags). `list_transactions` already uses infinite scroll; skip. |
 | Update frontend error handling | All frontend invoke calls | Parse structured `AppError` JSON; show contextual dialogs (validation vs system errors) |
+| Replace `window.confirm()` | `transactions/+page.svelte` | Replace bulk action confirmations with proper Dialog components |
+| Split balance format | `transactions/+page.svelte` | Show commodity-formatted balance (scale-aware) instead of raw minor units |
+| Dashboard: commodity-safe formatting | `routes/+page.svelte` | Pass commodity scale to `formatCurrency`; derive asset/liability type from backend enum not hardcoded strings |
+| Global keyboard shortcuts | `routes/+layout.svelte` | `N` = new transaction, `Ctrl+Z` = undo, `Ctrl+Shift+Z` = redo, `?` = help modal, arrow navigation in register |
 
 **Sprint 2.2 — Concurrency (1 week)**
 
@@ -197,7 +208,10 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 
 ---
 
-### Stage 3 — Reconciliation & Data Entry Completions
+### Stage 3 — Reconciliation  *(start immediately — no Stage 2 dependency)*
+
+> Backend reconciliation logic already exists. This is purely frontend UI work.
+> Builds user trust in their data — essential before reconciliation-dependent reports.
 
 **Sprint 3.1 — Reconciliation Wizard (2 weeks)**
 
@@ -225,12 +239,16 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 
 **Sprint 4.2 — Import Wizard UI (2 weeks)**
 
+> UX note: Keep it simple. Target "3 actions, no dead ends": pick file → preview + fix errors → import.
+> Power-user features (template CRUD, rule management) go in Settings. The wizard itself must be
+> operable by a non-technical user in under 2 minutes for a standard bank CSV.
+
 | Task | File(s) | Detail |
 |------|---------|--------|
-| 6-step import wizard | `routes/import/` (new) | Step 1: file pick + format detection. Step 2: template select/create (CSV/XLS). Step 3: column mapping preview. Step 4: validation + row errors. Step 5: duplicate matching. Step 6: commit + results. |
+| 3-step import wizard | `routes/import/` (new) | Step 1: file pick + auto format detection + account selection. Step 2: preview table with row-level errors, column mapping, duplicate flags. Step 3: commit + results summary (imported / skipped / errors). |
 | Import rules management | `settings/+page.svelte` | New "Import Rules" tab: list/create/delete rules with priority ordering |
 | Import template CRUD | Backend + UI | `import_templates` table (V3 migration); CRUD commands; export/import JSON |
-| Duplicate detection UI | Import wizard step 5 | Show suggested duplicates; accept/skip per row; persist decisions |
+| Duplicate detection UI | Import wizard step 2 | Highlight probable duplicates inline; checkbox to skip per row |
 
 ---
 
@@ -313,6 +331,12 @@ CREATE TABLE budget_lines (
 
 ### Stage 7 — Reports & Charts  *(visual financial intelligence)*
 
+> **Re-prioritization note:** The tabular report data APIs already exist (cashflow, spend by category,
+> payee totals, gains). Sprint 7.1 (new chart data APIs) can be skipped initially. Sprint 7.2
+> (chart UI) can be started after Stage 3 as a quick win — just add `chart.js` to the existing
+> reports page. This has high UX impact for simple users with minimal backend work.
+> Full chart API expansion (Sprint 7.1) follows Stage 6 as originally planned.
+
 **Sprint 7.1 — Chart Data APIs (1 week)**
 
 | Task | File(s) | Detail |
@@ -322,14 +346,22 @@ CREATE TABLE budget_lines (
 | Income vs expenses | `db_reports.rs` | Already in cashflow; expose monthly series for charting |
 | Investment performance | `db_reports.rs` | `portfolio_performance(from, to)` — time-weighted return approximation |
 
-**Sprint 7.2 — Chart UI (2 weeks)**
+**Sprint 7.2 — Chart UI (2 weeks)** *(phase A can start after Stage 3)*
+
+Phase A — early win (start after Stage 3, data already available):
 
 | Task | File(s) | Detail |
 |------|---------|--------|
-| Add chart library | `package.json` | Add `chart.js` + `svelte-chartjs` or `layerchart` (Svelte-native) |
-| Net worth chart | `routes/reports/+page.svelte` | Line chart with asset/liability breakdown |
-| Spending pie + bar | `routes/reports/+page.svelte` | Pie by category; bar chart month-over-month |
-| Cash flow chart | `routes/reports/+page.svelte` | Income vs expenses bars |
+| Add chart library | `package.json` | Add `layerchart` (Svelte-native) or `chart.js` + `svelte-chartjs` |
+| Cash flow bar chart | `routes/reports/+page.svelte` | Income vs expenses bars on existing cashflow tab |
+| Spending pie chart | `routes/reports/+page.svelte` | Pie by category on existing spending tab |
+
+Phase B — after Sprint 7.1 data APIs exist:
+
+| Task | File(s) | Detail |
+|------|---------|--------|
+| Net worth line chart | `routes/reports/+page.svelte` | Monthly net worth over time |
+| Spending trend bar chart | `routes/reports/+page.svelte` | Month-over-month per category |
 | Investment performance | `routes/investments/+page.svelte` | Portfolio value over time line chart |
 | Report export | Frontend | Export report data as CSV; print-friendly layout |
 
@@ -439,21 +471,25 @@ Tracked items from the Feb 2026 code review. Cross-referenced to execution sprin
 
 | # | Issue | Severity | Sprint |
 |---|-------|----------|--------|
-| 7 | Balance bug: voided/superseded transactions included in balance | 🔴 Critical | **0.1** |
-| 5 | No input validation (account type, status, name length, amount bounds) | 🟠 High | **0.1** |
+| 7 | Balance bug: voided/superseded transactions included in balance | 🔴 Critical | **0.1** ✅ Fixed |
+| 19 | `txn_date` / `occurred_date` serde mismatch — dates silently missing in all tx operations | 🔴 Critical | **1.2** ✅ Fixed |
+| 5 | No input validation (account type, status, name length, amount bounds) | 🟠 High | **0.1** ✅ Fixed |
 | 3 | All errors are strings; frontend cannot distinguish error types | 🟠 High | **2.1** |
 | 2 | Single `std::sync::Mutex` blocks UI during long operations | 🟠 High | **2.2** |
-| 11 | 5 tests for 19K+ lines; import parsers untested | 🟠 High | **9** |
+| 11 | 67 tests for 19K+ lines; import parsers still untested | 🟠 High | **9** |
 | 4 | `current_session_id()` duplicated in 3 files | 🟡 Medium | **2.1** |
 | 9 | Zero logging/observability | 🟡 Medium | **2.1** |
 | 10 | List endpoints return `Vec<T>` with no pagination metadata | 🟡 Medium | **2.1** — `list_transactions` uses infinite scroll (batch size 50); other list endpoints still unbounded |
+| 20 | Dashboard hardcodes asset/liability account types in frontend arrays | 🟡 Medium | **2.1** — derive from backend enum |
+| 21 | Dashboard `formatCurrency` divides by 100 regardless of commodity scale | 🟡 Medium | **2.1** |
+| 22 | `window.confirm()` used for bulk transaction confirmations | 🟡 Medium | **2.1** |
+| 23 | Split balance hint shows raw minor units, not formatted | 🟡 Medium | **2.1** |
 | 1 | Hardcoded `SINGLE_BOOK_ID = 1` in 6 files | 🟡 Medium | **10.2** |
-| 17 | Missing SQLite PRAGMAs (mmap, cache, busy_timeout, temp_store) | 🟡 Medium | **0.1** |
+| 17 | Missing SQLite PRAGMAs (mmap, cache, busy_timeout, temp_store) | 🟡 Medium | **0.1** ✅ Fixed |
 | 14 | No UUIDs — foreign keys are local integers, breaks sync | 🟡 Medium | **10.1** |
 | 18 | Backup integrity: no checksum after file copy | 🟡 Medium | **10.3** |
 | 12 | Append-only tables grow forever; no compaction | 🟡 Medium | **10.3** |
-| 6 | LIKE `%` and `_` not escaped in user search strings | 🟢 Low | **0.1** |
-| 19 | `txn_date` / `occurred_date` serde mismatch — dates silently missing in all tx operations | 🔴 Critical | **1.2** ✅ Fixed |
+| 6 | LIKE `%` and `_` not escaped in user search strings | 🟢 Low | **0.1** ✅ Fixed |
 | 8 | `std::mem::transmute` in tests (Tauri internal layout assumption) | 🟢 Low | **10.3** |
 | 16 | `#[path = "..."]` hack in `commands.rs` bypasses module system | 🟢 Low | **10.3** |
 | 15 | FX HTTP calls inside Mutex lock; no retry/timeout | 🟢 Low | **2.2** |
@@ -466,19 +502,29 @@ Tracked items from the Feb 2026 code review. Cross-referenced to execution sprin
 ```
 Stage 0 (bugs)
   └─ Stage 1 (MVP UX)
-       └─ Stage 2 (code quality)
-            ├─ Stage 3 (reconciliation)
-            ├─ Stage 4 (import)
+       ├─ Stage 3 (reconciliation) ◄── start immediately, no Stage 2 dependency
+       │    └─ Sprint 7.2 Phase A (charts — cashflow/spending, data already exists)
+       └─ Stage 2 (code quality) ◄── run in parallel with Stage 3
+            ├─ Stage 4 (import) ◄── 4.1 backend can start with Stage 2; 4.2 UI needs Sprint 2.1
             ├─ Stage 5 (schedules)
             ├─ Stage 6 (budgets)
-            │    └─ Stage 7 (reports/charts)
+            │    └─ Stage 7.1 + 7.2 Phase B (full chart APIs + net worth, trends)
             │         └─ Stage 8 (tax)
             └─ Stage 9 (testing — parallel)
                  └─ Stage 10 (future readiness)
                       └─ Stage 11 (advanced, deferred)
 ```
 
-Stages 3, 4, 5, 6 can be worked in parallel after Stage 2 is complete.
+**Recommended next order:**
+1. Stage 3 (reconciliation) + Stage 2 in parallel
+2. Sprint 7.2 Phase A (charts — quick win after Stage 3)
+3. Stage 4.1 (import backend) in parallel with Stage 2
+4. Stage 4.2 (import wizard UI) — after Sprint 2.1 complete
+5. Stage 5 (scheduled transactions)
+6. Stage 6 (budgets)
+7. Stage 7.1 + 7.2 Phase B (advanced charts)
+
+Stages 3, 4, 5, 6 can be worked in parallel after Stage 2.1 is complete.
 
 ---
 
@@ -504,14 +550,18 @@ cd src-tauri
 cargo test
 ```
 
-Current tests (5 total):
+**Current: 67 tests passing** (verified 2026-03-18). Added during Stage 0 + Stage 1:
+- `db_accounts::tests::test_balance_excludes_voided_transactions`
+- `db_accounts::tests::test_balance_excludes_superseded_transactions`
+- `validation::tests::*` — all validators (account type, tx status, name, memo, amount, LIKE escaping)
+- `db_currencies::tests::*` — updated for current schema
 - `db::tests::test_report_cache_invalidation_by_book_state`
 - `db_transactions::tests::test_create_update_register`
 - `db_transactions::tests::test_normalize_date_or_utc_timestamp`
 - `fx_refresh::tests::test_adjust_for_weekend`
 - `fx_refresh::tests::test_prepare_refresh_tasks_uses_active_currencies_and_last_success`
 
-Target after Stage 9: **40+ tests**.
+Target after Stage 9: **40+ Rust tests** (already above that — target is now **100+ tests** with meaningful coverage of all modules).
 
 ---
 
