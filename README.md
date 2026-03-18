@@ -18,11 +18,17 @@ See [MASTER_PLAN.md](MASTER_PLAN.md) for the full execution roadmap.
 - Reports: cashflow, category spend, payee totals, gains
 - Settings: categories, payees, tags, commodities, institutions, database management
 
-**In progress / next up:**
-- Onboarding flow (first-launch DB creation)
-- Complete transaction filters and server-side pagination
+**Sprint 1.1 completed (March 2026):**
+- Onboarding: welcome screen on first launch (no DB path stored)
+- Transaction filters: all moved server-side (payee/memo search, date range, status, account, amount)
+- Infinite scroll register (batches of 50, IntersectionObserver — MS Money / Quicken style)
+- Year-end close UI in Settings → Year-End tab
+- Sorting server-side (date, payee, status, amount)
+
+**Next up:**
 - Reconciliation wizard
 - Import wizard UI (parsers already exist for QIF/OFX/CSV/MT940)
+- Keyboard-driven quick entry (Sprint 1.2)
 
 ## Architecture
 

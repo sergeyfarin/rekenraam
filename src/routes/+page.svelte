@@ -215,13 +215,6 @@
       <p class="text-muted-foreground">Personal finance tracking with a local-first database.</p>
     </div>
 
-    {#if dbReady === false && setupError}
-      <Alert.Root variant="destructive">
-        <Alert.Title>Setup error</Alert.Title>
-        <Alert.Description>{setupError}</Alert.Description>
-      </Alert.Root>
-    {/if}
-
     {#if dbReady === true && error}
       <Alert.Root variant="destructive">
         <Alert.Title>Error</Alert.Title>
@@ -230,31 +223,44 @@
     {/if}
 
     {#if dbReady === null}
-      <Card.Root>
-        <Card.Header>
-          <Card.Title>Loading</Card.Title>
-          <Card.Description>Checking database connection…</Card.Description>
-        </Card.Header>
-      </Card.Root>
+      <div class="flex items-center justify-center py-16">
+        <p class="text-muted-foreground animate-pulse">Starting up…</p>
+      </div>
     {:else if dbReady === false}
-      <Card.Root>
-        <Card.Header>
-          <Card.Title>Welcome to Rekenraam</Card.Title>
-          <Card.Description>
-            To get started, open an existing database or create a new one.
-          </Card.Description>
-        </Card.Header>
-        <Card.Content>
-          <div class="flex flex-wrap gap-3">
-            <Button disabled={busy} onclick={() => !busy && openDatabase()}>
-              Open database
-            </Button>
-            <Button variant="outline" disabled={busy} onclick={() => !busy && createDatabase()}>
-              Create new database
-            </Button>
-          </div>
-        </Card.Content>
-      </Card.Root>
+      <!-- First-launch onboarding screen -->
+      <div class="flex flex-col items-center justify-center py-16 space-y-8 text-center">
+        <div class="space-y-3">
+          <div class="text-5xl">🪙</div>
+          <h2 class="text-3xl font-bold tracking-tight">Welcome to Rekenraam</h2>
+          <p class="text-muted-foreground max-w-md">
+            Your personal finance tracker — local-first, private, and built to last.
+            Get started by creating a new book or opening an existing one.
+          </p>
+        </div>
+
+        {#if setupError}
+          <Alert.Root variant="destructive" class="max-w-md text-left">
+            <Alert.Title>Error</Alert.Title>
+            <Alert.Description>{setupError}</Alert.Description>
+          </Alert.Root>
+        {/if}
+
+        <div class="flex flex-col sm:flex-row gap-4">
+          <Button size="lg" disabled={busy} onclick={() => !busy && createDatabase()} class="min-w-44">
+            <span class="mr-2 text-lg">✨</span>
+            Create new book
+          </Button>
+          <Button size="lg" variant="outline" disabled={busy} onclick={() => !busy && openDatabase()} class="min-w-44">
+            <span class="mr-2 text-lg">📂</span>
+            Open existing file
+          </Button>
+        </div>
+
+        <p class="text-xs text-muted-foreground max-w-xs">
+          Your data is stored as a portable SQLite file on your computer.
+          Nothing is sent to the cloud.
+        </p>
+      </div>
     {:else}
 
     <!-- Net Worth Summary Cards -->

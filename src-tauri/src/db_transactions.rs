@@ -107,6 +107,11 @@ pub struct ListTransactionsFilter {
     pub date_from: Option<String>,
     pub date_to: Option<String>,
     pub search: Option<String>,
+    pub status: Option<String>,
+    pub amount_min: Option<i64>,
+    pub amount_max: Option<i64>,
+    pub sort_by: Option<String>,  // "date" | "payee" | "amount" | "status"
+    pub sort_dir: Option<String>, // "asc" | "desc"
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -796,8 +801,11 @@ pub fn list_transactions(
 
     let book_id = SINGLE_BOOK_ID;
 
-    let limit = filter.limit.unwrap_or(200).max(1);
+    let limit = filter.limit.unwrap_or(50).max(1);
     let offset = filter.offset.unwrap_or(0).max(0);
+
+    // Status filter: default excludes void; if caller passes "void" show only void; "all" shows everything
+    let status_filter = filter.status.as_deref().unwrap_or("active");
 
     let mut sql = String::from(
         "SELECT DISTINCT t.id
@@ -805,7 +813,6 @@ pub fn list_transactions(
          LEFT JOIN splits s ON s.tx_id = t.id
          LEFT JOIN payees p ON p.id = t.payee_id
                  WHERE t.book_id = ?
-                     AND t.status != 'void'
                      AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
                      AND NOT EXISTS (
                          SELECT 1 FROM session_reverts sr
@@ -816,6 +823,18 @@ pub fn list_transactions(
     );
 
     let mut params: Vec<Value> = vec![Value::from(book_id)];
+
+    // Status filtering
+    match status_filter {
+        "all" => {} // no extra filter
+        "void" => {
+            sql.push_str(" AND t.status = 'void'");
+        }
+        _ => {
+            // "active" = exclude void
+            sql.push_str(" AND t.status != 'void'");
+        }
+    }
 
     if let Some(account_id) = filter.account_id {
         sql.push_str(" AND s.account_id = ?");
@@ -845,7 +864,37 @@ pub fn list_transactions(
         params.push(Value::from(like));
     }
 
-    sql.push_str(" ORDER BY t.occurred_date DESC, COALESCE(t.occurred_at_utc, t.posted_at_utc) DESC, t.id DESC LIMIT ? OFFSET ?");
+    // Amount range filter: join needs to be handled carefully with DISTINCT — use subquery
+    if filter.amount_min.is_some() || filter.amount_max.is_some() {
+        sql.push_str(" AND EXISTS (SELECT 1 FROM splits sa WHERE sa.tx_id = t.id");
+        if let Some(min) = filter.amount_min {
+            sql.push_str(" AND ABS(sa.amount_minor) >= ?");
+            params.push(Value::from(min));
+        }
+        if let Some(max) = filter.amount_max {
+            sql.push_str(" AND ABS(sa.amount_minor) <= ?");
+            params.push(Value::from(max));
+        }
+        sql.push_str(")");
+    }
+
+    // Sort order
+    let order_clause = match filter.sort_by.as_deref().unwrap_or("date") {
+        "payee" => {
+            let dir = if filter.sort_dir.as_deref() == Some("asc") { "ASC" } else { "DESC" };
+            format!("p.name {} NULLS LAST, t.occurred_date DESC, t.id DESC", dir)
+        }
+        "status" => {
+            let dir = if filter.sort_dir.as_deref() == Some("asc") { "ASC" } else { "DESC" };
+            format!("t.status {}, t.occurred_date DESC, t.id DESC", dir)
+        }
+        _ => {
+            // default: date
+            let dir = if filter.sort_dir.as_deref() == Some("asc") { "ASC" } else { "DESC" };
+            format!("t.occurred_date {}, COALESCE(t.occurred_at_utc, t.posted_at_utc) {}, t.id {}", dir, dir, dir)
+        }
+    };
+    sql.push_str(&format!(" ORDER BY {} LIMIT ? OFFSET ?", order_clause));
     params.push(Value::from(limit));
     params.push(Value::from(offset));
 

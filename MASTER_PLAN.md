@@ -2,7 +2,7 @@
 
 > **Single source of truth.** This document supersedes all previous planning files
 > (`IMPLEMENTATION_PLAN.md`, `IMPORT_PLAN.md`, `1.MD`, and `OLD_TODOS/`).
-> Last updated: 2026-03-18
+> Last updated: 2026-03-18 (Sprint 1.1)
 
 ---
 
@@ -53,10 +53,10 @@ offline-capable, extensible to sync.
 - Balance calculations include voided/superseded transactions (data integrity)
 
 **Missing MVP features:**
-- Onboarding flow (first-launch DB creation without manual navigation)
-- Transaction filters incomplete (payee, amount range, date range not all wired)
-- Reconciliation wizard (backend exists, no UI workflow)
-- Year-end close UI action
+- ~~Onboarding flow~~ ✅ Done Sprint 1.1
+- ~~Transaction filters incomplete~~ ✅ Done Sprint 1.1 (server-side, infinite scroll)
+- ~~Year-end close UI~~ ✅ Done Sprint 1.1
+- Reconciliation wizard (backend exists, no UI workflow) — Sprint 3.1
 
 **Missing product features:**
 - Scheduled transactions + reminders
@@ -130,15 +130,28 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 
 ### Stage 1 — MVP Usability  *(make it usable by a real user)*
 
-**Sprint 1.1 — Onboarding & Core UX (2 weeks)**
+**Sprint 1.1 — Onboarding & Core UX ✅ DONE (2026-03-18)**
 
-| Task | File(s) | Detail |
+> Design decision: **infinite scroll** instead of paginated navigation (user preference — matches
+> MS Money / Quicken UX; works well with Tauri + SQLite). Batches of 50 rows via `IntersectionObserver`.
+> All filters and sorting are now **server-side** (no client-side filtering on a 10 000-row download).
+
+| Task | File(s) | Status |
 |------|---------|--------|
-| Onboarding flow | `lib.rs`, new `routes/onboarding/` | On first launch (no DB path stored), show a welcome screen with "Create new book" / "Open existing file". Skip manual Settings navigation. |
-| Complete transaction filters | `transactions/+page.svelte` | Wire payee filter, date-range picker, amount range, status filter to `list_transactions` backend params |
-| Server-side sort + pagination | `db_transactions.rs`, frontend | Add `sort_by`, `sort_dir`, `page`, `page_size` to `ListTransactionsFilter`; return `PaginatedResult<T>` |
-| Year-end close UI | `settings/+page.svelte` | Add "Year-End" tab calling `close_fiscal_year`; show resulting closing transaction id + retained earnings delta |
-| Fix README bottom junk | `README.md` | Remove dangling text at line 84-87 |
+| Onboarding welcome screen | `routes/+page.svelte` | ✅ Done: centred welcome screen with Create/Open on first launch |
+| Complete transaction filters (server-side) | `db_transactions.rs`, `transactions/+page.svelte` | ✅ Done: search (payee/memo/ref), date range, status, account, amount range all wired to backend |
+| Infinite scroll register | `transactions/+page.svelte` | ✅ Done: `IntersectionObserver` sentinel, 50-row batches, `has_more` detection |
+| Server-side sort | `db_transactions.rs` | ✅ Done: `sort_by` (date/payee/status/amount) + `sort_dir` added to `ListTransactionsFilter` |
+| Year-end close UI | `settings/+page.svelte` | ✅ Done: "Year-End" tab with date picker, memo, result display (tx_id + delta) |
+| Fix README | `README.md` | ✅ Done: updated In Progress section; no dangling text found |
+
+**Gaps found during Sprint 1.1 (recorded for tracking):**
+- `list_transactions` default limit was 200; lowered to 50 to match infinite-scroll batch size
+- `status` filter added to backend — previously always excluded void with no override
+- Amount range filter uses `ABS(amount_minor)` with a ×100 multiplier from decimal input; accurate only for 2-decimal currencies (adequate for single-currency books; multi-currency filter is approximate)
+- `memoFilter` (client-side column filter) removed — covered by the global `search` bar which queries memo + payee + reference
+- "Account" column is filterable but not server-side sortable (sort by account name requires a JOIN + aggregate; deferred to Sprint 2.1 refactor)
+- `$lib/components/ui/card`, `alert`, `button`, `input`, `label` needed to be explicitly imported in `settings/+page.svelte` for the Year-End tab
 
 **Sprint 1.2 — Transaction UX (2 weeks)**
 
@@ -423,7 +436,7 @@ Tracked items from the Feb 2026 code review. Cross-referenced to execution sprin
 | 11 | 5 tests for 19K+ lines; import parsers untested | 🟠 High | **9** |
 | 4 | `current_session_id()` duplicated in 3 files | 🟡 Medium | **2.1** |
 | 9 | Zero logging/observability | 🟡 Medium | **2.1** |
-| 10 | List endpoints return `Vec<T>` with no pagination metadata | 🟡 Medium | **2.1** |
+| 10 | List endpoints return `Vec<T>` with no pagination metadata | 🟡 Medium | **2.1** — `list_transactions` uses infinite scroll (batch size 50); other list endpoints still unbounded |
 | 1 | Hardcoded `SINGLE_BOOK_ID = 1` in 6 files | 🟡 Medium | **10.2** |
 | 17 | Missing SQLite PRAGMAs (mmap, cache, busy_timeout, temp_store) | 🟡 Medium | **0.1** |
 | 14 | No UUIDs — foreign keys are local integers, breaks sync | 🟡 Medium | **10.1** |

@@ -106,19 +106,29 @@
   let loading = true;
   let error = "";
 
+  // Filter state (all server-side)
   let search = "";
   let dateFrom = "";
   let dateTo = "";
   let statusFilter = "";
   let accountFilterId: number | null = null;
-  let payeeFilter = "";
-  let memoFilter = "";
   let amountMin = "";
   let amountMax = "";
-  type FilterColumn = "date" | "payee" | "memo" | "status" | "account" | "amount";
+  type FilterColumn = "date" | "payee" | "status" | "account" | "amount";
   let activeFilter: FilterColumn | null = null;
-  let sortBy: "date" | "payee" | "memo" | "status" | "account" | "amount" = "date";
+  let sortBy: "date" | "payee" | "status" | "amount" = "date";
   let sortDir: "asc" | "desc" = "desc";
+
+  // Infinite scroll state
+  const BATCH_SIZE = 50;
+  let currentOffset = 0;
+  let hasMore = false;
+  let loadingMore = false;
+  let sentinelEl: HTMLDivElement;
+  let scrollObserver: IntersectionObserver | null = null;
+
+  // Search debounce
+  let searchTimeout: ReturnType<typeof setTimeout>;
 
   let dialogOpen = false;
   let dialogMode: "create" | "edit" = "create";
@@ -150,6 +160,8 @@
   onMount(async () => {
     await loadLookups();
     await loadTransactions();
+    // sentinel must be in DOM before observing — wait a tick
+    setTimeout(setupInfiniteScroll, 0);
   });
 
   async function loadLookups() {
@@ -175,25 +187,74 @@
     }
   }
 
-  async function loadTransactions() {
-    loading = true;
+  function buildFilter(offset: number) {
+    // Amount range: convert decimal input to minor units (scale 2 = cents, good for single currency)
+    const amountMinMinor = amountMin && Number.isFinite(Number(amountMin))
+      ? Math.round(Math.abs(Number(amountMin)) * 100) : undefined;
+    const amountMaxMinor = amountMax && Number.isFinite(Number(amountMax))
+      ? Math.round(Math.abs(Number(amountMax)) * 100) : undefined;
+
+    return {
+      book_id: bookId,
+      account_id: accountFilterId ?? undefined,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined,
+      search: search || undefined,
+      status: statusFilter || undefined,
+      amount_min: amountMinMinor,
+      amount_max: amountMaxMinor,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+      limit: BATCH_SIZE,
+      offset,
+    };
+  }
+
+  async function loadTransactions(append = false) {
+    if (append) {
+      if (!hasMore || loadingMore) return;
+      loadingMore = true;
+    } else {
+      loading = true;
+      currentOffset = 0;
+      transactions = [];
+    }
     error = "";
     try {
-      const filter = {
-        book_id: bookId,
-        account_id: accountFilterId ?? undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-        search: search || undefined,
-        limit: 10000,
-        offset: 0
-      };
-      transactions = await invoke<TransactionWithSplits[]>("list_transactions", { filter });
+      const result = await invoke<TransactionWithSplits[]>("list_transactions", {
+        filter: buildFilter(append ? currentOffset : 0),
+      });
+      if (append) {
+        transactions = [...transactions, ...result];
+      } else {
+        transactions = result;
+      }
+      hasMore = result.length === BATCH_SIZE;
+      currentOffset = (append ? currentOffset : 0) + result.length;
     } catch (e) {
       error = `Failed to load transactions: ${String(e)}`;
     } finally {
       loading = false;
+      loadingMore = false;
     }
+  }
+
+  function setupInfiniteScroll() {
+    scrollObserver?.disconnect();
+    scrollObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadTransactions(true);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    if (sentinelEl) scrollObserver.observe(sentinelEl);
+  }
+
+  function onSearchInput() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => loadTransactions(false), 400);
   }
 
   function formatMinorWithScale(amountMinor: number, scale: number): string {
@@ -269,7 +330,8 @@
   }
 
   function handleHeaderClick(column: FilterColumn) {
-    setSort(column);
+    // "account" column is filterable but not sortable server-side
+    if (column !== "account") setSort(column as typeof sortBy);
     toggleFilter(column);
   }
 
@@ -279,8 +341,7 @@
 
   function hasFilter(column: FilterColumn) {
     if (column === "date") return Boolean(dateFrom || dateTo);
-    if (column === "payee") return Boolean(payeeFilter);
-    if (column === "memo") return Boolean(memoFilter);
+    if (column === "payee") return Boolean(search);
     if (column === "status") return Boolean(statusFilter);
     if (column === "account") return Boolean(accountFilterId);
     if (column === "amount") return Boolean(amountMin || amountMax);
@@ -288,37 +349,16 @@
   }
 
   async function applyFilters() {
-    await loadTransactions();
+    await loadTransactions(false);
   }
 
   async function clearFilter(column: FilterColumn) {
-    if (column === "date") {
-      dateFrom = "";
-      dateTo = "";
-      await loadTransactions();
-      return;
-    }
-    if (column === "payee") {
-      payeeFilter = "";
-      return;
-    }
-    if (column === "memo") {
-      memoFilter = "";
-      return;
-    }
-    if (column === "status") {
-      statusFilter = "";
-      return;
-    }
-    if (column === "account") {
-      accountFilterId = null;
-      await loadTransactions();
-      return;
-    }
-    if (column === "amount") {
-      amountMin = "";
-      amountMax = "";
-    }
+    if (column === "date") { dateFrom = ""; dateTo = ""; }
+    else if (column === "payee") { search = ""; }
+    else if (column === "status") { statusFilter = ""; }
+    else if (column === "account") { accountFilterId = null; }
+    else if (column === "amount") { amountMin = ""; amountMax = ""; }
+    await loadTransactions(false);
   }
 
   async function openCreateDialog() {
@@ -826,64 +866,11 @@
       sortBy = column;
       sortDir = column === "date" ? "desc" : "asc";
     }
+    loadTransactions(false);
   }
 
-  $: filtered = transactions.filter((tx) => {
-    if (statusFilter && tx.transaction.status !== statusFilter) return false;
-    if (dateFrom && tx.transaction.txn_date < dateFrom) return false;
-    if (dateTo && tx.transaction.txn_date > dateTo) return false;
-    if (accountFilterId && !tx.splits.some((s) => s.account_id === accountFilterId)) return false;
-    if (search) {
-      const term = search.toLowerCase();
-      const payee = payeeName(tx.transaction.payee_id).toLowerCase();
-      const memo = (tx.transaction.memo ?? "").toLowerCase();
-      const reference = (tx.transaction.reference ?? "").toLowerCase();
-      const accountsText = tx.splits.map((s) => accountName(s.account_id).toLowerCase()).join(" ");
-      if (!payee.includes(term) && !memo.includes(term) && !reference.includes(term) && !accountsText.includes(term)) {
-        return false;
-      }
-    }
-    if (payeeFilter) {
-      const payee = payeeName(tx.transaction.payee_id).toLowerCase();
-      if (!payee.includes(payeeFilter.toLowerCase())) return false;
-    }
-    if (memoFilter) {
-      const memo = (tx.transaction.memo ?? "").toLowerCase();
-      if (!memo.includes(memoFilter.toLowerCase())) return false;
-    }
-    if (amountMin || amountMax) {
-      const split = primarySplit(tx, accountFilterId);
-      const value = amountToNumber(split.amount_minor, split.commodity_id);
-      if (amountMin && Number.isFinite(Number(amountMin)) && value < Number(amountMin)) return false;
-      if (amountMax && Number.isFinite(Number(amountMax)) && value > Number(amountMax)) return false;
-    }
-    return true;
-  });
-
-  $: sorted = [...filtered].sort((a, b) => {
-    const direction = sortDir === "asc" ? 1 : -1;
-    if (sortBy === "date") {
-      return direction * a.transaction.txn_date.localeCompare(b.transaction.txn_date);
-    }
-    if (sortBy === "payee") {
-      return direction * payeeName(a.transaction.payee_id).localeCompare(payeeName(b.transaction.payee_id));
-    }
-    if (sortBy === "memo") {
-      return direction * (a.transaction.memo ?? "").localeCompare(b.transaction.memo ?? "");
-    }
-    if (sortBy === "status") {
-      return direction * a.transaction.status.localeCompare(b.transaction.status);
-    }
-    if (sortBy === "account") {
-      return direction * accountName(primarySplit(a, accountFilterId).account_id).localeCompare(
-        accountName(primarySplit(b, accountFilterId).account_id)
-      );
-    }
-    if (sortBy === "amount") {
-      return direction * (primarySplit(a, accountFilterId).amount_minor - primarySplit(b, accountFilterId).amount_minor);
-    }
-    return 0;
-  });
+  // Transactions are sorted and filtered server-side; just use the list directly.
+  $: displayedTx = transactions;
 </script>
 
 <main class="py-6">
@@ -905,10 +892,21 @@
 
     <Card.Root>
       <Card.Content class="pt-6">
+        <!-- Search bar (always visible) -->
+        <div class="mb-4">
+          <Input
+            type="search"
+            placeholder="Search payee, memo, reference…"
+            bind:value={search}
+            oninput={onSearchInput}
+            class="max-w-sm"
+          />
+        </div>
+
         {#if loading}
           <p class="text-sm text-muted-foreground">Loading transactions…</p>
         {:else}
-          <!-- Filter Panel -->
+          <!-- Column filter panels (date, status, account, amount) -->
           {#if activeFilter}
             <div class="mb-4 p-4 bg-muted/50 rounded-lg border">
               {#if activeFilter === "date"}
@@ -929,57 +927,40 @@
               {:else if activeFilter === "payee"}
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="space-y-1 flex-1 max-w-xs">
-                    <Label for="tx-payee-filter">Payee contains</Label>
-                    <Input id="tx-payee-filter" placeholder="Filter payee" bind:value={payeeFilter} />
+                    <Label for="tx-payee-search">Search payee / memo</Label>
+                    <Input id="tx-payee-search" placeholder="Type to search…" bind:value={search} oninput={onSearchInput} />
                   </div>
                   <div class="flex gap-2">
-                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
                     <Button variant="ghost" size="sm" onclick={() => clearFilter("payee")}>Clear</Button>
-                  </div>
-                </div>
-              {:else if activeFilter === "memo"}
-                <div class="flex flex-wrap items-end gap-4">
-                  <div class="space-y-1 flex-1 max-w-xs">
-                    <Label for="tx-memo-filter">Memo contains</Label>
-                    <Input id="tx-memo-filter" placeholder="Filter memo" bind:value={memoFilter} />
-                  </div>
-                  <div class="flex gap-2">
-                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
-                    <Button variant="ghost" size="sm" onclick={() => clearFilter("memo")}>Clear</Button>
                   </div>
                 </div>
               {:else if activeFilter === "status"}
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="space-y-1">
                     <Label for="tx-status-filter">Status</Label>
-                    <select id="tx-status-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={statusFilter}>
-                      <option value="">Any status</option>
+                    <select id="tx-status-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={statusFilter} onchange={applyFilters}>
+                      <option value="">Active (non-void)</option>
                       <option value="uncleared">Uncleared</option>
                       <option value="cleared">Cleared</option>
                       <option value="reconciled">Reconciled</option>
-                      <option value="void">Void</option>
+                      <option value="void">Void only</option>
+                      <option value="all">All (including void)</option>
                     </select>
                   </div>
-                  <div class="flex gap-2">
-                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
-                    <Button variant="ghost" size="sm" onclick={() => clearFilter("status")}>Clear</Button>
-                  </div>
+                  <Button variant="ghost" size="sm" onclick={() => clearFilter("status")}>Clear</Button>
                 </div>
               {:else if activeFilter === "account"}
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="space-y-1">
                     <Label for="tx-account-filter">Account</Label>
-                    <select id="tx-account-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={accountFilterId}>
-                      <option value="">All accounts</option>
+                    <select id="tx-account-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={accountFilterId} onchange={applyFilters}>
+                      <option value={null}>All accounts</option>
                       {#each accounts as account}
                         <option value={account.id}>{account.name}</option>
                       {/each}
                     </select>
                   </div>
-                  <div class="flex gap-2">
-                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
-                    <Button variant="ghost" size="sm" onclick={() => clearFilter("account")}>Clear</Button>
-                  </div>
+                  <Button variant="ghost" size="sm" onclick={() => clearFilter("account")}>Clear</Button>
                 </div>
               {:else if activeFilter === "amount"}
                 <div class="flex flex-wrap items-end gap-4">
@@ -1004,7 +985,7 @@
             <Table.Root>
               <Table.Header>
                 <Table.Row>
-                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("date")}>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50 w-28" onclick={() => handleHeaderClick("date")}>
                     <span class="flex items-center gap-1">
                       {#if hasFilter("date")}<span class="text-primary">⏷</span>{/if}
                       Date
@@ -1014,18 +995,11 @@
                   <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("payee")}>
                     <span class="flex items-center gap-1">
                       {#if hasFilter("payee")}<span class="text-primary">⏷</span>{/if}
-                      Payee
+                      Payee / Memo
                       {#if sortBy === "payee"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
                     </span>
                   </Table.Head>
-                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("memo")}>
-                    <span class="flex items-center gap-1">
-                      {#if hasFilter("memo")}<span class="text-primary">⏷</span>{/if}
-                      Memo
-                      {#if sortBy === "memo"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
-                    </span>
-                  </Table.Head>
-                  <Table.Head class="cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("status")}>
+                  <Table.Head class="cursor-pointer hover:bg-muted/50 w-28" onclick={() => handleHeaderClick("status")}>
                     <span class="flex items-center gap-1">
                       {#if hasFilter("status")}<span class="text-primary">⏷</span>{/if}
                       Status
@@ -1036,7 +1010,6 @@
                     <span class="flex items-center gap-1">
                       {#if hasFilter("account")}<span class="text-primary">⏷</span>{/if}
                       Account
-                      {#if sortBy === "account"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
                     </span>
                   </Table.Head>
                   <Table.Head class="text-right cursor-pointer hover:bg-muted/50" onclick={() => handleHeaderClick("amount")}>
@@ -1046,28 +1019,34 @@
                       {#if sortBy === "amount"}<span class="text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>{/if}
                     </span>
                   </Table.Head>
-                  <Table.Head class="text-right">Actions</Table.Head>
+                  <Table.Head class="text-right w-44">Actions</Table.Head>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {#if sorted.length === 0}
+                {#if displayedTx.length === 0}
                   <Table.Row>
-                    <Table.Cell colspan={7} class="text-center text-muted-foreground py-8">
+                    <Table.Cell colspan={6} class="text-center text-muted-foreground py-8">
                       No transactions found.
                     </Table.Cell>
                   </Table.Row>
                 {:else}
-                  {#each sorted as tx (tx.transaction.id)}
+                  {#each displayedTx as tx (tx.transaction.id)}
                     <Table.Row class="hover:bg-muted/50">
                       <Table.Cell class="font-mono text-sm">{tx.transaction.txn_date}</Table.Cell>
-                      <Table.Cell>{payeeName(tx.transaction.payee_id)}</Table.Cell>
-                      <Table.Cell class="text-muted-foreground">{tx.transaction.memo ?? "—"}</Table.Cell>
+                      <Table.Cell>
+                        <div class="leading-snug">
+                          <span class="font-medium">{payeeName(tx.transaction.payee_id)}</span>
+                          {#if tx.transaction.memo}
+                            <span class="block text-xs text-muted-foreground">{tx.transaction.memo}</span>
+                          {/if}
+                        </div>
+                      </Table.Cell>
                       <Table.Cell>
                         <Badge variant={tx.transaction.status === "reconciled" ? "default" : tx.transaction.status === "cleared" ? "secondary" : tx.transaction.status === "void" ? "destructive" : "outline"}>
                           {tx.transaction.status}
                         </Badge>
                       </Table.Cell>
-                      <Table.Cell>{accountName(primarySplit(tx, accountFilterId).account_id)}</Table.Cell>
+                      <Table.Cell class="text-sm">{accountName(primarySplit(tx, accountFilterId).account_id)}</Table.Cell>
                       <Table.Cell class="text-right font-mono {primarySplit(tx, accountFilterId).amount_minor < 0 ? 'text-red-600' : 'text-green-600'}">
                         {formatAmount(primarySplit(tx, accountFilterId).amount_minor, primarySplit(tx, accountFilterId).commodity_id)}
                       </Table.Cell>
@@ -1088,6 +1067,15 @@
                 {/if}
               </Table.Body>
             </Table.Root>
+          </div>
+
+          <!-- Infinite scroll sentinel -->
+          <div bind:this={sentinelEl} class="py-2 text-center text-sm text-muted-foreground">
+            {#if loadingMore}
+              <span>Loading more…</span>
+            {:else if !hasMore && displayedTx.length > 0}
+              <span class="text-xs opacity-50">{displayedTx.length} transaction{displayedTx.length === 1 ? "" : "s"}</span>
+            {/if}
           </div>
         {/if}
       </Card.Content>
