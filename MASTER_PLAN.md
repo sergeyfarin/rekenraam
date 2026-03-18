@@ -2,7 +2,7 @@
 
 > **Single source of truth.** This document supersedes all previous planning files
 > (`IMPLEMENTATION_PLAN.md`, `IMPORT_PLAN.md`, `1.MD`, and `OLD_TODOS/`).
-> Last updated: 2026-03-18 (Sprint 1.1)
+> Last updated: 2026-03-18 (Sprint 1.2)
 
 ---
 
@@ -153,15 +153,25 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 - "Account" column is filterable but not server-side sortable (sort by account name requires a JOIN + aggregate; deferred to Sprint 2.1 refactor)
 - `$lib/components/ui/card`, `alert`, `button`, `input`, `label` needed to be explicitly imported in `settings/+page.svelte` for the Year-End tab
 
-**Sprint 1.2 — Transaction UX (2 weeks)**
+**Sprint 1.2 — Transaction UX ✅ DONE (2026-03-18)**
 
-| Task | File(s) | Detail |
+| Task | File(s) | Status |
 |------|---------|--------|
-| Keyboard-driven quick entry | `transactions/+page.svelte` | Tab-through fields; Enter to save; Escape to cancel; auto-advance to next row |
-| Payee/category auto-fill | Frontend | On payee selection, pre-fill last-used category and memo for that payee (call new `get_payee_defaults` command) |
-| Transaction duplication | Frontend + backend | "Duplicate" action creates a copy with today's date |
-| Bulk operations | Frontend | Multi-select with checkboxes; bulk categorize, bulk void, bulk delete |
-| Split balancing hint | Transaction form | Show running debit/credit sum; highlight imbalance in red before save |
+| Smart date parsing | `transactions/+page.svelte` | ✅ Done: text input with `parseSmartDate` — handles DD, MDD, MMDD, M/DD, DD/MM, YYYY-MM-DD, "today"/"t"; guesses month from recent past; year from past 60-day window |
+| Payee/category auto-fill | `transactions/+page.svelte`, `db_transactions.rs` | ✅ Done: `get_payee_defaults` command queries last non-void tx for payee (optionally by account); auto-fills category + memo on exact payee match |
+| Transaction duplication | `transactions/+page.svelte`, `db_transactions.rs` | ✅ Done: `duplicate_transaction` command; "Dup" button on each row; copies splits, sets today's date and status=uncleared |
+| Bulk operations | `transactions/+page.svelte`, `db_transactions.rs` | ✅ Done: multi-select checkboxes, select-all, bulk void (`bulk_void_transactions`), bulk delete (`bulk_delete_transactions`); both skip locked accounts |
+| Split balancing hint | `transactions/+page.svelte` | ✅ Done: shows balance in minor units, green "✓ Balanced" when zero, red with delta when not |
+| Bug fix: `txn_date` vs `occurred_date` mismatch | `db_transactions.rs` | ✅ Fixed: added `#[serde(rename = "txn_date")]` to all 6 `occurred_date` fields in `Transaction`, `CreateTransactionInput`, `UpdateTransactionInput`, `RegisterEntry`, `RegisterEntryWithBalance`, `PostingEntry` — dates now correctly round-trip between frontend and backend |
+
+**Gaps found during Sprint 1.2 (recorded for tracking):**
+- Smart date parsing deferred edge cases: locale-aware separators (e.g. European DD.MM.YYYY), relative dates ("yesterday", "+3d"), week numbers — document for later polish
+- Payee auto-fill only fills category/memo when both fields are currently empty (non-destructive); does not yet suggest the full last split set for complex transactions
+- Split balance hint shows raw minor-unit total, not formatted with commodity scale — acceptable for MVP, improve in Sprint 2.1 with commodity-aware formatting
+- Bulk categorize (re-assign category to selected transactions) deferred — requires fetching all splits and updating, more complex than void/delete
+- `window.confirm()` used for bulk action confirmation — replace with proper Dialog in Sprint 2.1 UX polish pass
+- `formCategoryInput` auto-fill from payee defaults requires the category to still exist in the lookup list; does not handle deleted categories gracefully — acceptable for MVP
+- `indeterminate` checkbox attribute on `<input>` works natively in browsers but TypeScript types may not include it — works at runtime
 
 ---
 
@@ -443,6 +453,7 @@ Tracked items from the Feb 2026 code review. Cross-referenced to execution sprin
 | 18 | Backup integrity: no checksum after file copy | 🟡 Medium | **10.3** |
 | 12 | Append-only tables grow forever; no compaction | 🟡 Medium | **10.3** |
 | 6 | LIKE `%` and `_` not escaped in user search strings | 🟢 Low | **0.1** |
+| 19 | `txn_date` / `occurred_date` serde mismatch — dates silently missing in all tx operations | 🔴 Critical | **1.2** ✅ Fixed |
 | 8 | `std::mem::transmute` in tests (Tauri internal layout assumption) | 🟢 Low | **10.3** |
 | 16 | `#[path = "..."]` hack in `commands.rs` bypasses module system | 🟢 Low | **10.3** |
 | 15 | FX HTTP calls inside Mutex lock; no retry/timeout | 🟢 Low | **2.2** |

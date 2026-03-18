@@ -15,6 +15,7 @@ pub struct Transaction {
     pub id: i64,
     pub book_id: i64,
     pub previous_tx_id: Option<i64>,
+    #[serde(rename = "txn_date")]
     pub occurred_date: String,
     pub occurred_at_utc: Option<String>,
     pub occurred_tz: Option<String>,
@@ -67,6 +68,7 @@ pub struct CreateSplit {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateTransactionInput {
     pub book_id: i64,
+    #[serde(rename = "txn_date")]
     pub occurred_date: String,
     pub occurred_at_utc: Option<String>,
     pub occurred_tz: Option<String>,
@@ -85,6 +87,7 @@ pub struct CreateTransactionInput {
 pub struct UpdateTransactionInput {
     pub id: i64,
     pub book_id: i64,
+    #[serde(rename = "txn_date")]
     pub occurred_date: String,
     pub occurred_at_utc: Option<String>,
     pub occurred_tz: Option<String>,
@@ -119,6 +122,7 @@ pub struct ListTransactionsFilter {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RegisterEntry {
     pub tx_id: i64,
+    #[serde(rename = "txn_date")]
     pub occurred_date: String,
     pub payee_id: Option<i64>,
     pub payee_name: Option<String>,
@@ -136,6 +140,7 @@ pub struct RegisterEntry {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RegisterEntryWithBalance {
     pub tx_id: i64,
+    #[serde(rename = "txn_date")]
     pub occurred_date: String,
     pub payee_id: Option<i64>,
     pub payee_name: Option<String>,
@@ -154,6 +159,7 @@ pub struct RegisterEntryWithBalance {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PostingEntry {
     pub tx_id: i64,
+    #[serde(rename = "txn_date")]
     pub occurred_date: String,
     pub payee_id: Option<i64>,
     pub payee_name: Option<String>,
@@ -1536,4 +1542,290 @@ pub fn ensure_currency_trading_balances(
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(inserted)
+}
+
+// ── Payee defaults ────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PayeeDefaults {
+    pub category_id: Option<i64>,
+    pub memo: Option<String>,
+}
+
+/// Return the category and memo from the most recent non-void transaction for
+/// the given payee.  Optionally restricted to a specific account.
+#[command]
+pub fn get_payee_defaults(
+    db: State<DbState>,
+    payee_id: i64,
+    account_id: Option<i64>,
+) -> Result<PayeeDefaults, String> {
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+
+    let book_id = SINGLE_BOOK_ID;
+
+    // Look for the most recent qualifying split: category set, payee matches, not void/superseded.
+    let row: Option<(Option<i64>, Option<String>)> = if let Some(acct) = account_id {
+        conn.query_row(
+            "SELECT s.category_id, t.memo
+             FROM splits s
+             JOIN transactions t ON t.id = s.tx_id
+             WHERE t.book_id = ?1
+               AND t.payee_id = ?2
+               AND s.account_id = ?3
+               AND s.category_id IS NOT NULL
+               AND t.status NOT IN ('void')
+               AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+             ORDER BY t.occurred_date DESC, t.id DESC
+             LIMIT 1",
+            params![book_id, payee_id, acct],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+    } else {
+        conn.query_row(
+            "SELECT s.category_id, t.memo
+             FROM splits s
+             JOIN transactions t ON t.id = s.tx_id
+             WHERE t.book_id = ?1
+               AND t.payee_id = ?2
+               AND s.category_id IS NOT NULL
+               AND t.status NOT IN ('void')
+               AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+             ORDER BY t.occurred_date DESC, t.id DESC
+             LIMIT 1",
+            params![book_id, payee_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+    };
+
+    Ok(match row {
+        Some((category_id, memo)) => PayeeDefaults { category_id, memo },
+        None => PayeeDefaults { category_id: None, memo: None },
+    })
+}
+
+// ── Duplicate transaction ─────────────────────────────────────────────────────
+
+/// Create a copy of an existing transaction with today's date and status=uncleared.
+#[command]
+pub fn duplicate_transaction(
+    db: State<DbState>,
+    id: i64,
+    today: String,
+) -> Result<TransactionWithSplits, String> {
+    ensure_occurred_date_format(&today)?;
+
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+
+    // Fetch the source transaction with its splits
+    let source = {
+        let tx_row: Option<(Option<i64>, Option<String>, i64)> = conn.query_row(
+            "SELECT payee_id, memo, book_id FROM transactions WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = transactions.id)",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).optional().map_err(|e| e.to_string())?;
+
+        match tx_row {
+            None => return Err("source transaction not found".to_string()),
+            Some(row) => row,
+        }
+    };
+    let (payee_id, memo, _book_id) = source;
+
+    let splits: Vec<(i64, i64, i64, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>)> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo
+                 FROM splits WHERE tx_id = ?1 ORDER BY id ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, Option<i64>>(6)?,
+                    row.get::<_, Option<i64>>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut v = Vec::new();
+        for r in rows { v.push(r.map_err(|e| e.to_string())?); }
+        v
+    };
+
+    if splits.is_empty() {
+        return Err("source transaction has no splits".to_string());
+    }
+
+    let book_id = SINGLE_BOOK_ID;
+    let db_tx = conn.transaction().map_err(|e| e.to_string())?;
+    let session_id = current_session_id(&db_tx)?;
+
+    let account_ids: HashSet<i64> = splits.iter().map(|s| s.0).collect();
+    check_account_locks(&db_tx, &today, &account_ids)?;
+
+    db_tx.execute(
+        "INSERT INTO transactions (book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz, payee_id, memo, status, reference, import_id, session_id, created_at)
+         VALUES (?1, NULL, ?2, NULL, NULL, ?2, NULL, NULL, ?3, ?4, 'uncleared', NULL, NULL, ?5, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![book_id, today, payee_id, memo, session_id],
+    ).map_err(|e| e.to_string())?;
+    let new_tx_id = db_tx.last_insert_rowid();
+
+    for (account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, split_memo) in &splits {
+        db_tx.execute(
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![new_tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, split_memo],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    record_insert_change(&db_tx, &session_id, "transactions", new_tx_id)?;
+    clear_redo_stack(&db_tx, &session_id)?;
+    db_tx.commit().map_err(|e| e.to_string())?;
+
+    let result = fetch_transaction_with_splits(conn, new_tx_id)?;
+    Ok(result)
+}
+
+// ── Bulk operations ───────────────────────────────────────────────────────────
+
+/// Void multiple transactions by ID. Skips locked or already-void transactions
+/// and returns the count voided.
+#[command]
+pub fn bulk_void_transactions(
+    db: State<DbState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let book_id = SINGLE_BOOK_ID;
+    let mut voided = 0;
+
+    for id in ids {
+        // Fetch the current transaction
+        let row: Option<(String, Option<i64>, Option<String>, Option<String>)> = conn
+            .query_row(
+                "SELECT occurred_date, payee_id, memo, reference
+                 FROM transactions WHERE id = ?1 AND book_id = ?2 AND status != 'void'
+                   AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = transactions.id)",
+                params![id, book_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+
+        let (occurred_date, payee_id, memo, reference) = match row {
+            None => continue, // skip: not found, already void, or superseded
+            Some(r) => r,
+        };
+
+        // Get splits
+        let split_rows: Vec<(i64, i64, i64, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<i64>, Option<String>)> = {
+            let mut stmt = conn
+                .prepare("SELECT account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo FROM splits WHERE tx_id = ?1 ORDER BY id ASC")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([id], |row| Ok((
+                row.get(0)?, row.get(1)?, row.get(2)?,
+                row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?, row.get(8)?,
+            ))).map_err(|e| e.to_string())?;
+            let mut v = Vec::new();
+            for r in rows { v.push(r.map_err(|e| e.to_string())?); }
+            v
+        };
+
+        // Check locks
+        let account_ids: HashSet<i64> = split_rows.iter().map(|s| s.0).collect();
+        if check_account_locks(conn, &occurred_date, &account_ids).is_err() {
+            continue; // skip locked
+        }
+
+        let db_tx = conn.transaction().map_err(|e| e.to_string())?;
+        let session_id = current_session_id(&db_tx)?;
+
+        db_tx.execute(
+            "INSERT INTO transactions (book_id, previous_tx_id, occurred_date, occurred_at_utc, occurred_tz, posted_date, posted_at_utc, posted_tz, payee_id, memo, status, reference, import_id, session_id, created_at)
+             VALUES (?1, ?2, ?3, NULL, NULL, ?3, NULL, NULL, ?4, ?5, 'void', ?6, NULL, ?7, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![book_id, id, occurred_date, payee_id, memo, reference, session_id],
+        ).map_err(|e| e.to_string())?;
+        let new_tx_id = db_tx.last_insert_rowid();
+
+        for (account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, split_memo) in &split_rows {
+            db_tx.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, memo, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![new_tx_id, account_id, commodity_id, amount_minor, category_id, tag_id, person_id, project_id, share_bps, split_memo],
+            ).map_err(|e| e.to_string())?;
+        }
+
+        record_insert_change(&db_tx, &session_id, "transactions", new_tx_id)?;
+        clear_redo_stack(&db_tx, &session_id)?;
+        db_tx.commit().map_err(|e| e.to_string())?;
+        voided += 1;
+    }
+
+    Ok(voided)
+}
+
+/// Delete multiple transactions by ID. Skips locked transactions.
+#[command]
+pub fn bulk_delete_transactions(
+    db: State<DbState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+    let book_id = SINGLE_BOOK_ID;
+    let mut deleted = 0;
+
+    for id in ids {
+        // Verify it exists and is not locked
+        let row: Option<String> = conn
+            .query_row(
+                "SELECT occurred_date FROM transactions WHERE id = ?1 AND book_id = ?2
+                   AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = transactions.id)",
+                params![id, book_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+
+        let occurred_date = match row {
+            None => continue,
+            Some(d) => d,
+        };
+
+        let split_account_ids: Vec<i64> = {
+            let mut stmt = conn.prepare("SELECT DISTINCT account_id FROM splits WHERE tx_id = ?1").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([id], |row| row.get(0)).map_err(|e| e.to_string())?;
+            let mut v = Vec::new();
+            for r in rows { v.push(r.map_err(|e| e.to_string())?); }
+            v
+        };
+        let account_set: HashSet<i64> = split_account_ids.into_iter().collect();
+        if check_account_locks(conn, &occurred_date, &account_set).is_err() {
+            continue;
+        }
+
+        let db_tx = conn.transaction().map_err(|e| e.to_string())?;
+        let session_id = current_session_id(&db_tx)?;
+        db_tx.execute("DELETE FROM splits WHERE tx_id = ?1", [id]).map_err(|e| e.to_string())?;
+        db_tx.execute("DELETE FROM transactions WHERE id = ?1", [id]).map_err(|e| e.to_string())?;
+        clear_redo_stack(&db_tx, &session_id)?;
+        db_tx.commit().map_err(|e| e.to_string())?;
+        deleted += 1;
+    }
+
+    Ok(deleted)
 }

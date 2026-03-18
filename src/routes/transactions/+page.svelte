@@ -134,7 +134,10 @@
   let dialogMode: "create" | "edit" = "create";
   let submitting = false;
   let formId: number | null = null;
+  // formDateRaw is what the user types; formDate is the resolved ISO YYYY-MM-DD
+  let formDateRaw = "";
   let formDate = "";
+  let formDateHint = ""; // shown when raw != resolved
   let formAccountId: number | null = null;
   let formTransferAccountId: number | null = null;
   let formPayeeId: number | null = null;
@@ -148,6 +151,10 @@
   let splitMode = false;
   let splitEditorOpen = false;
   let formSplits: SplitDraft[] = [];
+
+  // Multi-select state
+  let selectedIds = new Set<number>();
+  let bulkActionRunning = false;
 
   $: selectedCategoryKind = formCategoryId
     ? categories.find((category) => category.id === formCategoryId)?.kind ?? null
@@ -365,6 +372,8 @@
     dialogMode = "create";
     formId = null;
     formDate = new Date().toISOString().slice(0, 10);
+    formDateRaw = formDate;
+    formDateHint = "";
     formAccountId = accountFilterId;
     formTransferAccountId = null;
     formPayeeId = null;
@@ -388,6 +397,8 @@
     dialogMode = "edit";
     formId = tx.transaction.id;
     formDate = tx.transaction.txn_date;
+    formDateRaw = formDate;
+    formDateHint = "";
     const primary = primarySplit(tx, accountFilterId);
     const transfer = tx.splits.find((s) => s.account_id !== primary.account_id) ?? tx.splits[0];
     formAccountId = primary.account_id;
@@ -477,10 +488,141 @@
     return items.find((item) => normalizeName(item.name) === needle);
   }
 
-  function syncTopLevelInput(kind: "payee" | "category", value: string) {
+  // ─── Smart date parsing ────────────────────────────────────────────────────
+
+  function parseSmartDate(raw: string, todayIso: string): string | null {
+    const s = raw.trim();
+    if (!s) return null;
+
+    // "t" or "today"
+    if (s.toLowerCase() === "t" || s.toLowerCase() === "today") return todayIso;
+
+    // Already ISO YYYY-MM-DD or YYYY-M-D
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+      const [y, m, d] = s.split("-").map(Number);
+      return toIso(y, m, d);
+    }
+
+    const today = new Date(todayIso + "T12:00:00");
+
+    function toIso(y: number, m: number, d: number): string | null {
+      if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+      const dt = new Date(y, m - 1, d);
+      if (dt.getMonth() !== m - 1) return null; // overflow (e.g. Feb 30)
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+
+    function guessYear(m: number, d: number): number {
+      const y = today.getFullYear();
+      const candidate = new Date(y, m - 1, d);
+      const diffDays = (candidate.getTime() - today.getTime()) / 86400000;
+      return diffDays > 60 ? y - 1 : y;
+    }
+
+    function resolveMonthDay(a: number, b: number, year: number | null): string | null {
+      let month: number, day: number;
+      if (a > 12 && b <= 12) { day = a; month = b; }
+      else if (b > 12 && a <= 12) { day = b; month = a; }
+      else { month = a; day = b; } // ambiguous: MM/DD convention
+      const y = year ?? guessYear(month, day);
+      return toIso(y, month, day);
+    }
+
+    // Separator-delimited: A/B or A/B/C (also - and .)
+    const sepMatch = s.match(/^(\d{1,4})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?$/);
+    if (sepMatch) {
+      const [, a, b, c] = sepMatch;
+      const aNum = parseInt(a, 10), bNum = parseInt(b, 10);
+      if (c) {
+        const cNum = parseInt(c, 10);
+        if (aNum > 31) {
+          // YYYY/MM/DD
+          return toIso(aNum, bNum, cNum);
+        } else {
+          // DD/MM/YY or MM/DD/YY
+          const year = cNum < 100 ? 2000 + cNum : cNum;
+          return resolveMonthDay(aNum, bNum, year);
+        }
+      } else {
+        return resolveMonthDay(aNum, bNum, null);
+      }
+    }
+
+    // No separator: 1–4 digits
+    if (/^\d{1,4}$/.test(s)) {
+      const n = parseInt(s, 10);
+      if (s.length <= 2) {
+        // Day only: use current month, step back if more than 2 days in future
+        const d = n;
+        if (d < 1 || d > 31) return null;
+        let m = today.getMonth() + 1;
+        let y = today.getFullYear();
+        const candidate = new Date(y, m - 1, d);
+        if (isNaN(candidate.getTime()) || candidate.getMonth() !== m - 1) {
+          m -= 1; if (m === 0) { m = 12; y -= 1; }
+        } else {
+          const diff = (candidate.getTime() - today.getTime()) / 86400000;
+          if (diff > 2) { m -= 1; if (m === 0) { m = 12; y -= 1; } }
+        }
+        return toIso(y, m, d);
+      } else if (s.length === 3) {
+        // MDD: first digit = month, last two = day
+        return resolveMonthDay(parseInt(s[0], 10), parseInt(s.slice(1), 10), null);
+      } else {
+        // MMDD
+        return resolveMonthDay(parseInt(s.slice(0, 2), 10), parseInt(s.slice(2), 10), null);
+      }
+    }
+
+    return null;
+  }
+
+  function onDateInput(value: string) {
+    formDateRaw = value;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const resolved = parseSmartDate(value, todayIso);
+    if (resolved) {
+      formDate = resolved;
+      formDateHint = resolved !== value.trim() ? resolved : "";
+    } else {
+      formDate = "";
+      formDateHint = "";
+    }
+  }
+
+  function onDateBlur() {
+    // On blur, if parsed, replace raw with the canonical ISO form
+    if (formDate) {
+      formDateRaw = formDate;
+      formDateHint = "";
+    }
+  }
+
+  // ─── Payee auto-fill ───────────────────────────────────────────────────────
+
+  async function syncTopLevelInput(kind: "payee" | "category", value: string) {
     if (kind === "payee") {
       formPayeeInput = value;
-      formPayeeId = exactMatchByName(payees, value)?.id ?? null;
+      const matched = exactMatchByName(payees, value);
+      formPayeeId = matched?.id ?? null;
+      // When we get an exact payee match, auto-fill category + memo from last transaction
+      if (matched) {
+        try {
+          const defaults = await invoke<{ category_id: number | null; memo: string | null }>(
+            "get_payee_defaults",
+            { payeeId: matched.id, accountId: formAccountId ?? undefined }
+          );
+          if (defaults.category_id && !formCategoryId) {
+            formCategoryId = defaults.category_id;
+            formCategoryInput = categoryName(defaults.category_id);
+          }
+          if (defaults.memo && !formMemo) {
+            formMemo = defaults.memo;
+          }
+        } catch {
+          // ignore auto-fill errors silently
+        }
+      }
       return;
     }
     formCategoryInput = value;
@@ -745,6 +887,9 @@
     submitting = true;
     error = "";
     try {
+      if (!formDate) {
+        throw new Error("Date is required and must be a valid date");
+      }
       const payeeId = await ensureEntityId("payee", formPayeeInput, formPayeeId);
       formPayeeId = payeeId;
       const splits = await buildSplitsForSubmit();
@@ -869,6 +1014,77 @@
     loadTransactions(false);
   }
 
+  // ─── Duplicate transaction ─────────────────────────────────────────────────
+
+  async function duplicateTransaction(tx: TransactionWithSplits) {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      await invoke("duplicate_transaction", { id: tx.transaction.id, today });
+      await loadTransactions();
+    } catch (e) {
+      error = `Failed to duplicate: ${String(e)}`;
+    }
+  }
+
+  // ─── Multi-select helpers ──────────────────────────────────────────────────
+
+  function toggleSelect(id: number) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    selectedIds = new Set(selectedIds); // trigger reactivity
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === displayedTx.length && displayedTx.length > 0) {
+      selectedIds = new Set();
+    } else {
+      selectedIds = new Set(displayedTx.map((t) => t.transaction.id));
+    }
+  }
+
+  function clearSelection() {
+    selectedIds = new Set();
+  }
+
+  // ─── Bulk operations ───────────────────────────────────────────────────────
+
+  async function bulkVoid() {
+    if (selectedIds.size === 0) return;
+    const confirmed = window.confirm(`Void ${selectedIds.size} selected transaction(s)?`);
+    if (!confirmed) return;
+    bulkActionRunning = true;
+    error = "";
+    try {
+      const voided = await invoke<number>("bulk_void_transactions", { ids: Array.from(selectedIds) });
+      clearSelection();
+      await loadTransactions();
+      if (voided < selectedIds.size) {
+        // Some were skipped (locked)
+      }
+    } catch (e) {
+      error = `Bulk void failed: ${String(e)}`;
+    } finally {
+      bulkActionRunning = false;
+    }
+  }
+
+  async function bulkDelete() {
+    if (selectedIds.size === 0) return;
+    const confirmed = window.confirm(`Permanently delete ${selectedIds.size} selected transaction(s)? This cannot be undone.`);
+    if (!confirmed) return;
+    bulkActionRunning = true;
+    error = "";
+    try {
+      await invoke<number>("bulk_delete_transactions", { ids: Array.from(selectedIds) });
+      clearSelection();
+      await loadTransactions();
+    } catch (e) {
+      error = `Bulk delete failed: ${String(e)}`;
+    } finally {
+      bulkActionRunning = false;
+    }
+  }
+
   // Transactions are sorted and filtered server-side; just use the list directly.
   $: displayedTx = transactions;
 </script>
@@ -981,10 +1197,29 @@
             </div>
           {/if}
 
+          <!-- Bulk action toolbar -->
+          {#if selectedIds.size > 0}
+            <div class="mb-3 flex items-center gap-3 p-2 bg-primary/5 border rounded-lg">
+              <span class="text-sm font-medium">{selectedIds.size} selected</span>
+              <Button variant="outline" size="sm" onclick={bulkVoid} disabled={bulkActionRunning}>Void all</Button>
+              <Button variant="outline" size="sm" class="text-destructive" onclick={bulkDelete} disabled={bulkActionRunning}>Delete all</Button>
+              <Button variant="ghost" size="sm" onclick={clearSelection}>Clear selection</Button>
+            </div>
+          {/if}
+
           <div class="rounded-md border">
             <Table.Root>
               <Table.Header>
                 <Table.Row>
+                  <Table.Head class="w-8">
+                    <input
+                      type="checkbox"
+                      class="cursor-pointer"
+                      checked={selectedIds.size === displayedTx.length && displayedTx.length > 0}
+                      indeterminate={selectedIds.size > 0 && selectedIds.size < displayedTx.length}
+                      onchange={toggleSelectAll}
+                    />
+                  </Table.Head>
                   <Table.Head class="cursor-pointer hover:bg-muted/50 w-28" onclick={() => handleHeaderClick("date")}>
                     <span class="flex items-center gap-1">
                       {#if hasFilter("date")}<span class="text-primary">⏷</span>{/if}
@@ -1031,7 +1266,15 @@
                   </Table.Row>
                 {:else}
                   {#each displayedTx as tx (tx.transaction.id)}
-                    <Table.Row class="hover:bg-muted/50">
+                    <Table.Row class="hover:bg-muted/50 {selectedIds.has(tx.transaction.id) ? 'bg-muted/30' : ''}">
+                      <Table.Cell class="w-8">
+                        <input
+                          type="checkbox"
+                          class="cursor-pointer"
+                          checked={selectedIds.has(tx.transaction.id)}
+                          onchange={() => toggleSelect(tx.transaction.id)}
+                        />
+                      </Table.Cell>
                       <Table.Cell class="font-mono text-sm">{tx.transaction.txn_date}</Table.Cell>
                       <Table.Cell>
                         <div class="leading-snug">
@@ -1053,13 +1296,14 @@
                       <Table.Cell class="text-right">
                         <div class="flex justify-end gap-1">
                           <Button variant="ghost" size="sm" onclick={() => openEditDialog(tx)}>Edit</Button>
+                          <Button variant="ghost" size="sm" onclick={() => duplicateTransaction(tx)}>Dup</Button>
                           {#if tx.transaction.status === "cleared"}
                             <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "uncleared")}>Unflag</Button>
                           {:else}
                             <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "cleared")}>Flag</Button>
                           {/if}
                           <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "void")}>Void</Button>
-                          <Button variant="ghost" size="sm" class="text-destructive" onclick={() => removeTransaction(tx)}>Delete</Button>
+                          <Button variant="ghost" size="sm" class="text-destructive" onclick={() => removeTransaction(tx)}>Del</Button>
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -1094,7 +1338,21 @@
         <div class="space-y-4 py-4">
           <div class="space-y-2">
             <Label for="tx-date">Date</Label>
-            <Input id="tx-date" type="date" bind:value={formDate} required />
+            <Input
+              id="tx-date"
+              type="text"
+              placeholder="YYYY-MM-DD, 18, 3/18, today…"
+              value={formDateRaw}
+              oninput={(e) => onDateInput((e.currentTarget as HTMLInputElement).value)}
+              onblur={onDateBlur}
+              class={!formDate && formDateRaw ? "border-red-500" : ""}
+              required
+            />
+            {#if formDateHint}
+              <p class="text-xs text-muted-foreground">→ {formDateHint}</p>
+            {:else if !formDate && formDateRaw}
+              <p class="text-xs text-red-500">Date not recognized</p>
+            {/if}
           </div>
 
           <div class="space-y-2">
@@ -1301,7 +1559,14 @@
           </Table.Root>
           <Button variant="outline" size="sm" onclick={addSplitRow}>Add split</Button>
           {#if splitsTotalMinor() !== null}
-            <p class="text-sm text-muted-foreground">Split total: {splitsTotalMinor()}</p>
+            {@const total = splitsTotalMinor()!}
+            {@const balanced = total === 0}
+            <div class="flex items-center gap-2 mt-2">
+              <span class="text-sm font-medium">Balance:</span>
+              <span class="text-sm font-mono {balanced ? 'text-green-600' : 'text-red-600'}">
+                {total === 0 ? "✓ Balanced" : `${total > 0 ? "+" : ""}${total} minor units (unbalanced)`}
+              </span>
+            </div>
           {/if}
         </div>
       </div>
