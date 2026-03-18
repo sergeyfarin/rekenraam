@@ -1,7 +1,9 @@
 /// Input validation for Rekenraam domain types.
 ///
-/// All validators return `Result<(), String>` matching the existing error convention.
-/// A future migration to `AppError` (Sprint 2.1) will change the return type.
+/// All validators return `Result<(), AppError>` with `AppError::Validation` so that
+/// the frontend can show field-level error messages.
+
+use crate::error::AppError;
 
 // ── Account types ─────────────────────────────────────────────────────────────
 // Must match the CHECK constraint in V1__init.sql accounts.type
@@ -11,14 +13,13 @@ pub const ACCOUNT_TYPES: &[&str] = &[
 ];
 
 /// Validate that `t` is a recognised account type.
-pub fn validate_account_type(t: &str) -> Result<(), String> {
+pub fn validate_account_type(t: &str) -> Result<(), AppError> {
     if ACCOUNT_TYPES.contains(&t) {
         Ok(())
     } else {
-        Err(format!(
-            "invalid account_type '{}'; must be one of: {}",
-            t,
-            ACCOUNT_TYPES.join(", ")
+        Err(AppError::validation(
+            "account_type",
+            format!("invalid account_type '{}'; must be one of: {}", t, ACCOUNT_TYPES.join(", ")),
         ))
     }
 }
@@ -28,14 +29,13 @@ pub fn validate_account_type(t: &str) -> Result<(), String> {
 pub const TX_STATUSES: &[&str] = &["uncleared", "cleared", "reconciled", "void"];
 
 /// Validate that `s` is a recognised transaction status.
-pub fn validate_tx_status(s: &str) -> Result<(), String> {
+pub fn validate_tx_status(s: &str) -> Result<(), AppError> {
     if TX_STATUSES.contains(&s) {
         Ok(())
     } else {
-        Err(format!(
-            "invalid status '{}'; must be one of: {}",
-            s,
-            TX_STATUSES.join(", ")
+        Err(AppError::validation(
+            "status",
+            format!("invalid status '{}'; must be one of: {}", s, TX_STATUSES.join(", ")),
         ))
     }
 }
@@ -45,28 +45,26 @@ pub const MAX_NAME_LEN: usize = 512;
 pub const MAX_MEMO_LEN: usize = 4096;
 
 /// Validate that `name` is non-empty and within the maximum length.
-pub fn validate_name(name: &str) -> Result<(), String> {
+pub fn validate_name(name: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err("name must not be blank".to_string());
+        return Err(AppError::validation("name", "name must not be blank"));
     }
     if trimmed.len() > MAX_NAME_LEN {
-        return Err(format!(
-            "name must not exceed {} characters (got {})",
-            MAX_NAME_LEN,
-            trimmed.len()
+        return Err(AppError::validation(
+            "name",
+            format!("name must not exceed {} characters (got {})", MAX_NAME_LEN, trimmed.len()),
         ));
     }
     Ok(())
 }
 
 /// Validate that `memo` is within the maximum length (empty is allowed).
-pub fn validate_memo(memo: &str) -> Result<(), String> {
+pub fn validate_memo(memo: &str) -> Result<(), AppError> {
     if memo.len() > MAX_MEMO_LEN {
-        return Err(format!(
-            "memo must not exceed {} characters (got {})",
-            MAX_MEMO_LEN,
-            memo.len()
+        return Err(AppError::validation(
+            "memo",
+            format!("memo must not exceed {} characters (got {})", MAX_MEMO_LEN, memo.len()),
         ));
     }
     Ok(())
@@ -78,13 +76,13 @@ pub fn validate_memo(memo: &str) -> Result<(), String> {
 pub const MAX_AMOUNT_MINOR: i64 = 1_000_000_000_000_00; // 10 billion in minor units (2dp)
 
 /// Validate that `amount` is within acceptable bounds.
-pub fn validate_amount_minor(amount: i64) -> Result<(), String> {
+pub fn validate_amount_minor(amount: i64) -> Result<(), AppError> {
     // Use saturating_abs so i64::MIN (which has no positive i64 counterpart) is
     // treated as i64::MAX, which is guaranteed to exceed MAX_AMOUNT_MINOR.
     if amount.saturating_abs() > MAX_AMOUNT_MINOR {
-        return Err(format!(
-            "amount_minor {} exceeds the maximum of ±{} (overflow guard)",
-            amount, MAX_AMOUNT_MINOR
+        return Err(AppError::validation(
+            "amount_minor",
+            format!("amount_minor {} exceeds the maximum of ±{} (overflow guard)", amount, MAX_AMOUNT_MINOR),
         ));
     }
     Ok(())

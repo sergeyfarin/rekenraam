@@ -3220,6 +3220,7 @@ mod tests {
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Default::default(),
         }
     }
 

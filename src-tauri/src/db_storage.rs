@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 
 use crate::db::{
     db_accessible, latest_migration_version, load_storage_path, migration_versions,
-    normalize_db_path, open_and_migrate, save_storage_path,
+    normalize_db_path, open_and_migrate, open_read_conn, save_storage_path,
 };
 use crate::fx_refresh;
 use crate::state::{BackupSchedulerState, DbState, FxSchedulerState};
@@ -231,6 +231,11 @@ fn prune_backups(backup_dir: &PathBuf, retention_count: u64) {
 }
 
 fn checkpoint_and_close(db: &State<DbState>) -> Result<PathBuf, String> {
+    // Close read connection first (before WAL checkpoint)
+    if let Ok(mut rg) = db.read_conn.lock() {
+        *rg = None;
+    }
+
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let db_path = guard
         .db_path
@@ -253,6 +258,13 @@ fn open_and_set_storage(
 ) -> Result<String, String> {
     let (conn, effective_db_path, audit_user) =
         open_and_migrate(open_path).map_err(|e| format!("Migration failed: {e}"))?;
+
+    // Open a concurrent read-only connection for list/get commands.
+    if let Ok(rc) = open_read_conn(&effective_db_path) {
+        if let Ok(mut rg) = db.read_conn.lock() {
+            *rg = Some(rc);
+        }
+    }
 
     save_storage_path(storage_path);
 
@@ -286,6 +298,11 @@ pub fn validate_and_set_storage_location(
     save_storage_path(&input);
 
     {
+        if let Ok(rc) = open_read_conn(&effective_db_path) {
+            if let Ok(mut rg) = db.read_conn.lock() {
+                *rg = Some(rc);
+            }
+        }
         let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
         guard.db_path = Some(effective_db_path.clone());
         guard.conn = Some(conn);
@@ -534,6 +551,7 @@ mod tests {
                 conn: Some(conn),
                 audit_user: Some(_audit_user),
             }),
+            read_conn: Default::default(),
         };
 
         let backups_dir = temp.join("backups");
@@ -576,6 +594,7 @@ mod tests {
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Default::default(),
         };
 
         let settings = BackupSettings::default();
@@ -633,6 +652,7 @@ mod tests {
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Default::default(),
         };
 
         let backups_dir = temp.join("backups");
@@ -751,6 +771,7 @@ mod tests {
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Default::default(),
         };
 
         let loaded = load_backup_settings(Some(&db_state));
@@ -794,6 +815,11 @@ pub fn create_new_storage(
     save_storage_path(&db_path);
 
     {
+        if let Ok(rc) = open_read_conn(&effective_db_path) {
+            if let Ok(mut rg) = db.read_conn.lock() {
+                *rg = Some(rc);
+            }
+        }
         let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
         guard.db_path = Some(effective_db_path.clone());
         guard.conn = Some(conn);

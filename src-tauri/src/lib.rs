@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
+use tracing::{info, error};
 use tauri::{
     async_runtime::{self, JoinHandle},
     Manager, PhysicalPosition, PhysicalSize, Position, Size, Window, WindowEvent, WebviewWindow,
@@ -18,11 +19,14 @@ mod db_currencies;
 mod fx_rates;
 mod fx_refresh;
 mod state;
+pub mod error;
+pub mod pagination;
+pub mod session;
 pub mod validation;
 
 use crate::db::{
     create_db_placeholder, db_accessible, default_storage_dir, load_storage_path,
-    open_and_migrate, resolve_accessible_db, save_storage_path,
+    open_and_migrate, open_read_conn, resolve_accessible_db, save_storage_path,
 };
 use crate::state::{BackupSchedulerState, DbState, FxSchedulerState};
 
@@ -213,8 +217,39 @@ fn ensure_accessible_storage(mut storage: PathBuf) -> PathBuf {
     storage
 }
 
+fn init_logging() {
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    // Log directory: <data_local_dir>/rekenraam/logs/
+    let log_dir = dirs_next::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("rekenraam")
+        .join("logs");
+    let _ = fs::create_dir_all(&log_dir);
+
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "rekenraam.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // Leak the guard so it lives for the lifetime of the process.
+    Box::leak(Box::new(_guard));
+
+    let env_filter = EnvFilter::try_from_env("REKENRAAM_LOG")
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    fmt()
+        .with_env_filter(env_filter)
+        .with_writer(non_blocking)
+        .with_target(true)
+        .with_line_number(false)
+        .json()
+        .init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_logging();
+    info!("Rekenraam starting up");
+
     let debounce_state: DebounceState = Arc::new(Mutex::new(None));
     let db_state = DbState::default();
     let backup_scheduler = BackupSchedulerState::default();
@@ -236,16 +271,28 @@ pub fn run() {
             if let Some(storage) = load_storage_path() {
                 let db_path = crate::db::normalize_db_path(&storage);
                 if db_path.exists() {
-                    if let Ok((conn, db_path, audit_user)) = open_and_migrate(&storage) {
-                        let db_state = app.state::<DbState>();
-                        let mut guard = db_state
-                            .inner
-                            .lock()
-                            .map_err(|_| "db state lock poisoned".to_string())?;
-                        guard.db_path = Some(db_path);
-                        guard.conn = Some(conn);
-                        guard.audit_user = Some(audit_user);
-                        db_initialized = true;
+                    match open_and_migrate(&storage) {
+                        Ok((conn, db_path, audit_user)) => {
+                            info!(path = %db_path.display(), "Database opened");
+                            let db_state = app.state::<DbState>();
+                            // Open read connection (ignoring errors — non-fatal)
+                            if let Ok(rc) = open_read_conn(&db_path) {
+                                if let Ok(mut rg) = db_state.read_conn.lock() {
+                                    *rg = Some(rc);
+                                }
+                            }
+                            let mut guard = db_state
+                                .inner
+                                .lock()
+                                .map_err(|_| "db state lock poisoned".to_string())?;
+                            guard.db_path = Some(db_path);
+                            guard.conn = Some(conn);
+                            guard.audit_user = Some(audit_user);
+                            db_initialized = true;
+                        }
+                        Err(e) => {
+                            error!(error = %e, "Failed to open database on startup");
+                        }
                     }
                 }
             }

@@ -2,7 +2,7 @@
 
 > **Single source of truth.** This document supersedes all previous planning files
 > (`IMPLEMENTATION_PLAN.md`, `IMPORT_PLAN.md`, `1.MD`, and `OLD_TODOS/`).
-> Last updated: 2026-03-18 (Stage 1 complete — re-prioritized Stage 2–7)
+> Last updated: 2026-03-18 (Stage 2 complete — AppError, logging, session, read/write split, UX polish)
 
 ---
 
@@ -41,40 +41,44 @@ offline-capable, extensible to sync.
 - Account CRUD + tree view with rollup balances
 - Transaction/split create + edit with double-entry; bulk void/delete, duplication, smart date parsing, payee auto-fill
 - Account register with running balance, server-side filters + sort, infinite scroll
-- Dashboard: net worth summary, asset/liability account list, recent transactions, quick actions
+- Dashboard: net worth summary, asset/liability account list, recent transactions, quick actions; native currency scale aware
 - Investment: holdings, lots, buy/sell/dividend, realized/unrealized gains
-- FX: rate scheduler, source providers, daily/official rates
+- FX: rate scheduler, source providers, daily/official rates; 30s HTTP timeout + exponential backoff retry
 - Reports: tabular cashflow, category spend, payee totals, gains (all with date filters)
 - Settings: categories, payees, tags, commodities, institutions, DB management, year-end close
-- UI: shadcn-svelte + Tailwind 4 component library
+- UI: shadcn-svelte + Tailwind 4 component library; `ConfirmDialog` component; global keyboard shortcuts
 - Onboarding: welcome screen with Create/Open on first launch
 - Input validation: account type, tx status, name/memo length, amount bounds, LIKE escaping
 - Balance correctness: void/supersede/revert properly excluded from all balance queries
+- Error handling: `AppError` structured enum (backend) + `formatError()` (frontend) for user-friendly messages
+- Logging: `tracing` crate with JSON file rotation in app data dir
+- Concurrency: read/write SQLite connection split for `db_transactions.rs` + `db_accounts.rs`; `PRAGMA query_only = ON` on read conn
+- Reconciliation wizard: 2-step wizard (setup → checklist → finish) with balance verification
 
 ### What is incomplete or missing ⚠️
 
 **Missing MVP features:**
-- Reconciliation wizard (backend exists, no UI workflow) — Sprint 3.1
+- Reconciliation wizard (backend exists, no UI workflow) — Sprint 3.1 ✅ DONE
 - Import wizard UI (parsers exist, no UI pipeline) — Stage 4
 - Charts on reports page (data APIs exist, only tabular display) — Sprint 7.2 (pulled forward)
 - Scheduled transactions + reminders — Stage 5
 - Budgeting — Stage 6
 
-**Minor polish gaps (noted during Stage 1):**
-- Split balance hint shows raw minor units, not commodity-formatted — Sprint 2.1
-- `window.confirm()` for bulk actions — replace with Dialog — Sprint 2.1
-- Dashboard: account types hardcoded in frontend (`assetTypes`/`liabilityTypes` arrays) — should derive from backend enum
-- Dashboard: `formatCurrency` divides by 100 regardless of commodity scale — not multi-currency safe
-- Dashboard: recent transactions amount calculation naive for complex splits
-- Planning page (`/planning`) is an empty placeholder
-- No keyboard shortcut strategy (design philosophy mentions keyboard nav but no implementation plan)
+**Minor polish gaps (noted during Stage 1 — resolved in Stage 2):**
+- ~~Split balance hint shows raw minor units~~ — ✅ Fixed: scale-aware `formatMinorWithScale`
+- ~~`window.confirm()` for bulk actions~~ — ✅ Fixed: replaced with `ConfirmDialog` component throughout
+- ~~Dashboard: account types hardcoded~~ — ✅ Fixed: `assetTypes`/`liabilityTypes` now match backend `ACCOUNT_TYPES`
+- ~~Dashboard: `formatCurrency` not multi-currency safe~~ — ✅ Fixed: loads `get_default_currency` and uses its scale
+- Dashboard: recent transactions amount calculation naive for complex splits — still open
+- Planning page (`/planning`) is an empty placeholder — still open
+- ~~No keyboard shortcut strategy~~ — ✅ Fixed: `N` (new tx), `Ctrl+Z` (undo), `Ctrl+Shift+Z` (redo), `?` (help) in layout
 
-**Technical debt:**
-- All errors are `String` — frontend cannot distinguish error types — Sprint 2.1
-- Single `std::sync::Mutex` blocks UI during long operations — Sprint 2.2
+**Technical debt (resolved in Stage 2):**
+- ~~All errors are `String`~~ — ✅ Fixed: `AppError` enum with serde tagged union; `formatError()` utility in frontend
+- ~~Single `std::sync::Mutex` blocks UI during long operations~~ — ✅ Fixed: `read_conn` + `write_conn` split
 - Hardcoded `SINGLE_BOOK_ID = 1` in 6 files — Sprint 10.2
-- No logging or observability — Sprint 2.1
-- No pagination metadata on list endpoints (except `list_transactions`) — Sprint 2.1
+- ~~No logging or observability~~ — ✅ Fixed: `tracing` + JSON file rotation in app data dir
+- ~~No pagination metadata on list endpoints~~ — ✅ Fixed: `PaginatedResult<T>` struct added
 - No UUIDs (required for future sync) — Sprint 10.1
 
 ---
@@ -184,27 +188,37 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 > while Stage 2 proceeds in the background. Stage 4.2 import wizard benefits from AppError
 > for error feedback, so complete Sprint 2.1 before Sprint 4.2.
 
-**Sprint 2.1 — Structured Errors + UX Polish (2 weeks)**
+**Sprint 2.1 — Structured Errors + UX Polish ✅ DONE (2026-03-18)**
 
-| Task | File(s) | Detail |
+| Task | File(s) | Status |
 |------|---------|--------|
-| `AppError` enum | `error.rs` (new) | `Validation{field,message}`, `NotFound{entity,id}`, `Conflict{message}`, `Database{message}`, `Internal{message}`. Implement `Serialize`, `From<rusqlite::Error>`. |
-| Migrate error types | All command modules | Replace `Result<T, String>` with `Result<T, AppError>`. Start with `db_transactions.rs`. |
-| Extract `session.rs` | `session.rs` (new) | Move `current_session_id()`, `clear_redo_stack()`, `record_insert_change()` — deduplicate from 3 files |
-| Add `tracing` logging | `Cargo.toml`, `lib.rs`, all modules | `info!` at command entry/exit; `error!` at every error path; `info!` for FX refresh, backup, migration. File rotation in app data dir. |
-| Pagination metadata | `pagination.rs` (new) | `PaginatedResult<T> { items, total_count, has_more }`. Apply to unbounded list commands (accounts, payees, categories, tags). `list_transactions` already uses infinite scroll; skip. |
-| Update frontend error handling | All frontend invoke calls | Parse structured `AppError` JSON; show contextual dialogs (validation vs system errors) |
-| Replace `window.confirm()` | `transactions/+page.svelte` | Replace bulk action confirmations with proper Dialog components |
-| Split balance format | `transactions/+page.svelte` | Show commodity-formatted balance (scale-aware) instead of raw minor units |
-| Dashboard: commodity-safe formatting | `routes/+page.svelte` | Pass commodity scale to `formatCurrency`; derive asset/liability type from backend enum not hardcoded strings |
-| Global keyboard shortcuts | `routes/+layout.svelte` | `N` = new transaction, `Ctrl+Z` = undo, `Ctrl+Shift+Z` = redo, `?` = help modal, arrow navigation in register |
+| `AppError` enum | `error.rs` (new) | ✅ Done: `Validation{field,message}`, `NotFound`, `Conflict`, `Database`, `Internal`. `From<rusqlite::Error>`, `From<String>`. Tagged union serde. |
+| Migrate error types | `db_transactions.rs`, `db_accounts.rs`, `validation.rs` | ✅ Done: all `#[command]` fns return `Result<T, AppError>`. `db_commodities.rs`, `db_reports.rs`, `import.rs` still use `String` (deferred). |
+| Extract `session.rs` | `session.rs` (new) | ✅ Done: `current_session_id`, `clear_redo_stack`, `record_insert_change` deduplicated from 3 files |
+| Add `tracing` logging | `Cargo.toml`, `lib.rs` | ✅ Done: JSON file appender to `<data_dir>/rekenraam/logs/`; startup + DB open logged |
+| Pagination metadata | `pagination.rs` (new) | ✅ Done: `PaginatedResult<T> { items, total_count, has_more }` + `new()` + `all()` helpers |
+| Update frontend error handling | `transactions/+page.svelte`, `accounts/[id]/+page.svelte`, `routes/+page.svelte` | ✅ Done: `formatError()` util in `$lib/utils.ts` parses AppError tagged union; all `String(e)` replaced |
+| Replace `window.confirm()` | `transactions/+page.svelte`, `accounts/[id]/+page.svelte`, `settings/DatabaseSettings.svelte` | ✅ Done: `ConfirmDialog.svelte` component; Promise-based `askConfirm()`; separate dialogs for category creation and unlock reason |
+| Split balance format | `transactions/+page.svelte`, `accounts/[id]/+page.svelte` | ✅ Done: `formatMinorWithScale()` with first-split commodity scale; shows symbol |
+| Dashboard: commodity-safe formatting | `routes/+page.svelte` | ✅ Done: `get_default_currency` loaded on mount; `formatCurrency` uses native currency scale + symbol; account type arrays fixed to match backend `ACCOUNT_TYPES` |
+| Global keyboard shortcuts | `routes/+layout.svelte` | ✅ Done: `N` = navigate to `/transactions?new=1` (auto-opens create dialog), `Ctrl+Z` = undo, `Ctrl+Shift+Z` = redo, `?` = help modal; shortcuts suppressed in input fields and open dialogs |
 
-**Sprint 2.2 — Concurrency (1 week)**
+**Gaps found during Sprint 2.1:**
+- `db_commodities.rs`, `db_reports.rs`, `import.rs` not yet migrated to `AppError` — deferred; would require coordinated return type changes across many helpers
+- Arrow navigation in transaction register not yet implemented — lower priority keyboard shortcut
+- `tracing` instrumentation only at startup level; per-command `info!`/`error!` spans not yet added — add incrementally as commands are touched
+- `PaginatedResult<T>` struct created but list endpoints (`list_accounts`, `list_payees`, etc.) not yet migrated to return it — migration is backward-incompatible with frontend; defer to a dedicated refactor sprint
 
-| Task | File(s) | Detail |
+**Sprint 2.2 — Concurrency ✅ DONE (2026-03-18)**
+
+| Task | File(s) | Status |
 |------|---------|--------|
-| Read/write connection split | `state.rs`, `db.rs` | Add `read_conn` with `PRAGMA query_only = ON`. All `list_*`/`get_*` commands use `read_conn`; writes use existing `conn`. |
-| Fix FX HTTP in Mutex | `fx_refresh.rs` | Fetch rates with lock released; acquire only for final DB write. Add configurable timeouts. Add retry with exponential backoff (1s, 2s, 4s, max 30s). |
+| Read/write connection split | `state.rs`, `db.rs`, `db_transactions.rs`, `db_accounts.rs` | ✅ Done: `DbState.read_conn: Mutex<Option<Connection>>` with `PRAGMA query_only = ON`; all `list_*`/`get_*` commands in `db_transactions.rs` + `db_accounts.rs` use `read_conn`; `db_storage.rs` opens/closes read conn on lifecycle events; tests use real read conn |
+| Fix FX HTTP timeout + retry | `fx_rates/mod.rs`, `fx_refresh.rs` | ✅ Done: `http_get()` helper with 30s `reqwest` timeout; exponential backoff retry (1s → 2s → 4s, max 3 attempts) in `refresh_pair()` |
+
+**Gaps found during Sprint 2.2:**
+- `db_commodities.rs` and `db_reports.rs` list/get commands not migrated to `read_conn` (blocked by String error type — those modules not yet AppError migrated)
+- FX HTTP was already outside the mutex before this sprint; the main fix was timeouts + retry
 
 ---
 

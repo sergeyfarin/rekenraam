@@ -5,6 +5,8 @@ use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
+use crate::error::AppError;
+use crate::session::{current_session_id, clear_redo_stack, record_insert_change};
 use crate::state::DbState;
 use crate::validation::{validate_tx_status, validate_memo, validate_amount_minor, escape_like};
 
@@ -319,45 +321,15 @@ fn resolve_tz(
     Ok(normalized)
 }
 
-fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
-    conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
-        .map_err(|e| e.to_string())
-}
-
-fn clear_redo_stack(conn: &rusqlite::Connection, session_id: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM session_redo_stack WHERE session_id = ?1", [session_id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-fn record_insert_change(
-    conn: &rusqlite::Connection,
-    session_id: &str,
-    table_name: &str,
-    row_id: i64,
-) -> Result<(), String> {
-    conn.execute(
-        "INSERT INTO session_undo_stack (session_id, table_name, row_id) VALUES (?1, ?2, ?3)",
-        params![session_id, table_name, row_id],
-    )
-    .map_err(|e| e.to_string())?;
-    conn.execute(
-        "DELETE FROM session_reverts WHERE session_id = ?1 AND table_name = ?2 AND row_id = ?3",
-        params![session_id, table_name, row_id],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 #[command]
 pub fn list_account_register(
     db: State<DbState>,
     account_id: i64,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> Result<Vec<RegisterEntry>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<RegisterEntry>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let limit = limit.unwrap_or(200).max(1);
     let offset = offset.unwrap_or(0).max(0);
@@ -415,9 +387,9 @@ pub fn list_account_register_with_balance(
     account_id: i64,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> Result<Vec<RegisterEntryWithBalance>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<RegisterEntryWithBalance>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let limit = limit.unwrap_or(200).max(1);
     let offset = offset.unwrap_or(0).max(0);
@@ -498,9 +470,9 @@ pub fn list_postings(
     date_to: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> Result<Vec<PostingEntry>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<PostingEntry>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let limit = limit.unwrap_or(200).max(1);
     let offset = offset.unwrap_or(0).max(0);
@@ -650,9 +622,9 @@ fn check_account_locks(
 pub fn create_transaction_with_splits(
     db: State<DbState>,
     input: CreateTransactionInput,
-) -> Result<TransactionWithSplits, String> {
+) -> Result<TransactionWithSplits, AppError> {
     if input.splits.len() < 2 {
-        return Err("transaction must have at least two splits".to_string());
+        return Err(AppError::validation("splits", "transaction must have at least two splits"));
     }
 
     if let Some(ref s) = input.status {
@@ -670,7 +642,7 @@ pub fn create_transaction_with_splits(
 
     let sum: i64 = input.splits.iter().map(|s| s.amount_minor).sum();
     if sum != 0 {
-        return Err("splits must balance to zero".to_string());
+        return Err(AppError::validation("splits", "splits must balance to zero"));
     }
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
@@ -770,16 +742,16 @@ pub fn create_transaction_with_splits(
     }
 
     tx.commit().map_err(|e| e.to_string())?;
-    fetch_transaction_with_splits(conn, tx_id)
+    Ok(fetch_transaction_with_splits(conn, tx_id)?)
 }
 
 #[command]
 pub fn get_transaction_with_splits(
     db: State<DbState>,
     id: i64,
-) -> Result<Option<TransactionWithSplits>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Option<TransactionWithSplits>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let tx_opt: Option<i64> = conn
         .query_row(
@@ -794,16 +766,16 @@ pub fn get_transaction_with_splits(
         return Ok(None);
     }
 
-    fetch_transaction_with_splits(conn, id).map(Some)
+    Ok(Some(fetch_transaction_with_splits(conn, id)?))
 }
 
 #[command]
 pub fn list_transactions(
     db: State<DbState>,
     filter: ListTransactionsFilter,
-) -> Result<Vec<TransactionWithSplits>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<TransactionWithSplits>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let book_id = SINGLE_BOOK_ID;
 
@@ -922,9 +894,9 @@ pub fn list_transactions(
 pub fn update_transaction_with_splits(
     db: State<DbState>,
     input: UpdateTransactionInput,
-) -> Result<TransactionWithSplits, String> {
+) -> Result<TransactionWithSplits, AppError> {
     if input.splits.len() < 2 {
-        return Err("transaction must have at least two splits".to_string());
+        return Err(AppError::validation("splits", "transaction must have at least two splits"));
     }
 
     if let Some(ref s) = input.status {
@@ -942,7 +914,7 @@ pub fn update_transaction_with_splits(
 
     let sum: i64 = input.splits.iter().map(|s| s.amount_minor).sum();
     if sum != 0 {
-        return Err("splits must balance to zero".to_string());
+        return Err(AppError::validation("splits", "splits must balance to zero"));
     }
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
@@ -973,8 +945,8 @@ pub fn update_transaction_with_splits(
 
     match existing_book {
         Some(existing) if existing == book_id => {}
-        Some(_) => return Err("transaction does not belong to book".to_string()),
-        None => return Err("transaction not found".to_string()),
+        Some(_) => return Err(AppError::conflict("transaction does not belong to book")),
+        None => return Err(AppError::not_found("transaction", input.id.to_string())),
     }
 
     let mut accounts = HashSet::new();
@@ -1068,11 +1040,11 @@ pub fn update_transaction_with_splits(
     }
 
     tx.commit().map_err(|e| e.to_string())?;
-    fetch_transaction_with_splits(conn, new_tx_id)
+    Ok(fetch_transaction_with_splits(conn, new_tx_id)?)
 }
 
 #[command]
-pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -1183,7 +1155,7 @@ pub fn delete_transaction(db: State<DbState>, id: i64) -> Result<bool, String> {
 
 #[allow(dead_code)]
 #[command]
-pub fn undo_active_session_change(db: State<DbState>) -> Result<bool, String> {
+pub fn undo_active_session_change(db: State<DbState>) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -1225,7 +1197,7 @@ pub fn undo_active_session_change(db: State<DbState>) -> Result<bool, String> {
 
 #[allow(dead_code)]
 #[command]
-pub fn redo_active_session_change(db: State<DbState>) -> Result<bool, String> {
+pub fn redo_active_session_change(db: State<DbState>) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -1268,7 +1240,7 @@ pub fn redo_active_session_change(db: State<DbState>) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_and_migrate;
+    use crate::db::{open_and_migrate, open_read_conn};
     use crate::state::DbStateInner;
     use rusqlite::params;
     use std::fs;
@@ -1289,12 +1261,14 @@ mod tests {
         fs::create_dir_all(&temp).expect("create temp dir");
 
         let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
+        let read_conn = open_read_conn(&db_path).expect("open read conn");
         DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path),
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Mutex::new(Some(read_conn)),
         }
     }
 
@@ -1470,7 +1444,7 @@ mod tests {
 pub fn ensure_currency_trading_balances(
     db: State<DbState>,
     tx_id: i64,
-) -> Result<i64, String> {
+) -> Result<i64, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -1559,9 +1533,9 @@ pub fn get_payee_defaults(
     db: State<DbState>,
     payee_id: i64,
     account_id: Option<i64>,
-) -> Result<PayeeDefaults, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<PayeeDefaults, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let book_id = SINGLE_BOOK_ID;
 
@@ -1617,7 +1591,7 @@ pub fn duplicate_transaction(
     db: State<DbState>,
     id: i64,
     today: String,
-) -> Result<TransactionWithSplits, String> {
+) -> Result<TransactionWithSplits, AppError> {
     ensure_occurred_date_format(&today)?;
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
@@ -1632,7 +1606,7 @@ pub fn duplicate_transaction(
         ).optional().map_err(|e| e.to_string())?;
 
         match tx_row {
-            None => return Err("source transaction not found".to_string()),
+            None => return Err(AppError::not_found("transaction", id.to_string())),
             Some(row) => row,
         }
     };
@@ -1666,7 +1640,7 @@ pub fn duplicate_transaction(
     };
 
     if splits.is_empty() {
-        return Err("source transaction has no splits".to_string());
+        return Err(AppError::conflict("source transaction has no splits"));
     }
 
     let book_id = SINGLE_BOOK_ID;
@@ -1707,7 +1681,7 @@ pub fn duplicate_transaction(
 pub fn bulk_void_transactions(
     db: State<DbState>,
     ids: Vec<i64>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let book_id = SINGLE_BOOK_ID;
@@ -1783,7 +1757,7 @@ pub fn bulk_void_transactions(
 pub fn bulk_delete_transactions(
     db: State<DbState>,
     ids: Vec<i64>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let book_id = SINGLE_BOOK_ID;

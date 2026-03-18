@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -9,6 +11,8 @@
   import * as Table from "$lib/components/ui/table";
   import * as Alert from "$lib/components/ui/alert";
   import { Badge } from "$lib/components/ui/badge";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import { formatError } from "$lib/utils";
 
   type Account = {
     id: number;
@@ -156,6 +160,70 @@
   let selectedIds = new Set<number>();
   let bulkActionRunning = false;
 
+  // ─── Confirm dialog state ──────────────────────────────────────────────────
+  let confirmOpen = false;
+  let confirmTitle = "Are you sure?";
+  let confirmMessage = "";
+  let confirmLabel = "Confirm";
+  let confirmDestructive = false;
+  let confirmResolve: ((v: boolean) => void) | null = null;
+
+  function askConfirm(msg: string, opts?: { title?: string; label?: string; destructive?: boolean }): Promise<boolean> {
+    confirmMessage = msg;
+    confirmTitle = opts?.title ?? "Are you sure?";
+    confirmLabel = opts?.label ?? "Confirm";
+    confirmDestructive = opts?.destructive ?? false;
+    confirmOpen = true;
+    return new Promise<boolean>((resolve) => { confirmResolve = resolve; });
+  }
+  function onConfirmYes() { confirmOpen = false; confirmResolve?.(true); confirmResolve = null; }
+  function onConfirmNo() { confirmOpen = false; confirmResolve?.(false); confirmResolve = null; }
+
+  // ─── Create category dialog state ──────────────────────────────────────────
+  let createCategoryDialogOpen = false;
+  let createCategoryName = "";
+  let createCategoryKind = "expense";
+  let createCategoryResolve: ((id: number | null) => void) | null = null;
+
+  function askCategoryCreate(name: string): Promise<number | null> {
+    createCategoryName = name;
+    createCategoryKind = "expense";
+    createCategoryDialogOpen = true;
+    return new Promise<number | null>((resolve) => { createCategoryResolve = resolve; });
+  }
+  async function onCreateCategoryConfirm() {
+    createCategoryDialogOpen = false;
+    try {
+      const created = await invoke<Category>("create_category", {
+        input: { book_id: bookId, parent_id: null, name: createCategoryName, kind: createCategoryKind, color: null }
+      });
+      categories = [...categories, created];
+      createCategoryResolve?.(created.id);
+    } catch (e) {
+      error = `Failed to create category: ${formatError(e)}`;
+      createCategoryResolve?.(null);
+    }
+    createCategoryResolve = null;
+  }
+  function onCreateCategoryCancel() {
+    createCategoryDialogOpen = false;
+    createCategoryResolve?.(null);
+    createCategoryResolve = null;
+  }
+
+  // ─── Unlock reason dialog state ────────────────────────────────────────────
+  let unlockDialogOpen = false;
+  let unlockReason = "";
+  let unlockResolve: ((reason: string | null) => void) | null = null;
+
+  function askUnlockReason(): Promise<string | null> {
+    unlockReason = "";
+    unlockDialogOpen = true;
+    return new Promise<string | null>((resolve) => { unlockResolve = resolve; });
+  }
+  function onUnlockConfirm() { unlockDialogOpen = false; unlockResolve?.(unlockReason); unlockResolve = null; }
+  function onUnlockCancel() { unlockDialogOpen = false; unlockResolve?.(null); unlockResolve = null; }
+
   $: selectedCategoryKind = formCategoryId
     ? categories.find((category) => category.id === formCategoryId)?.kind ?? null
     : null;
@@ -167,6 +235,11 @@
   onMount(async () => {
     await loadLookups();
     await loadTransactions();
+    // Auto-open create dialog if URL has ?new=1 (e.g. from global keyboard shortcut)
+    if (page.url.searchParams.get("new") === "1") {
+      await goto("/transactions", { replaceState: true });
+      openCreateDialog();
+    }
     // sentinel must be in DOM before observing — wait a tick
     setTimeout(setupInfiniteScroll, 0);
   });
@@ -190,7 +263,7 @@
       projects = projectList;
       commodities = commodityList;
     } catch (e) {
-      error = `Failed to load lookup data: ${String(e)}`;
+      error = `Failed to load lookup data: ${formatError(e)}`;
     }
   }
 
@@ -239,7 +312,7 @@
       hasMore = result.length === BATCH_SIZE;
       currentOffset = (append ? currentOffset : 0) + result.length;
     } catch (e) {
-      error = `Failed to load transactions: ${String(e)}`;
+      error = `Failed to load transactions: ${formatError(e)}`;
     } finally {
       loading = false;
       loadingMore = false;
@@ -662,7 +735,7 @@
     if (kind === "payee") {
       const existing = exactMatchByName(payees, trimmed);
       if (existing) return existing.id;
-      if (!window.confirm(`Create new payee \"${trimmed}\"?`)) throw new Error("Payee creation cancelled");
+      if (!await askConfirm(`Create new payee "${trimmed}"?`, { label: "Create" })) throw new Error("Payee creation cancelled");
       const created = await invoke<Payee>("create_payee", {
         input: { book_id: bookId, name: trimmed, kind: "person", metadata: null }
       });
@@ -673,24 +746,15 @@
     if (kind === "category") {
       const existing = exactMatchByName(categories, trimmed);
       if (existing) return existing.id;
-      if (!window.confirm(`Create new category \"${trimmed}\"?`)) throw new Error("Category creation cancelled");
-      const rawKind = (window.prompt("Category kind (income, expense, transfer, other)", "expense") ?? "")
-        .trim()
-        .toLowerCase();
-      const categoryKind = ["income", "expense", "transfer", "other"].includes(rawKind)
-        ? rawKind
-        : "expense";
-      const created = await invoke<Category>("create_category", {
-        input: { book_id: bookId, parent_id: null, name: trimmed, kind: categoryKind, color: null }
-      });
-      categories = [...categories, created];
-      return created.id;
+      const id = await askCategoryCreate(trimmed);
+      if (id === null) throw new Error("Category creation cancelled");
+      return id;
     }
 
     if (kind === "tag") {
       const existing = exactMatchByName(tags, trimmed);
       if (existing) return existing.id;
-      if (!window.confirm(`Create new tag \"${trimmed}\"?`)) throw new Error("Tag creation cancelled");
+      if (!await askConfirm(`Create new tag "${trimmed}"?`, { label: "Create" })) throw new Error("Tag creation cancelled");
       const created = await invoke<Tag>("create_tag", {
         input: { book_id: bookId, name: trimmed, color: null }
       });
@@ -701,7 +765,7 @@
     if (kind === "person") {
       const existing = exactMatchByName(people, trimmed);
       if (existing) return existing.id;
-      if (!window.confirm(`Create new person \"${trimmed}\"?`)) throw new Error("Person creation cancelled");
+      if (!await askConfirm(`Create new person "${trimmed}"?`, { label: "Create" })) throw new Error("Person creation cancelled");
       const created = await invoke<Person>("create_person", {
         input: { book_id: bookId, name: trimmed, role: "member", metadata: null }
       });
@@ -711,7 +775,7 @@
 
     const existing = exactMatchByName(projects, trimmed);
     if (existing) return existing.id;
-    if (!window.confirm(`Create new project \"${trimmed}\"?`)) throw new Error("Project creation cancelled");
+    if (!await askConfirm(`Create new project "${trimmed}"?`, { label: "Create" })) throw new Error("Project creation cancelled");
     const created = await invoke<Project>("create_project", {
       input: { book_id: bookId, name: trimmed, status: "active", metadata: null }
     });
@@ -768,11 +832,12 @@
   }
 
   async function unlockAndRetry(tx: TransactionWithSplits, action: () => Promise<void>) {
-    const confirm = window.confirm(
-      "This transaction is locked (reconciled). Unlocking will void balance checks from this date forward for affected accounts. Continue?"
+    const confirm = await askConfirm(
+      "Unlocking will void balance checks from this date forward for affected accounts.",
+      { title: "Unlock Reconciled Transaction", label: "Unlock", destructive: true }
     );
     if (!confirm) return;
-    const reason = window.prompt("Unlock reason (optional):") ?? "";
+    const reason = (await askUnlockReason()) ?? "";
     const accountIds = Array.from(new Set(tx.splits.map((s) => s.account_id)));
     await Promise.all(
       accountIds.map((account_id) =>
@@ -931,7 +996,7 @@
       await loadTransactions();
       closeDialog();
     } catch (e) {
-      error = `Failed to save transaction: ${String(e)}`;
+      error = `Failed to save transaction: ${formatError(e)}`;
     } finally {
       submitting = false;
     }
@@ -968,7 +1033,7 @@
       await action();
       await loadTransactions();
     } catch (e) {
-      const msg = String(e);
+      const msg = formatError(e);
       if (msg.includes("locked accounts") || tx.transaction.status === "reconciled") {
         await unlockAndRetry(tx, async () => {
           await action();
@@ -981,7 +1046,7 @@
   }
 
   async function removeTransaction(tx: TransactionWithSplits) {
-    const confirmed = window.confirm("Delete this transaction? This cannot be undone.");
+    const confirmed = await askConfirm("Delete this transaction? This cannot be undone.", { label: "Delete", destructive: true });
     if (!confirmed) return;
 
     const action = async () => {
@@ -992,7 +1057,7 @@
       await action();
       await loadTransactions();
     } catch (e) {
-      const msg = String(e);
+      const msg = formatError(e);
       if (msg.includes("locked accounts") || tx.transaction.status === "reconciled") {
         await unlockAndRetry(tx, async () => {
           await action();
@@ -1022,7 +1087,7 @@
       await invoke("duplicate_transaction", { id: tx.transaction.id, today });
       await loadTransactions();
     } catch (e) {
-      error = `Failed to duplicate: ${String(e)}`;
+      error = `Failed to duplicate: ${formatError(e)}`;
     }
   }
 
@@ -1050,7 +1115,7 @@
 
   async function bulkVoid() {
     if (selectedIds.size === 0) return;
-    const confirmed = window.confirm(`Void ${selectedIds.size} selected transaction(s)?`);
+    const confirmed = await askConfirm(`Void ${selectedIds.size} selected transaction(s)?`, { label: "Void", destructive: true });
     if (!confirmed) return;
     bulkActionRunning = true;
     error = "";
@@ -1062,7 +1127,7 @@
         // Some were skipped (locked)
       }
     } catch (e) {
-      error = `Bulk void failed: ${String(e)}`;
+      error = `Bulk void failed: ${formatError(e)}`;
     } finally {
       bulkActionRunning = false;
     }
@@ -1070,7 +1135,7 @@
 
   async function bulkDelete() {
     if (selectedIds.size === 0) return;
-    const confirmed = window.confirm(`Permanently delete ${selectedIds.size} selected transaction(s)? This cannot be undone.`);
+    const confirmed = await askConfirm(`Permanently delete ${selectedIds.size} selected transaction(s)? This cannot be undone.`, { label: "Delete", destructive: true });
     if (!confirmed) return;
     bulkActionRunning = true;
     error = "";
@@ -1079,7 +1144,7 @@
       clearSelection();
       await loadTransactions();
     } catch (e) {
-      error = `Bulk delete failed: ${String(e)}`;
+      error = `Bulk delete failed: ${formatError(e)}`;
     } finally {
       bulkActionRunning = false;
     }
@@ -1564,7 +1629,14 @@
             <div class="flex items-center gap-2 mt-2">
               <span class="text-sm font-medium">Balance:</span>
               <span class="text-sm font-mono {balanced ? 'text-green-600' : 'text-red-600'}">
-                {total === 0 ? "✓ Balanced" : `${total > 0 ? "+" : ""}${total} minor units (unbalanced)`}
+                {#if total === 0}
+                  ✓ Balanced
+                {:else}
+                  {@const firstAccount = accounts.find((a) => a.id === formSplits[0]?.account_id)}
+                  {@const firstCommodity = commodities.find((c) => c.id === firstAccount?.commodity_id)}
+                  {@const scale = firstCommodity?.scale ?? 2}
+                  {total > 0 ? "+" : ""}{formatMinorWithScale(total, scale)} {firstCommodity?.symbol ?? ""} (unbalanced)
+                {/if}
               </span>
             </div>
           {/if}
@@ -1572,6 +1644,61 @@
       </div>
       <Dialog.Footer>
         <Button variant="secondary" onclick={closeSplitEditor}>Done</Button>
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
+
+  <!-- Generic confirm dialog -->
+  <ConfirmDialog
+    bind:open={confirmOpen}
+    title={confirmTitle}
+    message={confirmMessage}
+    confirmLabel={confirmLabel}
+    destructive={confirmDestructive}
+    onConfirm={onConfirmYes}
+    onCancel={onConfirmNo}
+  />
+
+  <!-- Create category dialog -->
+  <Dialog.Root bind:open={createCategoryDialogOpen}>
+    <Dialog.Content class="max-w-sm">
+      <Dialog.Header>
+        <Dialog.Title>Create Category</Dialog.Title>
+        <Dialog.Description>New category: <strong>{createCategoryName}</strong></Dialog.Description>
+      </Dialog.Header>
+      <div class="py-2 space-y-2">
+        <Label for="new-category-kind">Kind</Label>
+        <select
+          id="new-category-kind"
+          bind:value={createCategoryKind}
+          class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <Dialog.Footer>
+        <Button variant="outline" onclick={onCreateCategoryCancel}>Cancel</Button>
+        <Button onclick={onCreateCategoryConfirm}>Create</Button>
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
+
+  <!-- Unlock transaction dialog -->
+  <Dialog.Root bind:open={unlockDialogOpen}>
+    <Dialog.Content class="max-w-md">
+      <Dialog.Header>
+        <Dialog.Title>Unlock Reason</Dialog.Title>
+        <Dialog.Description>Optional reason for unlocking this transaction.</Dialog.Description>
+      </Dialog.Header>
+      <div class="py-2">
+        <Input bind:value={unlockReason} placeholder="Reason (optional)" />
+      </div>
+      <Dialog.Footer>
+        <Button variant="outline" onclick={onUnlockCancel}>Cancel</Button>
+        <Button variant="destructive" onclick={onUnlockConfirm}>Unlock</Button>
       </Dialog.Footer>
     </Dialog.Content>
   </Dialog.Root>

@@ -5,42 +5,14 @@ use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
+use crate::error::AppError;
+use crate::session::{current_session_id, clear_redo_stack, record_insert_change};
 use crate::state::DbState;
 use crate::validation::{validate_account_type, validate_name, validate_memo};
 
 const SINGLE_BOOK_ID: i64 = 1;
 const BALANCING_TX_MARK: &str = "balance_adjustment";
 const VOID_SESSION_PREFIX: &str = "void:";
-
-fn current_session_id(conn: &rusqlite::Connection) -> Result<String, String> {
-    conn.query_row("SELECT id FROM app_runtime_session LIMIT 1", [], |row| row.get(0))
-        .map_err(|e| e.to_string())
-}
-
-fn clear_redo_stack(conn: &rusqlite::Connection, session_id: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM session_redo_stack WHERE session_id = ?1", [session_id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-fn record_insert_change(
-    conn: &rusqlite::Connection,
-    session_id: &str,
-    table_name: &str,
-    row_id: i64,
-) -> Result<(), String> {
-    conn.execute(
-        "INSERT INTO session_undo_stack (session_id, table_name, row_id) VALUES (?1, ?2, ?3)",
-        params![session_id, table_name, row_id],
-    )
-    .map_err(|e| e.to_string())?;
-    conn.execute(
-        "DELETE FROM session_reverts WHERE session_id = ?1 AND table_name = ?2 AND row_id = ?3",
-        params![session_id, table_name, row_id],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 fn resolve_current_account_id(conn: &rusqlite::Connection, account_id: i64) -> Result<Option<i64>, String> {
     conn.query_row(
@@ -1094,7 +1066,7 @@ fn map_balance_constraint_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Balan
 }
 
 #[command]
-pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Account, String> {
+pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Account, AppError> {
     validate_account_type(&input.account_type)?;
     validate_name(&input.name)?;
 
@@ -1151,9 +1123,9 @@ pub fn get_account(
     db: State<DbState>,
     id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Option<Account>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Option<Account>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let account = conn
         .query_row(
@@ -1198,9 +1170,9 @@ pub fn list_accounts(
     db: State<DbState>,
     book_id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Vec<Account>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<Account>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -1243,7 +1215,7 @@ pub fn list_accounts(
 }
 
 #[command]
-pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Account, String> {
+pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Account, AppError> {
     validate_account_type(&input.account_type)?;
     validate_name(&input.name)?;
 
@@ -1269,7 +1241,7 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
     let (booking_policy, is_hidden, is_system, system_role) =
         source.ok_or_else(|| "account not found".to_string())?;
     if is_system == 1 {
-        return Err("system accounts cannot be updated".to_string());
+        return Err(AppError::conflict("system accounts cannot be updated"));
     }
 
     let is_closed = if input.is_closed { 1 } else { 0 };
@@ -1330,7 +1302,7 @@ pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Accoun
 }
 
 #[command]
-pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1346,7 +1318,7 @@ pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
         .optional()
         .map_err(|e| e.to_string())?;
     if is_system == Some(1) {
-        return Err("system accounts cannot be deleted".to_string());
+        return Err(AppError::conflict("system accounts cannot be deleted"));
     }
 
     let source: (i64, Option<i64>, String, String, i64, String, Option<i64>, Option<i64>, Option<String>, i64, i64, Option<String>) = conn
@@ -1416,20 +1388,20 @@ pub fn delete_account(db: State<DbState>, id: i64) -> Result<bool, String> {
 pub fn ensure_profit_loss_system_accounts(
     db: State<DbState>,
     book_id: i64,
-) -> Result<ProfitLossSystemAccounts, String> {
+) -> Result<ProfitLossSystemAccounts, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
-    ensure_profit_loss_system_accounts_internal(conn, book_id)
+    Ok(ensure_profit_loss_system_accounts_internal(conn, book_id)?)
 }
 
 #[command]
 pub fn close_fiscal_year(
     db: State<DbState>,
     input: FiscalYearCloseInput,
-) -> Result<FiscalYearCloseResult, String> {
+) -> Result<FiscalYearCloseResult, AppError> {
     validate_close_date(&input.close_date)?;
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
@@ -1461,7 +1433,7 @@ pub fn close_fiscal_year(
         .optional()
         .map_err(|e| e.to_string())?;
     if existing_close_id.is_some() {
-        return Err("fiscal year already closed for close_date".to_string());
+        return Err(AppError::conflict("fiscal year already closed for close_date"));
     }
 
     let mut account_adjustments: Vec<(i64, i64, String)> = Vec::new();
@@ -1508,10 +1480,10 @@ pub fn close_fiscal_year(
         for row in rows {
             let (account_id, account_type, commodity_id, balance_minor) = row.map_err(|e| e.to_string())?;
             if commodity_id != system_accounts.commodity_id {
-                return Err(format!(
+                return Err(AppError::internal(format!(
                     "account {} uses commodity {} but fiscal close requires base commodity {}",
                     account_id, commodity_id, system_accounts.commodity_id
-                ));
+                )));
             }
             account_adjustments.push((account_id, -balance_minor, account_type));
             retained_earnings_delta_minor += balance_minor;
@@ -1559,7 +1531,7 @@ pub fn close_fiscal_year(
 
     let split_sum: i64 = splits.iter().map(|(_, amount)| *amount).sum();
     if split_sum != 0 {
-        return Err("fiscal close failed: generated splits are unbalanced".to_string());
+        return Err(AppError::internal("fiscal close failed: generated splits are unbalanced"));
     }
 
     let session_id = current_session_id(&tx)?;
@@ -1627,9 +1599,9 @@ fn validate_institution_kind(kind: &str) -> Result<(), String> {
 }
 
 #[command]
-pub fn list_countries(db: State<DbState>, book_id: i64) -> Result<Vec<Country>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn list_countries(db: State<DbState>, book_id: i64) -> Result<Vec<Country>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -1668,7 +1640,7 @@ pub fn list_countries(db: State<DbState>, book_id: i64) -> Result<Vec<Country>, 
 }
 
 #[command]
-pub fn create_country(db: State<DbState>, input: CountryCreate) -> Result<Country, String> {
+pub fn create_country(db: State<DbState>, input: CountryCreate) -> Result<Country, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1701,9 +1673,9 @@ pub fn create_country(db: State<DbState>, input: CountryCreate) -> Result<Countr
 }
 
 #[command]
-pub fn get_country(db: State<DbState>, id: i64) -> Result<Option<Country>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_country(db: State<DbState>, id: i64) -> Result<Option<Country>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let item = conn
         .query_row(
@@ -1740,7 +1712,7 @@ pub fn get_country(db: State<DbState>, id: i64) -> Result<Option<Country>, Strin
 }
 
 #[command]
-pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Country, String> {
+pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Country, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1752,7 +1724,7 @@ pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Countr
         .optional()
         .map_err(|e| e.to_string())?;
     if exists.is_none() {
-        return Err("country not found".to_string());
+        return Err(AppError::not_found("country", "requested"));
     }
 
     conn.execute(
@@ -1782,7 +1754,7 @@ pub fn update_country(db: State<DbState>, input: CountryUpdate) -> Result<Countr
 }
 
 #[command]
-pub fn delete_country(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_country(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1842,9 +1814,9 @@ pub fn delete_country(db: State<DbState>, id: i64) -> Result<bool, String> {
 }
 
 #[command]
-pub fn list_institutions(db: State<DbState>, book_id: i64) -> Result<Vec<Institution>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn list_institutions(db: State<DbState>, book_id: i64) -> Result<Vec<Institution>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -1882,7 +1854,7 @@ pub fn list_institutions(db: State<DbState>, book_id: i64) -> Result<Vec<Institu
 }
 
 #[command]
-pub fn create_institution(db: State<DbState>, input: InstitutionCreate) -> Result<Institution, String> {
+pub fn create_institution(db: State<DbState>, input: InstitutionCreate) -> Result<Institution, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1917,9 +1889,9 @@ pub fn create_institution(db: State<DbState>, input: InstitutionCreate) -> Resul
 }
 
 #[command]
-pub fn get_institution(db: State<DbState>, id: i64) -> Result<Option<Institution>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_institution(db: State<DbState>, id: i64) -> Result<Option<Institution>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let item = conn
         .query_row(
@@ -1955,7 +1927,7 @@ pub fn get_institution(db: State<DbState>, id: i64) -> Result<Option<Institution
 }
 
 #[command]
-pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Result<Institution, String> {
+pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Result<Institution, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1970,7 +1942,7 @@ pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Resul
         .optional()
         .map_err(|e| e.to_string())?;
     if exists.is_none() {
-        return Err("institution not found".to_string());
+        return Err(AppError::not_found("institution", "requested"));
     }
 
     conn.execute(
@@ -1999,7 +1971,7 @@ pub fn update_institution(db: State<DbState>, input: InstitutionUpdate) -> Resul
 }
 
 #[command]
-pub fn delete_institution(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_institution(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2059,9 +2031,9 @@ pub fn delete_institution(db: State<DbState>, id: i64) -> Result<bool, String> {
 }
 
 #[command]
-pub fn list_account_balances(db: State<DbState>, book_id: i64) -> Result<Vec<AccountBalance>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn list_account_balances(db: State<DbState>, book_id: i64) -> Result<Vec<AccountBalance>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -2166,7 +2138,7 @@ pub fn list_account_balances(db: State<DbState>, book_id: i64) -> Result<Vec<Acc
 pub fn create_account_balancing(
     db: State<DbState>,
     input: AccountBalancingCreate,
-) -> Result<AccountBalancing, String> {
+) -> Result<AccountBalancing, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -2184,8 +2156,8 @@ pub fn create_account_balancing(
 
     match account_book_id {
         Some(account_book_id) if account_book_id == book_id => {}
-        Some(_) => return Err("account does not belong to book".to_string()),
-        None => return Err("account not found".to_string()),
+        Some(_) => return Err(AppError::conflict("account does not belong to book")),
+        None => return Err(AppError::not_found("account", "requested")),
     }
 
     let latest: Option<String> = tx
@@ -2207,7 +2179,7 @@ pub fn create_account_balancing(
 
     if let Some(max_date) = latest {
         if input.as_of_date <= max_date {
-            return Err("balancing date must be after last active balancing".to_string());
+            return Err(AppError::validation("balance_date", "balancing date must be after last active balancing"));
         }
     }
 
@@ -2249,9 +2221,9 @@ pub fn create_account_balancing(
 pub fn list_account_balancings(
     db: State<DbState>,
     account_id: i64,
-) -> Result<Vec<AccountBalancing>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<AccountBalancing>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -2288,9 +2260,9 @@ pub fn list_account_balancings(
 pub fn unlock_account_balancings(
     db: State<DbState>,
     input: AccountBalancingUnlockInput,
-) -> Result<i64, String> {
+) -> Result<i64, AppError> {
     if !input.confirm {
-        return Err("unlock not confirmed".to_string());
+        return Err(AppError::conflict("unlock not confirmed"));
     }
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
@@ -2356,9 +2328,9 @@ pub fn list_categories(
     db: State<DbState>,
     book_id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Vec<Category>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<Category>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -2398,7 +2370,7 @@ pub fn list_categories(
 }
 
 #[command]
-pub fn create_category(db: State<DbState>, input: CategoryCreate) -> Result<Category, String> {
+pub fn create_category(db: State<DbState>, input: CategoryCreate) -> Result<Category, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2440,9 +2412,9 @@ pub fn get_category(
     db: State<DbState>,
     id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Option<Category>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Option<Category>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let category = conn
         .query_row(
@@ -2481,7 +2453,7 @@ pub fn get_category(
 }
 
 #[command]
-pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Category, String> {
+pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Category, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2493,7 +2465,7 @@ pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Cate
         .optional()
         .map_err(|e| e.to_string())?;
     if exists.is_none() {
-        return Err("category not found".to_string());
+        return Err(AppError::not_found("category", "requested"));
     }
 
     conn.execute(
@@ -2536,7 +2508,7 @@ pub fn update_category(db: State<DbState>, input: CategoryUpdate) -> Result<Cate
 }
 
 #[command]
-pub fn delete_category(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_category(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2607,9 +2579,9 @@ pub fn list_payees(
     db: State<DbState>,
     book_id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Vec<Payee>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<Payee>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -2649,7 +2621,7 @@ pub fn list_payees(
 }
 
 #[command]
-pub fn create_payee(db: State<DbState>, input: PayeeCreate) -> Result<Payee, String> {
+pub fn create_payee(db: State<DbState>, input: PayeeCreate) -> Result<Payee, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2691,9 +2663,9 @@ pub fn get_payee(
     db: State<DbState>,
     id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Option<Payee>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Option<Payee>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let payee = conn
         .query_row(
@@ -2732,7 +2704,7 @@ pub fn get_payee(
 }
 
 #[command]
-pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, String> {
+pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2744,7 +2716,7 @@ pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, Str
         .optional()
         .map_err(|e| e.to_string())?;
     if exists.is_none() {
-        return Err("payee not found".to_string());
+        return Err(AppError::not_found("payee", "requested"));
     }
 
     conn.execute(
@@ -2779,7 +2751,7 @@ pub fn update_payee(db: State<DbState>, input: PayeeUpdate) -> Result<Payee, Str
 }
 
 #[command]
-pub fn delete_payee(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_payee(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2849,9 +2821,9 @@ pub fn list_tags(
     db: State<DbState>,
     book_id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Vec<Tag>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<Tag>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -2891,7 +2863,7 @@ pub fn list_tags(
 }
 
 #[command]
-pub fn create_tag(db: State<DbState>, input: TagCreate) -> Result<Tag, String> {
+pub fn create_tag(db: State<DbState>, input: TagCreate) -> Result<Tag, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2933,9 +2905,9 @@ pub fn get_tag(
     db: State<DbState>,
     id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Option<Tag>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Option<Tag>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let tag = conn
         .query_row(
@@ -2974,7 +2946,7 @@ pub fn get_tag(
 }
 
 #[command]
-pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
+pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2986,7 +2958,7 @@ pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
         .optional()
         .map_err(|e| e.to_string())?;
     if exists.is_none() {
-        return Err("tag not found".to_string());
+        return Err(AppError::not_found("tag", "requested"));
     }
 
     conn.execute(
@@ -3021,7 +2993,7 @@ pub fn update_tag(db: State<DbState>, input: TagUpdate) -> Result<Tag, String> {
 }
 
 #[command]
-pub fn delete_tag(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_tag(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -3090,9 +3062,9 @@ pub fn list_people(
     db: State<DbState>,
     book_id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Vec<Person>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<Person>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -3131,7 +3103,7 @@ pub fn list_people(
 }
 
 #[command]
-pub fn create_person(db: State<DbState>, input: PersonCreate) -> Result<Person, String> {
+pub fn create_person(db: State<DbState>, input: PersonCreate) -> Result<Person, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -3173,9 +3145,9 @@ pub fn list_projects(
     db: State<DbState>,
     book_id: i64,
     as_of_timestamp: Option<String>,
-) -> Result<Vec<Project>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<Project>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -3214,7 +3186,7 @@ pub fn list_projects(
 }
 
 #[command]
-pub fn create_project(db: State<DbState>, input: ProjectCreate) -> Result<Project, String> {
+pub fn create_project(db: State<DbState>, input: ProjectCreate) -> Result<Project, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -3252,9 +3224,9 @@ pub fn create_project(db: State<DbState>, input: ProjectCreate) -> Result<Projec
 }
 
 #[command]
-pub fn get_account_booking_policy(db: State<DbState>, account_id: i64) -> Result<String, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_account_booking_policy(db: State<DbState>, account_id: i64) -> Result<String, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let current_id = resolve_current_account_id(conn, account_id)?
         .ok_or_else(|| "account not found".to_string())?;
@@ -3270,7 +3242,7 @@ pub fn get_account_booking_policy(db: State<DbState>, account_id: i64) -> Result
 
     let account_type = account_type.ok_or_else(|| "account not found".to_string())?;
     if account_type != "investment" {
-        return Err("booking policy only applies to investment accounts".to_string());
+        return Err(AppError::validation("booking_policy", "booking policy only applies to investment accounts"));
     }
 
     let policy: Option<String> = conn
@@ -3289,10 +3261,10 @@ pub fn get_account_booking_policy(db: State<DbState>, account_id: i64) -> Result
 pub fn set_account_booking_policy(
     db: State<DbState>,
     input: AccountBookingPolicyUpdate,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let policy = input.booking_policy.to_lowercase();
     if policy != "fifo" && policy != "lifo" && policy != "strict" && policy != "average" {
-        return Err("booking policy must be fifo, lifo, strict, or average".to_string());
+        return Err(AppError::validation("booking_policy", "booking policy must be fifo, lifo, strict, or average"));
     }
 
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
@@ -3357,11 +3329,11 @@ pub fn set_account_booking_policy(
     ) = source.ok_or_else(|| "account not found".to_string())?;
 
     if is_system == 1 {
-        return Err("system accounts cannot be updated".to_string());
+        return Err(AppError::conflict("system accounts cannot be updated"));
     }
 
     if account_type != "investment" {
-        return Err("booking policy only applies to investment accounts".to_string());
+        return Err(AppError::validation("booking_policy", "booking policy only applies to investment accounts"));
     }
 
     conn.execute(
@@ -3408,9 +3380,9 @@ pub fn set_account_booking_policy(
 
 #[allow(dead_code)]
 #[command]
-pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<bool, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let is_closed: Option<i64> = conn
         .query_row(
@@ -3423,7 +3395,7 @@ pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<b
 
     let is_closed = match is_closed {
         Some(v) => v != 0,
-        None => return Err("account not found".to_string()),
+        None => return Err(AppError::not_found("account", "requested")),
     };
 
     if !is_closed {
@@ -3433,7 +3405,7 @@ pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<b
     let balance: i64 = get_account_balance_minor(conn, account_id)?;
 
     if balance != 0 {
-        return Err("account closing validation failed: balance is not zero".to_string());
+        return Err(AppError::conflict("account closing validation failed: balance is not zero"));
     }
 
     Ok(true)
@@ -3444,7 +3416,7 @@ pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<b
 pub fn create_balance_constraint(
     db: State<DbState>,
     input: BalanceConstraintCreate,
-) -> Result<BalanceConstraint, String> {
+) -> Result<BalanceConstraint, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -3454,11 +3426,11 @@ pub fn create_balance_constraint(
         .unwrap_or_else(|| "any".to_string())
         .to_lowercase();
     if sign_rule != "any" && sign_rule != "nonnegative" && sign_rule != "nonpositive" {
-        return Err("sign_rule must be any, nonnegative, or nonpositive".to_string());
+        return Err(AppError::validation("sign_rule", "sign_rule must be any, nonnegative, or nonpositive"));
     }
     if let (Some(min), Some(max)) = (input.min_balance_minor, input.max_balance_minor) {
         if min > max {
-            return Err("min_balance_minor must be <= max_balance_minor".to_string());
+            return Err(AppError::validation("min_balance_minor", "min_balance_minor must be <= max_balance_minor"));
         }
     }
 
@@ -3493,9 +3465,9 @@ pub fn create_balance_constraint(
 pub fn list_balance_constraints(
     db: State<DbState>,
     account_id: i64,
-) -> Result<Vec<BalanceConstraint>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<BalanceConstraint>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -3519,7 +3491,7 @@ pub fn list_balance_constraints(
 
 #[allow(dead_code)]
 #[command]
-pub fn delete_balance_constraint(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_balance_constraint(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -3532,9 +3504,9 @@ pub fn delete_balance_constraint(db: State<DbState>, id: i64) -> Result<bool, St
 
 #[allow(dead_code)]
 #[command]
-pub fn validate_balance_constraints(db: State<DbState>, account_id: i64) -> Result<bool, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn validate_balance_constraints(db: State<DbState>, account_id: i64) -> Result<bool, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let balance: i64 = get_account_balance_minor(conn, account_id)?;
 
@@ -3553,19 +3525,19 @@ pub fn validate_balance_constraints(db: State<DbState>, account_id: i64) -> Resu
         let constraint = row.map_err(|e| e.to_string())?;
         if let Some(min) = constraint.min_balance_minor {
             if balance < min {
-                return Err("balance constraint violated: below minimum".to_string());
+                return Err(AppError::conflict("balance constraint violated: below minimum"));
             }
         }
         if let Some(max) = constraint.max_balance_minor {
             if balance > max {
-                return Err("balance constraint violated: above maximum".to_string());
+                return Err(AppError::conflict("balance constraint violated: above maximum"));
             }
         }
         if constraint.sign_rule == "nonnegative" && balance < 0 {
-            return Err("balance constraint violated: must be nonnegative".to_string());
+            return Err(AppError::conflict("balance constraint violated: must be nonnegative"));
         }
         if constraint.sign_rule == "nonpositive" && balance > 0 {
-            return Err("balance constraint violated: must be nonpositive".to_string());
+            return Err(AppError::conflict("balance constraint violated: must be nonpositive"));
         }
     }
 
@@ -3574,9 +3546,9 @@ pub fn validate_balance_constraints(db: State<DbState>, account_id: i64) -> Resu
 
 #[allow(dead_code)]
 #[command]
-pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountTreeNode>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountTreeNode>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
     let book_id = SINGLE_BOOK_ID;
 
@@ -3828,36 +3800,36 @@ fn create_account_lifecycle_directive_internal(
 pub fn create_account_open(
     db: State<DbState>,
     input: AccountDirectiveCreate,
-) -> Result<AccountDirective, String> {
+) -> Result<AccountDirective, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    create_account_lifecycle_directive_internal(conn, "open", input)
+    Ok(create_account_lifecycle_directive_internal(conn, "open", input)?)
 }
 
 #[command]
 pub fn create_account_close(
     db: State<DbState>,
     input: AccountDirectiveCreate,
-) -> Result<AccountDirective, String> {
+) -> Result<AccountDirective, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    create_account_lifecycle_directive_internal(conn, "close", input)
+    Ok(create_account_lifecycle_directive_internal(conn, "close", input)?)
 }
 
 #[command]
 pub fn create_account_reopen(
     db: State<DbState>,
     input: AccountDirectiveCreate,
-) -> Result<AccountDirective, String> {
+) -> Result<AccountDirective, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
-    create_account_lifecycle_directive_internal(conn, "reopen", input)
+    Ok(create_account_lifecycle_directive_internal(conn, "reopen", input)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_and_migrate;
+    use crate::db::{open_and_migrate, open_read_conn};
     use crate::state::DbStateInner;
     use std::fs;
     use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
@@ -3877,12 +3849,14 @@ mod tests {
         fs::create_dir_all(&temp).expect("create temp dir");
 
         let (conn, db_path, audit_user) = open_and_migrate(&temp).expect("open and migrate");
+        let read_conn = open_read_conn(&db_path).expect("open read conn");
         DbState {
             inner: Mutex::new(DbStateInner {
                 db_path: Some(db_path),
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Mutex::new(Some(read_conn)),
         }
     }
 
@@ -4261,7 +4235,7 @@ mod tests {
             },
         )
         .expect_err("should reject earlier balancing date");
-        assert!(err.contains("balancing date"));
+        assert!(err.to_string().contains("balancing date"));
 
         let listed = list_account_balancings(as_state(&db_state), account.id)
             .expect("list balancings");
@@ -4339,7 +4313,7 @@ mod tests {
             },
         )
         .expect_err("non-investment booking policy should fail");
-        assert!(err.contains("investment"));
+        assert!(err.to_string().contains("investment"));
 
         let constraint = create_balance_constraint(
             as_state(&db_state),
@@ -4393,7 +4367,7 @@ mod tests {
 
         let err = validate_balance_constraints(as_state(&db_state), account.id)
             .expect_err("constraint should fail on negative balance");
-        assert!(err.contains("constraint"));
+        assert!(err.to_string().contains("constraint"));
 
         let opened = create_account_open(
             as_state(&db_state),
@@ -4852,7 +4826,7 @@ mod tests {
         .expect_err("second close on same date should fail");
 
         assert!(
-            second_close_err.contains("fiscal year already closed for close_date"),
+            second_close_err.to_string().contains("fiscal year already closed for close_date"),
             "unexpected error: {second_close_err}"
         );
     }
@@ -4999,7 +4973,7 @@ mod tests {
         );
         assert!(result.is_err(), "invalid account_type should be rejected");
         let msg = result.unwrap_err();
-        assert!(msg.contains("invalid account_type"), "error should mention account_type, got: {msg}");
+        assert!(msg.to_string().contains("invalid account_type"), "error should mention account_type, got: {msg}");
     }
 
     #[test]
@@ -5029,9 +5003,9 @@ mod tests {
 pub fn list_account_directives(
     db: State<DbState>,
     account_id: i64,
-) -> Result<Vec<AccountDirective>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<AccountDirective>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -5072,7 +5046,7 @@ pub fn list_account_directives(
 pub fn create_balance_check(
     db: State<DbState>,
     input: BalanceCheckCreate,
-) -> Result<BalanceCheck, String> {
+) -> Result<BalanceCheck, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5141,9 +5115,9 @@ pub fn create_balance_check(
 pub fn list_balance_checks(
     db: State<DbState>,
     account_id: i64,
-) -> Result<Vec<BalanceCheck>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<BalanceCheck>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -5169,7 +5143,7 @@ pub fn list_balance_checks(
 pub fn create_balance_adjustment(
     db: State<DbState>,
     input: BalanceAdjustmentCreate,
-) -> Result<BalanceAdjustment, String> {
+) -> Result<BalanceAdjustment, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5191,9 +5165,9 @@ pub fn create_balance_adjustment(
 pub fn list_balance_adjustments(
     db: State<DbState>,
     account_id: i64,
-) -> Result<Vec<BalanceAdjustment>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+) -> Result<Vec<BalanceAdjustment>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -5217,7 +5191,7 @@ pub fn list_balance_adjustments(
 }
 
 #[command]
-pub fn create_note(db: State<DbState>, input: NoteCreate) -> Result<Note, String> {
+pub fn create_note(db: State<DbState>, input: NoteCreate) -> Result<Note, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -5247,9 +5221,9 @@ pub fn create_note(db: State<DbState>, input: NoteCreate) -> Result<Note, String
 }
 
 #[command]
-pub fn list_notes(db: State<DbState>, filter: NoteFilter) -> Result<Vec<Note>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn list_notes(db: State<DbState>, filter: NoteFilter) -> Result<Vec<Note>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut sql = String::from(
         "SELECT id, book_id, account_id, tx_id, note, note_date, created_at
@@ -5294,9 +5268,9 @@ pub fn list_notes(db: State<DbState>, filter: NoteFilter) -> Result<Vec<Note>, S
 }
 
 #[command]
-pub fn get_note(db: State<DbState>, id: i64) -> Result<Option<Note>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_note(db: State<DbState>, id: i64) -> Result<Option<Note>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let note = conn
         .query_row(
@@ -5331,7 +5305,7 @@ pub fn get_note(db: State<DbState>, id: i64) -> Result<Option<Note>, String> {
 }
 
 #[command]
-pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String> {
+pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -5343,7 +5317,7 @@ pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String
         .optional()
         .map_err(|e| e.to_string())?;
     if exists.is_none() {
-        return Err("note not found".to_string());
+        return Err(AppError::not_found("note", "requested"));
     }
 
     conn.execute(
@@ -5378,7 +5352,7 @@ pub fn update_note(db: State<DbState>, input: NoteUpdate) -> Result<Note, String
 }
 
 #[command]
-pub fn delete_note(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_note(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -5439,7 +5413,7 @@ pub fn delete_note(db: State<DbState>, id: i64) -> Result<bool, String> {
 }
 
 #[command]
-pub fn create_event(db: State<DbState>, input: EventCreate) -> Result<Event, String> {
+pub fn create_event(db: State<DbState>, input: EventCreate) -> Result<Event, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5474,9 +5448,9 @@ pub fn create_event(db: State<DbState>, input: EventCreate) -> Result<Event, Str
 }
 
 #[command]
-pub fn list_events(db: State<DbState>, filter: EventFilter) -> Result<Vec<Event>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn list_events(db: State<DbState>, filter: EventFilter) -> Result<Vec<Event>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut sql = String::from(
         "SELECT id, book_id, account_id, tx_id, event_type, event_date, description, metadata, created_at, updated_at
@@ -5509,9 +5483,9 @@ pub fn list_events(db: State<DbState>, filter: EventFilter) -> Result<Vec<Event>
 }
 
 #[command]
-pub fn get_event(db: State<DbState>, id: i64) -> Result<Option<Event>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_event(db: State<DbState>, id: i64) -> Result<Option<Event>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -5529,7 +5503,7 @@ pub fn get_event(db: State<DbState>, id: i64) -> Result<Option<Event>, String> {
 }
 
 #[command]
-pub fn update_event(db: State<DbState>, input: EventUpdate) -> Result<Event, String> {
+pub fn update_event(db: State<DbState>, input: EventUpdate) -> Result<Event, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5561,7 +5535,7 @@ pub fn update_event(db: State<DbState>, input: EventUpdate) -> Result<Event, Str
         .map_err(|e| e.to_string())?;
 
     if rows == 0 {
-        return Err("event not found".to_string());
+        return Err(AppError::not_found("event", "requested"));
     }
 
     let event = conn
@@ -5577,7 +5551,7 @@ pub fn update_event(db: State<DbState>, input: EventUpdate) -> Result<Event, Str
 }
 
 #[command]
-pub fn delete_event(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_event(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5589,7 +5563,7 @@ pub fn delete_event(db: State<DbState>, id: i64) -> Result<bool, String> {
 }
 
 #[command]
-pub fn create_document(db: State<DbState>, input: DocumentCreate) -> Result<Document, String> {
+pub fn create_document(db: State<DbState>, input: DocumentCreate) -> Result<Document, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5625,9 +5599,9 @@ pub fn create_document(db: State<DbState>, input: DocumentCreate) -> Result<Docu
 }
 
 #[command]
-pub fn list_documents(db: State<DbState>, filter: DocumentFilter) -> Result<Vec<Document>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn list_documents(db: State<DbState>, filter: DocumentFilter) -> Result<Vec<Document>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut sql = String::from(
         "SELECT id, book_id, account_id, tx_id, doc_type, title, uri, mime_type, notes, created_at, updated_at
@@ -5660,9 +5634,9 @@ pub fn list_documents(db: State<DbState>, filter: DocumentFilter) -> Result<Vec<
 }
 
 #[command]
-pub fn get_document(db: State<DbState>, id: i64) -> Result<Option<Document>, String> {
-    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
-    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+pub fn get_document(db: State<DbState>, id: i64) -> Result<Option<Document>, AppError> {
+    let guard = db.read_conn.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -5680,7 +5654,7 @@ pub fn get_document(db: State<DbState>, id: i64) -> Result<Option<Document>, Str
 }
 
 #[command]
-pub fn update_document(db: State<DbState>, input: DocumentUpdate) -> Result<Document, String> {
+pub fn update_document(db: State<DbState>, input: DocumentUpdate) -> Result<Document, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -5714,7 +5688,7 @@ pub fn update_document(db: State<DbState>, input: DocumentUpdate) -> Result<Docu
         .map_err(|e| e.to_string())?;
 
     if rows == 0 {
-        return Err("document not found".to_string());
+        return Err(AppError::not_found("document", "requested"));
     }
 
     let doc = conn
@@ -5730,7 +5704,7 @@ pub fn update_document(db: State<DbState>, input: DocumentUpdate) -> Result<Docu
 }
 
 #[command]
-pub fn delete_document(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_document(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 

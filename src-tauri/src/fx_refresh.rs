@@ -218,7 +218,24 @@ async fn refresh_pair(
     let provider = provider_by_name(&task.source_name)
         .ok_or_else(|| format!("No provider for source '{}'", task.source_name))?;
 
-    let (points, derived) = fetch_rates_for_pair(settings, task, provider.as_ref()).await?;
+    // Fetch rates with exponential back-off: 1s → 2s → 4s (max 3 retries).
+    // HTTP calls happen *before* the DB mutex is acquired.
+    let (points, derived) = {
+        const MAX_RETRIES: u32 = 3;
+        let mut last_err = String::new();
+        let mut result = None;
+        for attempt in 0..=MAX_RETRIES {
+            if attempt > 0 {
+                let delay = Duration::from_secs(1u64 << attempt); // 2s, 4s, 8s
+                sleep(delay).await;
+            }
+            match fetch_rates_for_pair(settings, task, provider.as_ref()).await {
+                Ok(val) => { result = Some(val); break; }
+                Err(e) => { last_err = e; }
+            }
+        }
+        result.ok_or(last_err)?
+    };
 
     let mut inserted = 0usize;
     let mut derived_inserted = 0usize;
@@ -548,6 +565,7 @@ mod tests {
                 conn: Some(conn),
                 audit_user: Some(audit_user),
             }),
+            read_conn: Default::default(),
         }
     }
 

@@ -7,6 +7,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
   import * as Alert from "$lib/components/ui/alert";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
 
   type BackupSettings = {
     enabled: boolean;
@@ -56,6 +57,17 @@
   let backupSettingsLoaded = false;
   let backupSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let showBackupList = false;
+
+  let confirmOpen = false;
+  let confirmMessage = "";
+  let confirmResolve: ((v: boolean) => void) | null = null;
+  function askConfirm(msg: string): Promise<boolean> {
+    confirmMessage = msg;
+    confirmOpen = true;
+    return new Promise<boolean>((resolve) => { confirmResolve = resolve; });
+  }
+  function onConfirmYes() { confirmOpen = false; confirmResolve?.(true); confirmResolve = null; }
+  function onConfirmNo() { confirmOpen = false; confirmResolve?.(false); confirmResolve = null; }
 
   let dbStats: DbStats | null = null;
   let migrationStatus: MigrationStatus | null = null;
@@ -297,7 +309,7 @@
     status = "";
     const selected = await invoke<string | null>("pick_backup_file");
     if (!selected) return;
-    const confirmed = window.confirm("Restore will overwrite the current database. Continue?");
+    const confirmed = await askConfirm("Restore will overwrite the current database. This cannot be undone.");
     if (!confirmed) return;
     busy = true;
     try {
@@ -545,3 +557,13 @@
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
+
+<ConfirmDialog
+  bind:open={confirmOpen}
+  title="Restore Database"
+  message={confirmMessage}
+  confirmLabel="Restore"
+  destructive={true}
+  onConfirm={onConfirmYes}
+  onCancel={onConfirmNo}
+/>

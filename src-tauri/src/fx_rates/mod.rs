@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct FxRatePoint {
@@ -28,6 +29,20 @@ pub struct ProviderRequest {
 pub trait FxRateProvider: Send + Sync {
     fn name(&self) -> &str;
     async fn fetch_daily_rates(&self, req: ProviderRequest) -> Result<Vec<FxRatePoint>, String>;
+}
+
+/// Shared HTTP GET with a 30-second timeout. All providers must use this
+/// instead of `reqwest::get` so that hung network requests don't block the
+/// FX scheduler indefinitely.
+async fn http_get(url: &str) -> Result<reqwest::Response, String> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn map_rates_for_dates(
@@ -89,7 +104,7 @@ impl FxRateProvider for FrankfurterProvider {
             self.base_url, req.start_date, req.end_date, req.base, symbols
         );
 
-        let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+        let resp = http_get(&url).await?;
         if !resp.status().is_success() {
             return Err(format!("Frankfurter HTTP {}", resp.status()));
         }
@@ -127,7 +142,7 @@ impl FxRateProvider for ExchangeRateHostProvider {
             "https://api.exchangerate.host/timeseries?base={}&symbols={}&start_date={}&end_date={}",
             req.base, symbols, req.start_date, req.end_date
         );
-        let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+        let resp = http_get(&url).await?;
         if !resp.status().is_success() {
             return Err(format!("ExchangeRate.host HTTP {}", resp.status()));
         }
@@ -165,7 +180,7 @@ impl FxRateProvider for YahooProvider {
                 ticker, start, end
             );
 
-            let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+            let resp = http_get(&url).await?;
             if !resp.status().is_success() {
                 return Err(format!("Yahoo HTTP {}", resp.status()));
             }
@@ -251,7 +266,7 @@ impl FxRateProvider for BankOfCanadaProvider {
                 "https://www.bankofcanada.ca/valet/observations/{}?start_date={}&end_date={}",
                 series, req.start_date, req.end_date
             );
-            let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+            let resp = http_get(&url).await?;
             if !resp.status().is_success() {
                 return Err(format!("Bank of Canada HTTP {}", resp.status()));
             }
@@ -335,7 +350,7 @@ impl FxRateProvider for FederalReserveProvider {
                 "https://api.stlouisfed.org/fred/series/observations?series_id={}&observation_start={}&observation_end={}&api_key={}&file_type=json",
                 series_id, req.start_date, req.end_date, api_key
             );
-            let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+            let resp = http_get(&url).await?;
             if !resp.status().is_success() {
                 return Err(format!("FRED HTTP {}", resp.status()));
             }

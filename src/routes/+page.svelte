@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { formatError } from "$lib/utils";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import * as Alert from "$lib/components/ui/alert";
@@ -43,6 +44,8 @@
     memo: string | null;
   };
 
+  type DefaultCurrency = { scale: number; symbol: string | null; display_symbol: string | null };
+
   let busy = false;
   let error = "";
   let setupError = "";
@@ -52,6 +55,7 @@
   let accounts: Account[] = [];
   let balances: AccountBalance[] = [];
   let recentTransactions: TransactionWithSplits[] = [];
+  let nativeCurrency: DefaultCurrency | null = null;
 
   // Computed totals
   let totalAssets = 0;
@@ -76,7 +80,7 @@
       dbReady = true;
       await loadDashboardData();
     } catch (e) {
-      const message = String(e);
+      const message = formatError(e);
       dbReady = false;
       if (!message.includes("db not initialized")) {
         setupError = `Database error: ${message}`;
@@ -98,7 +102,7 @@
       await invoke<string>("validate_and_set_storage_location", { path: selected });
       await checkDatabase();
     } catch (e) {
-      setupError = `Failed to open database: ${String(e)}`;
+      setupError = `Failed to open database: ${formatError(e)}`;
     } finally {
       busy = false;
     }
@@ -113,7 +117,7 @@
       await invoke<string>("create_new_storage", { path: selected });
       await checkDatabase();
     } catch (e) {
-      setupError = `Failed to create database: ${String(e)}`;
+      setupError = `Failed to create database: ${formatError(e)}`;
     } finally {
       busy = false;
     }
@@ -124,8 +128,8 @@
     error = "";
 
     try {
-      // Load accounts and balances in parallel
-      const [accountsResult, balancesResult, transactionsResult] = await Promise.all([
+      // Load accounts, balances, recent transactions, and native currency in parallel
+      const [accountsResult, balancesResult, transactionsResult, nativeCurrencyResult] = await Promise.all([
         invoke<Account[]>("list_accounts", { bookId: 1, includeClosed: false }),
         invoke<AccountBalance[]>("list_account_balances", { bookId: 1 }),
         invoke<TransactionWithSplits[]>("list_transactions", {
@@ -135,16 +139,18 @@
             offset: 0,
           },
         }),
+        invoke<DefaultCurrency | null>("get_default_currency", { bookId: 1 }).catch(() => null),
       ]);
 
       accounts = accountsResult;
       balances = balancesResult;
       recentTransactions = transactionsResult;
+      nativeCurrency = nativeCurrencyResult;
 
       // Calculate totals
       calculateTotals();
     } catch (e) {
-      error = `Failed to load dashboard data: ${String(e)}`;
+      error = `Failed to load dashboard data: ${formatError(e)}`;
     } finally {
       busy = false;
     }
@@ -157,10 +163,10 @@
       balanceMap.set(b.account_id, b.native_balance_minor);
     }
 
-    // Asset types
-    const assetTypes = ["checking", "savings", "cash", "asset", "investment", "brokerage", "stock"];
+    // Asset types — must match ACCOUNT_TYPES in src-tauri/src/validation.rs
+    const assetTypes = ["cash", "checking", "savings", "asset", "investment"];
     // Liability types
-    const liabilityTypes = ["credit", "credit_card", "loan", "liability"];
+    const liabilityTypes = ["credit", "loan", "liability"];
 
     totalAssets = 0;
     totalLiabilities = 0;
@@ -182,8 +188,16 @@
     netWorth = totalAssets + totalLiabilities; // liabilities are typically negative
   }
 
-  function formatCurrency(minor: number) {
-    return (minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function formatCurrency(minor: number): string {
+    const scale = nativeCurrency?.scale ?? 2;
+    const symbol = nativeCurrency?.display_symbol ?? nativeCurrency?.symbol ?? "";
+    if (scale <= 0) return `${symbol}${minor}`.trim();
+    const factor = 10 ** scale;
+    const sign = minor < 0 ? "-" : "";
+    const abs = Math.abs(minor);
+    const whole = Math.floor(abs / factor);
+    const fraction = String(abs % factor).padStart(scale, "0");
+    return `${sign}${symbol}${whole}.${fraction}`.trim();
   }
 
   function formatDate(dateStr: string) {

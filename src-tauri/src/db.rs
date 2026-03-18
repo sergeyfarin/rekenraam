@@ -272,6 +272,27 @@ pub fn open_and_migrate(
     Ok((conn, db, audit_user))
 }
 
+/// Open a second, read-only connection to the same database file.
+///
+/// This connection has `PRAGMA query_only = ON` so any accidental write
+/// attempt will be rejected by SQLite. It is used by all `list_*` / `get_*`
+/// commands so they can run concurrently with the write connection (WAL mode
+/// allows one writer + many readers to proceed in parallel).
+///
+/// Call this **after** `open_and_migrate` has run migrations on the same path.
+pub fn open_read_conn(path: &PathBuf) -> Result<rusqlite::Connection, rusqlite::Error> {
+    let db = normalize_db_path(path);
+    let conn = rusqlite::Connection::open(&db)?;
+    conn.execute_batch(
+        "PRAGMA query_only = ON;
+         PRAGMA journal_mode = WAL;
+         PRAGMA busy_timeout = 5000;
+         PRAGMA mmap_size = 268435456;
+         PRAGMA cache_size = -16000;",
+    )?;
+    Ok(conn)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
