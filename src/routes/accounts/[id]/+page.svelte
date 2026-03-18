@@ -119,11 +119,20 @@
     balance_minor: number;
   };
 
+  type AccountBalancing = {
+    id: number;
+    account_id: number;
+    as_of_date: string;
+    balance_minor: number;
+    memo: string | null;
+  };
+
   let accountId: number | null = null;
   let account: Account | null = null;
   let transactions: TransactionWithSplits[] = [];
   let directives: AccountDirective[] = [];
   let balanceMinor = 0;
+  let lastBalancing: AccountBalancing | null = null;
   let bookingPolicy = "fifo";
   let savingPolicy = false;
   let loading = true;
@@ -203,9 +212,14 @@
       }
       account = fetched;
 
-      const balanceRows = await invoke<AccountBalance[]>("list_account_balances", { bookId: 1 });
+      const [balanceRows, balancings] = await Promise.all([
+        invoke<AccountBalance[]>("list_account_balances", { bookId: 1 }),
+        invoke<AccountBalancing[]>("list_account_balancings", { accountId }),
+      ]);
       const balanceMap = new Map(balanceRows.map((row) => [row.account_id, row.balance_minor] as const));
       balanceMinor = balanceMap.get(accountId) ?? 0;
+      // list_account_balancings returns DESC — first entry is most recent
+      lastBalancing = balancings.length > 0 ? balancings[0] : null;
 
       directives = await invoke<AccountDirective[]>("list_account_directives", { accountId });
       if (account.account_type === "investment") {
@@ -969,6 +983,12 @@
             </p>
             <div class="account-meta">
               <span>Balance: {formatMinor(balanceMinor, account.commodity_id)}</span>
+              {#if lastBalancing}
+                <span>
+                  Last reconciled: {lastBalancing.as_of_date}
+                  · {formatMinor(lastBalancing.balance_minor, account.commodity_id)}
+                </span>
+              {/if}
               {#if findDirectiveDate("open")}
                 <span>Opened: {findDirectiveDate("open")}</span>
               {/if}
@@ -1005,6 +1025,7 @@
                 <h2 class="section-title">Transactions</h2>
               </div>
               <div class="page-col page-col-actions">
+                <Button variant="secondary" href="/accounts/{accountId}/reconcile">Reconcile</Button>
                 <Button onclick={openCreateDialog}>New transaction</Button>
               </div>
             </div>

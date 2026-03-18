@@ -213,15 +213,32 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 > Backend reconciliation logic already exists. This is purely frontend UI work.
 > Builds user trust in their data — essential before reconciliation-dependent reports.
 
-**Sprint 3.1 — Reconciliation Wizard (2 weeks)**
+**Sprint 3.1 — Reconciliation Wizard ✅ DONE (2026-03-18)**
+
+| Task | File(s) | Status |
+|------|---------|--------|
+| Reconciliation route | `routes/accounts/[id]/reconcile/+page.svelte` | ✅ Done: 2-step wizard (setup → checklist) |
+| Setup step | `reconcile/+page.svelte` | ✅ Done: statement date + ending balance input; shows opening balance from last reconciliation |
+| Transaction checklist | `reconcile/+page.svelte` | ✅ Done: all uncleared+cleared tx up to statement date; sorted oldest-first; pre-checks already-cleared; select all/none |
+| Balance verification | `reconcile/+page.svelte` | ✅ Done: sticky summary bar — Opening / + Cleared / = Cleared Balance / Statement / Difference; green when balanced |
+| Finish reconciliation | `reconcile/+page.svelte` | ✅ Done: marks all checked tx as "reconciled" via `update_transaction_with_splits`; calls `create_account_balancing` to lock account; "Finish Anyway" available when unbalanced |
+| Reconciliation history | `accounts/[id]/+page.svelte` | ✅ Done: "Last reconciled: [date] · [balance]" in account meta row; "Reconcile" button next to "New transaction" |
+
+**Gaps found during Sprint 3.1 (recorded for tracking):**
+- Finishing reconciliation marks transactions one-by-one (N sequential `update_transaction_with_splits` calls). For accounts with many old cleared transactions this is slow. Fix: add a `bulk_set_transaction_status(ids, status)` backend command — deferred to Sprint 9 (testing sprint / code quality).
+- No balance adjustment transaction created when "Finish Anyway" (unbalanced close). The `balance_adjustments` table + `create_balance_adjustment` command exists in the backend but requires an `offset_account_id` (the account to post the discrepancy to). Deferred: add "create adjustment entry" flow in a follow-up Sprint 3.2 when needed.
+- `list_transactions` `status` filter only accepts a single value — reconcile page must load all active (non-void) and filter client-side for uncleared+cleared. Acceptable for MVP; note for Sprint 2.1 to consider array status filter.
+- Reconciliation history (full list of past reconciliations) not yet shown on account page — only last reconciliation date shown. Full history table deferred to Sprint 3.2.
+
+**Sprint 3.2 — Reconciliation Polish (deferred, low priority)**
 
 | Task | File(s) | Detail |
 |------|---------|--------|
-| Reconciliation route | `routes/accounts/[id]/reconcile/` | New page: enter statement date + ending balance. Load unreconciled transactions. |
-| Clear/unclear transactions | Frontend + `db_accounts.rs` | Mark individual transactions as cleared (R) during reconciliation session |
-| Balance verification | Frontend | Show running cleared balance vs statement balance; highlight difference |
-| Finish reconciliation | `db_accounts.rs` | Call `create_account_balancing` when cleared balance matches; create adjustment transaction if needed |
-| Reconciliation history | `accounts/[id]/+page.svelte` | Show last reconciled date + balance in account header |
+| `bulk_set_transaction_status(ids, status)` | `db_transactions.rs` | Add backend bulk status command; replace N-call loop in reconcile finish |
+| Balance adjustment flow | `reconcile/+page.svelte` | "Finish Anyway" prompts for offset account; calls `create_balance_adjustment` |
+| `status` array filter | `db_transactions.rs` | Accept `Vec<String>` status filter; eliminates client-side status filtering |
+| Reconciliation history table | `accounts/[id]/+page.svelte` | Full list of past reconciliations below the register |
+| Undo reconciliation UI | `accounts/[id]/+page.svelte` | Call `unlock_account_balancings` with date + reason; currently only exposed via edit-locked-tx prompt |
 
 ---
 
@@ -493,6 +510,8 @@ Tracked items from the Feb 2026 code review. Cross-referenced to execution sprin
 | 8 | `std::mem::transmute` in tests (Tauri internal layout assumption) | 🟢 Low | **10.3** |
 | 16 | `#[path = "..."]` hack in `commands.rs` bypasses module system | 🟢 Low | **10.3** |
 | 15 | FX HTTP calls inside Mutex lock; no retry/timeout | 🟢 Low | **2.2** |
+| 24 | Reconcile finish: N sequential status updates — slow for large accounts | 🟡 Medium | **3.2** — add `bulk_set_transaction_status` |
+| 25 | `list_transactions` status filter accepts single value only | 🟢 Low | **3.2** / **2.1** — accept array |
 | 13 | No business schema (invoices, tax codes, A/R, A/P) | 🔵 Future | **11.3** |
 
 ---
