@@ -41,6 +41,12 @@ npm install
 npm run tauri dev
 ```
 
+**Linux / WSL2 prerequisites** (required for Tauri's native file dialogs):
+```bash
+sudo apt install -y libgtk-3-dev libglib2.0-dev libwebkit2gtk-4.1-dev \
+  libjavascriptcoregtk-4.1-dev libsoup-3.0-dev
+```
+
 ## Data Storage
 
 - Database file: `Rekenraam-data.rekenraam` in a user-selected folder

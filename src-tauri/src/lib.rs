@@ -18,6 +18,7 @@ mod db_currencies;
 mod fx_rates;
 mod fx_refresh;
 mod state;
+pub mod validation;
 
 use crate::db::{
     create_db_placeholder, db_accessible, default_storage_dir, load_storage_path,

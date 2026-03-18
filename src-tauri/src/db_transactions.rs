@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
 use crate::state::DbState;
+use crate::validation::{validate_tx_status, validate_memo, validate_amount_minor, escape_like};
 
 const SINGLE_BOOK_ID: i64 = 1;
 
@@ -643,6 +644,19 @@ pub fn create_transaction_with_splits(
         return Err("transaction must have at least two splits".to_string());
     }
 
+    if let Some(ref s) = input.status {
+        validate_tx_status(s)?;
+    }
+    if let Some(ref m) = input.memo {
+        validate_memo(m)?;
+    }
+    for split in &input.splits {
+        validate_amount_minor(split.amount_minor)?;
+        if let Some(ref m) = split.memo {
+            validate_memo(m)?;
+        }
+    }
+
     let sum: i64 = input.splits.iter().map(|s| s.amount_minor).sum();
     if sum != 0 {
         return Err("splits must balance to zero".to_string());
@@ -824,8 +838,8 @@ pub fn list_transactions(
     }
 
     if let Some(search) = filter.search {
-        let like = format!("%{}%", search);
-        sql.push_str(" AND (t.memo LIKE ? OR t.reference LIKE ? OR p.name LIKE ?)");
+        let like = format!("%{}%", escape_like(&search));
+        sql.push_str(" AND (t.memo LIKE ? ESCAPE '\\' OR t.reference LIKE ? ESCAPE '\\' OR p.name LIKE ? ESCAPE '\\')");
         params.push(Value::from(like.clone()));
         params.push(Value::from(like.clone()));
         params.push(Value::from(like));
@@ -856,6 +870,19 @@ pub fn update_transaction_with_splits(
 ) -> Result<TransactionWithSplits, String> {
     if input.splits.len() < 2 {
         return Err("transaction must have at least two splits".to_string());
+    }
+
+    if let Some(ref s) = input.status {
+        validate_tx_status(s)?;
+    }
+    if let Some(ref m) = input.memo {
+        validate_memo(m)?;
+    }
+    for split in &input.splits {
+        validate_amount_minor(split.amount_minor)?;
+        if let Some(ref m) = split.memo {
+            validate_memo(m)?;
+        }
     }
 
     let sum: i64 = input.splits.iter().map(|s| s.amount_minor).sum();

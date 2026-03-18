@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
 use crate::state::DbState;
+use crate::validation::{validate_account_type, validate_name, validate_memo};
 
 const SINGLE_BOOK_ID: i64 = 1;
 const BALANCING_TX_MARK: &str = "balance_adjustment";
@@ -896,8 +897,22 @@ fn map_balance_adjustment_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Balan
 }
 
 fn get_account_balance_minor(conn: &rusqlite::Connection, account_id: i64) -> Result<i64, String> {
+    // Must match the standard void/supersede/revert filter used throughout the codebase.
+    // Without these filters the balance includes voided and superseded transactions,
+    // which produces incorrect totals for balance checks, adjustments, and closing validation.
     conn.query_row(
-        "SELECT COALESCE(SUM(amount_minor), 0) FROM splits WHERE account_id = ?1",
+        "SELECT COALESCE(SUM(s.amount_minor), 0)
+         FROM splits s
+         JOIN transactions t ON t.id = s.tx_id
+         WHERE s.account_id = ?1
+           AND t.status != 'void'
+           AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+           AND NOT EXISTS (
+               SELECT 1 FROM session_reverts sr
+               WHERE sr.table_name = 'transactions'
+                 AND sr.row_id = t.id
+                 AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+           )",
         [account_id],
         |row| row.get(0),
     )
@@ -1080,6 +1095,9 @@ fn map_balance_constraint_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Balan
 
 #[command]
 pub fn create_account(db: State<DbState>, input: AccountCreate) -> Result<Account, String> {
+    validate_account_type(&input.account_type)?;
+    validate_name(&input.name)?;
+
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1226,6 +1244,9 @@ pub fn list_accounts(
 
 #[command]
 pub fn update_account(db: State<DbState>, input: AccountUpdate) -> Result<Account, String> {
+    validate_account_type(&input.account_type)?;
+    validate_name(&input.name)?;
+
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -2069,13 +2090,27 @@ pub fn list_account_balances(db: State<DbState>, book_id: i64) -> Result<Vec<Acc
 
     let mut stmt = conn
         .prepare(
-            "SELECT a.id, a.commodity_id, c.scale, COALESCE(SUM(s.amount_minor), 0)
+            // Use a filtered subquery so voided and superseded transactions are
+            // excluded from balances displayed on the dashboard and account tree.
+            "SELECT a.id, a.commodity_id, c.scale, COALESCE(b.balance_minor, 0)
              FROM accounts a
              JOIN commodities c ON c.id = a.commodity_id
-             LEFT JOIN splits s ON s.account_id = a.id
-             LEFT JOIN transactions t ON t.id = s.tx_id
-             WHERE a.book_id = ?1
-             GROUP BY a.id, a.commodity_id, c.scale",
+             LEFT JOIN (
+                 SELECT s.account_id, SUM(s.amount_minor) AS balance_minor
+                 FROM splits s
+                 JOIN transactions t ON t.id = s.tx_id
+                 WHERE t.book_id = ?1
+                   AND t.status != 'void'
+                   AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+                   AND NOT EXISTS (
+                       SELECT 1 FROM session_reverts sr
+                       WHERE sr.table_name = 'transactions'
+                         AND sr.row_id = t.id
+                         AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+                   )
+                 GROUP BY s.account_id
+             ) b ON b.account_id = a.id
+             WHERE a.book_id = ?1",
         )
         .map_err(|e| e.to_string())?;
 
@@ -3395,13 +3430,7 @@ pub fn validate_account_closing(db: State<DbState>, account_id: i64) -> Result<b
         return Ok(false);
     }
 
-    let balance: i64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(amount_minor), 0) FROM splits WHERE account_id = ?1",
-            [account_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let balance: i64 = get_account_balance_minor(conn, account_id)?;
 
     if balance != 0 {
         return Err("account closing validation failed: balance is not zero".to_string());
@@ -3507,13 +3536,7 @@ pub fn validate_balance_constraints(db: State<DbState>, account_id: i64) -> Resu
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
-    let balance: i64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(amount_minor), 0) FROM splits WHERE account_id = ?1",
-            [account_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let balance: i64 = get_account_balance_minor(conn, account_id)?;
 
     let mut stmt = conn
         .prepare(
@@ -3593,9 +3616,20 @@ pub fn get_account_tree(db: State<DbState>, book_id: i64) -> Result<Vec<AccountT
 
     let mut balance_stmt = conn
         .prepare(
-            "SELECT account_id, COALESCE(SUM(amount_minor), 0) AS balance_minor
-             FROM splits
-             GROUP BY account_id",
+            // Exclude voided and superseded transactions so the account tree
+            // shows correct balances that match what the user can actually spend.
+            "SELECT s.account_id, COALESCE(SUM(s.amount_minor), 0) AS balance_minor
+             FROM splits s
+             JOIN transactions t ON t.id = s.tx_id
+             WHERE t.status != 'void'
+               AND NOT EXISTS (SELECT 1 FROM transactions newer WHERE newer.previous_tx_id = t.id)
+               AND NOT EXISTS (
+                   SELECT 1 FROM session_reverts sr
+                   WHERE sr.table_name = 'transactions'
+                     AND sr.row_id = t.id
+                     AND sr.session_id = (SELECT id FROM app_runtime_session LIMIT 1)
+               )
+             GROUP BY s.account_id",
         )
         .map_err(|e| e.to_string())?;
     let balance_rows = balance_stmt
@@ -4821,6 +4855,173 @@ mod tests {
             second_close_err.contains("fiscal year already closed for close_date"),
             "unexpected error: {second_close_err}"
         );
+    }
+
+    // ── Balance filter tests ───────────────────────────────────────────────────
+    // Verify that get_account_balance_minor (and, transitively, all balance
+    // queries that call it) excludes voided and superseded transactions.
+
+    fn insert_raw_tx(conn: &rusqlite::Connection, book_id: i64, status: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO transactions (book_id, occurred_date, status, created_at)
+             VALUES (?1, '2024-01-15', ?2, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![book_id, status],
+        )
+        .expect("insert raw tx");
+        conn.last_insert_rowid()
+    }
+
+    fn insert_raw_split(conn: &rusqlite::Connection, tx_id: i64, account_id: i64, commodity_id: i64, amount: i64) {
+        conn.execute(
+            "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+             VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+            params![tx_id, account_id, commodity_id, amount],
+        )
+        .expect("insert raw split");
+    }
+
+    #[test]
+    fn test_balance_excludes_voided_transactions() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "checking".to_string(),
+                name: "Balance Void Test".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create account");
+
+        {
+            let mut guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_mut().expect("conn");
+
+            // Cleared transaction — should be included in balance.
+            let tx_cleared = insert_raw_tx(conn, 1, "cleared");
+            insert_raw_split(conn, tx_cleared, account.id, commodity_id, 1000);
+
+            // Voided transaction — must NOT be included in balance.
+            let tx_void = insert_raw_tx(conn, 1, "void");
+            insert_raw_split(conn, tx_void, account.id, commodity_id, 500);
+
+            let balance = get_account_balance_minor(conn, account.id)
+                .expect("get balance");
+            assert_eq!(
+                balance, 1000,
+                "voided transaction (500) must not be counted; expected 1000 got {balance}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_balance_excludes_superseded_transactions() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let account = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "checking".to_string(),
+                name: "Balance Supersede Test".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        )
+        .expect("create account");
+
+        {
+            let mut guard = db_state.inner.lock().expect("lock");
+            let conn = guard.conn.as_mut().expect("conn");
+
+            // Original transaction: 1000.
+            let tx_original = insert_raw_tx(conn, 1, "cleared");
+            insert_raw_split(conn, tx_original, account.id, commodity_id, 1000);
+
+            // Revised (superseding) transaction: 2000.
+            // Inserting a new transaction pointing to tx_original via previous_tx_id
+            // makes tx_original "superseded" (another tx has previous_tx_id = tx_original).
+            conn.execute(
+                "INSERT INTO transactions (book_id, occurred_date, status, previous_tx_id, created_at)
+                 VALUES (1, '2024-01-15', 'cleared', ?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [tx_original],
+            )
+            .expect("insert revised tx");
+            let tx_revised = conn.last_insert_rowid();
+            insert_raw_split(conn, tx_revised, account.id, commodity_id, 2000);
+
+            let balance = get_account_balance_minor(conn, account.id)
+                .expect("get balance");
+            assert_eq!(
+                balance, 2000,
+                "superseded original (1000) must not be counted; expected 2000 got {balance}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_account_type_rejects_typo() {
+        let err = crate::validation::validate_account_type("epxense");
+        assert!(err.is_err(), "typo 'epxense' should be rejected");
+    }
+
+    #[test]
+    fn test_create_account_rejects_invalid_type() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let result = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "bank_account".to_string(), // invalid
+                name: "Bad Account".to_string(),
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        );
+        assert!(result.is_err(), "invalid account_type should be rejected");
+        let msg = result.unwrap_err();
+        assert!(msg.contains("invalid account_type"), "error should mention account_type, got: {msg}");
+    }
+
+    #[test]
+    fn test_create_account_rejects_blank_name() {
+        let db_state = create_temp_db();
+        let commodity_id = get_usd_commodity_id(&db_state);
+
+        let result = create_account(
+            as_state(&db_state),
+            AccountCreate {
+                book_id: 1,
+                parent_id: None,
+                account_type: "checking".to_string(),
+                name: "   ".to_string(), // blank
+                commodity_id,
+                institution_id: None,
+                country_id: None,
+                number_last4: None,
+                is_closed: None,
+            },
+        );
+        assert!(result.is_err(), "blank name should be rejected");
     }
 }
 

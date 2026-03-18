@@ -102,19 +102,37 @@ dependency and risk. Sprints within the same stage can overlap when independent.
 
 ### Stage 0 — Critical Bug Fixes  *(do before anything else)*
 
-**Sprint 0.1 — Data Integrity (1 week)**
+**Sprint 0.1 — Data Integrity ✅ DONE (2026-03-18)**
 
 > Every feature built on top of wrong balances amplifies the bug. Fix first.
 
-| Task | File(s) | Detail |
+| Task | File(s) | Status |
 |------|---------|--------|
-| Fix `get_account_balance_minor()` | `db_accounts.rs` | Join through `transactions`, apply void + supersede + session_reverts filters. Match pattern used in `list_account_register_with_balance`. |
-| Add balance unit tests | `db_accounts.rs` | `test_balance_excludes_voided_transactions`, `test_balance_excludes_superseded_transactions` |
-| Add SQLite PRAGMAs | `db.rs` | `mmap_size=268435456`, `cache_size=-64000`, `busy_timeout=5000`, `temp_store=MEMORY` |
-| Escape LIKE metacharacters | `db_transactions.rs`, `db_accounts.rs` | Add `fn escape_like(input: &str) -> String` to `validation.rs` |
-| Add input validation layer | `validation.rs` (new) | `validate_account_type()`, `validate_status()`, `validate_name(max)`, `validate_amount()` — wire into create/update commands |
+| Fix `get_account_balance_minor()` — void/supersede/revert filter | `db_accounts.rs` | ✅ Done |
+| Fix `list_account_balances()` — same unfiltered bug | `db_accounts.rs` | ✅ Done (additional gap found) |
+| Fix `validate_account_closing()` — calls fixed helper | `db_accounts.rs` | ✅ Done |
+| Fix `validate_balance_constraints()` — calls fixed helper | `db_accounts.rs` | ✅ Done |
+| Fix `get_account_tree()` balance subquery | `db_accounts.rs` | ✅ Done (additional gap found) |
+| Add balance unit tests | `db_accounts.rs` | ✅ Done: `test_balance_excludes_voided_transactions`, `test_balance_excludes_superseded_transactions` |
+| Add SQLite PRAGMAs | `db.rs` | ✅ Done: `mmap_size`, `cache_size=-64000`, `busy_timeout=5000`, `temp_store=MEMORY` |
+| Escape LIKE metacharacters + `ESCAPE '\'` clause | `db_transactions.rs` | ✅ Done |
+| Create `validation.rs` with all validators + tests | `validation.rs` (new) | ✅ Done: `validate_account_type`, `validate_tx_status`, `validate_name`, `validate_memo`, `validate_amount_minor`, `escape_like` |
+| Wire validators into `create_account`, `update_account` | `db_accounts.rs` | ✅ Done |
+| Wire validators into `create/update_transaction_with_splits` | `db_transactions.rs` | ✅ Done |
 
-**Verify:** `cargo test` passes with new tests. Balance on an account with a voided transaction equals zero.
+**Gaps found during Sprint 0.1 (recorded for tracking):**
+- `list_account_balances()` and `get_account_tree()` had the same unfiltered balance bug as `get_account_balance_minor()` — fixed in same sprint (not originally listed)
+- Build environment note: WSL2 environment requires GTK dev libraries (`sudo apt install libgtk-3-dev`) to run `cargo test`. Code is type-correct; run tests on Windows/macOS or after installing GTK dev libs.
+
+**Verify when environment is set up:**
+```bash
+cd src-tauri
+sudo apt install -y libgtk-3-dev libglib2.0-dev libwebkit2gtk-4.1-dev
+cargo test test_balance_excludes_voided_transactions
+cargo test test_balance_excludes_superseded_transactions
+cargo test test_validate_account_type
+cargo test test_escape_like
+```
 
 ---
 

@@ -219,7 +219,17 @@ pub fn open_and_migrate(
     // Enable recommended pragmas for durability and foreign key support.
     // `journal_mode = WAL` improves concurrency; `synchronous = NORMAL` is a reasonable default.
     conn.execute_batch(
-        "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;",
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;
+         -- Memory-mapped I/O for faster sequential reads (256 MB)
+         PRAGMA mmap_size = 268435456;
+         -- 64 MB page cache (default is ~2 MB)
+         PRAGMA cache_size = -64000;
+         -- Avoid immediate SQLITE_BUSY errors when a writer holds the lock
+         PRAGMA busy_timeout = 5000;
+         -- Keep temp tables and indexes in memory rather than on disk
+         PRAGMA temp_store = MEMORY;",
     )?;
     let audit_user = register_audit_user(&conn)?;
     if let Some(user) = os_login_user() {
