@@ -1,9 +1,12 @@
+use calamine::{open_workbook_auto, Reader};
 use csv::ReaderBuilder;
 use chrono::{Duration, NaiveDate};
 use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tauri::{command, State};
 
+use crate::error::AppError;
 use crate::state::DbState;
 
 const SINGLE_BOOK_ID: i64 = 1;
@@ -93,7 +96,24 @@ pub struct ImportRunResult {
     pub batch: ImportBatchResult,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ImportPreviewRow {
+    pub row_number: usize,
+    pub raw_values: Vec<String>,
+    pub draft: Option<ImportDraft>,
+    pub error: Option<String>,
+    pub matched_tx_id: Option<i64>,
+    pub is_duplicate: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ImportPreviewResult {
+    pub format: String,
+    pub rows: Vec<ImportPreviewRow>,
+    pub file_error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ImportDraft {
     pub payee_name: Option<String>,
     pub memo: Option<String>,
@@ -244,6 +264,14 @@ fn parse_amount_to_minor_with_locale(
         None => (s.as_str(), ""),
     };
 
+    let whole_trimmed = whole_raw.trim();
+    let frac_trimmed = frac_raw.trim();
+    if (!whole_trimmed.is_empty() && !whole_trimmed.chars().any(|c| c.is_ascii_digit()))
+        || (!frac_trimmed.is_empty() && !frac_trimmed.chars().any(|c| c.is_ascii_digit()))
+    {
+        return Err(format!("invalid amount: {raw}"));
+    }
+
     let whole: String = whole_raw.chars().filter(|c| c.is_ascii_digit()).collect();
     let frac: String = frac_raw.chars().filter(|c| c.is_ascii_digit()).collect();
 
@@ -256,8 +284,8 @@ fn parse_amount_to_minor_with_locale(
         frac_str = frac_str[..(scale as usize)].to_string();
     }
 
-    let whole_val: i64 = whole.parse().unwrap_or(0);
-    let frac_val: i64 = frac_str.parse().unwrap_or(0);
+    let whole_val: i64 = whole.parse().map_err(|_| format!("invalid amount: {raw}"))?;
+    let frac_val: i64 = frac_str.parse().map_err(|_| format!("invalid amount: {raw}"))?;
     let minor = whole_val * 10_i64.pow(scale as u32) + frac_val;
     Ok(if negative { -minor } else { minor })
 }
@@ -676,8 +704,25 @@ fn parse_csv(
         .map(|h| h.trim().to_lowercase())
         .collect::<Vec<String>>();
 
+    let rows = reader
+        .records()
+        .map(|record| {
+            record
+                .map(|r| r.iter().map(|v| v.to_string()).collect::<Vec<String>>())
+                .map_err(|e| e.to_string())
+        })
+        .collect::<Result<Vec<Vec<String>>, String>>()?;
+
+    parse_tabular_rows(headers, rows, locale)
+}
+
+fn build_tabular_indexes(headers: &[String]) -> Result<(Option<usize>, Option<usize>, Option<usize>, Option<usize>, Option<usize>, Option<usize>, Option<usize>), String> {
     if headers.is_empty() {
-        return Err("csv header row is required".to_string());
+        return Err("tabular import header row is required".to_string());
+    }
+
+    if headers.is_empty() {
+        return Err("tabular import header row is required".to_string());
     }
 
     let idx = |names: &[&str]| -> Option<usize> {
@@ -695,50 +740,193 @@ fn parse_csv(
     let currency_idx = idx(&["currency", "currency_code"]);
 
     if date_idx.is_none() && amount_idx.is_none() {
-        return Err("csv must include at least date or amount column".to_string());
+        return Err("tabular import must include at least date or amount column".to_string());
     }
 
+    Ok((date_idx, amount_idx, payee_idx, memo_idx, reference_idx, import_id_idx, currency_idx))
+}
+
+fn parse_tabular_row(
+    row: &[String],
+    indexes: &(Option<usize>, Option<usize>, Option<usize>, Option<usize>, Option<usize>, Option<usize>, Option<usize>),
+    locale: Option<&ImportLocaleOptions>,
+) -> Result<Option<ImportDraft>, String> {
+    let get = |idx: Option<usize>| -> Option<String> {
+        idx.and_then(|i| row.get(i))
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string())
+    };
+
+    let (date_idx, amount_idx, payee_idx, memo_idx, reference_idx, import_id_idx, currency_idx) = indexes;
+
+    let raw_date = get(*date_idx);
+    let raw_amount = get(*amount_idx);
+    let txn_date = raw_date.as_deref().and_then(|val| parse_csv_date(val, locale));
+    let amount_minor = match raw_amount.as_deref() {
+        Some(val) => Some(parse_amount_to_minor_with_locale(val, 2, locale)?),
+        None => None,
+    };
+
+    let draft = ImportDraft {
+        payee_name: get(*payee_idx),
+        memo: get(*memo_idx),
+        txn_date,
+        happened_at_utc: None,
+        posted_date: None,
+        posted_at_utc: None,
+        posted_tz: None,
+        amount_minor,
+        reference: get(*reference_idx),
+        import_id: get(*import_id_idx),
+        currency_code: get(*currency_idx),
+        account_id: None,
+        category_id: None,
+        payee_id: None,
+    };
+
+    if draft.txn_date.is_some() || draft.amount_minor.is_some() {
+        Ok(Some(draft))
+    } else {
+        Ok(None)
+    }
+}
+
+fn preview_tabular_rows(
+    headers: Vec<String>,
+    rows: Vec<Vec<String>>,
+    locale: Option<&ImportLocaleOptions>,
+) -> Result<ImportPreviewResult, String> {
+    let normalized_headers = headers
+        .into_iter()
+        .map(|h| h.trim().to_lowercase())
+        .collect::<Vec<String>>();
+    let indexes = build_tabular_indexes(&normalized_headers)?;
+
+    let mut preview_rows = Vec::new();
+    for (index, row) in rows.into_iter().enumerate() {
+        match parse_tabular_row(&row, &indexes, locale) {
+            Ok(Some(draft)) => preview_rows.push(ImportPreviewRow {
+                row_number: index + 2,
+                raw_values: row,
+                draft: Some(draft),
+                error: None,
+                matched_tx_id: None,
+                is_duplicate: false,
+            }),
+            Ok(None) => {}
+            Err(error) => preview_rows.push(ImportPreviewRow {
+                row_number: index + 2,
+                raw_values: row,
+                draft: None,
+                error: Some(error),
+                matched_tx_id: None,
+                is_duplicate: false,
+            }),
+        }
+    }
+
+    Ok(ImportPreviewResult {
+        format: "tabular".to_string(),
+        rows: preview_rows,
+        file_error: None,
+    })
+}
+
+fn parse_tabular_rows(
+    headers: Vec<String>,
+    rows: Vec<Vec<String>>,
+    locale: Option<&ImportLocaleOptions>,
+) -> Result<Vec<ImportDraft>, String> {
+    let normalized_headers = headers
+        .into_iter()
+        .map(|h| h.trim().to_lowercase())
+        .collect::<Vec<String>>();
+    let indexes = build_tabular_indexes(&normalized_headers)?;
+
     let mut results = Vec::new();
-    for record in reader.records() {
-        let record = record.map_err(|e| e.to_string())?;
-        let get = |idx: Option<usize>| -> Option<String> {
-            idx.and_then(|i| record.get(i))
-                .map(|v| v.trim())
-                .filter(|v| !v.is_empty())
-                .map(|v| v.to_string())
-        };
-
-        let raw_date = get(date_idx);
-        let raw_amount = get(amount_idx);
-        let txn_date = raw_date.as_deref().and_then(|val| parse_csv_date(val, locale));
-        let amount_minor = match raw_amount.as_deref() {
-            Some(val) => Some(parse_amount_to_minor_with_locale(val, 2, locale)?),
-            None => None,
-        };
-
-        let draft = ImportDraft {
-            payee_name: get(payee_idx),
-            memo: get(memo_idx),
-            txn_date,
-            happened_at_utc: None,
-            posted_date: None,
-            posted_at_utc: None,
-            posted_tz: None,
-            amount_minor,
-            reference: get(reference_idx),
-            import_id: get(import_id_idx),
-            currency_code: get(currency_idx),
-            account_id: None,
-            category_id: None,
-            payee_id: None,
-        };
-
-        if draft.txn_date.is_some() || draft.amount_minor.is_some() {
+    for row in rows {
+        if let Some(draft) = parse_tabular_row(&row, &indexes, locale)? {
             results.push(draft);
         }
     }
 
     Ok(results)
+}
+
+fn parse_spreadsheet(path: &Path, locale: Option<&ImportLocaleOptions>) -> Result<Vec<ImportDraft>, String> {
+    let mut workbook = open_workbook_auto(path).map_err(|e| e.to_string())?;
+    let sheet_name = workbook
+        .sheet_names()
+        .first()
+        .cloned()
+        .ok_or_else(|| "spreadsheet contains no worksheets".to_string())?;
+    let range = workbook
+        .worksheet_range(&sheet_name)
+        .map_err(|e| e.to_string())?;
+
+    let mut non_empty_rows = range
+        .rows()
+        .map(|row| row.iter().map(|cell| cell.to_string()).collect::<Vec<String>>())
+        .filter(|row| row.iter().any(|cell| !cell.trim().is_empty()));
+
+    let headers = non_empty_rows
+        .next()
+        .ok_or_else(|| "spreadsheet header row is required".to_string())?;
+    let rows = non_empty_rows.collect::<Vec<Vec<String>>>();
+    parse_tabular_rows(headers, rows, locale)
+}
+
+fn preview_spreadsheet(path: &Path, locale: Option<&ImportLocaleOptions>) -> Result<ImportPreviewResult, String> {
+    let mut workbook = open_workbook_auto(path).map_err(|e| e.to_string())?;
+    let sheet_name = workbook
+        .sheet_names()
+        .first()
+        .cloned()
+        .ok_or_else(|| "spreadsheet contains no worksheets".to_string())?;
+    let range = workbook
+        .worksheet_range(&sheet_name)
+        .map_err(|e| e.to_string())?;
+
+    let mut non_empty_rows = range
+        .rows()
+        .map(|row| row.iter().map(|cell| cell.to_string()).collect::<Vec<String>>())
+        .filter(|row| row.iter().any(|cell| !cell.trim().is_empty()));
+
+    let headers = non_empty_rows
+        .next()
+        .ok_or_else(|| "spreadsheet header row is required".to_string())?;
+    let rows = non_empty_rows.collect::<Vec<Vec<String>>>();
+    preview_tabular_rows(headers, rows, locale)
+}
+
+fn detect_import_format(format: &str, content: Option<&str>, path: Option<&Path>) -> Result<String, String> {
+    let fmt = format.to_lowercase();
+    if fmt != "auto" {
+        return Ok(fmt);
+    }
+
+    if let Some(path) = path {
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            let ext = ext.to_lowercase();
+            if matches!(ext.as_str(), "csv" | "qif" | "ofx" | "hbci" | "mt940" | "xls" | "xlsx") {
+                return Ok(if ext == "mt940" { "hbci".to_string() } else { ext });
+            }
+        }
+    }
+
+    let content = content.ok_or_else(|| "unable to detect import format".to_string())?;
+    if content.contains("<OFX>") {
+        Ok("ofx".to_string())
+    } else if content.contains("!Type:") {
+        Ok("qif".to_string())
+    } else if content.contains(":61:") {
+        Ok("hbci".to_string())
+    } else if looks_like_csv(content) {
+        Ok("csv".to_string())
+    } else {
+        Err("unable to detect import format".to_string())
+    }
 }
 
 fn looks_like_csv(content: &str) -> bool {
@@ -751,7 +939,7 @@ fn looks_like_csv(content: &str) -> bool {
 }
 
 #[command]
-pub fn parse_import_file(format: String, content: String) -> Result<Vec<ImportDraft>, String> {
+pub fn parse_import_file(format: String, content: String) -> Result<Vec<ImportDraft>, AppError> {
     parse_import_file_with_locale(format, content, None)
 }
 
@@ -760,32 +948,266 @@ pub fn parse_import_file_with_locale(
     format: String,
     content: String,
     locale: Option<ImportLocaleOptions>,
-) -> Result<Vec<ImportDraft>, String> {
-    let fmt = format.to_lowercase();
-    let detected = if fmt == "auto" {
-        if content.contains("<OFX>") {
-            "ofx"
-        } else if content.contains("!Type:") {
-            "qif"
-        } else if content.contains(":61:") {
-            "hbci"
-        } else if looks_like_csv(&content) {
-            "csv"
-        } else {
-            return Err("unable to detect import format".to_string());
-        }
-    } else {
-        fmt.as_str()
-    };
+) -> Result<Vec<ImportDraft>, AppError> {
+    let detected = detect_import_format(&format, Some(&content), None)?;
 
     let locale_ref = locale.as_ref();
-    match detected {
+    let drafts = match detected.as_str() {
         "qif" => parse_qif(&content, locale_ref),
         "ofx" => parse_ofx(&content, locale_ref),
         "hbci" => parse_hbci_mt940(&content, locale_ref),
         "csv" => parse_csv(&content, locale_ref),
-        _ => Err("unsupported import format".to_string()),
+        _ => return Err(AppError::validation("format", "unsupported import format")),
+    }?;
+
+    Ok(drafts)
+}
+
+#[command]
+pub fn parse_import_file_from_path(
+    format: String,
+    file_path: String,
+) -> Result<Vec<ImportDraft>, AppError> {
+    parse_import_file_from_path_with_locale(format, file_path, None)
+}
+
+#[command]
+pub fn parse_import_file_from_path_with_locale(
+    format: String,
+    file_path: String,
+    locale: Option<ImportLocaleOptions>,
+) -> Result<Vec<ImportDraft>, AppError> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err(AppError::not_found("file", file_path));
     }
+    let detected = detect_import_format(&format, None, Some(path))?;
+    let locale_ref = locale.as_ref();
+
+    let drafts = match detected.as_str() {
+        "xls" | "xlsx" => parse_spreadsheet(path, locale_ref),
+        _ => {
+            let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+            return parse_import_file_with_locale(detected, content, locale);
+        }
+    }?;
+
+    Ok(drafts)
+}
+
+#[command]
+pub fn preview_import_file(
+    format: String,
+    content: String,
+) -> Result<ImportPreviewResult, AppError> {
+    preview_import_file_with_locale(format, content, None)
+}
+
+#[command]
+pub fn preview_import_file_with_locale(
+    format: String,
+    content: String,
+    locale: Option<ImportLocaleOptions>,
+) -> Result<ImportPreviewResult, AppError> {
+    let detected = detect_import_format(&format, Some(&content), None)?;
+    let locale_ref = locale.as_ref();
+
+    let result = match detected.as_str() {
+        "csv" => {
+            let mut builder = ReaderBuilder::new();
+            builder.has_headers(true).flexible(true);
+            if let Some(locale) = locale_ref {
+                if let Some(delim) = locale.csv_delimiter.as_deref() {
+                    let delim = delim.chars().next().unwrap_or(',') as u8;
+                    builder.delimiter(delim);
+                }
+            }
+            let mut reader = builder.from_reader(content.as_bytes());
+            let headers = reader
+                .headers()
+                .map_err(|e| e.to_string())?
+                .iter()
+                .map(|h| h.trim().to_lowercase())
+                .collect::<Vec<String>>();
+            let rows = reader
+                .records()
+                .map(|record| {
+                    record
+                        .map(|r| r.iter().map(|v| v.to_string()).collect::<Vec<String>>())
+                        .map_err(|e| e.to_string())
+                })
+                .collect::<Result<Vec<Vec<String>>, String>>()?;
+            let mut preview = preview_tabular_rows(headers, rows, locale_ref)?;
+            preview.format = detected.clone();
+            preview
+        }
+        "qif" | "ofx" | "hbci" => {
+            let drafts = parse_import_file_with_locale(detected.clone(), content, locale)?;
+            ImportPreviewResult {
+                format: detected.clone(),
+                rows: drafts
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, draft)| ImportPreviewRow {
+                        row_number: index + 1,
+                        raw_values: Vec::new(),
+                        draft: Some(draft),
+                        error: None,
+                        matched_tx_id: None,
+                        is_duplicate: false,
+                    })
+                    .collect(),
+                file_error: None,
+            }
+        }
+        _ => return Err(AppError::validation("format", "unsupported import format")),
+    };
+
+    Ok(result)
+}
+
+#[command]
+pub fn preview_import_file_from_path(
+    format: String,
+    file_path: String,
+) -> Result<ImportPreviewResult, AppError> {
+    preview_import_file_from_path_with_locale(format, file_path, None)
+}
+
+#[command]
+pub fn preview_import_file_from_path_with_locale(
+    format: String,
+    file_path: String,
+    locale: Option<ImportLocaleOptions>,
+) -> Result<ImportPreviewResult, AppError> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err(AppError::not_found("file", file_path));
+    }
+    let detected = detect_import_format(&format, None, Some(path))?;
+    let locale_ref = locale.as_ref();
+
+    let preview = match detected.as_str() {
+        "xls" | "xlsx" => {
+            let mut preview = preview_spreadsheet(path, locale_ref)?;
+            preview.format = detected.clone();
+            preview
+        }
+        _ => {
+            let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+            return preview_import_file_with_locale(detected, content, locale);
+        }
+    };
+
+    Ok(preview)
+}
+
+fn require_account_currency_symbol(
+    conn: &rusqlite::Connection,
+    account_id: i64,
+) -> Result<String, AppError> {
+    get_account_commodity_symbol(conn, account_id)?
+        .ok_or_else(|| AppError::not_found("account", account_id))
+}
+
+fn attach_preview_matches(
+    conn: &rusqlite::Connection,
+    default_account_id: i64,
+    default_account_symbol: &str,
+    mut preview: ImportPreviewResult,
+) -> Result<ImportPreviewResult, String> {
+    for row in &mut preview.rows {
+        if row.error.is_some() {
+            continue;
+        }
+
+        let Some(draft) = row.draft.as_ref() else {
+            continue;
+        };
+
+        let target_account_id = draft.account_id.unwrap_or(default_account_id);
+        let target_account_symbol = if target_account_id == default_account_id {
+            default_account_symbol.to_string()
+        } else {
+            match get_account_commodity_symbol(conn, target_account_id)? {
+                Some(symbol) => symbol,
+                None => {
+                    row.error = Some(format!("account {} not found", target_account_id));
+                    row.matched_tx_id = None;
+                    row.is_duplicate = false;
+                    continue;
+                }
+            }
+        };
+
+        if let Some(code) = draft.currency_code.as_ref() {
+            if !target_account_symbol.eq_ignore_ascii_case(code) {
+                row.error = Some(format!(
+                    "currency '{}' does not match account currency '{}' for account {}",
+                    code, target_account_symbol, target_account_id
+                ));
+                row.matched_tx_id = None;
+                row.is_duplicate = false;
+                continue;
+            }
+        }
+
+        let matched_tx_id = find_matching_tx(conn, target_account_id, draft)?;
+        row.is_duplicate = matched_tx_id.is_some();
+        row.matched_tx_id = matched_tx_id;
+    }
+
+    Ok(preview)
+}
+
+#[command]
+pub fn preview_import_file_for_account(
+    db: State<DbState>,
+    account_id: i64,
+    format: String,
+    content: String,
+) -> Result<ImportPreviewResult, AppError> {
+    preview_import_file_with_locale_for_account(db, account_id, format, content, None)
+}
+
+#[command]
+pub fn preview_import_file_with_locale_for_account(
+    db: State<DbState>,
+    account_id: i64,
+    format: String,
+    content: String,
+    locale: Option<ImportLocaleOptions>,
+) -> Result<ImportPreviewResult, AppError> {
+    let preview = preview_import_file_with_locale(format, content, locale)?;
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let account_symbol = require_account_currency_symbol(conn, account_id)?;
+    attach_preview_matches(conn, account_id, &account_symbol, preview).map_err(AppError::from)
+}
+
+#[command]
+pub fn preview_import_file_from_path_for_account(
+    db: State<DbState>,
+    account_id: i64,
+    format: String,
+    file_path: String,
+) -> Result<ImportPreviewResult, AppError> {
+    preview_import_file_from_path_with_locale_for_account(db, account_id, format, file_path, None)
+}
+
+#[command]
+pub fn preview_import_file_from_path_with_locale_for_account(
+    db: State<DbState>,
+    account_id: i64,
+    format: String,
+    file_path: String,
+    locale: Option<ImportLocaleOptions>,
+) -> Result<ImportPreviewResult, AppError> {
+    let preview = preview_import_file_from_path_with_locale(format, file_path, locale)?;
+    let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+    let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
+    let account_symbol = require_account_currency_symbol(conn, account_id)?;
+    attach_preview_matches(conn, account_id, &account_symbol, preview).map_err(AppError::from)
 }
 
 fn find_matching_tx(
@@ -1031,6 +1453,26 @@ fn record_import_session_tx(
     Ok(())
 }
 
+fn abandon_import_session(
+    conn: &rusqlite::Connection,
+    session_id: i64,
+    reason: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "UPDATE import_sessions
+         SET status = 'abandoned',
+             notes = CASE
+                 WHEN ?2 = '' THEN notes
+                 WHEN notes IS NULL OR notes = '' THEN ?2
+                 ELSE notes || ' | ' || ?2
+             END
+         WHERE id = ?1 AND status = 'started'",
+        params![session_id, format!("abandoned: {reason}")],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn get_account_commodity_symbol(
     conn: &rusqlite::Connection,
     account_id: i64,
@@ -1125,7 +1567,7 @@ fn check_transaction_locks(conn: &rusqlite::Connection, tx_id: i64) -> Result<()
 pub fn list_import_session_transactions(
     db: State<DbState>,
     session_id: i64,
-) -> Result<Vec<ImportSessionTransactionInfo>, String> {
+) -> Result<Vec<ImportSessionTransactionInfo>, AppError> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1168,7 +1610,7 @@ pub fn list_import_session_transactions(
 pub fn list_transaction_import_sessions(
     db: State<DbState>,
     tx_id: i64,
-) -> Result<Vec<ImportSessionTransactionInfo>, String> {
+) -> Result<Vec<ImportSessionTransactionInfo>, AppError> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1212,7 +1654,7 @@ pub fn match_import_transactions(
     db: State<DbState>,
     account_id: i64,
     drafts: Vec<ImportDraft>,
-) -> Result<Vec<ImportMatchResult>, String> {
+) -> Result<Vec<ImportMatchResult>, AppError> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1236,7 +1678,7 @@ pub fn import_transactions(
     create_payees: bool,
     mode: Option<ImportMode>,
     import_session_id: Option<i64>,
-) -> Result<ImportBatchResult, String> {
+) -> Result<ImportBatchResult, AppError> {
     let mode = mode.unwrap_or(ImportMode::MatchAndEnrich);
 
     if mode == ImportMode::Review {
@@ -1304,14 +1746,22 @@ pub fn import_transactions(
     let mut updated = Vec::new();
     let mut skipped: i64 = 0;
 
-    for draft in drafts {
+    for (draft_index, draft) in drafts.into_iter().enumerate() {
         let target_account_id = draft.account_id.unwrap_or(account_id);
         if let Some(code) = draft.currency_code.as_ref() {
             let symbol = get_account_commodity_symbol(&tx, target_account_id)?;
             if let Some(symbol) = symbol {
                 if !symbol.eq_ignore_ascii_case(code) {
-                    skipped += 1;
-                    continue;
+                    return Err(AppError::validation(
+                        "currency_code",
+                        format!(
+                            "draft {} currency '{}' does not match account currency '{}' for account {}",
+                            draft_index + 1,
+                            code,
+                            symbol,
+                            target_account_id
+                        ),
+                    ));
                 }
             }
         }
@@ -1466,7 +1916,7 @@ pub fn import_transactions(
 pub fn create_import_rule(
     db: State<DbState>,
     input: ImportRuleCreate,
-) -> Result<ImportRule, String> {
+) -> Result<ImportRule, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
     let session_id = current_session_id(conn)?;
@@ -1479,18 +1929,24 @@ pub fn create_import_rule(
         && rule_kind != "date"
         && rule_kind != "account"
     {
-        return Err("rule_kind must be payee, memo, amount, date, or account".to_string());
+        return Err(AppError::validation(
+            "rule_kind",
+            "must be payee, memo, amount, date, or account",
+        ));
     }
     let match_type = input
         .match_type
         .unwrap_or_else(|| "contains".to_string())
         .to_lowercase();
     if match_type != "contains" && match_type != "equals" {
-        return Err("match_type must be contains or equals".to_string());
+        return Err(AppError::validation("match_type", "must be contains or equals"));
     }
     if let (Some(min), Some(max)) = (input.amount_min_minor, input.amount_max_minor) {
         if min > max {
-            return Err("amount_min_minor must be <= amount_max_minor".to_string());
+            return Err(AppError::validation(
+                "amount_min_minor",
+                "must be <= amount_max_minor",
+            ));
         }
     }
     let priority = input.priority.unwrap_or(100);
@@ -1541,7 +1997,7 @@ pub fn create_import_rule(
 }
 
 #[command]
-pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportRule>, String> {
+pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportRule>, AppError> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
     let _ = book_id;
@@ -1573,7 +2029,7 @@ pub fn list_import_rules(db: State<DbState>, book_id: i64) -> Result<Vec<ImportR
 }
 
 #[command]
-pub fn delete_import_rule(db: State<DbState>, id: i64) -> Result<bool, String> {
+pub fn delete_import_rule(db: State<DbState>, id: i64) -> Result<bool, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1670,7 +2126,7 @@ pub fn delete_import_rule(db: State<DbState>, id: i64) -> Result<bool, String> {
 pub fn start_import_session(
     db: State<DbState>,
     input: ImportSessionStartInput,
-) -> Result<ImportSession, String> {
+) -> Result<ImportSession, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1704,7 +2160,7 @@ pub fn start_import_session(
 }
 
 #[command]
-pub fn commit_import_session(db: State<DbState>, session_id: i64) -> Result<ImportSession, String> {
+pub fn commit_import_session(db: State<DbState>, session_id: i64) -> Result<ImportSession, AppError> {
     let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1718,7 +2174,7 @@ pub fn commit_import_session(db: State<DbState>, session_id: i64) -> Result<Impo
         .map_err(|e| e.to_string())?;
 
     if rows == 0 {
-        return Err("import session not found".to_string());
+        return Err(AppError::not_found("import session", session_id));
     }
 
     let session = conn
@@ -1737,7 +2193,7 @@ pub fn commit_import_session(db: State<DbState>, session_id: i64) -> Result<Impo
 pub fn import_transactions_with_session(
     db: State<DbState>,
     input: ImportRunInput,
-) -> Result<ImportRunResult, String> {
+) -> Result<ImportRunResult, AppError> {
     let session = start_import_session(
         db.clone(),
         ImportSessionStartInput {
@@ -1750,16 +2206,32 @@ pub fn import_transactions_with_session(
         },
     )?;
 
-    let batch = import_transactions(
+    let batch = match import_transactions(
         db.clone(),
         input.account_id,
         input.drafts,
         input.create_payees,
         input.mode,
         Some(session.id),
-    )?;
+    ) {
+        Ok(batch) => batch,
+        Err(error) => {
+            let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+            let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+            abandon_import_session(conn, session.id, &error.to_string())?;
+            return Err(error);
+        }
+    };
 
-    let committed = commit_import_session(db, session.id)?;
+    let committed = match commit_import_session(db.clone(), session.id) {
+        Ok(committed) => committed,
+        Err(error) => {
+            let mut guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
+            let conn = guard.conn.as_mut().ok_or_else(|| "db not initialized".to_string())?;
+            abandon_import_session(conn, session.id, &error.to_string())?;
+            return Err(error);
+        }
+    };
 
     Ok(ImportRunResult {
         session: committed,
@@ -1771,7 +2243,7 @@ pub fn import_transactions_with_session(
 pub fn apply_import_rules(
     db: State<DbState>,
     drafts: Vec<ImportDraft>,
-) -> Result<Vec<ImportDraft>, String> {
+) -> Result<Vec<ImportDraft>, AppError> {
     let guard = db.inner.lock().map_err(|_| "db state lock poisoned".to_string())?;
     let conn = guard.conn.as_ref().ok_or_else(|| "db not initialized".to_string())?;
 
@@ -1868,9 +2340,12 @@ pub fn apply_import_rules(
 mod tests {
     use super::*;
     use crate::db::open_and_migrate;
+    use crate::error::AppError;
     use crate::state::DbStateInner;
     use rusqlite::params;
+    use rust_xlsxwriter::Workbook;
     use std::fs;
+    use std::path::Path;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex,
@@ -1923,6 +2398,28 @@ mod tests {
         .expect("usd id")
     }
 
+    fn write_test_xlsx(path: &Path) {
+        let mut workbook = Workbook::new();
+        let worksheet = workbook.add_worksheet();
+        worksheet.write_string(0, 0, "date").expect("write header date");
+        worksheet.write_string(0, 1, "amount").expect("write header amount");
+        worksheet.write_string(0, 2, "payee").expect("write header payee");
+        worksheet.write_string(0, 3, "memo").expect("write header memo");
+        worksheet.write_string(0, 4, "reference").expect("write header reference");
+        worksheet.write_string(0, 5, "import_id").expect("write header import id");
+        worksheet.write_string(0, 6, "currency").expect("write header currency");
+
+        worksheet.write_string(1, 0, "2024-01-05").expect("write date");
+        worksheet.write_string(1, 1, "-10.50").expect("write amount");
+        worksheet.write_string(1, 2, "Cafe").expect("write payee");
+        worksheet.write_string(1, 3, "Latte").expect("write memo");
+        worksheet.write_string(1, 4, "REF1").expect("write ref");
+        worksheet.write_string(1, 5, "IMP1").expect("write import id");
+        worksheet.write_string(1, 6, "USD").expect("write currency");
+
+        workbook.save(path).expect("save xlsx");
+    }
+
     #[test]
     fn test_import_rules_and_sessions() {
         let db_state = create_temp_db();
@@ -1946,7 +2443,13 @@ mod tests {
             },
         )
         .expect_err("invalid match_type should error");
-        assert!(err.contains("match_type"));
+        match err {
+            AppError::Validation { field, message } => {
+                assert_eq!(field, "match_type");
+                assert!(message.contains("contains or equals"));
+            }
+            other => panic!("expected validation error, got {other:?}"),
+        }
 
         let rule = create_import_rule(
             as_state(&db_state),
@@ -2073,6 +2576,35 @@ mod tests {
             .expect("auto detect");
         assert_eq!(auto_drafts.len(), 1);
 
+        let mut xlsx_path = std::env::temp_dir();
+        xlsx_path.push(format!(
+            "rekenraam_import_parse_{}_{}.xlsx",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_millis(),
+            TEST_COUNTER.fetch_add(1, Ordering::SeqCst)
+        ));
+        write_test_xlsx(&xlsx_path);
+
+        let xlsx_drafts = parse_import_file_from_path(
+            "xlsx".to_string(),
+            xlsx_path.to_string_lossy().into_owned(),
+        )
+        .expect("parse xlsx");
+        assert_eq!(xlsx_drafts.len(), 1);
+        assert_eq!(xlsx_drafts[0].amount_minor, Some(-1050));
+        assert_eq!(xlsx_drafts[0].payee_name.as_deref(), Some("Cafe"));
+
+        let auto_xlsx_drafts = parse_import_file_from_path(
+            "auto".to_string(),
+            xlsx_path.to_string_lossy().into_owned(),
+        )
+        .expect("auto detect xlsx");
+        assert_eq!(auto_xlsx_drafts.len(), 1);
+
+        let _ = fs::remove_file(&xlsx_path);
+
         let db_state = create_temp_db();
         let checking_id = {
             let guard = db_state.inner.lock().expect("lock db");
@@ -2134,6 +2666,272 @@ mod tests {
         .expect("match imports");
         assert_eq!(matches.len(), 1);
         assert!(matches[0].matched_tx_id.is_some());
+    }
+
+    #[test]
+    fn test_preview_import_file_reports_row_errors() {
+        let csv = "date,amount,payee\n2024-01-05,-10.50,Cafe\n2024-01-06,not-a-number,Bad Row\n2024-01-07,5.25,Refund";
+        let preview = preview_import_file("csv".to_string(), csv.to_string())
+            .expect("preview csv");
+
+        assert_eq!(preview.format, "csv");
+        assert_eq!(preview.rows.len(), 3);
+        assert_eq!(preview.file_error, None);
+
+        assert_eq!(preview.rows[0].row_number, 2);
+        assert!(preview.rows[0].error.is_none());
+        assert_eq!(preview.rows[0].matched_tx_id, None);
+        assert!(!preview.rows[0].is_duplicate);
+        assert_eq!(preview.rows[0].draft.as_ref().and_then(|d| d.amount_minor), Some(-1050));
+
+        assert_eq!(preview.rows[1].row_number, 3);
+        assert!(preview.rows[1].draft.is_none());
+        assert_eq!(preview.rows[1].matched_tx_id, None);
+        assert!(!preview.rows[1].is_duplicate);
+        assert!(preview.rows[1]
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("invalid amount"));
+
+        assert_eq!(preview.rows[2].row_number, 4);
+        assert!(preview.rows[2].error.is_none());
+        assert_eq!(preview.rows[2].matched_tx_id, None);
+        assert!(!preview.rows[2].is_duplicate);
+        assert_eq!(preview.rows[2].draft.as_ref().and_then(|d| d.amount_minor), Some(525));
+    }
+
+    #[test]
+    fn test_preview_import_file_for_account_marks_duplicates() {
+        let db_state = create_temp_db();
+        let (checking_id, commodity_id) = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            let checking_id = lookup_account_id(conn, "Checking Account");
+            let commodity_id = lookup_usd_id(conn);
+            (checking_id, commodity_id)
+        };
+
+        let tx_id = {
+            let mut guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_mut().expect("conn");
+            conn.execute(
+                "INSERT INTO transactions (book_id, occurred_date, payee_id, memo, status, reference, import_id, created_at)
+                 VALUES (1, '2024-06-05', NULL, 'Duplicate Memo', 'cleared', NULL, 'dup-preview-1', strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                [],
+            )
+            .expect("insert tx");
+            let tx_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO splits (tx_id, account_id, commodity_id, amount_minor, created_at)
+                 VALUES (?1, ?2, ?3, -5000, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+                params![tx_id, checking_id, commodity_id],
+            )
+            .expect("insert split");
+            tx_id
+        };
+
+        let csv = "date,amount,memo,import_id\n2024-06-05,-50.00,Duplicate Memo,dup-preview-1";
+        let preview = preview_import_file_for_account(
+            as_state(&db_state),
+            checking_id,
+            "csv".to_string(),
+            csv.to_string(),
+        )
+        .expect("preview csv with account");
+
+        assert_eq!(preview.rows.len(), 1);
+        assert_eq!(preview.rows[0].matched_tx_id, Some(tx_id));
+        assert!(preview.rows[0].is_duplicate);
+        assert!(preview.rows[0].error.is_none());
+    }
+
+    #[test]
+    fn test_preview_import_file_for_account_reports_currency_mismatch() {
+        let db_state = create_temp_db();
+        let checking_id = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            lookup_account_id(conn, "Checking Account")
+        };
+
+        let csv = "date,amount,payee,currency\n2024-06-05,-50.00,Cafe,EUR";
+        let preview = preview_import_file_for_account(
+            as_state(&db_state),
+            checking_id,
+            "csv".to_string(),
+            csv.to_string(),
+        )
+        .expect("preview csv with account");
+
+        assert_eq!(preview.rows.len(), 1);
+        assert_eq!(preview.rows[0].matched_tx_id, None);
+        assert!(!preview.rows[0].is_duplicate);
+        assert!(preview.rows[0]
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("currency 'EUR' does not match account currency 'USD'"));
+    }
+
+    #[test]
+    fn test_preview_import_file_for_account_requires_existing_account() {
+        let db_state = create_temp_db();
+        let err = preview_import_file_for_account(
+            as_state(&db_state),
+            999_999,
+            "csv".to_string(),
+            "date,amount\n2024-06-05,-50.00".to_string(),
+        )
+        .expect_err("missing account should error");
+
+        match err {
+            AppError::NotFound { entity, id } => {
+                assert_eq!(entity, "account");
+                assert_eq!(id, "999999");
+            }
+            other => panic!("expected not-found error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_preview_import_file_from_path_supports_xlsx() {
+        let mut xlsx_path = std::env::temp_dir();
+        xlsx_path.push(format!(
+            "rekenraam_import_preview_{}_{}.xlsx",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_millis(),
+            TEST_COUNTER.fetch_add(1, Ordering::SeqCst)
+        ));
+        write_test_xlsx(&xlsx_path);
+
+        let preview = preview_import_file_from_path(
+            "auto".to_string(),
+            xlsx_path.to_string_lossy().into_owned(),
+        )
+        .expect("preview xlsx");
+
+        assert_eq!(preview.format, "xlsx");
+        assert_eq!(preview.rows.len(), 1);
+        assert!(preview.rows[0].error.is_none());
+    assert_eq!(preview.rows[0].matched_tx_id, None);
+    assert!(!preview.rows[0].is_duplicate);
+        assert_eq!(preview.rows[0].row_number, 2);
+        assert_eq!(preview.rows[0].draft.as_ref().and_then(|d| d.payee_name.as_deref()), Some("Cafe"));
+
+        let _ = fs::remove_file(&xlsx_path);
+    }
+
+    #[test]
+    fn test_import_transactions_rejects_currency_mismatch() {
+        let db_state = create_temp_db();
+        let checking_id = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            lookup_account_id(conn, "Checking Account")
+        };
+
+        let err = import_transactions(
+            as_state(&db_state),
+            checking_id,
+            vec![ImportDraft {
+                payee_name: Some("Foreign Test".to_string()),
+                memo: Some("mismatch".to_string()),
+                txn_date: Some("2024-01-10".to_string()),
+                happened_at_utc: None,
+                posted_date: None,
+                posted_at_utc: None,
+                posted_tz: None,
+                amount_minor: Some(-1000),
+                reference: None,
+                import_id: Some("mismatch-1".to_string()),
+                currency_code: Some("EUR".to_string()),
+                account_id: None,
+                category_id: None,
+                payee_id: None,
+            }],
+            true,
+            Some(ImportMode::AlwaysCreate),
+            None,
+        )
+        .expect_err("currency mismatch should error");
+
+        match err {
+            AppError::Validation { field, message } => {
+                assert_eq!(field, "currency_code");
+                assert!(message.contains("currency 'EUR'"));
+                assert!(message.contains("account currency 'USD'"));
+            }
+            other => panic!("expected validation error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_failed_import_session_is_abandoned() {
+        let db_state = create_temp_db();
+        let checking_id = {
+            let guard = db_state.inner.lock().expect("lock db");
+            let conn = guard.conn.as_ref().expect("conn");
+            lookup_account_id(conn, "Checking Account")
+        };
+
+        let err = import_transactions_with_session(
+            as_state(&db_state),
+            ImportRunInput {
+                account_id: checking_id,
+                drafts: vec![ImportDraft {
+                    payee_name: Some("Foreign Test".to_string()),
+                    memo: Some("mismatch".to_string()),
+                    txn_date: Some("2024-01-10".to_string()),
+                    happened_at_utc: None,
+                    posted_date: None,
+                    posted_at_utc: None,
+                    posted_tz: None,
+                    amount_minor: Some(-1000),
+                    reference: None,
+                    import_id: Some("mismatch-2".to_string()),
+                    currency_code: Some("EUR".to_string()),
+                    account_id: None,
+                    category_id: None,
+                    payee_id: None,
+                }],
+                create_payees: true,
+                mode: Some(ImportMode::AlwaysCreate),
+                source: Some("csv".to_string()),
+                file_name: Some("mismatch.csv".to_string()),
+                file_hash: None,
+                file_size: None,
+                notes: Some("session failure test".to_string()),
+            },
+        )
+        .expect_err("failed import should bubble up the error");
+
+        match err {
+            AppError::Validation { field, message } => {
+                assert_eq!(field, "currency_code");
+                assert!(message.contains("currency 'EUR'"));
+            }
+            other => panic!("expected validation error, got {other:?}"),
+        }
+
+        let guard = db_state.inner.lock().expect("lock db");
+        let conn = guard.conn.as_ref().expect("conn");
+        let abandoned: (String, Option<String>) = conn
+            .query_row(
+                "SELECT status, notes FROM import_sessions ORDER BY id DESC LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("latest session");
+
+        assert_eq!(abandoned.0, "abandoned");
+        assert!(abandoned
+            .1
+            .as_deref()
+            .unwrap_or_default()
+            .contains("currency 'EUR'"));
     }
 
     #[test]
