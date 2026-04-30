@@ -4,7 +4,7 @@ Modern MS Money–style desktop application built with Tauri (Rust) and Svelte (
 Offline-first, multi-currency, multi-account, with optional FX refresh and a roadmap for
 future sync, import, and plugins.
 
-## Current Status (March 2026)
+## Current Status (April 2026)
 
 See [MASTER_PLAN.md](MASTER_PLAN.md) for the full execution roadmap.
 
@@ -13,22 +13,27 @@ See [MASTER_PLAN.md](MASTER_PLAN.md) for the full execution roadmap.
 - Account CRUD with tree view and rollup balances
 - Transaction/split create and edit with double-entry enforcement
 - Account register with running balance
+- Reconciliation wizard with balance verification and account locking
 - Investment: holdings, lots, buy/sell/dividend, realized/unrealized gains
 - FX: rate scheduler, source providers, daily/official rates
 - Reports: cashflow, category spend, payee totals, gains
 - Settings: categories, payees, tags, commodities, institutions, database management
 
-**Sprint 1.1 completed (March 2026):**
+**Recently completed (March 2026):**
 - Onboarding: welcome screen on first launch (no DB path stored)
-- Transaction filters: all moved server-side (payee/memo search, date range, status, account, amount)
-- Infinite scroll register (batches of 50, IntersectionObserver — MS Money / Quicken style)
+- Transaction register improvements: server-side filters and sorting, infinite scroll, smart date parsing, duplication, bulk actions
+- Structured backend errors (`AppError`), frontend error formatting, logging, read/write DB split
 - Year-end close UI in Settings → Year-End tab
-- Sorting server-side (date, payee, status, amount)
+- Reconciliation wizard and account-level reconciliation status
 
 **Next up:**
-- Reconciliation wizard
-- Import wizard UI (parsers already exist for QIF/OFX/CSV/MT940)
-- Keyboard-driven quick entry (Sprint 1.2)
+- Import pipeline completion: backend hardening plus 3-step import wizard UI
+- Reports page charts using existing data APIs
+- Planning page implementation (scheduled transactions and budgeting remain placeholders)
+
+**Planning note:**
+- [MASTER_PLAN.md](MASTER_PLAN.md) is the active roadmap.
+- `OLD_TODOS/` is historical reference material; keep it for background, not active prioritization.
 
 ## Architecture
 

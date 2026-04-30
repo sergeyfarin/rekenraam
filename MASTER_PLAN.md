@@ -2,7 +2,21 @@
 
 > **Single source of truth.** This document supersedes all previous planning files
 > (`IMPLEMENTATION_PLAN.md`, `IMPORT_PLAN.md`, `1.MD`, and `OLD_TODOS/`).
-> Last updated: 2026-03-18 (Stage 2 complete — AppError, logging, session, read/write split, UX polish)
+> Last updated: 2026-04-30 (resume review: docs aligned to code, next step confirmed)
+
+## Resume Review (2026-04-30)
+
+- `README.md`, `SCHEMA.md`, and the codebase are broadly aligned with the completed March 2026 work.
+- `OLD_TODOS/` is archive/reference material, not an active backlog.
+- Three legacy files still contain useful reference detail:
+  - `OLD_TODOS/BACKEND_TESTS_TO_IMPLEMENT.md` for deeper backend test coverage planning
+  - `OLD_TODOS/UI_IMPLEMENTATION_PLAN.md` for frontend task breakdowns
+  - `OLD_TODOS/FX_PRICING_ARCHITECTURE.md` for future pricing-model refactors
+- Highest-value restart point remains **Stage 4 — Import Pipeline**.
+- Recommended immediate focus:
+  1. Sprint 4.1 backend hardening needed for a trustworthy import flow
+  2. Sprint 4.2 3-step import wizard UI
+  3. Only then resume planning/budgeting work on `/planning`
 
 ---
 
@@ -58,13 +72,12 @@ offline-capable, extensible to sync.
 ### What is incomplete or missing ⚠️
 
 **Missing MVP features:**
-- Reconciliation wizard (backend exists, no UI workflow) — Sprint 3.1 ✅ DONE
-- Import wizard UI (parsers exist, no UI pipeline) — Stage 4
+- Import pipeline completion (backend hardening + wizard UI) — Stage 4
 - Charts on reports page (data APIs exist, only tabular display) — Sprint 7.2 (pulled forward)
 - Scheduled transactions + reminders — Stage 5
 - Budgeting — Stage 6
 
-**Minor polish gaps (noted during Stage 1 — resolved in Stage 2):**
+**Minor polish gaps (noted during Stage 1 — resolved in Stage 2 unless marked open):**
 - ~~Split balance hint shows raw minor units~~ — ✅ Fixed: scale-aware `formatMinorWithScale`
 - ~~`window.confirm()` for bulk actions~~ — ✅ Fixed: replaced with `ConfirmDialog` component throughout
 - ~~Dashboard: account types hardcoded~~ — ✅ Fixed: `assetTypes`/`liabilityTypes` now match backend `ACCOUNT_TYPES`
