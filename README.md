@@ -52,6 +52,72 @@ npm install
 npm run tauri dev
 ```
 
+## Self-Hosted API Scaffold
+
+The first web migration slice now includes a standalone Rust API scaffold under
+`apps/api` plus a Docker Compose stack with PostgreSQL.
+
+```bash
+cp .env.example .env
+docker compose up --build api postgres
+```
+
+Then check:
+
+```bash
+curl http://localhost:8080/health
+```
+
+Expected response:
+
+```json
+{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0001_initial_schema"}
+```
+
+The API now runs SQLx migrations automatically on startup from `apps/api/migrations`.
+The Compose stack also includes an API healthcheck against `/health`, so container
+readiness reflects actual application startup rather than process spawn alone.
+
+The repo also includes a small `Makefile` for common API tasks:
+
+```bash
+make api-check
+make api-up
+make api-health
+make api-books
+make api-migrate-new NAME=add_accounts
+```
+
+If your Docker access requires elevation, override the Docker command:
+
+```bash
+make DOCKER="sudo docker compose" api-up
+```
+
+First real read endpoint:
+
+```bash
+curl http://localhost:8080/api/v1/books
+```
+
+Expected response:
+
+```json
+[{"id":1,"slug":"personal","name":"Personal","base_currency_code":"USD"}]
+```
+
+Book detail endpoint:
+
+```bash
+curl http://localhost:8080/api/v1/books/personal
+```
+
+Expected response:
+
+```json
+{"id":1,"slug":"personal","name":"Personal","base_currency_code":"USD"}
+```
+
 **Linux / WSL2 prerequisites** (required for Tauri's native file dialogs):
 ```bash
 sudo apt install -y libgtk-3-dev libglib2.0-dev libwebkit2gtk-4.1-dev \
@@ -79,6 +145,7 @@ Current schema version: **18** (consolidated in `V1__init.sql`).
 |----------|---------|
 | [MASTER_PLAN.md](MASTER_PLAN.md) | Prioritized execution plan — start here |
 | [SCHEMA.md](SCHEMA.md) | Database schema reference |
+| [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) | Target architecture and staged migration plan for the self-hosted Rust + PostgreSQL + SvelteKit + Docker version |
 
 ## Contributing
 

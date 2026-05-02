@@ -6,5 +6,6 @@ node_modules
 .env
 .env.*
 !.env.example
+/apps/api/target
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

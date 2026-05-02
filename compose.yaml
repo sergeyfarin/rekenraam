@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rekenraam}
+      POSTGRES_USER: ${POSTGRES_USER:-rekenraam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rekenraam}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: ${API_PORT:-8080}
+      DATABASE_URL: postgres://${POSTGRES_USER:-rekenraam}:${POSTGRES_PASSWORD:-rekenraam}@postgres:5432/${POSTGRES_DB:-rekenraam}
+      RUST_LOG: ${RUST_LOG:-info,tower_http=info}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+volumes:
+  postgres_data:
