@@ -71,7 +71,7 @@ curl http://localhost:8080/health
 Expected response:
 
 ```json
-{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0001_initial_schema"}
+{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0002_accounts"}
 ```
 
 The API now runs SQLx migrations automatically on startup from `apps/api/migrations`.
@@ -116,6 +116,21 @@ Expected response:
 
 ```json
 {"id":1,"slug":"personal","name":"Personal","base_currency_code":"USD"}
+```
+
+First accounts endpoint:
+
+```bash
+curl http://localhost:8080/api/v1/accounts
+```
+
+Expected response:
+
+```json
+[
+  {"id":1,"book_id":1,"parent_id":null,"account_type":"asset","name":"Cash","currency_code":"USD","is_closed":false,"is_hidden":false},
+  {"id":2,"book_id":1,"parent_id":null,"account_type":"asset","name":"Checking Account","currency_code":"USD","is_closed":false,"is_hidden":false}
+]
 ```
 
 **Linux / WSL2 prerequisites** (required for Tauri's native file dialogs):

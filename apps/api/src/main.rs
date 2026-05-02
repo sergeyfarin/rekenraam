@@ -12,7 +12,9 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::{error, info};
 
+mod accounts;
 mod books;
+mod services;
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 
@@ -60,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState { pool };
     let app = Router::new()
         .route("/health", get(health))
+        .route("/api/v1/accounts", get(list_accounts))
         .route("/api/v1/books", get(list_books))
         .route("/api/v1/books/{slug}", get(get_book_by_slug))
         .layer(CorsLayer::permissive())
@@ -102,10 +105,18 @@ async fn health(State(state): State<AppState>) -> Result<Json<HealthResponse>, A
     }))
 }
 
+async fn list_accounts(State(state): State<AppState>) -> Result<Json<Vec<AccountSummary>>, AppError> {
+    let accounts = services::accounts::list_accounts(&state.pool)
+        .await
+        .map_err(AppError::database)?;
+
+    Ok(Json(accounts))
+}
+
 async fn list_books(State(state): State<AppState>) -> Result<Json<Vec<BookSummary>>, AppError> {
-    let books = books::list_books(&state.pool)
-    .await
-    .map_err(AppError::database)?;
+    let books = services::books::list_books(&state.pool)
+        .await
+        .map_err(AppError::database)?;
 
     Ok(Json(books))
 }
@@ -114,7 +125,7 @@ async fn get_book_by_slug(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<BookSummary>, AppError> {
-    let book = books::get_book_by_slug(&state.pool, &slug)
+    let book = services::books::get_book_by_slug(&state.pool, &slug)
         .await
         .map_err(AppError::database)?
         .ok_or_else(|| AppError::not_found(format!("book not found for slug '{slug}'")))?;
@@ -193,3 +204,4 @@ impl IntoResponse for AppError {
 }
 
 use books::BookSummary;
+use accounts::AccountSummary;
