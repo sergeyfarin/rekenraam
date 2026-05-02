@@ -24,7 +24,7 @@ dirs-next = "2"
 rfd = "0.17.2"
 # used for debounced sleep in background task
 tokio = { version = "1.52.1", features = ["time", "macros", "rt"] }
-tauri-plugin-opener = "2.5.3"
+tauri-plugin-opener = "2.5.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.39.0", features = ["bundled", "functions"] }
