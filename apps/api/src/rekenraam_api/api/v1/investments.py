@@ -1,15 +1,20 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import get_investment_service
 from rekenraam_api.schemas.investments import (
+    BuyCommodityInput,
     ConvertedPosition,
     ConvertedPositionsQuery,
+    DividendInput,
+    DividendResult,
     LotHoldingPeriod,
     LotsHoldingQuery,
     Position,
     PositionsQuery,
+    SellCommodityInput,
+    TradeResult,
 )
 from rekenraam_api.services.investments import InvestmentService
 
@@ -54,3 +59,36 @@ async def list_lots_with_holding_period(
             as_of_date=as_of_date,
         )
     )
+
+
+@router.post("/buy", response_model=TradeResult)
+async def create_buy(
+    input: BuyCommodityInput,
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> TradeResult:
+    try:
+        return await investment_service.create_buy(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/sell", response_model=TradeResult)
+async def create_sell(
+    input: SellCommodityInput,
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> TradeResult:
+    try:
+        return await investment_service.create_sell(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/dividend", response_model=DividendResult)
+async def create_dividend(
+    input: DividendInput,
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> DividendResult:
+    try:
+        return await investment_service.create_dividend(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

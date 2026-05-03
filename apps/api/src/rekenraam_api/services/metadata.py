@@ -7,7 +7,9 @@ from rekenraam_api.schemas.metadata import (
     CategoryUpdateInput,
     CommoditySummary,
     CountrySummary,
+    InstitutionCreateInput,
     InstitutionSummary,
+    InstitutionUpdateInput,
     PayeeCreateInput,
     PayeeSummary,
     PayeeUpdateInput,
@@ -64,6 +66,9 @@ class MetadataService:
                 book_id=institution.book_id,
                 name=institution.name,
                 kind=institution.kind,
+                routing=institution.routing,
+                website=institution.website,
+                metadata=institution.metadata_text,
                 country_id=institution.country_id,
                 country_name=country.name if country is not None else None,
                 created_at=institution.created_at,
@@ -71,6 +76,70 @@ class MetadataService:
             )
             for institution, country in rows
         ]
+
+    async def create_institution(self, input: InstitutionCreateInput) -> InstitutionSummary:
+        name = input.name.strip()
+        if not name:
+            raise ValueError("name is required")
+        kind = self._normalize_institution_kind(input.kind)
+        row = await self._repository.create_institution(
+            book_id=input.book_id,
+            name=name,
+            kind=kind,
+            routing=self._clean_optional_text(input.routing),
+            website=self._clean_optional_text(input.website),
+            metadata=self._clean_optional_text(input.metadata),
+            country_id=input.country_id,
+        )
+        return InstitutionSummary(
+            id=row.id,
+            book_id=row.book_id,
+            name=row.name,
+            kind=row.kind,
+            routing=row.routing,
+            website=row.website,
+            metadata=row.metadata_text,
+            country_id=row.country_id,
+            country_name=None,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    async def update_institution(self, institution_id: int, input: InstitutionUpdateInput) -> InstitutionSummary | None:
+        name = input.name.strip()
+        if not name:
+            raise ValueError("name is required")
+        kind = self._normalize_institution_kind(input.kind)
+        row = await self._repository.update_institution(
+            institution_id=institution_id,
+            name=name,
+            kind=kind,
+            routing=self._clean_optional_text(input.routing),
+            website=self._clean_optional_text(input.website),
+            metadata=self._clean_optional_text(input.metadata),
+            country_id=input.country_id,
+        )
+        if row is None:
+            return None
+        return InstitutionSummary(
+            id=row.id,
+            book_id=row.book_id,
+            name=row.name,
+            kind=row.kind,
+            routing=row.routing,
+            website=row.website,
+            metadata=row.metadata_text,
+            country_id=row.country_id,
+            country_name=None,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    async def delete_institution(self, institution_id: int) -> bool:
+        try:
+            return await self._repository.delete_institution(institution_id)
+        except IntegrityError as error:
+            raise ValueError("institution is still in use") from error
 
     async def list_categories(self) -> list[CategorySummary]:
         rows = await self._repository.list_categories()
@@ -260,6 +329,24 @@ class MetadataService:
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
+
+    @staticmethod
+    def _clean_optional_text(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @staticmethod
+    def _normalize_institution_kind(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().lower()
+        if not cleaned:
+            return None
+        if cleaned not in {"bank", "credit_union", "brokerage", "insurance", "employer", "other"}:
+            raise ValueError("institution kind must be bank, credit_union, brokerage, insurance, employer, or other")
+        return cleaned
 
     @staticmethod
     def _to_person_summary(row: object) -> PersonSummary:

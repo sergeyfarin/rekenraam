@@ -64,9 +64,10 @@ Current evidence behind those statuses:
 - Account-detail register rows now load through the `/accounts/{id}/register` seam, with on-demand transaction detail reads for edit/status/delete actions.
 - Account-detail transaction create/update/delete flows now also go through the shared client seam, the unlock-account-balancing helper now does as well, and the remaining create-category/payee/tag/person/project/account helpers on that page now also use shared client methods.
 - Transaction create/update/delete plus duplicate/bulk-void/bulk-delete plus payee-default helpers now also have Python endpoints behind the shared client seam.
-- Classic reports now have Python endpoints for cashflow, category spend, and payee totals; the remaining gains reports are still blocked on missing Python lots, split-lot allocation, and pricing schema.
+- Classic reports plus realized/unrealized gains now have Python endpoints, backed by Python lots, split-lot allocation, positions conversion, and price-observation schema.
+- Investments now also have Python read/write coverage for positions, converted positions, lot holding periods, buy, sell, and cash dividend flows.
 - A shared frontend API seam now exists, and the accounts page account-tree plus account balances plus metadata lookups, the account-detail summary plus balances plus balancings plus directives plus booking-policy read/write plus form lookups plus register read plus on-demand transaction detail read plus transaction create/update/delete plus helper creation, the home/dashboard account plus balance plus payee plus recent-transaction reads, the settings categories/payees/tags read loads, and the transactions page form lookups plus transaction list read use it with HTTP-first and Tauri fallback behavior.
-- The current Svelte frontend still lives in root `src/` and remains coupled to Tauri fallback paths mainly in gains/investments, FX/admin/storage flows, and the remaining desktop-specific shortcuts outside the migrated slice.
+- The current Svelte frontend still lives in root `src/` and remains coupled to Tauri primarily in institution writes, commodities/FX, admin/storage flows, and the remaining desktop-specific shortcuts outside the migrated slice.
 - Parity tracking now lives in `docs/parity/desktop-to-python.md`.
 
 ## Executive Summary
@@ -703,8 +704,8 @@ Progress note:
 
 - A shared frontend client seam now exists under `src/lib/api/`, with HTTP-first and Tauri fallback behavior for incremental migration.
 - The accounts page account-tree plus balance plus metadata lookup loads, the account-detail summary plus balance plus balancings plus directives plus booking-policy read/write plus form lookup loads plus register read plus on-demand transaction detail read plus transaction create/update/delete plus duplicate/bulk helpers plus unlock helper, and the transactions page form lookup loads plus transaction list read are now on that seam.
-- The reports page cashflow, category-spend, and payee-total surfaces now also use Python HTTP endpoints through the shared reports client seam; realized and unrealized gains still fall back because the Python investment-lot and pricing schema is not implemented yet.
-- The frontend is still rooted in `src/`, but the remaining Tauri-dependent frontend slices are now concentrated in gains/investments, FX/admin/storage flows, and a smaller set of desktop-oriented helpers rather than the core transaction and classic reports flows.
+- The reports page now uses Python HTTP endpoints for cashflow, category-spend, payee totals, and realized/unrealized gains, and the investments page now also has Python HTTP coverage for read models plus buy/sell/dividend mutations.
+- The frontend is still rooted in `src/`, but the remaining Tauri-dependent frontend slices are now concentrated in institution writes, commodities/FX, admin/storage flows, and a smaller set of desktop-oriented helpers rather than the core transaction, reports, and investment flows.
 - The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
 
 ## Recommended Immediate Next Execution Order
@@ -720,7 +721,7 @@ Target outcome:
 Priority work:
 
 1. migrate the remaining dashboard/setup reads and read-only settings surfaces beyond categories/payees/tags
-2. finish the remaining high-traffic route reads in investments and the gains-specific report surfaces
+2. finish the remaining high-traffic metadata/settings and commodity/FX surfaces that still need desktop fallback
 3. keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets
 4. continue route-by-route frontend conversion rather than moving `src/` to `apps/web` prematurely
 
@@ -729,10 +730,10 @@ Immediate route-by-route execution checklist:
 1. `src/routes/+layout.svelte`: remove Tauri-dependent global session/runtime shortcuts or replace them with web-safe no-op or HTTP-backed equivalents so the layout no longer anchors the app to desktop behavior.
 2. `src/routes/+page.svelte`: finish moving any remaining dashboard/setup reads off direct `invoke()` usage.
 3. `src/routes/settings/+page.svelte`: move settings landing-page loads and navigation helpers to the shared client seam.
-4. `src/routes/settings/InstitutionSettings.svelte`: migrate institution reads and form lookups before touching write flows.
-5. `src/routes/settings/CommoditySettings.svelte`: split this into phases; migrate read-only commodity/currency/pricing-source screens first, then leave FX mutation flows for later milestones.
-6. `src/routes/reports/+page.svelte`: finish realized/unrealized gains by adding the Python lots/pricing foundation rather than adding more fallback-only wrappers.
-7. `src/routes/investments/+page.svelte`: migrate read models and lookup data first; the next backend prerequisite is explicit Python lots/positions/pricing schema, after which buy/sell/dividend mutations can follow in Milestone C or D.
+4. `src/routes/settings/InstitutionSettings.svelte`: migrate institution writes once the Python institution schema covers the current UI fields.
+5. `src/routes/settings/CommoditySettings.svelte`: migrate commodity/currency maintenance and pricing-source screens next; keep the FX refresh/mutation edge separate if needed.
+6. `src/routes/reports/+page.svelte`: keep this on the Python seam and use it as the reference shape for future report invalidation/cache work.
+7. `src/routes/investments/+page.svelte`: keep this on the Python seam and widen next into reinvested dividends or stricter account-type/booking validations rather than new Tauri wrappers.
 
 Routes already sufficiently advanced for Milestone A and not the next priority:
 
@@ -792,7 +793,7 @@ Priority work:
 
 1. migrate `book_state` and `report_cache` as the report invalidation foundation
 2. migrate commodities and pricing-history foundations using the append-only plus `current_*` view approach
-3. add explicit Python schema and services for lots, split-lot allocations, positions conversion, and pricing inputs before attempting realized/unrealized gains parity
+3. widen the now-landed lots/pricing foundation into reinvested dividends, corporate actions, and stricter investment booking validations before broader FX/report expansion
 4. move the frontend from root `src/` into `apps/web` only after the client seam is stable enough to justify the move
 
 This means the immediate execution order is:

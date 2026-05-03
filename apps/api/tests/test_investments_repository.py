@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account
@@ -177,3 +178,78 @@ async def test_investment_repository_returns_positions_lots_and_gains(repository
     assert unrealized_security["value_minor"] == 180000
     assert unrealized_security["cost_basis_minor"] == 150000
     assert unrealized_security["unrealized_gain_minor"] == 30000
+
+
+@pytest.mark.asyncio
+async def test_investment_repository_creates_buy_sell_and_dividend_transactions(repository_session: AsyncSession) -> None:
+    brokerage_id, security_id = await _seed_investment_data(repository_session)
+    repository = InvestmentRepository(repository_session)
+
+    buy_result = await repository.create_buy(
+        book_id=1,
+        txn_date=date(2026, 7, 1),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=20000,
+        cash_amount_minor=70000,
+        memo="Buy more ACME",
+        payee_id=None,
+        status="cleared",
+    )
+    sell_result = await repository.create_sell(
+        book_id=1,
+        txn_date=date(2026, 7, 2),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=30000,
+        cash_amount_minor=90000,
+        lot_strategy="fifo",
+        lot_allocations=None,
+        allow_short=False,
+        memo="Sell ACME",
+        payee_id=None,
+        status="cleared",
+    )
+    dividend_result = await repository.create_dividend(
+        book_id=1,
+        txn_date=date(2026, 7, 3),
+        cash_account_id=2,
+        income_account_id=3,
+        amount_minor=5000,
+        memo="Dividend",
+        payee_id=None,
+        status="cleared",
+    )
+
+    buy_tx = await repository._session.get(Transaction, buy_result["transaction_id"])
+    sell_tx = await repository._session.get(Transaction, sell_result["transaction_id"])
+    dividend_tx = await repository._session.get(Transaction, dividend_result["transaction_id"])
+
+    buy_splits = (
+        await repository._session.execute(select(Split).where(Split.tx_id == buy_result["transaction_id"]).order_by(Split.id))
+    ).scalars().all()
+    sell_splits = (
+        await repository._session.execute(select(Split).where(Split.tx_id == sell_result["transaction_id"]).order_by(Split.id))
+    ).scalars().all()
+    dividend_splits = (
+        await repository._session.execute(select(Split).where(Split.tx_id == dividend_result["transaction_id"]).order_by(Split.id))
+    ).scalars().all()
+
+    buy_lot = await repository._session.get(Lot, buy_result["lot_id"])
+    sell_allocations = (
+        await repository._session.execute(
+            select(SplitLotAllocation).where(SplitLotAllocation.split_id == next(split.id for split in sell_splits if split.account_id == brokerage_id))
+        )
+    ).scalars().all()
+
+    assert buy_tx is not None
+    assert sell_tx is not None
+    assert dividend_tx is not None
+    assert sum(split.amount_minor for split in buy_splits) == -50000
+    assert sum(split.amount_minor for split in sell_splits) == 60000
+    assert sum(split.amount_minor for split in dividend_splits) == 0
+    assert buy_lot is not None
+    assert buy_lot.cost_basis_minor == 70000
+    assert sell_allocations[0].quantity_minor == -30000

@@ -6,10 +6,29 @@ from httpx import ASGITransport, AsyncClient
 
 from rekenraam_api.api.dependencies import get_investment_service
 from rekenraam_api.app import app
-from rekenraam_api.schemas.investments import ConvertedPosition, LotHoldingPeriod, Position, PositionLot, RealizedGainEntry, UnrealizedGainEntry
+from rekenraam_api.schemas.investments import (
+    ConvertedPosition,
+    DividendResult,
+    LotHoldingPeriod,
+    Position,
+    PositionLot,
+    RealizedGainEntry,
+    TradeAllocation,
+    TradeResult,
+    UnrealizedGainEntry,
+)
 
 
 class StubInvestmentService:
+    async def create_buy(self, input: object) -> TradeResult:
+        return TradeResult(transaction_id=10, allocations=(TradeAllocation(lot_id=8, quantity_minor=60000),), lot_id=8)
+
+    async def create_sell(self, input: object) -> TradeResult:
+        return TradeResult(transaction_id=11, allocations=(TradeAllocation(lot_id=1, quantity_minor=40000),), lot_id=None)
+
+    async def create_dividend(self, input: object) -> DividendResult:
+        return DividendResult(transaction_id=12)
+
     async def list_positions(self, input: object) -> list[Position]:
         return [
             Position(
@@ -125,12 +144,50 @@ async def client() -> AsyncIterator[AsyncClient]:
 async def test_investment_endpoints_return_positions_lots_and_gains(client: AsyncClient) -> None:
     app.dependency_overrides[get_investment_service] = lambda: StubInvestmentService()
 
+    buy_response = await client.post(
+        "/api/v1/investments/buy",
+        json={
+            "txn_date": "2026-05-10",
+            "commodity_id": 2,
+            "investment_account_id": 4,
+            "cash_account_id": 2,
+            "quantity_minor": 60000,
+            "cash_amount_minor": 250000,
+        },
+    )
+    sell_response = await client.post(
+        "/api/v1/investments/sell",
+        json={
+            "txn_date": "2026-06-10",
+            "commodity_id": 2,
+            "investment_account_id": 4,
+            "cash_account_id": 2,
+            "quantity_minor": 40000,
+            "cash_amount_minor": 120000,
+            "lot_strategy": "fifo",
+        },
+    )
+    dividend_response = await client.post(
+        "/api/v1/investments/dividend",
+        json={
+            "txn_date": "2026-06-20",
+            "cash_account_id": 2,
+            "income_account_id": 5,
+            "amount_minor": 5000,
+        },
+    )
     positions_response = await client.get("/api/v1/investments/positions")
     converted_response = await client.get("/api/v1/investments/positions/converted?base_commodity_id=1")
     lots_response = await client.get("/api/v1/investments/lots")
     realized_response = await client.get("/api/v1/reports/realized-gains")
     unrealized_response = await client.get("/api/v1/reports/unrealized-gains?base_commodity_id=1")
 
+    assert buy_response.status_code == 200
+    assert buy_response.json()["lot_id"] == 8
+    assert sell_response.status_code == 200
+    assert sell_response.json()["allocations"][0]["lot_id"] == 1
+    assert dividend_response.status_code == 200
+    assert dividend_response.json()["transaction_id"] == 12
     assert positions_response.status_code == 200
     assert positions_response.json()[0]["commodity_name"] == "Acme Corp"
     assert converted_response.status_code == 200

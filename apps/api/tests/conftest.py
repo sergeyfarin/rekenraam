@@ -56,6 +56,7 @@ async def _drop_database(database_name: str) -> None:
 def _run_migrations(database_name: str) -> None:
     root_dir = Path(__file__).resolve().parents[1]
     config = Config(str(root_dir / "alembic.ini"))
+    config.set_main_option("script_location", str(root_dir / "alembic"))
 
     original_env = {
         "POSTGRES_DB": os.environ.get("POSTGRES_DB"),

@@ -7,7 +7,9 @@ from rekenraam_api.schemas.metadata import (
     CategoryUpdateInput,
     CommoditySummary,
     CountrySummary,
+    InstitutionCreateInput,
     InstitutionSummary,
+    InstitutionUpdateInput,
     PayeeCreateInput,
     PayeeSummary,
     PayeeUpdateInput,
@@ -44,6 +46,47 @@ async def list_institutions(
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[InstitutionSummary]:
     return await metadata_service.list_institutions()
+
+
+@router.post("/institutions", response_model=InstitutionSummary)
+async def create_institution(
+    input: InstitutionCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> InstitutionSummary:
+    try:
+        return await metadata_service.create_institution(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put("/institutions/{institution_id}", response_model=InstitutionSummary)
+async def update_institution(
+    institution_id: int,
+    input: InstitutionUpdateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> InstitutionSummary:
+    try:
+        institution = await metadata_service.update_institution(institution_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if institution is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="institution not found")
+    return institution
+
+
+@router.delete("/institutions/{institution_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_institution(
+    institution_id: int,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> None:
+    try:
+        deleted = await metadata_service.delete_institution(institution_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="institution not found")
 
 
 @router.get("/categories", response_model=list[CategorySummary])

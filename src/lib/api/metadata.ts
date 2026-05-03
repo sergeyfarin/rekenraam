@@ -26,6 +26,9 @@ export type InstitutionSummary = {
   book_id: number;
   name: string;
   kind: string | null;
+  routing: string | null;
+  website: string | null;
+  metadata: string | null;
   country_id: number | null;
   country_name: string | null;
   created_at: string;
@@ -217,18 +220,23 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectS
 }
 
 export async function createInstitution(input: InstitutionCreateInput): Promise<InstitutionSummary> {
-  return invokeTauri<InstitutionSummary>("create_institution", { input });
+  return apiPostWithTauriFallback<InstitutionSummary, InstitutionCreateInput>("/institutions", input, "create_institution", { input });
 }
 
 export async function saveInstitutionSettings(institution: InstitutionSettingsInput): Promise<void> {
   if (institution.id !== undefined) {
-    await invokeTauri("update_institution", { institution });
+    await apiPutWithTauriFallback<InstitutionSummary, InstitutionSettingsInput>(
+      `/institutions/${institution.id}`,
+      institution,
+      "update_institution",
+      { institution }
+    );
     return;
   }
 
-  await invokeTauri("create_institution", { institution });
+  await apiPostWithTauriFallback<InstitutionSummary, InstitutionSettingsInput>("/institutions", institution, "create_institution", { input: institution });
 }
 
 export async function deleteInstitution(institutionId: number, bookId = 1): Promise<void> {
-  await invokeTauri("delete_institution", { institutionId, bookId });
+  await apiDeleteWithTauriFallback<void>(`/institutions/${institutionId}`, "delete_institution", { institutionId, bookId });
 }

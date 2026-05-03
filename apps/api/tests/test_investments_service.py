@@ -3,16 +3,36 @@ from datetime import date
 import pytest
 
 from rekenraam_api.schemas.investments import (
+    BuyCommodityInput,
     ConvertedPositionsQuery,
+    DividendInput,
     LotsHoldingQuery,
     PositionsQuery,
     RealizedGainsQuery,
+    SellCommodityInput,
     UnrealizedGainsQuery,
 )
 from rekenraam_api.services.investments import InvestmentService
 
 
 class StubInvestmentRepository:
+    async def create_buy(self, **_: object) -> dict[str, object]:
+        return {
+            "transaction_id": 10,
+            "allocations": [{"lot_id": 8, "quantity_minor": 60000}],
+            "lot_id": 8,
+        }
+
+    async def create_sell(self, **_: object) -> dict[str, object]:
+        return {
+            "transaction_id": 11,
+            "allocations": [{"lot_id": 1, "quantity_minor": 40000}],
+            "lot_id": None,
+        }
+
+    async def create_dividend(self, **_: object) -> dict[str, object]:
+        return {"transaction_id": 12}
+
     async def list_positions(self, *, book_id: int, as_of_date: date | None) -> list[dict[str, object]]:
         return [
             {
@@ -142,12 +162,45 @@ class StubInvestmentRepository:
 async def test_investment_service_maps_positions_lots_and_gains() -> None:
     service = InvestmentService(StubInvestmentRepository())
 
+    buy = await service.create_buy(
+        BuyCommodityInput(
+            txn_date=date(2026, 5, 10),
+            commodity_id=2,
+            investment_account_id=4,
+            cash_account_id=2,
+            quantity_minor=60000,
+            cash_amount_minor=250000,
+        )
+    )
+    sell = await service.create_sell(
+        SellCommodityInput(
+            txn_date=date(2026, 6, 10),
+            commodity_id=2,
+            investment_account_id=4,
+            cash_account_id=2,
+            quantity_minor=40000,
+            cash_amount_minor=120000,
+            lot_strategy="fifo",
+        )
+    )
+    dividend = await service.create_dividend(
+        DividendInput(
+            txn_date=date(2026, 6, 20),
+            cash_account_id=2,
+            income_account_id=5,
+            amount_minor=5000,
+        )
+    )
     positions = await service.list_positions(PositionsQuery(book_id=1))
     converted = await service.convert_positions(ConvertedPositionsQuery(book_id=1, base_commodity_id=1))
     lots = await service.list_lots_with_holding_period(LotsHoldingQuery(book_id=1))
     realized = await service.report_realized_gains(RealizedGainsQuery(book_id=1))
     unrealized = await service.report_unrealized_gains(UnrealizedGainsQuery(book_id=1, base_commodity_id=1))
 
+    assert buy.transaction_id == 10
+    assert buy.lot_id == 8
+    assert sell.allocations[0].lot_id == 1
+    assert dividend.transaction_id == 12
     assert positions[0].commodity_name == "Acme Corp"
     assert positions[0].lots[0].remaining_cost_basis_minor == 150000
     assert converted[0].value_minor == 180000

@@ -1,4 +1,4 @@
-import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
+import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPost, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
 
 export type TransactionFilter = {
   book_id?: number;
@@ -299,16 +299,7 @@ export async function deleteTransaction(transactionId: number): Promise<void> {
 }
 
 export async function duplicateTransaction(transactionId: number, today: string): Promise<void> {
-  try {
-    await apiPostWithTauriFallback<unknown, null>(
-      `/transactions/${transactionId}/duplicate?today=${encodeURIComponent(today)}`,
-      null,
-      "duplicate_transaction",
-      { id: transactionId, today }
-    );
-  } catch {
-    await invokeTauri("duplicate_transaction", { id: transactionId, today });
-  }
+  await apiPost<unknown, null>(`/transactions/${transactionId}/duplicate?today=${encodeURIComponent(today)}`, null);
 }
 
 export async function bulkVoidTransactions(transactionIds: number[]): Promise<number> {

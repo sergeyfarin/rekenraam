@@ -1,5 +1,15 @@
 [project]
 name = "rekenraam"
 version = "0.1.0"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = "==3.13.*"
+dependencies = [
+    "rekenraam-api[dev]",
+]
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+]
+
+[tool.uv.sources]
+rekenraam-api = { workspace = true, editable = true }

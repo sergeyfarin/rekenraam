@@ -54,6 +54,13 @@ export async function apiGet<T>(path: string): Promise<T> {
   return apiJson<T>(path);
 }
 
+export async function apiPost<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
+  return apiJson<TResponse>(path, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function apiGetWithTauriFallback<T>(path: string, command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await apiGet<T>(path);

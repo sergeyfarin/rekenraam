@@ -41,3 +41,4 @@ select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "RUF"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+cache_dir = ".pytest_cache_local"

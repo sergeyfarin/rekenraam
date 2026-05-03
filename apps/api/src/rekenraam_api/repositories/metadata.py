@@ -30,6 +30,70 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.all())
 
+    async def create_institution(
+        self,
+        *,
+        book_id: int,
+        name: str,
+        kind: str | None,
+        routing: str | None,
+        website: str | None,
+        metadata: str | None,
+        country_id: int | None,
+    ) -> Institution:
+        institution = Institution(
+            book_id=book_id,
+            name=name,
+            kind=kind,
+            routing=routing,
+            website=website,
+            metadata_text=metadata,
+            country_id=country_id,
+        )
+        self._session.add(institution)
+        await self._session.commit()
+        await self._session.refresh(institution)
+        return institution
+
+    async def update_institution(
+        self,
+        *,
+        institution_id: int,
+        name: str,
+        kind: str | None,
+        routing: str | None,
+        website: str | None,
+        metadata: str | None,
+        country_id: int | None,
+    ) -> Institution | None:
+        institution = await self._session.get(Institution, institution_id)
+        if institution is None:
+            return None
+
+        institution.name = name
+        institution.kind = kind
+        institution.routing = routing
+        institution.website = website
+        institution.metadata_text = metadata
+        institution.country_id = country_id
+        institution.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(institution)
+        return institution
+
+    async def delete_institution(self, institution_id: int) -> bool:
+        institution = await self._session.get(Institution, institution_id)
+        if institution is None:
+            return False
+
+        await self._session.delete(institution)
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            raise
+        return True
+
     async def list_categories(self) -> list[Category]:
         statement: Select[tuple[Category]] = select(Category).order_by(Category.name.asc(), Category.id.asc())
         result = await self._session.execute(statement)

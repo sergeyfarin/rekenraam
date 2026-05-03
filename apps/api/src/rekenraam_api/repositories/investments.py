@@ -17,6 +17,253 @@ class InvestmentRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def create_buy(
+        self,
+        *,
+        book_id: int,
+        txn_date: date,
+        commodity_id: int,
+        investment_account_id: int,
+        cash_account_id: int,
+        quantity_minor: int,
+        cash_amount_minor: int,
+        memo: str | None,
+        payee_id: int | None,
+        status: str,
+    ) -> dict[str, Any]:
+        investment_account = await self._get_account(investment_account_id)
+        cash_account = await self._get_account(cash_account_id)
+
+        if investment_account is None or cash_account is None:
+            raise ValueError("account not found")
+
+        transaction = Transaction(
+            book_id=book_id,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=None,
+        )
+        self._session.add(transaction)
+        await self._session.flush()
+
+        security_split = Split(
+            tx_id=transaction.id,
+            account_id=investment_account_id,
+            commodity_id=commodity_id,
+            amount_minor=quantity_minor,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo=None,
+        )
+        cash_split = Split(
+            tx_id=transaction.id,
+            account_id=cash_account_id,
+            commodity_id=cash_account.commodity_id,
+            amount_minor=-cash_amount_minor,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo=None,
+        )
+        self._session.add_all([security_split, cash_split])
+        await self._session.flush()
+
+        lot = Lot(
+            book_id=book_id,
+            account_id=investment_account_id,
+            commodity_id=commodity_id,
+            opened_date=txn_date,
+            notes=None,
+            cost_basis_minor=cash_amount_minor,
+        )
+        self._session.add(lot)
+        await self._session.flush()
+
+        self._session.add(
+            SplitLotAllocation(
+                split_id=security_split.id,
+                lot_id=lot.id,
+                quantity_minor=quantity_minor,
+            )
+        )
+        await self._session.commit()
+
+        return {
+            "transaction_id": transaction.id,
+            "allocations": [{"lot_id": lot.id, "quantity_minor": quantity_minor}],
+            "lot_id": lot.id,
+        }
+
+    async def create_sell(
+        self,
+        *,
+        book_id: int,
+        txn_date: date,
+        commodity_id: int,
+        investment_account_id: int,
+        cash_account_id: int,
+        quantity_minor: int,
+        cash_amount_minor: int,
+        lot_strategy: str,
+        lot_allocations: tuple[dict[str, int], ...] | None,
+        allow_short: bool,
+        memo: str | None,
+        payee_id: int | None,
+        status: str,
+    ) -> dict[str, Any]:
+        investment_account = await self._get_account(investment_account_id)
+        cash_account = await self._get_account(cash_account_id)
+
+        if investment_account is None or cash_account is None:
+            raise ValueError("account not found")
+
+        strategy = lot_strategy.strip().lower()
+        if not strategy or strategy == "default":
+            strategy = investment_account.booking_policy
+        if strategy not in {"fifo", "lifo", "average", "custom", "strict"}:
+            raise ValueError("lot strategy must be fifo, lifo, average, or custom")
+        if strategy == "strict":
+            strategy = "custom"
+        if investment_account.booking_policy == "strict" and strategy != "custom":
+            raise ValueError("strict booking requires custom lot allocations")
+        if investment_account.booking_policy == "strict" and allow_short:
+            raise ValueError("strict booking does not allow short allocations")
+
+        transaction = Transaction(
+            book_id=book_id,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=None,
+        )
+        self._session.add(transaction)
+        await self._session.flush()
+
+        security_split = Split(
+            tx_id=transaction.id,
+            account_id=investment_account_id,
+            commodity_id=commodity_id,
+            amount_minor=-quantity_minor,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo=None,
+        )
+        cash_split = Split(
+            tx_id=transaction.id,
+            account_id=cash_account_id,
+            commodity_id=cash_account.commodity_id,
+            amount_minor=cash_amount_minor,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo=None,
+        )
+        self._session.add_all([security_split, cash_split])
+        await self._session.flush()
+
+        allocations = await self._plan_sell_allocations(
+            investment_account_id=investment_account_id,
+            commodity_id=commodity_id,
+            quantity_minor=quantity_minor,
+            strategy=strategy,
+            custom_allocations=lot_allocations,
+            allow_short=allow_short,
+            opened_date=txn_date,
+            book_id=book_id,
+        )
+
+        for allocation in allocations:
+            self._session.add(
+                SplitLotAllocation(
+                    split_id=security_split.id,
+                    lot_id=allocation["lot_id"],
+                    quantity_minor=-allocation["quantity_minor"],
+                )
+            )
+
+        await self._session.commit()
+        return {
+            "transaction_id": transaction.id,
+            "allocations": allocations,
+            "lot_id": None,
+        }
+
+    async def create_dividend(
+        self,
+        *,
+        book_id: int,
+        txn_date: date,
+        cash_account_id: int,
+        income_account_id: int,
+        amount_minor: int,
+        memo: str | None,
+        payee_id: int | None,
+        status: str,
+    ) -> dict[str, Any]:
+        cash_account = await self._get_account(cash_account_id)
+        income_account = await self._get_account(income_account_id)
+        if cash_account is None or income_account is None:
+            raise ValueError("account not found")
+
+        transaction = Transaction(
+            book_id=book_id,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=None,
+        )
+        self._session.add(transaction)
+        await self._session.flush()
+
+        self._session.add_all(
+            [
+                Split(
+                    tx_id=transaction.id,
+                    account_id=cash_account_id,
+                    commodity_id=cash_account.commodity_id,
+                    amount_minor=amount_minor,
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo=None,
+                ),
+                Split(
+                    tx_id=transaction.id,
+                    account_id=income_account_id,
+                    commodity_id=income_account.commodity_id,
+                    amount_minor=-amount_minor,
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo=None,
+                ),
+            ]
+        )
+
+        await self._session.commit()
+        return {"transaction_id": transaction.id}
+
     async def list_positions(self, *, book_id: int, as_of_date: date | None) -> list[dict[str, Any]]:
         balance_expr = func.coalesce(func.sum(Split.amount_minor), 0)
         position_statement: Select[tuple[int, str, str, int, str, int, int]] = (
@@ -153,7 +400,7 @@ class InvestmentRepository:
             value_minor = (balance_minor * price_minor) // scale_factor
             for lot in lots:
                 lot["converted_value_minor"] = (int(lot["quantity_minor"]) * price_minor) // scale_factor
-                lot["converted_cost_basis_minor"] = (int(lot["remaining_cost_basis_minor"]) * price_minor) // scale_factor
+                lot["converted_cost_basis_minor"] = int(lot["remaining_cost_basis_minor"])
                 lot["price_missing"] = False
 
             converted_positions.append({**position, "value_minor": value_minor, "price_missing": False, "lots": lots})
@@ -383,3 +630,115 @@ class InvestmentRepository:
             )
         ).all()
         return {commodity_id: price_minor for commodity_id, price_minor in rows}
+
+    async def _get_account(self, account_id: int) -> Account | None:
+        result = await self._session.execute(select(Account).where(Account.id == account_id))
+        return result.scalar_one_or_none()
+
+    async def _list_lot_balances(self, *, account_id: int, commodity_id: int) -> list[dict[str, Any]]:
+        balance_expr = func.coalesce(func.sum(SplitLotAllocation.quantity_minor), 0)
+        statement = (
+            select(Lot.id, Lot.opened_date, balance_expr.label("balance_minor"))
+            .outerjoin(SplitLotAllocation, SplitLotAllocation.lot_id == Lot.id)
+            .where(Lot.account_id == account_id)
+            .where(Lot.commodity_id == commodity_id)
+            .group_by(Lot.id, Lot.opened_date)
+            .order_by(Lot.opened_date.asc(), Lot.id.asc())
+        )
+        rows = (await self._session.execute(statement)).all()
+        return [
+            {"lot_id": lot_id, "opened_date": opened_date, "balance_minor": balance_minor}
+            for lot_id, opened_date, balance_minor in rows
+        ]
+
+    async def _create_short_lot(self, *, book_id: int, account_id: int, commodity_id: int, opened_date: date) -> int:
+        lot = Lot(
+            book_id=book_id,
+            account_id=account_id,
+            commodity_id=commodity_id,
+            opened_date=opened_date,
+            notes="Short sale",
+            cost_basis_minor=0,
+        )
+        self._session.add(lot)
+        await self._session.flush()
+        return lot.id
+
+    async def _plan_sell_allocations(
+        self,
+        *,
+        investment_account_id: int,
+        commodity_id: int,
+        quantity_minor: int,
+        strategy: str,
+        custom_allocations: tuple[dict[str, int], ...] | None,
+        allow_short: bool,
+        opened_date: date,
+        book_id: int,
+    ) -> list[dict[str, int]]:
+        allocations: list[dict[str, int]] = []
+
+        if strategy == "custom":
+            if not custom_allocations:
+                raise ValueError("custom allocations required")
+            total = sum(int(allocation["quantity_minor"]) for allocation in custom_allocations)
+            if total != quantity_minor:
+                raise ValueError("custom allocations must sum to quantity")
+
+            lot_balances = {
+                lot["lot_id"]: int(lot["balance_minor"])
+                for lot in await self._list_lot_balances(account_id=investment_account_id, commodity_id=commodity_id)
+            }
+            for allocation in custom_allocations:
+                lot_id = int(allocation["lot_id"])
+                alloc_qty = int(allocation["quantity_minor"])
+                if alloc_qty <= 0:
+                    raise ValueError("allocation quantities must be positive")
+                if alloc_qty > lot_balances.get(lot_id, 0) and not allow_short:
+                    raise ValueError("insufficient lot quantity for custom allocation")
+                allocations.append({"lot_id": lot_id, "quantity_minor": alloc_qty})
+            return allocations
+
+        lots = await self._list_lot_balances(account_id=investment_account_id, commodity_id=commodity_id)
+        positive_lots = [lot for lot in lots if int(lot["balance_minor"]) > 0]
+
+        if strategy == "average":
+            total_balance = sum(int(lot["balance_minor"]) for lot in positive_lots)
+            allocated = 0
+            for index, lot in enumerate(positive_lots):
+                balance = int(lot["balance_minor"])
+                if total_balance <= 0 or balance <= 0:
+                    continue
+                if index == len(positive_lots) - 1:
+                    alloc_qty = min(quantity_minor - allocated, balance)
+                else:
+                    alloc_qty = min((quantity_minor * balance) // total_balance, balance)
+                if alloc_qty > 0:
+                    allocations.append({"lot_id": int(lot["lot_id"]), "quantity_minor": alloc_qty})
+                    allocated += alloc_qty
+            remaining = quantity_minor - allocated
+        else:
+            ordered_lots = list(positive_lots)
+            if strategy == "lifo":
+                ordered_lots.sort(key=lambda lot: (lot["opened_date"] or date.min, int(lot["lot_id"])), reverse=True)
+            remaining = quantity_minor
+            for lot in ordered_lots:
+                if remaining <= 0:
+                    break
+                take = min(remaining, int(lot["balance_minor"]))
+                if take > 0:
+                    allocations.append({"lot_id": int(lot["lot_id"]), "quantity_minor": take})
+                    remaining -= take
+
+        if remaining > 0:
+            if not allow_short:
+                raise ValueError("insufficient lots available for sale")
+            short_lot_id = await self._create_short_lot(
+                book_id=book_id,
+                account_id=investment_account_id,
+                commodity_id=commodity_id,
+                opened_date=opened_date,
+            )
+            allocations.append({"lot_id": short_lot_id, "quantity_minor": remaining})
+
+        return allocations

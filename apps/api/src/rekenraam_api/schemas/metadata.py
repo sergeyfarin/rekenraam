@@ -35,10 +35,37 @@ class InstitutionSummary(BaseModel):
     book_id: int
     name: str
     kind: str | None
+    routing: str | None
+    website: str | None
+    metadata: str | None
     country_id: int | None
     country_name: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class InstitutionCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    kind: str | None
+    routing: str | None = None
+    website: str | None = None
+    metadata: str | None = None
+    country_id: int | None = None
+
+
+class InstitutionUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    kind: str | None
+    routing: str | None = None
+    website: str | None = None
+    metadata: str | None = None
+    country_id: int | None = None
 
 
 class CategorySummary(BaseModel):

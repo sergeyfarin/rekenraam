@@ -43,6 +43,80 @@ class UnrealizedGainsQuery(BaseModel):
     as_of_date: date | None = None
 
 
+class BuyCommodityInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
+    txn_date: date
+    commodity_id: int
+    investment_account_id: int
+    cash_account_id: int
+    quantity_minor: int
+    cash_amount_minor: int
+    memo: str | None = None
+    payee_id: int | None = None
+    status: str | None = None
+
+
+class SellLotAllocationInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    lot_id: int
+    quantity_minor: int
+
+
+class SellCommodityInput(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    book_id: int = 1
+    txn_date: date
+    commodity_id: int
+    investment_account_id: int
+    cash_account_id: int
+    quantity_minor: int
+    cash_amount_minor: int
+    lot_strategy: str = "default"
+    lot_allocations: tuple[SellLotAllocationInput, ...] | None = None
+    allow_short: bool = False
+    memo: str | None = None
+    payee_id: int | None = None
+    status: str | None = None
+
+
+class DividendInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
+    txn_date: date
+    cash_account_id: int
+    income_account_id: int
+    amount_minor: int
+    memo: str | None = None
+    payee_id: int | None = None
+    status: str | None = None
+
+
+class TradeAllocation(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    lot_id: int
+    quantity_minor: int
+
+
+class TradeResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    transaction_id: int
+    allocations: tuple[TradeAllocation, ...]
+    lot_id: int | None
+
+
+class DividendResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    transaction_id: int
+
+
 class PositionLot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
