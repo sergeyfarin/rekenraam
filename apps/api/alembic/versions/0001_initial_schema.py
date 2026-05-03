@@ -236,6 +236,60 @@ def upgrade() -> None:
     op.create_index("ix_splits_account_id", "splits", ["account_id"])
 
     op.create_table(
+        "lots",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column("opened_date", sa.Date(), nullable=True),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("cost_basis_minor", sa.BigInteger(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_lots_book_id", "lots", ["book_id"], unique=False)
+    op.create_index(
+        "ix_lots_account_commodity_opened",
+        "lots",
+        ["account_id", "commodity_id", "opened_date"],
+        unique=False,
+    )
+
+    op.create_table(
+        "split_lot_allocations",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("split_id", sa.BigInteger(), sa.ForeignKey("splits.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("lot_id", sa.BigInteger(), sa.ForeignKey("lots.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("quantity_minor", sa.BigInteger(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_split_lot_allocations_split_id", "split_lot_allocations", ["split_id"], unique=False)
+    op.create_index("ix_split_lot_allocations_lot_id", "split_lot_allocations", ["lot_id"], unique=False)
+
+    op.create_table(
+        "price_observations",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("quote_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("observation_kind", sa.String(length=32), nullable=False, server_default=sa.text("'commodity_market'")),
+        sa.Column("price_minor", sa.BigInteger(), nullable=False),
+        sa.Column("price_date", sa.Date(), nullable=False),
+        sa.Column("source", sa.String(length=128), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint(
+            "observation_kind IN ('commodity_market', 'fx_manual', 'valuation_override')",
+            name="ck_price_observations_observation_kind",
+        ),
+    )
+    op.create_index("ix_price_observations_book_id", "price_observations", ["book_id"], unique=False)
+    op.create_index(
+        "ix_price_observations_lookup",
+        "price_observations",
+        ["commodity_id", "quote_commodity_id", "observation_kind", "price_date"],
+        unique=False,
+    )
+
+    op.create_table(
         "book_memberships",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
@@ -288,6 +342,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_price_observations_lookup", table_name="price_observations")
+    op.drop_index("ix_price_observations_book_id", table_name="price_observations")
+    op.drop_table("price_observations")
+    op.drop_index("ix_split_lot_allocations_lot_id", table_name="split_lot_allocations")
+    op.drop_index("ix_split_lot_allocations_split_id", table_name="split_lot_allocations")
+    op.drop_table("split_lot_allocations")
+    op.drop_index("ix_lots_account_commodity_opened", table_name="lots")
+    op.drop_index("ix_lots_book_id", table_name="lots")
+    op.drop_table("lots")
     op.drop_index("ix_account_balancings_account_date", table_name="account_balancings")
     op.drop_index("ix_account_balancings_book_id", table_name="account_balancings")
     op.drop_table("account_balancings")

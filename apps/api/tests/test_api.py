@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 
 from rekenraam_api.api.dependencies import get_account_service, get_book_service
 from rekenraam_api.api.dependencies import get_metadata_service
+from rekenraam_api.api.dependencies import get_report_service
 from rekenraam_api.api.dependencies import get_transaction_service
 from rekenraam_api.app import app
 from rekenraam_api.schemas.accounts import (
@@ -29,6 +30,7 @@ from rekenraam_api.schemas.metadata import (
     ProjectSummary,
     TagSummary,
 )
+from rekenraam_api.schemas.reports import CashflowRow, CategorySpendRow, PayeeTotalRow
 from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.transactions import PayeeDefaults, SplitEntry, TransactionListFilters, TransactionMutationInput, TransactionSummary
 
@@ -653,6 +655,17 @@ class StubMetadataService:
         return tag_id == 1
 
 
+class StubReportService:
+    async def report_cashflow(self, input: object) -> list[CashflowRow]:
+        return [CashflowRow(period_start=datetime(2026, 5, 1, tzinfo=UTC).date(), inflow_minor=500000, outflow_minor=500000, net_minor=0)]
+
+    async def report_category_spend(self, input: object) -> list[CategorySpendRow]:
+        return [CategorySpendRow(category_id=1, category_name="Groceries", total_minor=-1250)]
+
+    async def report_payee_totals(self, input: object) -> list[PayeeTotalRow]:
+        return [PayeeTotalRow(payee_id=1, payee_name="Local Market", total_minor=-1250)]
+
+
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
     app.dependency_overrides.clear()
@@ -986,6 +999,22 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_and_
     assert delete_category_response.status_code == 204
     assert delete_payee_response.status_code == 204
     assert delete_tag_response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_report_endpoints_return_expected_shapes(client: AsyncClient) -> None:
+    app.dependency_overrides[get_report_service] = StubReportService
+
+    cashflow_response = await client.post("/api/v1/reports/cashflow", json={"book_id": 1, "date_from": None, "date_to": None, "group_by": "month"})
+    category_response = await client.post("/api/v1/reports/category-spend", json={"book_id": 1, "date_from": None, "date_to": None, "category_ids": None})
+    payee_response = await client.post("/api/v1/reports/payee-totals", json={"book_id": 1, "date_from": None, "date_to": None, "payee_ids": None})
+
+    assert cashflow_response.status_code == 200
+    assert cashflow_response.json()[0]["period_start"] == "2026-05-01"
+    assert category_response.status_code == 200
+    assert category_response.json()[0]["category_name"] == "Groceries"
+    assert payee_response.status_code == 200
+    assert payee_response.json()[0]["payee_name"] == "Local Market"
 
 
 @pytest.mark.asyncio
