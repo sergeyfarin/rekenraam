@@ -1,10 +1,11 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import ValidationError
 
 from rekenraam_api.api.dependencies import get_transaction_service
-from rekenraam_api.schemas.transactions import TransactionListFilters, TransactionSummary
+from rekenraam_api.schemas.transactions import PayeeDefaults, TransactionListFilters, TransactionMutationInput, TransactionSummary
 from rekenraam_api.services.transactions import TransactionService
 
 
@@ -57,6 +58,15 @@ async def list_transactions(
     return await transaction_service.list_transactions(filters)
 
 
+@router.get("/payee-defaults", response_model=PayeeDefaults)
+async def get_payee_defaults(
+    payee_id: int = Query(...),
+    account_id: int | None = Query(default=None),
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> PayeeDefaults:
+    return await transaction_service.get_payee_defaults(payee_id, account_id)
+
+
 @router.get("/{transaction_id}", response_model=TransactionSummary)
 async def get_transaction(
     transaction_id: int,
@@ -66,3 +76,68 @@ async def get_transaction(
     if transaction is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="transaction not found")
     return transaction
+
+
+@router.post("", response_model=TransactionSummary)
+async def create_transaction(
+    input: TransactionMutationInput,
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> TransactionSummary:
+    try:
+        return await transaction_service.create_transaction(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put("/{transaction_id}", response_model=TransactionSummary)
+async def update_transaction(
+    transaction_id: int,
+    input: TransactionMutationInput,
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> TransactionSummary:
+    try:
+        transaction = await transaction_service.update_transaction(transaction_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if transaction is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="transaction not found")
+    return transaction
+
+
+@router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_transaction(
+    transaction_id: int,
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> None:
+    deleted = await transaction_service.delete_transaction(transaction_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="transaction not found")
+
+
+@router.post("/{transaction_id}/duplicate", response_model=TransactionSummary)
+async def duplicate_transaction(
+    transaction_id: int,
+    today: date,
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> TransactionSummary:
+    transaction = await transaction_service.duplicate_transaction(transaction_id, today)
+    if transaction is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="transaction not found")
+    return transaction
+
+
+@router.post("/bulk-void", response_model=int)
+async def bulk_void_transactions(
+    ids: list[int],
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> int:
+    return await transaction_service.bulk_void_transactions(ids)
+
+
+@router.post("/bulk-delete", response_model=int)
+async def bulk_delete_transactions(
+    ids: list[int],
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> int:
+    return await transaction_service.bulk_delete_transactions(ids)

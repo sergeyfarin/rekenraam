@@ -299,20 +299,56 @@ export async function deleteTransaction(transactionId: number): Promise<void> {
 }
 
 export async function duplicateTransaction(transactionId: number, today: string): Promise<void> {
-  await invokeTauri("duplicate_transaction", { id: transactionId, today });
+  try {
+    await apiPostWithTauriFallback<unknown, null>(
+      `/transactions/${transactionId}/duplicate?today=${encodeURIComponent(today)}`,
+      null,
+      "duplicate_transaction",
+      { id: transactionId, today }
+    );
+  } catch {
+    await invokeTauri("duplicate_transaction", { id: transactionId, today });
+  }
 }
 
 export async function bulkVoidTransactions(transactionIds: number[]): Promise<number> {
-  return invokeTauri<number>("bulk_void_transactions", { ids: transactionIds });
+  try {
+    return await apiPostWithTauriFallback<number, number[]>(
+      "/transactions/bulk-void",
+      transactionIds,
+      "bulk_void_transactions",
+      { ids: transactionIds }
+    );
+  } catch {
+    return invokeTauri<number>("bulk_void_transactions", { ids: transactionIds });
+  }
 }
 
 export async function bulkDeleteTransactions(transactionIds: number[]): Promise<number> {
-  return invokeTauri<number>("bulk_delete_transactions", { ids: transactionIds });
+  try {
+    return await apiPostWithTauriFallback<number, number[]>(
+      "/transactions/bulk-delete",
+      transactionIds,
+      "bulk_delete_transactions",
+      { ids: transactionIds }
+    );
+  } catch {
+    return invokeTauri<number>("bulk_delete_transactions", { ids: transactionIds });
+  }
 }
 
 export async function getPayeeDefaults(payeeId: number, accountId?: number): Promise<{ category_id: number | null; memo: string | null }> {
-  return invokeTauri<{ category_id: number | null; memo: string | null }>("get_payee_defaults", {
-    payeeId,
-    accountId,
-  });
+  const params = new URLSearchParams({ payee_id: String(payeeId) });
+  if (accountId !== undefined) {
+    params.set("account_id", String(accountId));
+  }
+
+  try {
+    return await apiGet<{ category_id: number | null; memo: string | null }>(`/transactions/payee-defaults?${params.toString()}`);
+  } catch {
+    return invokeTauri<{ category_id: number | null; memo: string | null }>("get_payee_defaults", {
+      payeeId,
+      accountId,
+    });
+  }
 }

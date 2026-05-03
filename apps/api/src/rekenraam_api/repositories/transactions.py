@@ -91,6 +91,61 @@ class TransactionRepository:
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
+    async def create_transaction(
+        self,
+        *,
+        book_id: int,
+        txn_date,
+        payee_id: int | None,
+        memo: str | None,
+        status: str,
+        reference: str | None,
+    ) -> Transaction:
+        transaction = Transaction(
+            book_id=book_id,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=reference,
+        )
+        self._session.add(transaction)
+        await self._session.flush()
+        return transaction
+
+    async def update_transaction(
+        self,
+        *,
+        transaction_id: int,
+        txn_date,
+        payee_id: int | None,
+        memo: str | None,
+        status: str,
+        reference: str | None,
+    ) -> Transaction | None:
+        transaction = await self.get_transaction_by_id(transaction_id)
+        if transaction is None:
+            return None
+
+        transaction.occurred_date = txn_date
+        transaction.posted_date = txn_date
+        transaction.payee_id = payee_id
+        transaction.memo = memo
+        transaction.status = status
+        transaction.reference = reference
+        await self._session.flush()
+        return transaction
+
+    async def delete_transaction(self, transaction_id: int) -> bool:
+        transaction = await self.get_transaction_by_id(transaction_id)
+        if transaction is None:
+            return False
+
+        await self._session.delete(transaction)
+        await self._session.commit()
+        return True
+
     async def list_splits_for_transaction_ids(self, transaction_ids: list[int]) -> list[Split]:
         if not transaction_ids:
             return []
@@ -98,6 +153,36 @@ class TransactionRepository:
         statement: Select[tuple[Split]] = select(Split).where(Split.tx_id.in_(transaction_ids)).order_by(Split.id)
         result = await self._session.execute(statement)
         return list(result.scalars().all())
+
+    async def replace_transaction_splits(
+        self,
+        transaction_id: int,
+        splits: list[dict[str, int | str | None]],
+    ) -> list[Split]:
+        existing = await self.list_splits_for_transaction_ids([transaction_id])
+        for split in existing:
+            await self._session.delete(split)
+        await self._session.flush()
+
+        created: list[Split] = []
+        for split_input in splits:
+            split = Split(
+                tx_id=transaction_id,
+                account_id=int(split_input["account_id"]),
+                commodity_id=int(split_input["commodity_id"]),
+                amount_minor=int(split_input["amount_minor"]),
+                category_id=split_input["category_id"],
+                tag_id=split_input["tag_id"],
+                person_id=split_input["person_id"],
+                project_id=split_input["project_id"],
+                share_bps=split_input["share_bps"],
+                memo=split_input["memo"],
+            )
+            self._session.add(split)
+            created.append(split)
+
+        await self._session.flush()
+        return created
 
     async def list_account_register_splits(self, account_id: int) -> list[tuple[Transaction, Split]]:
         statement = (
@@ -108,3 +193,121 @@ class TransactionRepository:
         )
         result = await self._session.execute(statement)
         return list(result.all())
+
+    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> tuple[int | None, str | None]:
+        statement = (
+            select(Split.category_id, Transaction.memo)
+            .join(Transaction, Transaction.id == Split.tx_id)
+            .where(Transaction.payee_id == payee_id)
+            .where(Split.category_id.is_not(None))
+            .where(Transaction.status != "void")
+        )
+
+        if account_id is not None:
+            statement = statement.where(Split.account_id == account_id)
+
+        statement = statement.order_by(Transaction.occurred_date.desc(), Transaction.id.desc()).limit(1)
+        result = await self._session.execute(statement)
+        row = result.first()
+        if row is None:
+            return None, None
+        return row[0], row[1]
+
+    async def duplicate_transaction(self, transaction_id: int, today) -> Transaction | None:
+        source = await self.get_transaction_by_id(transaction_id)
+        if source is None:
+            return None
+
+        duplicate = Transaction(
+            book_id=source.book_id,
+            occurred_date=today,
+            posted_date=today,
+            payee_id=source.payee_id,
+            memo=source.memo,
+            status="uncleared",
+            reference=None,
+        )
+        self._session.add(duplicate)
+        await self._session.flush()
+
+        source_splits = await self.list_splits_for_transaction_ids([transaction_id])
+        for source_split in source_splits:
+            self._session.add(
+                Split(
+                    tx_id=duplicate.id,
+                    account_id=source_split.account_id,
+                    commodity_id=source_split.commodity_id,
+                    amount_minor=source_split.amount_minor,
+                    category_id=source_split.category_id,
+                    tag_id=source_split.tag_id,
+                    person_id=source_split.person_id,
+                    project_id=source_split.project_id,
+                    share_bps=source_split.share_bps,
+                    memo=source_split.memo,
+                )
+            )
+
+        await self._session.commit()
+        await self._session.refresh(duplicate)
+        return duplicate
+
+    async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
+        if not transaction_ids:
+            return 0
+
+        voided = 0
+        for transaction_id in transaction_ids:
+            source = await self.get_transaction_by_id(transaction_id)
+            if source is None or source.status == "void":
+                continue
+
+            replacement = Transaction(
+                book_id=source.book_id,
+                occurred_date=source.occurred_date,
+                posted_date=source.posted_date,
+                payee_id=source.payee_id,
+                memo=source.memo,
+                status="void",
+                reference=source.reference,
+            )
+            self._session.add(replacement)
+            await self._session.flush()
+
+            source_splits = await self.list_splits_for_transaction_ids([transaction_id])
+            for source_split in source_splits:
+                self._session.add(
+                    Split(
+                        tx_id=replacement.id,
+                        account_id=source_split.account_id,
+                        commodity_id=source_split.commodity_id,
+                        amount_minor=source_split.amount_minor,
+                        category_id=source_split.category_id,
+                        tag_id=source_split.tag_id,
+                        person_id=source_split.person_id,
+                        project_id=source_split.project_id,
+                        share_bps=source_split.share_bps,
+                        memo=source_split.memo,
+                    )
+                )
+            voided += 1
+
+        await self._session.commit()
+        return voided
+
+    async def bulk_delete_transactions(self, transaction_ids: list[int]) -> int:
+        if not transaction_ids:
+            return 0
+
+        deleted = 0
+        for transaction_id in transaction_ids:
+            transaction = await self.get_transaction_by_id(transaction_id)
+            if transaction is None:
+                continue
+            splits = await self.list_splits_for_transaction_ids([transaction_id])
+            for split in splits:
+                await self._session.delete(split)
+            await self._session.delete(transaction)
+            deleted += 1
+
+        await self._session.commit()
+        return deleted

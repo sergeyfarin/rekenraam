@@ -30,7 +30,7 @@ from rekenraam_api.schemas.metadata import (
     TagSummary,
 )
 from rekenraam_api.schemas.register import RegisterEntry
-from rekenraam_api.schemas.transactions import SplitEntry, TransactionListFilters, TransactionSummary
+from rekenraam_api.schemas.transactions import PayeeDefaults, SplitEntry, TransactionListFilters, TransactionMutationInput, TransactionSummary
 
 
 class StubBookService:
@@ -373,6 +373,153 @@ class StubTransactionService:
         if transaction_id == 1:
             return (await self.list_transactions())[0]
         return None
+
+    async def create_transaction(self, input: TransactionMutationInput) -> TransactionSummary:
+        return TransactionSummary(
+            id=3,
+            book_id=input.book_id,
+            occurred_date=input.txn_date,
+            posted_date=input.txn_date,
+            payee_id=input.payee_id,
+            memo=input.memo,
+            status=input.status,
+            reference=input.reference,
+            created_at=self._created_at,
+            splits=(
+                SplitEntry(
+                    id=10,
+                    tx_id=3,
+                    account_id=input.splits[0].account_id,
+                    commodity_id=input.splits[0].commodity_id,
+                    amount_minor=input.splits[0].amount_minor,
+                    category_id=input.splits[0].category_id,
+                    tag_id=input.splits[0].tag_id,
+                    person_id=input.splits[0].person_id,
+                    project_id=input.splits[0].project_id,
+                    share_bps=input.splits[0].share_bps,
+                    memo=input.splits[0].memo,
+                    created_at=self._created_at,
+                ),
+                SplitEntry(
+                    id=11,
+                    tx_id=3,
+                    account_id=input.splits[1].account_id,
+                    commodity_id=input.splits[1].commodity_id,
+                    amount_minor=input.splits[1].amount_minor,
+                    category_id=input.splits[1].category_id,
+                    tag_id=input.splits[1].tag_id,
+                    person_id=input.splits[1].person_id,
+                    project_id=input.splits[1].project_id,
+                    share_bps=input.splits[1].share_bps,
+                    memo=input.splits[1].memo,
+                    created_at=self._created_at,
+                ),
+            ),
+        )
+
+    async def update_transaction(self, transaction_id: int, input: TransactionMutationInput) -> TransactionSummary | None:
+        if transaction_id != 1:
+            return None
+        return TransactionSummary(
+            id=1,
+            book_id=input.book_id,
+            occurred_date=input.txn_date,
+            posted_date=input.txn_date,
+            payee_id=input.payee_id,
+            memo=input.memo,
+            status=input.status,
+            reference=input.reference,
+            created_at=self._created_at,
+            splits=(
+                SplitEntry(
+                    id=1,
+                    tx_id=1,
+                    account_id=input.splits[0].account_id,
+                    commodity_id=input.splits[0].commodity_id,
+                    amount_minor=input.splits[0].amount_minor,
+                    category_id=input.splits[0].category_id,
+                    tag_id=input.splits[0].tag_id,
+                    person_id=input.splits[0].person_id,
+                    project_id=input.splits[0].project_id,
+                    share_bps=input.splits[0].share_bps,
+                    memo=input.splits[0].memo,
+                    created_at=self._created_at,
+                ),
+                SplitEntry(
+                    id=2,
+                    tx_id=1,
+                    account_id=input.splits[1].account_id,
+                    commodity_id=input.splits[1].commodity_id,
+                    amount_minor=input.splits[1].amount_minor,
+                    category_id=input.splits[1].category_id,
+                    tag_id=input.splits[1].tag_id,
+                    person_id=input.splits[1].person_id,
+                    project_id=input.splits[1].project_id,
+                    share_bps=input.splits[1].share_bps,
+                    memo=input.splits[1].memo,
+                    created_at=self._created_at,
+                ),
+            ),
+        )
+
+    async def delete_transaction(self, transaction_id: int) -> bool:
+        return transaction_id == 1
+
+    async def duplicate_transaction(self, transaction_id: int, today: datetime.date) -> TransactionSummary | None:
+        if transaction_id != 1:
+            return None
+        return TransactionSummary(
+            id=4,
+            book_id=1,
+            occurred_date=today,
+            posted_date=today,
+            payee_id=None,
+            memo="Initial opening balance",
+            status="uncleared",
+            reference=None,
+            created_at=self._created_at,
+            splits=(
+                SplitEntry(
+                    id=12,
+                    tx_id=4,
+                    account_id=2,
+                    commodity_id=1,
+                    amount_minor=500000,
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo="Opening cash",
+                    created_at=self._created_at,
+                ),
+                SplitEntry(
+                    id=13,
+                    tx_id=4,
+                    account_id=3,
+                    commodity_id=1,
+                    amount_minor=-500000,
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo="Offset",
+                    created_at=self._created_at,
+                ),
+            ),
+        )
+
+    async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
+        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+
+    async def bulk_delete_transactions(self, transaction_ids: list[int]) -> int:
+        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+
+    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> PayeeDefaults:
+        if payee_id == 1 and account_id in {None, 2}:
+            return PayeeDefaults(category_id=1, memo="Pending groceries")
+        return PayeeDefaults(category_id=None, memo=None)
 
     async def list_account_register(self, account_id: int) -> list[RegisterEntry]:
         if account_id != 2:
@@ -881,6 +1028,80 @@ async def test_get_transaction_returns_404_for_missing_id(client: AsyncClient) -
 
     assert response.status_code == 404
     assert response.json() == {"detail": "transaction not found"}
+
+
+@pytest.mark.asyncio
+async def test_transaction_write_endpoints_return_expected_shapes(client: AsyncClient) -> None:
+    app.dependency_overrides[get_transaction_service] = StubTransactionService
+    payload = {
+        "book_id": 1,
+        "txn_date": "2026-05-03",
+        "payee_id": None,
+        "memo": "Created",
+        "status": "uncleared",
+        "reference": None,
+        "import_id": None,
+        "splits": [
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ],
+    }
+
+    create_response = await client.post("/api/v1/transactions", json=payload)
+    update_response = await client.put("/api/v1/transactions/1", json=payload)
+    delete_response = await client.delete("/api/v1/transactions/1")
+
+    assert create_response.status_code == 200
+    assert create_response.json()["id"] == 3
+    assert update_response.status_code == 200
+    assert update_response.json()["id"] == 1
+    assert delete_response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_transaction_duplicate_and_bulk_endpoints_return_expected_shapes(client: AsyncClient) -> None:
+    app.dependency_overrides[get_transaction_service] = StubTransactionService
+
+    duplicate_response = await client.post("/api/v1/transactions/1/duplicate", params={"today": "2026-05-04"})
+    bulk_void_response = await client.post("/api/v1/transactions/bulk-void", json=[1, 2, 999])
+    bulk_delete_response = await client.post("/api/v1/transactions/bulk-delete", json=[1, 2, 999])
+
+    assert duplicate_response.status_code == 200
+    assert duplicate_response.json()["id"] == 4
+    assert bulk_void_response.status_code == 200
+    assert bulk_void_response.json() == 2
+    assert bulk_delete_response.status_code == 200
+    assert bulk_delete_response.json() == 2
+
+
+@pytest.mark.asyncio
+async def test_get_payee_defaults_returns_expected_shape(client: AsyncClient) -> None:
+    app.dependency_overrides[get_transaction_service] = StubTransactionService
+
+    response = await client.get("/api/v1/transactions/payee-defaults", params={"payee_id": 1, "account_id": 2})
+
+    assert response.status_code == 200
+    assert response.json() == {"category_id": 1, "memo": "Pending groceries"}
 
 
 @pytest.mark.asyncio

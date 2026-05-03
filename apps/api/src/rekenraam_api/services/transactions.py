@@ -1,7 +1,13 @@
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.transactions import TransactionRepository
 from rekenraam_api.schemas.register import RegisterEntry
-from rekenraam_api.schemas.transactions import SplitEntry, TransactionListFilters, TransactionSummary
+from rekenraam_api.schemas.transactions import (
+    PayeeDefaults,
+    SplitEntry,
+    TransactionListFilters,
+    TransactionMutationInput,
+    TransactionSummary,
+)
 
 
 class TransactionService:
@@ -20,6 +26,60 @@ class TransactionService:
 
         splits = await self._repository.list_splits_for_transaction_ids([transaction.id])
         return self._map_transactions([transaction], splits)[0]
+
+    async def create_transaction(self, input: TransactionMutationInput) -> TransactionSummary:
+        self._validate_mutation_input(input)
+        transaction = await self._repository.create_transaction(
+            book_id=input.book_id,
+            txn_date=input.txn_date,
+            payee_id=input.payee_id,
+            memo=input.memo,
+            status=input.status,
+            reference=input.reference,
+        )
+        await self._repository.replace_transaction_splits(
+            transaction.id,
+            [split.model_dump() for split in input.splits],
+        )
+        await self._repository._session.commit()
+        refreshed = await self.get_transaction_by_id(transaction.id)
+        if refreshed is None:
+            raise ValueError("transaction not found after create")
+        return refreshed
+
+    async def update_transaction(self, transaction_id: int, input: TransactionMutationInput) -> TransactionSummary | None:
+        self._validate_mutation_input(input)
+        transaction = await self._repository.update_transaction(
+            transaction_id=transaction_id,
+            txn_date=input.txn_date,
+            payee_id=input.payee_id,
+            memo=input.memo,
+            status=input.status,
+            reference=input.reference,
+        )
+        if transaction is None:
+            return None
+        await self._repository.replace_transaction_splits(
+            transaction.id,
+            [split.model_dump() for split in input.splits],
+        )
+        await self._repository._session.commit()
+        return await self.get_transaction_by_id(transaction.id)
+
+    async def delete_transaction(self, transaction_id: int) -> bool:
+        return await self._repository.delete_transaction(transaction_id)
+
+    async def duplicate_transaction(self, transaction_id: int, today) -> TransactionSummary | None:
+        transaction = await self._repository.duplicate_transaction(transaction_id, today)
+        if transaction is None:
+            return None
+        return await self.get_transaction_by_id(transaction.id)
+
+    async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
+        return await self._repository.bulk_void_transactions(transaction_ids)
+
+    async def bulk_delete_transactions(self, transaction_ids: list[int]) -> int:
+        return await self._repository.bulk_delete_transactions(transaction_ids)
 
     async def list_account_register(self, account_id: int) -> list[RegisterEntry]:
         rows = await self._repository.list_account_register_splits(account_id)
@@ -48,6 +108,19 @@ class TransactionService:
             )
 
         return entries
+
+    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> PayeeDefaults:
+        category_id, memo = await self._repository.get_payee_defaults(payee_id, account_id)
+        return PayeeDefaults(category_id=category_id, memo=memo)
+
+    @staticmethod
+    def _validate_mutation_input(input: TransactionMutationInput) -> None:
+        if input.status not in {"uncleared", "cleared", "reconciled", "void"}:
+            raise ValueError("transaction status is invalid")
+        if len(input.splits) < 2:
+            raise ValueError("transaction requires at least two splits")
+        if sum(split.amount_minor for split in input.splits) != 0:
+            raise ValueError("transaction splits must balance to zero")
 
     def _map_transactions(
         self,

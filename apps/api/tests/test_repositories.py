@@ -432,6 +432,64 @@ async def test_transaction_repository_lists_splits_for_transaction(repository_se
 
 
 @pytest.mark.asyncio
+async def test_transaction_repository_creates_updates_and_deletes_transaction(repository_session: AsyncSession) -> None:
+    repository = TransactionRepository(repository_session)
+
+    transaction = await repository.create_transaction(
+        book_id=1,
+        txn_date=date(2026, 5, 3),
+        payee_id=None,
+        memo="Created transaction",
+        status="uncleared",
+        reference=None,
+    )
+    await repository.replace_transaction_splits(
+        transaction.id,
+        [
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ],
+    )
+    await repository_session.commit()
+
+    updated = await repository.update_transaction(
+        transaction_id=transaction.id,
+        txn_date=date(2026, 5, 4),
+        payee_id=None,
+        memo="Updated transaction",
+        status="cleared",
+        reference="ref-1",
+    )
+    await repository_session.commit()
+    deleted = await repository.delete_transaction(transaction.id)
+
+    assert transaction.id > 1
+    assert updated is not None
+    assert updated.memo == "Updated transaction"
+    assert deleted is True
+
+
+@pytest.mark.asyncio
 async def test_transaction_repository_returns_none_for_missing_transaction(repository_session: AsyncSession) -> None:
     repository = TransactionRepository(repository_session)
 
@@ -450,3 +508,40 @@ async def test_transaction_repository_lists_account_register_rows(repository_ses
     transaction, split = rows[0]
     assert transaction.memo == "Initial opening balance"
     assert split.amount_minor == 500000
+
+
+@pytest.mark.asyncio
+async def test_transaction_repository_returns_payee_defaults(repository_session: AsyncSession) -> None:
+    repository_session.add(Payee(id=2, book_id=1, name="Corner Shop", kind="business", metadata_text=None))
+    await repository_session.commit()
+
+    await _insert_test_transaction(
+        repository_session,
+        transaction_id=30,
+        occurred_date=date(2026, 5, 1),
+        posted_date=date(2026, 5, 1),
+        memo="Older memo",
+        status="cleared",
+        payee_id=2,
+        splits=[(2, -1500, "Groceries")],
+    )
+    await repository_session.execute(text("UPDATE splits SET category_id = 1 WHERE tx_id = 30"))
+    await repository_session.commit()
+
+    defaults = await TransactionRepository(repository_session).get_payee_defaults(2, 2)
+
+    assert defaults == (1, "Older memo")
+
+
+@pytest.mark.asyncio
+async def test_transaction_repository_duplicates_and_bulk_mutates_transactions(repository_session: AsyncSession) -> None:
+    repository = TransactionRepository(repository_session)
+
+    duplicated = await repository.duplicate_transaction(1, date(2026, 5, 4))
+    voided = await repository.bulk_void_transactions([1])
+    deleted = await repository.bulk_delete_transactions([1])
+
+    assert duplicated is not None
+    assert duplicated.occurred_date == date(2026, 5, 4)
+    assert voided == 1
+    assert deleted == 1

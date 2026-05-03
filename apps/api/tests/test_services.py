@@ -17,7 +17,7 @@ from rekenraam_api.schemas.accounts import (
     AccountUpdateInput,
 )
 from rekenraam_api.schemas.register import RegisterEntry
-from rekenraam_api.schemas.transactions import TransactionListFilters
+from rekenraam_api.schemas.transactions import PayeeDefaults, TransactionListFilters, TransactionMutationInput
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.books import BookService
 from rekenraam_api.services.transactions import TransactionService
@@ -291,13 +291,63 @@ class StubTransactionRepository:
             return (await self.list_transactions())[0]
         return None
 
+    async def create_transaction(
+        self,
+        *,
+        book_id: int,
+        txn_date: datetime.date,
+        payee_id: int | None,
+        memo: str | None,
+        status: str,
+        reference: str | None,
+    ) -> Transaction:
+        return Transaction(
+            id=3,
+            book_id=book_id,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=reference,
+            created_at=self._created_at,
+        )
+
+    async def update_transaction(
+        self,
+        *,
+        transaction_id: int,
+        txn_date: datetime.date,
+        payee_id: int | None,
+        memo: str | None,
+        status: str,
+        reference: str | None,
+    ) -> Transaction | None:
+        if transaction_id != 1:
+            return None
+        return Transaction(
+            id=1,
+            book_id=1,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=reference,
+            created_at=self._created_at,
+        )
+
+    async def delete_transaction(self, transaction_id: int) -> bool:
+        return transaction_id == 1
+
     async def list_splits_for_transaction_ids(self, transaction_ids: list[int]) -> list[Split]:
-        if 1 not in transaction_ids:
+        if 1 not in transaction_ids and 3 not in transaction_ids:
             return []
+        tx_id = 3 if 3 in transaction_ids else 1
         return [
             Split(
                 id=1,
-                tx_id=1,
+                tx_id=tx_id,
                 account_id=2,
                 commodity_id=1,
                 amount_minor=500000,
@@ -311,7 +361,7 @@ class StubTransactionRepository:
             ),
             Split(
                 id=2,
-                tx_id=1,
+                tx_id=tx_id,
                 account_id=3,
                 commodity_id=1,
                 amount_minor=-500000,
@@ -324,6 +374,30 @@ class StubTransactionRepository:
                 created_at=self._created_at,
             ),
         ]
+
+    async def replace_transaction_splits(self, transaction_id: int, splits: list[dict[str, int | str | None]]) -> list[Split]:
+        return await self.list_splits_for_transaction_ids([transaction_id])
+
+    async def duplicate_transaction(self, transaction_id: int, today: datetime.date) -> Transaction | None:
+        if transaction_id != 1:
+            return None
+        return Transaction(
+            id=4,
+            book_id=1,
+            occurred_date=today,
+            posted_date=today,
+            payee_id=None,
+            memo="Initial opening balance",
+            status="uncleared",
+            reference=None,
+            created_at=self._created_at,
+        )
+
+    async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
+        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+
+    async def bulk_delete_transactions(self, transaction_ids: list[int]) -> int:
+        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
 
     async def list_account_register_splits(self, account_id: int) -> list[tuple[Transaction, Split]]:
         if account_id != 2:
@@ -348,6 +422,11 @@ class StubTransactionRepository:
             created_at=self._created_at,
         )
         return [(transaction, split)]
+
+    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> tuple[int | None, str | None]:
+        if payee_id == 1 and account_id in {None, 2}:
+            return 1, "Pending groceries"
+        return None, None
 
 
 @pytest.mark.asyncio
@@ -621,6 +700,52 @@ async def test_transaction_service_returns_none_for_missing_transaction() -> Non
 
 
 @pytest.mark.asyncio
+async def test_transaction_service_creates_updates_and_deletes_transactions() -> None:
+    service = TransactionService(StubTransactionRepository())
+    input = TransactionMutationInput(
+        book_id=1,
+        txn_date=datetime(2026, 5, 3, tzinfo=UTC).date(),
+        payee_id=None,
+        memo="Created",
+        status="uncleared",
+        reference=None,
+        splits=(
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ),
+    )
+
+    created = await service.create_transaction(input)
+    updated = await service.update_transaction(1, input)
+    deleted = await service.delete_transaction(1)
+
+    assert created.id == 3
+    assert updated is not None
+    assert updated.id == 1
+    assert deleted is True
+
+
+@pytest.mark.asyncio
 async def test_transaction_service_builds_account_register_running_balance() -> None:
     service = TransactionService(StubTransactionRepository())
 
@@ -644,3 +769,26 @@ async def test_transaction_service_builds_account_register_running_balance() -> 
             created_at=StubTransactionRepository._created_at,
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_returns_payee_defaults() -> None:
+    service = TransactionService(StubTransactionRepository())
+
+    result = await service.get_payee_defaults(1, 2)
+
+    assert result == PayeeDefaults(category_id=1, memo="Pending groceries")
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_duplicates_and_bulk_mutates_transactions() -> None:
+    service = TransactionService(StubTransactionRepository())
+
+    duplicated = await service.duplicate_transaction(1, datetime(2026, 5, 4, tzinfo=UTC).date())
+    voided = await service.bulk_void_transactions([1, 2, 999])
+    deleted = await service.bulk_delete_transactions([1, 2, 999])
+
+    assert duplicated is not None
+    assert duplicated.id == 4
+    assert voided == 2
+    assert deleted == 2

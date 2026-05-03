@@ -48,6 +48,33 @@ class SplitEntry(BaseModel):
     created_at: datetime
 
 
+class TransactionSplitInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    account_id: int
+    commodity_id: int
+    amount_minor: int
+    category_id: int | None
+    tag_id: int | None
+    person_id: int | None
+    project_id: int | None
+    share_bps: int | None
+    memo: str | None
+
+
+class TransactionMutationInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    txn_date: date
+    payee_id: int | None
+    memo: str | None
+    status: str
+    reference: str | None
+    import_id: str | None = None
+    splits: tuple[TransactionSplitInput, ...]
+
+
 class TransactionSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -61,3 +88,10 @@ class TransactionSummary(BaseModel):
     reference: str | None
     created_at: datetime
     splits: tuple[SplitEntry, ...]
+
+
+class PayeeDefaults(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    category_id: int | None
+    memo: str | None
