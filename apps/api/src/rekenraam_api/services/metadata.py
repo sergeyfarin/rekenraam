@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy.exc import IntegrityError
 
 from rekenraam_api.repositories.metadata import MetadataRepository
@@ -5,6 +7,10 @@ from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
     CategoryUpdateInput,
+    CurrencyActivationInput,
+    CurrencyCreateInput,
+    CurrencySummary,
+    CurrencyUpdateInput,
     CommodityUpdateInput,
     CommoditySummary,
     CountrySummary,
@@ -69,6 +75,100 @@ class MetadataService:
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
+
+    async def list_currencies(self, book_id: int) -> list[CurrencySummary]:
+        rows, base_currency_code = await self._repository.list_currencies(book_id)
+        return [self._to_currency_summary(row, base_currency_code) for row in rows if row.symbol is not None]
+
+    async def create_currency(self, input: CurrencyCreateInput) -> CurrencySummary:
+        symbol = input.symbol.strip().upper()
+        name = input.name.strip()
+        if not symbol:
+            raise ValueError("symbol is required")
+        if not name:
+            raise ValueError("name is required")
+        if input.scale < 0:
+            raise ValueError("scale must be non-negative")
+
+        row = await self._repository.create_currency(
+            book_id=input.book_id,
+            symbol=symbol,
+            name=name,
+            scale=input.scale,
+            metadata=self._currency_metadata_text(display_symbol=input.display_symbol, is_active=True),
+        )
+        return self._to_currency_summary(row, None)
+
+    async def update_currency(self, currency_id: int, input: CurrencyUpdateInput) -> CurrencySummary | None:
+        symbol = input.symbol.strip().upper()
+        name = input.name.strip()
+        if not symbol:
+            raise ValueError("symbol is required")
+        if not name:
+            raise ValueError("name is required")
+        if input.scale < 0:
+            raise ValueError("scale must be non-negative")
+
+        existing_rows, existing_base_currency_code = await self._repository.list_currencies(input.book_id)
+        existing_row = next((existing for existing in existing_rows if existing.id == currency_id), None)
+        if existing_row is None:
+            return None
+
+        row = await self._repository.update_currency(
+            currency_id=currency_id,
+            symbol=symbol,
+            name=name,
+            scale=input.scale,
+            metadata=self._currency_metadata_text(
+                existing_metadata_text=existing_row.metadata_text,
+                display_symbol=input.display_symbol,
+                is_active=self._currency_is_active(existing_row, existing_base_currency_code),
+            ),
+        )
+        if row is None:
+            return None
+        rows, base_currency_code = await self._repository.list_currencies(input.book_id)
+        effective_base_currency = base_currency_code
+        if row.symbol is not None and any(existing.id == row.id for existing in rows):
+            return self._to_currency_summary(row, effective_base_currency)
+        return self._to_currency_summary(row, effective_base_currency)
+
+    async def set_default_currency(self, *, book_id: int, currency_id: int) -> CurrencySummary | None:
+        row = await self._repository.set_default_currency(book_id=book_id, currency_id=currency_id)
+        if row is None:
+            return None
+        row = (
+            await self._repository.set_currency_active(
+                currency_id=currency_id,
+                metadata=self._currency_metadata_text(
+                    existing_metadata_text=row.metadata_text,
+                    display_symbol=self._extract_display_symbol(row.metadata_text),
+                    is_active=True,
+                ),
+            )
+            or row
+        )
+        return self._to_currency_summary(row, row.symbol, None)
+
+    async def set_currency_active(self, *, currency_id: int, input: CurrencyActivationInput) -> CurrencySummary | None:
+        rows, base_currency_code = await self._repository.list_currencies(input.book_id)
+        existing_row = next((existing for existing in rows if existing.id == currency_id), None)
+        if existing_row is None or existing_row.symbol is None:
+            return None
+        if not input.is_active and base_currency_code is not None and existing_row.symbol == base_currency_code:
+            raise ValueError("default currency must remain active")
+
+        row = await self._repository.set_currency_active(
+            currency_id=currency_id,
+            metadata=self._currency_metadata_text(
+                existing_metadata_text=existing_row.metadata_text,
+                display_symbol=self._extract_display_symbol(existing_row.metadata_text),
+                is_active=input.is_active,
+            ),
+        )
+        if row is None:
+            return None
+        return self._to_currency_summary(row, base_currency_code, None)
 
     async def list_countries(self) -> list[CountrySummary]:
         rows = await self._repository.list_countries()
@@ -355,6 +455,75 @@ class MetadataService:
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
+
+    @classmethod
+    def _to_currency_summary(
+        cls,
+        row: object,
+        base_currency_code: str | None,
+        display_symbol_override: str | None = None,
+    ) -> CurrencySummary:
+        display_symbol = display_symbol_override if display_symbol_override not in {None, ""} else cls._extract_display_symbol(row.metadata_text)
+        if display_symbol in {None, ""}:
+            display_symbol = row.symbol
+        return CurrencySummary(
+            id=row.id,
+            book_id=row.book_id,
+            symbol=row.symbol,
+            display_symbol=display_symbol,
+            name=row.name,
+            scale=row.scale,
+            is_active=cls._currency_is_active(row, base_currency_code),
+            is_default=base_currency_code is not None and row.symbol == base_currency_code,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    @classmethod
+    def _currency_is_active(cls, row: object, base_currency_code: str | None) -> bool:
+        if row.symbol is not None and base_currency_code is not None and row.symbol == base_currency_code:
+            return True
+        is_active = cls._parse_currency_metadata(row.metadata_text).get("is_active")
+        if isinstance(is_active, bool):
+            return is_active
+        return True
+
+    @classmethod
+    def _extract_display_symbol(cls, metadata_text: str | None) -> str | None:
+        payload = cls._parse_currency_metadata(metadata_text)
+        display_symbol = payload.get("display_symbol")
+        if isinstance(display_symbol, str) and display_symbol.strip():
+            return display_symbol
+        return None
+
+    @staticmethod
+    def _parse_currency_metadata(metadata_text: str | None) -> dict[str, object]:
+        if metadata_text is None:
+            return {}
+        try:
+            payload = json.loads(metadata_text)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return dict(payload)
+
+    @classmethod
+    def _currency_metadata_text(
+        cls,
+        *,
+        existing_metadata_text: str | None = None,
+        display_symbol: str | None,
+        is_active: bool,
+    ) -> str:
+        payload = cls._parse_currency_metadata(existing_metadata_text)
+        cleaned_display_symbol = display_symbol.strip() if display_symbol is not None else ""
+        if cleaned_display_symbol:
+            payload["display_symbol"] = cleaned_display_symbol
+        else:
+            payload.pop("display_symbol", None)
+        payload["is_active"] = is_active
+        return json.dumps(payload)
 
     @staticmethod
     def _clean_optional_text(value: str | None) -> str | None:

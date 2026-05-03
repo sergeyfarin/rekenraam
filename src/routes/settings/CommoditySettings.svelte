@@ -267,12 +267,15 @@
   async function toggleCurrencyActive(currency: Currency) {
     currencyError = "";
     currencyStatus = "";
+    busy = true;
     try {
-      await toggleCurrencyActiveCommand(currency.id);
-      currencyStatus = `Currency ${currency.symbol} ${currency.is_active ? "deactivated" : "activated"}.`;
+      await toggleCurrencyActiveCommand(1, currency.id, !currency.is_active);
+      currencyStatus = `${currency.symbol} ${currency.is_active ? 'deactivated' : 'activated'}.`;
       await loadCurrencies();
     } catch (e) {
-      currencyError = `Failed to toggle currency: ${String(e)}`;
+      currencyError = `Failed to ${currency.is_active ? 'deactivate' : 'activate'} currency: ${String(e)}`;
+    } finally {
+      busy = false;
     }
   }
 
@@ -318,6 +321,7 @@
       if (editingCurrency) {
         await saveCurrencyCommand({
           id: editingCurrency.id,
+          book_id: 1,
           symbol: newCurrency.symbol,
           display_symbol: newCurrency.display_symbol || null,
           name: newCurrency.name,
@@ -331,7 +335,6 @@
           display_symbol: newCurrency.display_symbol || null,
           name: newCurrency.name,
           scale: newCurrency.scale,
-          is_active: true,
         }, false);
         currencyStatus = "Currency created.";
       }
@@ -671,7 +674,7 @@
     <!-- Currencies Sub-tab -->
     {#if commoditiesSubTab === 'currencies'}
       <div class="flex justify-between items-center mb-4">
-        <p class="text-sm text-muted-foreground">Manage active currencies and set your default currency. The default currency is used for reports and conversions.</p>
+        <p class="text-sm text-muted-foreground">Manage active currencies and set your default currency. Inactive currencies stay visible here but are excluded from FX entry and refresh flows. The default currency always remains active.</p>
         <Button onclick={openNewCurrency} disabled={busy} size="sm">Add Currency</Button>
       </div>
       {#if currencyStatus}
@@ -711,10 +714,10 @@
               <Table.Cell class="text-right">
                 <Button variant="ghost" size="sm" onclick={() => openEditCurrency(c)}>Edit</Button>
                 {#if !c.is_default}
+                  <Button variant="ghost" size="sm" onclick={() => toggleCurrencyActive(c)}>{c.is_active ? 'Deactivate' : 'Activate'}</Button>
+                {/if}
+                {#if !c.is_default}
                   <Button variant="ghost" size="sm" onclick={() => setDefaultCurrency(c)}>Set Default</Button>
-                  <Button variant="ghost" size="sm" onclick={() => toggleCurrencyActive(c)}>
-                    {c.is_active ? 'Deactivate' : 'Activate'}
-                  </Button>
                 {/if}
               </Table.Cell>
             </Table.Row>

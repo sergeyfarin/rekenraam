@@ -26,6 +26,48 @@ class CommodityUpdateInput(BaseModel):
     metadata: str | None
 
 
+class CurrencySummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    book_id: int
+    symbol: str
+    display_symbol: str | None
+    name: str
+    scale: int
+    is_active: bool
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CurrencyCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    symbol: str
+    display_symbol: str | None = None
+    name: str
+    scale: int = 2
+
+
+class CurrencyUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    symbol: str
+    display_symbol: str | None = None
+    name: str
+    scale: int
+
+
+class CurrencyActivationInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    is_active: bool
+
+
 class CountrySummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 

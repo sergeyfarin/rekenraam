@@ -4,6 +4,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
 
 
@@ -30,6 +31,92 @@ class MetadataRepository:
 
         commodity.symbol = symbol
         commodity.name = name
+        commodity.metadata_text = metadata
+        commodity.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(commodity)
+        return commodity
+
+    async def list_currencies(self, book_id: int) -> tuple[list[Commodity], str | None]:
+        statement: Select[tuple[Commodity]] = (
+            select(Commodity)
+            .where(Commodity.book_id == book_id, Commodity.kind == "currency")
+            .order_by(Commodity.symbol.asc(), Commodity.id.asc())
+        )
+        result = await self._session.execute(statement)
+        base_currency_code = await self._session.scalar(select(Book.base_currency_code).where(Book.id == book_id))
+        return list(result.scalars().all()), base_currency_code
+
+    async def create_currency(self, *, book_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity:
+        duplicate = await self._session.scalar(
+            select(Commodity.id).where(Commodity.book_id == book_id, Commodity.kind == "currency", Commodity.symbol == symbol)
+        )
+        if duplicate is not None:
+            raise ValueError("currency with this symbol already exists")
+
+        commodity = Commodity(book_id=book_id, kind="currency", symbol=symbol, name=name, scale=scale, metadata_text=metadata)
+        self._session.add(commodity)
+        await self._session.commit()
+        await self._session.refresh(commodity)
+        return commodity
+
+    async def update_currency(self, *, currency_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity | None:
+        commodity = await self._session.get(Commodity, currency_id)
+        if commodity is None:
+            return None
+        if commodity.kind != "currency":
+            raise ValueError("currency not found")
+
+        duplicate = await self._session.scalar(
+            select(Commodity.id).where(
+                Commodity.book_id == commodity.book_id,
+                Commodity.kind == "currency",
+                Commodity.symbol == symbol,
+                Commodity.id != currency_id,
+            )
+        )
+        if duplicate is not None:
+            raise ValueError("currency with this symbol already exists")
+
+        previous_symbol = commodity.symbol
+        commodity.symbol = symbol
+        commodity.name = name
+        commodity.scale = scale
+        commodity.metadata_text = metadata
+        commodity.updated_at = datetime.now(UTC)
+
+        if previous_symbol and previous_symbol != symbol:
+            book = await self._session.get(Book, commodity.book_id)
+            if book is not None and book.base_currency_code == previous_symbol:
+                book.base_currency_code = symbol
+                book.updated_at = datetime.now(UTC)
+
+        await self._session.commit()
+        await self._session.refresh(commodity)
+        return commodity
+
+    async def set_default_currency(self, *, book_id: int, currency_id: int) -> Commodity | None:
+        commodity = await self._session.get(Commodity, currency_id)
+        if commodity is None or commodity.kind != "currency" or commodity.book_id != book_id:
+            return None
+        if commodity.symbol is None:
+            raise ValueError("currency symbol is required")
+
+        book = await self._session.get(Book, book_id)
+        if book is None:
+            return None
+
+        book.base_currency_code = commodity.symbol
+        book.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(commodity)
+        return commodity
+
+    async def set_currency_active(self, *, currency_id: int, metadata: str | None) -> Commodity | None:
+        commodity = await self._session.get(Commodity, currency_id)
+        if commodity is None or commodity.kind != "currency":
+            return None
+
         commodity.metadata_text = metadata
         commodity.updated_at = datetime.now(UTC)
         await self._session.commit()

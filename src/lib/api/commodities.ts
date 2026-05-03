@@ -1,4 +1,4 @@
-import { apiPut, invokeTauri } from "$lib/api/client";
+import { apiGet, apiPost, apiPut, invokeTauri } from "$lib/api/client";
 
 export interface CommodityAutocompleteOption {
 	id: number;
@@ -38,7 +38,7 @@ export async function autocompleteCommodities(
 }
 
 export async function listCurrencies<T>(bookId = 1): Promise<T> {
-	return invokeTauri<T>("list_currencies", { bookId });
+	return apiGet<T>(`/currencies?book_id=${bookId}`);
 }
 
 export async function renameCommoditySymbol(input: Record<string, unknown>): Promise<void> {
@@ -50,16 +50,25 @@ export async function renameCommoditySymbol(input: Record<string, unknown>): Pro
 	await apiPut(`/commodities/${commodityId}`, input);
 }
 
-export async function toggleCurrencyActive(currencyId: number): Promise<void> {
-	await invokeTauri("toggle_currency_active", { currencyId });
+export async function toggleCurrencyActive(bookId: number, currencyId: number, isActive: boolean): Promise<void> {
+	await apiPost(`/currencies/${currencyId}/activation`, { book_id: bookId, is_active: isActive });
 }
 
 export async function setDefaultCurrency(bookId: number, currencyId: number): Promise<void> {
-	await invokeTauri("set_default_currency", { bookId, currencyId });
+	await apiPost(`/currencies/${currencyId}/default?book_id=${bookId}`, {});
 }
 
 export async function saveCurrency(currency: Record<string, unknown>, isUpdate: boolean): Promise<void> {
-	await invokeTauri(isUpdate ? "update_currency" : "create_currency", { currency });
+	if (isUpdate) {
+		const currencyId = currency["id"];
+		if (typeof currencyId !== "number") {
+			throw new Error("currency id is required");
+		}
+		await apiPut(`/currencies/${currencyId}`, currency);
+		return;
+	}
+
+	await apiPost("/currencies", currency);
 }
 
 export async function listFxRatesDaily<T>(bookId = 1, limit = 100): Promise<T> {

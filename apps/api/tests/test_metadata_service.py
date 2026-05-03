@@ -5,6 +5,9 @@ import pytest
 from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
 from rekenraam_api.schemas.metadata import (
     CategoryUpdateInput,
+    CurrencyActivationInput,
+    CurrencyCreateInput,
+    CurrencyUpdateInput,
     CommodityUpdateInput,
     InstitutionCreateInput,
     InstitutionUpdateInput,
@@ -44,6 +47,93 @@ class StubMetadataRepository:
             kind="currency",
             symbol=symbol,
             name=name,
+            scale=2,
+            metadata_text=metadata,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def list_currencies(self, book_id: int) -> tuple[list[Commodity], str | None]:
+        return (
+            [
+                Commodity(
+                    id=1,
+                    book_id=book_id,
+                    kind="currency",
+                    symbol="USD",
+                    name="US Dollar",
+                    scale=2,
+                    metadata_text='{"display_symbol":"USD","is_active":true}',
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+                Commodity(
+                    id=2,
+                    book_id=book_id,
+                    kind="currency",
+                    symbol="EUR",
+                    name="Euro",
+                    scale=2,
+                    metadata_text='{"display_symbol":"EUR","is_active":false}',
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+            ],
+            "USD",
+        )
+
+    async def create_currency(self, *, book_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity:
+        return Commodity(
+            id=2,
+            book_id=book_id,
+            kind="currency",
+            symbol=symbol,
+            name=name,
+            scale=scale,
+            metadata_text=metadata,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def update_currency(self, *, currency_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity | None:
+        if currency_id != 1:
+            return None
+        return Commodity(
+            id=currency_id,
+            book_id=1,
+            kind="currency",
+            symbol=symbol,
+            name=name,
+            scale=scale,
+            metadata_text=metadata,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def set_default_currency(self, *, book_id: int, currency_id: int) -> Commodity | None:
+        if currency_id != 1:
+            return None
+        return Commodity(
+            id=1,
+            book_id=book_id,
+            kind="currency",
+            symbol="USD",
+            name="US Dollar",
+            scale=2,
+            metadata_text='{"display_symbol":"USD","is_active":true}',
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def set_currency_active(self, *, currency_id: int, metadata: str | None) -> Commodity | None:
+        if currency_id not in {1, 2}:
+            return None
+        return Commodity(
+            id=currency_id,
+            book_id=1,
+            kind="currency",
+            symbol="USD" if currency_id == 1 else "EUR",
+            name="US Dollar" if currency_id == 1 else "Euro",
             scale=2,
             metadata_text=metadata,
             created_at=self._created_at,
@@ -212,6 +302,7 @@ async def test_metadata_service_maps_reference_data() -> None:
     service = MetadataService(StubMetadataRepository())
 
     commodities = await service.list_commodities()
+    currencies = await service.list_currencies(1)
     countries = await service.list_countries()
     institutions = await service.list_institutions()
     categories = await service.list_categories()
@@ -222,6 +313,9 @@ async def test_metadata_service_maps_reference_data() -> None:
 
     assert commodities[0].name == "US Dollar"
     assert commodities[0].symbol == "USD"
+    assert currencies[0].is_default is True
+    assert currencies[0].is_active is True
+    assert currencies[1].is_active is False
     assert countries == []
     assert institutions[0].routing == "123456789"
     assert institutions[0].website == "https://example.test"
@@ -240,6 +334,15 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
         1,
         CommodityUpdateInput(book_id=1, symbol="USDX", name="US Dollar Updated", metadata="Primary currency"),
     )
+    created_currency = await service.create_currency(
+        CurrencyCreateInput(book_id=1, symbol="EUR", display_symbol="EUR", name="Euro", scale=2)
+    )
+    updated_currency = await service.update_currency(
+        1,
+        CurrencyUpdateInput(book_id=1, symbol="USD", display_symbol="USD", name="US Dollar", scale=2),
+    )
+    default_currency = await service.set_default_currency(book_id=1, currency_id=1)
+    activated_currency = await service.set_currency_active(currency_id=2, input=CurrencyActivationInput(book_id=1, is_active=True))
 
     institution = await service.create_institution(
         InstitutionCreateInput(
@@ -277,6 +380,12 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
 
     assert commodity is not None
     assert commodity.symbol == "USDX"
+    assert created_currency.symbol == "EUR"
+    assert updated_currency is not None
+    assert updated_currency.is_default is True
+    assert default_currency is not None
+    assert activated_currency is not None
+    assert activated_currency.is_active is True
     assert institution.name == "New Bank"
     assert institution.routing == "111222333"
     assert updated_institution is not None
@@ -290,4 +399,12 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
     assert await service.delete_category(1) is True
     assert await service.delete_payee(1) is True
     assert await service.delete_tag(1) is True
+
+
+@pytest.mark.asyncio
+async def test_metadata_service_rejects_deactivating_default_currency() -> None:
+    service = MetadataService(StubMetadataRepository())
+
+    with pytest.raises(ValueError, match="default currency must remain active"):
+        await service.set_currency_active(currency_id=1, input=CurrencyActivationInput(book_id=1, is_active=False))
     assert await service.delete_institution(1) is True

@@ -34,6 +34,40 @@ async def test_metadata_repository_updates_commodity(repository_session: AsyncSe
 
 
 @pytest.mark.asyncio
+async def test_metadata_repository_lists_creates_updates_and_sets_default_currency(repository_session: AsyncSession) -> None:
+    repository = MetadataRepository(repository_session)
+
+    currencies, base_currency_code = await repository.list_currencies(1)
+
+    assert [currency.symbol for currency in currencies] == ["USD"]
+    assert base_currency_code == "USD"
+
+    created = await repository.create_currency(book_id=1, symbol="EUR", name="Euro", scale=2, metadata='{"display_symbol":"EUR"}')
+    assert created.symbol == "EUR"
+
+    updated = await repository.update_currency(
+        currency_id=created.id,
+        symbol="EUR",
+        name="Euro Updated",
+        scale=2,
+        metadata='{"display_symbol":"EUR"}',
+    )
+    assert updated is not None
+    assert updated.name == "Euro Updated"
+    assert updated.metadata_text == '{"display_symbol":"EUR"}'
+
+    default_currency = await repository.set_default_currency(book_id=1, currency_id=created.id)
+    assert default_currency is not None
+
+    _, updated_base_currency_code = await repository.list_currencies(1)
+    assert updated_base_currency_code == "EUR"
+
+    deactivated = await repository.set_currency_active(currency_id=created.id, metadata='{"display_symbol":"EUR","is_active":false}')
+    assert deactivated is not None
+    assert deactivated.metadata_text == '{"display_symbol":"EUR","is_active":false}'
+
+
+@pytest.mark.asyncio
 async def test_metadata_repository_lists_empty_countries_and_institutions(repository_session: AsyncSession) -> None:
     repository = MetadataRepository(repository_session)
 

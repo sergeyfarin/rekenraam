@@ -24,6 +24,8 @@ from rekenraam_api.schemas.metadata import (
     CategorySummary,
     CommoditySummary,
     CountrySummary,
+    CurrencyActivationInput,
+    CurrencySummary,
     InstitutionSummary,
     PayeeSummary,
     PersonSummary,
@@ -579,6 +581,84 @@ class StubMetadataService:
             updated_at=self._created_at,
         )
 
+    async def list_currencies(self, book_id: int) -> list[CurrencySummary]:
+        return [
+            CurrencySummary(
+                id=1,
+                book_id=book_id,
+                symbol="USD",
+                display_symbol="USD",
+                name="US Dollar",
+                scale=2,
+                is_active=True,
+                is_default=True,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
+        ]
+
+    async def create_currency(self, input: object) -> CurrencySummary:
+        return CurrencySummary(
+            id=2,
+            book_id=1,
+            symbol="EUR",
+            display_symbol="EUR",
+            name="Euro",
+            scale=2,
+            is_active=True,
+            is_default=False,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def update_currency(self, currency_id: int, input: object) -> CurrencySummary | None:
+        if currency_id != 1:
+            return None
+        return CurrencySummary(
+            id=1,
+            book_id=1,
+            symbol="USD",
+            display_symbol="USD",
+            name="US Dollar",
+            scale=2,
+            is_active=True,
+            is_default=True,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def set_default_currency(self, *, book_id: int, currency_id: int) -> CurrencySummary | None:
+        if currency_id != 1:
+            return None
+        return CurrencySummary(
+            id=1,
+            book_id=book_id,
+            symbol="USD",
+            display_symbol="USD",
+            name="US Dollar",
+            scale=2,
+            is_active=True,
+            is_default=True,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def set_currency_active(self, *, currency_id: int, input: CurrencyActivationInput) -> CurrencySummary | None:
+        if currency_id != 1:
+            return None
+        return CurrencySummary(
+            id=1,
+            book_id=input.book_id,
+            symbol="USD",
+            display_symbol="USD",
+            name="US Dollar",
+            scale=2,
+            is_active=input.is_active,
+            is_default=True,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
     async def list_countries(self) -> list[CountrySummary]:
         return []
 
@@ -1008,6 +1088,7 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
     app.dependency_overrides[get_metadata_service] = StubMetadataService
 
     commodities_response = await client.get("/api/v1/commodities")
+    currencies_response = await client.get("/api/v1/currencies")
     countries_response = await client.get("/api/v1/countries")
     institutions_response = await client.get("/api/v1/institutions")
     categories_response = await client.get("/api/v1/categories")
@@ -1018,6 +1099,8 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
 
     assert commodities_response.status_code == 200
     assert commodities_response.json()[0]["name"] == "US Dollar"
+    assert currencies_response.status_code == 200
+    assert currencies_response.json()[0]["is_default"] is True
     assert countries_response.status_code == 200
     assert countries_response.json() == []
     assert institutions_response.status_code == 200
@@ -1042,6 +1125,20 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags
     commodity_response = await client.put(
         "/api/v1/commodities/1",
         json={"book_id": 1, "symbol": "USDX", "name": "US Dollar Updated", "metadata": "Primary currency"},
+    )
+    list_currencies_response = await client.get("/api/v1/currencies")
+    create_currency_response = await client.post(
+        "/api/v1/currencies",
+        json={"book_id": 1, "symbol": "EUR", "display_symbol": "EUR", "name": "Euro", "scale": 2},
+    )
+    update_currency_response = await client.put(
+        "/api/v1/currencies/1",
+        json={"book_id": 1, "symbol": "USD", "display_symbol": "USD", "name": "US Dollar", "scale": 2},
+    )
+    default_currency_response = await client.post("/api/v1/currencies/1/default")
+    activate_currency_response = await client.post(
+        "/api/v1/currencies/1/activation",
+        json={"book_id": 1, "is_active": True},
     )
     create_institution_response = await client.post(
         "/api/v1/institutions",
@@ -1086,6 +1183,16 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags
 
     assert commodity_response.status_code == 200
     assert commodity_response.json()["symbol"] == "USDX"
+    assert list_currencies_response.status_code == 200
+    assert list_currencies_response.json()[0]["symbol"] == "USD"
+    assert create_currency_response.status_code == 200
+    assert create_currency_response.json()["symbol"] == "EUR"
+    assert update_currency_response.status_code == 200
+    assert update_currency_response.json()["symbol"] == "USD"
+    assert default_currency_response.status_code == 200
+    assert default_currency_response.json()["is_default"] is True
+    assert activate_currency_response.status_code == 200
+    assert activate_currency_response.json()["is_active"] is True
     assert create_institution_response.status_code == 200
     assert create_institution_response.json()["routing"] == "111222333"
     assert update_institution_response.status_code == 200

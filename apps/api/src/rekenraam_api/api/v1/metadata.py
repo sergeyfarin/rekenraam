@@ -5,6 +5,10 @@ from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
     CategoryUpdateInput,
+    CurrencyActivationInput,
+    CurrencyCreateInput,
+    CurrencySummary,
+    CurrencyUpdateInput,
     CommodityUpdateInput,
     CommoditySummary,
     CountrySummary,
@@ -49,6 +53,73 @@ async def update_commodity(
     if commodity is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="commodity not found")
     return commodity
+
+
+@router.get("/currencies", response_model=list[CurrencySummary])
+async def list_currencies(
+    book_id: int = 1,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> list[CurrencySummary]:
+    return await metadata_service.list_currencies(book_id)
+
+
+@router.post("/currencies", response_model=CurrencySummary)
+async def create_currency(
+    input: CurrencyCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CurrencySummary:
+    try:
+        return await metadata_service.create_currency(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put("/currencies/{currency_id}", response_model=CurrencySummary)
+async def update_currency(
+    currency_id: int,
+    input: CurrencyUpdateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CurrencySummary:
+    try:
+        currency = await metadata_service.update_currency(currency_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if currency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="currency not found")
+    return currency
+
+
+@router.post("/currencies/{currency_id}/default", response_model=CurrencySummary)
+async def set_default_currency(
+    currency_id: int,
+    book_id: int = 1,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CurrencySummary:
+    try:
+        currency = await metadata_service.set_default_currency(book_id=book_id, currency_id=currency_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if currency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="currency not found")
+    return currency
+
+
+@router.post("/currencies/{currency_id}/activation", response_model=CurrencySummary)
+async def set_currency_active(
+    currency_id: int,
+    input: CurrencyActivationInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CurrencySummary:
+    try:
+        currency = await metadata_service.set_currency_active(currency_id=currency_id, input=input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if currency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="currency not found")
+    return currency
 
 
 @router.get("/countries", response_model=list[CountrySummary])
