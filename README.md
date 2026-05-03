@@ -80,7 +80,7 @@ curl http://localhost:8080/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0002_add_accounts"}
+{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0003_add_transactions"}
 ```
 
 The API now runs Alembic migrations automatically on startup.
@@ -96,10 +96,13 @@ make api-lint
 make api-typecheck
 make api-test
 make api-test-docker
+make api-test-postgres
 make api-up
 make api-health
 make api-books
 make api-accounts
+make api-accounts-tree
+make api-transactions
 make api-smoke
 make api-migrate-new NAME=add_accounts
 ```
@@ -109,6 +112,7 @@ If your Docker access requires elevation, override the Docker command:
 ```bash
 make DOCKER="sudo docker compose" api-up
 make CONTAINER_RUNTIME="sudo docker" api-test-docker
+make DEV_DOCKER="sudo docker compose -f compose.yaml -f compose.dev.yaml" api-dev-up
 ```
 
 First real read endpoint:
@@ -140,6 +144,8 @@ Accounts endpoints:
 ```bash
 curl http://localhost:8080/api/v1/accounts
 curl http://localhost:8080/api/v1/accounts/1
+curl http://localhost:8080/api/v1/accounts/tree
+curl http://localhost:8080/api/v1/transactions
 ```
 
 Example response fields:
@@ -157,6 +163,94 @@ Example response fields:
   "system_role": null,
   "created_at": "2026-05-03T00:00:00+00:00"
 }
+```
+
+Account tree response shape for frontend migration:
+
+```json
+[
+  {
+    "id": 1,
+    "parent_id": null,
+    "name": "Assets",
+    "account_type": "asset",
+    "commodity_id": 1,
+    "commodity_name": "USD",
+    "commodity_scale": 2,
+    "institution_name": null,
+    "country_name": null,
+    "balance_minor": 0,
+    "rollup_balance_minor": 500000,
+    "children": [
+      {
+        "id": 2,
+        "parent_id": 1,
+        "name": "Cash",
+        "account_type": "asset",
+        "commodity_id": 1,
+        "commodity_name": "USD",
+        "commodity_scale": 2,
+        "institution_name": null,
+        "country_name": null,
+        "balance_minor": 500000,
+        "rollup_balance_minor": 500000,
+        "children": []
+      }
+    ]
+  }
+]
+```
+
+Balances and rollups are now backed by seeded transaction/split data. They are
+still minimal and will need to grow with the full transaction parity work, but
+they are no longer structural placeholders.
+
+Transactions endpoint:
+
+```bash
+curl http://localhost:8080/api/v1/transactions
+```
+
+Example response shape:
+
+```json
+[
+  {
+    "id": 1,
+    "book_id": 1,
+    "occurred_date": "2026-05-01",
+    "posted_date": "2026-05-01",
+    "memo": "Initial opening balance",
+    "status": "cleared",
+    "splits": [
+      {"id": 1, "tx_id": 1, "account_id": 2, "amount_minor": 500000, "memo": "Opening cash balance"},
+      {"id": 2, "tx_id": 1, "account_id": 3, "amount_minor": -500000, "memo": "Opening equity offset"}
+    ]
+  }
+]
+```
+
+## Dev Container Workflow
+
+For day-to-day backend work, prefer the dev compose workflow over rebuilding the
+production API image on every code change.
+
+```bash
+make api-dev-up
+make api-dev-logs
+```
+
+This starts an `api-dev` container with:
+
+- bind-mounted `apps/api` source
+- `uvicorn --reload`
+- Dockerized Postgres
+- no rebuild required for normal Python code edits
+
+Real repository tests against ephemeral PostgreSQL are available via:
+
+```bash
+make api-test-postgres
 ```
 
 **Linux / WSL2 prerequisites** (required for Tauri's native file dialogs):

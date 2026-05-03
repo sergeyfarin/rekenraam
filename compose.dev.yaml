@@ -1,0 +1,26 @@
+services:
+  api-dev:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: ${API_PORT:-8080}
+      POSTGRES_DB: ${POSTGRES_DB:-rekenraam}
+      POSTGRES_USER: ${POSTGRES_USER:-rekenraam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rekenraam}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - ./apps/api:/app

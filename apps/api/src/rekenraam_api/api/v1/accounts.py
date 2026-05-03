@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from rekenraam_api.api.dependencies import get_account_service
-from rekenraam_api.schemas.accounts import AccountSummary
+from rekenraam_api.schemas.accounts import AccountSummary, AccountTreeNode
 from rekenraam_api.services.accounts import AccountService
 
 
@@ -11,6 +11,13 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 @router.get("", response_model=list[AccountSummary])
 async def list_accounts(account_service: AccountService = Depends(get_account_service)) -> list[AccountSummary]:
     return await account_service.list_accounts()
+
+
+@router.get("/tree", response_model=list[AccountTreeNode])
+async def list_account_tree(
+    account_service: AccountService = Depends(get_account_service),
+) -> list[AccountTreeNode]:
+    return await account_service.list_account_tree()
 
 
 @router.get("/{account_id}", response_model=AccountSummary)

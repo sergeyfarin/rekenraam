@@ -44,8 +44,8 @@ verified, the Tauri path and related files should be removed.
 Current evidence behind those statuses:
 
 - Python FastAPI scaffold is active and validated in Docker.
-- Alembic migrations `0001_initial_schema` and `0002_add_accounts` apply cleanly from an empty database.
-- Read-only books and accounts list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
+- Alembic migrations `0001_initial_schema`, `0002_add_accounts`, and `0003_add_transactions` apply cleanly from an empty database.
+- Read-only books, accounts list/detail/tree, and transactions list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
 - Parity tracking now lives in `docs/parity/desktop-to-python.md`.
 
 ## Executive Summary
@@ -415,6 +415,7 @@ Exit criteria:
 Progress note:
 
 - Docker reproducibility is working and covered by smoke validation.
+- Repository integration tests now run against ephemeral PostgreSQL.
 - CI wiring is still pending, so this stage is not fully complete.
 
 ### Stage 3: Define The Python Domain Rules Before Porting Features
@@ -446,6 +447,8 @@ Exit criteria:
 Progress note:
 
 - Frozen outbound schema models and repository/service separation exist for books and accounts.
+- Account tree response shape now exists so frontend migration can start against a stable HTTP contract before transaction balances migrate.
+- Minimal transaction and split read models now exist and drive account balances plus rollups.
 - Domain models, shared error taxonomy, and request context shape are still incomplete.
 
 ### Stage 4: Build A Parity Matrix Against Tauri
@@ -521,7 +524,9 @@ Progress note:
 
 - Books list/detail are verified.
 - Accounts list/detail are verified.
-- Accounts tree, balances, and frontend HTTP integration are still pending.
+- Accounts tree shape is now available and verified.
+- Transaction-backed balances and rollups are now verified on seeded data.
+- Broader transaction parity and frontend HTTP integration are still pending.
 
 ### Stage 6: Migrate Write Slices With Accounting Correctness First
 
@@ -702,7 +707,7 @@ Because accounts are the first real finance slice, use this sequence:
 7. Complete: add `/api/v1/accounts`.
 8. Complete: add `/api/v1/accounts/{id}`.
 9. Complete: add tests against seeded data.
-10. In progress: compare output to current desktop behavior on sample data and extend toward account tree plus balances.
+10. In progress: compare output to current desktop behavior on sample data and extend current transaction-backed balances toward richer metadata and parity cases.
 
 ## Testing Plan
 
@@ -716,12 +721,13 @@ Because accounts are the first real finance slice, use this sequence:
 Current implemented coverage:
 
 - pytest service tests for books and accounts mapping behavior, missing-record handling, and frozen outputs
-- pytest API tests for health, books list/detail, accounts list/detail, and 404 behavior using dependency overrides
-- Docker smoke coverage for migrations plus live `/api/v1/health`, `/api/v1/books`, `/api/v1/accounts`, and `/api/v1/accounts/{id}`
+- pytest service tests for books, accounts, and transactions mapping behavior, missing-record handling, and frozen outputs
+- pytest API tests for health, books list/detail, accounts list/detail/tree, transactions list/detail, and 404 behavior using dependency overrides
+- pytest repository tests against ephemeral PostgreSQL for books, accounts, transaction repositories, and seeded account balances
+- Docker smoke coverage for migrations plus live `/api/v1/health`, `/api/v1/books`, `/api/v1/accounts`, `/api/v1/accounts/tree`, `/api/v1/accounts/{id}`, and `/api/v1/transactions`
 
 Still missing:
 
-- repository tests against a real PostgreSQL session
 - dedicated migration test harness beyond the smoke script
 - parity fixtures comparing desktop and Python outputs on the same sample data
 
