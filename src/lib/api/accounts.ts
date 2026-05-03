@@ -1,4 +1,4 @@
-import { apiGetWithTauriFallback, apiPutWithTauriFallback } from "$lib/api/client";
+import { apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback } from "$lib/api/client";
 
 export type AccountTreeNode = {
   id: number;
@@ -59,6 +59,26 @@ export type AccountDirectiveSummary = {
   created_at: string;
 };
 
+export type AccountCreateInput = {
+  book_id: number;
+  parent_id: number | null;
+  account_type: string;
+  name: string;
+  commodity_id: number;
+  institution_id: number | null;
+  country_id: number | null;
+  number_last4: string | null;
+  is_closed: boolean;
+};
+
+export async function listAccounts(bookId = 1): Promise<AccountSummary[]> {
+  return apiGetWithTauriFallback<AccountSummary[]>(`/accounts`, "list_accounts", { bookId });
+}
+
+export async function createAccount(input: AccountCreateInput): Promise<AccountSummary> {
+  return apiPostWithTauriFallback<AccountSummary, AccountCreateInput>("/accounts", input, "create_account", { input });
+}
+
 export async function listAccountTree(bookId = 1): Promise<AccountTreeNode[]> {
   return apiGetWithTauriFallback<AccountTreeNode[]>(`/accounts/tree`, "get_account_tree", { bookId });
 }
@@ -106,5 +126,19 @@ export async function setAccountBookingPolicy(accountId: number, bookingPolicy: 
     { booking_policy: bookingPolicy },
     "set_account_booking_policy",
     { input: { account_id: accountId, booking_policy: bookingPolicy } }
+  );
+}
+
+export async function unlockAccountBalancings(
+  accountId: number,
+  fromDate: string,
+  reason: string | null,
+  confirm: boolean,
+): Promise<number> {
+  return apiPostWithTauriFallback<number, { from_date: string; reason: string | null; confirm: boolean }>(
+    `/accounts/${accountId}/balancings/unlock`,
+    { from_date: fromDate, reason, confirm },
+    "unlock_account_balancings",
+    { input: { account_id: accountId, from_date: fromDate, reason, confirm } },
   );
 }

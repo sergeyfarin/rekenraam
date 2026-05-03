@@ -63,6 +63,28 @@ class AccountBookingPolicyUpdate(BaseModel):
     booking_policy: str
 
 
+class AccountCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    parent_id: int | None
+    account_type: str
+    name: str
+    commodity_id: int
+    institution_id: int | None
+    country_id: int | None
+    number_last4: str | None
+    is_closed: bool
+
+
+class AccountBalancingUnlockInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    from_date: date
+    reason: str | None
+    confirm: bool
+
+
 class AccountTreeNode(BaseModel):
     model_config = ConfigDict(frozen=True)
 

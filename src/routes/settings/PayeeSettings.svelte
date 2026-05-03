@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listPayees, type PayeeSummary } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -8,28 +9,18 @@
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
 
-  type Payee = {
-    id: number;
-    book_id: number;
-    name: string;
-    kind: string;
-    metadata: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-
-  export let payees: Payee[] = [];
+  export let payees: PayeeSummary[] = [];
   export let busy = false;
 
   let payeeError = "";
   let payeeStatus = "";
-  let editingPayee: Payee | null = null;
+  let editingPayee: PayeeSummary | null = null;
   let newPayee = { name: "", kind: "person", metadata: "" };
   let showPayeeDialog = false;
 
   export async function loadPayees() {
     try {
-      payees = await invoke<Payee[]>("list_payees", { bookId: 1 });
+      payees = await listPayees(1);
     } catch (e) {
       payeeError = `Failed to load payees: ${String(e)}`;
     }
@@ -41,7 +32,7 @@
     showPayeeDialog = true;
   }
 
-  function openEditPayee(p: Payee) {
+  function openEditPayee(p: PayeeSummary) {
     editingPayee = p;
     newPayee = { name: p.name, kind: p.kind, metadata: p.metadata || "" };
     showPayeeDialog = true;
@@ -88,7 +79,7 @@
     }
   }
 
-  async function deletePayee(p: Payee) {
+  async function deletePayee(p: PayeeSummary) {
     if (!confirm(`Delete payee "${p.name}"?`)) return;
     payeeError = "";
     payeeStatus = "";

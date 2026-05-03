@@ -54,6 +54,16 @@ class CategorySummary(BaseModel):
     updated_at: datetime
 
 
+class CategoryCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    parent_id: int | None
+    name: str
+    kind: str
+    color: str | None
+
+
 class PayeeSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -66,6 +76,15 @@ class PayeeSummary(BaseModel):
     updated_at: datetime
 
 
+class PayeeCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    kind: str
+    metadata: str | None
+
+
 class TagSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -75,6 +94,14 @@ class TagSummary(BaseModel):
     color: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TagCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    color: str | None
 
 
 class PersonSummary(BaseModel):
@@ -89,6 +116,15 @@ class PersonSummary(BaseModel):
     updated_at: datetime
 
 
+class PersonCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    role: str
+    metadata: str | None
+
+
 class ProjectSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -99,3 +135,12 @@ class ProjectSummary(BaseModel):
     metadata: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    status: str
+    metadata: str | None

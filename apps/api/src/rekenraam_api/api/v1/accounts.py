@@ -6,7 +6,9 @@ from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingSummary,
+    AccountBalancingUnlockInput,
     AccountBookingPolicyUpdate,
+    AccountCreateInput,
     AccountDirectiveSummary,
     AccountSummary,
     AccountTreeNode,
@@ -21,6 +23,17 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 @router.get("", response_model=list[AccountSummary])
 async def list_accounts(account_service: AccountService = Depends(get_account_service)) -> list[AccountSummary]:
     return await account_service.list_accounts()
+
+
+@router.post("", response_model=AccountSummary)
+async def create_account(
+    input: AccountCreateInput,
+    account_service: AccountService = Depends(get_account_service),
+) -> AccountSummary:
+    try:
+        return await account_service.create_account(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
 @router.get("/balances", response_model=list[AccountBalanceSummary])
@@ -39,6 +52,23 @@ async def list_account_balancings(
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
     return await account_service.list_account_balancings(account_id)
+
+
+@router.post("/{account_id}/balancings/unlock", response_model=int)
+async def unlock_account_balancings(
+    account_id: int,
+    input: AccountBalancingUnlockInput,
+    account_service: AccountService = Depends(get_account_service),
+) -> int:
+    account = await account_service.get_account_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
+    try:
+        return await account_service.unlock_account_balancings(account_id, input.from_date, input.reason, input.confirm)
+    except ValueError as error:
+        message = str(error)
+        status_code = status.HTTP_409_CONFLICT if message == "unlock not confirmed" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=message) from error
 
 
 @router.get("/{account_id}/directives", response_model=list[AccountDirectiveSummary])

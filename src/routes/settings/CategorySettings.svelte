@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listCategories, type CategorySummary } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -8,29 +9,18 @@
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
 
-  type Category = {
-    id: number;
-    book_id: number;
-    parent_id: number | null;
-    name: string;
-    kind: string;
-    color: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-
-  export let categories: Category[] = [];
+  export let categories: CategorySummary[] = [];
   export let busy = false;
 
   let categoryError = "";
   let categoryStatus = "";
-  let editingCategory: Category | null = null;
+  let editingCategory: CategorySummary | null = null;
   let newCategory = { name: "", kind: "expense", color: "", parent_id: null as number | null };
   let showCategoryDialog = false;
 
   export async function loadCategories() {
     try {
-      categories = await invoke<Category[]>("list_categories", { bookId: 1 });
+      categories = await listCategories(1);
     } catch (e) {
       categoryError = `Failed to load categories: ${String(e)}`;
     }
@@ -42,7 +32,7 @@
     showCategoryDialog = true;
   }
 
-  function openEditCategory(cat: Category) {
+  function openEditCategory(cat: CategorySummary) {
     editingCategory = cat;
     newCategory = { name: cat.name, kind: cat.kind, color: cat.color || "", parent_id: cat.parent_id };
     showCategoryDialog = true;
@@ -91,7 +81,7 @@
     }
   }
 
-  async function deleteCategory(cat: Category) {
+  async function deleteCategory(cat: CategorySummary) {
     if (!confirm(`Delete category "${cat.name}"?`)) return;
     categoryError = "";
     categoryStatus = "";

@@ -22,8 +22,18 @@ Python-first server architecture with strong correctness guarantees enforced by:
 - Ruff
 - frozen data structures for domain and DTO models
 
-The end state is a web-first application. Once functionality is migrated and
-verified, the Tauri path and related files should be removed.
+The end state is a Python + SvelteKit web application only. There is no target
+desktop product in this migration plan. Tauri exists only as a temporary
+migration reference and compatibility bridge until the required behavior has
+been migrated or consciously dropped. Once that work is verified, the Tauri
+path and related files should be removed.
+
+Global instruction for all stages:
+
+- do not preserve a desktop runtime as a product goal
+- do not introduce new Tauri-dependent architecture or workflows
+- migrate required behavior to Python + SvelteKit, then delete Tauri-specific code
+- treat remaining Tauri usage only as transitional migration scaffolding
 
 ## Current Stage Status
 
@@ -53,7 +63,8 @@ Current evidence behind those statuses:
 - Account-detail balancings, directives, and investment booking-policy reads now also have Python endpoints and shared-client route usage.
 - Account-detail booking-policy updates now also use the shared client seam rather than direct Tauri writes.
 - Account-detail register rows now load through the `/accounts/{id}/register` seam, with on-demand transaction detail reads for edit/status/delete actions.
-- A shared frontend API seam now exists, and the accounts page account-tree plus account balances plus metadata lookups, the account-detail summary plus balances plus balancings plus directives plus booking-policy read/write plus form lookups plus register read plus on-demand transaction detail read, and the transactions page form lookups plus transaction list read use it with HTTP-first and Tauri fallback behavior.
+- Account-detail transaction create/update/delete flows now also go through the shared client seam, the unlock-account-balancing helper now does as well, and the remaining create-category/payee/tag/person/project/account helpers on that page now also use shared client methods.
+- A shared frontend API seam now exists, and the accounts page account-tree plus account balances plus metadata lookups, the account-detail summary plus balances plus balancings plus directives plus booking-policy read/write plus form lookups plus register read plus on-demand transaction detail read plus transaction create/update/delete plus helper creation, the home/dashboard account plus balance plus payee plus recent-transaction reads, the settings categories/payees/tags read loads, and the transactions page form lookups plus transaction list read use it with HTTP-first and Tauri fallback behavior.
 - The current Svelte frontend still lives in root `src/` and remains heavily coupled to Tauri `invoke()` calls across transactions, accounts, reports, investments, settings, and layout shortcuts outside that first migrated slice.
 - Parity tracking now lives in `docs/parity/desktop-to-python.md`.
 
@@ -71,9 +82,9 @@ Recommended end state:
 - `infra/`: Docker, Compose, reverse proxy, deployment files
 - PostgreSQL as the only system of record
 
-Do not delete the Tauri path early. First achieve verified functional parity for
-all important desktop features. Then remove `src-tauri/`, Tauri-specific frontend
-code, and related desktop packaging files in one controlled cleanup phase.
+Do not delete the Tauri path before the required behavior has been migrated and
+verified in Python + SvelteKit. Then remove `src-tauri/`, Tauri-specific frontend
+code, and related packaging files in one controlled cleanup phase.
 
 ## What Changes In This Direction
 
@@ -101,7 +112,7 @@ The change is not only Rust to Python. It changes the implementation strategy:
 - PostgreSQL schema designed for long-term web use
 - no hidden state in route handlers
 - strict typing across backend and frontend interfaces
-- explicit parity tracking against the existing desktop app
+- explicit parity tracking against existing behavior that must survive the migration
 
 ## Recommended Stack
 
@@ -300,7 +311,8 @@ Recommended defaults:
 ## Functional Parity Rule
 
 The migration is not finished when the new stack is running. It is finished when
-the important desktop behavior has been migrated and verified.
+the important existing behavior has been migrated and verified in Python +
+SvelteKit.
 
 This means:
 
@@ -330,7 +342,7 @@ Delete `src-tauri/` and related files only after all of the following are true:
 1. Python backend covers all required MVP and currently used desktop functionality
 2. frontend no longer imports Tauri APIs
 3. parity checklist is signed off for core workflows
-4. data migration from desktop SQLite to PostgreSQL exists and is tested
+4. any required import or migration path from legacy SQLite data exists and is tested
 5. production Docker deployment for the web app is working
 
 Files to delete only at the end:
@@ -358,7 +370,7 @@ Tasks:
 1. Update this migration plan to the Python direction.
 2. Freeze further feature work in the Rust API scaffold except where needed for migration support.
 3. Treat the current FastAPI migration as the only active backend direction.
-4. Keep current desktop app working during migration.
+4. Keep the legacy Tauri path only as temporary migration scaffolding while migrating behavior away from it.
 
 Exit criteria:
 
@@ -427,6 +439,7 @@ Progress note:
 - Docker reproducibility is working and covered by smoke validation.
 - Repository integration tests now run against ephemeral PostgreSQL.
 - The empty-app schema has been squashed into a single current initial migration to avoid fake historical version churn.
+- Stage 2 remains in progress because the broader web schema and migration workflow are not complete yet: the plan still calls for user/membership-oriented schema coverage and fuller migration automation beyond the current baseline.
 - CI wiring is still pending, so this stage is not fully complete.
 
 ### Stage 3: Define The Python Domain Rules Before Porting Features
@@ -542,7 +555,7 @@ Progress note:
 - Transactions list filters are now available and verified.
 - Read-only commodities, countries, and institutions are now available and verified as backend support for frontend migration.
 - Read-only categories, payees, tags, people, and projects are now available and verified as backend support for transaction-form and register migration.
-- The accounts page account tree plus balances plus create-edit metadata lookups, account detail summary plus balances plus balancings plus directives plus booking-policy read/write plus form lookups plus register read plus on-demand transaction detail read, and transactions page form lookups plus transaction list read now read through the shared frontend client seam, proving the incremental HTTP migration path.
+- The accounts page account tree plus balances plus create-edit metadata lookups, account detail summary plus balances plus balancings plus directives plus booking-policy read/write plus form lookups plus register read plus on-demand transaction detail read plus transaction create/update/delete, and transactions page form lookups plus transaction list read now read through the shared frontend client seam, proving the incremental HTTP migration path.
 - Broader frontend HTTP integration is still pending, and that remains the highest-leverage next step before adding many more backend-only slices.
 
 ### Stage 6: Migrate Write Slices With Accounting Correctness First
@@ -641,7 +654,7 @@ Exit criteria:
 Progress note:
 
 - A shared frontend client seam now exists under `src/lib/api/`, with HTTP-first and Tauri fallback behavior for incremental migration.
-- The accounts page account-tree plus balance plus metadata lookup loads, the account-detail summary plus balance plus balancings plus directives plus booking-policy read/write plus form lookup loads plus register read plus on-demand transaction detail read, and the transactions page form lookup loads plus transaction list read are the current route slices using that seam.
+- The accounts page account-tree plus balance plus metadata lookup loads, the account-detail summary plus balance plus balancings plus directives plus booking-policy read/write plus form lookup loads plus register read plus on-demand transaction detail read plus transaction create/update/delete plus unlock helper, and the transactions page form lookup loads plus transaction list read are the current route slices using that seam.
 - The frontend is still rooted in `src/` and still imports `@tauri-apps/api/core` directly in high-traffic routes such as `+layout`, `transactions`, `reports`, `investments`, and multiple settings pages.
 - The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
 
@@ -649,7 +662,7 @@ Progress note:
 
 To complete the Rust/Tauri-era migration cleanly, the next steps should be:
 
-1. Continue migrating the highest-value remaining Tauri-dependent flows next: transaction create/update/delete and related unlock helpers on the account-detail page, home/dashboard, and the remaining read-only settings surfaces.
+1. Continue migrating the highest-value remaining Tauri-dependent flows next: the remaining dashboard/setup commands, the remaining read-only settings surfaces beyond categories/payees/tags, and other high-traffic routes such as transactions, reports, and investments.
 2. Keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets.
 3. After those read flows are web-native, continue the remaining backend parity slices needed by forms and then start write-path migration for transactions and accounts.
 4. Only after the client seam is stable should the frontend be moved from root `src/` into `apps/web`.
@@ -683,7 +696,7 @@ Important:
 
 Goal:
 
-- remove behavior that only made sense in a local desktop app
+- remove behavior that only made sense in the old local Tauri application model
 
 Candidates to replace or retire:
 

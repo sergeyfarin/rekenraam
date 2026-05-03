@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
@@ -168,6 +168,75 @@ async def test_account_repository_lists_latest_active_balancings(repository_sess
 
     assert [balancing.id for balancing in balancings] == [2]
     assert balancings[0].balance_minor == 120000
+
+
+@pytest.mark.asyncio
+async def test_account_repository_unlocks_active_balancings_from_date(repository_session: AsyncSession) -> None:
+    repository_session.add(
+        Account(
+            id=12,
+            book_id=1,
+            parent_id=1,
+            previous_account_id=None,
+            account_type="asset",
+            name="Unlock Test",
+            commodity_id=1,
+            booking_policy="fifo",
+            number_last4=None,
+            is_closed=False,
+            is_hidden=False,
+            is_system=False,
+            system_role=None,
+            effective_at=date(2026, 5, 1),
+            lifecycle_event="open",
+            lifecycle_note=None,
+            lifecycle_metadata=None,
+            created_at=datetime(2026, 5, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+    )
+    repository_session.add_all(
+        [
+            AccountBalancing(
+                id=10,
+                book_id=1,
+                account_id=12,
+                previous_account_balancing_id=None,
+                as_of_date=date(2026, 5, 1),
+                balance_minor=100000,
+                memo="Older",
+                created_at=datetime(2026, 5, 1, tzinfo=UTC),
+                voided_at=None,
+                void_reason=None,
+            ),
+            AccountBalancing(
+                id=11,
+                book_id=1,
+                account_id=12,
+                previous_account_balancing_id=10,
+                as_of_date=date(2026, 5, 2),
+                balance_minor=120000,
+                memo="Latest",
+                created_at=datetime(2026, 5, 2, tzinfo=UTC),
+                voided_at=None,
+                void_reason=None,
+            ),
+        ]
+    )
+    await repository_session.commit()
+    await repository_session.execute(
+        text(
+            "SELECT setval(pg_get_serial_sequence('account_balancings', 'id'), "
+            "(SELECT COALESCE(MAX(id), 1) FROM account_balancings))"
+        )
+    )
+    await repository_session.commit()
+
+    unlocked = await AccountRepository(repository_session).unlock_account_balancings(12, date(2026, 5, 2), "retry")
+
+    assert unlocked == 1
+    balancings = await AccountRepository(repository_session).list_account_balancings(12)
+    assert balancings == []
 
 
 @pytest.mark.asyncio

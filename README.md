@@ -83,6 +83,11 @@ Current migrated frontend read slices:
 - account detail page booking policy update
 - account detail page categories, payees, tags, people, projects, and commodities lookups
 - account detail page register rows and on-demand transaction detail read
+- account detail page transaction create, update, and delete flows via shared seam
+- account detail page unlock-account-balancing helper via shared seam
+- account detail page supporting create-entity/account helpers via shared seam
+- home/dashboard account, balance, payee, and recent-transaction reads via shared seam
+- settings categories, payees, and tags read loads via shared seam
 - transactions page categories, payees, tags, people, projects, and commodities lookups
 - transactions page transaction list read
 

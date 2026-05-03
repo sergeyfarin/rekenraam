@@ -1,18 +1,26 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { invoke } from "@tauri-apps/api/core";
   import {
+    createAccount,
     getAccountBookingPolicy,
     getAccountById,
+    listAccounts,
     listAccountBalancings,
     listAccountBalances,
     listAccountDirectives,
     setAccountBookingPolicy,
+    unlockAccountBalancings,
+    type AccountSummary,
     type AccountBalancingSummary,
     type AccountDirectiveSummary,
   } from "$lib/api/accounts";
   import {
+    createCategory,
+    createPayee,
+    createPerson,
+    createProject,
+    createTag,
     listCategories,
     listCommodities,
     listPayees,
@@ -27,9 +35,13 @@
     type TagSummary,
   } from "$lib/api/metadata";
   import {
+    createTransaction,
+    deleteTransaction,
     getTransactionById,
     listAccountRegister,
+    updateTransaction,
     type AccountRegisterEntry,
+    type TransactionMutationInput,
     type TransactionWithSplits,
   } from "$lib/api/transactions";
   import * as Card from "$lib/components/ui/card";
@@ -41,23 +53,6 @@
   import { Badge } from "$lib/components/ui/badge";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { formatError } from "$lib/utils";
-
-  type Account = {
-    id: number;
-    book_id: number;
-    parent_id: number | null;
-    account_type: string;
-    name: string;
-    commodity_id: number;
-    institution_id: number | null;
-    institution_name: string | null;
-    country_id: number | null;
-    country_name: string | null;
-    number_last4: string | null;
-    is_closed: boolean;
-    created_at: string;
-    updated_at: string;
-  };
 
   type SplitDraft = {
     account_id: number | null;
@@ -75,7 +70,7 @@
   };
 
   let accountId: number | null = null;
-  let account: Account | null = null;
+  let account: AccountSummary | null = null;
   let registerEntries: AccountRegisterEntry[] = [];
   let directives: AccountDirectiveSummary[] = [];
   let balanceMinor = 0;
@@ -84,7 +79,7 @@
   let savingPolicy = false;
   let loading = true;
   let error = "";
-  let accounts: Account[] = [];
+  let accounts: AccountSummary[] = [];
   let categories: CategorySummary[] = [];
   let payees: PayeeSummary[] = [];
   let tags: TagSummary[] = [];
@@ -161,8 +156,12 @@
   async function onCreateCategoryConfirm() {
     createCategoryDialogOpen = false;
     try {
-      const created = await invoke<CategorySummary>("create_category", {
-        input: { book_id: 1, parent_id: null, name: createCategoryName, kind: createCategoryKind, color: null }
+      const created = await createCategory({
+        book_id: 1,
+        parent_id: null,
+        name: createCategoryName,
+        kind: createCategoryKind,
+        color: null,
       });
       categories = [...categories, created];
       createCategoryResolve?.(created.id);
@@ -247,7 +246,7 @@
 
   async function loadLookups() {
     const [accountList, categoryList, payeeList, tagList, peopleList, projectList, commodityList] = await Promise.all([
-      invoke<Account[]>("list_accounts", { bookId: 1 }),
+      listAccounts(1),
       listCategories(1),
       listPayees(1),
       listTags(1),
@@ -588,9 +587,7 @@
       const existing = exactMatchByName(payees, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new payee "${trimmed}"?`, { label: "Create" })) throw new Error("Payee creation cancelled");
-      const created = await invoke<PayeeSummary>("create_payee", {
-        input: { book_id: 1, name: trimmed, kind: "person", metadata: null }
-      });
+      const created = await createPayee({ book_id: 1, name: trimmed, kind: "person", metadata: null });
       payees = [...payees, created];
       return created.id;
     }
@@ -607,9 +604,7 @@
       const existing = exactMatchByName(tags, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new tag "${trimmed}"?`, { label: "Create" })) throw new Error("Tag creation cancelled");
-      const created = await invoke<TagSummary>("create_tag", {
-        input: { book_id: 1, name: trimmed, color: null }
-      });
+      const created = await createTag({ book_id: 1, name: trimmed, color: null });
       tags = [...tags, created];
       return created.id;
     }
@@ -618,9 +613,7 @@
       const existing = exactMatchByName(people, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new person "${trimmed}"?`, { label: "Create" })) throw new Error("Person creation cancelled");
-      const created = await invoke<PersonSummary>("create_person", {
-        input: { book_id: 1, name: trimmed, role: "member", metadata: null }
-      });
+      const created = await createPerson({ book_id: 1, name: trimmed, role: "member", metadata: null });
       people = [...people, created];
       return created.id;
     }
@@ -628,9 +621,7 @@
     const existing = exactMatchByName(projects, trimmed);
     if (existing) return existing.id;
     if (!await askConfirm(`Create new project "${trimmed}"?`, { label: "Create" })) throw new Error("Project creation cancelled");
-    const created = await invoke<ProjectSummary>("create_project", {
-      input: { book_id: 1, name: trimmed, status: "active", metadata: null }
-    });
+    const created = await createProject({ book_id: 1, name: trimmed, status: "active", metadata: null });
     projects = [...projects, created];
     return created.id;
   }
@@ -666,18 +657,16 @@
     );
     if (existing) return existing.id;
 
-    const created = await invoke<Account>("create_account", {
-      input: {
-        book_id: 1,
-        parent_id: null,
-        account_type: targetKind,
-        name: targetName,
-        commodity_id: commodityId,
-        institution_id: null,
-        country_id: null,
-        number_last4: null,
-        is_closed: false
-      }
+    const created = await createAccount({
+      book_id: 1,
+      parent_id: null,
+      account_type: targetKind,
+      name: targetName,
+      commodity_id: commodityId,
+      institution_id: null,
+      country_id: null,
+      number_last4: null,
+      is_closed: false,
     });
     accounts = [...accounts, created];
     return created.id;
@@ -693,14 +682,7 @@
     const accountIds = Array.from(new Set(tx.splits.map((s) => s.account_id)));
     await Promise.all(
       accountIds.map((account_id) =>
-        invoke("unlock_account_balancings", {
-          input: {
-            account_id,
-            from_date: tx.transaction.txn_date,
-            reason: reason || null,
-            confirm: true
-          }
-        })
+        unlockAccountBalancings(account_id, tx.transaction.txn_date, reason || null, true)
       )
     );
     await action();
@@ -814,33 +796,22 @@
         throw new Error("Splits must balance to zero");
       }
 
+      const input: TransactionMutationInput = {
+        ...(dialogMode === "edit" && formId ? { id: formId } : {}),
+        book_id: 1,
+        txn_date: formDate,
+        payee_id: payeeId,
+        memo: formMemo || null,
+        status: formStatus,
+        reference: formReference || null,
+        import_id: null,
+        splits,
+      };
+
       if (dialogMode === "create") {
-        await invoke("create_transaction_with_splits", {
-          input: {
-            book_id: 1,
-            txn_date: formDate,
-            payee_id: payeeId,
-            memo: formMemo || null,
-            status: formStatus,
-            reference: formReference || null,
-            import_id: null,
-            splits
-          }
-        });
+        await createTransaction(input);
       } else if (formId) {
-        await invoke("update_transaction_with_splits", {
-          input: {
-            id: formId,
-            book_id: 1,
-            txn_date: formDate,
-            payee_id: payeeId,
-            memo: formMemo || null,
-            status: formStatus,
-            reference: formReference || null,
-            import_id: null,
-            splits
-          }
-        });
+        await updateTransaction(input);
       }
 
       await loadTransactions();
@@ -854,28 +825,26 @@
 
   async function updateStatus(tx: TransactionWithSplits, status: string) {
     const action = async () => {
-      await invoke("update_transaction_with_splits", {
-        input: {
-          id: tx.transaction.id,
-          book_id: 1,
-          txn_date: tx.transaction.txn_date,
-          payee_id: tx.transaction.payee_id,
-          memo: tx.transaction.memo,
-          status,
-          reference: tx.transaction.reference,
-          import_id: null,
-          splits: tx.splits.map((split) => ({
-            account_id: split.account_id,
-            commodity_id: split.commodity_id,
-            amount_minor: split.amount_minor,
-            category_id: split.category_id,
-            tag_id: split.tag_id,
-            person_id: split.person_id,
-            project_id: split.project_id,
-            share_bps: split.share_bps,
-            memo: split.memo
-          }))
-        }
+      await updateTransaction({
+        id: tx.transaction.id,
+        book_id: 1,
+        txn_date: tx.transaction.txn_date,
+        payee_id: tx.transaction.payee_id,
+        memo: tx.transaction.memo,
+        status,
+        reference: tx.transaction.reference,
+        import_id: null,
+        splits: tx.splits.map((split) => ({
+          account_id: split.account_id,
+          commodity_id: split.commodity_id,
+          amount_minor: split.amount_minor,
+          category_id: split.category_id,
+          tag_id: split.tag_id,
+          person_id: split.person_id,
+          project_id: split.project_id,
+          share_bps: split.share_bps,
+          memo: split.memo,
+        })),
       });
     };
 
@@ -900,7 +869,7 @@
     if (!confirmed) return;
 
     const action = async () => {
-      await invoke("delete_transaction", { id: tx.transaction.id });
+      await deleteTransaction(tx.transaction.id);
     };
 
     try {

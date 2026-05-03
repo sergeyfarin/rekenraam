@@ -1,14 +1,19 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from rekenraam_api.api.dependencies import get_metadata_service
 from rekenraam_api.schemas.metadata import (
+    CategoryCreateInput,
     CategorySummary,
     CommoditySummary,
     CountrySummary,
     InstitutionSummary,
+    PayeeCreateInput,
     PayeeSummary,
+    PersonCreateInput,
     PersonSummary,
+    ProjectCreateInput,
     ProjectSummary,
+    TagCreateInput,
     TagSummary,
 )
 from rekenraam_api.services.metadata import MetadataService
@@ -45,11 +50,33 @@ async def list_categories(
     return await metadata_service.list_categories()
 
 
+@router.post("/categories", response_model=CategorySummary)
+async def create_category(
+    input: CategoryCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CategorySummary:
+    try:
+        return await metadata_service.create_category(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
 @router.get("/payees", response_model=list[PayeeSummary])
 async def list_payees(
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[PayeeSummary]:
     return await metadata_service.list_payees()
+
+
+@router.post("/payees", response_model=PayeeSummary)
+async def create_payee(
+    input: PayeeCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> PayeeSummary:
+    try:
+        return await metadata_service.create_payee(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
 @router.get("/tags", response_model=list[TagSummary])
@@ -59,6 +86,17 @@ async def list_tags(
     return await metadata_service.list_tags()
 
 
+@router.post("/tags", response_model=TagSummary)
+async def create_tag(
+    input: TagCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> TagSummary:
+    try:
+        return await metadata_service.create_tag(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
 @router.get("/people", response_model=list[PersonSummary])
 async def list_people(
     metadata_service: MetadataService = Depends(get_metadata_service),
@@ -66,8 +104,30 @@ async def list_people(
     return await metadata_service.list_people()
 
 
+@router.post("/people", response_model=PersonSummary)
+async def create_person(
+    input: PersonCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> PersonSummary:
+    try:
+        return await metadata_service.create_person(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
 @router.get("/projects", response_model=list[ProjectSummary])
 async def list_projects(
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[ProjectSummary]:
     return await metadata_service.list_projects()
+
+
+@router.post("/projects", response_model=ProjectSummary)
+async def create_project(
+    input: ProjectCreateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> ProjectSummary:
+    try:
+        return await metadata_service.create_project(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

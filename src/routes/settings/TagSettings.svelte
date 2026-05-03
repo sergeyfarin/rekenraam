@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listTags, type TagSummary } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -7,27 +8,18 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
 
-  type Tag = {
-    id: number;
-    book_id: number;
-    name: string;
-    color: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-
-  export let tags: Tag[] = [];
+  export let tags: TagSummary[] = [];
   export let busy = false;
 
   let tagError = "";
   let tagStatus = "";
-  let editingTag: Tag | null = null;
+  let editingTag: TagSummary | null = null;
   let newTag = { name: "", color: "" };
   let showTagDialog = false;
 
   export async function loadTags() {
     try {
-      tags = await invoke<Tag[]>("list_tags", { bookId: 1 });
+      tags = await listTags(1);
     } catch (e) {
       tagError = `Failed to load tags: ${String(e)}`;
     }
@@ -39,7 +31,7 @@
     showTagDialog = true;
   }
 
-  function openEditTag(t: Tag) {
+  function openEditTag(t: TagSummary) {
     editingTag = t;
     newTag = { name: t.name, color: t.color || "" };
     showTagDialog = true;
@@ -84,7 +76,7 @@
     }
   }
 
-  async function deleteTag(t: Tag) {
+  async function deleteTag(t: TagSummary) {
     if (!confirm(`Delete tag "${t.name}"?`)) return;
     tagError = "";
     tagStatus = "";

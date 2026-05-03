@@ -172,6 +172,11 @@ class StubAccountRepository:
         account.booking_policy = booking_policy
         return account
 
+    async def unlock_account_balancings(self, account_id: int, from_date: datetime.date, reason: str | None) -> int:
+        if account_id != 1:
+            return 0
+        return 2
+
 
 class StubTransactionRepository:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
@@ -401,6 +406,23 @@ async def test_account_service_rejects_invalid_booking_policy_updates() -> None:
 
     with pytest.raises(ValueError, match="booking policy must be fifo, lifo, strict, or average"):
         await service.set_account_booking_policy(9, "bad-policy")
+
+
+@pytest.mark.asyncio
+async def test_account_service_unlocks_balancings_when_confirmed() -> None:
+    service = AccountService(StubAccountRepository())
+
+    result = await service.unlock_account_balancings(1, datetime(2026, 5, 2, tzinfo=UTC).date(), "retry", True)
+
+    assert result == 2
+
+
+@pytest.mark.asyncio
+async def test_account_service_rejects_unlock_without_confirmation() -> None:
+    service = AccountService(StubAccountRepository())
+
+    with pytest.raises(ValueError, match="unlock not confirmed"):
+        await service.unlock_account_balancings(1, datetime(2026, 5, 2, tzinfo=UTC).date(), None, False)
 
 
 @pytest.mark.asyncio

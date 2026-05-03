@@ -1,10 +1,12 @@
 from dataclasses import dataclass, field
+from datetime import date
 
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingSummary,
+    AccountCreateInput,
     AccountDirectiveSummary,
     AccountSummary,
     AccountTreeNode,
@@ -24,6 +26,26 @@ class AccountService:
     async def list_accounts(self) -> list[AccountSummary]:
         accounts = await self._repository.list_accounts()
         return [self._to_summary(account) for account in accounts]
+
+    async def create_account(self, input: AccountCreateInput) -> AccountSummary:
+        name = input.name.strip()
+        account_type = input.account_type.strip().lower()
+        if not name:
+            raise ValueError("name is required")
+        if account_type not in {"cash", "checking", "savings", "credit", "loan", "investment", "asset", "liability", "income", "expense", "equity"}:
+            raise ValueError("account type is invalid")
+        account = await self._repository.create_account(
+            book_id=input.book_id,
+            parent_id=input.parent_id,
+            account_type=account_type,
+            name=name,
+            commodity_id=input.commodity_id,
+            institution_id=input.institution_id,
+            country_id=input.country_id,
+            number_last4=input.number_last4,
+            is_closed=input.is_closed,
+        )
+        return self._to_summary(account)
 
     async def get_account_by_id(self, account_id: int) -> AccountSummary | None:
         account = await self._repository.get_account_by_id(account_id)
@@ -88,6 +110,11 @@ class AccountService:
         if account.account_type != "investment":
             raise ValueError("booking policy only applies to investment accounts")
         return account.booking_policy or "fifo"
+
+    async def unlock_account_balancings(self, account_id: int, from_date: date, reason: str | None, confirm: bool) -> int:
+        if not confirm:
+            raise ValueError("unlock not confirmed")
+        return await self._repository.unlock_account_balancings(account_id, from_date, reason)
 
     async def list_account_tree(self) -> list[AccountTreeNode]:
         accounts = await self._repository.list_accounts()

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { listAccountBalances, listAccounts, type AccountSummary, type AccountBalanceSummary } from "$lib/api/accounts";
+  import { listPayees, type PayeeSummary } from "$lib/api/metadata";
+  import { listTransactions, type TransactionWithSplits } from "$lib/api/transactions";
   import { formatError } from "$lib/utils";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -14,36 +17,6 @@
     price_missing: boolean;
   };
 
-  type Account = {
-    id: number;
-    name: string;
-    type: string;
-    commodity_id: number;
-  };
-
-  type TransactionWithSplits = {
-    id: number;
-    book_id: number;
-    txn_date: string;
-    memo: string | null;
-    payee_id: number | null;
-    payee_name: string | null;
-    status: string | null;
-    splits: Split[];
-  };
-
-  type Split = {
-    id: number;
-    tx_id: number;
-    account_id: number;
-    account_name: string;
-    category_id: number | null;
-    category_name: string | null;
-    commodity_id: number;
-    amount_minor: number;
-    memo: string | null;
-  };
-
   type DefaultCurrency = { scale: number; symbol: string | null; display_symbol: string | null };
 
   let busy = false;
@@ -52,9 +25,10 @@
   let dbReady: boolean | null = null;
 
   // Balances
-  let accounts: Account[] = [];
+  let accounts: AccountSummary[] = [];
   let balances: AccountBalance[] = [];
   let recentTransactions: TransactionWithSplits[] = [];
+  let payees: PayeeSummary[] = [];
   let nativeCurrency: DefaultCurrency | null = null;
 
   // Computed totals
@@ -63,8 +37,8 @@
   let netWorth = 0;
 
   // By account type
-  let assetAccounts: { account: Account; balance: number }[] = [];
-  let liabilityAccounts: { account: Account; balance: number }[] = [];
+  let assetAccounts: { account: AccountSummary; balance: number }[] = [];
+  let liabilityAccounts: { account: AccountSummary; balance: number }[] = [];
 
   onMount(async () => {
     await checkDatabase();
@@ -129,22 +103,27 @@
 
     try {
       // Load accounts, balances, recent transactions, and native currency in parallel
-      const [accountsResult, balancesResult, transactionsResult, nativeCurrencyResult] = await Promise.all([
-        invoke<Account[]>("list_accounts", { bookId: 1, includeClosed: false }),
-        invoke<AccountBalance[]>("list_account_balances", { bookId: 1 }),
-        invoke<TransactionWithSplits[]>("list_transactions", {
-          filter: {
-            book_id: 1,
-            limit: 10,
-            offset: 0,
-          },
+      const [accountsResult, balancesResult, transactionsResult, payeesResult, nativeCurrencyResult] = await Promise.all([
+        listAccounts(1),
+        listAccountBalances(1),
+        listTransactions({
+          book_id: 1,
+          limit: 10,
+          offset: 0,
         }),
+        listPayees(1),
         invoke<DefaultCurrency | null>("get_default_currency", { bookId: 1 }).catch(() => null),
       ]);
 
       accounts = accountsResult;
-      balances = balancesResult;
+      balances = balancesResult.map((balance: AccountBalanceSummary) => ({
+        account_id: balance.account_id,
+        balance_minor: balance.balance_minor,
+        native_balance_minor: balance.balance_minor,
+        price_missing: false,
+      }));
       recentTransactions = transactionsResult;
+      payees = payeesResult;
       nativeCurrency = nativeCurrencyResult;
 
       // Calculate totals
@@ -176,10 +155,10 @@
     for (const account of accounts) {
       const balance = balanceMap.get(account.id) || 0;
 
-      if (assetTypes.includes(account.type)) {
+      if (assetTypes.includes(account.account_type)) {
         totalAssets += balance;
         assetAccounts.push({ account, balance });
-      } else if (liabilityTypes.includes(account.type)) {
+      } else if (liabilityTypes.includes(account.account_type)) {
         totalLiabilities += balance;
         liabilityAccounts.push({ account, balance });
       }
@@ -204,6 +183,15 @@
     return new Date(dateStr).toLocaleDateString();
   }
 
+  function payeeName(payeeId: number | null): string | null {
+    if (!payeeId) return null;
+    return payees.find((payee) => payee.id === payeeId)?.name ?? null;
+  }
+
+  function accountName(accountId: number): string | null {
+    return accounts.find((account) => account.id === accountId)?.name ?? null;
+  }
+
   function getTransactionAmount(tx: TransactionWithSplits): number {
     // Sum of positive splits (or first split amount)
     if (tx.splits.length === 0) return 0;
@@ -214,9 +202,13 @@
   }
 
   function getTransactionDescription(tx: TransactionWithSplits): string {
-    if (tx.memo) return tx.memo;
-    if (tx.payee_name) return tx.payee_name;
-    if (tx.splits.length > 0 && tx.splits[0].account_name) return tx.splits[0].account_name;
+    if (tx.transaction.memo) return tx.transaction.memo;
+    const payee = payeeName(tx.transaction.payee_id);
+    if (payee) return payee;
+    if (tx.splits.length > 0) {
+      const name = accountName(tx.splits[0].account_id);
+      if (name) return name;
+    }
     return "(No description)";
   }
 </script>
@@ -403,7 +395,7 @@
               {#each recentTransactions as tx}
                 <div class="flex justify-between items-center py-2 border-b border-border last:border-0">
                   <div class="flex flex-col gap-0.5">
-                    <span class="text-xs text-muted-foreground">{formatDate(tx.txn_date)}</span>
+                    <span class="text-xs text-muted-foreground">{formatDate(tx.transaction.txn_date)}</span>
                     <span class="font-medium">{getTransactionDescription(tx)}</span>
                   </div>
                   <span

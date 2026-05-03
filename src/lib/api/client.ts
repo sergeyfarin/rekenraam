@@ -73,3 +73,42 @@ export async function apiPutWithTauriFallback<TResponse, TBody>(
     return await invoke<TResponse>(command, args);
   }
 }
+
+export async function apiPostWithTauriFallback<TResponse, TBody>(
+  path: string,
+  body: TBody,
+  command: string,
+  args?: Record<string, unknown>
+): Promise<TResponse> {
+  try {
+    return await apiJson<TResponse>(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return await invoke<TResponse>(command, args);
+  }
+}
+
+export async function apiDeleteWithTauriFallback<TResponse>(
+  path: string,
+  command: string,
+  args?: Record<string, unknown>
+): Promise<TResponse> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    if (baseUrl === null) {
+      throw new Error("PUBLIC_API_BASE_URL is not configured");
+    }
+
+    const response = await fetch(`${baseUrl}${path}`, { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error(await parseError(response));
+    }
+
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as TResponse;
+  } catch {
+    return await invoke<TResponse>(command, args);
+  }
+}

@@ -1,4 +1,4 @@
-import { apiGet, apiGetWithTauriFallback } from "$lib/api/client";
+import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback } from "$lib/api/client";
 
 export type TransactionFilter = {
   book_id?: number;
@@ -42,6 +42,30 @@ export type SplitRecord = {
 export type TransactionWithSplits = {
   transaction: TransactionRecord;
   splits: SplitRecord[];
+};
+
+export type TransactionSplitInput = {
+  account_id: number;
+  commodity_id: number;
+  amount_minor: number;
+  category_id: number | null;
+  tag_id: number | null;
+  person_id: number | null;
+  project_id: number | null;
+  share_bps: number | null;
+  memo: string | null;
+};
+
+export type TransactionMutationInput = {
+  id?: number;
+  book_id: number;
+  txn_date: string;
+  payee_id: number | null;
+  memo: string | null;
+  status: string;
+  reference: string | null;
+  import_id: string | null;
+  splits: TransactionSplitInput[];
 };
 
 export type AccountRegisterEntry = {
@@ -246,4 +270,30 @@ export async function listAccountRegister(accountId: number): Promise<AccountReg
     const transactions = await listTransactions({ account_id: accountId, limit: 10000, offset: 0 });
     return mapTransactionToRegisterEntries(transactions, accountId);
   }
+}
+
+export async function createTransaction(input: TransactionMutationInput): Promise<void> {
+  await apiPostWithTauriFallback<unknown, TransactionMutationInput>(
+    "/transactions",
+    input,
+    "create_transaction_with_splits",
+    { input }
+  );
+}
+
+export async function updateTransaction(input: TransactionMutationInput): Promise<void> {
+  if (input.id === undefined) {
+    throw new Error("Transaction id is required for updates");
+  }
+
+  await apiPutWithTauriFallback<unknown, TransactionMutationInput>(
+    `/transactions/${input.id}`,
+    input,
+    "update_transaction_with_splits",
+    { input }
+  );
+}
+
+export async function deleteTransaction(transactionId: number): Promise<void> {
+  await apiDeleteWithTauriFallback<unknown>(`/transactions/${transactionId}`, "delete_transaction", { id: transactionId });
 }

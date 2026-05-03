@@ -213,6 +213,13 @@ class StubAccountService:
             raise ValueError("booking policy must be fifo, lifo, strict, or average")
         return booking_policy
 
+    async def unlock_account_balancings(self, account_id: int, from_date: datetime.date, reason: str | None, confirm: bool) -> int:
+        if account_id == 99:
+            return 0
+        if not confirm:
+            raise ValueError("unlock not confirmed")
+        return 2
+
 
 class StubTransactionService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
@@ -592,6 +599,32 @@ async def test_set_account_booking_policy_rejects_invalid_value(client: AsyncCli
 
     assert response.status_code == 400
     assert response.json() == {"detail": "booking policy must be fifo, lifo, strict, or average"}
+
+
+@pytest.mark.asyncio
+async def test_unlock_account_balancings_returns_count(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.post(
+        "/api/v1/accounts/1/balancings/unlock",
+        json={"from_date": "2026-05-02", "reason": "retry", "confirm": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == 2
+
+
+@pytest.mark.asyncio
+async def test_unlock_account_balancings_requires_confirmation(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.post(
+        "/api/v1/accounts/1/balancings/unlock",
+        json={"from_date": "2026-05-02", "reason": None, "confirm": False},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "unlock not confirmed"}
 
 
 @pytest.mark.asyncio
