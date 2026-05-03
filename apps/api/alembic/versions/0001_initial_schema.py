@@ -42,6 +42,104 @@ def upgrade() -> None:
     op.create_index("ix_books_slug", "books", ["slug"], unique=True)
 
     op.create_table(
+        "commodities",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("kind", sa.String(length=32), nullable=False),
+        sa.Column("symbol", sa.String(length=32), nullable=True),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("scale", sa.Integer(), nullable=False),
+        sa.Column("metadata", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_commodities_book_id", "commodities", ["book_id"], unique=False)
+
+    op.create_table(
+        "countries",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("code", sa.String(length=3), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_countries_book_id", "countries", ["book_id"], unique=False)
+
+    op.create_table(
+        "institutions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("kind", sa.String(length=64), nullable=True),
+        sa.Column("country_id", sa.BigInteger(), sa.ForeignKey("countries.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_institutions_book_id", "institutions", ["book_id"], unique=False)
+
+    op.create_table(
+        "categories",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("parent_id", sa.BigInteger(), sa.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("kind", sa.String(length=32), nullable=False),
+        sa.Column("color", sa.String(length=32), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_categories_book_id", "categories", ["book_id"], unique=False)
+    op.create_index("ix_categories_parent_id", "categories", ["parent_id"], unique=False)
+
+    op.create_table(
+        "payees",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("kind", sa.String(length=32), nullable=False),
+        sa.Column("metadata", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_payees_book_id", "payees", ["book_id"], unique=False)
+
+    op.create_table(
+        "tags",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("color", sa.String(length=32), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_tags_book_id", "tags", ["book_id"], unique=False)
+
+    op.create_table(
+        "people",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("role", sa.String(length=64), nullable=False),
+        sa.Column("metadata", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_people_book_id", "people", ["book_id"], unique=False)
+
+    op.create_table(
+        "projects",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("status", sa.String(length=64), nullable=False),
+        sa.Column("metadata", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_projects_book_id", "projects", ["book_id"], unique=False)
+
+    op.create_table(
         "accounts",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
@@ -110,6 +208,11 @@ def upgrade() -> None:
     )
     op.execute(
         sa.text(
+            "INSERT INTO commodities (book_id, kind, symbol, name, scale) VALUES (1, 'currency', 'USD', 'US Dollar', 2)"
+        )
+    )
+    op.execute(
+        sa.text(
             """
                         INSERT INTO accounts (book_id, parent_id, account_type, name, commodity_id, is_system, system_role)
             VALUES
@@ -140,6 +243,23 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_projects_book_id", table_name="projects")
+    op.drop_table("projects")
+    op.drop_index("ix_people_book_id", table_name="people")
+    op.drop_table("people")
+    op.drop_index("ix_tags_book_id", table_name="tags")
+    op.drop_table("tags")
+    op.drop_index("ix_payees_book_id", table_name="payees")
+    op.drop_table("payees")
+    op.drop_index("ix_categories_parent_id", table_name="categories")
+    op.drop_index("ix_categories_book_id", table_name="categories")
+    op.drop_table("categories")
+    op.drop_index("ix_institutions_book_id", table_name="institutions")
+    op.drop_table("institutions")
+    op.drop_index("ix_countries_book_id", table_name="countries")
+    op.drop_table("countries")
+    op.drop_index("ix_commodities_book_id", table_name="commodities")
+    op.drop_table("commodities")
     op.drop_index("ix_splits_account_id", table_name="splits")
     op.drop_index("ix_splits_tx_id", table_name="splits")
     op.drop_table("splits")

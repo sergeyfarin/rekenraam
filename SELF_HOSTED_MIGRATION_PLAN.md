@@ -46,7 +46,9 @@ Current evidence behind those statuses:
 - Python FastAPI scaffold is active and validated in Docker.
 - The empty app now uses one current initial Alembic schema rather than artificial historical migration steps.
 - Read-only books, accounts list/detail/tree/register, and transactions list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
-- A shared frontend API seam now exists, and the accounts page account-tree plus account-detail summary read paths use it with HTTP-first and Tauri fallback behavior.
+- Read-only commodities, countries, and institutions endpoints now exist and are validated as frontend migration support metadata.
+- Read-only categories, payees, tags, people, and projects endpoints now also exist and are validated as transaction-form/frontend migration support metadata.
+- A shared frontend API seam now exists, and the accounts page account-tree plus metadata lookups, the account-detail summary plus form lookups, and the transactions page form lookups use it with HTTP-first and Tauri fallback behavior.
 - The current Svelte frontend still lives in root `src/` and remains heavily coupled to Tauri `invoke()` calls across transactions, accounts, reports, investments, settings, and layout shortcuts outside that first migrated slice.
 - Parity tracking now lives in `docs/parity/desktop-to-python.md`.
 
@@ -533,7 +535,9 @@ Progress note:
 - Account register reads are now available and verified.
 - Transaction-backed balances and rollups are now verified on seeded data.
 - Transactions list filters are now available and verified.
-- The accounts page account tree and account detail summary now read through the shared frontend client seam, proving the incremental HTTP migration path.
+- Read-only commodities, countries, and institutions are now available and verified as backend support for frontend migration.
+- Read-only categories, payees, tags, people, and projects are now available and verified as backend support for transaction-form and register migration.
+- The accounts page account tree, account create-edit metadata lookups, account detail summary plus form lookups, and transactions page form lookups now read through the shared frontend client seam, proving the incremental HTTP migration path.
 - Broader frontend HTTP integration is still pending, and that remains the highest-leverage next step before adding many more backend-only slices.
 
 ### Stage 6: Migrate Write Slices With Accounting Correctness First
@@ -632,7 +636,7 @@ Exit criteria:
 Progress note:
 
 - A shared frontend client seam now exists under `src/lib/api/`, with HTTP-first and Tauri fallback behavior for incremental migration.
-- The accounts page account-tree and account-detail summary read paths are the first route slices using that seam.
+- The accounts page account-tree plus metadata lookup loads, the account-detail summary plus form lookup loads, and the transactions page form lookup loads are the current route slices using that seam.
 - The frontend is still rooted in `src/` and still imports `@tauri-apps/api/core` directly in high-traffic routes such as `+layout`, `transactions`, `reports`, `investments`, and multiple settings pages.
 - The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
 
@@ -640,9 +644,9 @@ Progress note:
 
 To complete the Rust/Tauri-era migration cleanly, the next steps should be:
 
-1. Continue migrating the highest-value read routes off direct Tauri calls next: transactions, account detail/register, home/dashboard, and the read-only settings metadata used by transaction forms.
+1. Continue migrating the highest-value read routes off direct Tauri calls next: transactions list/detail data, account detail/register data, home/dashboard, and the remaining read-only settings surfaces.
 2. Keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets.
-3. After those read flows are web-native, continue backend parity for metadata and then start write-path migration for transactions and accounts.
+3. After those read flows are web-native, continue the remaining backend parity slices needed by forms and then start write-path migration for transactions and accounts.
 4. Only after the client seam is stable should the frontend be moved from root `src/` into `apps/web`.
 
 ### Stage 10: Data Migration From SQLite To PostgreSQL

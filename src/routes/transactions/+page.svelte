@@ -3,6 +3,20 @@
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
+  import {
+    listCategories,
+    listCommodities,
+    listPayees,
+    listPeople,
+    listProjects,
+    listTags,
+    type CategorySummary,
+    type CommoditySummary,
+    type PayeeSummary,
+    type PersonSummary,
+    type ProjectSummary,
+    type TagSummary,
+  } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -19,39 +33,6 @@
     name: string;
     commodity_id: number;
     account_type: string;
-  };
-
-  type Category = {
-    id: number;
-    name: string;
-    kind: string;
-  };
-
-  type Payee = {
-    id: number;
-    name: string;
-  };
-
-  type Tag = {
-    id: number;
-    name: string;
-  };
-
-  type Person = {
-    id: number;
-    name: string;
-  };
-
-  type Project = {
-    id: number;
-    name: string;
-  };
-
-  type Commodity = {
-    id: number;
-    symbol: string | null;
-    name: string;
-    scale: number;
   };
 
   type Transaction = {
@@ -101,12 +82,12 @@
 
   let transactions: TransactionWithSplits[] = [];
   let accounts: Account[] = [];
-  let categories: Category[] = [];
-  let payees: Payee[] = [];
-  let tags: Tag[] = [];
-  let people: Person[] = [];
-  let projects: Project[] = [];
-  let commodities: Commodity[] = [];
+  let categories: CategorySummary[] = [];
+  let payees: PayeeSummary[] = [];
+  let tags: TagSummary[] = [];
+  let people: PersonSummary[] = [];
+  let projects: ProjectSummary[] = [];
+  let commodities: CommoditySummary[] = [];
   let loading = true;
   let error = "";
 
@@ -194,7 +175,7 @@
   async function onCreateCategoryConfirm() {
     createCategoryDialogOpen = false;
     try {
-      const created = await invoke<Category>("create_category", {
+      const created = await invoke<CategorySummary>("create_category", {
         input: { book_id: bookId, parent_id: null, name: createCategoryName, kind: createCategoryKind, color: null }
       });
       categories = [...categories, created];
@@ -248,12 +229,12 @@
     try {
       const [accountList, categoryList, payeeList, tagList, peopleList, projectList, commodityList] = await Promise.all([
         invoke<Account[]>("list_accounts", { bookId }),
-        invoke<Category[]>("list_categories", { bookId }),
-        invoke<Payee[]>("list_payees", { bookId }),
-        invoke<Tag[]>("list_tags", { bookId }),
-        invoke<Person[]>("list_people", { bookId }),
-        invoke<Project[]>("list_projects", { bookId }),
-        invoke<Commodity[]>("list_commodities", { bookId })
+        listCategories(bookId),
+        listPayees(bookId),
+        listTags(bookId),
+        listPeople(bookId),
+        listProjects(bookId),
+        listCommodities(bookId)
       ]);
       accounts = accountList;
       categories = categoryList;
@@ -736,7 +717,7 @@
       const existing = exactMatchByName(payees, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new payee "${trimmed}"?`, { label: "Create" })) throw new Error("Payee creation cancelled");
-      const created = await invoke<Payee>("create_payee", {
+      const created = await invoke<PayeeSummary>("create_payee", {
         input: { book_id: bookId, name: trimmed, kind: "person", metadata: null }
       });
       payees = [...payees, created];
@@ -755,7 +736,7 @@
       const existing = exactMatchByName(tags, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new tag "${trimmed}"?`, { label: "Create" })) throw new Error("Tag creation cancelled");
-      const created = await invoke<Tag>("create_tag", {
+      const created = await invoke<TagSummary>("create_tag", {
         input: { book_id: bookId, name: trimmed, color: null }
       });
       tags = [...tags, created];
@@ -766,7 +747,7 @@
       const existing = exactMatchByName(people, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new person "${trimmed}"?`, { label: "Create" })) throw new Error("Person creation cancelled");
-      const created = await invoke<Person>("create_person", {
+      const created = await invoke<PersonSummary>("create_person", {
         input: { book_id: bookId, name: trimmed, role: "member", metadata: null }
       });
       people = [...people, created];
@@ -776,7 +757,7 @@
     const existing = exactMatchByName(projects, trimmed);
     if (existing) return existing.id;
     if (!await askConfirm(`Create new project "${trimmed}"?`, { label: "Create" })) throw new Error("Project creation cancelled");
-    const created = await invoke<Project>("create_project", {
+    const created = await invoke<ProjectSummary>("create_project", {
       input: { book_id: bookId, name: trimmed, status: "active", metadata: null }
     });
     projects = [...projects, created];

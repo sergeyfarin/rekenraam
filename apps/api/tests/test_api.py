@@ -5,10 +5,21 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from rekenraam_api.api.dependencies import get_account_service, get_book_service
+from rekenraam_api.api.dependencies import get_metadata_service
 from rekenraam_api.api.dependencies import get_transaction_service
 from rekenraam_api.app import app
 from rekenraam_api.schemas.accounts import AccountSummary, AccountTreeNode
 from rekenraam_api.schemas.books import BookSummary
+from rekenraam_api.schemas.metadata import (
+    CategorySummary,
+    CommoditySummary,
+    CountrySummary,
+    InstitutionSummary,
+    PayeeSummary,
+    PersonSummary,
+    ProjectSummary,
+    TagSummary,
+)
 from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.transactions import SplitEntry, TransactionListFilters, TransactionSummary
 
@@ -247,6 +258,67 @@ class StubTransactionService:
         ]
 
 
+class StubMetadataService:
+    _created_at = datetime(2026, 5, 3, tzinfo=UTC)
+
+    async def list_commodities(self) -> list[CommoditySummary]:
+        return [
+            CommoditySummary(
+                id=1,
+                book_id=1,
+                kind="currency",
+                symbol="USD",
+                name="US Dollar",
+                scale=2,
+                metadata=None,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
+        ]
+
+    async def list_countries(self) -> list[CountrySummary]:
+        return []
+
+    async def list_institutions(self) -> list[InstitutionSummary]:
+        return []
+
+    async def list_categories(self) -> list[CategorySummary]:
+        return [
+            CategorySummary(
+                id=1,
+                book_id=1,
+                parent_id=None,
+                name="Groceries",
+                kind="expense",
+                color="#00aa00",
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
+        ]
+
+    async def list_payees(self) -> list[PayeeSummary]:
+        return [
+            PayeeSummary(
+                id=1,
+                book_id=1,
+                name="Local Market",
+                kind="business",
+                metadata=None,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
+        ]
+
+    async def list_tags(self) -> list[TagSummary]:
+        return []
+
+    async def list_people(self) -> list[PersonSummary]:
+        return []
+
+    async def list_projects(self) -> list[ProjectSummary]:
+        return []
+
+
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
     app.dependency_overrides.clear()
@@ -357,6 +429,37 @@ async def test_list_transactions_returns_nested_splits(client: AsyncClient) -> N
     assert len(body) == 2
     assert len(body[0]["splits"]) == 2
     assert body[0]["splits"][0]["amount_minor"] == 500000
+
+
+@pytest.mark.asyncio
+async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -> None:
+    app.dependency_overrides[get_metadata_service] = StubMetadataService
+
+    commodities_response = await client.get("/api/v1/commodities")
+    countries_response = await client.get("/api/v1/countries")
+    institutions_response = await client.get("/api/v1/institutions")
+    categories_response = await client.get("/api/v1/categories")
+    payees_response = await client.get("/api/v1/payees")
+    tags_response = await client.get("/api/v1/tags")
+    people_response = await client.get("/api/v1/people")
+    projects_response = await client.get("/api/v1/projects")
+
+    assert commodities_response.status_code == 200
+    assert commodities_response.json()[0]["name"] == "US Dollar"
+    assert countries_response.status_code == 200
+    assert countries_response.json() == []
+    assert institutions_response.status_code == 200
+    assert institutions_response.json() == []
+    assert categories_response.status_code == 200
+    assert categories_response.json()[0]["name"] == "Groceries"
+    assert payees_response.status_code == 200
+    assert payees_response.json()[0]["name"] == "Local Market"
+    assert tags_response.status_code == 200
+    assert tags_response.json() == []
+    assert people_response.status_code == 200
+    assert people_response.json() == []
+    assert projects_response.status_code == 200
+    assert projects_response.json() == []
 
 
 @pytest.mark.asyncio

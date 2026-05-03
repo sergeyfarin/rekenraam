@@ -2,6 +2,14 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listAccountTree, type AccountTreeNode } from "$lib/api/accounts";
+  import {
+    listCommodities,
+    listCountries,
+    listInstitutions,
+    type CommoditySummary,
+    type CountrySummary,
+    type InstitutionSummary,
+  } from "$lib/api/metadata";
   import AccountTreeItem from "./AccountTreeItem.svelte";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -34,46 +42,14 @@
     balance_minor: number;
   };
 
-  type Commodity = {
-    id: number;
-    book_id: number;
-    kind: string;
-    symbol: string | null;
-    name: string;
-    scale: number;
-    metadata: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-
-  type Country = {
-    id: number;
-    book_id: number;
-    code: string;
-    name: string;
-    created_at: string;
-    updated_at: string;
-  };
-
-  type Institution = {
-    id: number;
-    book_id: number;
-    name: string;
-    kind: string;
-    country_id: number | null;
-    country_name: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-
   const bookId = 1;
 
   let accounts: Account[] = [];
   let balances = new Map<number, number>();
   let accountTree: AccountTreeNode[] = [];
-  let commodities: Commodity[] = [];
-  let countries: Country[] = [];
-  let institutions: Institution[] = [];
+  let commodities: CommoditySummary[] = [];
+  let countries: CountrySummary[] = [];
+  let institutions: InstitutionSummary[] = [];
   let loading = true;
   let error = "";
 
@@ -147,7 +123,7 @@
 
   async function loadCommodities() {
     try {
-      const rows = await invoke<Commodity[]>("list_commodities", { bookId });
+      const rows = await listCommodities(bookId);
       commodities = rows.filter((row) => row.book_id === bookId);
       if (!formCommodityId && commodities.length > 0) {
         formCommodityId = commodities[0].id;
@@ -160,7 +136,7 @@
 
   async function loadCountries() {
     try {
-      countries = await invoke<Country[]>("list_countries", { bookId });
+      countries = await listCountries(bookId);
     } catch (e) {
       error = `Failed to load countries: ${String(e)}`;
       countries = [];
@@ -169,7 +145,7 @@
 
   async function loadInstitutions() {
     try {
-      institutions = await invoke<Institution[]>("list_institutions", { bookId });
+      institutions = await listInstitutions(bookId);
     } catch (e) {
       error = `Failed to load institutions: ${String(e)}`;
       institutions = [];
@@ -254,7 +230,7 @@
     error = "";
 
     try {
-      const created = await invoke<Institution>("create_institution", {
+      const created = await invoke<InstitutionSummary>("create_institution", {
         input: {
           book_id: bookId,
           name: newInstitutionName.trim(),

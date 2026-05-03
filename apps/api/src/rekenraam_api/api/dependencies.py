@@ -6,9 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rekenraam_api.db.session import session_factory
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.repositories.books import BookRepository
+from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.repositories.transactions import TransactionRepository
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.books import BookService
+from rekenraam_api.services.metadata import MetadataService
 from rekenraam_api.services.transactions import TransactionService
 
 
@@ -30,3 +32,8 @@ def get_account_service(session: AsyncSession = Depends(get_db_session)) -> Acco
 def get_transaction_service(session: AsyncSession = Depends(get_db_session)) -> TransactionService:
     repository = TransactionRepository(session)
     return TransactionService(repository)
+
+
+def get_metadata_service(session: AsyncSession = Depends(get_db_session)) -> MetadataService:
+    repository = MetadataRepository(session)
+    return MetadataService(repository)
