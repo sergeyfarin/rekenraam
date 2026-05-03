@@ -439,9 +439,11 @@ Progress note:
 - Docker reproducibility is working and covered by smoke validation.
 - Repository integration tests now run against ephemeral PostgreSQL.
 - The empty-app schema has been squashed into a single current initial migration to avoid fake historical version churn.
-- ORM coverage now includes the Stage 2 `users` and `book_memberships` tables so the application model layer matches the initial Alembic schema.
+- Migration tests now assert the full Stage 2 schema contract for every migrated table, index, foreign key, unique constraint, and named check constraint in the initial Alembic migration.
+- ORM coverage and direct parity tests now cover the full Stage 2 table set so the SQLAlchemy model layer matches the initial Alembic schema rather than only the original `users` and `book_memberships` slice.
 - Migration automation now includes explicit upgrade, downgrade, current-version, and Docker-backed smoke targets.
 - Migration smoke is now wired into CI so upgrade/downgrade/re-upgrade validation runs automatically for API changes.
+- The Tauri-only runtime/session tables `app_runtime_session`, `session_undo_stack`, `session_redo_stack`, and `session_reverts` are intentionally excluded from Stage 2 because they model desktop-process-local state, not shared server data. `app_runtime_session` is replaced by request/auth session context later in the web stack; the undo/redo tables have no direct PostgreSQL port and require a separate server-safe policy decision.
 
 ### Stage 3: Define The Python Domain Rules Before Porting Features
 
@@ -706,6 +708,13 @@ Candidates to replace or retire:
 - desktop backup scheduling model
 - Tauri undo/redo session implementation if not suitable for server model
 
+Explicit runtime/session table decision:
+
+- `app_runtime_session`: dropped as a database table. This was a singleton desktop-process marker and should be replaced by explicit request context plus authenticated web session handling, not by a PostgreSQL bootstrap table.
+- `session_undo_stack`: dropped from the Stage 2 schema. Do not port this table directly; if undo remains a product requirement, replace it later with a server-safe mutation-history design.
+- `session_redo_stack`: dropped from the Stage 2 schema for the same reason as `session_undo_stack`; no direct table port is planned.
+- `session_reverts`: dropped from the Stage 2 schema. Any future replacement belongs with a redesigned server-side undo/audit subsystem, not the initial migration baseline.
+
 For each such feature:
 
 1. define server equivalent
@@ -775,11 +784,12 @@ Current implemented coverage:
 - pytest service tests for books, accounts, and transactions mapping behavior, missing-record handling, and frozen outputs
 - pytest API tests for health, books list/detail, accounts list/detail/tree/register, transactions list/detail, and 404 behavior using dependency overrides
 - pytest repository tests against ephemeral PostgreSQL for books, accounts, transaction repositories, and seeded account balances
+- pytest migration tests for upgrade/downgrade/re-upgrade plus full Stage 2 schema-contract assertions across tables, indexes, foreign keys, unique constraints, and named check constraints
+- pytest ORM parity tests that compare the SQLAlchemy metadata against the Stage 2 Alembic schema contract across all modeled tables
 - Docker smoke coverage for schema boot plus live `/api/v1/health`, `/api/v1/books`, `/api/v1/accounts`, `/api/v1/accounts/tree`, `/api/v1/accounts/{id}`, `/api/v1/accounts/2/register`, and `/api/v1/transactions`
 
 Still missing:
 
-- dedicated migration test harness beyond the smoke script
 - parity fixtures comparing desktop and Python outputs on the same sample data
 
 ### Frontend
