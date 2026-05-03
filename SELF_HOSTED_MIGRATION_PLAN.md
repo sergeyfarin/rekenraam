@@ -1,645 +1,720 @@
 # Rekenraam Self-Hosted Migration Plan
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Purpose
 
-This document defines the recommended migration path from the current desktop-first
-Tauri + SQLite application to a self-hosted, multi-user finance application with:
+This document defines the migration path from the current desktop-first
+Tauri + Rust + SQLite application to a self-hosted, multi-user finance
+application with:
 
-- Rust backend
+- Python backend
 - PostgreSQL database
 - SvelteKit frontend
-- Docker-based local development and production deployment
+- Docker-based local development and deployment
 
-This is a product and platform migration, not just a framework swap. The core
-requirements change from local single-user desktop usage to shared server-side
-state, authenticated users, and browser-based access across devices.
+This plan replaces the previous Rust-backend direction. The new goal is a
+Python-first server architecture with strong correctness guarantees enforced by:
+
+- FastAPI
+- Pydantic
+- Pyright in strict mode
+- Ruff
+- frozen data structures for domain and DTO models
+
+The end state is a web-first application. Once functionality is migrated and
+verified, the Tauri path and related files should be removed.
 
 ## Executive Summary
 
-The best path is a staged monorepo migration that preserves the existing Rust
-domain logic while replacing Tauri-only runtime assumptions with a transport-
-agnostic backend service layer.
+The recommended path is still a staged monorepo migration, but the backend
+implementation language changes from Rust to Python.
 
 Recommended end state:
 
-- `apps/web`: SvelteKit frontend for browser clients
-- `apps/api`: Rust HTTP API server
-- `packages/types`: shared API contracts / DTO schemas
+- `apps/web`: SvelteKit frontend
+- `apps/api`: FastAPI backend
+- `apps/worker`: background jobs and schedulers
+- `packages/client`: generated or handwritten TypeScript API client
 - `infra/`: Docker, Compose, reverse proxy, deployment files
-- PostgreSQL as the system of record
-- Background workers inside the Rust backend or a separate worker binary
-- Tauri retained only temporarily or as an optional future desktop shell
+- PostgreSQL as the only system of record
 
-Do not create a separate repository yet. Keep a single repo until the new web
-product is stable. The current codebase contains substantial reusable Rust domain
-logic, tests, and schema knowledge that would be unnecessarily fragmented by an
-early repo split.
+Do not delete the Tauri path early. First achieve verified functional parity for
+all important desktop features. Then remove `src-tauri/`, Tauri-specific frontend
+code, and related desktop packaging files in one controlled cleanup phase.
 
-## Why The Current Architecture Must Change
+## What Changes In This Direction
 
-The current repo is optimized for a desktop app:
+The change is not only Rust to Python. It changes the implementation strategy:
 
-- Frontend calls Tauri commands directly via `invoke(...)`
-- SvelteKit is configured as a static SPA with `ssr = false`
-- Storage lifecycle depends on local file dialogs and local filesystem ownership
-- Database state is in-process and built around a single local SQLite file
-- Audit identity is derived from the operating system login instead of app users
+- domain logic moves from Rust modules to Python packages
+- Tauri command handlers are no longer the backend boundary
+- the SQLite desktop schema becomes a migration source, not the target runtime
+- correctness must be enforced through Python typing, validation, immutable data
+  models, explicit service boundaries, and tests
 
-Those are all acceptable for desktop, but not for a self-hosted multi-user app.
+## Architecture Goals
 
-## Target Architecture
+### Product Goals
 
-## 1. Product Shape
+- browser-based, self-hosted, multi-user finance app
+- shared access across devices and users
+- explicit auth and authorization
+- correctness for accounting workflows
+- incremental migration from current desktop implementation
 
-Deploy a browser-based web application with a separate API backend and a shared
-PostgreSQL database.
+### Technical Goals
+
+- Python backend with clear internal layering
+- PostgreSQL schema designed for long-term web use
+- no hidden state in route handlers
+- strict typing across backend and frontend interfaces
+- explicit parity tracking against the existing desktop app
+
+## Recommended Stack
+
+### Backend
+
+- Python 3.13+
+- FastAPI
+- Pydantic v2
+- SQLAlchemy 2.x with async support and Alembic
+- `asyncpg` via SQLAlchemy async engine
+- Pyright with `typeCheckingMode = strict`
+- Ruff for linting and formatting
+- pytest
 
 ### Frontend
 
 - SvelteKit
-- SSR enabled for authenticated app shell and faster first load
-- Client-side interactivity for register, reports, filters, and long forms
-- All data access through HTTP API, never direct database access
-
-### Backend
-
-- Rust with Axum
-- Clear layering:
-  - HTTP handlers
-  - application services
-  - domain logic
-  - repositories / persistence adapters
-- Authentication, authorization, audit logging, import processing, report jobs,
-  and background refresh handled server-side
-
-### Database
-
-- PostgreSQL 16+
-- SQL migrations with a real migration tool
-- Row ownership and access rules designed for multi-user books
-- Explicit indexes for register, reports, imports, and pricing queries
-
-### Deployment
-
-- Docker Compose for local development and single-host deployment
-- Reverse proxy in front of app containers
-- Persistent Postgres volume
-- Optional object storage later for documents / attachments
-
-## 2. Recommended Repository Layout
-
-Target layout:
-
-```text
-.
-├── apps/
-│   ├── api/                # Rust Axum API server
-│   ├── worker/             # Optional Rust worker for scheduled jobs
-│   ├── web/                # SvelteKit web frontend
-│   └── desktop/            # Optional temporary Tauri shell during migration
-├── crates/
-│   ├── domain/             # Business rules, validation, invariants
-│   ├── application/        # Use cases / service layer
-│   ├── persistence/        # DB adapters, repository implementations
-│   ├── api-contracts/      # Shared DTOs / serde schemas / OpenAPI support
-│   └── test-support/       # Fixtures, builders, integration helpers
-├── packages/
-│   └── types/              # Generated TS API types if needed
-├── infra/
-│   ├── docker/
-│   ├── compose/
-│   ├── nginx/              # or caddy/traefik
-│   └── scripts/
-├── docs/
-│   ├── architecture/
-│   ├── operations/
-│   └── migration/
-├── migrations/             # PostgreSQL migrations
-└── README.md
-```
-
-Transitional layout is acceptable at first. You do not need to move everything
-on day one. But the destination should be explicit.
-
-## 3. Core Architectural Decisions
-
-### Keep Rust
-
-Keep Rust for the backend. The repo already contains substantial domain logic in
-Rust for:
-
-- accounts
-- transactions and splits
-- investments and lots
-- reporting
-- import pipeline
-- pricing / FX
-- validation and invariants
-
-Rewriting this into TypeScript would slow the migration, reduce confidence, and
-discard existing test coverage.
-
-### Replace Tauri Commands With Service Calls
-
-Tauri command handlers should stop being the business logic boundary.
-
-Move to:
-
-- thin HTTP handlers in `apps/api`
-- thin Tauri handlers if desktop is retained temporarily
-- shared application services in reusable crates
-
-This is the most important refactor in the entire migration.
-
-### Move From SQLite-Centric Design To Postgres-Ready Design
-
-The current code relies on:
-
-- SQLite PRAGMAs
-- SQLite triggers and append-only enforcement
-- `rusqlite`
-- local connection management assumptions
-
-That needs a deliberate persistence redesign. Some concepts carry over cleanly,
-but the implementation should target Postgres first, not emulate SQLite forever.
-
-### Add Real User And Access Model
-
-The current schema is book-centric, which is useful. The self-hosted model should
-introduce:
-
-- `users`
-- `organizations` or `households` if shared spaces are needed
-- `book_memberships`
-- roles such as `owner`, `editor`, `viewer`
-- audit attribution by authenticated user id
-
-## 4. Recommended Stack
-
-### Backend
-
-- Rust stable
-- Axum
-- Tokio
-- SQLx or SeaORM for PostgreSQL access
-- `serde` / `serde_json`
-- `tracing` and `tracing-subscriber`
-- `utoipa` or equivalent for OpenAPI generation
-- `tower-http` for CORS, compression, trace layers
-
-Recommendation: prefer SQLx over an ORM-heavy stack. This app is query-heavy and
-financially sensitive. Explicit SQL is usually clearer and easier to optimize.
-
-### Frontend
-
-- SvelteKit
-- adapter-node for self-hosting behind reverse proxy
 - TypeScript
-- existing component stack can be retained if still suitable
+- adapter-node for self-hosting
+- HTTP-only interaction with the backend
 
 ### Database and Infra
 
 - PostgreSQL 16+
-- Redis only if later needed for queues, rate limits, or cache invalidation
-- Docker Compose for local dev and initial production
-- Caddy or Traefik for TLS termination and reverse proxy on a single host
+- Docker Compose for dev and initial production
+- Caddy or Traefik for reverse proxy and TLS
+- Redis optional later, not required initially
 
-## 5. Required Domain Changes For Multi-User Web
+## Correctness Strategy For Python
 
-These are not optional if the app becomes shared and self-hosted.
+Python is acceptable here only if the repo enforces discipline aggressively.
+These rules are part of the architecture, not optional code style.
 
-### Authentication
+### Type Safety
 
-Support one of:
+- all backend packages must pass Pyright strict
+- no untyped public service functions
+- no `Any` in domain or service layers unless locally justified and isolated
+- explicit return types on all exported functions
 
-- email + password with secure reset flow
-- OIDC only
-- both
+### Validation
 
-Recommendation: start with local auth plus optional OIDC later.
+- all request and response shapes defined as Pydantic models
+- all command inputs validated before service execution
+- all persistence outputs mapped into typed models before use in business logic
 
-Requirements:
+### Immutability
 
-- password hashing with Argon2id
-- session or token strategy defined explicitly
-- CSRF protection if cookie auth is used
-- secure password reset tokens
-- email verification optional for self-hosted setups
+- domain objects and DTOs should be frozen Pydantic models where mutation is not required
+- prefer tuples and frozen sets for internal immutable collections where useful
+- avoid passing mutable dicts across service boundaries
 
-### Authorization
+### Repository Boundaries
 
-Every data access path must validate book access. Do not rely on frontend route
-protection. Authorization belongs in the backend service layer.
+- HTTP handlers do not write SQL
+- service layer coordinates use cases and business rules
+- repositories encapsulate database access
+- domain rules do not depend on FastAPI or SQLAlchemy session objects
 
-### Auditability
+### Testing
 
-Every mutation should record:
+- unit tests for pure domain logic
+- repository tests against PostgreSQL
+- API tests for HTTP behavior
+- parity tests against known desktop behavior for important financial rules
 
-- authenticated user id
-- timestamp
-- request id
-- originating book id
-- relevant entity ids
+## Recommended Repository Layout
 
-### Attachments And Files
+Target structure:
 
-Current document flows likely assume local filesystem access. For web:
+```text
+.
+├── apps/
+│   ├── api/
+│   │   ├── pyproject.toml
+│   │   ├── alembic.ini
+│   │   ├── alembic/
+│   │   ├── src/
+│   │   │   └── rekenraam_api/
+│   │   │       ├── app.py
+│   │   │       ├── api/
+│   │   │       ├── config/
+│   │   │       ├── db/
+│   │   │       ├── domain/
+│   │   │       ├── services/
+│   │   │       ├── repositories/
+│   │   │       ├── schemas/
+│   │   │       └── tests/
+│   ├── worker/
+│   └── web/
+├── packages/
+│   └── client/
+├── docs/
+│   ├── migration/
+│   ├── parity/
+│   └── architecture/
+├── infra/
+│   ├── compose/
+│   ├── caddy/
+│   └── scripts/
+├── src/
+├── src-tauri/
+├── README.md
+└── SELF_HOSTED_MIGRATION_PLAN.md
+```
 
-- start with server-managed local storage volume
-- later support S3-compatible object storage if needed
-- store only metadata in Postgres
+Transitional note:
 
-### Background Jobs
+- `src/` and `src-tauri/` remain until parity is achieved
+- `apps/api/` becomes the new backend source of truth during migration
+- once parity is verified, delete Tauri-related paths
 
-Server-side jobs will be needed for:
+## Backend Package Shape
 
-- FX refresh
-- backup jobs
-- report cache pruning
-- import processing if large files are supported
+Recommended backend package layout inside `apps/api/src/rekenraam_api/`:
 
-Avoid tying these jobs to web request lifecycles.
+```text
+rekenraam_api/
+├── api/
+│   ├── dependencies.py
+│   ├── errors.py
+│   ├── router.py
+│   └── v1/
+│       ├── health.py
+│       ├── books.py
+│       ├── accounts.py
+│       ├── transactions.py
+│       ├── reports.py
+│       └── ...
+├── config/
+│   ├── settings.py
+│   └── logging.py
+├── db/
+│   ├── base.py
+│   ├── session.py
+│   ├── models/
+│   └── migrations/
+├── domain/
+│   ├── accounts.py
+│   ├── transactions.py
+│   ├── reports.py
+│   └── ...
+├── repositories/
+│   ├── books.py
+│   ├── accounts.py
+│   ├── transactions.py
+│   └── ...
+├── schemas/
+│   ├── books.py
+│   ├── accounts.py
+│   ├── transactions.py
+│   └── common.py
+├── services/
+│   ├── books.py
+│   ├── accounts.py
+│   ├── transactions.py
+│   └── ...
+└── tests/
+```
 
-## 6. Migration Strategy
+## Standards To Enforce From Day One
 
-Use staged migration. Do not attempt a single big-bang rewrite.
+### FastAPI
 
-### Phase 0: Freeze The Direction
+- thin route handlers only
+- dependency injection only for auth, db session, config, request context
+- all endpoints versioned under `/api/v1`
 
-Goals:
+### Pydantic
 
-- keep `main` usable
-- create the future target shape in docs
-- avoid mixing old Tauri assumptions into new work
+- request and response models live in `schemas/`
+- domain models that represent immutable business entities should be frozen
+- use constrained types and validators rather than loose strings where practical
+
+### Pyright
+
+- strict mode enabled at project root for the backend
+- fail CI on any type error
+- no ignored files except generated or explicitly isolated integration glue
+
+### Ruff
+
+- lint + format enforced in CI
+- import sorting included
+- ban unused noqa clutter and dead imports
+
+### Frozen Data Structures
+
+Recommended defaults:
+
+- Pydantic models: `ConfigDict(frozen=True)` unless mutation is necessary
+- prefer dataclass `frozen=True` for internal pure domain helpers where Pydantic is unnecessary
+- repository models are mapped into immutable domain or schema objects before leaving the repository layer
+
+## Functional Parity Rule
+
+The migration is not finished when the new stack is running. It is finished when
+the important desktop behavior has been migrated and verified.
+
+This means:
+
+- every major Tauri command group must map to a Python service/module or be consciously dropped
+- no Tauri path deletion until parity checklist is complete
+- parity must be tracked in a document, not kept in memory
+
+Recommended parity categories:
+
+1. storage and migrations
+2. books and currencies
+3. accounts and account tree
+4. transactions and splits
+5. reconciliation
+6. imports
+7. reports
+8. investments and lots
+9. pricing / FX
+10. settings and metadata
+11. backup / restore
+12. undo / redo policy replacement or conscious removal
+
+## Tauri Deletion Rule
+
+Delete `src-tauri/` and related files only after all of the following are true:
+
+1. Python backend covers all required MVP and currently used desktop functionality
+2. frontend no longer imports Tauri APIs
+3. parity checklist is signed off for core workflows
+4. data migration from desktop SQLite to PostgreSQL exists and is tested
+5. production Docker deployment for the web app is working
+
+Files to delete only at the end:
+
+- `src-tauri/`
+- Tauri dependencies in root `package.json`
+- Tauri-specific Vite/Svelte config adjustments
+- desktop-specific README sections
+
+## Step-By-Step Concrete Implementation Plan
+
+This is the concrete sequence to execute.
+
+### Stage 0: Reset The Migration Direction
+
+Goal:
+
+- stop deepening the Rust-backend migration path
+- make Python the official target backend
 
 Tasks:
 
-- create this migration plan
-- create a dedicated long-lived refactor branch when implementation starts
-- keep the current desktop app buildable until the web path is stable
+1. Update this migration plan to the Python direction.
+2. Freeze further feature work in the Rust API scaffold except where needed for migration support.
+3. Treat the current FastAPI migration as the only active backend direction.
+4. Keep current desktop app working during migration.
 
 Exit criteria:
 
-- architecture accepted
-- repo strategy accepted
-- implementation sequence agreed
+- docs reflect Python backend direction
+- implementation team follows Python plan, not Rust API expansion
 
-### Phase 1: Introduce Backend Boundaries Without Changing Product Behavior
+### Stage 1: Scaffold Python Backend Correctly
 
-Goals:
+Goal:
 
-- isolate business logic from Tauri
-- reduce direct frontend coupling to `invoke`
+- create the long-term backend foundation with correctness tooling from day one
 
 Tasks:
 
-- create a frontend API client abstraction
-- move `src/lib/api/*` toward a backend-agnostic interface
-- extract service modules from Tauri command files
-- make Tauri commands thin wrappers around services
-- define request / response DTOs independent of Tauri
+1. Create `apps/api/pyproject.toml`.
+2. Add dependencies for FastAPI, Pydantic, SQLAlchemy, Alembic, asyncpg, uvicorn.
+3. Add dev dependencies for Pyright, Ruff, pytest, pytest-asyncio, httpx.
+4. Add `pyrightconfig.json` with strict mode.
+5. Add Ruff config in `pyproject.toml`.
+6. Create `src/rekenraam_api/` package structure.
+7. Add settings management using Pydantic settings.
+8. Add app factory, top-level router, and `/api/v1/health` endpoint.
+9. Add Dockerfile for the Python API.
+10. Add Compose service for the Python API beside Postgres.
 
 Exit criteria:
 
-- at least one vertical slice works through shared services
-- no new business logic added directly to Tauri command handlers
+- backend starts locally and in Docker
+- `/api/v1/health` works
+- Pyright strict passes
+- Ruff passes
 
-### Phase 2: Create The Web Backend Skeleton
+### Stage 2: Establish PostgreSQL Schema And Migration Workflow
 
-Goals:
+Goal:
 
-- stand up a real Rust HTTP server
-- prove one vertical slice end-to-end
+- make Alembic the only schema migration path for the new backend
 
 Tasks:
 
-- add `apps/api`
-- add health endpoint, auth placeholder, structured error model, tracing setup
-- expose one slice first, preferably `accounts` or `commodities`
-- add OpenAPI generation
-- add integration tests against Postgres
+1. Create Alembic config and migrations environment.
+2. Create initial PostgreSQL schema for:
+  - users
+  - books
+  - book memberships
+  - currencies or base currency support
+3. Add a backend schema version mechanism if operationally useful.
+4. Add Makefile or task commands for:
+  - create migration
+  - apply migration
+  - downgrade in dev
+  - reset local database
+5. Add migration smoke tests in CI.
 
 Exit criteria:
 
-- browser client can call the new API for at least one slice
-- backend starts under Docker Compose
+- empty database can be created from scratch
+- migrations are reproducible in Docker and CI
 
-### Phase 3: Introduce PostgreSQL
+### Stage 3: Define The Python Domain Rules Before Porting Features
 
-Goals:
+Goal:
 
-- establish the long-term database model
-- stop deepening SQLite-only dependencies
+- avoid porting Tauri handlers directly into FastAPI route files
 
 Tasks:
 
-- design Postgres schema equivalent to current core model
-- create migration toolchain
-- port seed/reference data intentionally, not by blind SQL translation
-- decide which append-only invariants belong in DB constraints, triggers, or app services
-- define UUID strategy for externally visible ids
-
-Important:
-
-Do not carry forward every SQLite trigger mechanically. Re-evaluate each invariant.
-Some belong in the database, some in the service layer, and some in both.
+1. Create frozen domain models for books, accounts, transactions, splits, payees, categories.
+2. Define canonical schema objects for inbound/outbound API payloads.
+3. Define repository interfaces and service responsibilities.
+4. Define error taxonomy:
+  - validation
+  - not found
+  - conflict
+  - authorization
+  - infrastructure
+5. Define request context shape with authenticated user and correlation id.
 
 Exit criteria:
 
-- core entities exist in Postgres
-- schema migration story is reliable in dev and CI
-- one end-to-end write flow works against Postgres
+- service boundaries are explicit
+- no feature port begins without target domain shape
 
-### Phase 4: Add Auth And Multi-User Model
+### Stage 4: Build A Parity Matrix Against Tauri
 
-Goals:
+Goal:
 
-- make shared usage real, not theoretical
+- ensure no desktop functionality is forgotten
 
 Tasks:
 
-- add users, sessions, memberships, roles
-- add audit identity based on authenticated user
-- protect all routes and API handlers
-- add first-run admin bootstrap flow
+1. Create `docs/parity/desktop-to-python.md`.
+2. Inventory Tauri commands by module:
+  - storage
+  - accounts
+  - transactions
+  - reports
+  - commodities / currencies
+  - pricing / FX
+  - imports
+  - reconciliation
+  - settings
+3. For each command or feature, record:
+  - current file/function
+  - target Python module/service
+  - target endpoint
+  - status: not started / in progress / verified / dropped
+4. Mark conscious removals explicitly.
 
 Exit criteria:
 
-- multiple users can authenticate
-- permissions are enforced per book
+- every meaningful Tauri capability is accounted for
 
-### Phase 5: Migrate Frontend From Tauri SPA To Web App
+### Stage 5: Migrate Read-Only Slices First
 
-Goals:
+Goal:
 
-- make SvelteKit a real server-hosted web frontend
+- move low-risk functionality first and validate architecture
 
-Tasks:
+Recommended order:
 
-- move frontend to `apps/web`
-- switch from `adapter-static` to `adapter-node`
-- enable SSR where beneficial
-- replace all remaining `@tauri-apps/api` imports
-- add auth-aware route guards and session handling
+1. books
+2. accounts list/detail/tree
+3. payees/categories/tags/institutions
+4. reports metadata and simple read-only reports
 
-Exit criteria:
+Per slice tasks:
 
-- app works in browser without Tauri runtime
-- login, core account views, transaction flows work end-to-end
+1. create SQLAlchemy models or table mappings
+2. create repository module
+3. create service module
+4. create Pydantic response models
+5. create FastAPI endpoints
+6. add repository tests
+7. add API tests
+8. wire frontend client to new HTTP endpoint
 
-### Phase 6: Migrate Remaining Vertical Slices
+Exit criteria per slice:
+
+- route works
+- tests pass
+- frontend can read data through HTTP
+
+### Stage 6: Migrate Write Slices With Accounting Correctness First
+
+Goal:
+
+- preserve financial correctness while moving mutation logic to Python
 
 Priority order:
 
-1. accounts
-2. transactions/register
-3. categories/payees/tags/institutions
-4. reports
-5. commodities/investments
-6. import pipeline
-7. pricing / FX refresh
-8. backups / storage / documents
+1. account create/update/delete
+2. transaction create/update/delete with splits
+3. bulk transaction actions
+4. reconciliation actions
+5. imports
 
-Rationale:
+Per mutation slice tasks:
 
-- accounts and transactions establish the app's core value
-- reports depend on clean transaction and classification data
-- investments and imports are higher complexity and should not be the first slice
+1. identify existing Rust validations and invariants
+2. encode them in Python service layer
+3. decide which invariants also belong in PostgreSQL constraints or triggers
+4. implement transactional repository operations
+5. add parity tests against known desktop scenarios
+6. expose mutation endpoints
+7. wire frontend mutation flows
 
-### Phase 7: Operations Hardening
+Critical requirement:
+
+- double-entry integrity must not rely only on frontend validation
+
+### Stage 7: Migrate Complex Domains
+
+Goal:
+
+- port the most stateful and correctness-sensitive areas after the core is stable
+
+Priority order:
+
+1. reports calculations
+2. imports and import rules
+3. investments and lots
+4. pricing / FX refresh
+5. backup / restore strategy replacement for web
+
+Tasks for each complex domain:
+
+1. document current Rust behavior
+2. port rules into Python services
+3. create regression fixtures from current app behavior
+4. implement endpoints and jobs
+5. validate on realistic data
+
+### Stage 8: Introduce Auth And Multi-User Access
+
+Goal:
+
+- move from personal desktop state to real shared server state
 
 Tasks:
 
-- Docker production images
-- Compose deployment profile
-- reverse proxy and TLS
-- backups for Postgres and uploaded documents
-- metrics and log aggregation guidance
-- health checks and readiness checks
-- restore test procedure
+1. add users table and membership model if not already present
+2. add password hashing with Argon2id
+3. add login, logout, session management
+4. add access checks on every book-scoped service
+5. add first-admin bootstrap flow
+6. add audit trail fields and request context logging
 
 Exit criteria:
 
-- single-host deployment is documented and reproducible
-- backup and restore are tested
+- multiple users can log in
+- book access is enforced server-side
 
-### Phase 8: Retire Or Minimize Desktop-Specific Code
+### Stage 9: Move Frontend Off Tauri Completely
 
-Options:
+Goal:
 
-- fully retire Tauri
-- keep Tauri as a thin desktop shell pointed at the same API
-- keep a local-only desktop edition temporarily
+- make the SvelteKit frontend web-native
 
-Recommendation: do not decide this too early. First get the web product stable.
+Tasks:
 
-## 7. Docker Strategy
+1. create shared API client layer for HTTP calls
+2. replace direct Tauri `invoke()` usage throughout frontend
+3. move frontend to `apps/web` if not already done
+4. switch from SPA/Tauri assumptions to adapter-node deployment
+5. add auth-aware session handling in SvelteKit
 
-### Development Compose
+Exit criteria:
 
-Use Docker Compose for local development with at least:
+- frontend runs only against HTTP API
+- no runtime dependency on Tauri remains in the web frontend
 
-- `postgres`
-- `api`
-- `web`
-- optional `mailpit` for auth email flows
+### Stage 10: Data Migration From SQLite To PostgreSQL
 
-Recommended dev flow:
+Goal:
 
-- run Postgres in Docker
-- optionally run `api` and `web` outside Docker for faster edit cycles
-- keep full Compose support for onboarding and CI parity
+- preserve existing user data when moving to the new system
 
-Example services:
+Tasks:
 
-- `postgres`: persistent named volume, init env vars, healthcheck
-- `api`: mounted source in dev or built image in prod
-- `web`: SvelteKit node server or dev server depending on mode
-- `proxy`: only needed in production-like local tests
+1. design mapping from current SQLite schema to PostgreSQL schema
+2. build one-way import tooling in Python
+3. migrate reference data first
+4. migrate books/accounts/transactions/splits
+5. migrate reports metadata, imports, pricing, and investment data as needed
+6. build validation checks:
+  - row counts
+  - balances
+  - sample report comparisons
+  - reconciliation comparisons
 
-### Production Compose
+Important:
 
-For a single VPS / home server deployment:
+- do not attempt live sync between SQLite and PostgreSQL
+- treat SQLite as a source to import from, not a parallel runtime
 
-- `caddy` or `traefik`
-- `web`
-- `api`
-- `postgres`
-- optional `worker`
+### Stage 11: Replace Or Retire Desktop-Only Concepts
 
-Requirements:
+Goal:
 
-- no database exposed publicly
-- secrets injected through environment or mounted secret files
-- persistent volumes for database and uploads
-- automated backups outside the running container filesystem
+- remove behavior that only made sense in a local desktop app
 
-### Container Build Guidance
+Candidates to replace or retire:
 
-- multi-stage Docker builds
-- minimal runtime images
-- non-root user in runtime containers
-- pinned base image families
-- healthcheck endpoints for `api` and `web`
+- local file chooser storage selection
+- OS login derived audit identity
+- desktop backup scheduling model
+- Tauri undo/redo session implementation if not suitable for server model
 
-## 8. Data Migration Strategy
+For each such feature:
 
-There are two separate migrations:
+1. define server equivalent
+2. migrate if still valuable
+3. otherwise explicitly drop and document
 
-1. architecture migration
-2. existing user data migration from SQLite to Postgres
+### Stage 12: Delete Tauri Path
 
-Treat them separately.
+Goal:
 
-### Initial Recommendation
+- remove the old desktop backend and packaging once parity is proven
 
-Do not block backend architecture migration on perfect automated data import.
-First make the new system correct for fresh Postgres data. Then build a one-way
-import from the current SQLite format.
+Tasks:
 
-### Data Migration Approach
+1. verify parity checklist completion
+2. verify frontend no longer uses Tauri APIs
+3. remove `src-tauri/`
+4. remove Tauri dependencies from root frontend config and package files
+5. remove Tauri-specific docs and scripts
+6. update README and onboarding docs to web-first instructions
 
-- define canonical entity mapping from SQLite schema to Postgres schema
-- build import command in Rust
-- run import idempotently into an empty target book or workspace
-- verify with reconciliation checks and row-count sanity checks
+Exit criteria:
 
-Do not attempt live bi-directional sync between desktop SQLite and Postgres.
-That is a separate product problem.
+- repo contains only the self-hosted web architecture
 
-## 9. Testing Strategy
+## Detailed First 10 Implementation Tasks
+
+These are the next concrete execution steps to start the Python migration.
+
+1. Remove `apps/api` Rust backend scaffold or archive it as inactive.
+2. Create `apps/api` Python package scaffold with `pyproject.toml`.
+3. Add FastAPI app with `/api/v1/health`.
+4. Add Pyright strict and Ruff configuration.
+5. Add Dockerfile and Compose service for Python API.
+6. Add Alembic and initial Postgres migration for users/books/book_memberships.
+7. Add frozen Pydantic models for books.
+8. Add repository + service + endpoint for books list/detail.
+9. Add parity tracking document for Tauri-to-Python migration.
+10. Inventory `src-tauri/src/db_accounts.rs` and start the accounts read-only slice.
+
+## Detailed Accounts Migration Checklist
+
+Because accounts are the first real finance slice, use this sequence:
+
+1. map current Rust `Account` fields to a Python target model
+2. decide which fields are required for the first read-only endpoint
+3. create Postgres accounts table and indexes
+4. create SQLAlchemy model and repository
+5. create frozen Pydantic output model
+6. create accounts service
+7. add `/api/v1/accounts`
+8. add `/api/v1/accounts/{id}`
+9. add tests against seeded data
+10. compare output to current desktop behavior on sample data
+
+## Testing Plan
 
 ### Backend
 
-- unit tests for pure domain logic
-- repository tests against ephemeral Postgres
-- integration tests for HTTP handlers
-- migration tests on empty and semi-realistic databases
+- pytest unit tests for domain logic
+- repository tests against PostgreSQL
+- API tests using HTTPX test client
+- migration tests using ephemeral databases
 
 ### Frontend
 
-- component tests for critical interactions
-- end-to-end tests for login, accounts, transaction creation, reconciliation,
-  and import wizard
+- component tests for HTTP-driven views
+- end-to-end tests for login, accounts, transactions, reconciliation, imports
 
-### Contract
+### Parity Tests
 
-- OpenAPI generation checked in CI
-- frontend type generation from API schema where useful
+- create fixtures from desktop SQLite files where useful
+- compare balances, account lists, and report outputs between old and new implementations
 
-## 10. CI/CD Recommendations
+## CI/CD Plan
 
-Add CI before the refactor gets deep.
+Minimum CI for the Python backend:
 
-Minimum CI jobs:
+- Ruff check
+- Ruff format check
+- Pyright strict
+- pytest
+- Alembic migration smoke test
+- Docker image build
 
-- frontend typecheck and build
-- Rust fmt, clippy, test
-- Postgres-backed integration tests
-- Docker image build smoke test
+Frontend CI remains:
 
-Later:
+- Svelte typecheck
+- build
+- tests
 
-- dependency scanning
-- image scanning
-- migration drift detection
+## Security Baseline
 
-## 11. Security And Operations Baseline
+Minimum requirements:
 
-Minimum baseline for a self-hosted finance app:
-
-- HTTPS by default
-- secure headers at reverse proxy
-- rate limits on auth endpoints
+- HTTPS in production
+- secure session or token handling
 - Argon2id password hashing
-- encrypted backups where appropriate
-- audit logs for sensitive mutations
-- documented secret rotation process
-- no direct DB admin endpoints in app UI
+- no secrets in source control
+- explicit authorization checks in services
+- audit logging for sensitive mutations
 
-## 12. What To Preserve From The Current System
+## Open Technical Defaults
 
-Preserve these concepts during migration:
+Unless you want to override them, this plan assumes:
 
-- strong domain validation
-- double-entry integrity
-- append-only thinking where it protects auditability
-- test coverage for core finance rules
-- explicit reporting logic rather than opaque ORM behavior
+- SQLAlchemy 2.x + Alembic, not Django ORM or Tortoise
+- async FastAPI backend
+- frozen Pydantic v2 models for immutable schemas and domain DTOs
+- pytest as the test runner
+- one monorepo, not split repositories
 
-## 13. What To Drop Or Rework
+## Final Recommendation
 
-Do not carry these assumptions forward unchanged:
+Build the self-hosted finance app as:
 
-- local filesystem pickers as storage setup
-- OS login as audit user identity
-- direct Tauri `invoke` coupling from route components
-- SQLite-specific concurrency tuning as a system design foundation
-- SPA-only deployment assumptions
-
-## 14. Recommended First Implementation Sprint
-
-The first implementation sprint should be small and architecture-heavy.
-
-### Sprint A
-
-- create `docs/` and move this plan there later if repo restructuring begins
-- add `apps/api` Rust server skeleton
-- add `apps/web` skeleton or prepare current frontend for later move
-- extract one service slice from Tauri command handlers
-- define shared error model and API DTOs
-- run Postgres in Docker Compose
-- implement `GET /health` and one real read endpoint
-
-### Success Condition
-
-You can boot:
-
-- Postgres in Docker
-- Rust API locally or in Docker
-- SvelteKit frontend locally
-
-and load one real screen using HTTP instead of Tauri.
-
-## 15. Recommended Order Of Repository Changes
-
-1. Add docs and target layout plan
-2. Add Docker Compose and Postgres dev setup
-3. Add `apps/api`
-4. Extract shared Rust service layer
-5. Move first vertical slice to HTTP
-6. Add auth foundation
-7. Move frontend to web-first setup
-8. Port remaining slices
-9. Add production deployment and backup docs
-
-This order reduces the risk of a half-migrated repo with no stable execution path.
-
-## 16. Non-Goals For The First Refactor Wave
-
-Avoid these early:
-
-- Kubernetes
-- microservices
-- event sourcing rewrite
-- real-time collaboration
-- mobile apps
-- bi-directional desktop/web sync
-
-They add complexity before the core web product is stable.
-
-## 17. Final Recommendation
-
-Build a monorepo self-hosted web app with:
-
-- Rust Axum backend
+- Python backend with FastAPI
 - PostgreSQL
 - SvelteKit frontend
 - Docker Compose deployment
 
-Keep the current repo, preserve the Rust domain logic, and perform the migration
-in staged vertical slices. The controlling technical task is not "switch to web".
-It is "separate business logic from Tauri and redesign persistence for Postgres
-and multi-user access."
+Use strict typing and immutable models aggressively so the Python backend remains
+predictable and safe. Migrate the current Tauri functionality slice by slice,
+track parity explicitly, and delete the Tauri path only after the Python web
+stack has proven functional coverage.

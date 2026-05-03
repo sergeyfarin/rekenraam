@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rekenraam-api"
+version = "0.1.0"
+description = "Rekenraam self-hosted API"
+requires-python = ">=3.13"
+dependencies = [
+  "alembic==1.16.4",
+  "asyncpg==0.31.0",
+  "fastapi==0.136.1",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "sqlalchemy[asyncio]==2.0.42",
+  "uvicorn[standard]==0.46.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "pyright==1.1.403",
+  "pytest==9.0.3",
+  "pytest-asyncio==1.1.0",
+  "ruff==0.15.12",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "RUF"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

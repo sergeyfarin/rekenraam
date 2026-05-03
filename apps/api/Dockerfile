@@ -1,24 +1,24 @@
-FROM rust:1.88-bookworm AS builder
+FROM python:3.13-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
-
-COPY apps/api /app
-
-RUN cargo build --release --locked
-
-FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends curl build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+COPY apps/api/pyproject.toml /app/pyproject.toml
+COPY apps/api/alembic.ini /app/alembic.ini
+COPY apps/api/alembic /app/alembic
+COPY apps/api/src /app/src
 
-COPY --from=builder /app/target/release/rekenraam-api /usr/local/bin/rekenraam-api
+RUN pip install --no-cache-dir .
 
 ENV APP_HOST=0.0.0.0
 ENV APP_PORT=8080
 
 EXPOSE 8080
 
-CMD ["rekenraam-api"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn rekenraam_api.app:app --host ${APP_HOST} --port ${APP_PORT}"]

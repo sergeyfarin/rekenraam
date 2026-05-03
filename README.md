@@ -54,7 +54,7 @@ npm run tauri dev
 
 ## Self-Hosted API Scaffold
 
-The first web migration slice now includes a standalone Rust API scaffold under
+The first web migration slice now includes a standalone Python FastAPI scaffold under
 `apps/api` plus a Docker Compose stack with PostgreSQL.
 
 ```bash
@@ -62,29 +62,43 @@ cp .env.example .env
 docker compose up --build api postgres
 ```
 
+If you previously ran the old Rust API scaffold against Docker, the existing
+Postgres volume may contain incompatible tables. The Python scaffold now uses a
+fresh Compose volume, but if you want to reset the local test database entirely:
+
+```bash
+make api-reset-db
+docker compose up --build api postgres
+```
+
 Then check:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/health
 ```
 
 Expected response:
 
 ```json
-{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0002_accounts"}
+{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0002_add_accounts"}
 ```
 
-The API now runs SQLx migrations automatically on startup from `apps/api/migrations`.
-The Compose stack also includes an API healthcheck against `/health`, so container
-readiness reflects actual application startup rather than process spawn alone.
+The API now runs Alembic migrations automatically on startup.
+The Compose stack also includes an API healthcheck against `/api/v1/health`, so
+container readiness reflects actual application startup rather than process spawn
+alone.
 
 The repo also includes a small `Makefile` for common API tasks:
 
 ```bash
 make api-check
+make api-lint
+make api-typecheck
 make api-up
 make api-health
 make api-books
+make api-accounts
+make api-smoke
 make api-migrate-new NAME=add_accounts
 ```
 
@@ -118,19 +132,28 @@ Expected response:
 {"id":1,"slug":"personal","name":"Personal","base_currency_code":"USD"}
 ```
 
-First accounts endpoint:
+Accounts endpoints:
 
 ```bash
 curl http://localhost:8080/api/v1/accounts
+curl http://localhost:8080/api/v1/accounts/1
 ```
 
-Expected response:
+Example response fields:
 
 ```json
-[
-  {"id":1,"book_id":1,"parent_id":null,"account_type":"asset","name":"Cash","currency_code":"USD","is_closed":false,"is_hidden":false},
-  {"id":2,"book_id":1,"parent_id":null,"account_type":"asset","name":"Checking Account","currency_code":"USD","is_closed":false,"is_hidden":false}
-]
+{
+  "id": 1,
+  "book_id": 1,
+  "parent_id": null,
+  "account_type": "asset",
+  "name": "Assets",
+  "is_closed": false,
+  "is_hidden": false,
+  "is_system": false,
+  "system_role": null,
+  "created_at": "2026-05-03T00:00:00+00:00"
+}
 ```
 
 **Linux / WSL2 prerequisites** (required for Tauri's native file dialogs):
@@ -160,7 +183,7 @@ Current schema version: **18** (consolidated in `V1__init.sql`).
 |----------|---------|
 | [MASTER_PLAN.md](MASTER_PLAN.md) | Prioritized execution plan — start here |
 | [SCHEMA.md](SCHEMA.md) | Database schema reference |
-| [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) | Target architecture and staged migration plan for the self-hosted Rust + PostgreSQL + SvelteKit + Docker version |
+| [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) | Target architecture and staged migration plan for the self-hosted Python + PostgreSQL + SvelteKit + Docker version |
 
 ## Contributing
 

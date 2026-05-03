@@ -7,5 +7,13 @@ node_modules
 .env.*
 !.env.example
 /apps/api/target
+/apps/api/.venv
+/apps/api/.pytest_cache
+/apps/api/.ruff_cache
+/apps/api/.mypy_cache
+/apps/api/.pyright
+/apps/api/alembic/versions/*.pyc
+/apps/api/src/**/*.pyc
+/apps/api/__pycache__
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
