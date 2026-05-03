@@ -1,4 +1,4 @@
-import { apiGetWithTauriFallback } from "$lib/api/client";
+import { apiGetWithTauriFallback, apiPutWithTauriFallback } from "$lib/api/client";
 
 export type AccountTreeNode = {
   id: number;
@@ -98,4 +98,13 @@ export async function getAccountBookingPolicy(accountId: number): Promise<string
   return apiGetWithTauriFallback<string>(`/accounts/${accountId}/booking-policy`, "get_account_booking_policy", {
     accountId,
   });
+}
+
+export async function setAccountBookingPolicy(accountId: number, bookingPolicy: string): Promise<string> {
+  return apiPutWithTauriFallback<string, { booking_policy: string }>(
+    `/accounts/${accountId}/booking-policy`,
+    { booking_policy: bookingPolicy },
+    "set_account_booking_policy",
+    { input: { account_id: accountId, booking_policy: bookingPolicy } }
+  );
 }

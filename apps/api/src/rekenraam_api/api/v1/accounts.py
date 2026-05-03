@@ -6,6 +6,7 @@ from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingSummary,
+    AccountBookingPolicyUpdate,
     AccountDirectiveSummary,
     AccountSummary,
     AccountTreeNode,
@@ -60,6 +61,26 @@ async def get_account_booking_policy(
         policy = await account_service.get_account_booking_policy(account_id)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if policy is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
+    return policy
+
+
+@router.put("/{account_id}/booking-policy", response_model=str)
+async def set_account_booking_policy(
+    account_id: int,
+    input: AccountBookingPolicyUpdate,
+    account_service: AccountService = Depends(get_account_service),
+) -> str:
+    try:
+        policy = await account_service.set_account_booking_policy(account_id, input.booking_policy)
+    except ValueError as error:
+        message = str(error)
+        status_code = status.HTTP_400_BAD_REQUEST
+        if message == "system accounts cannot be updated":
+            status_code = status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=status_code, detail=message) from error
 
     if policy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")

@@ -57,6 +57,12 @@ class AccountDirectiveSummary(BaseModel):
     created_at: datetime
 
 
+class AccountBookingPolicyUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    booking_policy: str
+
+
 class AccountTreeNode(BaseModel):
     model_config = ConfigDict(frozen=True)
 

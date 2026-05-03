@@ -204,6 +204,15 @@ class StubAccountService:
             raise ValueError("booking policy only applies to investment accounts")
         return "average"
 
+    async def set_account_booking_policy(self, account_id: int, booking_policy: str) -> str | None:
+        if account_id == 99:
+            return None
+        if account_id == 2:
+            raise ValueError("booking policy only applies to investment accounts")
+        if booking_policy == "bad-policy":
+            raise ValueError("booking policy must be fifo, lifo, strict, or average")
+        return booking_policy
+
 
 class StubTransactionService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
@@ -563,6 +572,26 @@ async def test_get_account_booking_policy_rejects_non_investment_account(client:
 
     assert response.status_code == 400
     assert response.json() == {"detail": "booking policy only applies to investment accounts"}
+
+
+@pytest.mark.asyncio
+async def test_set_account_booking_policy_updates_policy(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.put("/api/v1/accounts/9/booking-policy", json={"booking_policy": "lifo"})
+
+    assert response.status_code == 200
+    assert response.json() == "lifo"
+
+
+@pytest.mark.asyncio
+async def test_set_account_booking_policy_rejects_invalid_value(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.put("/api/v1/accounts/9/booking-policy", json={"booking_policy": "bad-policy"})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "booking policy must be fifo, lifo, strict, or average"}
 
 
 @pytest.mark.asyncio

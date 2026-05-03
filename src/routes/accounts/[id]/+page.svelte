@@ -8,6 +8,7 @@
     listAccountBalancings,
     listAccountBalances,
     listAccountDirectives,
+    setAccountBookingPolicy,
     type AccountBalancingSummary,
     type AccountDirectiveSummary,
   } from "$lib/api/accounts";
@@ -312,9 +313,7 @@
     if (!accountId) return;
     savingPolicy = true;
     try {
-      bookingPolicy = await invoke<string>("set_account_booking_policy", {
-        input: { account_id: accountId, booking_policy: bookingPolicy }
-      });
+      bookingPolicy = await setAccountBookingPolicy(accountId, bookingPolicy);
     } catch (e) {
       error = `Failed to update booking policy: ${formatError(e)}`;
     } finally {

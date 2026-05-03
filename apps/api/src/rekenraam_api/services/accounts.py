@@ -75,6 +75,20 @@ class AccountService:
             raise ValueError("booking policy only applies to investment accounts")
         return policy or "fifo"
 
+    async def set_account_booking_policy(self, account_id: int, booking_policy: str) -> str | None:
+        normalized_policy = booking_policy.strip().lower()
+        if normalized_policy not in {"fifo", "lifo", "strict", "average"}:
+            raise ValueError("booking policy must be fifo, lifo, strict, or average")
+
+        account = await self._repository.set_account_booking_policy(account_id, normalized_policy)
+        if account is None:
+            return None
+        if account.is_system:
+            raise ValueError("system accounts cannot be updated")
+        if account.account_type != "investment":
+            raise ValueError("booking policy only applies to investment accounts")
+        return account.booking_policy or "fifo"
+
     async def list_account_tree(self) -> list[AccountTreeNode]:
         accounts = await self._repository.list_accounts()
         if not accounts:

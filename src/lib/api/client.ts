@@ -26,13 +26,19 @@ async function parseError(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`.trim();
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = getApiBaseUrl();
   if (baseUrl === null) {
     throw new Error("PUBLIC_API_BASE_URL is not configured");
   }
 
-  const response = await fetch(`${baseUrl}${path}`);
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    ...init,
+  });
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
@@ -40,10 +46,30 @@ export async function apiGet<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function apiGet<T>(path: string): Promise<T> {
+  return apiJson<T>(path);
+}
+
 export async function apiGetWithTauriFallback<T>(path: string, command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await apiGet<T>(path);
   } catch {
     return await invoke<T>(command, args);
+  }
+}
+
+export async function apiPutWithTauriFallback<TResponse, TBody>(
+  path: string,
+  body: TBody,
+  command: string,
+  args?: Record<string, unknown>
+): Promise<TResponse> {
+  try {
+    return await apiJson<TResponse>(path, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return await invoke<TResponse>(command, args);
   }
 }

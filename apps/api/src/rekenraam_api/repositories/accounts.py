@@ -96,3 +96,13 @@ class AccountRepository:
         if account is None:
             return None, None
         return account, account.booking_policy
+
+    async def set_account_booking_policy(self, account_id: int, booking_policy: str) -> Account | None:
+        account = await self.get_account_by_id(account_id)
+        if account is None:
+            return None
+
+        account.booking_policy = booking_policy
+        await self._session.commit()
+        await self._session.refresh(account)
+        return account

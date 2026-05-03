@@ -165,6 +165,13 @@ class StubAccountRepository:
             return None, None
         return account, account.booking_policy
 
+    async def set_account_booking_policy(self, account_id: int, booking_policy: str) -> Account | None:
+        account = await self.get_account_by_id(account_id)
+        if account is None:
+            return None
+        account.booking_policy = booking_policy
+        return account
+
 
 class StubTransactionRepository:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
@@ -377,6 +384,23 @@ async def test_account_service_rejects_booking_policy_for_non_investment_account
 
     with pytest.raises(ValueError, match="booking policy only applies"):
         await service.get_account_booking_policy(1)
+
+
+@pytest.mark.asyncio
+async def test_account_service_updates_booking_policy_for_investment_account() -> None:
+    service = AccountService(StubAccountRepository())
+
+    result = await service.set_account_booking_policy(9, "lifo")
+
+    assert result == "lifo"
+
+
+@pytest.mark.asyncio
+async def test_account_service_rejects_invalid_booking_policy_updates() -> None:
+    service = AccountService(StubAccountRepository())
+
+    with pytest.raises(ValueError, match="booking policy must be fifo, lifo, strict, or average"):
+        await service.set_account_booking_policy(9, "bad-policy")
 
 
 @pytest.mark.asyncio
