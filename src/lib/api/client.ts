@@ -3,11 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 const rawApiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL?.trim() ?? "";
 
 function getApiBaseUrl(): string | null {
-  if (!rawApiBaseUrl) {
-    return null;
+  if (rawApiBaseUrl) {
+    return rawApiBaseUrl.endsWith("/") ? rawApiBaseUrl.slice(0, -1) : rawApiBaseUrl;
   }
 
-  return rawApiBaseUrl.endsWith("/") ? rawApiBaseUrl.slice(0, -1) : rawApiBaseUrl;
+  if (typeof window !== "undefined") {
+    const { protocol, origin } = window.location;
+    if (protocol === "http:" || protocol === "https:") {
+      return `${origin}/api/v1`;
+    }
+  }
+
+  return null;
 }
 
 export function hasApiBaseUrl(): boolean {

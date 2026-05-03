@@ -839,6 +839,22 @@ async def test_health_returns_expected_payload(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_health_preflight_allows_local_frontend_origin(client: AsyncClient) -> None:
+    app.dependency_overrides[get_book_service] = StubBookService
+
+    response = await client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+@pytest.mark.asyncio
 async def test_list_books_returns_seeded_book_shape(client: AsyncClient) -> None:
     app.dependency_overrides[get_book_service] = StubBookService
 

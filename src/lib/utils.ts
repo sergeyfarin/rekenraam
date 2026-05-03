@@ -19,6 +19,7 @@ type AppError =
 export function formatError(e: unknown): string {
   if (e === null || e === undefined) return "Unknown error";
   if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message || e.name;
   if (typeof e === "object") {
     const err = e as Record<string, unknown>;
     if (typeof err["type"] === "string" && err["data"] !== undefined) {
@@ -37,7 +38,14 @@ export function formatError(e: unknown): string {
       }
     }
     // Fallback: try JSON serialization
-    try { return JSON.stringify(e); } catch { /* ignore */ }
+    try {
+      const serialized = JSON.stringify(e);
+      if (serialized && serialized !== "{}") {
+        return serialized;
+      }
+    } catch {
+      // Ignore JSON parse failures and fall through.
+    }
   }
   return String(e);
 }
