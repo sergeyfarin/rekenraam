@@ -11,12 +11,97 @@ from rekenraam_api.schemas.reports import (
     CategorySpendRow,
     PayeeTotalsReportInput,
     PayeeTotalRow,
+    ReportDefinitionCreateInput,
+    ReportDefinitionSummary,
+    ReportDefinitionUpdateInput,
+    ReportRunCreateInput,
+    ReportRunSummary,
 )
 from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.reports import ReportService
 
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+@router.get("/definitions", response_model=list[ReportDefinitionSummary])
+async def list_report_definitions(
+    book_id: int = Query(default=1),
+    report_service: ReportService = Depends(get_report_service),
+) -> list[ReportDefinitionSummary]:
+    return await report_service.list_report_definitions(book_id)
+
+
+@router.get("/definitions/{definition_id}", response_model=ReportDefinitionSummary)
+async def get_report_definition(
+    definition_id: int,
+    report_service: ReportService = Depends(get_report_service),
+) -> ReportDefinitionSummary:
+    item = await report_service.get_report_definition(definition_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found")
+    return item
+
+
+@router.post("/definitions", response_model=ReportDefinitionSummary)
+async def create_report_definition(
+    input: ReportDefinitionCreateInput,
+    report_service: ReportService = Depends(get_report_service),
+) -> ReportDefinitionSummary:
+    try:
+        return await report_service.create_report_definition(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put("/definitions/{definition_id}", response_model=ReportDefinitionSummary)
+async def update_report_definition(
+    definition_id: int,
+    input: ReportDefinitionUpdateInput,
+    report_service: ReportService = Depends(get_report_service),
+) -> ReportDefinitionSummary:
+    if definition_id != input.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path id must match body id")
+    try:
+        item = await report_service.update_report_definition(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found")
+    return item
+
+
+@router.delete("/definitions/{definition_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_report_definition(
+    definition_id: int,
+    report_service: ReportService = Depends(get_report_service),
+) -> None:
+    deleted = await report_service.delete_report_definition(definition_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found")
+
+
+@router.get("/runs", response_model=list[ReportRunSummary])
+async def list_report_runs(
+    book_id: int = Query(default=1),
+    definition_id: int | None = Query(default=None),
+    report_service: ReportService = Depends(get_report_service),
+) -> list[ReportRunSummary]:
+    return await report_service.list_report_runs(book_id, definition_id)
+
+
+@router.post("/runs", response_model=ReportRunSummary)
+async def create_report_run(
+    input: ReportRunCreateInput,
+    report_service: ReportService = Depends(get_report_service),
+) -> ReportRunSummary:
+    try:
+        return await report_service.create_report_run(input)
+    except ValueError as error:
+        detail = str(error)
+        if detail == "report definition not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from error
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from error
 
 
 @router.post("/cashflow", response_model=list[CashflowRow])

@@ -215,6 +215,9 @@ class PricingRepository:
         await self._session.refresh(assignment)
         return assignment
 
+    async def get_pricing_source_assignment(self, assignment_id: int) -> PricingSourceAssignment | None:
+        return await self._session.get(PricingSourceAssignment, assignment_id)
+
     async def update_pricing_source_assignment(
         self,
         *,
@@ -242,7 +245,7 @@ class PricingRepository:
         return assignment
 
     async def delete_pricing_source_assignment(self, assignment_id: int) -> bool:
-        assignment = await self._session.get(PricingSourceAssignment, assignment_id)
+        assignment = await self.get_pricing_source_assignment(assignment_id)
         if assignment is None:
             return False
         await self._session.delete(assignment)

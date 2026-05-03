@@ -42,6 +42,68 @@ def upgrade() -> None:
     op.create_index("ix_books_slug", "books", ["slug"], unique=True)
 
     op.create_table(
+        "book_state",
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("change_seq", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+
+    op.create_table(
+        "report_cache",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("report_type", sa.String(length=100), nullable=False),
+        sa.Column("params_hash", sa.String(length=128), nullable=False),
+        sa.Column("params_json", sa.Text(), nullable=True),
+        sa.Column("as_of_seq", sa.Integer(), nullable=False),
+        sa.Column("payload_json", sa.Text(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("book_id", "report_type", "params_hash", "as_of_seq", name="uq_report_cache_entry"),
+    )
+    op.create_index("ix_report_cache_book_type", "report_cache", ["book_id", "report_type"], unique=False)
+    op.create_index("ix_report_cache_book_seq", "report_cache", ["book_id", "as_of_seq"], unique=False)
+
+    op.create_table(
+        "report_definitions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("previous_report_definition_id", sa.BigInteger(), sa.ForeignKey("report_definitions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("session_id", sa.String(length=255), nullable=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("kind", sa.String(length=20), nullable=False, server_default=sa.text("'custom'")),
+        sa.Column("query_type", sa.String(length=20), nullable=False, server_default=sa.text("'sql'")),
+        sa.Column("query_text", sa.Text(), nullable=False),
+        sa.Column("params_schema", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("kind IN ('builtin', 'custom')", name="ck_report_definitions_kind"),
+        sa.CheckConstraint("query_type IN ('sql', 'template')", name="ck_report_definitions_query_type"),
+        sa.UniqueConstraint("previous_report_definition_id", name="uq_report_definitions_previous"),
+    )
+    op.create_index("ix_report_definitions_book", "report_definitions", ["book_id"], unique=False)
+    op.create_index("ix_report_definitions_kind", "report_definitions", ["book_id", "kind"], unique=False)
+    op.create_index("ix_report_definitions_previous", "report_definitions", ["previous_report_definition_id"], unique=False)
+
+    op.create_table(
+        "report_runs",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("definition_id", sa.BigInteger(), sa.ForeignKey("report_definitions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("params_hash", sa.String(length=128), nullable=False),
+        sa.Column("as_of_seq", sa.Integer(), nullable=False),
+        sa.Column("pricing_mode", sa.String(length=32), nullable=False, server_default=sa.text("'latest_corrected'")),
+        sa.Column("pricing_policy_id", sa.BigInteger(), sa.ForeignKey("pricing_policies.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("pricing_policy_version", sa.String(length=255), nullable=True),
+        sa.Column("valuation_snapshot_id", sa.BigInteger(), nullable=True),
+        sa.Column("pricing_resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("result_json", sa.Text(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("pricing_mode IN ('frozen', 'latest_corrected')", name="ck_report_runs_pricing_mode"),
+        sa.UniqueConstraint("book_id", "definition_id", "params_hash", "as_of_seq", name="uq_report_runs_entry"),
+    )
+    op.create_index("ix_report_runs_book_def", "report_runs", ["book_id", "definition_id"], unique=False)
+    op.create_index("ix_report_runs_book_seq", "report_runs", ["book_id", "as_of_seq"], unique=False)
+
+    op.create_table(
         "commodities",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
@@ -402,6 +464,11 @@ def upgrade() -> None:
     )
     op.execute(
         sa.text(
+            "INSERT INTO book_state (book_id, change_seq) VALUES (1, 0)"
+        )
+    )
+    op.execute(
+        sa.text(
             "INSERT INTO commodities (book_id, kind, symbol, name, scale) VALUES (1, 'currency', 'USD', 'US Dollar', 2)"
         )
     )
@@ -465,6 +532,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_report_runs_book_seq", table_name="report_runs")
+    op.drop_index("ix_report_runs_book_def", table_name="report_runs")
+    op.drop_table("report_runs")
+    op.drop_index("ix_report_definitions_previous", table_name="report_definitions")
+    op.drop_index("ix_report_definitions_kind", table_name="report_definitions")
+    op.drop_index("ix_report_definitions_book", table_name="report_definitions")
+    op.drop_table("report_definitions")
+    op.drop_index("ix_report_cache_book_seq", table_name="report_cache")
+    op.drop_index("ix_report_cache_book_type", table_name="report_cache")
+    op.drop_table("report_cache")
+    op.drop_table("book_state")
     op.drop_index("ix_pricing_refresh_runs_finished_at", table_name="pricing_refresh_runs")
     op.drop_index("ix_pricing_refresh_runs_book_id", table_name="pricing_refresh_runs")
     op.drop_table("pricing_refresh_runs")

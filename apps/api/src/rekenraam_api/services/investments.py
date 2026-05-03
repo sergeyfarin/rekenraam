@@ -1,4 +1,5 @@
 from rekenraam_api.repositories.investments import InvestmentRepository
+from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.investments import (
     BuyCommodityInput,
     ConvertedPosition,
@@ -37,6 +38,7 @@ class InvestmentService:
             payee_id=input.payee_id,
             status=input.status or "uncleared",
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return TradeResult.model_validate(row)
 
     async def create_sell(self, input: SellCommodityInput) -> TradeResult:
@@ -57,6 +59,7 @@ class InvestmentService:
             payee_id=input.payee_id,
             status=input.status or "uncleared",
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return TradeResult.model_validate(row)
 
     async def create_dividend(self, input: DividendInput) -> DividendResult:
@@ -71,6 +74,7 @@ class InvestmentService:
             payee_id=input.payee_id,
             status=input.status or "uncleared",
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return DividendResult.model_validate(row)
 
     async def list_positions(self, input: PositionsQuery) -> list[Position]:

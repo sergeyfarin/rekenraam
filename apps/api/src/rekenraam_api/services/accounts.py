@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.repositories.accounts import AccountRepository
+from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingCreateInput,
@@ -50,6 +51,7 @@ class AccountService:
             number_last4=input.number_last4,
             is_closed=input.is_closed,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_summary(account)
 
     async def update_account(self, account_id: int, input: AccountUpdateInput) -> AccountSummary | None:
@@ -79,6 +81,7 @@ class AccountService:
         )
         if account is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), current.book_id)
         return self._to_summary(account)
 
     async def delete_account(self, account_id: int) -> bool:
@@ -88,9 +91,12 @@ class AccountService:
         if current.is_system:
             raise ValueError("system accounts cannot be deleted")
         try:
-            return await self._repository.delete_account(account_id)
+            deleted = await self._repository.delete_account(account_id)
         except IntegrityError as error:
             raise ValueError("account is still in use") from error
+        if deleted:
+            await bump_report_state(getattr(self._repository, "_session", None), current.book_id)
+        return deleted
 
     async def get_account_by_id(self, account_id: int) -> AccountSummary | None:
         account = await self._repository.get_account_by_id(account_id)
@@ -154,12 +160,17 @@ class AccountService:
             raise ValueError("system accounts cannot be updated")
         if account.account_type != "investment":
             raise ValueError("booking policy only applies to investment accounts")
+        await bump_report_state(getattr(self._repository, "_session", None), account.book_id)
         return account.booking_policy or "fifo"
 
     async def unlock_account_balancings(self, account_id: int, from_date: date, reason: str | None, confirm: bool) -> int:
         if not confirm:
             raise ValueError("unlock not confirmed")
-        return await self._repository.unlock_account_balancings(account_id, from_date, reason)
+        account = await self._repository.get_account_by_id(account_id)
+        count = await self._repository.unlock_account_balancings(account_id, from_date, reason)
+        if count and account is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), account.book_id)
+        return count
 
     async def validate_account_closing(self, account_id: int) -> AccountClosingValidationResult | None:
         account = await self._repository.get_account_by_id(account_id)
@@ -190,6 +201,8 @@ class AccountService:
 
         if balancing is None:
             return None
+
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
 
         return AccountBalancingSummary(
             id=balancing.id,

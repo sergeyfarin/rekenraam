@@ -4,7 +4,7 @@ CONTAINER_RUNTIME ?= docker
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs
+.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up
 
 api-check:
 	cd $(API_DIR) && python -m py_compile $$(find src -name '*.py')
@@ -28,7 +28,7 @@ api-test-postgres:
 	$(DEV_DOCKER) down -v
 
 api-up:
-	$(DOCKER) up -d --build postgres api
+	$(DOCKER) up -d --build postgres api frontend
 
 api-down:
 	$(DOCKER) down
@@ -61,13 +61,19 @@ api-smoke:
 	DOCKER='$(DOCKER)' ./scripts/test_api_smoke.sh
 
 api-dev-up:
-	$(DEV_DOCKER) up -d --build postgres api-dev
+	$(DEV_DOCKER) up -d --build postgres api-dev frontend-dev
 
 api-dev-down:
 	$(DEV_DOCKER) down
 
 api-dev-logs:
 	$(DEV_DOCKER) logs -f api-dev
+
+web-up:
+	$(DOCKER) up -d --build postgres api frontend
+
+web-dev-up:
+	$(DEV_DOCKER) up -d --build postgres api-dev frontend-dev
 
 api-migrate-new:
 	@test -n "$(NAME)" || (echo "Usage: make api-migrate-new NAME=create_users" && exit 1)

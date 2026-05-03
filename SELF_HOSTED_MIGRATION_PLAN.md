@@ -54,6 +54,7 @@ Current evidence behind those statuses:
 
 - Python FastAPI scaffold is active and validated in Docker.
 - The empty app now uses one current initial Alembic schema rather than artificial historical migration steps.
+- That single current baseline already carries the migrated investments tables plus the pricing tables, seeded providers, and persisted pricing refresh history used by the web app.
 - Read-only books, accounts list/detail/tree/register, and transactions list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
 - Read-only commodities, countries, and institutions endpoints now exist and are validated as frontend migration support metadata.
 - Read-only categories, payees, tags, people, and projects endpoints now also exist and are validated as transaction-form/frontend migration support metadata.
@@ -451,7 +452,7 @@ Progress note:
 - Docker reproducibility is working and covered by smoke validation.
 - Repository integration tests now run against ephemeral PostgreSQL.
 - The empty-app schema has been squashed into a single current initial migration to avoid fake historical version churn.
-- Migration tests now assert the full Stage 2 schema contract for every migrated table, index, foreign key, unique constraint, and named check constraint in the initial Alembic migration.
+- Migration tests now assert the full Stage 2 schema contract for every migrated table, index, foreign key, unique constraint, and named check constraint in the initial Alembic migration, including the investments and pricing tables that were added after the first web slices.
 - ORM coverage and direct parity tests now cover the full Stage 2 table set so the SQLAlchemy model layer matches the initial Alembic schema rather than only the original `users` and `book_memberships` slice.
 - Migration automation now includes explicit upgrade, downgrade, current-version, and Docker-backed smoke targets.
 - Migration smoke is now wired into CI so upgrade/downgrade/re-upgrade validation runs automatically for API changes.
@@ -711,6 +712,9 @@ Progress note:
 - The dashboard page now uses HTTP-only health and book metadata reads, and the old desktop storage/file-picker onboarding flow has been removed from that route.
 - The reports page now uses Python HTTP endpoints for cashflow, category-spend, payee totals, and realized/unrealized gains, and the investments page now also has Python HTTP coverage for read models plus buy/sell/dividend mutations.
 - The frontend is still rooted in `src/`, but the remaining Tauri-dependent frontend slices are now concentrated in FX-specific commodities flows, admin/storage flows, and a smaller set of desktop-oriented helpers rather than the core dashboard, transaction, reports, investment, institution, commodity-edit, and currency-maintenance flows.
+- With the FX execution/status/history slice now landed, the next active migration target should move to report-state and cache foundations: `book_state`, `report_cache`, then `report_definitions` and `report_runs`, so backend-owned reporting can gain stable invalidation and saved-run support before the remaining admin/import work.
+- The first part of that slice is now in the web baseline schema: `book_state` and `report_cache` exist in the single current Alembic baseline, while report-definition and report-run persistence plus invalidation wiring still remain.
+- Report-definition and report-run persistence are now also in the baseline schema and exposed over Python endpoints; the remaining gap in this area is wiring `book_state` / `report_cache` invalidation and connecting the generic metadata layer to report execution.
 - The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
 
 ## Recommended Immediate Next Execution Order

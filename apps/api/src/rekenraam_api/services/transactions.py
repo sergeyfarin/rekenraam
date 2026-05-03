@@ -1,5 +1,6 @@
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.transactions import TransactionRepository
+from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.transactions import (
     PayeeDefaults,
@@ -42,6 +43,7 @@ class TransactionService:
             [split.model_dump() for split in input.splits],
         )
         await self._repository._session.commit()
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         refreshed = await self.get_transaction_by_id(transaction.id)
         if refreshed is None:
             raise ValueError("transaction not found after create")
@@ -64,22 +66,46 @@ class TransactionService:
             [split.model_dump() for split in input.splits],
         )
         await self._repository._session.commit()
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return await self.get_transaction_by_id(transaction.id)
 
     async def delete_transaction(self, transaction_id: int) -> bool:
-        return await self._repository.delete_transaction(transaction_id)
+        transaction = await self._repository.get_transaction_by_id(transaction_id)
+        if transaction is None:
+            return False
+        deleted = await self._repository.delete_transaction(transaction_id)
+        if deleted:
+            await bump_report_state(getattr(self._repository, "_session", None), transaction.book_id)
+        return deleted
 
     async def duplicate_transaction(self, transaction_id: int, today) -> TransactionSummary | None:
         transaction = await self._repository.duplicate_transaction(transaction_id, today)
         if transaction is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), transaction.book_id)
         return await self.get_transaction_by_id(transaction.id)
 
     async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
-        return await self._repository.bulk_void_transactions(transaction_ids)
+        transactions = [
+            transaction
+            for transaction in [await self._repository.get_transaction_by_id(transaction_id) for transaction_id in transaction_ids]
+            if transaction is not None
+        ]
+        count = await self._repository.bulk_void_transactions(transaction_ids)
+        for book_id in {transaction.book_id for transaction in transactions}:
+            await bump_report_state(getattr(self._repository, "_session", None), book_id)
+        return count
 
     async def bulk_delete_transactions(self, transaction_ids: list[int]) -> int:
-        return await self._repository.bulk_delete_transactions(transaction_ids)
+        transactions = [
+            transaction
+            for transaction in [await self._repository.get_transaction_by_id(transaction_id) for transaction_id in transaction_ids]
+            if transaction is not None
+        ]
+        count = await self._repository.bulk_delete_transactions(transaction_ids)
+        for book_id in {transaction.book_id for transaction in transactions}:
+            await bump_report_state(getattr(self._repository, "_session", None), book_id)
+        return count
 
     async def list_account_register(self, account_id: int) -> list[RegisterEntry]:
         rows = await self._repository.list_account_register_splits(account_id)

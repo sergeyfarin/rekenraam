@@ -1,6 +1,7 @@
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState, PricingSourceAssignment
 from rekenraam_api.repositories.pricing import PricingRepository
+from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.pricing import (
     PriceSourceSummary,
     PricingPolicySummary,
@@ -40,6 +41,7 @@ class PricingService:
         )
         if policy is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return await self._build_policy_summary(policy)
 
     async def list_pricing_source_assignments(self, book_id: int) -> list[PricingSourceAssignmentSummary]:
@@ -56,6 +58,7 @@ class PricingService:
             effective_from=input.effective_from,
             effective_to=input.effective_to,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return await self._build_assignment_summary(assignment)
 
     async def update_pricing_source_assignment(self, assignment_id: int, input: PricingSourceAssignmentUpdateInput) -> PricingSourceAssignmentSummary | None:
@@ -71,10 +74,15 @@ class PricingService:
         )
         if assignment is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return await self._build_assignment_summary(assignment)
 
     async def delete_pricing_source_assignment(self, assignment_id: int) -> bool:
-        return await self._repository.delete_pricing_source_assignment(assignment_id)
+        assignment_row = await self._repository.get_pricing_source_assignment(assignment_id)
+        deleted = await self._repository.delete_pricing_source_assignment(assignment_id)
+        if deleted and assignment_row is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), assignment_row.book_id)
+        return deleted
 
     async def list_pricing_refresh_state(self, book_id: int) -> list[PricingRefreshStateSummary]:
         rows = await self._repository.list_pricing_refresh_state(book_id)

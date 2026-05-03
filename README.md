@@ -59,8 +59,19 @@ The first web migration slice now includes a standalone Python FastAPI scaffold 
 
 ```bash
 cp .env.example .env
-docker compose up --build api postgres
+docker compose up --build
 ```
+
+That starts three containers by default:
+
+- `postgres` for the database
+- `api` for the FastAPI backend
+- `frontend` for the built Svelte web app served as static files
+
+The frontend is intentionally separate from the API container. The UI is a static
+Svelte build, so bundling Node build output and static file serving into the Python
+API image would mix two runtimes and make cache/build behavior worse without adding
+useful coupling.
 
 The frontend migration seam can now target the Python API through:
 
@@ -97,13 +108,14 @@ fresh Compose volume, but if you want to reset the local test database entirely:
 
 ```bash
 make api-reset-db
-docker compose up --build api postgres
+docker compose up --build
 ```
 
 Then check:
 
 ```bash
 curl http://localhost:8080/api/v1/health
+curl http://localhost:3000
 ```
 
 Expected response:
@@ -113,6 +125,12 @@ Expected response:
 ```
 
 The API now runs one current initial Alembic schema automatically on startup.
+That single `0001_initial_schema` baseline is the source of truth for fresh web
+databases and already includes the current investments tables, pricing policy
+tables, seeded pricing sources, persisted pricing refresh run history, and the
+first report invalidation foundation tables: `book_state` and `report_cache`.
+It now also includes report metadata persistence tables: `report_definitions`
+and `report_runs`.
 The Compose stack also includes an API healthcheck against `/api/v1/health`, so
 container readiness reflects actual application startup rather than process spawn
 alone.
@@ -146,6 +164,7 @@ make api-test
 make api-test-docker
 make api-test-postgres
 make api-up
+make web-up
 make api-health
 make api-books
 make api-accounts
@@ -158,6 +177,12 @@ make api-migrate-up
 make api-migrate-down REV=base
 make api-migrate-current
 make api-migrate-smoke
+```
+
+For the hot-reload development stack, use:
+
+```bash
+make web-dev-up
 ```
 
 If your Docker access requires elevation, override the Docker command:

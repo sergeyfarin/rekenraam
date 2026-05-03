@@ -24,3 +24,17 @@ services:
       - "${API_PORT:-8080}:8080"
     volumes:
       - ./apps/api:/app
+
+  frontend-dev:
+    image: node:22-alpine
+    working_dir: /workspace
+    depends_on:
+      api-dev:
+        condition: service_healthy
+    environment:
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8080/api/v1}
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 4173"
+    ports:
+      - "${FRONTEND_PORT:-3000}:4173"
+    volumes:
+      - ./:/workspace

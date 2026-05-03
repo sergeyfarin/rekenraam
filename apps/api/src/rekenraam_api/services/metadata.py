@@ -3,6 +3,7 @@ import json
 from sqlalchemy.exc import IntegrityError
 
 from rekenraam_api.repositories.metadata import MetadataRepository
+from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
@@ -64,6 +65,7 @@ class MetadataService:
         )
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
         return CommoditySummary(
             id=row.id,
             book_id=row.book_id,
@@ -97,6 +99,7 @@ class MetadataService:
             scale=input.scale,
             metadata=self._currency_metadata_text(display_symbol=input.display_symbol, is_active=True),
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_currency_summary(row, None)
 
     async def update_currency(self, currency_id: int, input: CurrencyUpdateInput) -> CurrencySummary | None:
@@ -127,6 +130,7 @@ class MetadataService:
         )
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         rows, base_currency_code = await self._repository.list_currencies(input.book_id)
         effective_base_currency = base_currency_code
         if row.symbol is not None and any(existing.id == row.id for existing in rows):
@@ -148,6 +152,7 @@ class MetadataService:
             )
             or row
         )
+        await bump_report_state(getattr(self._repository, "_session", None), book_id)
         return self._to_currency_summary(row, row.symbol, None)
 
     async def set_currency_active(self, *, currency_id: int, input: CurrencyActivationInput) -> CurrencySummary | None:
@@ -168,6 +173,7 @@ class MetadataService:
         )
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_currency_summary(row, base_currency_code, None)
 
     async def list_countries(self) -> list[CountrySummary]:
@@ -217,6 +223,7 @@ class MetadataService:
             metadata=self._clean_optional_text(input.metadata),
             country_id=input.country_id,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return InstitutionSummary(
             id=row.id,
             book_id=row.book_id,
@@ -247,6 +254,7 @@ class MetadataService:
         )
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
         return InstitutionSummary(
             id=row.id,
             book_id=row.book_id,
@@ -262,10 +270,15 @@ class MetadataService:
         )
 
     async def delete_institution(self, institution_id: int) -> bool:
+        institutions = await self._repository.list_institutions()
+        existing = next((institution for institution, _ in institutions if institution.id == institution_id), None)
         try:
-            return await self._repository.delete_institution(institution_id)
+            deleted = await self._repository.delete_institution(institution_id)
         except IntegrityError as error:
             raise ValueError("institution is still in use") from error
+        if deleted and existing is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
+        return deleted
 
     async def list_categories(self) -> list[CategorySummary]:
         rows = await self._repository.list_categories()
@@ -285,6 +298,7 @@ class MetadataService:
             kind=kind,
             color=input.color,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_category_summary(row)
 
     async def update_category(self, category_id: int, input: CategoryUpdateInput) -> CategorySummary | None:
@@ -304,13 +318,19 @@ class MetadataService:
         )
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
         return self._to_category_summary(row)
 
     async def delete_category(self, category_id: int) -> bool:
+        rows = await self._repository.list_categories()
+        existing = next((row for row in rows if row.id == category_id), None)
         try:
-            return await self._repository.delete_category(category_id)
+            deleted = await self._repository.delete_category(category_id)
         except IntegrityError as error:
             raise ValueError("category is still in use") from error
+        if deleted and existing is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
+        return deleted
 
     async def list_payees(self) -> list[PayeeSummary]:
         rows = await self._repository.list_payees()
@@ -329,6 +349,7 @@ class MetadataService:
             kind=kind,
             metadata=input.metadata,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_payee_summary(row)
 
     async def update_payee(self, payee_id: int, input: PayeeUpdateInput) -> PayeeSummary | None:
@@ -347,13 +368,19 @@ class MetadataService:
         )
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
         return self._to_payee_summary(row)
 
     async def delete_payee(self, payee_id: int) -> bool:
+        rows = await self._repository.list_payees()
+        existing = next((row for row in rows if row.id == payee_id), None)
         try:
-            return await self._repository.delete_payee(payee_id)
+            deleted = await self._repository.delete_payee(payee_id)
         except IntegrityError as error:
             raise ValueError("payee is still in use") from error
+        if deleted and existing is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
+        return deleted
 
     async def list_tags(self) -> list[TagSummary]:
         rows = await self._repository.list_tags()
@@ -364,6 +391,7 @@ class MetadataService:
         if not name:
             raise ValueError("name is required")
         row = await self._repository.create_tag(book_id=input.book_id, name=name, color=input.color)
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_tag_summary(row)
 
     async def update_tag(self, tag_id: int, input: TagUpdateInput) -> TagSummary | None:
@@ -374,13 +402,19 @@ class MetadataService:
         row = await self._repository.update_tag(tag_id=tag_id, name=name, color=input.color)
         if row is None:
             return None
+        await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
         return self._to_tag_summary(row)
 
     async def delete_tag(self, tag_id: int) -> bool:
+        rows = await self._repository.list_tags()
+        existing = next((row for row in rows if row.id == tag_id), None)
         try:
-            return await self._repository.delete_tag(tag_id)
+            deleted = await self._repository.delete_tag(tag_id)
         except IntegrityError as error:
             raise ValueError("tag is still in use") from error
+        if deleted and existing is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
+        return deleted
 
     async def list_people(self) -> list[PersonSummary]:
         rows = await self._repository.list_people()
@@ -399,6 +433,7 @@ class MetadataService:
             role=role,
             metadata=input.metadata,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_person_summary(row)
 
     async def list_projects(self) -> list[ProjectSummary]:
@@ -418,6 +453,7 @@ class MetadataService:
             status=status,
             metadata=input.metadata,
         )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_project_summary(row)
 
     @staticmethod
