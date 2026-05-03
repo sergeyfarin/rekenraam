@@ -6,12 +6,12 @@ Requires-Python: >=3.13
 Requires-Dist: alembic==1.16.4
 Requires-Dist: asyncpg==0.31.0
 Requires-Dist: fastapi==0.136.1
+Requires-Dist: httpx==0.28.1
 Requires-Dist: pydantic==2.11.7
 Requires-Dist: pydantic-settings==2.10.1
 Requires-Dist: sqlalchemy[asyncio]==2.0.42
 Requires-Dist: uvicorn[standard]==0.46.0
 Provides-Extra: dev
-Requires-Dist: httpx==0.28.1; extra == "dev"
 Requires-Dist: pyright==1.1.403; extra == "dev"
 Requires-Dist: pytest==9.0.3; extra == "dev"
 Requires-Dist: pytest-asyncio==1.3.0; extra == "dev"

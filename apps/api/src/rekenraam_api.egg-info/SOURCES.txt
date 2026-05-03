@@ -12,6 +12,7 @@ src/rekenraam_api/api/v1/books.py
 src/rekenraam_api/api/v1/health.py
 src/rekenraam_api/api/v1/investments.py
 src/rekenraam_api/api/v1/metadata.py
+src/rekenraam_api/api/v1/pricing.py
 src/rekenraam_api/api/v1/reports.py
 src/rekenraam_api/api/v1/transactions.py
 src/rekenraam_api/config/settings.py
@@ -23,11 +24,13 @@ src/rekenraam_api/db/models/accounts.py
 src/rekenraam_api/db/models/books.py
 src/rekenraam_api/db/models/investments.py
 src/rekenraam_api/db/models/metadata.py
+src/rekenraam_api/db/models/pricing.py
 src/rekenraam_api/db/models/transactions.py
 src/rekenraam_api/repositories/accounts.py
 src/rekenraam_api/repositories/books.py
 src/rekenraam_api/repositories/investments.py
 src/rekenraam_api/repositories/metadata.py
+src/rekenraam_api/repositories/pricing.py
 src/rekenraam_api/repositories/reports.py
 src/rekenraam_api/repositories/transactions.py
 src/rekenraam_api/schemas/accounts.py
@@ -35,6 +38,7 @@ src/rekenraam_api/schemas/books.py
 src/rekenraam_api/schemas/health.py
 src/rekenraam_api/schemas/investments.py
 src/rekenraam_api/schemas/metadata.py
+src/rekenraam_api/schemas/pricing.py
 src/rekenraam_api/schemas/register.py
 src/rekenraam_api/schemas/reports.py
 src/rekenraam_api/schemas/transactions.py
@@ -42,8 +46,11 @@ src/rekenraam_api/services/accounts.py
 src/rekenraam_api/services/books.py
 src/rekenraam_api/services/investments.py
 src/rekenraam_api/services/metadata.py
+src/rekenraam_api/services/pricing.py
+src/rekenraam_api/services/pricing_execution.py
 src/rekenraam_api/services/reports.py
 src/rekenraam_api/services/transactions.py
+src/rekenraam_api/workers/pricing.py
 tests/test_api.py
 tests/test_investments_api.py
 tests/test_investments_repository.py
@@ -52,6 +59,10 @@ tests/test_metadata_repository.py
 tests/test_metadata_service.py
 tests/test_migrations.py
 tests/test_orm_schema.py
+tests/test_pricing_api.py
+tests/test_pricing_execution_service.py
+tests/test_pricing_repository.py
+tests/test_pricing_service.py
 tests/test_reports_repository.py
 tests/test_reports_service.py
 tests/test_repositories.py
