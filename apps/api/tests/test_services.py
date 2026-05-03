@@ -8,9 +8,13 @@ from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
+    AccountBalancingCreateInput,
     AccountBalancingSummary,
+    AccountClosingValidationResult,
+    AccountCreateInput,
     AccountDirectiveSummary,
     AccountTreeNode,
+    AccountUpdateInput,
 )
 from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.transactions import TransactionListFilters
@@ -106,6 +110,46 @@ class StubAccountRepository:
             )
         return None
 
+    async def update_account(
+        self,
+        *,
+        account_id: int,
+        parent_id: int | None,
+        account_type: str,
+        name: str,
+        commodity_id: int,
+        institution_id: int | None,
+        country_id: int | None,
+        number_last4: str | None,
+        is_closed: bool,
+    ) -> Account | None:
+        if account_id != 1:
+            return None
+        return Account(
+            id=account_id,
+            book_id=1,
+            parent_id=parent_id,
+            previous_account_id=None,
+            account_type=account_type,
+            name=name,
+            commodity_id=commodity_id,
+            booking_policy="fifo",
+            number_last4=number_last4,
+            is_closed=is_closed,
+            is_hidden=False,
+            is_system=False,
+            system_role=None,
+            effective_at=datetime(2026, 5, 3, tzinfo=UTC).date(),
+            lifecycle_event="update",
+            lifecycle_note=None,
+            lifecycle_metadata=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_account(self, account_id: int) -> bool:
+        return account_id == 1
+
     async def get_book_base_currency_code(self, book_id: int) -> str | None:
         if book_id == 1:
             return "USD"
@@ -176,6 +220,30 @@ class StubAccountRepository:
         if account_id != 1:
             return 0
         return 2
+
+    async def create_account_balancing(
+        self,
+        *,
+        book_id: int,
+        account_id: int,
+        as_of_date: datetime.date,
+        balance_minor: int,
+        memo: str | None,
+    ) -> AccountBalancing | None:
+        if account_id != 1:
+            return None
+        return AccountBalancing(
+            id=9,
+            book_id=book_id,
+            account_id=account_id,
+            previous_account_balancing_id=None,
+            as_of_date=as_of_date,
+            balance_minor=balance_minor,
+            memo=memo,
+            created_at=self._created_at,
+            voided_at=None,
+            void_reason=None,
+        )
 
 
 class StubTransactionRepository:
@@ -314,6 +382,50 @@ async def test_account_service_maps_parent_and_system_flags() -> None:
     assert result[1].commodity_id == 1
     assert result[1].number_last4 == "1234"
     assert result[0].is_system is False
+
+
+@pytest.mark.asyncio
+async def test_account_service_updates_and_deletes_accounts() -> None:
+    service = AccountService(StubAccountRepository())
+
+    updated = await service.update_account(
+        1,
+        AccountUpdateInput(
+            book_id=1,
+            parent_id=None,
+            account_type="asset",
+            name="Renamed Assets",
+            commodity_id=1,
+            institution_id=None,
+            country_id=None,
+            number_last4=None,
+            is_closed=False,
+        ),
+    )
+
+    assert updated is not None
+    assert updated.name == "Renamed Assets"
+    assert await service.delete_account(1) is True
+
+
+@pytest.mark.asyncio
+async def test_account_service_validates_closing_and_creates_balancing() -> None:
+    service = AccountService(StubAccountRepository())
+
+    validation = await service.validate_account_closing(1)
+    balancing = await service.create_account_balancing(
+        AccountBalancingCreateInput(
+            book_id=1,
+            account_id=1,
+            as_of_date=datetime(2026, 5, 4, tzinfo=UTC).date(),
+            balance_minor=100,
+            memo=None,
+        )
+    )
+
+    assert validation == AccountClosingValidationResult(valid=True, issues=())
+    assert balancing is not None
+    assert balancing.account_id == 1
 
 
 @pytest.mark.asyncio

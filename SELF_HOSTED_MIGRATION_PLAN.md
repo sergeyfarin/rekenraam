@@ -721,6 +721,26 @@ Priority work:
 3. keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets
 4. continue route-by-route frontend conversion rather than moving `src/` to `apps/web` prematurely
 
+Immediate route-by-route execution checklist:
+
+1. `src/routes/+layout.svelte`: remove Tauri-dependent global session/runtime shortcuts or replace them with web-safe no-op or HTTP-backed equivalents so the layout no longer anchors the app to desktop behavior.
+2. `src/routes/+page.svelte`: finish moving any remaining dashboard/setup reads off direct `invoke()` usage.
+3. `src/routes/settings/+page.svelte`: move settings landing-page loads and navigation helpers to the shared client seam.
+4. `src/routes/settings/InstitutionSettings.svelte`: migrate institution reads and form lookups before touching write flows.
+5. `src/routes/settings/CommoditySettings.svelte`: split this into phases; migrate read-only commodity/currency/pricing-source screens first, then leave FX mutation flows for later milestones.
+6. `src/routes/reports/+page.svelte`: move report metadata and simple read surfaces to HTTP before report calculation parity work.
+7. `src/routes/investments/+page.svelte`: migrate read models and lookup data first; defer buy/sell/dividend mutations to Milestone C or D.
+
+Routes already sufficiently advanced for Milestone A and not the next priority:
+
+1. `src/routes/accounts/+page.svelte`
+2. `src/routes/accounts/[id]/+page.svelte`
+3. `src/routes/transactions/+page.svelte`
+
+Milestone A completion gate:
+
+- the main layout, dashboard, reports landing flows, investments landing flows, and remaining settings read surfaces no longer need direct `@tauri-apps/api/core` imports for read behavior
+
 ### Milestone B: Audit-Aware Immutable Write Foundation
 
 Target outcome:
@@ -733,6 +753,18 @@ Priority work:
 2. design the persistent audit-session/device model that replaces desktop runtime identity
 3. decide how immutable rows are stamped with audit context during writes
 4. implement the minimal backend infrastructure needed so transaction/account mutations do not have to guess later
+
+Immediate design deliverables:
+
+1. define a backend request-context object with `user_id`, `session_id`, `device_id`, `request_id`, and request timestamp semantics
+2. define the persistent tables needed for web audit attribution, at minimum one auth-session table and one device-registration or device-fingerprint table
+3. decide which immutable domain tables need audit stamp columns directly versus which can rely on related audit-event records
+4. define how service-layer writes receive request context without coupling domain logic directly to FastAPI request objects
+5. decide the first thin vertical slice that will prove the model, preferably transaction create/update/delete rather than a synthetic example
+
+Milestone B completion gate:
+
+- transaction/account write implementation can start without unresolved questions about who performed a change, from which session it came, or how that attribution is persisted
 
 ### Milestone C: Transaction/Account Write Parity
 

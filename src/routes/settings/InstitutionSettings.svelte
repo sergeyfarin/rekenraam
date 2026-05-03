@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { deleteInstitution as deleteInstitutionCommand, listInstitutions, saveInstitutionSettings, type InstitutionSummary } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -31,7 +31,18 @@
 
   export async function loadInstitutions() {
     try {
-      institutions = await invoke<Institution[]>("list_institutions", { bookId: 1 });
+      const summaries = await listInstitutions(1);
+      institutions = summaries.map((institution: InstitutionSummary) => ({
+        id: institution.id,
+        book_id: institution.book_id,
+        name: institution.name,
+        kind: institution.kind,
+        routing: null,
+        website: null,
+        metadata: null,
+        created_at: institution.created_at,
+        updated_at: institution.updated_at,
+      }));
     } catch (e) {
       institutionError = `Failed to load institutions: ${String(e)}`;
     }
@@ -66,28 +77,24 @@
     busy = true;
     try {
       if (editingInstitution) {
-        await invoke("update_institution", {
-          institution: {
-            id: editingInstitution.id,
-            book_id: 1,
-            name: newInstitution.name,
-            kind: newInstitution.kind || null,
-            routing: newInstitution.routing || null,
-            website: newInstitution.website || null,
-            metadata: newInstitution.metadata || null,
-          },
+        await saveInstitutionSettings({
+          id: editingInstitution.id,
+          book_id: 1,
+          name: newInstitution.name,
+          kind: newInstitution.kind || null,
+          routing: newInstitution.routing || null,
+          website: newInstitution.website || null,
+          metadata: newInstitution.metadata || null,
         });
         institutionStatus = "Institution updated.";
       } else {
-        await invoke("create_institution", {
-          institution: {
-            book_id: 1,
-            name: newInstitution.name,
-            kind: newInstitution.kind || null,
-            routing: newInstitution.routing || null,
-            website: newInstitution.website || null,
-            metadata: newInstitution.metadata || null,
-          },
+        await saveInstitutionSettings({
+          book_id: 1,
+          name: newInstitution.name,
+          kind: newInstitution.kind || null,
+          routing: newInstitution.routing || null,
+          website: newInstitution.website || null,
+          metadata: newInstitution.metadata || null,
         });
         institutionStatus = "Institution created.";
       }
@@ -106,7 +113,7 @@
     institutionStatus = "";
     busy = true;
     try {
-      await invoke("delete_institution", { institutionId: inst.id, bookId: 1 });
+      await deleteInstitutionCommand(inst.id, 1);
       institutionStatus = "Institution deleted.";
       await loadInstitutions();
     } catch (e) {

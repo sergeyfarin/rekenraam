@@ -1,12 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import {
+    createAccount,
+    deleteAccount as deleteAccountCommand,
+    listAccounts,
     listAccountBalances,
     listAccountTree,
+    updateAccount,
+    validateAccountClosing,
     type AccountTreeNode,
   } from "$lib/api/accounts";
   import {
+    createInstitution,
     listCommodities,
     listCountries,
     listInstitutions,
@@ -91,7 +96,7 @@
     loading = true;
     error = "";
     try {
-      const list = await invoke<Account[]>("list_accounts", { bookId });
+      const list = await listAccounts(bookId);
       accounts = list;
       await loadBalances();
     } catch (e) {
@@ -229,13 +234,11 @@
     error = "";
 
     try {
-      const created = await invoke<InstitutionSummary>("create_institution", {
-        input: {
-          book_id: bookId,
-          name: newInstitutionName.trim(),
-          kind: newInstitutionKind,
-          country_id: newInstitutionCountryId
-        }
+      const created = await createInstitution({
+        book_id: bookId,
+        name: newInstitutionName.trim(),
+        kind: newInstitutionKind,
+        country_id: newInstitutionCountryId,
       });
       await loadInstitutions();
       formInstitutionId = created.id;
@@ -268,33 +271,29 @@
 
     try {
       if (dialogMode === "create") {
-        await invoke<Account>("create_account", {
-          input: {
-            book_id: bookId,
-            parent_id: formParentId,
-            account_type: formType,
-            name: formName.trim(),
-            commodity_id: formCommodityId,
-            institution_id: normalizeOptionalId(formInstitutionId),
-            country_id: null,
-            number_last4: formLast4.trim() || null,
-            is_closed: formIsClosed
-          }
+        await createAccount({
+          book_id: bookId,
+          parent_id: formParentId,
+          account_type: formType,
+          name: formName.trim(),
+          commodity_id: formCommodityId,
+          institution_id: normalizeOptionalId(formInstitutionId),
+          country_id: null,
+          number_last4: formLast4.trim() || null,
+          is_closed: formIsClosed,
         });
       } else if (formId !== null) {
-        await invoke<Account>("update_account", {
-          input: {
-            id: formId,
-            book_id: bookId,
-            parent_id: formParentId,
-            account_type: formType,
-            name: formName.trim(),
-            commodity_id: formCommodityId,
-            institution_id: normalizeOptionalId(formInstitutionId),
-            country_id: null,
-            number_last4: formLast4.trim() || null,
-            is_closed: formIsClosed
-          }
+        await updateAccount({
+          id: formId,
+          book_id: bookId,
+          parent_id: formParentId,
+          account_type: formType,
+          name: formName.trim(),
+          commodity_id: formCommodityId,
+          institution_id: normalizeOptionalId(formInstitutionId),
+          country_id: null,
+          number_last4: formLast4.trim() || null,
+          is_closed: formIsClosed,
         });
       }
 
@@ -316,7 +315,7 @@
     loading = true;
 
     try {
-      await invoke("delete_account", { accountId: account.id, bookId });
+      await deleteAccountCommand(account.id, bookId);
       await loadAccounts();
     } catch (e) {
       error = `Failed to delete account: ${String(e)}`;
@@ -328,10 +327,7 @@
   async function validateClosing(account: Account) {
     error = "";
     try {
-      const result = await invoke<{ valid: boolean; issues: string[] }>("validate_account_closing", {
-        accountId: account.id,
-        bookId,
-      });
+      const result = await validateAccountClosing(account.id, bookId);
 
       if (result.valid) {
         alert(`Account "${account.name}" can be safely closed. No issues found.`);

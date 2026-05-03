@@ -77,12 +77,43 @@ class AccountCreateInput(BaseModel):
     is_closed: bool
 
 
+class AccountUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    parent_id: int | None
+    account_type: str
+    name: str
+    commodity_id: int
+    institution_id: int | None
+    country_id: int | None
+    number_last4: str | None
+    is_closed: bool
+
+
 class AccountBalancingUnlockInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     from_date: date
     reason: str | None
     confirm: bool
+
+
+class AccountBalancingCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    account_id: int
+    as_of_date: date
+    balance_minor: int
+    memo: str | None
+
+
+class AccountClosingValidationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    valid: bool
+    issues: tuple[str, ...]
 
 
 class AccountTreeNode(BaseModel):

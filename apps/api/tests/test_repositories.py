@@ -105,6 +105,27 @@ async def test_account_repository_returns_expected_account_by_id(repository_sess
 
 
 @pytest.mark.asyncio
+async def test_account_repository_updates_existing_account(repository_session: AsyncSession) -> None:
+    repository = AccountRepository(repository_session)
+
+    updated = await repository.update_account(
+        account_id=2,
+        parent_id=1,
+        account_type="checking",
+        name="Everyday Cash",
+        commodity_id=1,
+        institution_id=None,
+        country_id=None,
+        number_last4="4321",
+        is_closed=False,
+    )
+
+    assert updated is not None
+    assert updated.name == "Everyday Cash"
+    assert updated.number_last4 == "4321"
+
+
+@pytest.mark.asyncio
 async def test_account_repository_returns_none_for_missing_account(repository_session: AsyncSession) -> None:
     repository = AccountRepository(repository_session)
 
@@ -237,6 +258,24 @@ async def test_account_repository_unlocks_active_balancings_from_date(repository
     assert unlocked == 1
     balancings = await AccountRepository(repository_session).list_account_balancings(12)
     assert balancings == []
+
+
+@pytest.mark.asyncio
+async def test_account_repository_creates_and_deletes_account_balancing_and_account(repository_session: AsyncSession) -> None:
+    repository = AccountRepository(repository_session)
+
+    balancing = await repository.create_account_balancing(
+        book_id=1,
+        account_id=2,
+        as_of_date=date(2026, 5, 3),
+        balance_minor=500000,
+        memo="Checkpoint",
+    )
+    deleted = await repository.delete_account(2)
+
+    assert balancing is not None
+    assert balancing.balance_minor == 500000
+    assert deleted is True
 
 
 @pytest.mark.asyncio

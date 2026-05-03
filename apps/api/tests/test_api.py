@@ -10,10 +10,13 @@ from rekenraam_api.api.dependencies import get_transaction_service
 from rekenraam_api.app import app
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
+    AccountBalancingCreateInput,
     AccountBalancingSummary,
+    AccountClosingValidationResult,
     AccountDirectiveSummary,
     AccountSummary,
     AccountTreeNode,
+    AccountUpdateInput,
 )
 from rekenraam_api.schemas.books import BookSummary
 from rekenraam_api.schemas.metadata import (
@@ -119,6 +122,32 @@ class StubAccountService:
             )
         return None
 
+    async def update_account(self, account_id: int, input: AccountUpdateInput) -> AccountSummary | None:
+        if account_id != 1:
+            return None
+        return AccountSummary(
+            id=account_id,
+            book_id=input.book_id,
+            parent_id=input.parent_id,
+            account_type=input.account_type,
+            name=input.name,
+            commodity_id=input.commodity_id,
+            institution_id=None,
+            institution_name=None,
+            country_id=None,
+            country_name=None,
+            number_last4=input.number_last4,
+            is_closed=input.is_closed,
+            is_hidden=False,
+            is_system=False,
+            system_role=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_account(self, account_id: int) -> bool:
+        return account_id == 1
+
     async def list_account_tree(self) -> list[AccountTreeNode]:
         return [
             AccountTreeNode(
@@ -183,6 +212,17 @@ class StubAccountService:
             )
         ]
 
+    async def create_account_balancing(self, input: AccountBalancingCreateInput) -> AccountBalancingSummary | None:
+        if input.account_id == 99:
+            return None
+        return AccountBalancingSummary(
+            id=8,
+            account_id=input.account_id,
+            as_of_date=input.as_of_date,
+            balance_minor=input.balance_minor,
+            memo=input.memo,
+        )
+
     async def list_account_directives(self, account_id: int) -> list[AccountDirectiveSummary]:
         return [
             AccountDirectiveSummary(
@@ -196,6 +236,13 @@ class StubAccountService:
                 created_at=self._created_at,
             )
         ]
+
+    async def validate_account_closing(self, account_id: int) -> AccountClosingValidationResult | None:
+        if account_id == 99:
+            return None
+        if account_id == 2:
+            return AccountClosingValidationResult(valid=False, issues=("account balance is not zero",))
+        return AccountClosingValidationResult(valid=True, issues=())
 
     async def get_account_booking_policy(self, account_id: int) -> str | None:
         if account_id == 99:
@@ -410,6 +457,54 @@ class StubMetadataService:
     async def list_projects(self) -> list[ProjectSummary]:
         return []
 
+    async def update_category(self, category_id: int, input: object) -> CategorySummary | None:
+        if category_id != 1:
+            return None
+        return CategorySummary(
+            id=category_id,
+            book_id=1,
+            parent_id=None,
+            name="Food",
+            kind="expense",
+            color="#111111",
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_category(self, category_id: int) -> bool:
+        return category_id == 1
+
+    async def update_payee(self, payee_id: int, input: object) -> PayeeSummary | None:
+        if payee_id != 1:
+            return None
+        return PayeeSummary(
+            id=payee_id,
+            book_id=1,
+            name="Corner Shop",
+            kind="business",
+            metadata=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_payee(self, payee_id: int) -> bool:
+        return payee_id == 1
+
+    async def update_tag(self, tag_id: int, input: object) -> TagSummary | None:
+        if tag_id != 1:
+            return None
+        return TagSummary(
+            id=tag_id,
+            book_id=1,
+            name="Family",
+            color="#222222",
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_tag(self, tag_id: int) -> bool:
+        return tag_id == 1
+
 
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
@@ -538,6 +633,46 @@ async def test_list_account_balancings_returns_rows(client: AsyncClient) -> None
             "memo": "Checkpoint",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_account_write_endpoints_return_expected_shapes(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    update_response = await client.put(
+        "/api/v1/accounts/1",
+        json={
+            "book_id": 1,
+            "parent_id": None,
+            "account_type": "asset",
+            "name": "Renamed Assets",
+            "commodity_id": 1,
+            "institution_id": None,
+            "country_id": None,
+            "number_last4": None,
+            "is_closed": False,
+        },
+    )
+    validation_response = await client.get("/api/v1/accounts/2/closing-validation")
+    balancing_response = await client.post(
+        "/api/v1/accounts/1/balancings",
+        json={
+            "book_id": 1,
+            "account_id": 1,
+            "as_of_date": "2026-05-03",
+            "balance_minor": 500000,
+            "memo": "Checkpoint",
+        },
+    )
+    delete_response = await client.delete("/api/v1/accounts/1")
+
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "Renamed Assets"
+    assert validation_response.status_code == 200
+    assert validation_response.json() == {"valid": False, "issues": ["account balance is not zero"]}
+    assert balancing_response.status_code == 200
+    assert balancing_response.json()["account_id"] == 1
+    assert delete_response.status_code == 204
 
 
 @pytest.mark.asyncio
@@ -673,6 +808,37 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
     assert people_response.json() == []
     assert projects_response.status_code == 200
     assert projects_response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_metadata_write_endpoints_update_and_delete_categories_payees_and_tags(client: AsyncClient) -> None:
+    app.dependency_overrides[get_metadata_service] = StubMetadataService
+
+    category_response = await client.put(
+        "/api/v1/categories/1",
+        json={"book_id": 1, "parent_id": None, "name": "Food", "kind": "expense", "color": "#111111"},
+    )
+    payee_response = await client.put(
+        "/api/v1/payees/1",
+        json={"book_id": 1, "name": "Corner Shop", "kind": "business", "metadata": None},
+    )
+    tag_response = await client.put(
+        "/api/v1/tags/1",
+        json={"book_id": 1, "name": "Family", "color": "#222222"},
+    )
+    delete_category_response = await client.delete("/api/v1/categories/1")
+    delete_payee_response = await client.delete("/api/v1/payees/1")
+    delete_tag_response = await client.delete("/api/v1/tags/1")
+
+    assert category_response.status_code == 200
+    assert category_response.json()["name"] == "Food"
+    assert payee_response.status_code == 200
+    assert payee_response.json()["name"] == "Corner Shop"
+    assert tag_response.status_code == 200
+    assert tag_response.json()["name"] == "Family"
+    assert delete_category_response.status_code == 204
+    assert delete_payee_response.status_code == 204
+    assert delete_tag_response.status_code == 204
 
 
 @pytest.mark.asyncio

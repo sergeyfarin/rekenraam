@@ -1,18 +1,23 @@
+from sqlalchemy.exc import IntegrityError
+
 from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
+    CategoryUpdateInput,
     CommoditySummary,
     CountrySummary,
     InstitutionSummary,
     PayeeCreateInput,
     PayeeSummary,
+    PayeeUpdateInput,
     PersonCreateInput,
     PersonSummary,
     ProjectCreateInput,
     ProjectSummary,
     TagCreateInput,
     TagSummary,
+    TagUpdateInput,
 )
 
 
@@ -87,6 +92,31 @@ class MetadataService:
         )
         return self._to_category_summary(row)
 
+    async def update_category(self, category_id: int, input: CategoryUpdateInput) -> CategorySummary | None:
+        name = input.name.strip()
+        kind = input.kind.strip().lower()
+        if not name:
+            raise ValueError("name is required")
+        if kind not in {"expense", "income", "transfer"}:
+            raise ValueError("category kind must be expense, income, or transfer")
+
+        row = await self._repository.update_category(
+            category_id=category_id,
+            parent_id=input.parent_id,
+            name=name,
+            kind=kind,
+            color=input.color,
+        )
+        if row is None:
+            return None
+        return self._to_category_summary(row)
+
+    async def delete_category(self, category_id: int) -> bool:
+        try:
+            return await self._repository.delete_category(category_id)
+        except IntegrityError as error:
+            raise ValueError("category is still in use") from error
+
     async def list_payees(self) -> list[PayeeSummary]:
         rows = await self._repository.list_payees()
         return [self._to_payee_summary(row) for row in rows]
@@ -106,6 +136,30 @@ class MetadataService:
         )
         return self._to_payee_summary(row)
 
+    async def update_payee(self, payee_id: int, input: PayeeUpdateInput) -> PayeeSummary | None:
+        name = input.name.strip()
+        kind = input.kind.strip().lower()
+        if not name:
+            raise ValueError("name is required")
+        if kind not in {"person", "business"}:
+            raise ValueError("payee kind must be person or business")
+
+        row = await self._repository.update_payee(
+            payee_id=payee_id,
+            name=name,
+            kind=kind,
+            metadata=input.metadata,
+        )
+        if row is None:
+            return None
+        return self._to_payee_summary(row)
+
+    async def delete_payee(self, payee_id: int) -> bool:
+        try:
+            return await self._repository.delete_payee(payee_id)
+        except IntegrityError as error:
+            raise ValueError("payee is still in use") from error
+
     async def list_tags(self) -> list[TagSummary]:
         rows = await self._repository.list_tags()
         return [self._to_tag_summary(row) for row in rows]
@@ -116,6 +170,22 @@ class MetadataService:
             raise ValueError("name is required")
         row = await self._repository.create_tag(book_id=input.book_id, name=name, color=input.color)
         return self._to_tag_summary(row)
+
+    async def update_tag(self, tag_id: int, input: TagUpdateInput) -> TagSummary | None:
+        name = input.name.strip()
+        if not name:
+            raise ValueError("name is required")
+
+        row = await self._repository.update_tag(tag_id=tag_id, name=name, color=input.color)
+        if row is None:
+            return None
+        return self._to_tag_summary(row)
+
+    async def delete_tag(self, tag_id: int) -> bool:
+        try:
+            return await self._repository.delete_tag(tag_id)
+        except IntegrityError as error:
+            raise ValueError("tag is still in use") from error
 
     async def list_people(self) -> list[PersonSummary]:
         rows = await self._repository.list_people()

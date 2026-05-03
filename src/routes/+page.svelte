@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { listAccountBalances, listAccounts, type AccountSummary, type AccountBalanceSummary } from "$lib/api/accounts";
+  import { getHealthStatus, listBooks } from "$lib/api/books";
+  import { hasApiBaseUrl, invokeTauri } from "$lib/api/client";
   import { listPayees, type PayeeSummary } from "$lib/api/metadata";
   import { listTransactions, type TransactionWithSplits } from "$lib/api/transactions";
   import { formatError } from "$lib/utils";
@@ -23,6 +24,7 @@
   let error = "";
   let setupError = "";
   let dbReady: boolean | null = null;
+  const desktopStorageMode = !hasApiBaseUrl();
 
   // Balances
   let accounts: AccountSummary[] = [];
@@ -50,13 +52,19 @@
     setupError = "";
 
     try {
-      await invoke<string>("db_health");
+      if (desktopStorageMode) {
+        await invokeTauri<string>("db_health");
+      } else {
+        await getHealthStatus();
+      }
       dbReady = true;
       await loadDashboardData();
     } catch (e) {
       const message = formatError(e);
       dbReady = false;
-      if (!message.includes("db not initialized")) {
+      if (!desktopStorageMode) {
+        setupError = `Backend unavailable: ${message}`;
+      } else if (!message.includes("db not initialized")) {
         setupError = `Database error: ${message}`;
       }
     } finally {
@@ -68,12 +76,12 @@
     setupError = "";
     busy = true;
     try {
-      let selected = await invoke<string | null>("pick_storage_file");
+      let selected = await invokeTauri<string | null>("pick_storage_file");
       if (!selected) {
-        selected = await invoke<string | null>("pick_storage_folder");
+        selected = await invokeTauri<string | null>("pick_storage_folder");
       }
       if (!selected) return;
-      await invoke<string>("validate_and_set_storage_location", { path: selected });
+      await invokeTauri<string>("validate_and_set_storage_location", { path: selected });
       await checkDatabase();
     } catch (e) {
       setupError = `Failed to open database: ${formatError(e)}`;
@@ -86,9 +94,9 @@
     setupError = "";
     busy = true;
     try {
-      const selected = await invoke<string | null>("pick_storage_folder");
+      const selected = await invokeTauri<string | null>("pick_storage_folder");
       if (!selected) return;
-      await invoke<string>("create_new_storage", { path: selected });
+      await invokeTauri<string>("create_new_storage", { path: selected });
       await checkDatabase();
     } catch (e) {
       setupError = `Failed to create database: ${formatError(e)}`;
@@ -103,6 +111,23 @@
 
     try {
       // Load accounts, balances, recent transactions, and native currency in parallel
+      const nativeCurrencyPromise = desktopStorageMode
+        ? invokeTauri<DefaultCurrency | null>("get_default_currency", { bookId: 1 }).catch(() => null)
+        : listBooks()
+            .then((books) => {
+              const primaryBook = books[0] ?? null;
+              if (primaryBook === null) {
+                return null;
+              }
+
+              return {
+                scale: 2,
+                symbol: primaryBook.base_currency_code,
+                display_symbol: primaryBook.base_currency_code,
+              } satisfies DefaultCurrency;
+            })
+            .catch(() => null);
+
       const [accountsResult, balancesResult, transactionsResult, payeesResult, nativeCurrencyResult] = await Promise.all([
         listAccounts(1),
         listAccountBalances(1),
@@ -112,7 +137,7 @@
           offset: 0,
         }),
         listPayees(1),
-        invoke<DefaultCurrency | null>("get_default_currency", { bookId: 1 }).catch(() => null),
+        nativeCurrencyPromise,
       ]);
 
       accounts = accountsResult;
@@ -232,7 +257,7 @@
       <div class="flex items-center justify-center py-16">
         <p class="text-muted-foreground animate-pulse">Starting up…</p>
       </div>
-    {:else if dbReady === false}
+    {:else if dbReady === false && desktopStorageMode}
       <!-- First-launch onboarding screen -->
       <div class="flex flex-col items-center justify-center py-16 space-y-8 text-center">
         <div class="space-y-3">
@@ -266,6 +291,27 @@
           Your data is stored as a portable SQLite file on your computer.
           Nothing is sent to the cloud.
         </p>
+      </div>
+    {:else if dbReady === false}
+      <div class="flex flex-col items-center justify-center py-16 space-y-6 text-center">
+        <div class="space-y-3 max-w-md">
+          <h2 class="text-3xl font-bold tracking-tight">Backend unavailable</h2>
+          <p class="text-muted-foreground">
+            The web app could not reach the configured API backend. Check the server and API base URL,
+            then retry.
+          </p>
+        </div>
+
+        {#if setupError}
+          <Alert.Root variant="destructive" class="max-w-md text-left">
+            <Alert.Title>Error</Alert.Title>
+            <Alert.Description>{setupError}</Alert.Description>
+          </Alert.Root>
+        {/if}
+
+        <Button size="lg" disabled={busy} onclick={() => !busy && checkDatabase()} class="min-w-44">
+          Retry connection
+        </Button>
       </div>
     {:else}
 

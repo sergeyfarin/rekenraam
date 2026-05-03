@@ -1,4 +1,4 @@
-import { apiGetWithTauriFallback, apiPostWithTauriFallback } from "$lib/api/client";
+import { apiDeleteWithTauriFallback, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
 
 export type CommoditySummary = {
   id: number;
@@ -117,6 +117,24 @@ export type ProjectCreateInput = {
   metadata: string | null;
 };
 
+export type InstitutionCreateInput = {
+  book_id: number;
+  name: string;
+  kind: string | null;
+  country_id?: number | null;
+};
+
+export type InstitutionSettingsInput = {
+  id?: number;
+  book_id: number;
+  name: string;
+  kind: string | null;
+  routing?: string | null;
+  website?: string | null;
+  metadata?: string | null;
+  country_id?: number | null;
+};
+
 export async function listCommodities(bookId = 1): Promise<CommoditySummary[]> {
   return apiGetWithTauriFallback<CommoditySummary[]>(`/commodities`, "list_commodities", { bookId });
 }
@@ -137,6 +155,19 @@ export async function createCategory(input: CategoryCreateInput): Promise<Catego
   return apiPostWithTauriFallback<CategorySummary, CategoryCreateInput>("/categories", input, "create_category", { input });
 }
 
+export async function updateCategory(category: CategoryCreateInput & { id: number }): Promise<void> {
+  await apiPutWithTauriFallback<CategorySummary, CategoryCreateInput>(
+    `/categories/${category.id}`,
+    category,
+    "update_category",
+    { category }
+  );
+}
+
+export async function deleteCategory(categoryId: number, bookId = 1): Promise<void> {
+  await apiDeleteWithTauriFallback<void>(`/categories/${categoryId}`, "delete_category", { categoryId, bookId });
+}
+
 export async function listPayees(bookId = 1): Promise<PayeeSummary[]> {
   return apiGetWithTauriFallback<PayeeSummary[]>(`/payees`, "list_payees", { bookId });
 }
@@ -145,12 +176,28 @@ export async function createPayee(input: PayeeCreateInput): Promise<PayeeSummary
   return apiPostWithTauriFallback<PayeeSummary, PayeeCreateInput>("/payees", input, "create_payee", { input });
 }
 
+export async function updatePayee(payee: PayeeCreateInput & { id: number }): Promise<void> {
+  await apiPutWithTauriFallback<PayeeSummary, PayeeCreateInput>(`/payees/${payee.id}`, payee, "update_payee", { payee });
+}
+
+export async function deletePayee(payeeId: number, bookId = 1): Promise<void> {
+  await apiDeleteWithTauriFallback<void>(`/payees/${payeeId}`, "delete_payee", { payeeId, bookId });
+}
+
 export async function listTags(bookId = 1): Promise<TagSummary[]> {
   return apiGetWithTauriFallback<TagSummary[]>(`/tags`, "list_tags", { bookId });
 }
 
 export async function createTag(input: TagCreateInput): Promise<TagSummary> {
   return apiPostWithTauriFallback<TagSummary, TagCreateInput>("/tags", input, "create_tag", { input });
+}
+
+export async function updateTag(tag: TagCreateInput & { id: number }): Promise<void> {
+  await apiPutWithTauriFallback<TagSummary, TagCreateInput>(`/tags/${tag.id}`, tag, "update_tag", { tag });
+}
+
+export async function deleteTag(tagId: number, bookId = 1): Promise<void> {
+  await apiDeleteWithTauriFallback<void>(`/tags/${tagId}`, "delete_tag", { tagId, bookId });
 }
 
 export async function listPeople(bookId = 1): Promise<PersonSummary[]> {
@@ -167,4 +214,21 @@ export async function listProjects(bookId = 1): Promise<ProjectSummary[]> {
 
 export async function createProject(input: ProjectCreateInput): Promise<ProjectSummary> {
   return apiPostWithTauriFallback<ProjectSummary, ProjectCreateInput>("/projects", input, "create_project", { input });
+}
+
+export async function createInstitution(input: InstitutionCreateInput): Promise<InstitutionSummary> {
+  return invokeTauri<InstitutionSummary>("create_institution", { input });
+}
+
+export async function saveInstitutionSettings(institution: InstitutionSettingsInput): Promise<void> {
+  if (institution.id !== undefined) {
+    await invokeTauri("update_institution", { institution });
+    return;
+  }
+
+  await invokeTauri("create_institution", { institution });
+}
+
+export async function deleteInstitution(institutionId: number, bookId = 1): Promise<void> {
+  await invokeTauri("delete_institution", { institutionId, bookId });
 }

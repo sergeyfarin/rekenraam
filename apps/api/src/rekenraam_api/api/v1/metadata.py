@@ -4,17 +4,20 @@ from rekenraam_api.api.dependencies import get_metadata_service
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
+    CategoryUpdateInput,
     CommoditySummary,
     CountrySummary,
     InstitutionSummary,
     PayeeCreateInput,
     PayeeSummary,
+    PayeeUpdateInput,
     PersonCreateInput,
     PersonSummary,
     ProjectCreateInput,
     ProjectSummary,
     TagCreateInput,
     TagSummary,
+    TagUpdateInput,
 )
 from rekenraam_api.services.metadata import MetadataService
 
@@ -61,6 +64,36 @@ async def create_category(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
+@router.put("/categories/{category_id}", response_model=CategorySummary)
+async def update_category(
+    category_id: int,
+    input: CategoryUpdateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CategorySummary:
+    try:
+        category = await metadata_service.update_category(category_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if category is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="category not found")
+    return category
+
+
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: int,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> None:
+    try:
+        deleted = await metadata_service.delete_category(category_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="category not found")
+
+
 @router.get("/payees", response_model=list[PayeeSummary])
 async def list_payees(
     metadata_service: MetadataService = Depends(get_metadata_service),
@@ -79,6 +112,36 @@ async def create_payee(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
+@router.put("/payees/{payee_id}", response_model=PayeeSummary)
+async def update_payee(
+    payee_id: int,
+    input: PayeeUpdateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> PayeeSummary:
+    try:
+        payee = await metadata_service.update_payee(payee_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if payee is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="payee not found")
+    return payee
+
+
+@router.delete("/payees/{payee_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payee(
+    payee_id: int,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> None:
+    try:
+        deleted = await metadata_service.delete_payee(payee_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="payee not found")
+
+
 @router.get("/tags", response_model=list[TagSummary])
 async def list_tags(
     metadata_service: MetadataService = Depends(get_metadata_service),
@@ -95,6 +158,36 @@ async def create_tag(
         return await metadata_service.create_tag(input)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put("/tags/{tag_id}", response_model=TagSummary)
+async def update_tag(
+    tag_id: int,
+    input: TagUpdateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> TagSummary:
+    try:
+        tag = await metadata_service.update_tag(tag_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if tag is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tag not found")
+    return tag
+
+
+@router.delete("/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tag(
+    tag_id: int,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> None:
+    try:
+        deleted = await metadata_service.delete_tag(tag_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tag not found")
 
 
 @router.get("/people", response_model=list[PersonSummary])

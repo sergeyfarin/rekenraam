@@ -1,4 +1,7 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import Select, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
@@ -47,6 +50,41 @@ class MetadataRepository:
         await self._session.refresh(category)
         return category
 
+    async def update_category(
+        self,
+        *,
+        category_id: int,
+        parent_id: int | None,
+        name: str,
+        kind: str,
+        color: str | None,
+    ) -> Category | None:
+        category = await self._session.get(Category, category_id)
+        if category is None:
+            return None
+
+        category.parent_id = parent_id
+        category.name = name
+        category.kind = kind
+        category.color = color
+        category.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(category)
+        return category
+
+    async def delete_category(self, category_id: int) -> bool:
+        category = await self._session.get(Category, category_id)
+        if category is None:
+            return False
+
+        await self._session.delete(category)
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            raise
+        return True
+
     async def list_payees(self) -> list[Payee]:
         statement: Select[tuple[Payee]] = select(Payee).order_by(Payee.name.asc(), Payee.id.asc())
         result = await self._session.execute(statement)
@@ -59,6 +97,32 @@ class MetadataRepository:
         await self._session.refresh(payee)
         return payee
 
+    async def update_payee(self, *, payee_id: int, name: str, kind: str, metadata: str | None) -> Payee | None:
+        payee = await self._session.get(Payee, payee_id)
+        if payee is None:
+            return None
+
+        payee.name = name
+        payee.kind = kind
+        payee.metadata_text = metadata
+        payee.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(payee)
+        return payee
+
+    async def delete_payee(self, payee_id: int) -> bool:
+        payee = await self._session.get(Payee, payee_id)
+        if payee is None:
+            return False
+
+        await self._session.delete(payee)
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            raise
+        return True
+
     async def list_tags(self) -> list[Tag]:
         statement: Select[tuple[Tag]] = select(Tag).order_by(Tag.name.asc(), Tag.id.asc())
         result = await self._session.execute(statement)
@@ -70,6 +134,31 @@ class MetadataRepository:
         await self._session.commit()
         await self._session.refresh(tag)
         return tag
+
+    async def update_tag(self, *, tag_id: int, name: str, color: str | None) -> Tag | None:
+        tag = await self._session.get(Tag, tag_id)
+        if tag is None:
+            return None
+
+        tag.name = name
+        tag.color = color
+        tag.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(tag)
+        return tag
+
+    async def delete_tag(self, tag_id: int) -> bool:
+        tag = await self._session.get(Tag, tag_id)
+        if tag is None:
+            return False
+
+        await self._session.delete(tag)
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            raise
+        return True
 
     async def list_people(self) -> list[Person]:
         statement: Select[tuple[Person]] = select(Person).order_by(Person.name.asc(), Person.id.asc())

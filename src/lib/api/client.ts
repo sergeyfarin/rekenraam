@@ -10,6 +10,10 @@ function getApiBaseUrl(): string | null {
   return rawApiBaseUrl.endsWith("/") ? rawApiBaseUrl.slice(0, -1) : rawApiBaseUrl;
 }
 
+export function hasApiBaseUrl(): boolean {
+  return getApiBaseUrl() !== null;
+}
+
 async function parseError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: string | { msg?: string }[] };
@@ -111,4 +115,8 @@ export async function apiDeleteWithTauriFallback<TResponse>(
   } catch {
     return await invoke<TResponse>(command, args);
   }
+}
+
+export async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return invoke<T>(command, args);
 }

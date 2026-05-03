@@ -1,4 +1,4 @@
-import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback } from "$lib/api/client";
+import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
 
 export type TransactionFilter = {
   book_id?: number;
@@ -296,4 +296,23 @@ export async function updateTransaction(input: TransactionMutationInput): Promis
 
 export async function deleteTransaction(transactionId: number): Promise<void> {
   await apiDeleteWithTauriFallback<unknown>(`/transactions/${transactionId}`, "delete_transaction", { id: transactionId });
+}
+
+export async function duplicateTransaction(transactionId: number, today: string): Promise<void> {
+  await invokeTauri("duplicate_transaction", { id: transactionId, today });
+}
+
+export async function bulkVoidTransactions(transactionIds: number[]): Promise<number> {
+  return invokeTauri<number>("bulk_void_transactions", { ids: transactionIds });
+}
+
+export async function bulkDeleteTransactions(transactionIds: number[]): Promise<number> {
+  return invokeTauri<number>("bulk_delete_transactions", { ids: transactionIds });
+}
+
+export async function getPayeeDefaults(payeeId: number, accountId?: number): Promise<{ category_id: number | null; memo: string | null }> {
+  return invokeTauri<{ category_id: number | null; memo: string | null }>("get_payee_defaults", {
+    payeeId,
+    accountId,
+  });
 }

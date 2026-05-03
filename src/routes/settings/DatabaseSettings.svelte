@@ -1,5 +1,24 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import {
+    copyStorage,
+    createBackup,
+    createNewStorage,
+    dbIntegrityCheck,
+    dbStats as fetchDbStats,
+    dbVacuum,
+    getBackupSettings,
+    getDbPath,
+    getMigrationStatus,
+    listBackups,
+    moveStorage,
+    pickBackupFile,
+    pickBackupFolder,
+    pickStorageFile,
+    pickStorageFolder,
+    restoreFromBackup as restoreDatabaseFromBackup,
+    setBackupSettings,
+    validateAndSetStorageLocation,
+  } from "$lib/api/admin";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -84,7 +103,7 @@
 
   async function loadDbPath() {
     try {
-      const path = await invoke<string | null>("get_db_path");
+      const path = await getDbPath();
       dbPath = path ?? "";
     } catch (e) {
       error = `Failed to load DB path: ${String(e)}`;
@@ -94,7 +113,7 @@
   async function openDatabaseFile() {
     error = "";
     status = "";
-    const selected = await invoke<string | null>("pick_storage_file");
+    const selected = await pickStorageFile();
     if (!selected) return;
     await switchDatabase(selected);
   }
@@ -102,14 +121,14 @@
   async function openDatabaseFolder() {
     error = "";
     status = "";
-    const selected = await invoke<string | null>("pick_storage_folder");
+    const selected = await pickStorageFolder();
     if (!selected) return;
     await switchDatabase(selected);
   }
 
   async function loadBackupSettings() {
     try {
-      backupSettings = await invoke<BackupSettings>("get_backup_settings");
+      backupSettings = await getBackupSettings<BackupSettings>();
       backupSettingsLoaded = true;
     } catch (e) {
       backupError = `Failed to load backup settings: ${String(e)}`;
@@ -127,7 +146,7 @@
         interval_minutes: Number(backupSettings.interval_minutes),
         retention_count: Number(backupSettings.retention_count),
       };
-      backupSettings = await invoke<BackupSettings>("set_backup_settings", { settings: normalized });
+      backupSettings = await setBackupSettings<BackupSettings>(normalized);
       if (showStatus) {
         backupStatus = "Backup settings saved.";
       }
@@ -150,7 +169,7 @@
   async function chooseBackupFolder() {
     backupError = "";
     backupStatus = "";
-    const selected = await invoke<string | null>("pick_backup_folder");
+    const selected = await pickBackupFolder();
     if (!selected) return;
     backupSettings = { ...backupSettings, backup_path: selected };
     queueBackupSave();
@@ -161,7 +180,7 @@
     backupStatus = "";
     busy = true;
     try {
-      await invoke<string>("create_backup");
+      await createBackup();
       backupStatus = "Backup created.";
       await refreshBackups();
     } catch (e) {
@@ -173,7 +192,7 @@
 
   async function refreshBackups() {
     try {
-      backups = await invoke<BackupInfo[]>("list_backups");
+      backups = await listBackups<BackupInfo[]>();
     } catch (e) {
       backupError = `Failed to list backups: ${String(e)}`;
     }
@@ -207,8 +226,8 @@
   async function refreshMaintenance() {
     maintenanceError = "";
     try {
-      dbStats = await invoke<DbStats>("db_stats");
-      migrationStatus = await invoke<MigrationStatus>("get_migration_status");
+      dbStats = await fetchDbStats<DbStats>();
+      migrationStatus = await getMigrationStatus<MigrationStatus>();
     } catch (e) {
       maintenanceError = `Failed to load maintenance info: ${String(e)}`;
     }
@@ -220,7 +239,7 @@
     integrityStatus = "";
     busy = true;
     try {
-      integrityStatus = await invoke<string>("db_integrity_check");
+      integrityStatus = await dbIntegrityCheck();
       maintenanceStatus = integrityStatus === "ok" ? "Integrity check passed." : "Integrity check reported issues.";
     } catch (e) {
       maintenanceError = `Integrity check failed: ${String(e)}`;
@@ -234,7 +253,7 @@
     maintenanceStatus = "";
     busy = true;
     try {
-      await invoke<string>("db_vacuum");
+      await dbVacuum();
       maintenanceStatus = "Database vacuum complete.";
       await refreshMaintenance();
     } catch (e) {
@@ -247,11 +266,11 @@
   async function createNewDatabase() {
     error = "";
     status = "";
-    const selected = await invoke<string | null>("pick_storage_folder");
+    const selected = await pickStorageFolder();
     if (!selected) return;
     busy = true;
     try {
-      const created = await invoke<string>("create_new_storage", { path: selected });
+      const created = await createNewStorage(selected);
       dbPath = created;
       status = "New database created.";
       setTimeout(() => {
@@ -267,11 +286,11 @@
   async function moveDatabase() {
     error = "";
     status = "";
-    const selected = await invoke<string | null>("pick_storage_folder");
+    const selected = await pickStorageFolder();
     if (!selected) return;
     busy = true;
     try {
-      const moved = await invoke<string>("move_storage", { path: selected });
+      const moved = await moveStorage(selected);
       dbPath = moved;
       status = "Database moved.";
       setTimeout(() => {
@@ -287,11 +306,11 @@
   async function duplicateDatabase() {
     error = "";
     status = "";
-    const selected = await invoke<string | null>("pick_storage_folder");
+    const selected = await pickStorageFolder();
     if (!selected) return;
     busy = true;
     try {
-      const copied = await invoke<string>("copy_storage", { path: selected });
+      const copied = await copyStorage(selected);
       dbPath = copied;
       status = "Database duplicated.";
       setTimeout(() => {
@@ -307,13 +326,13 @@
   async function restoreFromBackup() {
     error = "";
     status = "";
-    const selected = await invoke<string | null>("pick_backup_file");
+    const selected = await pickBackupFile();
     if (!selected) return;
     const confirmed = await askConfirm("Restore will overwrite the current database. This cannot be undone.");
     if (!confirmed) return;
     busy = true;
     try {
-      const restored = await invoke<string>("restore_from_backup", { backup_path: selected });
+      const restored = await restoreDatabaseFromBackup(selected);
       dbPath = restored;
       status = "Database restored from backup.";
       setTimeout(() => {
@@ -329,7 +348,7 @@
   async function switchDatabase(path: string) {
     busy = true;
     try {
-      const updated = await invoke<string>("validate_and_set_storage_location", { path });
+      const updated = await validateAndSetStorageLocation(path);
       dbPath = updated;
       status = "Storage location updated.";
       setTimeout(() => {

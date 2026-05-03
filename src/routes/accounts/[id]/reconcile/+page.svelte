@@ -2,7 +2,9 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { invoke } from "@tauri-apps/api/core";
+  import { createAccountBalancing, getAccountById, listAccountBalancings } from "$lib/api/accounts";
+  import { listCommodities, listPayees, type CommoditySummary, type PayeeSummary } from "$lib/api/metadata";
+  import { listTransactions, updateTransaction } from "$lib/api/transactions";
   import { Button } from "$lib/components/ui/button";
   import * as Alert from "$lib/components/ui/alert";
 
@@ -127,14 +129,21 @@
     error = "";
     try {
       const [acct, comms, payeeList, bals] = await Promise.all([
-        invoke<Account>("get_account", { id: accountId }),
-        invoke<Commodity[]>("list_commodities", { bookId: 1 }),
-        invoke<Payee[]>("list_payees", { bookId: 1 }),
-        invoke<AccountBalancing[]>("list_account_balancings", { accountId }),
+        getAccountById(accountId),
+        listCommodities(1),
+        listPayees(1),
+        listAccountBalancings(accountId),
       ]);
       account = acct;
-      commodity = comms.find((c) => c.id === acct.commodity_id) ?? null;
-      payees = payeeList;
+      commodity = comms.find((entry: CommoditySummary) => entry.id === acct?.commodity_id)
+        ? {
+            id: (comms.find((entry: CommoditySummary) => entry.id === acct?.commodity_id) as CommoditySummary).id,
+            symbol: (comms.find((entry: CommoditySummary) => entry.id === acct?.commodity_id) as CommoditySummary).symbol,
+            name: (comms.find((entry: CommoditySummary) => entry.id === acct?.commodity_id) as CommoditySummary).name,
+            scale: (comms.find((entry: CommoditySummary) => entry.id === acct?.commodity_id) as CommoditySummary).scale,
+          }
+        : null;
+      payees = payeeList.map((payee: PayeeSummary) => ({ id: payee.id, name: payee.name }));
       // list_account_balancings returns DESC by date — first entry is most recent
       lastBalancing = bals.length > 0 ? bals[0] : null;
     } catch (e) {
@@ -149,14 +158,12 @@
     loading = true;
     error = "";
     try {
-      const allTx = await invoke<TxRow[]>("list_transactions", {
-        filter: {
-          book_id: 1,
-          account_id: accountId,
-          date_to: statementDate,
-          limit: 10000,
-          offset: 0,
-        },
+      const allTx = await listTransactions({
+        book_id: 1,
+        account_id: accountId,
+        date_to: statementDate,
+        limit: 10000,
+        offset: 0,
       });
       // Only show uncleared + cleared (not void or already reconciled)
       candidates = allTx.filter(
@@ -204,39 +211,35 @@
         (tx) => checkedIds.has(tx.transaction.id) && tx.transaction.status !== "reconciled"
       );
       for (const tx of toReconcile) {
-        await invoke("update_transaction_with_splits", {
-          input: {
-            id: tx.transaction.id,
-            book_id: 1,
-            txn_date: tx.transaction.txn_date,
-            payee_id: tx.transaction.payee_id,
-            memo: tx.transaction.memo,
-            status: "reconciled",
-            reference: tx.transaction.reference,
-            import_id: null,
-            splits: tx.splits.map((s) => ({
-              account_id: s.account_id,
-              commodity_id: s.commodity_id,
-              amount_minor: s.amount_minor,
-              category_id: s.category_id,
-              tag_id: s.tag_id,
-              person_id: s.person_id,
-              project_id: s.project_id,
-              share_bps: s.share_bps,
-              memo: s.memo,
-            })),
-          },
+        await updateTransaction({
+          id: tx.transaction.id,
+          book_id: 1,
+          txn_date: tx.transaction.txn_date,
+          payee_id: tx.transaction.payee_id,
+          memo: tx.transaction.memo,
+          status: "reconciled",
+          reference: tx.transaction.reference,
+          import_id: null,
+          splits: tx.splits.map((s) => ({
+            account_id: s.account_id,
+            commodity_id: s.commodity_id,
+            amount_minor: s.amount_minor,
+            category_id: s.category_id,
+            tag_id: s.tag_id,
+            person_id: s.person_id,
+            project_id: s.project_id,
+            share_bps: s.share_bps,
+            memo: s.memo,
+          })),
         });
       }
       // Create account balancing (locks the account through this date)
-      await invoke("create_account_balancing", {
-        input: {
-          book_id: 1,
-          account_id: accountId,
-          as_of_date: statementDate,
-          balance_minor: statementBalanceMinor,
-          memo: null,
-        },
+      await createAccountBalancing({
+        book_id: 1,
+        account_id: accountId,
+        as_of_date: statementDate,
+        balance_minor: statementBalanceMinor,
+        memo: null,
       });
       goto(`/accounts/${accountId}`);
     } catch (e) {

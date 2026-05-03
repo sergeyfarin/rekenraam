@@ -1,6 +1,28 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import {
+    createFxRateDaily,
+    createFxRateOfficial,
+    deleteFxRateDaily,
+    deleteFxRateOfficial,
+    deleteFxRateSourceAssignment,
+    getFxRateSettings,
+    listCurrencies,
+    listFxRateRefreshState,
+    listFxRateSourceAssignments,
+    listFxRateSources,
+    listFxRatesDaily,
+    listFxRatesOfficial,
+    refreshFxRatesNow as refreshFxRatesNowCommand,
+    renameCommoditySymbol,
+    restartFxRateScheduler,
+    saveCurrency as saveCurrencyCommand,
+    saveFxRateSourceAssignment,
+    setDefaultCurrency as setDefaultCurrencyCommand,
+    setFxRateSettings,
+    toggleCurrencyActive as toggleCurrencyActiveCommand,
+  } from "$lib/api/commodities";
+  import { listCommodities, type CommoditySummary } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -179,15 +201,22 @@
   export async function initialize() {
     await loadCommodities();
     await loadCurrencies();
-    await loadFxRateSources();
-    await loadFxRateSettings();
-    await loadFxRateAssignments();
-    await loadFxRefreshState();
   }
 
   export async function loadCommodities() {
     try {
-      commodities = await invoke<Commodity[]>("list_commodities", { bookId: 1 });
+      const summaries = await listCommodities(1);
+      commodities = summaries.map((commodity: CommoditySummary) => ({
+        id: commodity.id,
+        book_id: commodity.book_id,
+        kind: commodity.kind,
+        symbol: commodity.symbol,
+        name: commodity.name,
+        scale: commodity.scale,
+        metadata: commodity.metadata,
+        created_at: commodity.created_at,
+        updated_at: commodity.updated_at,
+      }));
     } catch (e) {
       commodityError = `Failed to load commodities: ${String(e)}`;
     }
@@ -209,14 +238,12 @@
     commodityStatus = "";
     busy = true;
     try {
-      await invoke("rename_commodity_symbol", {
-        input: {
-          id: editingCommodity.id,
-          book_id: 1,
-          symbol: editingCommodity.symbol,
-          name: editingCommodity.name,
-          metadata: editingCommodity.metadata,
-        },
+      await renameCommoditySymbol({
+        id: editingCommodity.id,
+        book_id: 1,
+        symbol: editingCommodity.symbol,
+        name: editingCommodity.name,
+        metadata: editingCommodity.metadata,
       });
       commodityStatus = "Commodity updated.";
       closeCommodityDialog();
@@ -231,7 +258,7 @@
   // --- Currency management functions ---
   async function loadCurrencies() {
     try {
-      currencies = await invoke<Currency[]>("list_currencies", { bookId: 1 });
+      currencies = await listCurrencies<Currency[]>(1);
     } catch (e) {
       currencyError = `Failed to load currencies: ${String(e)}`;
     }
@@ -241,7 +268,7 @@
     currencyError = "";
     currencyStatus = "";
     try {
-      await invoke("toggle_currency_active", { currencyId: currency.id });
+      await toggleCurrencyActiveCommand(currency.id);
       currencyStatus = `Currency ${currency.symbol} ${currency.is_active ? "deactivated" : "activated"}.`;
       await loadCurrencies();
     } catch (e) {
@@ -253,7 +280,7 @@
     currencyError = "";
     currencyStatus = "";
     try {
-      await invoke("set_default_currency", { bookId: 1, currencyId: currency.id });
+      await setDefaultCurrencyCommand(1, currency.id);
       currencyStatus = `${currency.symbol} set as default currency.`;
       await loadCurrencies();
     } catch (e) {
@@ -289,27 +316,23 @@
     busy = true;
     try {
       if (editingCurrency) {
-        await invoke("update_currency", {
-          input: {
-            id: editingCurrency.id,
-            symbol: newCurrency.symbol,
-            display_symbol: newCurrency.display_symbol || null,
-            name: newCurrency.name,
-            scale: newCurrency.scale,
-          },
-        });
+        await saveCurrencyCommand({
+          id: editingCurrency.id,
+          symbol: newCurrency.symbol,
+          display_symbol: newCurrency.display_symbol || null,
+          name: newCurrency.name,
+          scale: newCurrency.scale,
+        }, true);
         currencyStatus = "Currency updated.";
       } else {
-        await invoke("create_currency", {
-          input: {
-            book_id: 1,
-            symbol: newCurrency.symbol,
-            display_symbol: newCurrency.display_symbol || null,
-            name: newCurrency.name,
-            scale: newCurrency.scale,
-            is_active: true,
-          },
-        });
+        await saveCurrencyCommand({
+          book_id: 1,
+          symbol: newCurrency.symbol,
+          display_symbol: newCurrency.display_symbol || null,
+          name: newCurrency.name,
+          scale: newCurrency.scale,
+          is_active: true,
+        }, false);
         currencyStatus = "Currency created.";
       }
       closeCurrencyDialog();
@@ -324,7 +347,7 @@
   // --- FX Rate functions ---
   async function loadFxRatesDaily() {
     try {
-      fxRatesDaily = await invoke<FxRateDaily[]>("list_fx_rates_daily", { bookId: 1, limit: 100 });
+      fxRatesDaily = await listFxRatesDaily<FxRateDaily[]>(1, 100);
     } catch (e) {
       fxRateError = `Failed to load daily FX rates: ${String(e)}`;
     }
@@ -332,7 +355,7 @@
 
   async function loadFxRatesOfficial() {
     try {
-      fxRatesOfficial = await invoke<FxRateOfficial[]>("list_fx_rates_official", { bookId: 1 });
+      fxRatesOfficial = await listFxRatesOfficial<FxRateOfficial[]>(1);
     } catch (e) {
       fxRateError = `Failed to load official FX rates: ${String(e)}`;
     }
@@ -340,7 +363,7 @@
 
   async function loadFxRateSources() {
     try {
-      fxRateSources = await invoke<FxRateSource[]>("list_fx_rate_sources", { bookId: 1 });
+      fxRateSources = await listFxRateSources<FxRateSource[]>(1);
     } catch (e) {
       fxRateError = `Failed to load FX rate sources: ${String(e)}`;
     }
@@ -348,7 +371,7 @@
 
   async function loadFxRateSettings() {
     try {
-      fxRateSettings = await invoke<FxRateSettings | null>("get_fx_rate_settings", { bookId: 1 });
+      fxRateSettings = await getFxRateSettings<FxRateSettings | null>(1);
     } catch (e) {
       fxRateError = `Failed to load FX settings: ${String(e)}`;
     }
@@ -361,18 +384,16 @@
     busy = true;
     try {
       const normalizedDefaultSource = fxRateSettings.default_source_id ? Number(fxRateSettings.default_source_id) : null;
-      fxRateSettings = await invoke<FxRateSettings>("set_fx_rate_settings", {
-        input: {
-          base_currency_id: Number(fxRateSettings.base_currency_id),
-          default_source_id: normalizedDefaultSource,
-          refresh_enabled: fxRateSettings.refresh_enabled,
-          refresh_hour_utc: Number(fxRateSettings.refresh_hour_utc),
-          refresh_minute_utc: Number(fxRateSettings.refresh_minute_utc),
-          max_backfill_days: Number(fxRateSettings.max_backfill_days),
-          weekend_policy: fxRateSettings.weekend_policy,
-        },
+      fxRateSettings = await setFxRateSettings<FxRateSettings>({
+        base_currency_id: Number(fxRateSettings.base_currency_id),
+        default_source_id: normalizedDefaultSource,
+        refresh_enabled: fxRateSettings.refresh_enabled,
+        refresh_hour_utc: Number(fxRateSettings.refresh_hour_utc),
+        refresh_minute_utc: Number(fxRateSettings.refresh_minute_utc),
+        max_backfill_days: Number(fxRateSettings.max_backfill_days),
+        weekend_policy: fxRateSettings.weekend_policy,
       });
-      await invoke("restart_fx_rate_scheduler");
+      await restartFxRateScheduler();
       fxRateStatus = "FX settings saved.";
     } catch (e) {
       fxRateError = `Failed to save FX settings: ${String(e)}`;
@@ -383,7 +404,7 @@
 
   async function loadFxRateAssignments() {
     try {
-      fxRateAssignments = await invoke<FxRateSourceAssignment[]>("list_fx_rate_source_assignments", { bookId: 1 });
+      fxRateAssignments = await listFxRateSourceAssignments<FxRateSourceAssignment[]>(1);
     } catch (e) {
       fxRateError = `Failed to load FX source assignments: ${String(e)}`;
     }
@@ -426,25 +447,21 @@
     busy = true;
     try {
       if (editingAssignment) {
-        await invoke("update_fx_rate_source_assignment", {
-          input: {
-            id: editingAssignment.id,
-            source_id: Number(newFxAssignment.source_id),
-            effective_from: newFxAssignment.effective_from,
-            effective_to: newFxAssignment.effective_to || null,
-          },
-        });
+        await saveFxRateSourceAssignment({
+          id: editingAssignment.id,
+          source_id: Number(newFxAssignment.source_id),
+          effective_from: newFxAssignment.effective_from,
+          effective_to: newFxAssignment.effective_to || null,
+        }, true);
         fxRateStatus = "FX source assignment updated.";
       } else {
-        await invoke("create_fx_rate_source_assignment", {
-          input: {
-            from_currency_id: Number(newFxAssignment.from_currency_id),
-            to_currency_id: Number(newFxAssignment.to_currency_id),
-            source_id: Number(newFxAssignment.source_id),
-            effective_from: newFxAssignment.effective_from,
-            effective_to: newFxAssignment.effective_to || null,
-          },
-        });
+        await saveFxRateSourceAssignment({
+          from_currency_id: Number(newFxAssignment.from_currency_id),
+          to_currency_id: Number(newFxAssignment.to_currency_id),
+          source_id: Number(newFxAssignment.source_id),
+          effective_from: newFxAssignment.effective_from,
+          effective_to: newFxAssignment.effective_to || null,
+        }, false);
         fxRateStatus = "FX source assignment created.";
       }
       closeFxAssignmentDialog();
@@ -461,7 +478,7 @@
     fxRateError = "";
     fxRateStatus = "";
     try {
-      await invoke("delete_fx_rate_source_assignment", { id: assignment.id });
+      await deleteFxRateSourceAssignment(assignment.id);
       fxRateStatus = "FX source assignment deleted.";
       await loadFxRateAssignments();
     } catch (e) {
@@ -471,7 +488,7 @@
 
   async function loadFxRefreshState() {
     try {
-      fxRateRefreshState = await invoke<FxRateRefreshState[]>("list_fx_rate_refresh_state", { bookId: 1 });
+      fxRateRefreshState = await listFxRateRefreshState<FxRateRefreshState[]>(1);
     } catch (e) {
       fxRateError = `Failed to load FX refresh status: ${String(e)}`;
     }
@@ -482,7 +499,7 @@
     fxRateStatus = "";
     busy = true;
     try {
-      const summary = await invoke<{ pairs_total: number; pairs_success: number; pairs_failed: number; rates_inserted: number; derived_inserted: number; last_error: string | null }>("refresh_fx_rates_now");
+      const summary = await refreshFxRatesNowCommand<{ pairs_total: number; pairs_success: number; pairs_failed: number; rates_inserted: number; derived_inserted: number; last_error: string | null }>();
       fxRateStatus = `FX refresh complete. ${summary.pairs_success}/${summary.pairs_total} pairs updated, ${summary.rates_inserted} rates.`;
       if (summary.last_error) {
         fxRateError = `Last error: ${summary.last_error}`;
@@ -517,15 +534,13 @@
     fxRateStatus = "";
     busy = true;
     try {
-      await invoke("create_fx_rate_daily", {
-        input: {
-          book_id: 1,
-          from_currency_id: newFxDaily.from_currency_id,
-          to_currency_id: newFxDaily.to_currency_id,
-          rate_date: newFxDaily.rate_date,
-          rate: newFxDaily.rate,
-          source: newFxDaily.source || null,
-        },
+      await createFxRateDaily({
+        book_id: 1,
+        from_currency_id: newFxDaily.from_currency_id,
+        to_currency_id: newFxDaily.to_currency_id,
+        rate_date: newFxDaily.rate_date,
+        rate: newFxDaily.rate,
+        source: newFxDaily.source || null,
       });
       fxRateStatus = "Daily FX rate added.";
       closeFxDailyDialog();
@@ -542,7 +557,7 @@
     fxRateError = "";
     fxRateStatus = "";
     try {
-      await invoke("delete_fx_rate_daily", { id: rate.id });
+      await deleteFxRateDaily(rate.id);
       fxRateStatus = "FX rate deleted.";
       await loadFxRatesDaily();
     } catch (e) {
@@ -576,20 +591,18 @@
     fxRateStatus = "";
     busy = true;
     try {
-      await invoke("create_fx_rate_official", {
-        input: {
-          book_id: 1,
-          from_currency_id: newFxOfficial.from_currency_id,
-          to_currency_id: newFxOfficial.to_currency_id,
-          period_type: newFxOfficial.period_type,
-          period_year: newFxOfficial.period_year,
-          period_month: newFxOfficial.period_type === "monthly" ? newFxOfficial.period_month : null,
-          rate: newFxOfficial.rate,
-          source_name: newFxOfficial.source_name,
-          source_url: newFxOfficial.source_url || null,
-          source_date: null,
-          notes: newFxOfficial.notes || null,
-        },
+      await createFxRateOfficial({
+        book_id: 1,
+        from_currency_id: newFxOfficial.from_currency_id,
+        to_currency_id: newFxOfficial.to_currency_id,
+        period_type: newFxOfficial.period_type,
+        period_year: newFxOfficial.period_year,
+        period_month: newFxOfficial.period_type === "monthly" ? newFxOfficial.period_month : null,
+        rate: newFxOfficial.rate,
+        source_name: newFxOfficial.source_name,
+        source_url: newFxOfficial.source_url || null,
+        source_date: null,
+        notes: newFxOfficial.notes || null,
       });
       fxRateStatus = "Official FX rate added.";
       closeFxOfficialDialog();
@@ -607,7 +620,7 @@
     fxRateError = "";
     fxRateStatus = "";
     try {
-      await invoke("delete_fx_rate_official", { id: rate.id });
+      await deleteFxRateOfficial(rate.id);
       fxRateStatus = "Official FX rate deleted.";
       await loadFxRatesOfficial();
     } catch (e) {
@@ -637,19 +650,19 @@
       </button>
       <button
         class="px-4 py-2 text-sm font-medium {commoditiesSubTab === 'fx-daily' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
-        onclick={() => { commoditiesSubTab = 'fx-daily'; loadFxRatesDaily(); }}
+        onclick={() => { commoditiesSubTab = 'fx-daily'; loadFxRateSources(); loadFxRatesDaily(); }}
       >
         Daily FX Rates
       </button>
       <button
         class="px-4 py-2 text-sm font-medium {commoditiesSubTab === 'fx-official' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
-        onclick={() => { commoditiesSubTab = 'fx-official'; loadFxRatesOfficial(); }}
+        onclick={() => { commoditiesSubTab = 'fx-official'; loadFxRateSources(); loadFxRatesOfficial(); }}
       >
         Official FX Rates
       </button>
       <button
         class="px-4 py-2 text-sm font-medium {commoditiesSubTab === 'fx-settings' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
-        onclick={() => { commoditiesSubTab = 'fx-settings'; loadFxRateSettings(); loadFxRateAssignments(); loadFxRefreshState(); }}
+        onclick={() => { commoditiesSubTab = 'fx-settings'; loadFxRateSources(); loadFxRateSettings(); loadFxRateAssignments(); loadFxRefreshState(); }}
       >
         FX Settings
       </button>

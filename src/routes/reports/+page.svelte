@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { listCommodities, type CommoditySummary } from "$lib/api/metadata";
+  import {
+    realizedGainsReport,
+    reportCashflow,
+    reportCategorySpend,
+    reportPayeeTotals,
+    unrealizedGainsReport,
+  } from "$lib/api/reports";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -105,7 +112,15 @@
 
   async function loadCommodities() {
     try {
-      commodities = await invoke<Commodity[]>("list_commodities", { bookId: 1 });
+      const summaries = await listCommodities(1);
+      commodities = summaries.map((commodity: CommoditySummary) => ({
+        id: commodity.id,
+        book_id: commodity.book_id,
+        kind: commodity.kind,
+        symbol: commodity.symbol,
+        name: commodity.name,
+        scale: commodity.scale,
+      }));
       // Default to first currency if available
       const currencies = commodities.filter((c) => c.kind === "currency");
       if (currencies.length > 0) {
@@ -120,13 +135,11 @@
     error = "";
     busy = true;
     try {
-      cashflowData = await invoke<CashflowRow[]>("report_cashflow", {
-        input: {
-          book_id: 1,
-          date_from: dateFrom || null,
-          date_to: dateTo || null,
-          group_by: groupBy,
-        },
+      cashflowData = await reportCashflow<CashflowRow[]>({
+        book_id: 1,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+        group_by: groupBy,
       });
 
       // Calculate totals
@@ -149,13 +162,11 @@
     error = "";
     busy = true;
     try {
-      categorySpendData = await invoke<CategorySpendRow[]>("report_category_spend", {
-        input: {
-          book_id: 1,
-          date_from: dateFrom || null,
-          date_to: dateTo || null,
-          category_ids: null,
-        },
+      categorySpendData = await reportCategorySpend<CategorySpendRow[]>({
+        book_id: 1,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+        category_ids: null,
       });
 
       categorySpendTotal = categorySpendData.reduce((sum, row) => sum + row.total_minor, 0);
@@ -170,13 +181,11 @@
     error = "";
     busy = true;
     try {
-      payeeTotalsData = await invoke<PayeeTotalRow[]>("report_payee_totals", {
-        input: {
-          book_id: 1,
-          date_from: dateFrom || null,
-          date_to: dateTo || null,
-          payee_ids: null,
-        },
+      payeeTotalsData = await reportPayeeTotals<PayeeTotalRow[]>({
+        book_id: 1,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+        payee_ids: null,
       });
 
       payeeTotalsTotal = payeeTotalsData.reduce((sum, row) => sum + row.total_minor, 0);
@@ -191,10 +200,7 @@
     error = "";
     busy = true;
     try {
-      realizedGains = await invoke<RealizedGainEntry[]>("realized_gains_report", {
-        dateFrom: dateFrom || null,
-        dateTo: dateTo || null,
-      });
+      realizedGains = await realizedGainsReport<RealizedGainEntry[]>(dateFrom || null, dateTo || null);
 
       realizedGainsTotal = realizedGains.reduce((sum, row) => sum + row.gain_loss_minor, 0);
     } catch (e) {
@@ -210,10 +216,7 @@
     error = "";
     busy = true;
     try {
-      unrealizedGains = await invoke<UnrealizedGainEntry[]>("unrealized_gains_report", {
-        baseCommodityId: selectedCommodityId,
-        asOfDate: dateTo || null,
-      });
+      unrealizedGains = await unrealizedGainsReport<UnrealizedGainEntry[]>(selectedCommodityId, dateTo || null);
 
       unrealizedGainsTotal = unrealizedGains.reduce((sum, row) => sum + row.unrealized_gain_minor, 0);
     } catch (e) {

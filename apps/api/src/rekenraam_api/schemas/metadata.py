@@ -64,6 +64,16 @@ class CategoryCreateInput(BaseModel):
     color: str | None
 
 
+class CategoryUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    parent_id: int | None
+    name: str
+    kind: str
+    color: str | None
+
+
 class PayeeSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -85,6 +95,15 @@ class PayeeCreateInput(BaseModel):
     metadata: str | None
 
 
+class PayeeUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    kind: str
+    metadata: str | None
+
+
 class TagSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -97,6 +116,14 @@ class TagSummary(BaseModel):
 
 
 class TagCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    name: str
+    color: str | None
+
+
+class TagUpdateInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     book_id: int

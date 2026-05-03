@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, date
 
 from sqlalchemy import Select, exists, func, literal, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -56,6 +57,56 @@ class AccountRepository:
         statement: Select[tuple[Account]] = select(Account).where(Account.id == account_id)
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
+
+    async def update_account(
+        self,
+        *,
+        account_id: int,
+        parent_id: int | None,
+        account_type: str,
+        name: str,
+        commodity_id: int,
+        institution_id: int | None,
+        country_id: int | None,
+        number_last4: str | None,
+        is_closed: bool,
+    ) -> Account | None:
+        account = await self.get_account_by_id(account_id)
+        if account is None:
+            return None
+
+        previous_closed = account.is_closed
+        account.parent_id = parent_id
+        account.account_type = account_type
+        account.name = name
+        account.commodity_id = commodity_id
+        account.number_last4 = number_last4
+        account.is_closed = is_closed
+        account.updated_at = datetime.now(UTC)
+        account.effective_at = date.today()
+        if not previous_closed and is_closed:
+            account.lifecycle_event = "close"
+        elif previous_closed and not is_closed:
+            account.lifecycle_event = "reopen"
+        else:
+            account.lifecycle_event = "update"
+
+        await self._session.commit()
+        await self._session.refresh(account)
+        return account
+
+    async def delete_account(self, account_id: int) -> bool:
+        account = await self.get_account_by_id(account_id)
+        if account is None:
+            return False
+
+        await self._session.delete(account)
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            raise
+        return True
 
     async def get_book_base_currency_code(self, book_id: int) -> str | None:
         statement: Select[tuple[str]] = select(Book.base_currency_code).where(Book.id == book_id)
@@ -178,3 +229,38 @@ class AccountRepository:
 
         await self._session.commit()
         return inserted
+
+    async def create_account_balancing(
+        self,
+        *,
+        book_id: int,
+        account_id: int,
+        as_of_date: date,
+        balance_minor: int,
+        memo: str | None,
+    ) -> AccountBalancing | None:
+        account = await self.get_account_by_id(account_id)
+        if account is None:
+            return None
+        if account.book_id != book_id:
+            raise ValueError("account does not belong to book")
+
+        latest_active_balancings = await self.list_account_balancings(account_id)
+        if latest_active_balancings and as_of_date <= latest_active_balancings[0].as_of_date:
+            raise ValueError("balancing date must be after last active balancing")
+
+        balancing = AccountBalancing(
+            book_id=book_id,
+            account_id=account_id,
+            previous_account_balancing_id=None,
+            as_of_date=as_of_date,
+            balance_minor=balance_minor,
+            memo=memo,
+            created_at=datetime.now(UTC),
+            voided_at=None,
+            void_reason=None,
+        )
+        self._session.add(balancing)
+        await self._session.commit()
+        await self._session.refresh(balancing)
+        return balancing

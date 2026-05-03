@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
-  import { listPayees, type PayeeSummary } from "$lib/api/metadata";
+  import { createPayee, deletePayee as deletePayeeCommand, listPayees, type PayeeSummary, updatePayee } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -49,24 +48,20 @@
     busy = true;
     try {
       if (editingPayee) {
-        await invoke("update_payee", {
-          payee: {
-            id: editingPayee.id,
-            book_id: 1,
-            name: newPayee.name,
-            kind: newPayee.kind,
-            metadata: newPayee.metadata || null,
-          },
+        await updatePayee({
+          id: editingPayee.id,
+          book_id: 1,
+          name: newPayee.name,
+          kind: newPayee.kind,
+          metadata: newPayee.metadata || null,
         });
         payeeStatus = "Payee updated.";
       } else {
-        await invoke("create_payee", {
-          payee: {
-            book_id: 1,
-            name: newPayee.name,
-            kind: newPayee.kind,
-            metadata: newPayee.metadata || null,
-          },
+        await createPayee({
+          book_id: 1,
+          name: newPayee.name,
+          kind: newPayee.kind,
+          metadata: newPayee.metadata || null,
         });
         payeeStatus = "Payee created.";
       }
@@ -85,7 +80,7 @@
     payeeStatus = "";
     busy = true;
     try {
-      await invoke("delete_payee", { payeeId: p.id, bookId: 1 });
+      await deletePayeeCommand(p.id, 1);
       payeeStatus = "Payee deleted.";
       await loadPayees();
     } catch (e) {

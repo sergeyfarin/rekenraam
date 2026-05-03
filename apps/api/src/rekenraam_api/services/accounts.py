@@ -1,15 +1,20 @@
 from dataclasses import dataclass, field
 from datetime import date
 
+from sqlalchemy.exc import IntegrityError
+
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
+    AccountBalancingCreateInput,
     AccountBalancingSummary,
+    AccountClosingValidationResult,
     AccountCreateInput,
     AccountDirectiveSummary,
     AccountSummary,
     AccountTreeNode,
+    AccountUpdateInput,
 )
 
 
@@ -46,6 +51,46 @@ class AccountService:
             is_closed=input.is_closed,
         )
         return self._to_summary(account)
+
+    async def update_account(self, account_id: int, input: AccountUpdateInput) -> AccountSummary | None:
+        name = input.name.strip()
+        account_type = input.account_type.strip().lower()
+        if not name:
+            raise ValueError("name is required")
+        if account_type not in {"cash", "checking", "savings", "credit", "loan", "investment", "asset", "liability", "income", "expense", "equity"}:
+            raise ValueError("account type is invalid")
+
+        current = await self._repository.get_account_by_id(account_id)
+        if current is None:
+            return None
+        if current.is_system:
+            raise ValueError("system accounts cannot be updated")
+
+        account = await self._repository.update_account(
+            account_id=account_id,
+            parent_id=input.parent_id,
+            account_type=account_type,
+            name=name,
+            commodity_id=input.commodity_id,
+            institution_id=input.institution_id,
+            country_id=input.country_id,
+            number_last4=input.number_last4,
+            is_closed=input.is_closed,
+        )
+        if account is None:
+            return None
+        return self._to_summary(account)
+
+    async def delete_account(self, account_id: int) -> bool:
+        current = await self._repository.get_account_by_id(account_id)
+        if current is None:
+            return False
+        if current.is_system:
+            raise ValueError("system accounts cannot be deleted")
+        try:
+            return await self._repository.delete_account(account_id)
+        except IntegrityError as error:
+            raise ValueError("account is still in use") from error
 
     async def get_account_by_id(self, account_id: int) -> AccountSummary | None:
         account = await self._repository.get_account_by_id(account_id)
@@ -115,6 +160,44 @@ class AccountService:
         if not confirm:
             raise ValueError("unlock not confirmed")
         return await self._repository.unlock_account_balancings(account_id, from_date, reason)
+
+    async def validate_account_closing(self, account_id: int) -> AccountClosingValidationResult | None:
+        account = await self._repository.get_account_by_id(account_id)
+        if account is None:
+            return None
+
+        issues: list[str] = []
+        if account.is_system:
+            issues.append("system accounts cannot be closed")
+
+        balances = await self._repository.get_account_balances()
+        if balances.get(account_id, 0) != 0:
+            issues.append("account balance is not zero")
+
+        return AccountClosingValidationResult(valid=len(issues) == 0, issues=tuple(issues))
+
+    async def create_account_balancing(self, input: AccountBalancingCreateInput) -> AccountBalancingSummary | None:
+        try:
+            balancing = await self._repository.create_account_balancing(
+                book_id=input.book_id,
+                account_id=input.account_id,
+                as_of_date=input.as_of_date,
+                balance_minor=input.balance_minor,
+                memo=input.memo,
+            )
+        except ValueError:
+            raise
+
+        if balancing is None:
+            return None
+
+        return AccountBalancingSummary(
+            id=balancing.id,
+            account_id=balancing.account_id,
+            as_of_date=balancing.as_of_date,
+            balance_minor=balancing.balance_minor,
+            memo=balancing.memo,
+        )
 
     async def list_account_tree(self) -> list[AccountTreeNode]:
         accounts = await self._repository.list_accounts()

@@ -2,7 +2,6 @@
   import "../app.css";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { invoke } from "@tauri-apps/api/core";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
 
@@ -49,19 +48,6 @@
       return;
     }
 
-    // Ctrl+Z / Cmd+Z — undo
-    if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
-      e.preventDefault();
-      invoke("undo_session").catch(() => {});
-      return;
-    }
-
-    // Ctrl+Shift+Z / Cmd+Shift+Z — redo
-    if (e.key === "z" && (e.ctrlKey || e.metaKey) && e.shiftKey) {
-      e.preventDefault();
-      invoke("redo_session").catch(() => {});
-      return;
-    }
   }
 </script>
 
@@ -97,10 +83,6 @@
       <div class="grid grid-cols-2 gap-x-4 gap-y-1">
         <kbd class="font-mono bg-muted rounded px-1">N</kbd>
         <span>New transaction</span>
-        <kbd class="font-mono bg-muted rounded px-1">Ctrl+Z</kbd>
-        <span>Undo</span>
-        <kbd class="font-mono bg-muted rounded px-1">Ctrl+Shift+Z</kbd>
-        <span>Redo</span>
         <kbd class="font-mono bg-muted rounded px-1">?</kbd>
         <span>Show this help</span>
       </div>

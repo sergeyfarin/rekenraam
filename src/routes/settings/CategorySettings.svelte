@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
-  import { listCategories, type CategorySummary } from "$lib/api/metadata";
+  import { createCategory, deleteCategory as deleteCategoryCommand, listCategories, type CategorySummary, updateCategory } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -49,26 +48,22 @@
     busy = true;
     try {
       if (editingCategory) {
-        await invoke("update_category", {
-          category: {
-            id: editingCategory.id,
-            book_id: 1,
-            parent_id: newCategory.parent_id || null,
-            name: newCategory.name,
-            kind: newCategory.kind,
-            color: newCategory.color || null,
-          },
+        await updateCategory({
+          id: editingCategory.id,
+          book_id: 1,
+          parent_id: newCategory.parent_id || null,
+          name: newCategory.name,
+          kind: newCategory.kind,
+          color: newCategory.color || null,
         });
         categoryStatus = "Category updated.";
       } else {
-        await invoke("create_category", {
-          category: {
-            book_id: 1,
-            parent_id: newCategory.parent_id || null,
-            name: newCategory.name,
-            kind: newCategory.kind,
-            color: newCategory.color || null,
-          },
+        await createCategory({
+          book_id: 1,
+          parent_id: newCategory.parent_id || null,
+          name: newCategory.name,
+          kind: newCategory.kind,
+          color: newCategory.color || null,
         });
         categoryStatus = "Category created.";
       }
@@ -87,7 +82,7 @@
     categoryStatus = "";
     busy = true;
     try {
-      await invoke("delete_category", { categoryId: cat.id, bookId: 1 });
+      await deleteCategoryCommand(cat.id, 1);
       categoryStatus = "Category deleted.";
       await loadCategories();
     } catch (e) {

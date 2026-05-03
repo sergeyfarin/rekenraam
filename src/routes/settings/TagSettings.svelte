@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
-  import { listTags, type TagSummary } from "$lib/api/metadata";
+  import { createTag, deleteTag as deleteTagCommand, listTags, type TagSummary, updateTag } from "$lib/api/metadata";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -48,22 +47,18 @@
     busy = true;
     try {
       if (editingTag) {
-        await invoke("update_tag", {
-          tag: {
-            id: editingTag.id,
-            book_id: 1,
-            name: newTag.name,
-            color: newTag.color || null,
-          },
+        await updateTag({
+          id: editingTag.id,
+          book_id: 1,
+          name: newTag.name,
+          color: newTag.color || null,
         });
         tagStatus = "Tag updated.";
       } else {
-        await invoke("create_tag", {
-          tag: {
-            book_id: 1,
-            name: newTag.name,
-            color: newTag.color || null,
-          },
+        await createTag({
+          book_id: 1,
+          name: newTag.name,
+          color: newTag.color || null,
         });
         tagStatus = "Tag created.";
       }
@@ -82,7 +77,7 @@
     tagStatus = "";
     busy = true;
     try {
-      await invoke("delete_tag", { tagId: t.id, bookId: 1 });
+      await deleteTagCommand(t.id, 1);
       tagStatus = "Tag deleted.";
       await loadTags();
     } catch (e) {

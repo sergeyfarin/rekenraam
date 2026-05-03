@@ -51,3 +51,43 @@ async def test_metadata_repository_lists_reference_data_by_name(repository_sessi
     assert [tag.name for tag in tags] == ["Shared"]
     assert [person.name for person in people] == ["Alex"]
     assert [project.name for project in projects] == ["Kitchen Remodel"]
+
+
+@pytest.mark.asyncio
+async def test_metadata_repository_updates_and_deletes_category_payee_and_tag(repository_session: AsyncSession) -> None:
+    repository = MetadataRepository(repository_session)
+    category = Category(book_id=1, parent_id=None, name="Groceries", kind="expense", color="#00aa00")
+    payee = Payee(book_id=1, name="Local Market", kind="business", metadata_text=None)
+    tag = Tag(book_id=1, name="Shared", color="#123456")
+    repository_session.add_all([category, payee, tag])
+    await repository_session.commit()
+
+    updated_category = await repository.update_category(
+        category_id=category.id,
+        parent_id=None,
+        name="Food",
+        kind="expense",
+        color="#112233",
+    )
+    updated_payee = await repository.update_payee(
+        payee_id=payee.id,
+        name="Corner Shop",
+        kind="business",
+        metadata="{\"source\":\"manual\"}",
+    )
+    updated_tag = await repository.update_tag(tag_id=tag.id, name="Family", color="#654321")
+
+    assert updated_category is not None
+    assert updated_category.name == "Food"
+    assert updated_payee is not None
+    assert updated_payee.name == "Corner Shop"
+    assert updated_payee.metadata_text == '{"source":"manual"}'
+    assert updated_tag is not None
+    assert updated_tag.name == "Family"
+
+    assert await repository.delete_category(category.id) is True
+    assert await repository.delete_payee(payee.id) is True
+    assert await repository.delete_tag(tag.id) is True
+    assert await repository.list_categories() == []
+    assert await repository.list_payees() == []
+    assert await repository.list_tags() == []

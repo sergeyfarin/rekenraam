@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { listAccounts } from "$lib/api/accounts";
+  import { getPositions, convertPositions, listLotsWithHoldingPeriod, buyCommodity, sellCommodity, createDividendTransaction } from "$lib/api/investments";
+  import { listCommodities } from "$lib/api/metadata";
   import { autocompleteCommodities, type CommodityAutocompleteOption } from "$lib/api/commodities";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -128,7 +130,13 @@
 
   async function loadAccounts() {
     try {
-      accounts = await invoke<Account[]>("list_accounts", { bookId: 1, includeClosed: false });
+      const rows = await listAccounts(1);
+      accounts = rows.filter((account) => !account.is_closed).map((account) => ({
+        id: account.id,
+        name: account.name,
+        type: account.account_type,
+        commodity_id: account.commodity_id,
+      }));
     } catch (e) {
       error = `Failed to load accounts: ${String(e)}`;
     }
@@ -136,7 +144,14 @@
 
   async function loadCommodities() {
     try {
-      commodities = await invoke<Commodity[]>("list_commodities", { bookId: 1 });
+      const rows = await listCommodities(1);
+      commodities = rows.map((commodity) => ({
+        id: commodity.id,
+        kind: commodity.kind,
+        symbol: commodity.symbol,
+        name: commodity.name,
+        scale: commodity.scale,
+      }));
       const currencies = commodities.filter((c) => c.kind === "currency");
       if (currencies.length > 0 && !quoteCommodityId) {
         quoteCommodityId = currencies[0].id;
@@ -150,17 +165,11 @@
     error = "";
     busy = true;
     try {
-      positions = await invoke<Position[]>("get_positions", {
-        bookId: 1,
-        asOfDate: asOfDate || null,
-      });
+      positions = await getPositions<Position[]>();
 
       // Convert positions to base currency if quote commodity is selected
       if (quoteCommodityId) {
-        convertedPositions = await invoke<ConvertedPosition[]>("convert_positions", {
-          baseCommodityId: quoteCommodityId,
-          asOfDate: asOfDate || null,
-        });
+        convertedPositions = await convertPositions<ConvertedPosition[]>(positions, quoteCommodityId);
 
         // Calculate totals
         totalValue = convertedPositions.reduce((sum, p) => sum + p.value_minor, 0);
@@ -180,10 +189,7 @@
     error = "";
     busy = true;
     try {
-      lotsWithHolding = await invoke<LotWithHoldingPeriod[]>("list_lots_with_holding_period", {
-        bookId: 1,
-        asOfDate: asOfDate || null,
-      });
+      lotsWithHolding = await listLotsWithHoldingPeriod<LotWithHoldingPeriod[]>();
     } catch (e) {
       error = `Failed to load lots: ${String(e)}`;
     } finally {
@@ -299,35 +305,31 @@
 
     try {
       if (tradeType === "buy") {
-        await invoke("buy_commodity", {
-          input: {
-            txn_date: tradeForm.txn_date,
-            investment_account_id: tradeForm.investment_account_id,
-            cash_account_id: tradeForm.cash_account_id,
-            commodity_id: tradeForm.commodity_id,
-            quantity_minor: quantityMinor,
-            cash_amount_minor: cashAmountMinor,
-            memo: tradeForm.memo || null,
-            payee_id: null,
-            status: null,
-          },
+        await buyCommodity({
+          txn_date: tradeForm.txn_date,
+          investment_account_id: tradeForm.investment_account_id,
+          cash_account_id: tradeForm.cash_account_id,
+          commodity_id: tradeForm.commodity_id,
+          quantity_minor: quantityMinor,
+          cash_amount_minor: cashAmountMinor,
+          memo: tradeForm.memo || null,
+          payee_id: null,
+          status: null,
         });
         status = "Buy transaction created successfully";
       } else {
-        await invoke("sell_commodity", {
-          input: {
-            txn_date: tradeForm.txn_date,
-            investment_account_id: tradeForm.investment_account_id,
-            cash_account_id: tradeForm.cash_account_id,
-            commodity_id: tradeForm.commodity_id,
-            quantity_minor: quantityMinor,
-            proceeds_minor: cashAmountMinor,
-            lot_allocation_method: "FIFO",
-            lot_allocations: null,
-            memo: tradeForm.memo || null,
-            payee_id: null,
-            status: null,
-          },
+        await sellCommodity({
+          txn_date: tradeForm.txn_date,
+          investment_account_id: tradeForm.investment_account_id,
+          cash_account_id: tradeForm.cash_account_id,
+          commodity_id: tradeForm.commodity_id,
+          quantity_minor: quantityMinor,
+          proceeds_minor: cashAmountMinor,
+          lot_allocation_method: "FIFO",
+          lot_allocations: null,
+          memo: tradeForm.memo || null,
+          payee_id: null,
+          status: null,
         });
         status = "Sell transaction created successfully";
       }
@@ -375,18 +377,16 @@
     busy = true;
 
     try {
-      await invoke("create_dividend_transaction", {
-        input: {
-          txn_date: dividendForm.txn_date,
-          investment_account_id: dividendForm.investment_account_id,
-          cash_account_id: dividendForm.cash_account_id,
-          income_account_id: dividendForm.income_account_id,
-          amount_minor: amountMinor,
-          commodity_id: dividendForm.commodity_id,
-          memo: dividendForm.memo || null,
-          payee_id: null,
-          status: null,
-        },
+      await createDividendTransaction({
+        txn_date: dividendForm.txn_date,
+        investment_account_id: dividendForm.investment_account_id,
+        cash_account_id: dividendForm.cash_account_id,
+        income_account_id: dividendForm.income_account_id,
+        amount_minor: amountMinor,
+        commodity_id: dividendForm.commodity_id,
+        memo: dividendForm.memo || null,
+        payee_id: null,
+        status: null,
       });
       status = "Dividend transaction created successfully";
       closeDividendDialog();

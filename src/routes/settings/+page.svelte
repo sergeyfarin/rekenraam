@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { closeFiscalYear } from "$lib/api/admin";
   import * as Tabs from "$lib/components/ui/tabs";
   import * as Card from "$lib/components/ui/card";
   import * as Alert from "$lib/components/ui/alert";
@@ -71,6 +71,7 @@
 
   // Tab state
   let activeTab: "database" | "categories" | "payees" | "tags" | "commodities" | "institutions" | "year-end" = "database";
+  let loadedTabs = new Set<string>();
 
   // Year-End Close state
   type FiscalYearCloseResult = {
@@ -104,23 +105,63 @@
   let institutions: Institution[] = [];
 
   onMount(async () => {
-    // Initialize all settings components
-    await databaseSettings?.initialize?.();
-    await categorySettings?.loadCategories?.();
-    await payeeSettings?.loadPayees?.();
-    await tagSettings?.loadTags?.();
-    await commoditySettings?.initialize?.();
-    await institutionSettings?.loadInstitutions?.();
+    await ensureActiveTabLoaded(activeTab);
   });
+
+  $: void ensureActiveTabLoaded(activeTab);
+
+  async function ensureActiveTabLoaded(tab: typeof activeTab) {
+    if (loadedTabs.has(tab)) {
+      return;
+    }
+
+    if (tab === "database" && databaseSettings) {
+      await databaseSettings.initialize?.();
+      loadedTabs.add(tab);
+      return;
+    }
+
+    if (tab === "categories" && categorySettings) {
+      await categorySettings.loadCategories?.();
+      loadedTabs.add(tab);
+      return;
+    }
+
+    if (tab === "payees" && payeeSettings) {
+      await payeeSettings.loadPayees?.();
+      loadedTabs.add(tab);
+      return;
+    }
+
+    if (tab === "tags" && tagSettings) {
+      await tagSettings.loadTags?.();
+      loadedTabs.add(tab);
+      return;
+    }
+
+    if (tab === "commodities" && commoditySettings) {
+      await commoditySettings.initialize?.();
+      loadedTabs.add(tab);
+      return;
+    }
+
+    if (tab === "institutions" && institutionSettings) {
+      await institutionSettings.loadInstitutions?.();
+      loadedTabs.add(tab);
+      return;
+    }
+
+    if (tab === "year-end") {
+      loadedTabs.add(tab);
+    }
+  }
 
   async function runYearEndClose() {
     yearEndError = "";
     yearEndResult = null;
     yearEndRunning = true;
     try {
-      yearEndResult = await invoke<FiscalYearCloseResult>("close_fiscal_year", {
-        input: { close_date: yearEndDate, memo: yearEndMemo || null },
-      });
+      yearEndResult = await closeFiscalYear<FiscalYearCloseResult>({ close_date: yearEndDate, memo: yearEndMemo || null });
     } catch (e) {
       yearEndError = String(e);
     } finally {
