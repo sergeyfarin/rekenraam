@@ -49,7 +49,7 @@ class PriceObservation(Base):
             "price_date",
         ),
         CheckConstraint(
-            "observation_kind IN ('commodity_market', 'fx_manual', 'valuation_override')",
+            "observation_kind IN ('commodity_market', 'fx_daily', 'fx_manual', 'valuation_override')",
             name="ck_price_observations_observation_kind",
         ),
     )

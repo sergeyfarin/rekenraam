@@ -4,11 +4,13 @@ from datetime import UTC, date, datetime
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from rekenraam_api.api.dependencies import get_pricing_service
+from rekenraam_api.api.dependencies import get_pricing_service, get_pricing_worker
 from rekenraam_api.app import app
 from rekenraam_api.schemas.pricing import (
+    PricingExecutionStatusSummary,
     PriceSourceSummary,
     PricingPolicySummary,
+    PricingRefreshRunSummary,
     PricingRefreshStateSummary,
     PricingSourceAssignmentSummary,
 )
@@ -129,6 +131,51 @@ class StubPricingService:
         ]
 
 
+class StubPricingWorker:
+    _created_at = datetime(2026, 5, 3, tzinfo=UTC)
+
+    async def run_book(self, book_id: int, *, trigger: str, force: bool) -> PricingRefreshRunSummary | None:
+        if book_id != 1:
+            raise ValueError("pricing policy not found")
+        return PricingRefreshRunSummary(
+            book_id=1,
+            trigger=trigger,
+            started_at=self._created_at,
+            finished_at=self._created_at,
+            pairs_total=1,
+            pairs_success=1,
+            pairs_failed=0,
+            rates_inserted=2,
+            derived_inserted=0,
+            last_error=None,
+        )
+
+    async def get_status(self, book_id: int) -> PricingExecutionStatusSummary:
+        if book_id != 1:
+            raise ValueError("pricing policy not found")
+        return PricingExecutionStatusSummary(
+            book_id=1,
+            scheduler_enabled=True,
+            scheduler_poll_seconds=60,
+            worker_started_at=self._created_at,
+            is_running=False,
+            active_book_ids=[],
+            next_scheduled_at=datetime(2026, 5, 4, 4, 0, tzinfo=UTC),
+            last_run=PricingRefreshRunSummary(
+                book_id=1,
+                trigger="scheduled",
+                started_at=self._created_at,
+                finished_at=self._created_at,
+                pairs_total=1,
+                pairs_success=1,
+                pairs_failed=0,
+                rates_inserted=2,
+                derived_inserted=0,
+                last_error=None,
+            ),
+        )
+
+
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
     app.dependency_overrides.clear()
@@ -146,6 +193,7 @@ async def client() -> AsyncIterator[AsyncClient]:
 @pytest.mark.asyncio
 async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_state(client: AsyncClient) -> None:
     app.dependency_overrides[get_pricing_service] = lambda: StubPricingService()
+    app.dependency_overrides[get_pricing_worker] = lambda: StubPricingWorker()
 
     sources_response = await client.get("/api/v1/pricing/sources")
     policy_response = await client.get("/api/v1/pricing/policy")
@@ -187,6 +235,8 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     )
     delete_assignment_response = await client.delete("/api/v1/pricing/source-assignments/10")
     refresh_state_response = await client.get("/api/v1/pricing/refresh-state")
+    run_response = await client.post("/api/v1/pricing/refresh/run", json={"book_id": 1})
+    execution_status_response = await client.get("/api/v1/pricing/refresh/execution-status")
 
     assert sources_response.status_code == 200
     assert sources_response.json()[0]["name"] == "ECB"
@@ -203,3 +253,7 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     assert delete_assignment_response.status_code == 204
     assert refresh_state_response.status_code == 200
     assert refresh_state_response.json()[0]["last_success_date"] == "2026-05-20"
+    assert run_response.status_code == 200
+    assert run_response.json()["pairs_success"] == 1
+    assert execution_status_response.status_code == 200
+    assert execution_status_response.json()["scheduler_enabled"] is True

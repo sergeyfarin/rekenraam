@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.session import session_factory
@@ -16,8 +16,10 @@ from rekenraam_api.services.books import BookService
 from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.metadata import MetadataService
 from rekenraam_api.services.pricing import PricingService
+from rekenraam_api.services.pricing_execution import PricingExecutionService
 from rekenraam_api.services.reports import ReportService
 from rekenraam_api.services.transactions import TransactionService
+from rekenraam_api.workers.pricing import PricingRefreshWorker, pricing_refresh_worker
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
@@ -53,6 +55,15 @@ def get_investment_service(session: AsyncSession = Depends(get_db_session)) -> I
 def get_pricing_service(session: AsyncSession = Depends(get_db_session)) -> PricingService:
     repository = PricingRepository(session)
     return PricingService(repository)
+
+
+def get_pricing_execution_service(session: AsyncSession = Depends(get_db_session)) -> PricingExecutionService:
+    repository = PricingRepository(session)
+    return PricingExecutionService(repository)
+
+
+def get_pricing_worker(request: Request) -> PricingRefreshWorker:
+    return getattr(request.app.state, "pricing_worker", pricing_refresh_worker)
 
 
 def get_report_service(session: AsyncSession = Depends(get_db_session)) -> ReportService:

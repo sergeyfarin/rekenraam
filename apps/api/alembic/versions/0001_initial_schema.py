@@ -280,7 +280,7 @@ def upgrade() -> None:
         sa.Column("source", sa.String(length=128), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.CheckConstraint(
-            "observation_kind IN ('commodity_market', 'fx_manual', 'valuation_override')",
+            "observation_kind IN ('commodity_market', 'fx_daily', 'fx_manual', 'valuation_override')",
             name="ck_price_observations_observation_kind",
         ),
     )

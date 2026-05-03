@@ -1,16 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from rekenraam_api.api.dependencies import get_pricing_service
+from rekenraam_api.api.dependencies import get_pricing_service, get_pricing_worker
 from rekenraam_api.schemas.pricing import (
+    PricingExecutionStatusSummary,
     PriceSourceSummary,
     PricingPolicySummary,
     PricingPolicyUpdateInput,
+    PricingRefreshRunInput,
+    PricingRefreshRunSummary,
     PricingRefreshStateSummary,
     PricingSourceAssignmentCreateInput,
     PricingSourceAssignmentSummary,
     PricingSourceAssignmentUpdateInput,
 )
 from rekenraam_api.services.pricing import PricingService
+from rekenraam_api.workers.pricing import PricingRefreshWorker
 
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
@@ -98,3 +102,34 @@ async def list_pricing_refresh_state(
     pricing_service: PricingService = Depends(get_pricing_service),
 ) -> list[PricingRefreshStateSummary]:
     return await pricing_service.list_pricing_refresh_state(book_id)
+
+
+@router.post("/refresh/run", response_model=PricingRefreshRunSummary)
+async def run_pricing_refresh(
+    input: PricingRefreshRunInput,
+    pricing_worker: PricingRefreshWorker = Depends(get_pricing_worker),
+) -> PricingRefreshRunSummary:
+    try:
+        summary = await pricing_worker.run_book(input.book_id, trigger="manual", force=True)
+    except ValueError as error:
+        detail = str(error)
+        if detail == "pricing policy not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from error
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from error
+    if summary is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pricing refresh already running")
+    return summary
+
+
+@router.get("/refresh/execution-status", response_model=PricingExecutionStatusSummary)
+async def get_pricing_execution_status(
+    book_id: int = Query(default=1),
+    pricing_worker: PricingRefreshWorker = Depends(get_pricing_worker),
+) -> PricingExecutionStatusSummary:
+    try:
+        return await pricing_worker.get_status(book_id)
+    except ValueError as error:
+        detail = str(error)
+        if detail == "pricing policy not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from error
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from error

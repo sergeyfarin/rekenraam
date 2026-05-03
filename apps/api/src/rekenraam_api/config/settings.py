@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     postgres_password: str = "change-me"
     postgres_host: str = "postgres"
     postgres_port: int = 5432
+    pricing_scheduler_enabled: bool = True
+    pricing_scheduler_poll_seconds: int = 60
 
     @property
     def database_url(self) -> str:

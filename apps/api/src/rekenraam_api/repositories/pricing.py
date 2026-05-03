@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from rekenraam_api.db.models.books import Book
+from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState, PricingSourceAssignment
 
@@ -17,6 +20,15 @@ class PricingRepository:
 
     async def list_price_sources(self) -> list[PriceSource]:
         statement: Select[tuple[PriceSource]] = select(PriceSource).order_by(PriceSource.name.asc(), PriceSource.id.asc())
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def list_enabled_pricing_policies(self) -> list[PricingPolicy]:
+        statement: Select[tuple[PricingPolicy]] = (
+            select(PricingPolicy)
+            .where(PricingPolicy.refresh_enabled.is_(True))
+            .order_by(PricingPolicy.book_id.asc(), PricingPolicy.id.asc())
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -102,6 +114,16 @@ class PricingRepository:
     async def get_price_source(self, source_id: int) -> PriceSource | None:
         return await self._session.get(PriceSource, source_id)
 
+    async def list_book_currencies(self, book_id: int) -> tuple[list[Commodity], str | None]:
+        statement: Select[tuple[Commodity]] = (
+            select(Commodity)
+            .where(Commodity.book_id == book_id, Commodity.kind == "currency")
+            .order_by(Commodity.symbol.asc(), Commodity.id.asc())
+        )
+        result = await self._session.execute(statement)
+        base_currency_code = await self._session.scalar(select(Book.base_currency_code).where(Book.id == book_id))
+        return list(result.scalars().all()), base_currency_code
+
     async def list_pricing_source_assignments(self, book_id: int) -> list[tuple[PricingSourceAssignment, Commodity, Commodity, PriceSource]]:
         from_currency = aliased(Commodity)
         to_currency = aliased(Commodity)
@@ -114,6 +136,34 @@ class PricingRepository:
             .order_by(
                 from_currency.symbol.asc(),
                 to_currency.symbol.asc(),
+                PricingSourceAssignment.effective_from.desc(),
+                PricingSourceAssignment.id.asc(),
+            )
+        )
+        result = await self._session.execute(statement)
+        return list(result.all())
+
+    async def list_effective_pricing_source_assignments(
+        self, book_id: int, effective_on: date
+    ) -> list[tuple[PricingSourceAssignment, Commodity, Commodity, PriceSource]]:
+        from_currency = aliased(Commodity)
+        to_currency = aliased(Commodity)
+        statement = (
+            select(PricingSourceAssignment, from_currency, to_currency, PriceSource)
+            .join(from_currency, PricingSourceAssignment.commodity_id == from_currency.id)
+            .join(to_currency, PricingSourceAssignment.quote_commodity_id == to_currency.id)
+            .join(PriceSource, PricingSourceAssignment.source_id == PriceSource.id)
+            .where(
+                PricingSourceAssignment.book_id == book_id,
+                PricingSourceAssignment.effective_from <= effective_on,
+                or_(
+                    PricingSourceAssignment.effective_to.is_(None),
+                    PricingSourceAssignment.effective_to >= effective_on,
+                ),
+            )
+            .order_by(
+                PricingSourceAssignment.commodity_id.asc(),
+                PricingSourceAssignment.quote_commodity_id.asc(),
                 PricingSourceAssignment.effective_from.desc(),
                 PricingSourceAssignment.id.asc(),
             )
@@ -194,6 +244,118 @@ class PricingRepository:
         result = await self._session.execute(statement)
         return list(result.all())
 
+    async def list_pricing_refresh_state_rows(self, book_id: int) -> list[PricingRefreshState]:
+        statement: Select[tuple[PricingRefreshState]] = (
+            select(PricingRefreshState)
+            .where(PricingRefreshState.book_id == book_id)
+            .order_by(
+                PricingRefreshState.commodity_id.asc(),
+                PricingRefreshState.quote_commodity_id.asc(),
+                PricingRefreshState.source_id.asc(),
+                PricingRefreshState.id.asc(),
+            )
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def list_existing_price_observation_dates(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        quote_commodity_id: int,
+        observation_kind: str,
+        source: str,
+        start_date: date,
+        end_date: date,
+    ) -> set[date]:
+        statement = (
+            select(PriceObservation.price_date)
+            .where(
+                PriceObservation.book_id == book_id,
+                PriceObservation.commodity_id == commodity_id,
+                PriceObservation.quote_commodity_id == quote_commodity_id,
+                PriceObservation.observation_kind == observation_kind,
+                PriceObservation.source == source,
+                PriceObservation.price_date >= start_date,
+                PriceObservation.price_date <= end_date,
+            )
+            .order_by(PriceObservation.price_date.asc())
+        )
+        result = await self._session.execute(statement)
+        return set(result.scalars().all())
+
+    async def record_pricing_refresh_success(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        quote_commodity_id: int,
+        source_id: int,
+        last_success_date: date,
+        attempted_at: datetime,
+        observations: list[PriceObservation],
+    ) -> None:
+        if observations:
+            self._session.add_all(observations)
+        statement = pg_insert(PricingRefreshState).values(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            quote_commodity_id=quote_commodity_id,
+            source_id=source_id,
+            last_success_date=last_success_date,
+            last_attempt_at=attempted_at,
+            last_error=None,
+            created_at=attempted_at,
+            updated_at=attempted_at,
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="uq_pricing_refresh_state_pair_source",
+            set_={
+                "last_success_date": statement.excluded.last_success_date,
+                "last_attempt_at": statement.excluded.last_attempt_at,
+                "last_error": None,
+                "updated_at": statement.excluded.updated_at,
+            },
+        )
+        await self._session.execute(statement)
+        await self._session.commit()
+
+    async def record_pricing_refresh_error(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        quote_commodity_id: int,
+        source_id: int,
+        attempted_at: datetime,
+        error: str,
+    ) -> None:
+        statement = pg_insert(PricingRefreshState).values(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            quote_commodity_id=quote_commodity_id,
+            source_id=source_id,
+            last_success_date=None,
+            last_attempt_at=attempted_at,
+            last_error=error,
+            created_at=attempted_at,
+            updated_at=attempted_at,
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="uq_pricing_refresh_state_pair_source",
+            set_={
+                "last_attempt_at": statement.excluded.last_attempt_at,
+                "last_error": statement.excluded.last_error,
+                "updated_at": statement.excluded.updated_at,
+            },
+        )
+        await self._session.execute(statement)
+        await self._session.commit()
+
+    async def rollback(self) -> None:
+        await self._session.rollback()
+
     async def _validate_assignment_refs(self, *, book_id: int, from_currency_id: int, to_currency_id: int, source_id: int) -> None:
         from_currency = await self._session.get(Commodity, from_currency_id)
         to_currency = await self._session.get(Commodity, to_currency_id)
@@ -204,3 +366,18 @@ class PricingRepository:
             raise ValueError("to currency not found")
         if source is None:
             raise ValueError("source not found")
+
+    @staticmethod
+    def currency_is_active(row: Commodity, base_currency_code: str | None) -> bool:
+        if row.symbol is not None and base_currency_code is not None and row.symbol == base_currency_code:
+            return True
+        if row.metadata_text is None:
+            return True
+        try:
+            payload = json.loads(row.metadata_text)
+        except json.JSONDecodeError:
+            return True
+        if not isinstance(payload, dict):
+            return True
+        is_active = payload.get("is_active")
+        return is_active if isinstance(is_active, bool) else True

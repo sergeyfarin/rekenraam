@@ -100,3 +100,37 @@ class PricingRefreshStateSummary(BaseModel):
     last_error: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class PricingRefreshRunSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    trigger: str
+    started_at: datetime
+    finished_at: datetime
+    pairs_total: int
+    pairs_success: int
+    pairs_failed: int
+    rates_inserted: int
+    derived_inserted: int
+    last_error: str | None
+
+
+class PricingExecutionStatusSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    scheduler_enabled: bool
+    scheduler_poll_seconds: int
+    worker_started_at: datetime | None
+    is_running: bool
+    active_book_ids: list[int]
+    next_scheduled_at: datetime | None
+    last_run: PricingRefreshRunSummary | None
+
+
+class PricingRefreshRunInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
