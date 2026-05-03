@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: rekenraam-api
+Version: 0.1.0
+Summary: Rekenraam self-hosted API
+Requires-Python: >=3.13
+Requires-Dist: alembic==1.16.4
+Requires-Dist: asyncpg==0.31.0
+Requires-Dist: fastapi==0.136.1
+Requires-Dist: pydantic==2.11.7
+Requires-Dist: pydantic-settings==2.10.1
+Requires-Dist: sqlalchemy[asyncio]==2.0.42
+Requires-Dist: uvicorn[standard]==0.46.0
+Provides-Extra: dev
+Requires-Dist: httpx==0.28.1; extra == "dev"
+Requires-Dist: pyright==1.1.403; extra == "dev"
+Requires-Dist: pytest==8.4.2; extra == "dev"
+Requires-Dist: pytest-asyncio==1.1.0; extra == "dev"
+Requires-Dist: ruff==0.15.12; extra == "dev"

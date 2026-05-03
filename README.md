@@ -94,6 +94,8 @@ The repo also includes a small `Makefile` for common API tasks:
 make api-check
 make api-lint
 make api-typecheck
+make api-test
+make api-test-docker
 make api-up
 make api-health
 make api-books
@@ -106,6 +108,7 @@ If your Docker access requires elevation, override the Docker command:
 
 ```bash
 make DOCKER="sudo docker compose" api-up
+make CONTAINER_RUNTIME="sudo docker" api-test-docker
 ```
 
 First real read endpoint:

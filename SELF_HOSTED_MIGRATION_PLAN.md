@@ -25,6 +25,29 @@ Python-first server architecture with strong correctness guarantees enforced by:
 The end state is a web-first application. Once functionality is migrated and
 verified, the Tauri path and related files should be removed.
 
+## Current Stage Status
+
+- Stage 0: complete
+- Stage 1: complete
+- Stage 2: in progress
+- Stage 3: in progress
+- Stage 4: in progress
+- Stage 5: in progress
+- Stage 6: not started
+- Stage 7: not started
+- Stage 8: not started
+- Stage 9: not started
+- Stage 10: not started
+- Stage 11: not started
+- Stage 12: not started
+
+Current evidence behind those statuses:
+
+- Python FastAPI scaffold is active and validated in Docker.
+- Alembic migrations `0001_initial_schema` and `0002_add_accounts` apply cleanly from an empty database.
+- Read-only books and accounts list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
+- Parity tracking now lives in `docs/parity/desktop-to-python.md`.
+
 ## Executive Summary
 
 The recommended path is still a staged monorepo migration, but the backend
@@ -313,6 +336,8 @@ This is the concrete sequence to execute.
 
 ### Stage 0: Reset The Migration Direction
 
+Status: complete
+
 Goal:
 
 - stop deepening the Rust-backend migration path
@@ -331,6 +356,8 @@ Exit criteria:
 - implementation team follows Python plan, not Rust API expansion
 
 ### Stage 1: Scaffold Python Backend Correctly
+
+Status: complete
 
 Goal:
 
@@ -358,6 +385,8 @@ Exit criteria:
 
 ### Stage 2: Establish PostgreSQL Schema And Migration Workflow
 
+Status: in progress
+
 Goal:
 
 - make Alembic the only schema migration path for the new backend
@@ -383,7 +412,14 @@ Exit criteria:
 - empty database can be created from scratch
 - migrations are reproducible in Docker and CI
 
+Progress note:
+
+- Docker reproducibility is working and covered by smoke validation.
+- CI wiring is still pending, so this stage is not fully complete.
+
 ### Stage 3: Define The Python Domain Rules Before Porting Features
+
+Status: in progress
 
 Goal:
 
@@ -407,7 +443,14 @@ Exit criteria:
 - service boundaries are explicit
 - no feature port begins without target domain shape
 
+Progress note:
+
+- Frozen outbound schema models and repository/service separation exist for books and accounts.
+- Domain models, shared error taxonomy, and request context shape are still incomplete.
+
 ### Stage 4: Build A Parity Matrix Against Tauri
+
+Status: in progress
 
 Goal:
 
@@ -437,7 +480,14 @@ Exit criteria:
 
 - every meaningful Tauri capability is accounted for
 
+Progress note:
+
+- Initial parity matrix exists at `docs/parity/desktop-to-python.md`.
+- The matrix still needs deeper per-command expansion for high-risk areas like transactions, reconciliation, and imports.
+
 ### Stage 5: Migrate Read-Only Slices First
+
+Status: in progress
 
 Goal:
 
@@ -466,6 +516,12 @@ Exit criteria per slice:
 - route works
 - tests pass
 - frontend can read data through HTTP
+
+Progress note:
+
+- Books list/detail are verified.
+- Accounts list/detail are verified.
+- Accounts tree, balances, and frontend HTTP integration are still pending.
 
 ### Stage 6: Migrate Write Slices With Accounting Correctness First
 
@@ -622,31 +678,31 @@ Exit criteria:
 
 These are the next concrete execution steps to start the Python migration.
 
-1. Remove `apps/api` Rust backend scaffold or archive it as inactive.
-2. Create `apps/api` Python package scaffold with `pyproject.toml`.
-3. Add FastAPI app with `/api/v1/health`.
-4. Add Pyright strict and Ruff configuration.
-5. Add Dockerfile and Compose service for Python API.
-6. Add Alembic and initial Postgres migration for users/books/book_memberships.
-7. Add frozen Pydantic models for books.
-8. Add repository + service + endpoint for books list/detail.
-9. Add parity tracking document for Tauri-to-Python migration.
-10. Inventory `src-tauri/src/db_accounts.rs` and start the accounts read-only slice.
+1. Complete: remove `apps/api` Rust backend scaffold or archive it as inactive.
+2. Complete: create `apps/api` Python package scaffold with `pyproject.toml`.
+3. Complete: add FastAPI app with `/api/v1/health`.
+4. Complete: add Pyright strict and Ruff configuration.
+5. Complete: add Dockerfile and Compose service for Python API.
+6. Complete: add Alembic and initial Postgres migration for users/books/book_memberships.
+7. Complete: add frozen Pydantic models for books.
+8. Complete: add repository + service + endpoint for books list/detail.
+9. Complete: add parity tracking document for Tauri-to-Python migration.
+10. Complete: inventory `src-tauri/src/db_accounts.rs` and start the accounts read-only slice.
 
 ## Detailed Accounts Migration Checklist
 
 Because accounts are the first real finance slice, use this sequence:
 
-1. map current Rust `Account` fields to a Python target model
-2. decide which fields are required for the first read-only endpoint
-3. create Postgres accounts table and indexes
-4. create SQLAlchemy model and repository
-5. create frozen Pydantic output model
-6. create accounts service
-7. add `/api/v1/accounts`
-8. add `/api/v1/accounts/{id}`
-9. add tests against seeded data
-10. compare output to current desktop behavior on sample data
+1. Complete: map current Rust `Account` fields to a Python target model.
+2. Complete: decide which fields are required for the first read-only endpoint.
+3. Complete: create Postgres accounts table and indexes.
+4. Complete: create SQLAlchemy model and repository.
+5. Complete: create frozen Pydantic output model.
+6. Complete: create accounts service.
+7. Complete: add `/api/v1/accounts`.
+8. Complete: add `/api/v1/accounts/{id}`.
+9. Complete: add tests against seeded data.
+10. In progress: compare output to current desktop behavior on sample data and extend toward account tree plus balances.
 
 ## Testing Plan
 
@@ -656,6 +712,18 @@ Because accounts are the first real finance slice, use this sequence:
 - repository tests against PostgreSQL
 - API tests using HTTPX test client
 - migration tests using ephemeral databases
+
+Current implemented coverage:
+
+- pytest service tests for books and accounts mapping behavior, missing-record handling, and frozen outputs
+- pytest API tests for health, books list/detail, accounts list/detail, and 404 behavior using dependency overrides
+- Docker smoke coverage for migrations plus live `/api/v1/health`, `/api/v1/books`, `/api/v1/accounts`, and `/api/v1/accounts/{id}`
+
+Still missing:
+
+- repository tests against a real PostgreSQL session
+- dedicated migration test harness beyond the smoke script
+- parity fixtures comparing desktop and Python outputs on the same sample data
 
 ### Frontend
 

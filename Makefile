@@ -1,8 +1,9 @@
 DOCKER ?= docker compose
+CONTAINER_RUNTIME ?= docker
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-typecheck api-up api-down api-logs api-health api-books api-accounts api-smoke api-reset-db api-migrate-new
+.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-up api-down api-logs api-health api-books api-accounts api-smoke api-reset-db api-migrate-new
 
 api-check:
 	cd $(API_DIR) && python -m py_compile $$(find src -name '*.py')
@@ -12,6 +13,12 @@ api-lint:
 
 api-typecheck:
 	cd $(API_DIR) && pyright
+
+api-test:
+	cd $(API_DIR) && pytest -q
+
+api-test-docker:
+	$(CONTAINER_RUNTIME) run --rm -v "$$(pwd)/$(API_DIR)":/workspace -w /workspace python:3.13-slim-bookworm sh -lc "python -m pip install --upgrade pip >/dev/null && pip install --quiet -e .[dev] && pytest -q"
 
 api-up:
 	$(DOCKER) up -d --build postgres api
