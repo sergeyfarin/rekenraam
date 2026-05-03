@@ -7,6 +7,7 @@
     deleteFxRateDaily,
     deleteFxRateOfficial,
     deleteFxRateSourceAssignment,
+    getFxRefreshExecutionStatus,
     getFxRateSettings,
     listCurrencies,
     listFxRateRefreshState,
@@ -149,6 +150,30 @@
     updated_at: string;
   };
 
+  type FxRefreshRunSummary = {
+    book_id: number;
+    trigger: string;
+    started_at: string;
+    finished_at: string;
+    pairs_total: number;
+    pairs_success: number;
+    pairs_failed: number;
+    rates_inserted: number;
+    derived_inserted: number;
+    last_error: string | null;
+  };
+
+  type FxRefreshExecutionStatus = {
+    book_id: number;
+    scheduler_enabled: boolean;
+    scheduler_poll_seconds: number;
+    worker_started_at: string | null;
+    is_running: boolean;
+    active_book_ids: number[];
+    next_scheduled_at: string | null;
+    last_run: FxRefreshRunSummary | null;
+  };
+
   export let commodities: Commodity[] = [];
   export let busy = false;
 
@@ -176,6 +201,7 @@
   let fxRateSettings: FxRateSettings | null = null;
   let fxRateAssignments: FxRateSourceAssignment[] = [];
   let fxRateRefreshState: FxRateRefreshState[] = [];
+  let fxRefreshExecutionStatus: FxRefreshExecutionStatus | null = null;
   let fxRateError = "";
   let fxRateStatus = "";
   const pricingAutomationManagedByServer = hasApiBaseUrl();
@@ -401,6 +427,8 @@
       });
       if (!pricingAutomationManagedByServer) {
         await restartFxRateScheduler();
+      } else {
+        await loadFxRefreshExecutionStatus();
       }
       fxRateStatus = "FX settings saved.";
     } catch (e) {
@@ -506,17 +534,31 @@
     }
   }
 
+  async function loadFxRefreshExecutionStatus() {
+    if (!pricingAutomationManagedByServer) {
+      fxRefreshExecutionStatus = null;
+      return;
+    }
+
+    try {
+      fxRefreshExecutionStatus = await getFxRefreshExecutionStatus<FxRefreshExecutionStatus>(1);
+    } catch (e) {
+      fxRateError = `Failed to load FX execution status: ${String(e)}`;
+    }
+  }
+
   async function refreshFxRatesNow() {
     fxRateError = "";
     fxRateStatus = "";
     busy = true;
     try {
-      const summary = await refreshFxRatesNowCommand<{ pairs_total: number; pairs_success: number; pairs_failed: number; rates_inserted: number; derived_inserted: number; last_error: string | null }>();
+      const summary = await refreshFxRatesNowCommand<FxRefreshRunSummary>();
       fxRateStatus = `FX refresh complete. ${summary.pairs_success}/${summary.pairs_total} pairs updated, ${summary.rates_inserted} rates.`;
       if (summary.last_error) {
         fxRateError = `Last error: ${summary.last_error}`;
       }
       await loadFxRefreshState();
+      await loadFxRefreshExecutionStatus();
     } catch (e) {
       fxRateError = `Failed to refresh FX rates: ${String(e)}`;
     } finally {
@@ -680,6 +722,7 @@
           loadFxRateSettings();
           loadFxRateAssignments();
           loadFxRefreshState();
+          loadFxRefreshExecutionStatus();
         }}
       >
         FX Settings
@@ -896,15 +939,15 @@
           <p class="text-sm text-muted-foreground">Configure pricing refresh policy and manage source assignments. In the web app, scheduled execution is owned by a backend worker rather than the browser session.</p>
         </div>
         <div class="flex gap-2">
-          {#if !pricingAutomationManagedByServer}
-            <Button onclick={refreshFxRatesNow} disabled={busy} size="sm">Refresh Now</Button>
-          {/if}
+          <Button onclick={refreshFxRatesNow} disabled={busy || (pricingAutomationManagedByServer && fxRefreshExecutionStatus?.is_running)} size="sm">
+            {pricingAutomationManagedByServer ? 'Run Refresh Now' : 'Refresh Now'}
+          </Button>
           <Button onclick={saveFxRateSettings} disabled={busy || !fxRateSettings} size="sm" variant="secondary">Save Settings</Button>
         </div>
       </div>
 
       {#if pricingAutomationManagedByServer}
-        <p class="text-sm text-muted-foreground mb-4">Refresh jobs will be picked up by the backend scheduler using the policy and assignments below. Manual browser-triggered refresh is intentionally disabled in web mode.</p>
+        <p class="text-sm text-muted-foreground mb-4">Refresh jobs are owned by the backend scheduler using the policy and assignments below. Manual runs request the backend worker directly and do not start browser-side automation.</p>
       {/if}
 
       {#if fxRateStatus}
@@ -983,6 +1026,77 @@
               </Card.Content>
             </Card.Root>
           </div>
+      {/if}
+
+      {#if pricingAutomationManagedByServer && fxRefreshExecutionStatus}
+        <div class="grid gap-4 lg:grid-cols-3 mb-6">
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Worker Status</Card.Title>
+            </Card.Header>
+            <Card.Content class="space-y-2 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-muted-foreground">Scheduler</span>
+                <Badge variant={fxRefreshExecutionStatus.scheduler_enabled ? 'secondary' : 'outline'}>
+                  {fxRefreshExecutionStatus.scheduler_enabled ? 'Enabled' : 'Disabled'}
+                </Badge>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-muted-foreground">Run state</span>
+                <Badge variant={fxRefreshExecutionStatus.is_running ? 'secondary' : 'outline'}>
+                  {fxRefreshExecutionStatus.is_running ? 'Running' : 'Idle'}
+                </Badge>
+              </div>
+              <div>
+                <span class="text-muted-foreground">Poll interval:</span>
+                <span class="ml-2">{fxRefreshExecutionStatus.scheduler_poll_seconds}s</span>
+              </div>
+              <div>
+                <span class="text-muted-foreground">Next scheduled:</span>
+                <span class="ml-2">{fxRefreshExecutionStatus.next_scheduled_at || '—'}</span>
+              </div>
+            </Card.Content>
+          </Card.Root>
+
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Last Run</Card.Title>
+            </Card.Header>
+            <Card.Content class="space-y-2 text-sm">
+              {#if fxRefreshExecutionStatus.last_run}
+                <div>
+                  <span class="text-muted-foreground">Trigger:</span>
+                  <span class="ml-2 capitalize">{fxRefreshExecutionStatus.last_run.trigger}</span>
+                </div>
+                <div>
+                  <span class="text-muted-foreground">Finished:</span>
+                  <span class="ml-2">{fxRefreshExecutionStatus.last_run.finished_at}</span>
+                </div>
+                <div>
+                  <span class="text-muted-foreground">Pairs:</span>
+                  <span class="ml-2">{fxRefreshExecutionStatus.last_run.pairs_success}/{fxRefreshExecutionStatus.last_run.pairs_total}</span>
+                </div>
+                <div>
+                  <span class="text-muted-foreground">Rates inserted:</span>
+                  <span class="ml-2">{fxRefreshExecutionStatus.last_run.rates_inserted}</span>
+                </div>
+              {:else}
+                <p class="text-muted-foreground">No execution run recorded yet.</p>
+              {/if}
+            </Card.Content>
+          </Card.Root>
+
+          <Card.Root>
+            <Card.Header>
+              <Card.Title>Backend Ownership</Card.Title>
+            </Card.Header>
+            <Card.Content class="space-y-2 text-sm text-muted-foreground">
+              <p>Policy changes update the server-owned schedule.</p>
+              <p>Manual runs queue work on the backend worker instead of the browser.</p>
+              <p>Refresh-state rows below reflect pair-level outcomes from those backend runs.</p>
+            </Card.Content>
+          </Card.Root>
+        </div>
       {/if}
 
       <div class="flex items-center justify-between mb-2">

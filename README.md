@@ -117,6 +117,21 @@ The Compose stack also includes an API healthcheck against `/api/v1/health`, so
 container readiness reflects actual application startup rather than process spawn
 alone.
 
+Pricing execution is now backend-owned in the Python API as well. The FastAPI
+app starts an in-process pricing worker on startup, and the FX settings page in
+web mode now uses these endpoints:
+
+```bash
+curl http://localhost:8080/api/v1/pricing/refresh-state
+curl http://localhost:8080/api/v1/pricing/refresh/execution-status
+curl -X POST http://localhost:8080/api/v1/pricing/refresh/run \
+  -H 'Content-Type: application/json' \
+  -d '{"book_id":1}'
+```
+
+Current backend execution coverage starts with ECB, Federal Reserve, and Bank
+of Canada providers for scheduled and manual FX refresh in web mode.
+
 The repo also includes a small `Makefile` for common API tasks:
 
 ```bash
