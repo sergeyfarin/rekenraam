@@ -7,4 +7,3 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     database: str
-    schema_version: str

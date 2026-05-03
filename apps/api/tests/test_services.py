@@ -7,6 +7,8 @@ from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.schemas.accounts import AccountTreeNode
+from rekenraam_api.schemas.register import RegisterEntry
+from rekenraam_api.schemas.transactions import TransactionListFilters
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.books import BookService
 from rekenraam_api.services.transactions import TransactionService
@@ -21,10 +23,6 @@ class StubBookRepository:
             return Book(id=1, slug="personal", name="Personal", base_currency_code="USD")
         return None
 
-    async def get_schema_version(self) -> str:
-        return "0003_add_transactions"
-
-
 class StubAccountRepository:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
 
@@ -36,11 +34,14 @@ class StubAccountRepository:
                 parent_id=None,
                 account_type="asset",
                 name="Assets",
+                commodity_id=1,
+                number_last4=None,
                 is_closed=False,
                 is_hidden=False,
                 is_system=False,
                 system_role=None,
                 created_at=self._created_at,
+                updated_at=self._created_at,
             ),
             Account(
                 id=2,
@@ -48,11 +49,14 @@ class StubAccountRepository:
                 parent_id=1,
                 account_type="asset",
                 name="Cash",
+                commodity_id=1,
+                number_last4="1234",
                 is_closed=False,
                 is_hidden=False,
                 is_system=False,
                 system_role=None,
                 created_at=self._created_at,
+                updated_at=self._created_at,
             ),
         ]
 
@@ -64,11 +68,14 @@ class StubAccountRepository:
                 parent_id=None,
                 account_type="asset",
                 name="Assets",
+                commodity_id=1,
+                number_last4=None,
                 is_closed=False,
                 is_hidden=False,
                 is_system=False,
                 system_role=None,
                 created_at=self._created_at,
+                updated_at=self._created_at,
             )
         return None
 
@@ -83,9 +90,20 @@ class StubAccountRepository:
 
 class StubTransactionRepository:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
+    last_filters: TransactionListFilters | None = None
 
-    async def list_transactions(self) -> list[Transaction]:
-        return [
+    async def list_transactions(self, filters: TransactionListFilters | None = None) -> list[Transaction]:
+        self.last_filters = filters
+        transactions = [
+            Transaction(
+                id=2,
+                book_id=1,
+                occurred_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                posted_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                memo="Pending groceries",
+                status="uncleared",
+                created_at=self._created_at,
+            ),
             Transaction(
                 id=1,
                 book_id=1,
@@ -94,7 +112,16 @@ class StubTransactionRepository:
                 memo="Initial opening balance",
                 status="cleared",
                 created_at=self._created_at,
-            )
+            ),
+        ]
+        if filters is None:
+            return transactions
+        return [
+            transaction
+            for transaction in transactions
+            if (filters.status is None or transaction.status == filters.status)
+            and (filters.occurred_from is None or transaction.occurred_date >= filters.occurred_from)
+            and (filters.occurred_to is None or transaction.occurred_date <= filters.occurred_to)
         ]
 
     async def get_transaction_by_id(self, transaction_id: int) -> Transaction | None:
@@ -109,6 +136,17 @@ class StubTransactionRepository:
             Split(id=1, tx_id=1, account_id=2, amount_minor=500000, memo="Opening cash", created_at=self._created_at),
             Split(id=2, tx_id=1, account_id=3, amount_minor=-500000, memo="Offset", created_at=self._created_at),
         ]
+
+    async def list_account_register_splits(self, account_id: int) -> list[tuple[Transaction, Split]]:
+        if account_id != 2:
+            return []
+        transaction = next(
+            transaction
+            for transaction in await self.list_transactions()
+            if transaction.id == 1
+        )
+        split = Split(id=1, tx_id=1, account_id=2, amount_minor=500000, memo="Opening cash", created_at=self._created_at)
+        return [(transaction, split)]
 
 
 @pytest.mark.asyncio
@@ -133,15 +171,6 @@ async def test_book_service_returns_none_when_slug_is_missing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_book_service_returns_schema_version_from_repository() -> None:
-    service = BookService(StubBookRepository())
-
-    result = await service.get_schema_version()
-
-    assert result == "0003_add_transactions"
-
-
-@pytest.mark.asyncio
 async def test_account_service_maps_parent_and_system_flags() -> None:
     service = AccountService(StubAccountRepository())
 
@@ -149,6 +178,8 @@ async def test_account_service_maps_parent_and_system_flags() -> None:
 
     assert [account.id for account in result] == [1, 2]
     assert result[1].parent_id == 1
+    assert result[1].commodity_id == 1
+    assert result[1].number_last4 == "1234"
     assert result[0].is_system is False
 
 
@@ -214,10 +245,22 @@ async def test_transaction_service_returns_transactions_with_splits() -> None:
 
     result = await service.list_transactions()
 
-    assert len(result) == 1
-    assert result[0].memo == "Initial opening balance"
-    assert len(result[0].splits) == 2
-    assert result[0].splits[0].amount_minor == 500000
+    assert len(result) == 2
+    assert result[0].memo == "Pending groceries"
+    assert len(result[1].splits) == 2
+    assert result[1].splits[0].amount_minor == 500000
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_passes_filters_to_repository() -> None:
+    repository = StubTransactionRepository()
+    service = TransactionService(repository)
+    filters = TransactionListFilters(status="cleared", occurred_to=datetime(2026, 5, 1, tzinfo=UTC).date())
+
+    result = await service.list_transactions(filters)
+
+    assert repository.last_filters == filters
+    assert [transaction.id for transaction in result] == [1]
 
 
 @pytest.mark.asyncio
@@ -227,3 +270,25 @@ async def test_transaction_service_returns_none_for_missing_transaction() -> Non
     result = await service.get_transaction_by_id(999)
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_builds_account_register_running_balance() -> None:
+    service = TransactionService(StubTransactionRepository())
+
+    result = await service.list_account_register(2)
+
+    assert result == [
+        RegisterEntry(
+            tx_id=1,
+            split_id=1,
+            account_id=2,
+            occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+            posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+            memo="Initial opening balance",
+            status="cleared",
+            amount_minor=500000,
+            running_balance_minor=500000,
+            created_at=StubTransactionRepository._created_at,
+        )
+    ]

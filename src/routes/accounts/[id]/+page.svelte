@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { invoke } from "@tauri-apps/api/core";
+  import { getAccountById } from "$lib/api/accounts";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -271,7 +272,7 @@
     error = "";
     try {
       await loadLookups();
-      const fetched = await invoke<Account | null>("get_account", { id: accountId });
+      const fetched = await getAccountById(accountId);
       if (!fetched) {
         error = "Account not found.";
         return;

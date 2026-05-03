@@ -24,6 +24,7 @@ src/rekenraam_api/repositories/transactions.py
 src/rekenraam_api/schemas/accounts.py
 src/rekenraam_api/schemas/books.py
 src/rekenraam_api/schemas/health.py
+src/rekenraam_api/schemas/register.py
 src/rekenraam_api/schemas/transactions.py
 src/rekenraam_api/services/accounts.py
 src/rekenraam_api/services/books.py

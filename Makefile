@@ -4,7 +4,7 @@ CONTAINER_RUNTIME ?= docker
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-transactions api-smoke api-reset-db api-migrate-new api-dev-up api-dev-down api-dev-logs
+.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-dev-up api-dev-down api-dev-logs
 
 api-check:
 	cd $(API_DIR) && python -m py_compile $$(find src -name '*.py')
@@ -50,6 +50,9 @@ api-accounts:
 
 api-accounts-tree:
 	curl --fail http://localhost:8080/api/v1/accounts/tree
+
+api-account-register:
+	curl --fail http://localhost:8080/api/v1/accounts/2/register
 
 api-transactions:
 	curl --fail http://localhost:8080/api/v1/transactions

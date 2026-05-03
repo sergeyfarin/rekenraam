@@ -36,7 +36,7 @@ verified, the Tauri path and related files should be removed.
 - Stage 6: not started
 - Stage 7: not started
 - Stage 8: not started
-- Stage 9: not started
+- Stage 9: in progress
 - Stage 10: not started
 - Stage 11: not started
 - Stage 12: not started
@@ -44,8 +44,10 @@ verified, the Tauri path and related files should be removed.
 Current evidence behind those statuses:
 
 - Python FastAPI scaffold is active and validated in Docker.
-- Alembic migrations `0001_initial_schema`, `0002_add_accounts`, and `0003_add_transactions` apply cleanly from an empty database.
-- Read-only books, accounts list/detail/tree, and transactions list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
+- The empty app now uses one current initial Alembic schema rather than artificial historical migration steps.
+- Read-only books, accounts list/detail/tree/register, and transactions list/detail endpoints are implemented and covered by pytest plus Docker smoke checks.
+- A shared frontend API seam now exists, and the accounts page account-tree plus account-detail summary read paths use it with HTTP-first and Tauri fallback behavior.
+- The current Svelte frontend still lives in root `src/` and remains heavily coupled to Tauri `invoke()` calls across transactions, accounts, reports, investments, settings, and layout shortcuts outside that first migrated slice.
 - Parity tracking now lives in `docs/parity/desktop-to-python.md`.
 
 ## Executive Summary
@@ -113,6 +115,7 @@ The change is not only Rust to Python. It changes the implementation strategy:
 - TypeScript
 - adapter-node for self-hosting
 - HTTP-only interaction with the backend
+- infinite scrolling for long ledgers and registers; backend should support that UX with cursor or keyset-style fetches rather than page-number navigation
 
 ### Database and Infra
 
@@ -416,6 +419,7 @@ Progress note:
 
 - Docker reproducibility is working and covered by smoke validation.
 - Repository integration tests now run against ephemeral PostgreSQL.
+- The empty-app schema has been squashed into a single current initial migration to avoid fake historical version churn.
 - CI wiring is still pending, so this stage is not fully complete.
 
 ### Stage 3: Define The Python Domain Rules Before Porting Features
@@ -449,6 +453,7 @@ Progress note:
 - Frozen outbound schema models and repository/service separation exist for books and accounts.
 - Account tree response shape now exists so frontend migration can start against a stable HTTP contract before transaction balances migrate.
 - Minimal transaction and split read models now exist and drive account balances plus rollups.
+- Account register reads with running balances now exist as a better finance-oriented read surface than raw transaction lists alone.
 - Domain models, shared error taxonomy, and request context shape are still incomplete.
 
 ### Stage 4: Build A Parity Matrix Against Tauri
@@ -525,8 +530,11 @@ Progress note:
 - Books list/detail are verified.
 - Accounts list/detail are verified.
 - Accounts tree shape is now available and verified.
+- Account register reads are now available and verified.
 - Transaction-backed balances and rollups are now verified on seeded data.
-- Broader transaction parity and frontend HTTP integration are still pending.
+- Transactions list filters are now available and verified.
+- The accounts page account tree and account detail summary now read through the shared frontend client seam, proving the incremental HTTP migration path.
+- Broader frontend HTTP integration is still pending, and that remains the highest-leverage next step before adding many more backend-only slices.
 
 ### Stage 6: Migrate Write Slices With Accounting Correctness First
 
@@ -600,6 +608,8 @@ Exit criteria:
 
 ### Stage 9: Move Frontend Off Tauri Completely
 
+Status: in progress
+
 Goal:
 
 - make the SvelteKit frontend web-native
@@ -607,15 +617,33 @@ Goal:
 Tasks:
 
 1. create shared API client layer for HTTP calls
-2. replace direct Tauri `invoke()` usage throughout frontend
-3. move frontend to `apps/web` if not already done
-4. switch from SPA/Tauri assumptions to adapter-node deployment
-5. add auth-aware session handling in SvelteKit
+2. add a migration seam so existing route components can switch from direct `invoke()` calls to backend client methods incrementally
+3. replace direct Tauri `invoke()` usage throughout frontend starting with home, transactions, accounts, and settings read flows
+4. preserve infinite-scroll UX for registers and long transaction lists, backed by cursor or keyset pagination semantics at the API layer
+5. move frontend to `apps/web` if not already done
+6. switch from SPA/Tauri assumptions to adapter-node deployment
+7. add auth-aware session handling in SvelteKit
 
 Exit criteria:
 
 - frontend runs only against HTTP API
 - no runtime dependency on Tauri remains in the web frontend
+
+Progress note:
+
+- A shared frontend client seam now exists under `src/lib/api/`, with HTTP-first and Tauri fallback behavior for incremental migration.
+- The accounts page account-tree and account-detail summary read paths are the first route slices using that seam.
+- The frontend is still rooted in `src/` and still imports `@tauri-apps/api/core` directly in high-traffic routes such as `+layout`, `transactions`, `reports`, `investments`, and multiple settings pages.
+- The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
+
+## Recommended Immediate Next Execution Order
+
+To complete the Rust/Tauri-era migration cleanly, the next steps should be:
+
+1. Continue migrating the highest-value read routes off direct Tauri calls next: transactions, account detail/register, home/dashboard, and the read-only settings metadata used by transaction forms.
+2. Keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets.
+3. After those read flows are web-native, continue backend parity for metadata and then start write-path migration for transactions and accounts.
+4. Only after the client seam is stable should the frontend be moved from root `src/` into `apps/web`.
 
 ### Stage 10: Data Migration From SQLite To PostgreSQL
 
@@ -720,11 +748,10 @@ Because accounts are the first real finance slice, use this sequence:
 
 Current implemented coverage:
 
-- pytest service tests for books and accounts mapping behavior, missing-record handling, and frozen outputs
 - pytest service tests for books, accounts, and transactions mapping behavior, missing-record handling, and frozen outputs
-- pytest API tests for health, books list/detail, accounts list/detail/tree, transactions list/detail, and 404 behavior using dependency overrides
+- pytest API tests for health, books list/detail, accounts list/detail/tree/register, transactions list/detail, and 404 behavior using dependency overrides
 - pytest repository tests against ephemeral PostgreSQL for books, accounts, transaction repositories, and seeded account balances
-- Docker smoke coverage for migrations plus live `/api/v1/health`, `/api/v1/books`, `/api/v1/accounts`, `/api/v1/accounts/tree`, `/api/v1/accounts/{id}`, and `/api/v1/transactions`
+- Docker smoke coverage for schema boot plus live `/api/v1/health`, `/api/v1/books`, `/api/v1/accounts`, `/api/v1/accounts/tree`, `/api/v1/accounts/{id}`, `/api/v1/accounts/2/register`, and `/api/v1/transactions`
 
 Still missing:
 

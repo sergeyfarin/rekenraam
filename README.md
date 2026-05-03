@@ -62,6 +62,21 @@ cp .env.example .env
 docker compose up --build api postgres
 ```
 
+The frontend migration seam can now target the Python API through:
+
+```bash
+PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
+```
+
+Frontend routes that have been migrated to the shared client layer will prefer
+HTTP and fall back to Tauri commands if the Python API is not yet configured or
+does not provide the needed slice.
+
+Current migrated frontend read slices:
+
+- accounts page account tree
+- account detail page account summary
+
 If you previously ran the old Rust API scaffold against Docker, the existing
 Postgres volume may contain incompatible tables. The Python scaffold now uses a
 fresh Compose volume, but if you want to reset the local test database entirely:
@@ -80,10 +95,10 @@ curl http://localhost:8080/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","service":"rekenraam-api","database":"ok","schema_version":"0003_add_transactions"}
+{"status":"ok","service":"rekenraam-api","database":"ok"}
 ```
 
-The API now runs Alembic migrations automatically on startup.
+The API now runs one current initial Alembic schema automatically on startup.
 The Compose stack also includes an API healthcheck against `/api/v1/health`, so
 container readiness reflects actual application startup rather than process spawn
 alone.
@@ -102,6 +117,7 @@ make api-health
 make api-books
 make api-accounts
 make api-accounts-tree
+make api-account-register
 make api-transactions
 make api-smoke
 make api-migrate-new NAME=add_accounts
@@ -145,6 +161,7 @@ Accounts endpoints:
 curl http://localhost:8080/api/v1/accounts
 curl http://localhost:8080/api/v1/accounts/1
 curl http://localhost:8080/api/v1/accounts/tree
+curl http://localhost:8080/api/v1/accounts/2/register
 curl http://localhost:8080/api/v1/transactions
 ```
 
@@ -209,7 +226,16 @@ Transactions endpoint:
 
 ```bash
 curl http://localhost:8080/api/v1/transactions
+curl 'http://localhost:8080/api/v1/transactions?account_id=2&status=cleared&occurred_from=2026-05-01&occurred_to=2026-05-31'
 ```
+
+Supported transaction list filters:
+
+- `book_id`
+- `account_id`
+- `status`
+- `occurred_from`
+- `occurred_to`
 
 Example response shape:
 
@@ -226,6 +252,30 @@ Example response shape:
       {"id": 1, "tx_id": 1, "account_id": 2, "amount_minor": 500000, "memo": "Opening cash balance"},
       {"id": 2, "tx_id": 1, "account_id": 3, "amount_minor": -500000, "memo": "Opening equity offset"}
     ]
+  }
+]
+```
+
+Account register endpoint:
+
+```bash
+curl http://localhost:8080/api/v1/accounts/2/register
+```
+
+Example response shape:
+
+```json
+[
+  {
+    "tx_id": 1,
+    "split_id": 1,
+    "account_id": 2,
+    "occurred_date": "2026-05-01",
+    "posted_date": "2026-05-01",
+    "memo": "Initial opening balance",
+    "status": "cleared",
+    "amount_minor": 500000,
+    "running_balance_minor": 500000
   }
 ]
 ```

@@ -52,11 +52,18 @@ class AccountService:
             parent_id=account.parent_id,
             account_type=account.account_type,
             name=account.name,
+            commodity_id=account.commodity_id,
+            institution_id=None,
+            institution_name=None,
+            country_id=None,
+            country_name=None,
+            number_last4=account.number_last4,
             is_closed=account.is_closed,
             is_hidden=account.is_hidden,
             is_system=account.is_system,
             system_role=account.system_role,
             created_at=account.created_at,
+            updated_at=account.updated_at,
         )
 
     def _build_tree_node(
@@ -78,7 +85,7 @@ class AccountService:
             parent_id=state.account.parent_id,
             name=state.account.name,
             account_type=state.account.account_type,
-            commodity_id=state.account.book_id,
+            commodity_id=state.account.commodity_id,
             commodity_name=commodity_name,
             commodity_scale=2,
             institution_name=None,

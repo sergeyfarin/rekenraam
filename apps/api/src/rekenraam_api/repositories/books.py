@@ -1,7 +1,7 @@
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rekenraam_api.db.models.books import AppSchemaState, Book
+from rekenraam_api.db.models.books import Book
 
 
 class BookRepository:
@@ -17,9 +17,3 @@ class BookRepository:
         statement: Select[tuple[Book]] = select(Book).where(Book.slug == slug)
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
-
-    async def get_schema_version(self) -> str:
-        statement: Select[tuple[AppSchemaState]] = select(AppSchemaState).where(AppSchemaState.id.is_(True))
-        result = await self._session.execute(statement)
-        schema_state = result.scalar_one()
-        return schema_state.schema_version

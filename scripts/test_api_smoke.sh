@@ -22,5 +22,7 @@ curl --silent --fail http://localhost:8080/api/v1/accounts/tree
 printf '\n'
 curl --silent --fail http://localhost:8080/api/v1/accounts/1
 printf '\n'
+curl --silent --fail http://localhost:8080/api/v1/accounts/2/register
+printf '\n'
 curl --silent --fail http://localhost:8080/api/v1/transactions
 printf '\n'

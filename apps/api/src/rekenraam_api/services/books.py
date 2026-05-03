@@ -29,6 +29,3 @@ class BookService:
             name=book.name,
             base_currency_code=book.base_currency_code,
         )
-
-    async def get_schema_version(self) -> str:
-        return await self._repository.get_schema_version()

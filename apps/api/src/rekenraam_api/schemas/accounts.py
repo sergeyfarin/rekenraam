@@ -13,11 +13,18 @@ class AccountSummary(BaseModel):
     parent_id: int | None
     account_type: str
     name: str
+    commodity_id: int
+    institution_id: int | None
+    institution_name: str | None
+    country_id: int | None
+    country_name: str | None
+    number_last4: str | None
     is_closed: bool
     is_hidden: bool
     is_system: bool
     system_role: str | None
     created_at: datetime
+    updated_at: datetime
 
 
 class AccountTreeNode(BaseModel):

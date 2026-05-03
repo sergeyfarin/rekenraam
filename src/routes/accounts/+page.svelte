@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { listAccountTree, type AccountTreeNode } from "$lib/api/accounts";
   import AccountTreeItem from "./AccountTreeItem.svelte";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -31,21 +32,6 @@
   type AccountBalance = {
     account_id: number;
     balance_minor: number;
-  };
-
-  type AccountTreeNode = {
-    id: number;
-    parent_id: number | null;
-    name: string;
-    account_type: string;
-    commodity_id: number;
-    commodity_name: string;
-    commodity_scale: number;
-    institution_name: string | null;
-    country_name: string | null;
-    balance_minor: number;
-    rollup_balance_minor: number;
-    children: AccountTreeNode[];
   };
 
   type Commodity = {
@@ -152,7 +138,7 @@
 
   async function loadAccountTree() {
     try {
-      accountTree = await invoke<AccountTreeNode[]>("get_account_tree", { bookId });
+      accountTree = await listAccountTree(bookId);
     } catch (e) {
       error = `Failed to load account tree: ${String(e)}`;
       accountTree = [];

@@ -1,14 +1,15 @@
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.transactions import TransactionRepository
-from rekenraam_api.schemas.transactions import SplitEntry, TransactionSummary
+from rekenraam_api.schemas.register import RegisterEntry
+from rekenraam_api.schemas.transactions import SplitEntry, TransactionListFilters, TransactionSummary
 
 
 class TransactionService:
     def __init__(self, repository: TransactionRepository) -> None:
         self._repository = repository
 
-    async def list_transactions(self) -> list[TransactionSummary]:
-        transactions = await self._repository.list_transactions()
+    async def list_transactions(self, filters: TransactionListFilters | None = None) -> list[TransactionSummary]:
+        transactions = await self._repository.list_transactions(filters)
         splits = await self._repository.list_splits_for_transaction_ids([transaction.id for transaction in transactions])
         return self._map_transactions(transactions, splits)
 
@@ -19,6 +20,30 @@ class TransactionService:
 
         splits = await self._repository.list_splits_for_transaction_ids([transaction.id])
         return self._map_transactions([transaction], splits)[0]
+
+    async def list_account_register(self, account_id: int) -> list[RegisterEntry]:
+        rows = await self._repository.list_account_register_splits(account_id)
+        running_balance_minor = 0
+        entries: list[RegisterEntry] = []
+
+        for transaction, split in rows:
+            running_balance_minor += split.amount_minor
+            entries.append(
+                RegisterEntry(
+                    tx_id=transaction.id,
+                    split_id=split.id,
+                    account_id=split.account_id,
+                    occurred_date=transaction.occurred_date,
+                    posted_date=transaction.posted_date,
+                    memo=transaction.memo,
+                    status=transaction.status,
+                    amount_minor=split.amount_minor,
+                    running_balance_minor=running_balance_minor,
+                    created_at=split.created_at,
+                )
+            )
+
+        return entries
 
     def _map_transactions(
         self,

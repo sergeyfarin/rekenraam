@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from rekenraam_api.api.dependencies import get_account_service
+from rekenraam_api.api.dependencies import get_transaction_service
+from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.accounts import AccountSummary, AccountTreeNode
 from rekenraam_api.services.accounts import AccountService
+from rekenraam_api.services.transactions import TransactionService
 
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -29,3 +32,16 @@ async def get_account(
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
     return account
+
+
+@router.get("/{account_id}/register", response_model=list[RegisterEntry])
+async def get_account_register(
+    account_id: int,
+    account_service: AccountService = Depends(get_account_service),
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> list[RegisterEntry]:
+    account = await account_service.get_account_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
+
+    return await transaction_service.list_account_register(account_id)
