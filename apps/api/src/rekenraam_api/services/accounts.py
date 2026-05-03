@@ -2,7 +2,13 @@ from dataclasses import dataclass, field
 
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.repositories.accounts import AccountRepository
-from rekenraam_api.schemas.accounts import AccountSummary, AccountTreeNode
+from rekenraam_api.schemas.accounts import (
+    AccountBalanceSummary,
+    AccountBalancingSummary,
+    AccountDirectiveSummary,
+    AccountSummary,
+    AccountTreeNode,
+)
 
 
 @dataclass
@@ -24,6 +30,50 @@ class AccountService:
         if account is None:
             return None
         return self._to_summary(account)
+
+    async def list_account_balances(self) -> list[AccountBalanceSummary]:
+        balances = await self._repository.get_account_balances()
+        return [
+            AccountBalanceSummary(account_id=account_id, balance_minor=balance_minor)
+            for account_id, balance_minor in sorted(balances.items())
+        ]
+
+    async def list_account_balancings(self, account_id: int) -> list[AccountBalancingSummary]:
+        balancings = await self._repository.list_account_balancings(account_id)
+        return [
+            AccountBalancingSummary(
+                id=balancing.id,
+                account_id=balancing.account_id,
+                as_of_date=balancing.as_of_date,
+                balance_minor=balancing.balance_minor,
+                memo=balancing.memo,
+            )
+            for balancing in balancings
+        ]
+
+    async def list_account_directives(self, account_id: int) -> list[AccountDirectiveSummary]:
+        directives = await self._repository.list_account_directives(account_id)
+        return [
+            AccountDirectiveSummary(
+                id=directive.id,
+                book_id=directive.book_id,
+                account_id=account_id,
+                directive_type=directive.lifecycle_event,
+                directive_date=directive.effective_at,
+                note=directive.lifecycle_note,
+                metadata=directive.lifecycle_metadata,
+                created_at=directive.created_at,
+            )
+            for directive in directives
+        ]
+
+    async def get_account_booking_policy(self, account_id: int) -> str | None:
+        account, policy = await self._repository.get_account_booking_policy(account_id)
+        if account is None:
+            return None
+        if account.account_type != "investment":
+            raise ValueError("booking policy only applies to investment accounts")
+        return policy or "fifo"
 
     async def list_account_tree(self) -> list[AccountTreeNode]:
         accounts = await self._repository.list_accounts()

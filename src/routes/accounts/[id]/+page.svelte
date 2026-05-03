@@ -2,7 +2,15 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { invoke } from "@tauri-apps/api/core";
-  import { getAccountById } from "$lib/api/accounts";
+  import {
+    getAccountBookingPolicy,
+    getAccountById,
+    listAccountBalancings,
+    listAccountBalances,
+    listAccountDirectives,
+    type AccountBalancingSummary,
+    type AccountDirectiveSummary,
+  } from "$lib/api/accounts";
   import {
     listCategories,
     listCommodities,
@@ -17,6 +25,7 @@
     type ProjectSummary,
     type TagSummary,
   } from "$lib/api/metadata";
+  import { listTransactions as fetchTransactions } from "$lib/api/transactions";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -87,36 +96,12 @@
     memo: string;
   };
 
-  type AccountDirective = {
-    id: number;
-    book_id: number;
-    account_id: number;
-    directive_type: string;
-    directive_date: string;
-    note: string | null;
-    metadata: string | null;
-    created_at: string;
-  };
-
-  type AccountBalance = {
-    account_id: number;
-    balance_minor: number;
-  };
-
-  type AccountBalancing = {
-    id: number;
-    account_id: number;
-    as_of_date: string;
-    balance_minor: number;
-    memo: string | null;
-  };
-
   let accountId: number | null = null;
   let account: Account | null = null;
   let transactions: TransactionWithSplits[] = [];
-  let directives: AccountDirective[] = [];
+  let directives: AccountDirectiveSummary[] = [];
   let balanceMinor = 0;
-  let lastBalancing: AccountBalancing | null = null;
+  let lastBalancing: AccountBalancingSummary | null = null;
   let bookingPolicy = "fifo";
   let savingPolicy = false;
   let loading = true;
@@ -261,17 +246,17 @@
       account = fetched;
 
       const [balanceRows, balancings] = await Promise.all([
-        invoke<AccountBalance[]>("list_account_balances", { bookId: 1 }),
-        invoke<AccountBalancing[]>("list_account_balancings", { accountId }),
+        listAccountBalances(1),
+        listAccountBalancings(accountId),
       ]);
       const balanceMap = new Map(balanceRows.map((row) => [row.account_id, row.balance_minor] as const));
       balanceMinor = balanceMap.get(accountId) ?? 0;
       // list_account_balancings returns DESC — first entry is most recent
       lastBalancing = balancings.length > 0 ? balancings[0] : null;
 
-      directives = await invoke<AccountDirective[]>("list_account_directives", { accountId });
+      directives = await listAccountDirectives(accountId);
       if (account.account_type === "investment") {
-        bookingPolicy = await invoke<string>("get_account_booking_policy", { accountId });
+        bookingPolicy = await getAccountBookingPolicy(accountId);
       }
       await loadTransactions();
     } catch (e) {
@@ -311,7 +296,7 @@
       limit: 10000,
       offset: 0
     };
-    transactions = await invoke<TransactionWithSplits[]>("list_transactions", { filter });
+    transactions = await fetchTransactions(filter);
   }
 
   function formatMinorWithScale(amountMinor: number, scale: number): string {

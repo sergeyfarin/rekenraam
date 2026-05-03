@@ -3,7 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from rekenraam_api.api.dependencies import get_account_service
 from rekenraam_api.api.dependencies import get_transaction_service
 from rekenraam_api.schemas.register import RegisterEntry
-from rekenraam_api.schemas.accounts import AccountSummary, AccountTreeNode
+from rekenraam_api.schemas.accounts import (
+    AccountBalanceSummary,
+    AccountBalancingSummary,
+    AccountDirectiveSummary,
+    AccountSummary,
+    AccountTreeNode,
+)
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.transactions import TransactionService
 
@@ -14,6 +20,50 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 @router.get("", response_model=list[AccountSummary])
 async def list_accounts(account_service: AccountService = Depends(get_account_service)) -> list[AccountSummary]:
     return await account_service.list_accounts()
+
+
+@router.get("/balances", response_model=list[AccountBalanceSummary])
+async def list_account_balances(
+    account_service: AccountService = Depends(get_account_service),
+) -> list[AccountBalanceSummary]:
+    return await account_service.list_account_balances()
+
+
+@router.get("/{account_id}/balancings", response_model=list[AccountBalancingSummary])
+async def list_account_balancings(
+    account_id: int,
+    account_service: AccountService = Depends(get_account_service),
+) -> list[AccountBalancingSummary]:
+    account = await account_service.get_account_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
+    return await account_service.list_account_balancings(account_id)
+
+
+@router.get("/{account_id}/directives", response_model=list[AccountDirectiveSummary])
+async def list_account_directives(
+    account_id: int,
+    account_service: AccountService = Depends(get_account_service),
+) -> list[AccountDirectiveSummary]:
+    account = await account_service.get_account_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
+    return await account_service.list_account_directives(account_id)
+
+
+@router.get("/{account_id}/booking-policy", response_model=str)
+async def get_account_booking_policy(
+    account_id: int,
+    account_service: AccountService = Depends(get_account_service),
+) -> str:
+    try:
+        policy = await account_service.get_account_booking_policy(account_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if policy is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
+    return policy
 
 
 @router.get("/tree", response_model=list[AccountTreeNode])

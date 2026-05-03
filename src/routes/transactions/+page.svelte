@@ -17,6 +17,7 @@
     type ProjectSummary,
     type TagSummary,
   } from "$lib/api/metadata";
+  import { listTransactions as fetchTransactions } from "$lib/api/transactions";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -282,9 +283,7 @@
     }
     error = "";
     try {
-      const result = await invoke<TransactionWithSplits[]>("list_transactions", {
-        filter: buildFilter(append ? currentOffset : 0),
-      });
+      const result = await fetchTransactions(buildFilter(append ? currentOffset : 0));
       if (append) {
         transactions = [...transactions, ...result];
       } else {

@@ -75,10 +75,15 @@ does not provide the needed slice.
 Current migrated frontend read slices:
 
 - accounts page account tree
+- accounts page account balances
 - accounts page commodities, countries, and institutions lookups
 - account detail page account summary
+- account detail page account balances
+- account detail page balancings, directives, and booking policy
 - account detail page categories, payees, tags, people, projects, and commodities lookups
+- account detail page transaction list read
 - transactions page categories, payees, tags, people, projects, and commodities lookups
+- transactions page transaction list read
 
 If you previously ran the old Rust API scaffold against Docker, the existing
 Postgres volume may contain incompatible tables. The Python scaffold now uses a

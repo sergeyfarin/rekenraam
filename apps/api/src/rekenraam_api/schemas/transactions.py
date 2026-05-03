@@ -8,9 +8,17 @@ class TransactionListFilters(BaseModel):
 
     book_id: int | None = None
     account_id: int | None = None
+    payee_id: int | None = None
     status: str | None = None
     occurred_from: date | None = None
     occurred_to: date | None = None
+    search: str | None = None
+    amount_min: int | None = None
+    amount_max: int | None = None
+    sort_by: str | None = None
+    sort_dir: str | None = None
+    limit: int | None = None
+    offset: int | None = None
 
     @model_validator(mode="after")
     def validate_date_range(self) -> "TransactionListFilters":
@@ -29,7 +37,13 @@ class SplitEntry(BaseModel):
     id: int
     tx_id: int
     account_id: int
+    commodity_id: int
     amount_minor: int
+    category_id: int | None
+    tag_id: int | None
+    person_id: int | None
+    project_id: int | None
+    share_bps: int | None
     memo: str | None
     created_at: datetime
 
@@ -41,7 +55,9 @@ class TransactionSummary(BaseModel):
     book_id: int
     occurred_date: date
     posted_date: date
+    payee_id: int | None
     memo: str | None
     status: str
+    reference: str | None
     created_at: datetime
     splits: tuple[SplitEntry, ...]

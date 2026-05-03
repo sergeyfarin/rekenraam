@@ -35,8 +35,36 @@ export type AccountSummary = {
   updated_at: string;
 };
 
+export type AccountBalanceSummary = {
+  account_id: number;
+  balance_minor: number;
+};
+
+export type AccountBalancingSummary = {
+  id: number;
+  account_id: number;
+  as_of_date: string;
+  balance_minor: number;
+  memo: string | null;
+};
+
+export type AccountDirectiveSummary = {
+  id: number;
+  book_id: number;
+  account_id: number;
+  directive_type: string;
+  directive_date: string;
+  note: string | null;
+  metadata: string | null;
+  created_at: string;
+};
+
 export async function listAccountTree(bookId = 1): Promise<AccountTreeNode[]> {
   return apiGetWithTauriFallback<AccountTreeNode[]>(`/accounts/tree`, "get_account_tree", { bookId });
+}
+
+export async function listAccountBalances(bookId = 1): Promise<AccountBalanceSummary[]> {
+  return apiGetWithTauriFallback<AccountBalanceSummary[]>(`/accounts/balances`, "list_account_balances", { bookId });
 }
 
 export async function getAccountById(accountId: number): Promise<AccountSummary | null> {
@@ -48,4 +76,26 @@ export async function getAccountById(accountId: number): Promise<AccountSummary 
     }
     throw error;
   }
+}
+
+export async function listAccountBalancings(accountId: number): Promise<AccountBalancingSummary[]> {
+  return apiGetWithTauriFallback<AccountBalancingSummary[]>(
+    `/accounts/${accountId}/balancings`,
+    "list_account_balancings",
+    { accountId }
+  );
+}
+
+export async function listAccountDirectives(accountId: number): Promise<AccountDirectiveSummary[]> {
+  return apiGetWithTauriFallback<AccountDirectiveSummary[]>(
+    `/accounts/${accountId}/directives`,
+    "list_account_directives",
+    { accountId }
+  );
+}
+
+export async function getAccountBookingPolicy(accountId: number): Promise<string> {
+  return apiGetWithTauriFallback<string>(`/accounts/${accountId}/booking-policy`, "get_account_booking_policy", {
+    accountId,
+  });
 }

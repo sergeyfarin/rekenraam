@@ -3,10 +3,15 @@ from datetime import UTC, datetime
 import pytest
 from pydantic_core import ValidationError
 
-from rekenraam_api.db.models.accounts import Account
+from rekenraam_api.db.models.accounts import Account, AccountBalancing
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.transactions import Split, Transaction
-from rekenraam_api.schemas.accounts import AccountTreeNode
+from rekenraam_api.schemas.accounts import (
+    AccountBalanceSummary,
+    AccountBalancingSummary,
+    AccountDirectiveSummary,
+    AccountTreeNode,
+)
 from rekenraam_api.schemas.register import RegisterEntry
 from rekenraam_api.schemas.transactions import TransactionListFilters
 from rekenraam_api.services.accounts import AccountService
@@ -77,6 +82,28 @@ class StubAccountRepository:
                 created_at=self._created_at,
                 updated_at=self._created_at,
             )
+        if account_id == 9:
+            return Account(
+                id=9,
+                book_id=1,
+                parent_id=None,
+                previous_account_id=None,
+                account_type="investment",
+                name="Brokerage",
+                commodity_id=1,
+                booking_policy="average",
+                number_last4=None,
+                is_closed=False,
+                is_hidden=False,
+                is_system=False,
+                system_role=None,
+                effective_at=datetime(2026, 5, 3, tzinfo=UTC).date(),
+                lifecycle_event="open",
+                lifecycle_note=None,
+                lifecycle_metadata=None,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
         return None
 
     async def get_book_base_currency_code(self, book_id: int) -> str | None:
@@ -86,6 +113,57 @@ class StubAccountRepository:
 
     async def get_account_balances(self) -> dict[int, int]:
         return {2: 500000, 3: -500000}
+
+    async def list_account_balancings(self, account_id: int) -> list[AccountBalancing]:
+        if account_id != 1:
+            return []
+        return [
+            AccountBalancing(
+                id=7,
+                book_id=1,
+                account_id=1,
+                previous_account_balancing_id=None,
+                as_of_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                balance_minor=500000,
+                memo="Checkpoint",
+                created_at=self._created_at,
+                voided_at=None,
+                void_reason=None,
+            )
+        ]
+
+    async def list_account_directives(self, account_id: int) -> list[Account]:
+        if account_id != 1:
+            return []
+        return [
+            Account(
+                id=1,
+                book_id=1,
+                parent_id=None,
+                previous_account_id=None,
+                account_type="asset",
+                name="Assets",
+                commodity_id=1,
+                booking_policy="fifo",
+                number_last4=None,
+                is_closed=False,
+                is_hidden=False,
+                is_system=False,
+                system_role=None,
+                effective_at=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                lifecycle_event="open",
+                lifecycle_note="Opened",
+                lifecycle_metadata='{"source":"seed"}',
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
+        ]
+
+    async def get_account_booking_policy(self, account_id: int) -> tuple[Account | None, str | None]:
+        account = await self.get_account_by_id(account_id)
+        if account is None:
+            return None, None
+        return account, account.booking_policy
 
 
 class StubTransactionRepository:
@@ -100,8 +178,10 @@ class StubTransactionRepository:
                 book_id=1,
                 occurred_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
                 posted_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                payee_id=1,
                 memo="Pending groceries",
                 status="uncleared",
+                reference="groceries-1",
                 created_at=self._created_at,
             ),
             Transaction(
@@ -109,8 +189,10 @@ class StubTransactionRepository:
                 book_id=1,
                 occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
                 posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                payee_id=None,
                 memo="Initial opening balance",
                 status="cleared",
+                reference=None,
                 created_at=self._created_at,
             ),
         ]
@@ -133,8 +215,34 @@ class StubTransactionRepository:
         if 1 not in transaction_ids:
             return []
         return [
-            Split(id=1, tx_id=1, account_id=2, amount_minor=500000, memo="Opening cash", created_at=self._created_at),
-            Split(id=2, tx_id=1, account_id=3, amount_minor=-500000, memo="Offset", created_at=self._created_at),
+            Split(
+                id=1,
+                tx_id=1,
+                account_id=2,
+                commodity_id=1,
+                amount_minor=500000,
+                category_id=None,
+                tag_id=None,
+                person_id=None,
+                project_id=None,
+                share_bps=None,
+                memo="Opening cash",
+                created_at=self._created_at,
+            ),
+            Split(
+                id=2,
+                tx_id=1,
+                account_id=3,
+                commodity_id=1,
+                amount_minor=-500000,
+                category_id=None,
+                tag_id=None,
+                person_id=None,
+                project_id=None,
+                share_bps=None,
+                memo="Offset",
+                created_at=self._created_at,
+            ),
         ]
 
     async def list_account_register_splits(self, account_id: int) -> list[tuple[Transaction, Split]]:
@@ -145,7 +253,20 @@ class StubTransactionRepository:
             for transaction in await self.list_transactions()
             if transaction.id == 1
         )
-        split = Split(id=1, tx_id=1, account_id=2, amount_minor=500000, memo="Opening cash", created_at=self._created_at)
+        split = Split(
+            id=1,
+            tx_id=1,
+            account_id=2,
+            commodity_id=1,
+            amount_minor=500000,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo="Opening cash",
+            created_at=self._created_at,
+        )
         return [(transaction, split)]
 
 
@@ -190,6 +311,72 @@ async def test_account_service_returns_none_when_account_is_missing() -> None:
     result = await service.get_account_by_id(999)
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_account_service_lists_account_balances() -> None:
+    service = AccountService(StubAccountRepository())
+
+    result = await service.list_account_balances()
+
+    assert result == [
+        AccountBalanceSummary(account_id=2, balance_minor=500000),
+        AccountBalanceSummary(account_id=3, balance_minor=-500000),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_account_service_lists_account_balancings() -> None:
+    service = AccountService(StubAccountRepository())
+
+    result = await service.list_account_balancings(1)
+
+    assert result == [
+        AccountBalancingSummary(
+            id=7,
+            account_id=1,
+            as_of_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+            balance_minor=500000,
+            memo="Checkpoint",
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_account_service_lists_account_directives() -> None:
+    service = AccountService(StubAccountRepository())
+
+    result = await service.list_account_directives(1)
+
+    assert result == [
+        AccountDirectiveSummary(
+            id=1,
+            book_id=1,
+            account_id=1,
+            directive_type="open",
+            directive_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+            note="Opened",
+            metadata='{"source":"seed"}',
+            created_at=datetime(2026, 5, 3, tzinfo=UTC),
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_account_service_returns_booking_policy_for_investment_account() -> None:
+    service = AccountService(StubAccountRepository())
+
+    result = await service.get_account_booking_policy(9)
+
+    assert result == "average"
+
+
+@pytest.mark.asyncio
+async def test_account_service_rejects_booking_policy_for_non_investment_account() -> None:
+    service = AccountService(StubAccountRepository())
+
+    with pytest.raises(ValueError, match="booking policy only applies"):
+        await service.get_account_booking_policy(1)
 
 
 @pytest.mark.asyncio
@@ -247,8 +434,11 @@ async def test_transaction_service_returns_transactions_with_splits() -> None:
 
     assert len(result) == 2
     assert result[0].memo == "Pending groceries"
+    assert result[0].payee_id == 1
+    assert result[0].reference == "groceries-1"
     assert len(result[1].splits) == 2
     assert result[1].splits[0].amount_minor == 500000
+    assert result[1].splits[0].commodity_id == 1
 
 
 @pytest.mark.asyncio

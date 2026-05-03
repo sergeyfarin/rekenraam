@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -25,6 +25,36 @@ class AccountSummary(BaseModel):
     system_role: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class AccountBalanceSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    account_id: int
+    balance_minor: int
+
+
+class AccountBalancingSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    account_id: int
+    as_of_date: date
+    balance_minor: int
+    memo: str | None
+
+
+class AccountDirectiveSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    book_id: int
+    account_id: int
+    directive_type: str
+    directive_date: date
+    note: str | None
+    metadata: str | None
+    created_at: datetime
 
 
 class AccountTreeNode(BaseModel):

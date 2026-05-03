@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { listAccountTree, type AccountTreeNode } from "$lib/api/accounts";
+  import {
+    listAccountBalances,
+    listAccountTree,
+    type AccountTreeNode,
+  } from "$lib/api/accounts";
   import {
     listCommodities,
     listCountries,
@@ -35,11 +39,6 @@
     is_closed: boolean;
     created_at: string;
     updated_at: string;
-  };
-
-  type AccountBalance = {
-    account_id: number;
-    balance_minor: number;
   };
 
   const bookId = 1;
@@ -104,7 +103,7 @@
 
   async function loadBalances() {
     try {
-      const rows = await invoke<AccountBalance[]>("list_account_balances", { bookId });
+      const rows = await listAccountBalances(bookId);
       balances = new Map(rows.map((row) => [row.account_id, row.balance_minor] as const));
     } catch (e) {
       error = `Failed to load balances: ${String(e)}`;

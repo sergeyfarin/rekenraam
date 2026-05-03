@@ -8,7 +8,13 @@ from rekenraam_api.api.dependencies import get_account_service, get_book_service
 from rekenraam_api.api.dependencies import get_metadata_service
 from rekenraam_api.api.dependencies import get_transaction_service
 from rekenraam_api.app import app
-from rekenraam_api.schemas.accounts import AccountSummary, AccountTreeNode
+from rekenraam_api.schemas.accounts import (
+    AccountBalanceSummary,
+    AccountBalancingSummary,
+    AccountDirectiveSummary,
+    AccountSummary,
+    AccountTreeNode,
+)
 from rekenraam_api.schemas.books import BookSummary
 from rekenraam_api.schemas.metadata import (
     CategorySummary,
@@ -160,6 +166,44 @@ class StubAccountService:
             ),
         ]
 
+    async def list_account_balances(self) -> list[AccountBalanceSummary]:
+        return [
+            AccountBalanceSummary(account_id=2, balance_minor=500000),
+            AccountBalanceSummary(account_id=3, balance_minor=-500000),
+        ]
+
+    async def list_account_balancings(self, account_id: int) -> list[AccountBalancingSummary]:
+        return [
+            AccountBalancingSummary(
+                id=7,
+                account_id=account_id,
+                as_of_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                balance_minor=500000,
+                memo="Checkpoint",
+            )
+        ]
+
+    async def list_account_directives(self, account_id: int) -> list[AccountDirectiveSummary]:
+        return [
+            AccountDirectiveSummary(
+                id=2,
+                book_id=1,
+                account_id=account_id,
+                directive_type="open",
+                directive_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                note="Opened",
+                metadata='{"source":"seed"}',
+                created_at=self._created_at,
+            )
+        ]
+
+    async def get_account_booking_policy(self, account_id: int) -> str | None:
+        if account_id == 99:
+            return None
+        if account_id == 2:
+            raise ValueError("booking policy only applies to investment accounts")
+        return "average"
+
 
 class StubTransactionService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
@@ -173,15 +217,23 @@ class StubTransactionService:
                 book_id=1,
                 occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
                 posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                payee_id=None,
                 memo="Initial opening balance",
                 status="cleared",
+                reference=None,
                 created_at=self._created_at,
                 splits=(
                     SplitEntry(
                         id=1,
                         tx_id=1,
                         account_id=2,
+                        commodity_id=1,
                         amount_minor=500000,
+                        category_id=None,
+                        tag_id=None,
+                        person_id=None,
+                        project_id=None,
+                        share_bps=None,
                         memo="Opening cash",
                         created_at=self._created_at,
                     ),
@@ -189,7 +241,13 @@ class StubTransactionService:
                         id=2,
                         tx_id=1,
                         account_id=3,
+                        commodity_id=1,
                         amount_minor=-500000,
+                        category_id=None,
+                        tag_id=None,
+                        person_id=None,
+                        project_id=None,
+                        share_bps=None,
                         memo="Offset",
                         created_at=self._created_at,
                     ),
@@ -200,15 +258,23 @@ class StubTransactionService:
                 book_id=1,
                 occurred_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
                 posted_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                payee_id=1,
                 memo="Pending groceries",
                 status="uncleared",
+                reference="groceries-1",
                 created_at=self._created_at,
                 splits=(
                     SplitEntry(
                         id=3,
                         tx_id=2,
                         account_id=2,
+                        commodity_id=1,
                         amount_minor=-1250,
+                        category_id=1,
+                        tag_id=None,
+                        person_id=None,
+                        project_id=None,
+                        share_bps=None,
                         memo="Groceries",
                         created_at=self._created_at,
                     ),
@@ -216,7 +282,13 @@ class StubTransactionService:
                         id=4,
                         tx_id=2,
                         account_id=4,
+                        commodity_id=1,
                         amount_minor=1250,
+                        category_id=None,
+                        tag_id=None,
+                        person_id=None,
+                        project_id=None,
+                        share_bps=None,
                         memo="Expense",
                         created_at=self._created_at,
                     ),
@@ -418,6 +490,78 @@ async def test_list_account_tree_returns_nested_balance_shape(client: AsyncClien
 
 
 @pytest.mark.asyncio
+async def test_list_account_balances_returns_balance_rows(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.get("/api/v1/accounts/balances")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"account_id": 2, "balance_minor": 500000},
+        {"account_id": 3, "balance_minor": -500000},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_account_balancings_returns_rows(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.get("/api/v1/accounts/1/balancings")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 7,
+            "account_id": 1,
+            "as_of_date": "2026-05-02",
+            "balance_minor": 500000,
+            "memo": "Checkpoint",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_account_directives_returns_rows(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.get("/api/v1/accounts/1/directives")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 2,
+            "book_id": 1,
+            "account_id": 1,
+            "directive_type": "open",
+            "directive_date": "2026-05-01",
+            "note": "Opened",
+            "metadata": '{"source":"seed"}',
+            "created_at": "2026-05-03T00:00:00Z",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_account_booking_policy_returns_policy(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.get("/api/v1/accounts/9/booking-policy")
+
+    assert response.status_code == 200
+    assert response.json() == "average"
+
+
+@pytest.mark.asyncio
+async def test_get_account_booking_policy_rejects_non_investment_account(client: AsyncClient) -> None:
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    response = await client.get("/api/v1/accounts/2/booking-policy")
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "booking policy only applies to investment accounts"}
+
+
+@pytest.mark.asyncio
 async def test_list_transactions_returns_nested_splits(client: AsyncClient) -> None:
     app.dependency_overrides[get_transaction_service] = StubTransactionService
 
@@ -429,6 +573,9 @@ async def test_list_transactions_returns_nested_splits(client: AsyncClient) -> N
     assert len(body) == 2
     assert len(body[0]["splits"]) == 2
     assert body[0]["splits"][0]["amount_minor"] == 500000
+    assert body[1]["payee_id"] == 1
+    assert body[1]["reference"] == "groceries-1"
+    assert body[1]["splits"][0]["commodity_id"] == 1
 
 
 @pytest.mark.asyncio
