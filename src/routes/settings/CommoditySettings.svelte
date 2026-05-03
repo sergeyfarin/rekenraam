@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { hasApiBaseUrl } from "$lib/api/client";
   import {
     createFxRateDaily,
     createFxRateOfficial,
@@ -177,6 +178,7 @@
   let fxRateRefreshState: FxRateRefreshState[] = [];
   let fxRateError = "";
   let fxRateStatus = "";
+  const pricingAutomationManagedByServer = hasApiBaseUrl();
   let showFxDailyDialog = false;
   let showFxOfficialDialog = false;
   let showFxAssignmentDialog = false;
@@ -665,7 +667,15 @@
       </button>
       <button
         class="px-4 py-2 text-sm font-medium {commoditiesSubTab === 'fx-settings' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
-        onclick={() => { commoditiesSubTab = 'fx-settings'; loadFxRateSources(); loadFxRateSettings(); loadFxRateAssignments(); loadFxRefreshState(); }}
+        onclick={() => {
+          commoditiesSubTab = 'fx-settings';
+          if (!pricingAutomationManagedByServer) {
+            loadFxRateSources();
+            loadFxRateSettings();
+            loadFxRateAssignments();
+            loadFxRefreshState();
+          }
+        }}
       >
         FX Settings
       </button>
@@ -876,167 +886,180 @@
 
     <!-- FX Settings Sub-tab -->
     {#if commoditiesSubTab === 'fx-settings'}
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <p class="text-sm text-muted-foreground">Configure FX refresh and manage source assignments. Settings affect automatic updates.</p>
+      {#if pricingAutomationManagedByServer}
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Scheduled Pricing Migration</Card.Title>
+          </Card.Header>
+          <Card.Content class="space-y-3 text-sm text-muted-foreground">
+            <p>FX, commodity, share, and other market-price refresh will be owned by a backend worker in the web app, not by the browser session.</p>
+            <p>This tab no longer tries to run a client-side scheduler or manual refresh. The remaining work is a Python pricing service that persists refresh policy, source assignments, and refresh status for a scheduled job.</p>
+            <p>Until that slice lands, use the currencies tab to control which currencies participate in pricing and treat this tab as reserved for backend-managed automation.</p>
+          </Card.Content>
+        </Card.Root>
+      {:else}
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-sm text-muted-foreground">Configure FX refresh and manage source assignments. Settings affect automatic updates.</p>
+          </div>
+          <div class="flex gap-2">
+            <Button onclick={refreshFxRatesNow} disabled={busy} size="sm">Refresh Now</Button>
+            <Button onclick={saveFxRateSettings} disabled={busy || !fxRateSettings} size="sm" variant="secondary">Save Settings</Button>
+          </div>
         </div>
-        <div class="flex gap-2">
-          <Button onclick={refreshFxRatesNow} disabled={busy} size="sm">Refresh Now</Button>
-          <Button onclick={saveFxRateSettings} disabled={busy || !fxRateSettings} size="sm" variant="secondary">Save Settings</Button>
-        </div>
-      </div>
 
-      {#if fxRateStatus}
-        <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
-      {/if}
-      {#if fxRateError}
-        <p class="text-sm text-destructive mb-2">{fxRateError}</p>
-      {/if}
+        {#if fxRateStatus}
+          <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
+        {/if}
+        {#if fxRateError}
+          <p class="text-sm text-destructive mb-2">{fxRateError}</p>
+        {/if}
 
-      {#if fxRateSettings}
-        <div class="grid gap-4 lg:grid-cols-3 mb-6">
-          <Card.Root>
-            <Card.Header>
-              <Card.Title>Base Currency</Card.Title>
-            </Card.Header>
-            <Card.Content class="space-y-3">
-              <div class="grid gap-2">
-                <Label for="fx-base-currency">Base currency</Label>
-                <select id="fx-base-currency" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.base_currency_id}>
-                  {#each currencies as c}
-                    <option value={c.id}>{c.display_symbol || ''} {c.symbol} - {c.name}</option>
-                  {/each}
-                </select>
-              </div>
-              <div class="grid gap-2">
-                <Label for="fx-default-source">Default source</Label>
-                <select id="fx-default-source" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.default_source_id}>
-                  <option value="">Select source</option>
-                  {#each fxRateSources as s}
-                    <option value={s.id}>{s.name}</option>
-                  {/each}
-                </select>
-              </div>
-            </Card.Content>
-          </Card.Root>
-
-          <Card.Root>
-            <Card.Header>
-              <Card.Title>Refresh Schedule</Card.Title>
-            </Card.Header>
-            <Card.Content class="space-y-3">
-              <div class="flex items-center justify-between">
-                <Label for="fx-refresh-enabled">Enable refresh</Label>
-                <input id="fx-refresh-enabled" type="checkbox" class="h-4 w-4" bind:checked={fxRateSettings.refresh_enabled} />
-              </div>
-              <div class="grid grid-cols-2 gap-3">
+        {#if fxRateSettings}
+          <div class="grid gap-4 lg:grid-cols-3 mb-6">
+            <Card.Root>
+              <Card.Header>
+                <Card.Title>Base Currency</Card.Title>
+              </Card.Header>
+              <Card.Content class="space-y-3">
                 <div class="grid gap-2">
-                  <Label for="fx-refresh-hour">Hour (UTC)</Label>
-                  <Input id="fx-refresh-hour" type="number" min="0" max="23" bind:value={fxRateSettings.refresh_hour_utc} />
+                  <Label for="fx-base-currency">Base currency</Label>
+                  <select id="fx-base-currency" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.base_currency_id}>
+                    {#each currencies as c}
+                      <option value={c.id}>{c.display_symbol || ''} {c.symbol} - {c.name}</option>
+                    {/each}
+                  </select>
                 </div>
                 <div class="grid gap-2">
-                  <Label for="fx-refresh-minute">Minute (UTC)</Label>
-                  <Input id="fx-refresh-minute" type="number" min="0" max="59" bind:value={fxRateSettings.refresh_minute_utc} />
+                  <Label for="fx-default-source">Default source</Label>
+                  <select id="fx-default-source" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.default_source_id}>
+                    <option value="">Select source</option>
+                    {#each fxRateSources as s}
+                      <option value={s.id}>{s.name}</option>
+                    {/each}
+                  </select>
                 </div>
-              </div>
-            </Card.Content>
-          </Card.Root>
+              </Card.Content>
+            </Card.Root>
 
-          <Card.Root>
-            <Card.Header>
-              <Card.Title>Backfill Policy</Card.Title>
-            </Card.Header>
-            <Card.Content class="space-y-3">
-              <div class="grid gap-2">
-                <Label for="fx-backfill-days">Max backfill days</Label>
-                <Input id="fx-backfill-days" type="number" min="1" bind:value={fxRateSettings.max_backfill_days} />
-              </div>
-              <div class="grid gap-2">
-                <Label for="fx-weekend-policy">Weekend policy</Label>
-                <select id="fx-weekend-policy" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.weekend_policy}>
-                  <option value="skip">Skip</option>
-                  <option value="fill_previous">Fill previous</option>
-                  <option value="download">Download</option>
-                </select>
-              </div>
-            </Card.Content>
-          </Card.Root>
+            <Card.Root>
+              <Card.Header>
+                <Card.Title>Refresh Schedule</Card.Title>
+              </Card.Header>
+              <Card.Content class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <Label for="fx-refresh-enabled">Enable refresh</Label>
+                  <input id="fx-refresh-enabled" type="checkbox" class="h-4 w-4" bind:checked={fxRateSettings.refresh_enabled} />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="grid gap-2">
+                    <Label for="fx-refresh-hour">Hour (UTC)</Label>
+                    <Input id="fx-refresh-hour" type="number" min="0" max="23" bind:value={fxRateSettings.refresh_hour_utc} />
+                  </div>
+                  <div class="grid gap-2">
+                    <Label for="fx-refresh-minute">Minute (UTC)</Label>
+                    <Input id="fx-refresh-minute" type="number" min="0" max="59" bind:value={fxRateSettings.refresh_minute_utc} />
+                  </div>
+                </div>
+              </Card.Content>
+            </Card.Root>
+
+            <Card.Root>
+              <Card.Header>
+                <Card.Title>Backfill Policy</Card.Title>
+              </Card.Header>
+              <Card.Content class="space-y-3">
+                <div class="grid gap-2">
+                  <Label for="fx-backfill-days">Max backfill days</Label>
+                  <Input id="fx-backfill-days" type="number" min="1" bind:value={fxRateSettings.max_backfill_days} />
+                </div>
+                <div class="grid gap-2">
+                  <Label for="fx-weekend-policy">Weekend policy</Label>
+                  <select id="fx-weekend-policy" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" bind:value={fxRateSettings.weekend_policy}>
+                    <option value="skip">Skip</option>
+                    <option value="fill_previous">Fill previous</option>
+                    <option value="download">Download</option>
+                  </select>
+                </div>
+              </Card.Content>
+            </Card.Root>
+          </div>
+        {/if}
+
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-semibold">Source Assignments</h3>
+          <Button onclick={openNewFxAssignment} disabled={busy} size="sm">Add Assignment</Button>
         </div>
-      {/if}
-
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="text-lg font-semibold">Source Assignments</h3>
-        <Button onclick={openNewFxAssignment} disabled={busy} size="sm">Add Assignment</Button>
-      </div>
-      <Table.Root>
-        <Table.Header>
-          <Table.Row>
-            <Table.Head>Pair</Table.Head>
-            <Table.Head>Source</Table.Head>
-            <Table.Head>Effective</Table.Head>
-            <Table.Head class="text-right">Actions</Table.Head>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {#each fxRateAssignments as assignment}
+        <Table.Root>
+          <Table.Header>
             <Table.Row>
-              <Table.Cell class="font-mono">{assignment.from_currency_symbol}/{assignment.to_currency_symbol}</Table.Cell>
-              <Table.Cell>{assignment.source_name}</Table.Cell>
-              <Table.Cell>{assignment.effective_from}{assignment.effective_to ? ` → ${assignment.effective_to}` : ''}</Table.Cell>
-              <Table.Cell class="text-right">
-                <Button variant="ghost" size="sm" onclick={() => openEditFxAssignment(assignment)}>Edit</Button>
-                <Button variant="ghost" size="sm" class="text-destructive" onclick={() => deleteFxAssignment(assignment)}>Delete</Button>
-              </Table.Cell>
+              <Table.Head>Pair</Table.Head>
+              <Table.Head>Source</Table.Head>
+              <Table.Head>Effective</Table.Head>
+              <Table.Head class="text-right">Actions</Table.Head>
             </Table.Row>
-          {:else}
-            <Table.Row>
-              <Table.Cell colspan={4} class="text-muted-foreground">No source assignments configured.</Table.Cell>
-            </Table.Row>
-          {/each}
-        </Table.Body>
-      </Table.Root>
-
-      <div class="flex items-center justify-between mt-6 mb-2">
-        <h3 class="text-lg font-semibold">Refresh Status</h3>
-        <Button variant="secondary" size="sm" onclick={loadFxRefreshState} disabled={busy}>Reload</Button>
-      </div>
-      <Table.Root>
-        <Table.Header>
-          <Table.Row>
-            <Table.Head>Pair</Table.Head>
-            <Table.Head>Source</Table.Head>
-            <Table.Head>Last Success</Table.Head>
-            <Table.Head>Last Attempt</Table.Head>
-            <Table.Head>Status</Table.Head>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {#each fxRateRefreshState as state}
-            <Table.Row>
-              <Table.Cell class="font-mono">{state.from_currency_symbol}/{state.to_currency_symbol}</Table.Cell>
-              <Table.Cell>{state.source_name || '—'}</Table.Cell>
-              <Table.Cell>{state.last_success_date || '—'}</Table.Cell>
-              <Table.Cell>{state.last_attempt_at || '—'}</Table.Cell>
-              <Table.Cell>
-                {#if state.last_error}
-                  <Badge variant="destructive">Error</Badge>
-                {:else}
-                  <Badge variant="secondary">OK</Badge>
-                {/if}
-              </Table.Cell>
-            </Table.Row>
-            {#if state.last_error}
+          </Table.Header>
+          <Table.Body>
+            {#each fxRateAssignments as assignment}
               <Table.Row>
-                <Table.Cell colspan={5} class="text-xs text-destructive">{state.last_error}</Table.Cell>
+                <Table.Cell class="font-mono">{assignment.from_currency_symbol}/{assignment.to_currency_symbol}</Table.Cell>
+                <Table.Cell>{assignment.source_name}</Table.Cell>
+                <Table.Cell>{assignment.effective_from}{assignment.effective_to ? ` → ${assignment.effective_to}` : ''}</Table.Cell>
+                <Table.Cell class="text-right">
+                  <Button variant="ghost" size="sm" onclick={() => openEditFxAssignment(assignment)}>Edit</Button>
+                  <Button variant="ghost" size="sm" class="text-destructive" onclick={() => deleteFxAssignment(assignment)}>Delete</Button>
+                </Table.Cell>
               </Table.Row>
-            {/if}
-          {:else}
+            {:else}
+              <Table.Row>
+                <Table.Cell colspan={4} class="text-muted-foreground">No source assignments configured.</Table.Cell>
+              </Table.Row>
+            {/each}
+          </Table.Body>
+        </Table.Root>
+
+        <div class="flex items-center justify-between mt-6 mb-2">
+          <h3 class="text-lg font-semibold">Refresh Status</h3>
+          <Button variant="secondary" size="sm" onclick={loadFxRefreshState} disabled={busy}>Reload</Button>
+        </div>
+        <Table.Root>
+          <Table.Header>
             <Table.Row>
-              <Table.Cell colspan={5} class="text-muted-foreground">No refresh status yet.</Table.Cell>
+              <Table.Head>Pair</Table.Head>
+              <Table.Head>Source</Table.Head>
+              <Table.Head>Last Success</Table.Head>
+              <Table.Head>Last Attempt</Table.Head>
+              <Table.Head>Status</Table.Head>
             </Table.Row>
-          {/each}
-        </Table.Body>
-      </Table.Root>
+          </Table.Header>
+          <Table.Body>
+            {#each fxRateRefreshState as state}
+              <Table.Row>
+                <Table.Cell class="font-mono">{state.from_currency_symbol}/{state.to_currency_symbol}</Table.Cell>
+                <Table.Cell>{state.source_name || '—'}</Table.Cell>
+                <Table.Cell>{state.last_success_date || '—'}</Table.Cell>
+                <Table.Cell>{state.last_attempt_at || '—'}</Table.Cell>
+                <Table.Cell>
+                  {#if state.last_error}
+                    <Badge variant="destructive">Error</Badge>
+                  {:else}
+                    <Badge variant="secondary">OK</Badge>
+                  {/if}
+                </Table.Cell>
+              </Table.Row>
+              {#if state.last_error}
+                <Table.Row>
+                  <Table.Cell colspan={5} class="text-xs text-destructive">{state.last_error}</Table.Cell>
+                </Table.Row>
+              {/if}
+            {:else}
+              <Table.Row>
+                <Table.Cell colspan={5} class="text-muted-foreground">No refresh status yet.</Table.Cell>
+              </Table.Row>
+            {/each}
+          </Table.Body>
+        </Table.Root>
+      {/if}
     {/if}
   </Card.Content>
 </Card.Root>

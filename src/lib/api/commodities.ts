@@ -1,4 +1,10 @@
-import { apiGet, apiPost, apiPut, invokeTauri } from "$lib/api/client";
+import { apiGet, apiPost, apiPut, hasApiBaseUrl, invokeTauri } from "$lib/api/client";
+
+function requireDesktopPricingAutomation(feature: string): void {
+	if (hasApiBaseUrl()) {
+		throw new Error(`${feature} is not migrated yet. In the web app, FX and market price refresh will run from a backend schedule rather than the browser.`);
+	}
+}
 
 export interface CommodityAutocompleteOption {
 	id: number;
@@ -84,34 +90,42 @@ export async function listFxRateSources<T>(bookId = 1): Promise<T> {
 }
 
 export async function getFxRateSettings<T>(bookId = 1): Promise<T> {
+	requireDesktopPricingAutomation("FX refresh settings");
 	return invokeTauri<T>("get_fx_rate_settings", { bookId });
 }
 
 export async function setFxRateSettings<T>(settings: Record<string, unknown>): Promise<T> {
+	requireDesktopPricingAutomation("FX refresh settings");
 	return invokeTauri<T>("set_fx_rate_settings", { settings });
 }
 
 export async function restartFxRateScheduler(): Promise<void> {
+	requireDesktopPricingAutomation("Client-side FX scheduler restarts");
 	await invokeTauri("restart_fx_rate_scheduler");
 }
 
 export async function listFxRateSourceAssignments<T>(bookId = 1): Promise<T> {
+	requireDesktopPricingAutomation("FX source assignments");
 	return invokeTauri<T>("list_fx_rate_source_assignments", { bookId });
 }
 
 export async function saveFxRateSourceAssignment(assignment: Record<string, unknown>, isUpdate: boolean): Promise<void> {
+	requireDesktopPricingAutomation("FX source assignments");
 	await invokeTauri(isUpdate ? "update_fx_rate_source_assignment" : "create_fx_rate_source_assignment", { assignment });
 }
 
 export async function deleteFxRateSourceAssignment(id: number): Promise<void> {
+	requireDesktopPricingAutomation("FX source assignments");
 	await invokeTauri("delete_fx_rate_source_assignment", { id });
 }
 
 export async function listFxRateRefreshState<T>(bookId = 1): Promise<T> {
+	requireDesktopPricingAutomation("FX refresh status");
 	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
 }
 
 export async function refreshFxRatesNow<T>(): Promise<T> {
+	requireDesktopPricingAutomation("Manual FX refresh");
 	return invokeTauri<T>("refresh_fx_rates_now");
 }
 
