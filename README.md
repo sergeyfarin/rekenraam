@@ -81,7 +81,7 @@ Current migrated frontend read slices:
 - account detail page account balances
 - account detail page balancings, directives, and booking policy
 - account detail page categories, payees, tags, people, projects, and commodities lookups
-- account detail page transaction list read
+- account detail page register rows and on-demand transaction detail read
 - transactions page categories, payees, tags, people, projects, and commodities lookups
 - transactions page transaction list read
 

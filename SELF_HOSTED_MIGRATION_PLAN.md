@@ -51,7 +51,8 @@ Current evidence behind those statuses:
 - The Python transaction read slice now carries payee/reference, rich split metadata, and list filter/sort/pagination inputs needed by the current Svelte transaction views.
 - Plain account balances now also have a Python endpoint and shared-client route usage for the accounts page and account detail page.
 - Account-detail balancings, directives, and investment booking-policy reads now also have Python endpoints and shared-client route usage.
-- A shared frontend API seam now exists, and the accounts page account-tree plus account balances plus metadata lookups, the account-detail summary plus balances plus balancings plus directives plus booking policy plus form lookups plus transaction list read, and the transactions page form lookups plus transaction list read use it with HTTP-first and Tauri fallback behavior.
+- Account-detail register rows now load through the `/accounts/{id}/register` seam, with on-demand transaction detail reads for edit/status/delete actions.
+- A shared frontend API seam now exists, and the accounts page account-tree plus account balances plus metadata lookups, the account-detail summary plus balances plus balancings plus directives plus booking policy plus form lookups plus register read plus on-demand transaction detail read, and the transactions page form lookups plus transaction list read use it with HTTP-first and Tauri fallback behavior.
 - The current Svelte frontend still lives in root `src/` and remains heavily coupled to Tauri `invoke()` calls across transactions, accounts, reports, investments, settings, and layout shortcuts outside that first migrated slice.
 - Parity tracking now lives in `docs/parity/desktop-to-python.md`.
 
@@ -540,7 +541,7 @@ Progress note:
 - Transactions list filters are now available and verified.
 - Read-only commodities, countries, and institutions are now available and verified as backend support for frontend migration.
 - Read-only categories, payees, tags, people, and projects are now available and verified as backend support for transaction-form and register migration.
-- The accounts page account tree plus balances plus create-edit metadata lookups, account detail summary plus balances plus balancings plus directives plus booking-policy reads plus form lookups plus transaction list read, and transactions page form lookups plus transaction list read now read through the shared frontend client seam, proving the incremental HTTP migration path.
+- The accounts page account tree plus balances plus create-edit metadata lookups, account detail summary plus balances plus balancings plus directives plus booking-policy reads plus form lookups plus register read plus on-demand transaction detail read, and transactions page form lookups plus transaction list read now read through the shared frontend client seam, proving the incremental HTTP migration path.
 - Broader frontend HTTP integration is still pending, and that remains the highest-leverage next step before adding many more backend-only slices.
 
 ### Stage 6: Migrate Write Slices With Accounting Correctness First
@@ -639,7 +640,7 @@ Exit criteria:
 Progress note:
 
 - A shared frontend client seam now exists under `src/lib/api/`, with HTTP-first and Tauri fallback behavior for incremental migration.
-- The accounts page account-tree plus balance plus metadata lookup loads, the account-detail summary plus balance plus balancings plus directives plus booking-policy plus form lookup loads plus transaction list read, and the transactions page form lookup loads plus transaction list read are the current route slices using that seam.
+- The accounts page account-tree plus balance plus metadata lookup loads, the account-detail summary plus balance plus balancings plus directives plus booking-policy plus form lookup loads plus register read plus on-demand transaction detail read, and the transactions page form lookup loads plus transaction list read are the current route slices using that seam.
 - The frontend is still rooted in `src/` and still imports `@tauri-apps/api/core` directly in high-traffic routes such as `+layout`, `transactions`, `reports`, `investments`, and multiple settings pages.
 - The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
 
@@ -647,12 +648,13 @@ Progress note:
 
 To complete the Rust/Tauri-era migration cleanly, the next steps should be:
 
-1. Continue migrating the highest-value read routes off direct Tauri calls next: account detail register data beyond the list read, transactions detail/mutation flows, home/dashboard, and the remaining read-only settings surfaces.
+1. Continue migrating the highest-value read routes off direct Tauri calls next: transactions detail and mutation flows on the account-detail page, home/dashboard, and the remaining read-only settings surfaces.
 2. Keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets.
 3. After those read flows are web-native, continue the remaining backend parity slices needed by forms and then start write-path migration for transactions and accounts.
 4. Only after the client seam is stable should the frontend be moved from root `src/` into `apps/web`.
 
-### Stage 10: Data Migration From SQLite To PostgreSQL
+### Stage 10: Data Migration From SQLite To PostgreSQL - Not needed! There is no legacy data yet.
+Remove this stage from the plan
 
 Goal:
 

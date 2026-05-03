@@ -321,8 +321,12 @@ class StubTransactionService:
                 account_id=2,
                 occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
                 posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                payee_id=None,
                 memo="Initial opening balance",
                 status="cleared",
+                reference=None,
+                commodity_id=1,
+                category_id=None,
                 amount_minor=500000,
                 running_balance_minor=500000,
                 created_at=self._created_at,
@@ -662,6 +666,10 @@ async def test_get_account_register_returns_running_balance_entries(client: Asyn
     body = response.json()
     assert body[0]["amount_minor"] == 500000
     assert body[0]["running_balance_minor"] == 500000
+    assert body[0]["payee_id"] is None
+    assert body[0]["reference"] is None
+    assert body[0]["commodity_id"] == 1
+    assert body[0]["category_id"] is None
 
 
 @pytest.mark.asyncio

@@ -25,7 +25,12 @@
     type ProjectSummary,
     type TagSummary,
   } from "$lib/api/metadata";
-  import { listTransactions as fetchTransactions } from "$lib/api/transactions";
+  import {
+    getTransactionById,
+    listAccountRegister,
+    type AccountRegisterEntry,
+    type TransactionWithSplits,
+  } from "$lib/api/transactions";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -53,34 +58,6 @@
     updated_at: string;
   };
 
-  type Transaction = {
-    id: number;
-    txn_date: string;
-    payee_id: number | null;
-    memo: string | null;
-    status: string;
-    reference: string | null;
-  };
-
-  type Split = {
-    id: number;
-    tx_id: number;
-    account_id: number;
-    commodity_id: number;
-    amount_minor: number;
-    category_id: number | null;
-    tag_id: number | null;
-    person_id: number | null;
-    project_id: number | null;
-    share_bps: number | null;
-    memo: string | null;
-  };
-
-  type TransactionWithSplits = {
-    transaction: Transaction;
-    splits: Split[];
-  };
-
   type SplitDraft = {
     account_id: number | null;
     category_id: number | null;
@@ -98,7 +75,7 @@
 
   let accountId: number | null = null;
   let account: Account | null = null;
-  let transactions: TransactionWithSplits[] = [];
+  let registerEntries: AccountRegisterEntry[] = [];
   let directives: AccountDirectiveSummary[] = [];
   let balanceMinor = 0;
   let lastBalancing: AccountBalancingSummary | null = null;
@@ -139,6 +116,7 @@
   let splitMode = false;
   let splitEditorOpen = false;
   let formSplits: SplitDraft[] = [];
+  const transactionDetailCache = new Map<number, TransactionWithSplits>();
 
   $: selectedCategoryKind = formCategoryId
     ? categories.find((category) => category.id === formCategoryId)?.kind ?? null
@@ -287,16 +265,23 @@
 
   async function loadTransactions() {
     if (!accountId) return;
-    const filter = {
-      book_id: 1,
-      account_id: accountId,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined,
-      search: search || undefined,
-      limit: 10000,
-      offset: 0
-    };
-    transactions = await fetchTransactions(filter);
+    registerEntries = await listAccountRegister(accountId);
+    transactionDetailCache.clear();
+  }
+
+  async function getTransactionDetails(transactionId: number): Promise<TransactionWithSplits> {
+    const cached = transactionDetailCache.get(transactionId);
+    if (cached) {
+      return cached;
+    }
+
+    const fetched = await getTransactionById(transactionId);
+    if (!fetched) {
+      throw new Error("Transaction not found.");
+    }
+
+    transactionDetailCache.set(transactionId, fetched);
+    return fetched;
   }
 
   function formatMinorWithScale(amountMinor: number, scale: number): string {
@@ -466,7 +451,8 @@
     dialogOpen = true;
   }
 
-  function openEditDialog(tx: TransactionWithSplits) {
+  async function openEditDialog(transactionId: number) {
+    const tx = await getTransactionDetails(transactionId);
     dialogMode = "edit";
     formId = tx.transaction.id;
     formDate = tx.transaction.txn_date;
@@ -934,17 +920,27 @@
     }
   }
 
-  $: filtered = transactions.filter((tx) => {
-    if (statusFilter && tx.transaction.status !== statusFilter) return false;
-    if (dateFrom && tx.transaction.txn_date < dateFrom) return false;
-    if (dateTo && tx.transaction.txn_date > dateTo) return false;
+  async function updateRegisterEntryStatus(entry: AccountRegisterEntry, status: string) {
+    const tx = await getTransactionDetails(entry.tx_id);
+    await updateStatus(tx, status);
+  }
+
+  async function removeRegisterEntry(entry: AccountRegisterEntry) {
+    const tx = await getTransactionDetails(entry.tx_id);
+    await removeTransaction(tx);
+  }
+
+  $: filtered = registerEntries.filter((entry) => {
+    if (statusFilter && entry.status !== statusFilter) return false;
+    if (dateFrom && entry.txn_date < dateFrom) return false;
+    if (dateTo && entry.txn_date > dateTo) return false;
     if (search) {
       const term = search.toLowerCase();
-      const payee = payeeName(tx.transaction.payee_id).toLowerCase();
-      const memo = (tx.transaction.memo ?? "").toLowerCase();
-      const reference = (tx.transaction.reference ?? "").toLowerCase();
-      const accountsText = tx.splits.map((s) => accountName(s.account_id).toLowerCase()).join(" ");
-      if (!payee.includes(term) && !memo.includes(term) && !reference.includes(term) && !accountsText.includes(term)) {
+      const payee = payeeName(entry.payee_id).toLowerCase();
+      const memo = (entry.memo ?? "").toLowerCase();
+      const reference = (entry.reference ?? "").toLowerCase();
+      const accountText = accountName(entry.account_id).toLowerCase();
+      if (!payee.includes(term) && !memo.includes(term) && !reference.includes(term) && !accountText.includes(term)) {
         return false;
       }
     }
@@ -954,19 +950,19 @@
   $: sorted = [...filtered].sort((a, b) => {
     const direction = sortDir === "asc" ? 1 : -1;
     if (sortBy === "date") {
-      return direction * a.transaction.txn_date.localeCompare(b.transaction.txn_date);
+      return direction * a.txn_date.localeCompare(b.txn_date);
     }
     if (sortBy === "payee") {
-      return direction * payeeName(a.transaction.payee_id).localeCompare(payeeName(b.transaction.payee_id));
+      return direction * payeeName(a.payee_id).localeCompare(payeeName(b.payee_id));
     }
     if (sortBy === "memo") {
-      return direction * (a.transaction.memo ?? "").localeCompare(b.transaction.memo ?? "");
+      return direction * (a.memo ?? "").localeCompare(b.memo ?? "");
     }
     if (sortBy === "status") {
-      return direction * a.transaction.status.localeCompare(b.transaction.status);
+      return direction * a.status.localeCompare(b.status);
     }
     if (sortBy === "amount") {
-      return direction * (accountSplit(a).amount_minor - accountSplit(b).amount_minor);
+      return direction * (a.amount_minor - b.amount_minor);
     }
     return 0;
   });
@@ -1129,26 +1125,26 @@
                   <div class="data-cell"></div>
                 </div>
               {:else}
-                {#each sorted as tx}
-                  {#key tx.transaction.id}
+                {#each sorted as entry}
+                  {#key entry.split_id}
                     <div class="data-row" style={`grid-template-columns: ${txGridTemplate}`}>
-                      <div class="data-cell">{tx.transaction.txn_date}</div>
-                      <div class="data-cell">{payeeName(tx.transaction.payee_id)}</div>
-                      <div class="data-cell">{tx.transaction.memo ?? "—"}</div>
+                      <div class="data-cell">{entry.txn_date}</div>
+                      <div class="data-cell">{payeeName(entry.payee_id)}</div>
+                      <div class="data-cell">{entry.memo ?? "—"}</div>
                       <div class="data-cell">
-                        <span class={statusBadgeClass(tx.transaction.status)}>{tx.transaction.status}</span>
+                        <span class={statusBadgeClass(entry.status)}>{entry.status}</span>
                       </div>
-                      <div class="data-cell">{categoryName(accountSplit(tx).category_id)}</div>
-                      <div class="data-cell amount">{formatMinor(accountSplit(tx).amount_minor, accountSplit(tx).commodity_id)}</div>
+                      <div class="data-cell">{categoryName(entry.category_id)}</div>
+                      <div class="data-cell amount">{formatMinor(entry.amount_minor, entry.commodity_id)}</div>
                       <div class="data-cell action">
-                        <Button variant="ghost" size="sm" onclick={() => openEditDialog(tx)}>Edit</Button>
-                        {#if tx.transaction.status === "cleared"}
-                          <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "uncleared")}>Unflag</Button>
+                        <Button variant="ghost" size="sm" onclick={() => openEditDialog(entry.tx_id)}>Edit</Button>
+                        {#if entry.status === "cleared"}
+                          <Button variant="ghost" size="sm" onclick={() => updateRegisterEntryStatus(entry, "uncleared")}>Unflag</Button>
                         {:else}
-                          <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "cleared")}>Flag</Button>
+                          <Button variant="ghost" size="sm" onclick={() => updateRegisterEntryStatus(entry, "cleared")}>Flag</Button>
                         {/if}
-                        <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "void")}>Void</Button>
-                        <Button variant="ghost" size="sm" onclick={() => removeTransaction(tx)}>Delete</Button>
+                        <Button variant="ghost" size="sm" onclick={() => updateRegisterEntryStatus(entry, "void")}>Void</Button>
+                        <Button variant="ghost" size="sm" onclick={() => removeRegisterEntry(entry)}>Delete</Button>
                       </div>
                     </div>
                   {/key}
