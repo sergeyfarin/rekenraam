@@ -61,6 +61,28 @@ export async function apiPost<TResponse, TBody>(path: string, body: TBody): Prom
   });
 }
 
+export async function apiPut<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
+  return apiJson<TResponse>(path, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
+  const baseUrl = getApiBaseUrl();
+  if (baseUrl === null) {
+    throw new Error("PUBLIC_API_BASE_URL is not configured");
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as TResponse;
+}
+
 export async function apiGetWithTauriFallback<T>(path: string, command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await apiGet<T>(path);
@@ -107,18 +129,7 @@ export async function apiDeleteWithTauriFallback<TResponse>(
   args?: Record<string, unknown>
 ): Promise<TResponse> {
   try {
-    const baseUrl = getApiBaseUrl();
-    if (baseUrl === null) {
-      throw new Error("PUBLIC_API_BASE_URL is not configured");
-    }
-
-    const response = await fetch(`${baseUrl}${path}`, { method: "DELETE" });
-    if (!response.ok) {
-      throw new Error(await parseError(response));
-    }
-
-    const text = await response.text();
-    return (text ? JSON.parse(text) : undefined) as TResponse;
+    return await apiDelete<TResponse>(path);
   } catch {
     return await invoke<TResponse>(command, args);
   }

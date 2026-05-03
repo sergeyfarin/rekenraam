@@ -1,4 +1,4 @@
-import { apiDeleteWithTauriFallback, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
+import { apiDelete, apiDeleteWithTauriFallback, apiGetWithTauriFallback, apiPost, apiPostWithTauriFallback, apiPut, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
 
 export type CommoditySummary = {
   id: number;
@@ -220,23 +220,19 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectS
 }
 
 export async function createInstitution(input: InstitutionCreateInput): Promise<InstitutionSummary> {
-  return apiPostWithTauriFallback<InstitutionSummary, InstitutionCreateInput>("/institutions", input, "create_institution", { input });
+  return apiPost<InstitutionSummary, InstitutionCreateInput>("/institutions", input);
 }
 
 export async function saveInstitutionSettings(institution: InstitutionSettingsInput): Promise<void> {
   if (institution.id !== undefined) {
-    await apiPutWithTauriFallback<InstitutionSummary, InstitutionSettingsInput>(
-      `/institutions/${institution.id}`,
-      institution,
-      "update_institution",
-      { institution }
-    );
+    await apiPut<InstitutionSummary, InstitutionSettingsInput>(`/institutions/${institution.id}`, institution);
     return;
   }
 
-  await apiPostWithTauriFallback<InstitutionSummary, InstitutionSettingsInput>("/institutions", institution, "create_institution", { input: institution });
+  await apiPost<InstitutionSummary, InstitutionSettingsInput>("/institutions", institution);
 }
 
 export async function deleteInstitution(institutionId: number, bookId = 1): Promise<void> {
-  await apiDeleteWithTauriFallback<void>(`/institutions/${institutionId}`, "delete_institution", { institutionId, bookId });
+  void bookId;
+  await apiDelete<void>(`/institutions/${institutionId}`);
 }
