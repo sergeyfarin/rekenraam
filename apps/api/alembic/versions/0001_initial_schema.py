@@ -367,6 +367,24 @@ def upgrade() -> None:
     op.create_index("ix_pricing_refresh_state_book_id", "pricing_refresh_state", ["book_id"], unique=False)
 
     op.create_table(
+        "pricing_refresh_runs",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("trigger", sa.String(length=32), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("pairs_total", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("pairs_success", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("pairs_failed", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("rates_inserted", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("derived_inserted", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_pricing_refresh_runs_book_id", "pricing_refresh_runs", ["book_id"], unique=False)
+    op.create_index("ix_pricing_refresh_runs_finished_at", "pricing_refresh_runs", ["finished_at"], unique=False)
+
+    op.create_table(
         "book_memberships",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
@@ -399,7 +417,9 @@ def upgrade() -> None:
                 (1005, 'Federal Reserve', 'provider', 'Federal Reserve', 'https://www.federalreserve.gov/releases/h10/current/'),
                 (1006, 'Bank of Canada', 'provider', 'Bank of Canada', 'https://www.bankofcanada.ca/rates/exchange/'),
                 (1007, 'RBA', 'provider', 'RBA', 'https://www.rba.gov.au/statistics/frequency/exchange-rates.html'),
-                (1008, 'SNB', 'provider', 'SNB', 'https://www.snb.ch/en/iabout/stat/statrep/id/current_interest_exchange_rates')
+                (1008, 'SNB', 'provider', 'SNB', 'https://www.snb.ch/en/iabout/stat/statrep/id/current_interest_exchange_rates'),
+                (1009, 'ExchangeRate.host', 'provider', 'ExchangeRate.host', 'https://api.exchangerate.host/'),
+                (1010, 'Yahoo Finance', 'provider', 'Yahoo Finance', 'https://finance.yahoo.com/')
             """
         )
     )
@@ -445,6 +465,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_pricing_refresh_runs_finished_at", table_name="pricing_refresh_runs")
+    op.drop_index("ix_pricing_refresh_runs_book_id", table_name="pricing_refresh_runs")
+    op.drop_table("pricing_refresh_runs")
     op.drop_index("ix_pricing_refresh_state_book_id", table_name="pricing_refresh_state")
     op.drop_table("pricing_refresh_state")
     op.drop_index("ix_pricing_source_assignments_book_id", table_name="pricing_source_assignments")

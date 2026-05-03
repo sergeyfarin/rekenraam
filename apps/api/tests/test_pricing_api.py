@@ -175,6 +175,24 @@ class StubPricingWorker:
             ),
         )
 
+    async def get_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRunSummary]:
+        if book_id != 1:
+            raise ValueError("pricing policy not found")
+        return [
+            PricingRefreshRunSummary(
+                book_id=1,
+                trigger="manual",
+                started_at=self._created_at,
+                finished_at=self._created_at,
+                pairs_total=1,
+                pairs_success=1,
+                pairs_failed=0,
+                rates_inserted=2,
+                derived_inserted=0,
+                last_error=None,
+            )
+        ]
+
 
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
@@ -237,6 +255,7 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     refresh_state_response = await client.get("/api/v1/pricing/refresh-state")
     run_response = await client.post("/api/v1/pricing/refresh/run", json={"book_id": 1})
     execution_status_response = await client.get("/api/v1/pricing/refresh/execution-status")
+    history_response = await client.get("/api/v1/pricing/refresh/history")
 
     assert sources_response.status_code == 200
     assert sources_response.json()[0]["name"] == "ECB"
@@ -257,3 +276,5 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     assert run_response.json()["pairs_success"] == 1
     assert execution_status_response.status_code == 200
     assert execution_status_response.json()["scheduler_enabled"] is True
+    assert history_response.status_code == 200
+    assert history_response.json()[0]["trigger"] == "manual"

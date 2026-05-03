@@ -21,6 +21,8 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
     sources = await repository.list_price_sources()
     assert sources[0].name == "Bank of Canada"
     assert any(source.name == "ECB" for source in sources)
+    assert any(source.name == "ExchangeRate.host" for source in sources)
+    assert any(source.name == "Yahoo Finance" for source in sources)
 
     policy = await repository.get_pricing_policy(1)
     assert policy is not None
@@ -125,6 +127,25 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
         end_date=date(2026, 5, 21),
     )
     assert existing_dates == {date(2026, 5, 21)}
+
+    recorded_run = await repository.record_pricing_refresh_run(
+        book_id=1,
+        trigger="manual",
+        started_at=datetime(2026, 5, 21, 6, 30, tzinfo=UTC),
+        finished_at=datetime(2026, 5, 21, 6, 31, tzinfo=UTC),
+        pairs_total=1,
+        pairs_success=1,
+        pairs_failed=0,
+        rates_inserted=1,
+        derived_inserted=0,
+        last_error=None,
+    )
+    history = await repository.list_pricing_refresh_run_history(1, limit=10)
+    latest_run = await repository.get_latest_pricing_refresh_run(1)
+
+    assert history[0].id == recorded_run.id
+    assert latest_run is not None
+    assert latest_run.id == recorded_run.id
 
     assert await repository.delete_pricing_source_assignment(assignment.id) is True
     assert await repository.list_pricing_source_assignments(1) == []

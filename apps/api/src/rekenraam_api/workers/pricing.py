@@ -19,7 +19,6 @@ class PricingRefreshWorker:
         self._stop_event = asyncio.Event()
         self._state_lock = asyncio.Lock()
         self._active_book_ids: set[int] = set()
-        self._last_run_by_book: dict[int, PricingRefreshRunSummary] = {}
         self._started_at: datetime | None = None
 
     async def start(self) -> None:
@@ -48,9 +47,6 @@ class PricingRefreshWorker:
             async with session_factory() as session:
                 service = PricingExecutionService(PricingRepository(session))
                 summary = await service.run_book_refresh(book_id, trigger=trigger, force=force)
-            if summary is not None:
-                async with self._state_lock:
-                    self._last_run_by_book[book_id] = summary
             return summary
         finally:
             async with self._state_lock:
@@ -59,7 +55,6 @@ class PricingRefreshWorker:
     async def get_status(self, book_id: int) -> PricingExecutionStatusSummary:
         async with self._state_lock:
             active_book_ids = sorted(self._active_book_ids)
-            last_run = self._last_run_by_book.get(book_id)
             worker_started_at = self._started_at
         async with session_factory() as session:
             service = PricingExecutionService(PricingRepository(session))
@@ -69,8 +64,13 @@ class PricingRefreshWorker:
                 scheduler_poll_seconds=self._poll_seconds,
                 worker_started_at=worker_started_at,
                 active_book_ids=active_book_ids,
-                last_run=last_run,
+                last_run=None,
             )
+
+    async def get_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRunSummary]:
+        async with session_factory() as session:
+            service = PricingExecutionService(PricingRepository(session))
+            return await service.list_refresh_run_history(book_id, limit)
 
     async def _scheduler_loop(self) -> None:
         while not self._stop_event.is_set():

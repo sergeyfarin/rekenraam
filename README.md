@@ -124,13 +124,17 @@ web mode now uses these endpoints:
 ```bash
 curl http://localhost:8080/api/v1/pricing/refresh-state
 curl http://localhost:8080/api/v1/pricing/refresh/execution-status
+curl http://localhost:8080/api/v1/pricing/refresh/history
 curl -X POST http://localhost:8080/api/v1/pricing/refresh/run \
   -H 'Content-Type: application/json' \
   -d '{"book_id":1}'
 ```
 
-Current backend execution coverage starts with ECB, Federal Reserve, and Bank
-of Canada providers for scheduled and manual FX refresh in web mode.
+Current backend execution coverage includes ECB, Federal Reserve, Bank of
+Canada, ExchangeRate.host, and Yahoo Finance, with compatibility aliases for
+HMRC, IRS, Belastingdienst, RBA, and SNB. Completed runs are now persisted and
+available through the history endpoint that the FX settings page shows in web
+mode.
 
 The repo also includes a small `Makefile` for common API tasks:
 

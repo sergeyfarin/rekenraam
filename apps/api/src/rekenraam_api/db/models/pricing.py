@@ -90,3 +90,24 @@ class PricingRefreshState(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class PricingRefreshRun(Base):
+    __tablename__ = "pricing_refresh_runs"
+    __table_args__ = (
+        Index("ix_pricing_refresh_runs_book_id", "book_id"),
+        Index("ix_pricing_refresh_runs_finished_at", "finished_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    trigger: Mapped[str] = mapped_column(String(32), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pairs_total: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    pairs_success: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    pairs_failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rates_inserted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    derived_inserted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -11,7 +11,7 @@ from sqlalchemy.orm import aliased
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState, PricingSourceAssignment
+from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshRun, PricingRefreshState, PricingSourceAssignment
 
 
 class PricingRepository:
@@ -22,6 +22,25 @@ class PricingRepository:
         statement: Select[tuple[PriceSource]] = select(PriceSource).order_by(PriceSource.name.asc(), PriceSource.id.asc())
         result = await self._session.execute(statement)
         return list(result.scalars().all())
+
+    async def list_pricing_refresh_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRun]:
+        statement: Select[tuple[PricingRefreshRun]] = (
+            select(PricingRefreshRun)
+            .where(PricingRefreshRun.book_id == book_id)
+            .order_by(PricingRefreshRun.finished_at.desc(), PricingRefreshRun.id.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def get_latest_pricing_refresh_run(self, book_id: int) -> PricingRefreshRun | None:
+        statement: Select[tuple[PricingRefreshRun]] = (
+            select(PricingRefreshRun)
+            .where(PricingRefreshRun.book_id == book_id)
+            .order_by(PricingRefreshRun.finished_at.desc(), PricingRefreshRun.id.desc())
+            .limit(1)
+        )
+        return await self._session.scalar(statement)
 
     async def list_enabled_pricing_policies(self) -> list[PricingPolicy]:
         statement: Select[tuple[PricingPolicy]] = (
@@ -352,6 +371,37 @@ class PricingRepository:
         )
         await self._session.execute(statement)
         await self._session.commit()
+
+    async def record_pricing_refresh_run(
+        self,
+        *,
+        book_id: int,
+        trigger: str,
+        started_at: datetime,
+        finished_at: datetime,
+        pairs_total: int,
+        pairs_success: int,
+        pairs_failed: int,
+        rates_inserted: int,
+        derived_inserted: int,
+        last_error: str | None,
+    ) -> PricingRefreshRun:
+        row = PricingRefreshRun(
+            book_id=book_id,
+            trigger=trigger,
+            started_at=started_at,
+            finished_at=finished_at,
+            pairs_total=pairs_total,
+            pairs_success=pairs_success,
+            pairs_failed=pairs_failed,
+            rates_inserted=rates_inserted,
+            derived_inserted=derived_inserted,
+            last_error=last_error,
+        )
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
 
     async def rollback(self) -> None:
         await self._session.rollback()

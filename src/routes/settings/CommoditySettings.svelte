@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { hasApiBaseUrl } from "$lib/api/client";
   import {
     createFxRateDaily,
@@ -10,6 +10,7 @@
     getFxRefreshExecutionStatus,
     getFxRateSettings,
     listCurrencies,
+    listFxRefreshRunHistory,
     listFxRateRefreshState,
     listFxRateSourceAssignments,
     listFxRateSources,
@@ -202,9 +203,11 @@
   let fxRateAssignments: FxRateSourceAssignment[] = [];
   let fxRateRefreshState: FxRateRefreshState[] = [];
   let fxRefreshExecutionStatus: FxRefreshExecutionStatus | null = null;
+  let fxRefreshRunHistory: FxRefreshRunSummary[] = [];
   let fxRateError = "";
   let fxRateStatus = "";
   const pricingAutomationManagedByServer = hasApiBaseUrl();
+  let fxExecutionPollTimer: ReturnType<typeof setInterval> | null = null;
   let showFxDailyDialog = false;
   let showFxOfficialDialog = false;
   let showFxAssignmentDialog = false;
@@ -225,6 +228,16 @@
   onMount(() => {
     initialize();
   });
+
+  onDestroy(() => {
+    stopFxExecutionPolling();
+  });
+
+  $: if (pricingAutomationManagedByServer && commoditiesSubTab === 'fx-settings' && fxRefreshExecutionStatus?.is_running) {
+    startFxExecutionPolling();
+  } else {
+    stopFxExecutionPolling();
+  }
 
   export async function initialize() {
     await loadCommodities();
@@ -429,6 +442,7 @@
         await restartFxRateScheduler();
       } else {
         await loadFxRefreshExecutionStatus();
+        await loadFxRefreshRunHistory();
       }
       fxRateStatus = "FX settings saved.";
     } catch (e) {
@@ -547,6 +561,46 @@
     }
   }
 
+  async function loadFxRefreshRunHistory() {
+    if (!pricingAutomationManagedByServer) {
+      fxRefreshRunHistory = [];
+      return;
+    }
+
+    try {
+      fxRefreshRunHistory = await listFxRefreshRunHistory<FxRefreshRunSummary[]>(1, 10);
+    } catch (e) {
+      fxRateError = `Failed to load FX refresh history: ${String(e)}`;
+    }
+  }
+
+  async function reloadFxExecutionData() {
+    await Promise.all([
+      loadFxRefreshState(),
+      loadFxRefreshExecutionStatus(),
+      loadFxRefreshRunHistory(),
+    ]);
+  }
+
+  function startFxExecutionPolling() {
+    if (fxExecutionPollTimer !== null) {
+      return;
+    }
+
+    fxExecutionPollTimer = setInterval(() => {
+      void reloadFxExecutionData();
+    }, 5000);
+  }
+
+  function stopFxExecutionPolling() {
+    if (fxExecutionPollTimer === null) {
+      return;
+    }
+
+    clearInterval(fxExecutionPollTimer);
+    fxExecutionPollTimer = null;
+  }
+
   async function refreshFxRatesNow() {
     fxRateError = "";
     fxRateStatus = "";
@@ -557,8 +611,7 @@
       if (summary.last_error) {
         fxRateError = `Last error: ${summary.last_error}`;
       }
-      await loadFxRefreshState();
-      await loadFxRefreshExecutionStatus();
+      await reloadFxExecutionData();
     } catch (e) {
       fxRateError = `Failed to refresh FX rates: ${String(e)}`;
     } finally {
@@ -721,8 +774,7 @@
           loadFxRateSources();
           loadFxRateSettings();
           loadFxRateAssignments();
-          loadFxRefreshState();
-          loadFxRefreshExecutionStatus();
+          reloadFxExecutionData();
         }}
       >
         FX Settings
@@ -1055,6 +1107,10 @@
                 <span class="text-muted-foreground">Next scheduled:</span>
                 <span class="ml-2">{fxRefreshExecutionStatus.next_scheduled_at || '—'}</span>
               </div>
+              <div>
+                <span class="text-muted-foreground">Worker started:</span>
+                <span class="ml-2">{fxRefreshExecutionStatus.worker_started_at || '—'}</span>
+              </div>
             </Card.Content>
           </Card.Root>
 
@@ -1131,9 +1187,53 @@
           </Table.Body>
       </Table.Root>
 
+        {#if pricingAutomationManagedByServer}
+          <div class="flex items-center justify-between mt-6 mb-2">
+            <h3 class="text-lg font-semibold">Run History</h3>
+            <Button variant="secondary" size="sm" onclick={reloadFxExecutionData} disabled={busy}>Reload Status</Button>
+          </div>
+          <Table.Root>
+            <Table.Header>
+              <Table.Row>
+                <Table.Head>Finished</Table.Head>
+                <Table.Head>Trigger</Table.Head>
+                <Table.Head>Pairs</Table.Head>
+                <Table.Head>Rates</Table.Head>
+                <Table.Head>Status</Table.Head>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {#each fxRefreshRunHistory as run}
+                <Table.Row>
+                  <Table.Cell>{run.finished_at}</Table.Cell>
+                  <Table.Cell class="capitalize">{run.trigger}</Table.Cell>
+                  <Table.Cell>{run.pairs_success}/{run.pairs_total}</Table.Cell>
+                  <Table.Cell>{run.rates_inserted}</Table.Cell>
+                  <Table.Cell>
+                    {#if run.last_error}
+                      <Badge variant="destructive">Error</Badge>
+                    {:else}
+                      <Badge variant="secondary">OK</Badge>
+                    {/if}
+                  </Table.Cell>
+                </Table.Row>
+                {#if run.last_error}
+                  <Table.Row>
+                    <Table.Cell colspan={5} class="text-xs text-destructive">{run.last_error}</Table.Cell>
+                  </Table.Row>
+                {/if}
+              {:else}
+                <Table.Row>
+                  <Table.Cell colspan={5} class="text-muted-foreground">No refresh runs recorded yet.</Table.Cell>
+                </Table.Row>
+              {/each}
+            </Table.Body>
+          </Table.Root>
+        {/if}
+
       <div class="flex items-center justify-between mt-6 mb-2">
           <h3 class="text-lg font-semibold">Refresh Status</h3>
-          <Button variant="secondary" size="sm" onclick={loadFxRefreshState} disabled={busy}>Reload</Button>
+          <Button variant="secondary" size="sm" onclick={reloadFxExecutionData} disabled={busy}>Reload</Button>
       </div>
       <Table.Root>
           <Table.Header>

@@ -157,6 +157,14 @@ export async function getFxRefreshExecutionStatus<T>(bookId = 1): Promise<T> {
 	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
 }
 
+export async function listFxRefreshRunHistory<T>(bookId = 1, limit = 10): Promise<T> {
+	if (hasApiBaseUrl()) {
+		return apiGet<T>(`/pricing/refresh/history?book_id=${bookId}&limit=${limit}`);
+	}
+	requireDesktopPricingAutomation("Backend-owned FX refresh history");
+	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
+}
+
 export async function refreshFxRatesNow<T>(): Promise<T> {
 	if (hasApiBaseUrl()) {
 		return apiPost<T, { book_id: number }>("/pricing/refresh/run", { book_id: 1 });

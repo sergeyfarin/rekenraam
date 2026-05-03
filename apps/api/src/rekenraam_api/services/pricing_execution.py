@@ -173,12 +173,99 @@ class BankOfCanadaProvider(PricingRateProvider):
         return points
 
 
+class ExchangeRateHostProvider(PricingRateProvider):
+    def __init__(self) -> None:
+        super().__init__("ExchangeRate.host")
+
+    async def fetch_daily_rates(self, request: ProviderRequest) -> list[FxRatePoint]:
+        url = (
+            "https://api.exchangerate.host/timeseries"
+            f"?base={request.base}"
+            f"&symbols={','.join(request.symbols)}"
+            f"&start_date={request.start_date.isoformat()}"
+            f"&end_date={request.end_date.isoformat()}"
+        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            payload = response.json()
+        base = str(payload.get("base", request.base))
+        points: list[FxRatePoint] = []
+        for date_text, quotes in payload.get("rates", {}).items():
+            if not isinstance(quotes, dict):
+                continue
+            point_date = date.fromisoformat(date_text)
+            for quote, rate in quotes.items():
+                decimal_rate = Decimal(str(rate))
+                if decimal_rate <= 0:
+                    continue
+                points.append(FxRatePoint(date=point_date, base=base, quote=str(quote), rate=decimal_rate, source_name=self.name))
+        return points
+
+
+class YahooFinanceProvider(PricingRateProvider):
+    def __init__(self) -> None:
+        super().__init__("Yahoo Finance")
+
+    async def fetch_daily_rates(self, request: ProviderRequest) -> list[FxRatePoint]:
+        start_epoch = int(datetime.combine(request.start_date, time(0, 0, tzinfo=UTC)).timestamp())
+        end_epoch = int(datetime.combine(request.end_date + timedelta(days=1), time(0, 0, tzinfo=UTC)).timestamp())
+        points: list[FxRatePoint] = []
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for quote in request.symbols:
+                ticker = f"{request.base}{quote}=X"
+                url = (
+                    f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+                    f"?period1={start_epoch}&period2={end_epoch}&interval=1d&events=history&includeAdjustedClose=true"
+                )
+                response = await client.get(url)
+                response.raise_for_status()
+                payload = response.json()
+                result = payload.get("chart", {}).get("result", [])
+                if not result:
+                    continue
+                row = result[0]
+                timestamps = row.get("timestamp") or []
+                closes = (((row.get("indicators") or {}).get("quote") or [{}])[0].get("close") or [])
+                for index, timestamp in enumerate(timestamps):
+                    if index >= len(closes):
+                        continue
+                    close = closes[index]
+                    if close in {None, 0}:
+                        continue
+                    decimal_rate = Decimal(str(close))
+                    if decimal_rate <= 0:
+                        continue
+                    point_date = datetime.fromtimestamp(int(timestamp), tz=UTC).date()
+                    points.append(FxRatePoint(date=point_date, base=request.base, quote=quote, rate=decimal_rate, source_name=self.name))
+        return points
+
+
 class PricingProviderRegistry:
     def __init__(self, providers: dict[str, PricingRateProvider] | None = None) -> None:
-        self._providers = providers or {
-            "ecb": FrankfurterProvider(),
-            "federal reserve": FederalReserveProvider(),
-            "bank of canada": BankOfCanadaProvider(),
+        if providers is not None:
+            self._providers = providers
+            return
+
+        frankfurter = FrankfurterProvider()
+        federal_reserve = FederalReserveProvider()
+        bank_of_canada = BankOfCanadaProvider()
+        exchange_rate_host = ExchangeRateHostProvider()
+        yahoo_finance = YahooFinanceProvider()
+        self._providers = {
+            "ecb": frankfurter,
+            "federal reserve": federal_reserve,
+            "federal reserve (fred)": federal_reserve,
+            "bank of canada": bank_of_canada,
+            "exchangerate.host": exchange_rate_host,
+            "exchange rate host": exchange_rate_host,
+            "yahoo finance": yahoo_finance,
+            "yahoo": yahoo_finance,
+            "irs": exchange_rate_host,
+            "hmrc": exchange_rate_host,
+            "belastingdienst": exchange_rate_host,
+            "rba": exchange_rate_host,
+            "snb": exchange_rate_host,
         }
 
     def resolve(self, source: PriceSource) -> PricingRateProvider | None:
@@ -272,7 +359,7 @@ class PricingExecutionService:
                     error=last_error,
                 )
 
-        return PricingRefreshRunSummary(
+        summary = PricingRefreshRunSummary(
             book_id=book_id,
             trigger=trigger,
             started_at=started_at,
@@ -284,6 +371,23 @@ class PricingExecutionService:
             derived_inserted=derived_inserted,
             last_error=last_error,
         )
+        await self._repository.record_pricing_refresh_run(
+            book_id=summary.book_id,
+            trigger=summary.trigger,
+            started_at=summary.started_at,
+            finished_at=summary.finished_at,
+            pairs_total=summary.pairs_total,
+            pairs_success=summary.pairs_success,
+            pairs_failed=summary.pairs_failed,
+            rates_inserted=summary.rates_inserted,
+            derived_inserted=summary.derived_inserted,
+            last_error=summary.last_error,
+        )
+        return summary
+
+    async def list_refresh_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRunSummary]:
+        rows = await self._repository.list_pricing_refresh_run_history(book_id, limit)
+        return [self._to_refresh_run_summary(row) for row in rows]
 
     async def get_execution_status(
         self,
@@ -298,6 +402,10 @@ class PricingExecutionService:
         policy = await self._repository.get_pricing_policy(book_id)
         if policy is None:
             raise ValueError("pricing policy not found")
+        if last_run is None:
+            latest_run = await self._repository.get_latest_pricing_refresh_run(book_id)
+            if latest_run is not None:
+                last_run = self._to_refresh_run_summary(latest_run)
         next_scheduled_at = self._scheduled_at(policy, self._now().date()) if policy.refresh_enabled else None
         if next_scheduled_at is not None and next_scheduled_at <= self._now():
             next_scheduled_at = next_scheduled_at + timedelta(days=1)
@@ -488,3 +596,18 @@ class PricingExecutionService:
     def _now(self) -> datetime:
         current = self._now_provider()
         return current if current.tzinfo is not None else current.replace(tzinfo=UTC)
+
+    @staticmethod
+    def _to_refresh_run_summary(row: object) -> PricingRefreshRunSummary:
+        return PricingRefreshRunSummary(
+            book_id=row.book_id,
+            trigger=row.trigger,
+            started_at=row.started_at,
+            finished_at=row.finished_at,
+            pairs_total=row.pairs_total,
+            pairs_success=row.pairs_success,
+            pairs_failed=row.pairs_failed,
+            rates_inserted=row.rates_inserted,
+            derived_inserted=row.derived_inserted,
+            last_error=row.last_error,
+        )

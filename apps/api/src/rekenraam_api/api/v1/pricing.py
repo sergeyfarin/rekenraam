@@ -133,3 +133,18 @@ async def get_pricing_execution_status(
         if detail == "pricing policy not found":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from error
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from error
+
+
+@router.get("/refresh/history", response_model=list[PricingRefreshRunSummary])
+async def list_pricing_refresh_history(
+    book_id: int = Query(default=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    pricing_worker: PricingRefreshWorker = Depends(get_pricing_worker),
+) -> list[PricingRefreshRunSummary]:
+    try:
+        return await pricing_worker.get_run_history(book_id, limit)
+    except ValueError as error:
+        detail = str(error)
+        if detail == "pricing policy not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from error
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from error

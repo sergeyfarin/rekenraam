@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState
+from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshRun, PricingRefreshState
 from rekenraam_api.services.pricing_execution import FxRatePoint, PricingExecutionService, PricingProviderRegistry, PricingRateProvider, ProviderRequest
 
 
@@ -32,6 +32,7 @@ class StubPricingRepository:
     def __init__(self) -> None:
         self.success_calls: list[dict[str, object]] = []
         self.error_calls: list[dict[str, object]] = []
+        self.run_calls: list[dict[str, object]] = []
 
     async def list_enabled_pricing_policies(self) -> list[PricingPolicy]:
         policy = await self.get_pricing_policy(1)
@@ -101,6 +102,16 @@ class StubPricingRepository:
     async def record_pricing_refresh_error(self, **kwargs: object) -> None:
         self.error_calls.append(kwargs)
 
+    async def record_pricing_refresh_run(self, **kwargs: object) -> PricingRefreshRun:
+        self.run_calls.append(kwargs)
+        return PricingRefreshRun(id=1, created_at=self._created_at, **kwargs)
+
+    async def list_pricing_refresh_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRun]:
+        return [PricingRefreshRun(id=1, book_id=1, trigger="manual", started_at=self._created_at, finished_at=self._created_at, pairs_total=1, pairs_success=1, pairs_failed=0, rates_inserted=1, derived_inserted=0, last_error=None, created_at=self._created_at)]
+
+    async def get_latest_pricing_refresh_run(self, book_id: int) -> PricingRefreshRun | None:
+        return PricingRefreshRun(id=1, book_id=1, trigger="manual", started_at=self._created_at, finished_at=self._created_at, pairs_total=1, pairs_success=1, pairs_failed=0, rates_inserted=1, derived_inserted=0, last_error=None, created_at=self._created_at)
+
     async def rollback(self) -> None:
         return None
 
@@ -125,6 +136,7 @@ async def test_pricing_execution_service_runs_manual_refresh() -> None:
     assert summary.pairs_success == 1
     assert summary.rates_inserted == 1
     assert repository.success_calls
+    assert repository.run_calls
     observations = repository.success_calls[0]["observations"]
     assert len(observations) == 1
     assert observations[0].observation_kind == "fx_daily"
@@ -143,3 +155,15 @@ async def test_pricing_execution_service_skips_scheduled_run_before_due_time() -
 
     assert summary is None
     assert repository.success_calls == []
+
+
+def test_pricing_provider_registry_resolves_aliases_beyond_initial_three() -> None:
+    registry = PricingProviderRegistry()
+
+    hmrc = registry.resolve(PriceSource(id=1003, name="HMRC", kind="provider", provider="HMRC", base_url=None, created_at=datetime(2026, 5, 3, tzinfo=UTC)))
+    yahoo = registry.resolve(PriceSource(id=1010, name="Yahoo Finance", kind="provider", provider="Yahoo Finance", base_url=None, created_at=datetime(2026, 5, 3, tzinfo=UTC)))
+
+    assert hmrc is not None
+    assert hmrc.name == "ExchangeRate.host"
+    assert yahoo is not None
+    assert yahoo.name == "Yahoo Finance"
