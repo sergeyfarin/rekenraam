@@ -37,9 +37,9 @@
         book_id: institution.book_id,
         name: institution.name,
         kind: institution.kind,
-        routing: null,
-        website: null,
-        metadata: null,
+        routing: institution.routing,
+        website: institution.website,
+        metadata: institution.metadata,
         created_at: institution.created_at,
         updated_at: institution.updated_at,
       }));

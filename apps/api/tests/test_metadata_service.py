@@ -3,7 +3,13 @@ from datetime import UTC, datetime
 import pytest
 
 from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
-from rekenraam_api.schemas.metadata import CategoryUpdateInput, PayeeUpdateInput, TagUpdateInput
+from rekenraam_api.schemas.metadata import (
+    CategoryUpdateInput,
+    InstitutionCreateInput,
+    InstitutionUpdateInput,
+    PayeeUpdateInput,
+    TagUpdateInput,
+)
 from rekenraam_api.services.metadata import MetadataService
 
 
@@ -29,7 +35,56 @@ class StubMetadataRepository:
         return []
 
     async def list_institutions(self) -> list[tuple[Institution, Country | None]]:
-        return []
+        return [
+            (
+                Institution(
+                    id=1,
+                    book_id=1,
+                    name="Example Bank",
+                    kind="bank",
+                    routing="123456789",
+                    website="https://example.test",
+                    metadata_text="Primary",
+                    country_id=None,
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+                None,
+            )
+        ]
+
+    async def create_institution(self, **kwargs: object) -> Institution:
+        return Institution(
+            id=2,
+            book_id=int(kwargs["book_id"]),
+            name=str(kwargs["name"]),
+            kind=kwargs["kind"],
+            routing=kwargs["routing"],
+            website=kwargs["website"],
+            metadata_text=kwargs["metadata"],
+            country_id=kwargs["country_id"],
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def update_institution(self, *, institution_id: int, **kwargs: object) -> Institution | None:
+        if institution_id != 1:
+            return None
+        return Institution(
+            id=institution_id,
+            book_id=1,
+            name=str(kwargs["name"]),
+            kind=kwargs["kind"],
+            routing=kwargs["routing"],
+            website=kwargs["website"],
+            metadata_text=kwargs["metadata"],
+            country_id=kwargs["country_id"],
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_institution(self, institution_id: int) -> bool:
+        return institution_id == 1
 
     async def list_categories(self) -> list[Category]:
         return [
@@ -152,7 +207,8 @@ async def test_metadata_service_maps_reference_data() -> None:
     assert commodities[0].name == "US Dollar"
     assert commodities[0].symbol == "USD"
     assert countries == []
-    assert institutions == []
+    assert institutions[0].routing == "123456789"
+    assert institutions[0].website == "https://example.test"
     assert categories[0].kind == "expense"
     assert payees[0].name == "Local Market"
     assert tags == []
@@ -164,6 +220,30 @@ async def test_metadata_service_maps_reference_data() -> None:
 async def test_metadata_service_updates_and_deletes_supported_reference_data() -> None:
     service = MetadataService(StubMetadataRepository())
 
+    institution = await service.create_institution(
+        InstitutionCreateInput(
+            book_id=1,
+            name="New Bank",
+            kind="bank",
+            routing="111222333",
+            website="https://newbank.test",
+            metadata="Note",
+            country_id=None,
+        )
+    )
+    updated_institution = await service.update_institution(
+        1,
+        InstitutionUpdateInput(
+            book_id=1,
+            name="Updated Bank",
+            kind="brokerage",
+            routing="333222111",
+            website="https://updated.test",
+            metadata="Updated",
+            country_id=None,
+        ),
+    )
+
     category = await service.update_category(
         1,
         input=CategoryUpdateInput(book_id=1, parent_id=None, name="Food", kind="expense", color="#111111"),
@@ -174,6 +254,10 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
     )
     tag = await service.update_tag(1, input=TagUpdateInput(book_id=1, name="Shared", color="#222222"))
 
+    assert institution.name == "New Bank"
+    assert institution.routing == "111222333"
+    assert updated_institution is not None
+    assert updated_institution.kind == "brokerage"
     assert category is not None
     assert category.name == "Food"
     assert payee is not None
@@ -183,3 +267,4 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
     assert await service.delete_category(1) is True
     assert await service.delete_payee(1) is True
     assert await service.delete_tag(1) is True
+    assert await service.delete_institution(1) is True

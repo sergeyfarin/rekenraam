@@ -568,7 +568,56 @@ class StubMetadataService:
         return []
 
     async def list_institutions(self) -> list[InstitutionSummary]:
-        return []
+        return [
+            InstitutionSummary(
+                id=1,
+                book_id=1,
+                name="Example Bank",
+                kind="bank",
+                routing="123456789",
+                website="https://example.test",
+                metadata="Primary",
+                country_id=None,
+                country_name=None,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            )
+        ]
+
+    async def create_institution(self, input: object) -> InstitutionSummary:
+        return InstitutionSummary(
+            id=2,
+            book_id=1,
+            name="New Bank",
+            kind="bank",
+            routing="111222333",
+            website="https://newbank.test",
+            metadata="Note",
+            country_id=None,
+            country_name=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def update_institution(self, institution_id: int, input: object) -> InstitutionSummary | None:
+        if institution_id != 1:
+            return None
+        return InstitutionSummary(
+            id=1,
+            book_id=1,
+            name="Updated Bank",
+            kind="brokerage",
+            routing="333222111",
+            website="https://updated.test",
+            metadata="Updated",
+            country_id=None,
+            country_name=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_institution(self, institution_id: int) -> bool:
+        return institution_id == 1
 
     async def list_categories(self) -> list[CategorySummary]:
         return [
@@ -957,7 +1006,8 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
     assert countries_response.status_code == 200
     assert countries_response.json() == []
     assert institutions_response.status_code == 200
-    assert institutions_response.json() == []
+    assert institutions_response.json()[0]["routing"] == "123456789"
+    assert institutions_response.json()[0]["website"] == "https://example.test"
     assert categories_response.status_code == 200
     assert categories_response.json()[0]["name"] == "Groceries"
     assert payees_response.status_code == 200
@@ -971,9 +1021,33 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
 
 
 @pytest.mark.asyncio
-async def test_metadata_write_endpoints_update_and_delete_categories_payees_and_tags(client: AsyncClient) -> None:
+async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags_and_institutions(client: AsyncClient) -> None:
     app.dependency_overrides[get_metadata_service] = StubMetadataService
 
+    create_institution_response = await client.post(
+        "/api/v1/institutions",
+        json={
+            "book_id": 1,
+            "name": "New Bank",
+            "kind": "bank",
+            "routing": "111222333",
+            "website": "https://newbank.test",
+            "metadata": "Note",
+            "country_id": None,
+        },
+    )
+    update_institution_response = await client.put(
+        "/api/v1/institutions/1",
+        json={
+            "book_id": 1,
+            "name": "Updated Bank",
+            "kind": "brokerage",
+            "routing": "333222111",
+            "website": "https://updated.test",
+            "metadata": "Updated",
+            "country_id": None,
+        },
+    )
     category_response = await client.put(
         "/api/v1/categories/1",
         json={"book_id": 1, "parent_id": None, "name": "Food", "kind": "expense", "color": "#111111"},
@@ -989,7 +1063,12 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_and_
     delete_category_response = await client.delete("/api/v1/categories/1")
     delete_payee_response = await client.delete("/api/v1/payees/1")
     delete_tag_response = await client.delete("/api/v1/tags/1")
+    delete_institution_response = await client.delete("/api/v1/institutions/1")
 
+    assert create_institution_response.status_code == 200
+    assert create_institution_response.json()["routing"] == "111222333"
+    assert update_institution_response.status_code == 200
+    assert update_institution_response.json()["kind"] == "brokerage"
     assert category_response.status_code == 200
     assert category_response.json()["name"] == "Food"
     assert payee_response.status_code == 200
@@ -999,6 +1078,7 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_and_
     assert delete_category_response.status_code == 204
     assert delete_payee_response.status_code == 204
     assert delete_tag_response.status_code == 204
+    assert delete_institution_response.status_code == 204
 
 
 @pytest.mark.asyncio

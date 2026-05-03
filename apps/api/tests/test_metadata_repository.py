@@ -27,6 +27,48 @@ async def test_metadata_repository_lists_empty_countries_and_institutions(reposi
 
 
 @pytest.mark.asyncio
+async def test_metadata_repository_creates_updates_and_deletes_institution(repository_session: AsyncSession) -> None:
+    repository = MetadataRepository(repository_session)
+
+    created = await repository.create_institution(
+        book_id=1,
+        name="Example Bank",
+        kind="bank",
+        routing="123456789",
+        website="https://example.test",
+        metadata="Primary checking",
+        country_id=None,
+    )
+
+    assert created.name == "Example Bank"
+    assert created.routing == "123456789"
+    assert created.website == "https://example.test"
+    assert created.metadata_text == "Primary checking"
+
+    updated = await repository.update_institution(
+        institution_id=created.id,
+        name="Example Credit Union",
+        kind="credit_union",
+        routing="987654321",
+        website="https://credit.test",
+        metadata="Updated",
+        country_id=None,
+    )
+
+    assert updated is not None
+    assert updated.name == "Example Credit Union"
+    assert updated.routing == "987654321"
+    assert updated.website == "https://credit.test"
+    assert updated.metadata_text == "Updated"
+
+    institutions = await repository.list_institutions()
+    assert len(institutions) == 1
+    assert institutions[0][0].name == "Example Credit Union"
+    assert await repository.delete_institution(created.id) is True
+    assert await repository.list_institutions() == []
+
+
+@pytest.mark.asyncio
 async def test_metadata_repository_lists_reference_data_by_name(repository_session: AsyncSession) -> None:
     repository = MetadataRepository(repository_session)
     repository_session.add_all(
