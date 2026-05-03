@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, hasApiBaseUrl, invokeTauri } from "$lib/api/client";
+import { apiDelete, apiGet, apiPost, apiPut, hasApiBaseUrl, invokeTauri } from "$lib/api/client";
 
 function requireDesktopPricingAutomation(feature: string): void {
 	if (hasApiBaseUrl()) {
@@ -86,16 +86,23 @@ export async function listFxRatesOfficial<T>(bookId = 1): Promise<T> {
 }
 
 export async function listFxRateSources<T>(bookId = 1): Promise<T> {
+	if (hasApiBaseUrl()) {
+		return apiGet<T>(`/pricing/sources?book_id=${bookId}`);
+	}
 	return invokeTauri<T>("list_fx_rate_sources", { bookId });
 }
 
 export async function getFxRateSettings<T>(bookId = 1): Promise<T> {
-	requireDesktopPricingAutomation("FX refresh settings");
+	if (hasApiBaseUrl()) {
+		return apiGet<T>(`/pricing/policy?book_id=${bookId}`);
+	}
 	return invokeTauri<T>("get_fx_rate_settings", { bookId });
 }
 
 export async function setFxRateSettings<T>(settings: Record<string, unknown>): Promise<T> {
-	requireDesktopPricingAutomation("FX refresh settings");
+	if (hasApiBaseUrl()) {
+		return apiPut<T, Record<string, unknown>>("/pricing/policy", settings);
+	}
 	return invokeTauri<T>("set_fx_rate_settings", { settings });
 }
 
@@ -105,22 +112,40 @@ export async function restartFxRateScheduler(): Promise<void> {
 }
 
 export async function listFxRateSourceAssignments<T>(bookId = 1): Promise<T> {
-	requireDesktopPricingAutomation("FX source assignments");
+	if (hasApiBaseUrl()) {
+		return apiGet<T>(`/pricing/source-assignments?book_id=${bookId}`);
+	}
 	return invokeTauri<T>("list_fx_rate_source_assignments", { bookId });
 }
 
 export async function saveFxRateSourceAssignment(assignment: Record<string, unknown>, isUpdate: boolean): Promise<void> {
-	requireDesktopPricingAutomation("FX source assignments");
+	if (hasApiBaseUrl()) {
+		if (isUpdate) {
+			const assignmentId = assignment["id"];
+			if (typeof assignmentId !== "number") {
+				throw new Error("pricing source assignment id is required");
+			}
+			await apiPut(`/pricing/source-assignments/${assignmentId}`, assignment);
+			return;
+		}
+		await apiPost("/pricing/source-assignments", assignment);
+		return;
+	}
 	await invokeTauri(isUpdate ? "update_fx_rate_source_assignment" : "create_fx_rate_source_assignment", { assignment });
 }
 
 export async function deleteFxRateSourceAssignment(id: number): Promise<void> {
-	requireDesktopPricingAutomation("FX source assignments");
+	if (hasApiBaseUrl()) {
+		await apiDelete(`/pricing/source-assignments/${id}`);
+		return;
+	}
 	await invokeTauri("delete_fx_rate_source_assignment", { id });
 }
 
 export async function listFxRateRefreshState<T>(bookId = 1): Promise<T> {
-	requireDesktopPricingAutomation("FX refresh status");
+	if (hasApiBaseUrl()) {
+		return apiGet<T>(`/pricing/refresh-state?book_id=${bookId}`);
+	}
 	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
 }
 

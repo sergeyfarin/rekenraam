@@ -293,6 +293,80 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "price_sources",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("name", sa.String(length=100), nullable=False),
+        sa.Column("kind", sa.String(length=32), nullable=False, server_default=sa.text("'provider'")),
+        sa.Column("provider", sa.String(length=100), nullable=True),
+        sa.Column("base_url", sa.String(length=255), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("name", name="uq_price_sources_name"),
+    )
+    op.create_index("ix_price_sources_kind", "price_sources", ["kind"], unique=False)
+
+    op.create_table(
+        "pricing_policies",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("base_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column("refresh_enabled", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("refresh_hour_utc", sa.Integer(), nullable=False, server_default=sa.text("4")),
+        sa.Column("refresh_minute_utc", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("max_backfill_days", sa.Integer(), nullable=False, server_default=sa.text("370")),
+        sa.Column("weekend_policy", sa.String(length=32), nullable=False, server_default=sa.text("'skip'")),
+        sa.Column("default_source_id", sa.BigInteger(), sa.ForeignKey("price_sources.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("refresh_hour_utc BETWEEN 0 AND 23", name="ck_pricing_policies_refresh_hour"),
+        sa.CheckConstraint("refresh_minute_utc BETWEEN 0 AND 59", name="ck_pricing_policies_refresh_minute"),
+        sa.CheckConstraint("max_backfill_days >= 1", name="ck_pricing_policies_backfill_days"),
+        sa.CheckConstraint(
+            "weekend_policy IN ('skip', 'fill_previous', 'download')",
+            name="ck_pricing_policies_weekend_policy",
+        ),
+        sa.UniqueConstraint("book_id", name="uq_pricing_policies_book_id"),
+    )
+    op.create_index("ix_pricing_policies_book_id", "pricing_policies", ["book_id"], unique=False)
+
+    op.create_table(
+        "pricing_source_assignments",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("quote_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("source_id", sa.BigInteger(), sa.ForeignKey("price_sources.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("priority", sa.Integer(), nullable=False, server_default=sa.text("100")),
+        sa.Column("effective_from", sa.Date(), nullable=False),
+        sa.Column("effective_to", sa.Date(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("priority >= 0", name="ck_pricing_source_assignments_priority"),
+    )
+    op.create_index("ix_pricing_source_assignments_book_id", "pricing_source_assignments", ["book_id"], unique=False)
+
+    op.create_table(
+        "pricing_refresh_state",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("quote_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("source_id", sa.BigInteger(), sa.ForeignKey("price_sources.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("last_success_date", sa.Date(), nullable=True),
+        sa.Column("last_attempt_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint(
+            "book_id",
+            "commodity_id",
+            "quote_commodity_id",
+            "source_id",
+            name="uq_pricing_refresh_state_pair_source",
+        ),
+    )
+    op.create_index("ix_pricing_refresh_state_book_id", "pricing_refresh_state", ["book_id"], unique=False)
+
+    op.create_table(
         "book_memberships",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
@@ -311,6 +385,22 @@ def upgrade() -> None:
     op.execute(
         sa.text(
             "INSERT INTO commodities (book_id, kind, symbol, name, scale) VALUES (1, 'currency', 'USD', 'US Dollar', 2)"
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            INSERT INTO price_sources (id, name, kind, provider, base_url)
+            VALUES
+                (1001, 'ECB', 'provider', 'ECB', 'https://www.ecb.europa.eu/stats/exchange/eurofxref/'),
+                (1002, 'IRS', 'provider', 'IRS', 'https://www.irs.gov/individuals/international-taxpayers/yearly-average-currency-exchange-rates'),
+                (1003, 'HMRC', 'provider', 'HMRC', 'https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat'),
+                (1004, 'Belastingdienst', 'provider', 'Belastingdienst', 'https://www.belastingdienst.nl/wps/wcm/connect/nl/koerslijst/'),
+                (1005, 'Federal Reserve', 'provider', 'Federal Reserve', 'https://www.federalreserve.gov/releases/h10/current/'),
+                (1006, 'Bank of Canada', 'provider', 'Bank of Canada', 'https://www.bankofcanada.ca/rates/exchange/'),
+                (1007, 'RBA', 'provider', 'RBA', 'https://www.rba.gov.au/statistics/frequency/exchange-rates.html'),
+                (1008, 'SNB', 'provider', 'SNB', 'https://www.snb.ch/en/iabout/stat/statrep/id/current_interest_exchange_rates')
+            """
         )
     )
     op.execute(
@@ -342,9 +432,27 @@ def upgrade() -> None:
             """
         )
     )
+    op.execute(
+        sa.text(
+            """
+            INSERT INTO pricing_policies
+                (book_id, base_commodity_id, refresh_enabled, refresh_hour_utc, refresh_minute_utc, max_backfill_days, weekend_policy, default_source_id)
+            VALUES
+                (1, 1, FALSE, 4, 0, 370, 'skip', NULL)
+            """
+        )
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("ix_pricing_refresh_state_book_id", table_name="pricing_refresh_state")
+    op.drop_table("pricing_refresh_state")
+    op.drop_index("ix_pricing_source_assignments_book_id", table_name="pricing_source_assignments")
+    op.drop_table("pricing_source_assignments")
+    op.drop_index("ix_pricing_policies_book_id", table_name="pricing_policies")
+    op.drop_table("pricing_policies")
+    op.drop_index("ix_price_sources_kind", table_name="price_sources")
+    op.drop_table("price_sources")
     op.drop_index("ix_price_observations_lookup", table_name="price_observations")
     op.drop_index("ix_price_observations_book_id", table_name="price_observations")
     op.drop_table("price_observations")

@@ -8,12 +8,14 @@ from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.repositories.books import BookRepository
 from rekenraam_api.repositories.investments import InvestmentRepository
 from rekenraam_api.repositories.metadata import MetadataRepository
+from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.repositories.reports import ReportRepository
 from rekenraam_api.repositories.transactions import TransactionRepository
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.books import BookService
 from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.metadata import MetadataService
+from rekenraam_api.services.pricing import PricingService
 from rekenraam_api.services.reports import ReportService
 from rekenraam_api.services.transactions import TransactionService
 
@@ -46,6 +48,11 @@ def get_metadata_service(session: AsyncSession = Depends(get_db_session)) -> Met
 def get_investment_service(session: AsyncSession = Depends(get_db_session)) -> InvestmentService:
     repository = InvestmentRepository(session)
     return InvestmentService(repository)
+
+
+def get_pricing_service(session: AsyncSession = Depends(get_db_session)) -> PricingService:
+    repository = PricingRepository(session)
+    return PricingService(repository)
 
 
 def get_report_service(session: AsyncSession = Depends(get_db_session)) -> ReportService:

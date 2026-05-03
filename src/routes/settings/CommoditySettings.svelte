@@ -390,6 +390,7 @@
     try {
       const normalizedDefaultSource = fxRateSettings.default_source_id ? Number(fxRateSettings.default_source_id) : null;
       fxRateSettings = await setFxRateSettings<FxRateSettings>({
+        book_id: 1,
         base_currency_id: Number(fxRateSettings.base_currency_id),
         default_source_id: normalizedDefaultSource,
         refresh_enabled: fxRateSettings.refresh_enabled,
@@ -398,7 +399,9 @@
         max_backfill_days: Number(fxRateSettings.max_backfill_days),
         weekend_policy: fxRateSettings.weekend_policy,
       });
-      await restartFxRateScheduler();
+      if (!pricingAutomationManagedByServer) {
+        await restartFxRateScheduler();
+      }
       fxRateStatus = "FX settings saved.";
     } catch (e) {
       fxRateError = `Failed to save FX settings: ${String(e)}`;
@@ -454,6 +457,9 @@
       if (editingAssignment) {
         await saveFxRateSourceAssignment({
           id: editingAssignment.id,
+          book_id: 1,
+          from_currency_id: Number(newFxAssignment.from_currency_id),
+          to_currency_id: Number(newFxAssignment.to_currency_id),
           source_id: Number(newFxAssignment.source_id),
           effective_from: newFxAssignment.effective_from,
           effective_to: newFxAssignment.effective_to || null,
@@ -461,6 +467,7 @@
         fxRateStatus = "FX source assignment updated.";
       } else {
         await saveFxRateSourceAssignment({
+          book_id: 1,
           from_currency_id: Number(newFxAssignment.from_currency_id),
           to_currency_id: Number(newFxAssignment.to_currency_id),
           source_id: Number(newFxAssignment.source_id),
@@ -669,12 +676,10 @@
         class="px-4 py-2 text-sm font-medium {commoditiesSubTab === 'fx-settings' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}"
         onclick={() => {
           commoditiesSubTab = 'fx-settings';
-          if (!pricingAutomationManagedByServer) {
-            loadFxRateSources();
-            loadFxRateSettings();
-            loadFxRateAssignments();
-            loadFxRefreshState();
-          }
+          loadFxRateSources();
+          loadFxRateSettings();
+          loadFxRateAssignments();
+          loadFxRefreshState();
         }}
       >
         FX Settings
@@ -886,36 +891,30 @@
 
     <!-- FX Settings Sub-tab -->
     {#if commoditiesSubTab === 'fx-settings'}
-      {#if pricingAutomationManagedByServer}
-        <Card.Root>
-          <Card.Header>
-            <Card.Title>Scheduled Pricing Migration</Card.Title>
-          </Card.Header>
-          <Card.Content class="space-y-3 text-sm text-muted-foreground">
-            <p>FX, commodity, share, and other market-price refresh will be owned by a backend worker in the web app, not by the browser session.</p>
-            <p>This tab no longer tries to run a client-side scheduler or manual refresh. The remaining work is a Python pricing service that persists refresh policy, source assignments, and refresh status for a scheduled job.</p>
-            <p>Until that slice lands, use the currencies tab to control which currencies participate in pricing and treat this tab as reserved for backend-managed automation.</p>
-          </Card.Content>
-        </Card.Root>
-      {:else}
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <p class="text-sm text-muted-foreground">Configure FX refresh and manage source assignments. Settings affect automatic updates.</p>
-          </div>
-          <div class="flex gap-2">
-            <Button onclick={refreshFxRatesNow} disabled={busy} size="sm">Refresh Now</Button>
-            <Button onclick={saveFxRateSettings} disabled={busy || !fxRateSettings} size="sm" variant="secondary">Save Settings</Button>
-          </div>
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-sm text-muted-foreground">Configure pricing refresh policy and manage source assignments. In the web app, scheduled execution is owned by a backend worker rather than the browser session.</p>
         </div>
+        <div class="flex gap-2">
+          {#if !pricingAutomationManagedByServer}
+            <Button onclick={refreshFxRatesNow} disabled={busy} size="sm">Refresh Now</Button>
+          {/if}
+          <Button onclick={saveFxRateSettings} disabled={busy || !fxRateSettings} size="sm" variant="secondary">Save Settings</Button>
+        </div>
+      </div>
 
-        {#if fxRateStatus}
-          <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
-        {/if}
-        {#if fxRateError}
-          <p class="text-sm text-destructive mb-2">{fxRateError}</p>
-        {/if}
+      {#if pricingAutomationManagedByServer}
+        <p class="text-sm text-muted-foreground mb-4">Refresh jobs will be picked up by the backend scheduler using the policy and assignments below. Manual browser-triggered refresh is intentionally disabled in web mode.</p>
+      {/if}
 
-        {#if fxRateSettings}
+      {#if fxRateStatus}
+        <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
+      {/if}
+      {#if fxRateError}
+        <p class="text-sm text-destructive mb-2">{fxRateError}</p>
+      {/if}
+
+      {#if fxRateSettings}
           <div class="grid gap-4 lg:grid-cols-3 mb-6">
             <Card.Root>
               <Card.Header>
@@ -984,13 +983,13 @@
               </Card.Content>
             </Card.Root>
           </div>
-        {/if}
+      {/if}
 
-        <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center justify-between mb-2">
           <h3 class="text-lg font-semibold">Source Assignments</h3>
           <Button onclick={openNewFxAssignment} disabled={busy} size="sm">Add Assignment</Button>
-        </div>
-        <Table.Root>
+      </div>
+      <Table.Root>
           <Table.Header>
             <Table.Row>
               <Table.Head>Pair</Table.Head>
@@ -1016,13 +1015,13 @@
               </Table.Row>
             {/each}
           </Table.Body>
-        </Table.Root>
+      </Table.Root>
 
-        <div class="flex items-center justify-between mt-6 mb-2">
+      <div class="flex items-center justify-between mt-6 mb-2">
           <h3 class="text-lg font-semibold">Refresh Status</h3>
           <Button variant="secondary" size="sm" onclick={loadFxRefreshState} disabled={busy}>Reload</Button>
-        </div>
-        <Table.Root>
+      </div>
+      <Table.Root>
           <Table.Header>
             <Table.Row>
               <Table.Head>Pair</Table.Head>
@@ -1058,8 +1057,7 @@
               </Table.Row>
             {/each}
           </Table.Body>
-        </Table.Root>
-      {/if}
+      </Table.Root>
     {/if}
   </Card.Content>
 </Card.Root>
