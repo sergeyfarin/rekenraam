@@ -49,7 +49,6 @@ Global instruction for all stages:
 - Stage 9: in progress
 - Stage 10: not started
 - Stage 11: not started
-- Stage 12: not started
 
 Current evidence behind those statuses:
 
@@ -335,6 +334,12 @@ Recommended parity categories:
 11. backup / restore
 12. undo / redo policy replacement or conscious removal
 
+Schema parity audit rule:
+
+- treat table families, views, triggers, append-only/versioning rules, and audit/runtime state as separate checklist items
+- when a Tauri schema item is absent from the current Postgres baseline, mark it as exactly one of: deferred, dropped, or explicit decision required
+- do not mark a stage as full Tauri parity unless all three buckets are empty for that stage's intended scope
+
 ## Tauri Deletion Rule
 
 Delete `src-tauri/` and related files only after all of the following are true:
@@ -444,6 +449,36 @@ Progress note:
 - Migration automation now includes explicit upgrade, downgrade, current-version, and Docker-backed smoke targets.
 - Migration smoke is now wired into CI so upgrade/downgrade/re-upgrade validation runs automatically for API changes.
 - The Tauri-only runtime/session tables `app_runtime_session`, `session_undo_stack`, `session_redo_stack`, and `session_reverts` are intentionally excluded from Stage 2 because they model desktop-process-local state, not shared server data. `app_runtime_session` is replaced by request/auth session context later in the web stack; the undo/redo tables have no direct PostgreSQL port and require a separate server-safe policy decision.
+
+Stage 2 completion note:
+
+- Stage 2 is complete for the narrowed web baseline schema, not for full legacy SQLite parity.
+- Full Tauri-schema parity now requires tracking three separate buckets explicitly: intentionally deferred schema families, intentionally dropped desktop-only runtime state, and unresolved parity decisions that still need a web-side replacement or conscious removal.
+
+Tauri-vs-Postgres schema gap checklist:
+
+- Deferred to later web stages:
+  - investments and lots: `lots`, `split_lot_allocations`, `corporate_actions`, `dividend_income_categories`
+  - pricing and valuation: `price_ingest_runs`, `price_observations`, `price_sources`, `commodity_price_sources`, `pricing_policies`, `pricing_source_assignments`, `pricing_refresh_state`, `valuation_snapshots`, `valuation_snapshot_items`, `book_base_currency_history`
+  - imports: `import_rules`, `import_sessions`, `import_session_transactions`
+  - report state and caching even before frontend adoption: `book_state`, `report_cache`
+  - reports beyond the current baseline: `report_definitions`, `report_runs`
+  - reconciliation support tables: `balance_checks`, `balance_adjustments`, `balance_constraints`
+  - note and attachment domain even before frontend adoption: `notes`, `events`, `documents`
+  - backup replacement: `backup_settings`
+- Intentionally dropped from the Stage 2 baseline:
+  - desktop runtime/session tables: `app_runtime_session`, `session_undo_stack`, `session_redo_stack`, `session_reverts`
+- Still requires explicit product or architecture decision:
+  - SQLite trigger-enforced invariants such as same-book checks, datetime shape guards, system-role guards, and cache-bump triggers
+  - per-trigger placement between PostgreSQL controls and service-layer validation for graceful user-facing errors
+
+Required architecture decisions already made:
+
+- preserve append-only immutability/version-chain behavior using `previous_*`, `session_id`, and append-only semantics because it supports time-machine behavior and is preferred over mutable-row replacement
+- replace legacy `audit_user` / OS-login identity with authenticated user attribution plus persistent user-session-device audit trails
+- treat `commodities` as the canonical asset master and represent currencies as commodity rows with `kind='currency'` rather than maintaining a separate canonical `currencies` table
+- keep `current_*` latest-version projections, but implement them as ordinary PostgreSQL SQL views plus repository helpers by default instead of copying SQLite-specific trigger/view mechanics verbatim
+- keep audit attribution separate from immutable business history: domain version chains preserve time-machine semantics, while explicit audit session/device records capture who, from which session, and from which device a change came
 
 ### Stage 3: Define The Python Domain Rules Before Porting Features
 
@@ -602,6 +637,7 @@ Priority order:
 3. investments and lots
 4. pricing / FX refresh
 5. backup / restore strategy replacement for web
+6. notes, events, and documents backend parity
 
 Tasks for each complex domain:
 
@@ -611,7 +647,7 @@ Tasks for each complex domain:
 4. implement endpoints and jobs
 5. validate on realistic data
 
-### Stage 8: Introduce Auth And Multi-User Access
+### Stage 8: Introduce Audit Context, Auth, And Multi-User Access
 
 Goal:
 
@@ -619,17 +655,24 @@ Goal:
 
 Tasks:
 
-1. add users table and membership model if not already present
-2. add password hashing with Argon2id
-3. add login, logout, session management
-4. add access checks on every book-scoped service
-5. add first-admin bootstrap flow
-6. add audit trail fields and request context logging
+1. define request context shape for authenticated user, session, device, and correlation id
+2. add persistent auth-session and device records so every immutable change can be attributed correctly
+3. add audit trail fields and request context logging to mutation flows
+4. add users table and membership model if not already present
+5. add password hashing with Argon2id
+6. add login, logout, session management
+7. add access checks on every book-scoped service
+8. add first-admin bootstrap flow
 
 Exit criteria:
 
 - multiple users can log in
 - book access is enforced server-side
+- audit trails can attribute changes to user, session, and device
+
+Planning note:
+
+- The audit-aware immutable write foundation should start before the full auth rollout is complete. Mutation design for append-only rows should not proceed without a clear request/session/device attribution model.
 
 ### Stage 9: Move Frontend Off Tauri Completely
 
@@ -663,39 +706,68 @@ Progress note:
 
 ## Recommended Immediate Next Execution Order
 
-To complete the Rust/Tauri-era migration cleanly, the next steps should be:
+To complete the Rust/Tauri-era migration cleanly, the next work should be organized around four major milestones rather than around broad, overlapping stage names.
 
-1. Continue migrating the highest-value remaining Tauri-dependent flows next: the remaining dashboard/setup commands, the remaining read-only settings surfaces beyond categories/payees/tags, and other high-traffic routes such as transactions, reports, and investments.
-2. Keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets.
-3. After those read flows are web-native, continue the remaining backend parity slices needed by forms and then start write-path migration for transactions and accounts.
-4. Only after the client seam is stable should the frontend be moved from root `src/` into `apps/web`.
+### Milestone A: Frontend Off The Critical Tauri Read Paths
 
-### Stage 10: Data Migration From SQLite To PostgreSQL - Not needed! There is no legacy data yet.
-Remove this stage from the plan
+Target outcome:
 
-Goal:
+- the highest-traffic user journeys read through the shared HTTP client seam rather than direct `invoke()` calls
 
-- preserve existing user data when moving to the new system
+Priority work:
 
-Tasks:
+1. migrate the remaining dashboard/setup reads and read-only settings surfaces beyond categories/payees/tags
+2. migrate the remaining high-traffic route reads in reports and investments
+3. keep the register UX as infinite scroll while introducing backend cursor semantics for large result sets
+4. continue route-by-route frontend conversion rather than moving `src/` to `apps/web` prematurely
 
-1. design mapping from current SQLite schema to PostgreSQL schema
-2. build one-way import tooling in Python
-3. migrate reference data first
-4. migrate books/accounts/transactions/splits
-5. migrate reports metadata, imports, pricing, and investment data as needed
-6. build validation checks:
-  - row counts
-  - balances
-  - sample report comparisons
-  - reconciliation comparisons
+### Milestone B: Audit-Aware Immutable Write Foundation
 
-Important:
+Target outcome:
 
-- do not attempt live sync between SQLite and PostgreSQL
-- treat SQLite as a source to import from, not a parallel runtime
+- immutable write paths have a defined attribution model before broad mutation parity work starts
 
-### Stage 11: Replace Or Retire Desktop-Only Concepts
+Priority work:
+
+1. define request context for user, session, device, and correlation id
+2. design the persistent audit-session/device model that replaces desktop runtime identity
+3. decide how immutable rows are stamped with audit context during writes
+4. implement the minimal backend infrastructure needed so transaction/account mutations do not have to guess later
+
+### Milestone C: Transaction/Account Write Parity
+
+Target outcome:
+
+- the core accounting write flows behave correctly through the Python backend and shared frontend seam
+
+Priority work:
+
+1. finish the remaining backend parity slices needed by forms and account/transaction mutations
+2. implement transaction and account write-path invariants in services plus PostgreSQL where appropriate
+3. add parity tests for known accounting scenarios and immutable-write behavior
+4. migrate the corresponding frontend write flows fully off Tauri
+
+### Milestone D: Report/Pricing/Investment Expansion
+
+Target outcome:
+
+- the complex domains expand only after the core read and write model is stable
+
+Priority work:
+
+1. migrate `book_state` and `report_cache` as the report invalidation foundation
+2. migrate commodities and pricing-history foundations using the append-only plus `current_*` view approach
+3. expand into reports, pricing/FX, and investments/lots incrementally instead of as one large port
+4. move the frontend from root `src/` into `apps/web` only after the client seam is stable enough to justify the move
+
+This means the immediate execution order is:
+
+1. finish Milestone A first
+2. start the minimum viable Milestone B infrastructure before broad write migration
+3. execute Milestone C next as the main correctness milestone
+4. widen into Milestone D only after the core write model is proven
+
+### Stage 10: Replace Or Retire Desktop-Only Concepts
 
 Goal:
 
@@ -707,6 +779,10 @@ Candidates to replace or retire:
 - OS login derived audit identity
 - desktop backup scheduling model
 - Tauri undo/redo session implementation if not suitable for server model
+- append-only/version-chain row model enforced through `previous_*`, `session_id`, and append-only triggers
+- SQLite `current_*` views and trigger-driven latest-version projections
+- report invalidation infrastructure built around `book_state` and `report_cache`
+- notes, events, and documents if they are not part of the intended web MVP
 
 Explicit runtime/session table decision:
 
@@ -714,6 +790,11 @@ Explicit runtime/session table decision:
 - `session_undo_stack`: dropped from the Stage 2 schema. Do not port this table directly; if undo remains a product requirement, replace it later with a server-safe mutation-history design.
 - `session_redo_stack`: dropped from the Stage 2 schema for the same reason as `session_undo_stack`; no direct table port is planned.
 - `session_reverts`: dropped from the Stage 2 schema. Any future replacement belongs with a redesigned server-side undo/audit subsystem, not the initial migration baseline.
+- `audit_user` / OS-login audit identity: do not port the SQLite function model. Replace it with authenticated user identity plus persistent session-and-device-aware audit context.
+- append-only/version-chain model: preserve it deliberately. The web architecture should keep immutable versioned rows or an equivalent append-only design rather than falling back to ordinary mutable rows.
+- `current_*` views and trigger-driven invariants: still undecided. Each item should be reassigned explicitly to PostgreSQL constraints, repository queries, service-layer validation, or conscious removal.
+- `book_state` / `report_cache`: migrate them even before a frontend depends on them, but redesign the implementation for a web-safe cache invalidation model.
+- `notes`, `events`, `documents`: migrate them as backend parity work even if the frontend arrives later.
 
 For each such feature:
 
@@ -721,7 +802,7 @@ For each such feature:
 2. migrate if still valuable
 3. otherwise explicitly drop and document
 
-### Stage 12: Delete Tauri Path
+### Stage 11: Delete Tauri Path
 
 Goal:
 
