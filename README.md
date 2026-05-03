@@ -135,6 +135,10 @@ make api-account-register
 make api-transactions
 make api-smoke
 make api-migrate-new NAME=add_accounts
+make api-migrate-up
+make api-migrate-down REV=base
+make api-migrate-current
+make api-migrate-smoke
 ```
 
 If your Docker access requires elevation, override the Docker command:

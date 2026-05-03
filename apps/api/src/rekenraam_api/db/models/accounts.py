@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -8,6 +8,22 @@ from rekenraam_api.db.base import Base
 
 class Account(Base):
     __tablename__ = "accounts"
+    __table_args__ = (
+        Index("ix_accounts_book_id", "book_id"),
+        Index("ix_accounts_parent_id", "parent_id"),
+        CheckConstraint(
+            "account_type IN ('cash', 'checking', 'savings', 'credit', 'loan', 'investment', 'asset', 'liability', 'income', 'expense', 'equity')",
+            name="ck_accounts_account_type",
+        ),
+        CheckConstraint(
+            "booking_policy IN ('fifo', 'lifo', 'strict', 'average')",
+            name="ck_accounts_booking_policy",
+        ),
+        CheckConstraint(
+            "lifecycle_event IN ('open', 'close', 'reopen', 'update')",
+            name="ck_accounts_lifecycle_event",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -32,6 +48,10 @@ class Account(Base):
 
 class AccountBalancing(Base):
     __tablename__ = "account_balancings"
+    __table_args__ = (
+        Index("ix_account_balancings_book_id", "book_id"),
+        Index("ix_account_balancings_account_date", "account_id", "as_of_date"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)

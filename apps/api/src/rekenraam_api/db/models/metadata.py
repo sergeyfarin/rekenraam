@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -8,6 +8,7 @@ from rekenraam_api.db.base import Base
 
 class Commodity(Base):
     __tablename__ = "commodities"
+    __table_args__ = (Index("ix_commodities_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -22,6 +23,7 @@ class Commodity(Base):
 
 class Country(Base):
     __tablename__ = "countries"
+    __table_args__ = (Index("ix_countries_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -33,6 +35,7 @@ class Country(Base):
 
 class Institution(Base):
     __tablename__ = "institutions"
+    __table_args__ = (Index("ix_institutions_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -45,6 +48,10 @@ class Institution(Base):
 
 class Category(Base):
     __tablename__ = "categories"
+    __table_args__ = (
+        Index("ix_categories_book_id", "book_id"),
+        Index("ix_categories_parent_id", "parent_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -58,6 +65,7 @@ class Category(Base):
 
 class Payee(Base):
     __tablename__ = "payees"
+    __table_args__ = (Index("ix_payees_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -70,6 +78,7 @@ class Payee(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
+    __table_args__ = (Index("ix_tags_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -81,6 +90,7 @@ class Tag(Base):
 
 class Person(Base):
     __tablename__ = "people"
+    __table_args__ = (Index("ix_people_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -93,6 +103,7 @@ class Person(Base):
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (Index("ix_projects_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)

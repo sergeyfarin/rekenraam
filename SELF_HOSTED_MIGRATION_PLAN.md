@@ -39,7 +39,7 @@ Global instruction for all stages:
 
 - Stage 0: complete
 - Stage 1: complete
-- Stage 2: in progress
+- Stage 2: complete
 - Stage 3: in progress
 - Stage 4: in progress
 - Stage 5: in progress
@@ -407,7 +407,7 @@ Exit criteria:
 
 ### Stage 2: Establish PostgreSQL Schema And Migration Workflow
 
-Status: in progress
+Status: complete
 
 Goal:
 
@@ -439,8 +439,9 @@ Progress note:
 - Docker reproducibility is working and covered by smoke validation.
 - Repository integration tests now run against ephemeral PostgreSQL.
 - The empty-app schema has been squashed into a single current initial migration to avoid fake historical version churn.
-- Stage 2 remains in progress because the broader web schema and migration workflow are not complete yet: the plan still calls for user/membership-oriented schema coverage and fuller migration automation beyond the current baseline.
-- CI wiring is still pending, so this stage is not fully complete.
+- ORM coverage now includes the Stage 2 `users` and `book_memberships` tables so the application model layer matches the initial Alembic schema.
+- Migration automation now includes explicit upgrade, downgrade, current-version, and Docker-backed smoke targets.
+- Migration smoke is now wired into CI so upgrade/downgrade/re-upgrade validation runs automatically for API changes.
 
 ### Stage 3: Define The Python Domain Rules Before Porting Features
 

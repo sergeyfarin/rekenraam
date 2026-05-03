@@ -4,7 +4,7 @@ CONTAINER_RUNTIME ?= docker
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-dev-up api-dev-down api-dev-logs
+.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs
 
 api-check:
 	cd $(API_DIR) && python -m py_compile $$(find src -name '*.py')
@@ -75,3 +75,18 @@ api-migrate-new:
 	@cd $(API_DIR) && alembic revision -m "$(NAME)"; \
 	file=$$(ls -t alembic/versions/*.py | head -n 1); \
 	echo "Created $${file}"
+
+api-migrate-up:
+	cd $(API_DIR) && alembic upgrade head
+
+api-migrate-down:
+	cd $(API_DIR) && alembic downgrade $(if $(REV),$(REV),base)
+
+api-migrate-current:
+	cd $(API_DIR) && alembic current
+
+api-migrate-smoke:
+	$(DEV_DOCKER) down -v
+	$(DEV_DOCKER) up -d postgres
+	$(DEV_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres api-dev pytest -q tests/test_migrations.py
+	$(DEV_DOCKER) down -v

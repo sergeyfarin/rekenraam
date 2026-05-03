@@ -1,0 +1,28 @@
+name: API Migrations
+
+on:
+  push:
+    paths:
+      - ".github/workflows/api-migrations.yml"
+      - "apps/api/**"
+      - "compose.yaml"
+      - "compose.dev.yaml"
+      - "Makefile"
+  pull_request:
+    paths:
+      - ".github/workflows/api-migrations.yml"
+      - "apps/api/**"
+      - "compose.yaml"
+      - "compose.dev.yaml"
+      - "Makefile"
+
+jobs:
+  migration-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run migration smoke
+        run: make api-migrate-smoke

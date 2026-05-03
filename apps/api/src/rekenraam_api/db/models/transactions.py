@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -8,6 +8,13 @@ from rekenraam_api.db.base import Base
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        Index("ix_transactions_book_occurred_date", "book_id", "occurred_date"),
+        CheckConstraint(
+            "status IN ('uncleared', 'cleared', 'reconciled', 'void')",
+            name="ck_transactions_status",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
@@ -22,6 +29,10 @@ class Transaction(Base):
 
 class Split(Base):
     __tablename__ = "splits"
+    __table_args__ = (
+        Index("ix_splits_tx_id", "tx_id"),
+        Index("ix_splits_account_id", "account_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     tx_id: Mapped[int] = mapped_column(ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False)
