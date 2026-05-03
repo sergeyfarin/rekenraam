@@ -16,6 +16,26 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    async def update_commodity(
+        self,
+        *,
+        commodity_id: int,
+        symbol: str | None,
+        name: str,
+        metadata: str | None,
+    ) -> Commodity | None:
+        commodity = await self._session.get(Commodity, commodity_id)
+        if commodity is None:
+            return None
+
+        commodity.symbol = symbol
+        commodity.name = name
+        commodity.metadata_text = metadata
+        commodity.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(commodity)
+        return commodity
+
     async def list_countries(self) -> list[Country]:
         statement: Select[tuple[Country]] = select(Country).order_by(Country.name.asc(), Country.id.asc())
         result = await self._session.execute(statement)

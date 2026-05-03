@@ -17,6 +17,15 @@ class CommoditySummary(BaseModel):
     updated_at: datetime
 
 
+class CommodityUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    symbol: str | None
+    name: str
+    metadata: str | None
+
+
 class CountrySummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 

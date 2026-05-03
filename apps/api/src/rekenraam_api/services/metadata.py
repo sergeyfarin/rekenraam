@@ -5,6 +5,7 @@ from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
     CategoryUpdateInput,
+    CommodityUpdateInput,
     CommoditySummary,
     CountrySummary,
     InstitutionCreateInput,
@@ -43,6 +44,31 @@ class MetadataService:
             )
             for row in rows
         ]
+
+    async def update_commodity(self, commodity_id: int, input: CommodityUpdateInput) -> CommoditySummary | None:
+        name = input.name.strip()
+        if not name:
+            raise ValueError("name is required")
+
+        row = await self._repository.update_commodity(
+            commodity_id=commodity_id,
+            symbol=self._clean_optional_text(input.symbol),
+            name=name,
+            metadata=self._clean_optional_text(input.metadata),
+        )
+        if row is None:
+            return None
+        return CommoditySummary(
+            id=row.id,
+            book_id=row.book_id,
+            kind=row.kind,
+            symbol=row.symbol,
+            name=row.name,
+            scale=row.scale,
+            metadata=row.metadata_text,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
 
     async def list_countries(self) -> list[CountrySummary]:
         rows = await self._repository.list_countries()

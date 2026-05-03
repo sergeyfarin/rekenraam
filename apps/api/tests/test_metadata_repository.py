@@ -16,6 +16,24 @@ async def test_metadata_repository_lists_seeded_commodities(repository_session: 
 
 
 @pytest.mark.asyncio
+async def test_metadata_repository_updates_commodity(repository_session: AsyncSession) -> None:
+    repository = MetadataRepository(repository_session)
+
+    commodities = await repository.list_commodities()
+    updated = await repository.update_commodity(
+        commodity_id=commodities[0].id,
+        symbol="USDX",
+        name="US Dollar Updated",
+        metadata="Primary currency",
+    )
+
+    assert updated is not None
+    assert updated.symbol == "USDX"
+    assert updated.name == "US Dollar Updated"
+    assert updated.metadata_text == "Primary currency"
+
+
+@pytest.mark.asyncio
 async def test_metadata_repository_lists_empty_countries_and_institutions(repository_session: AsyncSession) -> None:
     repository = MetadataRepository(repository_session)
 

@@ -1,4 +1,4 @@
-import { invokeTauri } from "$lib/api/client";
+import { apiPut, invokeTauri } from "$lib/api/client";
 
 export interface CommodityAutocompleteOption {
 	id: number;
@@ -42,7 +42,12 @@ export async function listCurrencies<T>(bookId = 1): Promise<T> {
 }
 
 export async function renameCommoditySymbol(input: Record<string, unknown>): Promise<void> {
-	await invokeTauri("rename_commodity_symbol", { input });
+	const commodityId = input["id"];
+	if (typeof commodityId !== "number") {
+		throw new Error("commodity id is required");
+	}
+
+	await apiPut(`/commodities/${commodityId}`, input);
 }
 
 export async function toggleCurrencyActive(currencyId: number): Promise<void> {

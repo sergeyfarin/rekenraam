@@ -5,6 +5,7 @@ from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
     CategoryUpdateInput,
+    CommodityUpdateInput,
     CommoditySummary,
     CountrySummary,
     InstitutionCreateInput,
@@ -32,6 +33,22 @@ async def list_commodities(
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[CommoditySummary]:
     return await metadata_service.list_commodities()
+
+
+@router.put("/commodities/{commodity_id}", response_model=CommoditySummary)
+async def update_commodity(
+    commodity_id: int,
+    input: CommodityUpdateInput,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CommoditySummary:
+    try:
+        commodity = await metadata_service.update_commodity(commodity_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    if commodity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="commodity not found")
+    return commodity
 
 
 @router.get("/countries", response_model=list[CountrySummary])

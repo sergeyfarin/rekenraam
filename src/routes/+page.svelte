@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { listAccountBalances, listAccounts, type AccountSummary, type AccountBalanceSummary } from "$lib/api/accounts";
   import { getHealthStatus, listBooks } from "$lib/api/books";
-  import { hasApiBaseUrl, invokeTauri } from "$lib/api/client";
   import { listPayees, type PayeeSummary } from "$lib/api/metadata";
   import { listTransactions, type TransactionWithSplits } from "$lib/api/transactions";
   import { formatError } from "$lib/utils";
@@ -24,7 +23,6 @@
   let error = "";
   let setupError = "";
   let dbReady: boolean | null = null;
-  const desktopStorageMode = !hasApiBaseUrl();
 
   // Balances
   let accounts: AccountSummary[] = [];
@@ -52,54 +50,12 @@
     setupError = "";
 
     try {
-      if (desktopStorageMode) {
-        await invokeTauri<string>("db_health");
-      } else {
-        await getHealthStatus();
-      }
+      await getHealthStatus();
       dbReady = true;
       await loadDashboardData();
     } catch (e) {
-      const message = formatError(e);
       dbReady = false;
-      if (!desktopStorageMode) {
-        setupError = `Backend unavailable: ${message}`;
-      } else if (!message.includes("db not initialized")) {
-        setupError = `Database error: ${message}`;
-      }
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function openDatabase() {
-    setupError = "";
-    busy = true;
-    try {
-      let selected = await invokeTauri<string | null>("pick_storage_file");
-      if (!selected) {
-        selected = await invokeTauri<string | null>("pick_storage_folder");
-      }
-      if (!selected) return;
-      await invokeTauri<string>("validate_and_set_storage_location", { path: selected });
-      await checkDatabase();
-    } catch (e) {
-      setupError = `Failed to open database: ${formatError(e)}`;
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function createDatabase() {
-    setupError = "";
-    busy = true;
-    try {
-      const selected = await invokeTauri<string | null>("pick_storage_folder");
-      if (!selected) return;
-      await invokeTauri<string>("create_new_storage", { path: selected });
-      await checkDatabase();
-    } catch (e) {
-      setupError = `Failed to create database: ${formatError(e)}`;
+      setupError = `Backend unavailable: ${formatError(e)}`;
     } finally {
       busy = false;
     }
@@ -111,22 +67,20 @@
 
     try {
       // Load accounts, balances, recent transactions, and native currency in parallel
-      const nativeCurrencyPromise = desktopStorageMode
-        ? invokeTauri<DefaultCurrency | null>("get_default_currency", { bookId: 1 }).catch(() => null)
-        : listBooks()
-            .then((books) => {
-              const primaryBook = books[0] ?? null;
-              if (primaryBook === null) {
-                return null;
-              }
+      const nativeCurrencyPromise = listBooks()
+        .then((books) => {
+          const primaryBook = books[0] ?? null;
+          if (primaryBook === null) {
+            return null;
+          }
 
-              return {
-                scale: 2,
-                symbol: primaryBook.base_currency_code,
-                display_symbol: primaryBook.base_currency_code,
-              } satisfies DefaultCurrency;
-            })
-            .catch(() => null);
+          return {
+            scale: 2,
+            symbol: primaryBook.base_currency_code,
+            display_symbol: primaryBook.base_currency_code,
+          } satisfies DefaultCurrency;
+        })
+        .catch(() => null);
 
       const [accountsResult, balancesResult, transactionsResult, payeesResult, nativeCurrencyResult] = await Promise.all([
         listAccounts(1),
@@ -243,7 +197,7 @@
     <!-- Header -->
     <div>
       <h1 class="text-3xl font-bold tracking-tight">Rekenraam</h1>
-      <p class="text-muted-foreground">Personal finance tracking with a local-first database.</p>
+      <p class="text-muted-foreground">Self-hosted personal finance tracking through the web app.</p>
     </div>
 
     {#if dbReady === true && error}
@@ -256,41 +210,6 @@
     {#if dbReady === null}
       <div class="flex items-center justify-center py-16">
         <p class="text-muted-foreground animate-pulse">Starting up…</p>
-      </div>
-    {:else if dbReady === false && desktopStorageMode}
-      <!-- First-launch onboarding screen -->
-      <div class="flex flex-col items-center justify-center py-16 space-y-8 text-center">
-        <div class="space-y-3">
-          <div class="text-5xl">🪙</div>
-          <h2 class="text-3xl font-bold tracking-tight">Welcome to Rekenraam</h2>
-          <p class="text-muted-foreground max-w-md">
-            Your personal finance tracker — local-first, private, and built to last.
-            Get started by creating a new book or opening an existing one.
-          </p>
-        </div>
-
-        {#if setupError}
-          <Alert.Root variant="destructive" class="max-w-md text-left">
-            <Alert.Title>Error</Alert.Title>
-            <Alert.Description>{setupError}</Alert.Description>
-          </Alert.Root>
-        {/if}
-
-        <div class="flex flex-col sm:flex-row gap-4">
-          <Button size="lg" disabled={busy} onclick={() => !busy && createDatabase()} class="min-w-44">
-            <span class="mr-2 text-lg">✨</span>
-            Create new book
-          </Button>
-          <Button size="lg" variant="outline" disabled={busy} onclick={() => !busy && openDatabase()} class="min-w-44">
-            <span class="mr-2 text-lg">📂</span>
-            Open existing file
-          </Button>
-        </div>
-
-        <p class="text-xs text-muted-foreground max-w-xs">
-          Your data is stored as a portable SQLite file on your computer.
-          Nothing is sent to the cloud.
-        </p>
       </div>
     {:else if dbReady === false}
       <div class="flex flex-col items-center justify-center py-16 space-y-6 text-center">

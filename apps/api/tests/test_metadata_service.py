@@ -5,6 +5,7 @@ import pytest
 from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
 from rekenraam_api.schemas.metadata import (
     CategoryUpdateInput,
+    CommodityUpdateInput,
     InstitutionCreateInput,
     InstitutionUpdateInput,
     PayeeUpdateInput,
@@ -33,6 +34,21 @@ class StubMetadataRepository:
 
     async def list_countries(self) -> list[Country]:
         return []
+
+    async def update_commodity(self, *, commodity_id: int, symbol: str | None, name: str, metadata: str | None) -> Commodity | None:
+        if commodity_id != 1:
+            return None
+        return Commodity(
+            id=commodity_id,
+            book_id=1,
+            kind="currency",
+            symbol=symbol,
+            name=name,
+            scale=2,
+            metadata_text=metadata,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
 
     async def list_institutions(self) -> list[tuple[Institution, Country | None]]:
         return [
@@ -220,6 +236,11 @@ async def test_metadata_service_maps_reference_data() -> None:
 async def test_metadata_service_updates_and_deletes_supported_reference_data() -> None:
     service = MetadataService(StubMetadataRepository())
 
+    commodity = await service.update_commodity(
+        1,
+        CommodityUpdateInput(book_id=1, symbol="USDX", name="US Dollar Updated", metadata="Primary currency"),
+    )
+
     institution = await service.create_institution(
         InstitutionCreateInput(
             book_id=1,
@@ -254,6 +275,8 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
     )
     tag = await service.update_tag(1, input=TagUpdateInput(book_id=1, name="Shared", color="#222222"))
 
+    assert commodity is not None
+    assert commodity.symbol == "USDX"
     assert institution.name == "New Bank"
     assert institution.routing == "111222333"
     assert updated_institution is not None

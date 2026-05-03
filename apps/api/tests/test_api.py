@@ -564,6 +564,21 @@ class StubMetadataService:
             )
         ]
 
+    async def update_commodity(self, commodity_id: int, input: object) -> CommoditySummary | None:
+        if commodity_id != 1:
+            return None
+        return CommoditySummary(
+            id=1,
+            book_id=1,
+            kind="currency",
+            symbol="USDX",
+            name="US Dollar Updated",
+            scale=2,
+            metadata="Primary currency",
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
     async def list_countries(self) -> list[CountrySummary]:
         return []
 
@@ -1024,6 +1039,10 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
 async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags_and_institutions(client: AsyncClient) -> None:
     app.dependency_overrides[get_metadata_service] = StubMetadataService
 
+    commodity_response = await client.put(
+        "/api/v1/commodities/1",
+        json={"book_id": 1, "symbol": "USDX", "name": "US Dollar Updated", "metadata": "Primary currency"},
+    )
     create_institution_response = await client.post(
         "/api/v1/institutions",
         json={
@@ -1065,6 +1084,8 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags
     delete_tag_response = await client.delete("/api/v1/tags/1")
     delete_institution_response = await client.delete("/api/v1/institutions/1")
 
+    assert commodity_response.status_code == 200
+    assert commodity_response.json()["symbol"] == "USDX"
     assert create_institution_response.status_code == 200
     assert create_institution_response.json()["routing"] == "111222333"
     assert update_institution_response.status_code == 200
