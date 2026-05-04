@@ -11,6 +11,7 @@ from rekenraam_api.repositories.access import AccessRepository
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.repositories.books import BookRepository
 from rekenraam_api.repositories.investments import InvestmentRepository
+from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.repositories.reconciliation import ReconciliationRepository
@@ -21,7 +22,9 @@ from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.admin import AdminService
 from rekenraam_api.services.auth import SESSION_COOKIE_NAME, AuthService
 from rekenraam_api.services.books import BookService
+from rekenraam_api.services.exports import ExportService
 from rekenraam_api.services.investments import InvestmentService
+from rekenraam_api.services.imports import ImportService
 from rekenraam_api.services.metadata import MetadataService
 from rekenraam_api.services.pricing import PricingService
 from rekenraam_api.services.pricing_execution import PricingExecutionService
@@ -141,3 +144,25 @@ def get_report_service(
 ) -> ReportService:
     repository = ReportRepository(session)
     return ReportService(repository, access_policy)
+
+
+def get_import_service(
+    session: AsyncSession = Depends(get_db_session),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+) -> ImportService:
+    repository = ImportRepository(session)
+    return ImportService(repository, access_policy)
+
+
+def get_export_service(
+    session: AsyncSession = Depends(get_db_session),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+) -> ExportService:
+    report_repository = ReportRepository(session)
+    investment_repository = InvestmentRepository(session)
+    return ExportService(
+        session,
+        ReportService(report_repository, access_policy),
+        InvestmentService(investment_repository),
+        access_policy,
+    )

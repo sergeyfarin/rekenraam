@@ -337,16 +337,74 @@ def upgrade() -> None:
     op.create_index("ix_reconciliation_preferences_account", "reconciliation_preferences", ["account_id"], unique=False)
 
     op.create_table(
+        "import_sessions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("source", sa.String(length=120), nullable=True),
+        sa.Column("file_name", sa.Text(), nullable=True),
+        sa.Column("file_hash", sa.String(length=128), nullable=True),
+        sa.Column("file_size", sa.BigInteger(), nullable=True),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default=sa.text("'started'")),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("committed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
+        sa.CheckConstraint("status IN ('started', 'committed', 'abandoned')", name="ck_import_sessions_status"),
+    )
+    op.create_index("ix_import_sessions_book_status", "import_sessions", ["book_id", "status"], unique=False)
+    op.create_index("ix_import_sessions_file_hash", "import_sessions", ["file_hash"], unique=False)
+
+    op.create_table(
+        "import_rules",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("previous_import_rule_id", sa.BigInteger(), sa.ForeignKey("import_rules.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("rule_kind", sa.String(length=20), nullable=False),
+        sa.Column("match_type", sa.String(length=20), nullable=False, server_default=sa.text("'contains'")),
+        sa.Column("match_text", sa.Text(), nullable=False),
+        sa.Column("priority", sa.BigInteger(), nullable=False, server_default=sa.text("100")),
+        sa.Column("amount_min_minor", sa.BigInteger(), nullable=True),
+        sa.Column("amount_max_minor", sa.BigInteger(), nullable=True),
+        sa.Column("date_from", sa.Date(), nullable=True),
+        sa.Column("date_to", sa.Date(), nullable=True),
+        sa.Column("match_account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("target_account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("target_category_id", sa.BigInteger(), sa.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("target_payee_id", sa.BigInteger(), sa.ForeignKey("payees.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
+        sa.CheckConstraint("rule_kind IN ('payee', 'memo', 'amount', 'date', 'account')", name="ck_import_rules_kind"),
+        sa.CheckConstraint("match_type IN ('contains', 'equals')", name="ck_import_rules_match_type"),
+        sa.UniqueConstraint("previous_import_rule_id", name="uq_import_rules_previous"),
+    )
+    op.create_index("ix_import_rules_book_kind", "import_rules", ["book_id", "rule_kind"], unique=False)
+    op.create_index("ix_import_rules_priority", "import_rules", ["priority", "id"], unique=False)
+    op.create_index("ix_import_rules_previous", "import_rules", ["previous_import_rule_id"], unique=False)
+
+    op.create_table(
         "transactions",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
         sa.Column("previous_tx_id", sa.BigInteger(), sa.ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True),
         sa.Column("occurred_date", sa.Date(), nullable=False),
+        sa.Column("occurred_at_utc", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("occurred_tz", sa.String(length=64), nullable=True),
         sa.Column("posted_date", sa.Date(), nullable=False),
+        sa.Column("posted_at_utc", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("posted_tz", sa.String(length=64), nullable=True),
         sa.Column("payee_id", sa.BigInteger(), sa.ForeignKey("payees.id", ondelete="SET NULL"), nullable=True),
         sa.Column("memo", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=20), nullable=False, server_default=sa.text("'uncleared'")),
         sa.Column("reference", sa.Text(), nullable=True),
+        sa.Column("import_id", sa.String(length=255), nullable=True),
+        sa.Column("import_session_id", sa.BigInteger(), sa.ForeignKey("import_sessions.id", ondelete="SET NULL"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
@@ -360,6 +418,8 @@ def upgrade() -> None:
     )
     op.create_index("ix_transactions_book_occurred_date", "transactions", ["book_id", "occurred_date"])
     op.create_index("ix_transactions_previous_tx_id", "transactions", ["previous_tx_id"])
+    op.create_index("ix_transactions_import_id", "transactions", ["import_id"])
+    op.create_index("ix_transactions_import_session_id", "transactions", ["import_session_id"])
 
     op.create_table(
         "balance_adjustments",
@@ -405,6 +465,19 @@ def upgrade() -> None:
     )
     op.create_index("ix_splits_tx_id", "splits", ["tx_id"])
     op.create_index("ix_splits_account_id", "splits", ["account_id"])
+
+    op.create_table(
+        "import_session_transactions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("session_id", sa.BigInteger(), sa.ForeignKey("import_sessions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("tx_id", sa.BigInteger(), sa.ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("action", sa.String(length=20), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("action IN ('created', 'updated', 'validated')", name="ck_import_session_transactions_action"),
+        sa.UniqueConstraint("session_id", "tx_id", "action", name="uq_import_session_transaction_action"),
+    )
+    op.create_index("ix_import_session_transactions_session", "import_session_transactions", ["session_id"], unique=False)
+    op.create_index("ix_import_session_transactions_tx", "import_session_transactions", ["tx_id"], unique=False)
 
     op.create_table(
         "lots",
@@ -708,9 +781,21 @@ def downgrade() -> None:
     op.drop_index("ix_splits_account_id", table_name="splits")
     op.drop_index("ix_splits_tx_id", table_name="splits")
     op.drop_table("splits")
+    op.drop_index("ix_import_session_transactions_tx", table_name="import_session_transactions")
+    op.drop_index("ix_import_session_transactions_session", table_name="import_session_transactions")
+    op.drop_table("import_session_transactions")
+    op.drop_index("ix_transactions_import_session_id", table_name="transactions")
+    op.drop_index("ix_transactions_import_id", table_name="transactions")
     op.drop_index("ix_transactions_book_occurred_date", table_name="transactions")
     op.drop_index("ix_transactions_previous_tx_id", table_name="transactions")
     op.drop_table("transactions")
+    op.drop_index("ix_import_rules_previous", table_name="import_rules")
+    op.drop_index("ix_import_rules_priority", table_name="import_rules")
+    op.drop_index("ix_import_rules_book_kind", table_name="import_rules")
+    op.drop_table("import_rules")
+    op.drop_index("ix_import_sessions_file_hash", table_name="import_sessions")
+    op.drop_index("ix_import_sessions_book_status", table_name="import_sessions")
+    op.drop_table("import_sessions")
     op.drop_index("ix_projects_book_id", table_name="projects")
     op.drop_table("projects")
     op.drop_index("ix_people_book_id", table_name="people")

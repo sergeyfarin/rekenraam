@@ -89,3 +89,23 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
   const text = await response.text();
   return (text ? JSON.parse(text) : undefined) as TResponse;
 }
+
+export async function apiText(path: string, init?: RequestInit): Promise<string> {
+  const baseUrl = getApiBaseUrl();
+  if (baseUrl === null) {
+    throw new Error("PUBLIC_API_BASE_URL is not configured");
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    credentials: "include",
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.text();
+}

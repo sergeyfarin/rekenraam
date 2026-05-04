@@ -88,6 +88,7 @@ class TransactionSummary(BaseModel):
     memo: str | None
     status: str
     reference: str | None
+    import_id: str | None = None
     created_at: datetime
     splits: tuple[SplitEntry, ...]
 

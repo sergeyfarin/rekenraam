@@ -23,6 +23,7 @@
     { label: "Accounts", href: "/accounts" },
     { label: "Investments", href: "/investments" },
     { label: "Reports", href: "/reports" },
+    { label: "Import/Export", href: "/import-export" },
     { label: "Planning", href: "/planning" },
     { label: "Tax", href: "/tax" },
     { label: "Settings", href: "/settings" },

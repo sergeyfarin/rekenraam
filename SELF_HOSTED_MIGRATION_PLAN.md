@@ -215,9 +215,9 @@ Tasks:
 1. Build a unified import pipeline for CSV, QIF, and OFX/QFX.
 2. Add import sessions, preview, duplicate detection, mapping templates, and
    commit workflow.
-3. Add SQLite desktop-to-Postgres import as a special importer.
-4. Add CSV/QIF export and report CSV export before PDF.
-5. Defer PDF statement parsing and bank connectivity until after v1.
+3. Add CSV/QIF export and report CSV export before PDF.
+4. Defer SQLite desktop-to-Postgres import, PDF statement parsing, and bank
+   connectivity until after v1.
 
 Public API targets:
 
@@ -226,7 +226,6 @@ Public API targets:
 
 Exit criteria:
 
-- existing desktop data can be migrated into Postgres through a tested path
 - common bank/card files can be previewed, matched, and committed
 - users can export core data without direct database access
 
@@ -334,7 +333,7 @@ Deletion gate:
 
 1. parity checklist is signed off for core workflows
 2. no frontend runtime imports Tauri APIs
-3. SQLite desktop-to-Postgres import is tested
+3. import/export parity is tested without a desktop migration requirement
 4. Docker deployment is working
 5. auth/audit context is in place for writes
 

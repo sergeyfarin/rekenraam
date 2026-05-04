@@ -52,6 +52,7 @@ class TransactionService:
             memo=input.memo,
             status=input.status,
             reference=input.reference,
+            import_id=input.import_id,
             created_by_user_id=audit.created_by_user_id if audit is not None else None,
             created_session_id=audit.created_session_id if audit is not None else None,
             created_device_id=audit.created_device_id if audit is not None else None,
@@ -318,6 +319,7 @@ class TransactionService:
                 memo=transaction.memo,
                 status=transaction.status,
                 reference=transaction.reference,
+                import_id=transaction.import_id,
                 created_at=transaction.created_at,
                 splits=tuple(splits_by_tx.get(transaction.id, [])),
             )

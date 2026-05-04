@@ -24,7 +24,6 @@ Small-business support is an architectural future option, not a v1 release gate.
 - reconciliation workflow with balancing history and unlock/void controls
 - CSV, XLS/XLSX, QIF, and OFX/QFX import with preview, validation, matching,
   duplicate detection, import audit trail, and commit
-- legacy SQLite desktop-to-Postgres import
 - CSV/QIF export and report data export
 - core reports: net worth, cash flow, spending by category/payee, account
   trends, realized/unrealized gains
@@ -99,7 +98,6 @@ V1 can release when:
 - core account, register, transaction, reconciliation, import/export, report,
   budget, schedule, investment, pricing, plugin, and theme workflows are usable
   without Tauri
-- legacy SQLite import has parity fixtures
 - backups and restores are documented and smoke-tested
 - frontend no longer needs Tauri runtime APIs
 - deployment, frontend, and core workflows no longer depend on Tauri runtime or
