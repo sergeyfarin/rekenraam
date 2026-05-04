@@ -1,11 +1,12 @@
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from rekenraam_api.api.dependencies import get_account_service, get_book_service, require_request_context
 from rekenraam_api.api.dependencies import get_metadata_service
+from rekenraam_api.api.dependencies import get_reconciliation_service
 from rekenraam_api.api.dependencies import get_report_service
 from rekenraam_api.api.dependencies import get_transaction_service
 from rekenraam_api.app import app
@@ -32,6 +33,17 @@ from rekenraam_api.schemas.metadata import (
     PersonSummary,
     ProjectSummary,
     TagSummary,
+)
+from rekenraam_api.schemas.reconciliation import (
+    BalanceCheckSummary,
+    BalanceConstraintCreateInput,
+    BalanceConstraintSummary,
+    BalanceConstraintValidation,
+    ReconciliationCommoditySummary,
+    ReconciliationFinishInput,
+    ReconciliationFinishResult,
+    ReconciliationHistoryResponse,
+    ReconciliationStartResponse,
 )
 from rekenraam_api.schemas.reports import CashflowRow, CategorySpendRow, PayeeTotalRow
 from rekenraam_api.schemas.register import RegisterEntry, RegisterPage
@@ -811,6 +823,148 @@ class StubReportService:
         return [PayeeTotalRow(payee_id=1, payee_name="Local Market", total_minor=-1250)]
 
 
+class StubReconciliationService:
+    _created_at = datetime(2026, 5, 3, tzinfo=UTC)
+
+    async def start(
+        self,
+        account_id: int,
+        as_of_date: date,
+        statement_start_date: date | None = None,
+    ) -> ReconciliationStartResponse | None:
+        if account_id == 99:
+            return None
+        return ReconciliationStartResponse(
+            account=AccountSummary(
+                id=account_id,
+                book_id=1,
+                parent_id=1,
+                account_type="asset",
+                name="Cash",
+                commodity_id=1,
+                institution_id=None,
+                institution_name=None,
+                country_id=None,
+                country_name=None,
+                number_last4="1234",
+                is_closed=False,
+                is_hidden=False,
+                is_system=False,
+                system_role=None,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            ),
+            commodity=ReconciliationCommoditySummary(id=1, name="US Dollar", symbol="USD", scale=2),
+            last_balancing=AccountBalancingSummary(
+                id=7,
+                account_id=account_id,
+                as_of_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                balance_minor=500000,
+                memo="Previous",
+            ),
+            statement_start_date=statement_start_date or datetime(2026, 5, 2, tzinfo=UTC).date(),
+            statement_end_date=as_of_date,
+            remembered_offset_account_id=3,
+            candidates=(
+                TransactionSummary(
+                    id=2,
+                    book_id=1,
+                    occurred_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                    posted_date=datetime(2026, 5, 2, tzinfo=UTC).date(),
+                    payee_id=None,
+                    memo="Groceries",
+                    status="cleared",
+                    reference=None,
+                    created_at=self._created_at,
+                    splits=(),
+                ),
+            ),
+        )
+
+    async def finish(
+        self,
+        account_id: int,
+        input: ReconciliationFinishInput,
+    ) -> ReconciliationFinishResult | None:
+        if account_id == 99:
+            return None
+        check = BalanceCheckSummary(
+            id=11,
+            book_id=input.book_id,
+            account_id=account_id,
+            as_of_date=input.as_of_date,
+            balance_minor=input.statement_balance_minor,
+            memo=input.memo,
+            status="matched",
+            created_at=self._created_at,
+        )
+        return ReconciliationFinishResult(
+            balance_check=check,
+            balancing=AccountBalancingSummary(
+                id=12,
+                account_id=account_id,
+                as_of_date=input.as_of_date,
+                balance_minor=input.statement_balance_minor,
+                memo=input.memo,
+            ),
+            adjustment=None,
+            difference_minor=0,
+            reconciled_count=len(input.selected_transaction_ids),
+            uncleared_count=0,
+        )
+
+    async def history(self, account_id: int) -> ReconciliationHistoryResponse | None:
+        if account_id == 99:
+            return None
+        return ReconciliationHistoryResponse(balancings=(), balance_checks=(), balance_adjustments=())
+
+    async def unlock(
+        self,
+        account_id: int,
+        from_date: date,
+        reason: str | None,
+        confirm: bool,
+    ) -> int | None:
+        if account_id == 99:
+            return None
+        if not confirm:
+            raise ValueError("unlock not confirmed")
+        return 1
+
+    async def list_constraints(self, account_id: int) -> tuple[BalanceConstraintSummary, ...] | None:
+        if account_id == 99:
+            return None
+        return ()
+
+    async def create_constraint(
+        self,
+        account_id: int,
+        input: BalanceConstraintCreateInput,
+    ) -> BalanceConstraintSummary | None:
+        if account_id == 99:
+            return None
+        return BalanceConstraintSummary(
+            id=13,
+            book_id=input.book_id,
+            account_id=account_id,
+            min_balance_minor=input.min_balance_minor,
+            max_balance_minor=input.max_balance_minor,
+            sign_rule=input.sign_rule,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def delete_constraint(self, account_id: int, constraint_id: int) -> bool | None:
+        if account_id == 99:
+            return None
+        return constraint_id == 13
+
+    async def validate_constraints(self, account_id: int) -> BalanceConstraintValidation | None:
+        if account_id == 99:
+            return None
+        return BalanceConstraintValidation(valid=True, balance_minor=500000, issues=())
+
+
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
     async def stub_request_context() -> RequestContext:
@@ -1394,3 +1548,65 @@ async def test_get_account_register_returns_404_for_missing_account(client: Asyn
 
     assert response.status_code == 404
     assert response.json() == {"detail": "account not found"}
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_start_returns_candidates(client: AsyncClient) -> None:
+    app.dependency_overrides[get_reconciliation_service] = StubReconciliationService
+
+    response = await client.get("/api/v1/reconciliation/accounts/2/start?as_of_date=2026-05-31")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["statement_start_date"] == "2026-05-02"
+    assert payload["remembered_offset_account_id"] == 3
+    assert payload["candidates"][0]["status"] == "cleared"
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_finish_returns_atomic_result(client: AsyncClient) -> None:
+    app.dependency_overrides[get_reconciliation_service] = StubReconciliationService
+
+    response = await client.post(
+        "/api/v1/reconciliation/accounts/2/finish",
+        json={
+            "book_id": 1,
+            "as_of_date": "2026-05-31",
+            "statement_start_date": "2026-05-02",
+            "statement_balance_minor": 512500,
+            "selected_transaction_ids": [2],
+            "offset_account_id": None,
+            "remember_offset_account": False,
+            "memo": "May statement",
+            "confirm_unbalanced": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["balance_check"]["balance_minor"] == 512500
+    assert payload["balancing"]["as_of_date"] == "2026-05-31"
+    assert payload["reconciled_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_constraints_round_trip(client: AsyncClient) -> None:
+    app.dependency_overrides[get_reconciliation_service] = StubReconciliationService
+
+    create_response = await client.post(
+        "/api/v1/reconciliation/accounts/2/constraints",
+        json={
+            "book_id": 1,
+            "min_balance_minor": 0,
+            "max_balance_minor": None,
+            "sign_rule": "nonnegative",
+        },
+    )
+    validation_response = await client.get("/api/v1/reconciliation/accounts/2/constraints/validation")
+    delete_response = await client.delete("/api/v1/reconciliation/accounts/2/constraints/13")
+
+    assert create_response.status_code == 200
+    assert create_response.json()["sign_rule"] == "nonnegative"
+    assert validation_response.status_code == 200
+    assert validation_response.json()["valid"] is True
+    assert delete_response.status_code == 204

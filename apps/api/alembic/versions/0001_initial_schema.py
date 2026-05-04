@@ -286,6 +286,57 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "balance_checks",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("as_of_date", sa.Date(), nullable=False),
+        sa.Column("balance_minor", sa.BigInteger(), nullable=False),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default=sa.text("'recorded'")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
+        sa.CheckConstraint(
+            "status IN ('recorded', 'matched', 'failed', 'unbalanced', 'balanced')",
+            name="ck_balance_checks_status",
+        ),
+    )
+    op.create_index("ix_balance_checks_account_date", "balance_checks", ["account_id", "as_of_date"], unique=False)
+
+    op.create_table(
+        "balance_constraints",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("min_balance_minor", sa.BigInteger(), nullable=True),
+        sa.Column("max_balance_minor", sa.BigInteger(), nullable=True),
+        sa.Column("sign_rule", sa.String(length=20), nullable=False, server_default=sa.text("'any'")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint(
+            "sign_rule IN ('any', 'nonnegative', 'nonpositive')",
+            name="ck_balance_constraints_sign_rule",
+        ),
+    )
+    op.create_index("ix_balance_constraints_account", "balance_constraints", ["account_id"], unique=False)
+
+    op.create_table(
+        "reconciliation_preferences",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("offset_account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", "account_id", name="uq_reconciliation_preferences_user_account"),
+    )
+    op.create_index("ix_reconciliation_preferences_account", "reconciliation_preferences", ["account_id"], unique=False)
+
+    op.create_table(
         "transactions",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
@@ -309,6 +360,29 @@ def upgrade() -> None:
     )
     op.create_index("ix_transactions_book_occurred_date", "transactions", ["book_id", "occurred_date"])
     op.create_index("ix_transactions_previous_tx_id", "transactions", ["previous_tx_id"])
+
+    op.create_table(
+        "balance_adjustments",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("balance_check_id", sa.BigInteger(), sa.ForeignKey("balance_checks.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("offset_account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("as_of_date", sa.Date(), nullable=False),
+        sa.Column("target_balance_minor", sa.BigInteger(), nullable=False),
+        sa.Column("actual_balance_minor", sa.BigInteger(), nullable=False),
+        sa.Column("adjustment_minor", sa.BigInteger(), nullable=False),
+        sa.Column("tx_id", sa.BigInteger(), sa.ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("mark", sa.String(length=64), nullable=False, server_default=sa.text("'balance_adjustment'")),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
+    )
+    op.create_index("ix_balance_adjustments_account_date", "balance_adjustments", ["account_id", "as_of_date"], unique=False)
+    op.create_index("ix_balance_adjustments_check", "balance_adjustments", ["balance_check_id"], unique=False)
 
     op.create_table(
         "splits",
@@ -599,6 +673,15 @@ def downgrade() -> None:
     op.drop_index("ix_report_cache_book_type", table_name="report_cache")
     op.drop_table("report_cache")
     op.drop_table("book_state")
+    op.drop_index("ix_balance_adjustments_check", table_name="balance_adjustments")
+    op.drop_index("ix_balance_adjustments_account_date", table_name="balance_adjustments")
+    op.drop_table("balance_adjustments")
+    op.drop_index("ix_reconciliation_preferences_account", table_name="reconciliation_preferences")
+    op.drop_table("reconciliation_preferences")
+    op.drop_index("ix_balance_constraints_account", table_name="balance_constraints")
+    op.drop_table("balance_constraints")
+    op.drop_index("ix_balance_checks_account_date", table_name="balance_checks")
+    op.drop_table("balance_checks")
     op.drop_index("ix_pricing_refresh_runs_finished_at", table_name="pricing_refresh_runs")
     op.drop_index("ix_pricing_refresh_runs_book_id", table_name="pricing_refresh_runs")
     op.drop_table("pricing_refresh_runs")

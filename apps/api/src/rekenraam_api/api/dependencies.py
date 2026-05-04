@@ -13,6 +13,7 @@ from rekenraam_api.repositories.books import BookRepository
 from rekenraam_api.repositories.investments import InvestmentRepository
 from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.repositories.pricing import PricingRepository
+from rekenraam_api.repositories.reconciliation import ReconciliationRepository
 from rekenraam_api.repositories.reports import ReportRepository
 from rekenraam_api.repositories.transactions import TransactionRepository
 from rekenraam_api.services.access import AccessPolicy
@@ -24,6 +25,7 @@ from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.metadata import MetadataService
 from rekenraam_api.services.pricing import PricingService
 from rekenraam_api.services.pricing_execution import PricingExecutionService
+from rekenraam_api.services.reconciliation import ReconciliationService
 from rekenraam_api.services.reports import ReportService
 from rekenraam_api.services.request_context import RequestContext, set_request_context
 from rekenraam_api.services.transactions import TransactionService
@@ -119,6 +121,14 @@ def get_pricing_service(session: AsyncSession = Depends(get_db_session)) -> Pric
 def get_pricing_execution_service(session: AsyncSession = Depends(get_db_session)) -> PricingExecutionService:
     repository = PricingRepository(session)
     return PricingExecutionService(repository)
+
+
+def get_reconciliation_service(
+    session: AsyncSession = Depends(get_db_session),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+) -> ReconciliationService:
+    repository = ReconciliationRepository(session)
+    return ReconciliationService(repository, access_policy)
 
 
 def get_pricing_worker(request: Request) -> PricingRefreshWorker:
