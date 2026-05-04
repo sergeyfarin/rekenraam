@@ -10,13 +10,21 @@ class TransactionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_transactions(self, filters: TransactionListFilters | None = None) -> list[Transaction]:
+    async def list_transactions(
+        self,
+        filters: TransactionListFilters | None = None,
+        allowed_book_ids: list[int] | None = None,
+    ) -> list[Transaction]:
         active_filters = filters or TransactionListFilters()
 
         statement: Select[tuple[Transaction]] = select(Transaction).outerjoin(Payee, Payee.id == Transaction.payee_id)
 
         if active_filters.book_id is not None:
             statement = statement.where(Transaction.book_id == active_filters.book_id)
+        elif allowed_book_ids is not None:
+            if not allowed_book_ids:
+                return []
+            statement = statement.where(Transaction.book_id.in_(allowed_book_ids))
 
         status_filter = active_filters.status
         if status_filter is None or status_filter == "active":
@@ -100,6 +108,10 @@ class TransactionRepository:
         memo: str | None,
         status: str,
         reference: str | None,
+        created_by_user_id: int | None = None,
+        created_session_id: int | None = None,
+        created_device_id: int | None = None,
+        created_request_id: str | None = None,
     ) -> Transaction:
         transaction = Transaction(
             book_id=book_id,
@@ -109,6 +121,10 @@ class TransactionRepository:
             memo=memo,
             status=status,
             reference=reference,
+            created_by_user_id=created_by_user_id,
+            created_session_id=created_session_id,
+            created_device_id=created_device_id,
+            created_request_id=created_request_id,
         )
         self._session.add(transaction)
         await self._session.flush()
@@ -158,6 +174,10 @@ class TransactionRepository:
         self,
         transaction_id: int,
         splits: list[dict[str, int | str | None]],
+        created_by_user_id: int | None = None,
+        created_session_id: int | None = None,
+        created_device_id: int | None = None,
+        created_request_id: str | None = None,
     ) -> list[Split]:
         existing = await self.list_splits_for_transaction_ids([transaction_id])
         for split in existing:
@@ -177,6 +197,10 @@ class TransactionRepository:
                 project_id=split_input["project_id"],
                 share_bps=split_input["share_bps"],
                 memo=split_input["memo"],
+                created_by_user_id=created_by_user_id,
+                created_session_id=created_session_id,
+                created_device_id=created_device_id,
+                created_request_id=created_request_id,
             )
             self._session.add(split)
             created.append(split)
@@ -213,7 +237,16 @@ class TransactionRepository:
             return None, None
         return row[0], row[1]
 
-    async def duplicate_transaction(self, transaction_id: int, today) -> Transaction | None:
+    async def duplicate_transaction(
+        self,
+        transaction_id: int,
+        today,
+        *,
+        created_by_user_id: int | None = None,
+        created_session_id: int | None = None,
+        created_device_id: int | None = None,
+        created_request_id: str | None = None,
+    ) -> Transaction | None:
         source = await self.get_transaction_by_id(transaction_id)
         if source is None:
             return None
@@ -226,6 +259,10 @@ class TransactionRepository:
             memo=source.memo,
             status="uncleared",
             reference=None,
+            created_by_user_id=created_by_user_id,
+            created_session_id=created_session_id,
+            created_device_id=created_device_id,
+            created_request_id=created_request_id,
         )
         self._session.add(duplicate)
         await self._session.flush()
@@ -244,6 +281,10 @@ class TransactionRepository:
                     project_id=source_split.project_id,
                     share_bps=source_split.share_bps,
                     memo=source_split.memo,
+                    created_by_user_id=created_by_user_id,
+                    created_session_id=created_session_id,
+                    created_device_id=created_device_id,
+                    created_request_id=created_request_id,
                 )
             )
 
@@ -251,7 +292,15 @@ class TransactionRepository:
         await self._session.refresh(duplicate)
         return duplicate
 
-    async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
+    async def bulk_void_transactions(
+        self,
+        transaction_ids: list[int],
+        *,
+        created_by_user_id: int | None = None,
+        created_session_id: int | None = None,
+        created_device_id: int | None = None,
+        created_request_id: str | None = None,
+    ) -> int:
         if not transaction_ids:
             return 0
 
@@ -269,6 +318,10 @@ class TransactionRepository:
                 memo=source.memo,
                 status="void",
                 reference=source.reference,
+                created_by_user_id=created_by_user_id,
+                created_session_id=created_session_id,
+                created_device_id=created_device_id,
+                created_request_id=created_request_id,
             )
             self._session.add(replacement)
             await self._session.flush()
@@ -287,6 +340,10 @@ class TransactionRepository:
                         project_id=source_split.project_id,
                         share_bps=source_split.share_bps,
                         memo=source_split.memo,
+                        created_by_user_id=created_by_user_id,
+                        created_session_id=created_session_id,
+                        created_device_id=created_device_id,
+                        created_request_id=created_request_id,
                     )
                 )
             voided += 1

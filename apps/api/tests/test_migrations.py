@@ -110,6 +110,8 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
     try:
         _run_migrations(database_name, "head")
         assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
+        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.user_devices')")) == "user_devices"
+        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')")) == "auth_sessions"
         assert (
             asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')"))
             == "book_memberships"
@@ -127,6 +129,7 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
 
         _run_migrations(database_name, "base")
         assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) is None
+        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')")) is None
         assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')")) is None
 
         _run_migrations(database_name, "head")

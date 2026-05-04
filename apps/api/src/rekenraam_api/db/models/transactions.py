@@ -25,6 +25,10 @@ class Transaction(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="uncleared")
     reference: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_session_id: Mapped[int | None] = mapped_column(ForeignKey("auth_sessions.id", ondelete="SET NULL"))
+    created_device_id: Mapped[int | None] = mapped_column(ForeignKey("user_devices.id", ondelete="SET NULL"))
+    created_request_id: Mapped[str | None] = mapped_column(String(64))
 
 
 class Split(Base):
@@ -46,3 +50,7 @@ class Split(Base):
     share_bps: Mapped[int | None] = mapped_column(BigInteger)
     memo: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_session_id: Mapped[int | None] = mapped_column(ForeignKey("auth_sessions.id", ondelete="SET NULL"))
+    created_device_id: Mapped[int | None] = mapped_column(ForeignKey("user_devices.id", ondelete="SET NULL"))
+    created_request_id: Mapped[str | None] = mapped_column(String(64))

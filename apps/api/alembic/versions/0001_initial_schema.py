@@ -31,6 +31,36 @@ def upgrade() -> None:
     op.create_index("ix_users_email", "users", ["email"], unique=True)
 
     op.create_table(
+        "user_devices",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("device_fingerprint", sa.String(length=128), nullable=False),
+        sa.Column("label", sa.String(length=200), nullable=True),
+        sa.Column("user_agent", sa.Text(), nullable=True),
+        sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", "device_fingerprint", name="uq_user_devices_user_fingerprint"),
+    )
+    op.create_index("ix_user_devices_user_id", "user_devices", ["user_id"], unique=False)
+
+    op.create_table(
+        "auth_sessions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("token_hash", sa.String(length=128), nullable=False),
+        sa.Column("user_agent", sa.Text(), nullable=True),
+        sa.Column("ip_address", sa.String(length=64), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_index("ix_auth_sessions_user_id", "auth_sessions", ["user_id"], unique=False)
+    op.create_index("ix_auth_sessions_token_hash", "auth_sessions", ["token_hash"], unique=True)
+    op.create_index("ix_auth_sessions_expires_at", "auth_sessions", ["expires_at"], unique=False)
+
+    op.create_table(
         "books",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("slug", sa.String(length=120), nullable=False),
@@ -75,6 +105,10 @@ def upgrade() -> None:
         sa.Column("query_text", sa.Text(), nullable=False),
         sa.Column("params_schema", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
         sa.CheckConstraint("kind IN ('builtin', 'custom')", name="ck_report_definitions_kind"),
         sa.CheckConstraint("query_type IN ('sql', 'template')", name="ck_report_definitions_query_type"),
         sa.UniqueConstraint("previous_report_definition_id", name="uq_report_definitions_previous"),
@@ -233,6 +267,10 @@ def upgrade() -> None:
         sa.Column("balance_minor", sa.BigInteger(), nullable=False),
         sa.Column("memo", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
         sa.Column("voided_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("void_reason", sa.Text(), nullable=True),
     )
@@ -255,6 +293,10 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=20), nullable=False, server_default=sa.text("'uncleared'")),
         sa.Column("reference", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
         sa.CheckConstraint(
             "status IN ('uncleared', 'cleared', 'reconciled', 'void')",
             name="ck_transactions_status",
@@ -276,6 +318,10 @@ def upgrade() -> None:
         sa.Column("share_bps", sa.BigInteger(), nullable=True),
         sa.Column("memo", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
     )
     op.create_index("ix_splits_tx_id", "splits", ["tx_id"])
     op.create_index("ix_splits_account_id", "splits", ["account_id"])
@@ -440,6 +486,10 @@ def upgrade() -> None:
         sa.Column("pricing_resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("result_json", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("created_request_id", sa.String(length=64), nullable=True),
         sa.CheckConstraint("pricing_mode IN ('frozen', 'latest_corrected')", name="ck_report_runs_pricing_mode"),
         sa.UniqueConstraint("book_id", "definition_id", "params_hash", "as_of_seq", name="uq_report_runs_entry"),
     )
@@ -594,5 +644,11 @@ def downgrade() -> None:
     op.drop_table("book_memberships")
     op.drop_index("ix_books_slug", table_name="books")
     op.drop_table("books")
+    op.drop_index("ix_auth_sessions_expires_at", table_name="auth_sessions")
+    op.drop_index("ix_auth_sessions_token_hash", table_name="auth_sessions")
+    op.drop_index("ix_auth_sessions_user_id", table_name="auth_sessions")
+    op.drop_table("auth_sessions")
+    op.drop_index("ix_user_devices_user_id", table_name="user_devices")
+    op.drop_table("user_devices")
     op.drop_index("ix_users_email", table_name="users")
     op.drop_table("users")

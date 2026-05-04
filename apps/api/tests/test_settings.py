@@ -11,3 +11,11 @@ def test_settings_build_database_url_from_fields() -> None:
     )
 
     assert settings.database_url == "postgresql+asyncpg://finance:secret@db:6543/ledger"
+
+
+def test_first_admin_seed_settings_are_optional() -> None:
+    settings = Settings()
+
+    assert settings.first_admin_email is None
+    assert settings.first_admin_password is None
+    assert settings.first_admin_display_name == "Admin"

@@ -8,6 +8,8 @@ src/rekenraam_api.egg-info/top_level.txt
 src/rekenraam_api/api/dependencies.py
 src/rekenraam_api/api/router.py
 src/rekenraam_api/api/v1/accounts.py
+src/rekenraam_api/api/v1/admin.py
+src/rekenraam_api/api/v1/auth.py
 src/rekenraam_api/api/v1/books.py
 src/rekenraam_api/api/v1/health.py
 src/rekenraam_api/api/v1/investments.py
@@ -28,6 +30,7 @@ src/rekenraam_api/db/models/pricing.py
 src/rekenraam_api/db/models/report_metadata.py
 src/rekenraam_api/db/models/report_state.py
 src/rekenraam_api/db/models/transactions.py
+src/rekenraam_api/repositories/access.py
 src/rekenraam_api/repositories/accounts.py
 src/rekenraam_api/repositories/books.py
 src/rekenraam_api/repositories/investments.py
@@ -36,6 +39,8 @@ src/rekenraam_api/repositories/pricing.py
 src/rekenraam_api/repositories/reports.py
 src/rekenraam_api/repositories/transactions.py
 src/rekenraam_api/schemas/accounts.py
+src/rekenraam_api/schemas/admin.py
+src/rekenraam_api/schemas/auth.py
 src/rekenraam_api/schemas/books.py
 src/rekenraam_api/schemas/health.py
 src/rekenraam_api/schemas/investments.py
@@ -44,7 +49,10 @@ src/rekenraam_api/schemas/pricing.py
 src/rekenraam_api/schemas/register.py
 src/rekenraam_api/schemas/reports.py
 src/rekenraam_api/schemas/transactions.py
+src/rekenraam_api/services/access.py
 src/rekenraam_api/services/accounts.py
+src/rekenraam_api/services/admin.py
+src/rekenraam_api/services/auth.py
 src/rekenraam_api/services/books.py
 src/rekenraam_api/services/investments.py
 src/rekenraam_api/services/metadata.py
@@ -52,9 +60,12 @@ src/rekenraam_api/services/pricing.py
 src/rekenraam_api/services/pricing_execution.py
 src/rekenraam_api/services/report_invalidation.py
 src/rekenraam_api/services/reports.py
+src/rekenraam_api/services/request_context.py
 src/rekenraam_api/services/transactions.py
 src/rekenraam_api/workers/pricing.py
+tests/test_admin_api.py
 tests/test_api.py
+tests/test_fx_manual_api.py
 tests/test_investments_api.py
 tests/test_investments_repository.py
 tests/test_investments_service.py

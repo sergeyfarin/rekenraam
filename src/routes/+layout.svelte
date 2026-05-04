@@ -1,9 +1,19 @@
 <script lang="ts">
   import "../app.css";
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
   import * as Dialog from "$lib/components/ui/dialog";
+  import {
+    createFirstAdmin,
+    getBootstrapStatus,
+    getCurrentUser,
+    login,
+    logout,
+    type AuthMe
+  } from "$lib/api/auth";
 
   type Tab = { label: string; href: string };
 
@@ -22,6 +32,63 @@
   $: currentPath = page.url.pathname;
 
   let helpOpen = false;
+  let authLoading = true;
+  let bootstrapRequired = false;
+  let authUser: AuthMe | null = null;
+  let authError = "";
+  let authSubmitting = false;
+  let displayName = "";
+  let email = "";
+  let password = "";
+
+  onMount(() => {
+    void refreshAuth();
+  });
+
+  async function refreshAuth() {
+    authLoading = true;
+    authError = "";
+    try {
+      authUser = await getCurrentUser();
+      bootstrapRequired = false;
+    } catch {
+      authUser = null;
+      try {
+        const status = await getBootstrapStatus();
+        bootstrapRequired = status.bootstrap_required;
+      } catch (error) {
+        authError = error instanceof Error ? error.message : "Authentication check failed";
+      }
+    } finally {
+      authLoading = false;
+    }
+  }
+
+  async function submitAuth() {
+    authSubmitting = true;
+    authError = "";
+    try {
+      authUser = bootstrapRequired
+        ? await createFirstAdmin({ email, password, display_name: displayName })
+        : await login({ email, password });
+      bootstrapRequired = false;
+      password = "";
+    } catch (error) {
+      authError = error instanceof Error ? error.message : "Authentication failed";
+    } finally {
+      authSubmitting = false;
+    }
+  }
+
+  async function handleLogout() {
+    authError = "";
+    try {
+      await logout();
+    } finally {
+      authUser = null;
+      await refreshAuth();
+    }
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     // Ignore shortcuts when user is typing in an input, textarea, select, or contenteditable
@@ -53,6 +120,38 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
+{#if authLoading}
+  <main class="grid min-h-screen place-items-center bg-background px-6 text-sm text-muted-foreground">
+    Loading
+  </main>
+{:else if !authUser}
+  <main class="grid min-h-screen place-items-center bg-background px-6">
+    <form class="w-full max-w-sm space-y-4" on:submit|preventDefault={submitAuth}>
+      <div class="space-y-1">
+        <h1 class="text-2xl font-semibold">{bootstrapRequired ? "Create Admin" : "Sign In"}</h1>
+        <p class="text-sm text-muted-foreground">Rekenraam</p>
+      </div>
+      {#if bootstrapRequired}
+        <Input bind:value={displayName} placeholder="Display name" autocomplete="name" required />
+      {/if}
+      <Input bind:value={email} placeholder="Email" autocomplete="email" type="email" required />
+      <Input
+        bind:value={password}
+        placeholder="Password"
+        autocomplete={bootstrapRequired ? "new-password" : "current-password"}
+        type="password"
+        required
+        minlength={bootstrapRequired ? 12 : 1}
+      />
+      {#if authError}
+        <p class="text-sm text-destructive">{authError}</p>
+      {/if}
+      <Button type="submit" class="w-full" disabled={authSubmitting}>
+        {authSubmitting ? "Please wait" : bootstrapRequired ? "Create Admin" : "Sign In"}
+      </Button>
+    </form>
+  </main>
+{:else}
 <header class="sticky top-0 z-10 border-b border-border bg-background">
   <div class="container mx-auto flex h-16 items-center justify-between gap-4 px-6">
     <div class="font-semibold text-lg">Rekenraam 🪙</div>
@@ -68,10 +167,15 @@
         </a>
       {/each}
     </nav>
+    <div class="flex items-center gap-2 text-sm">
+      <span class="max-w-40 truncate text-muted-foreground">{authUser.user.display_name}</span>
+      <Button variant="outline" size="sm" onclick={handleLogout}>Logout</Button>
+    </div>
   </div>
 </header>
 
 <slot />
+{/if}
 
 <!-- Help / keyboard shortcut modal -->
 <Dialog.Root bind:open={helpOpen}>

@@ -37,6 +37,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
+For faster local testing, `.env` may include `FIRST_ADMIN_EMAIL`,
+`FIRST_ADMIN_PASSWORD`, and `FIRST_ADMIN_DISPLAY_NAME`; the API seeds that admin
+only when no users exist.
+
 Default services:
 
 - frontend: <http://localhost:3000>

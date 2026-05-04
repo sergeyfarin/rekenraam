@@ -7,6 +7,24 @@ from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
 from rekenraam_api.db.models.report_state import BookState, ReportCache
 from rekenraam_api.db.models.metadata import Category, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
+from rekenraam_api.services.request_context import get_request_context
+
+
+def _audit_values() -> dict[str, int | str | None]:
+    context = get_request_context()
+    if context is None:
+        return {
+            "created_by_user_id": None,
+            "created_session_id": None,
+            "created_device_id": None,
+            "created_request_id": None,
+        }
+    return {
+        "created_by_user_id": context.user_id,
+        "created_session_id": context.session_id,
+        "created_device_id": context.device_id,
+        "created_request_id": context.request_id,
+    }
 
 
 class ReportRepository:
@@ -140,6 +158,7 @@ class ReportRepository:
             query_type=query_type,
             query_text=query_text,
             params_schema=params_schema,
+            **_audit_values(),
         )
         self._session.add(row)
         await self._session.commit()
@@ -168,6 +187,7 @@ class ReportRepository:
             query_type=query_type,
             query_text=query_text,
             params_schema=params_schema,
+            **_audit_values(),
         )
         self._session.add(row)
         await self._session.commit()
@@ -187,6 +207,7 @@ class ReportRepository:
             query_type=current.query_type,
             query_text=current.query_text,
             params_schema=current.params_schema,
+            **_audit_values(),
         )
         self._session.add(row)
         await self._session.commit()
@@ -228,6 +249,7 @@ class ReportRepository:
             valuation_snapshot_id=valuation_snapshot_id,
             pricing_resolved_at=pricing_resolved_at,
             result_json=result_json,
+            **_audit_values(),
         )
         self._session.add(row)
         await self._session.commit()

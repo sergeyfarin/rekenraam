@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from rekenraam_api.repositories.access import AccessRepository
+from rekenraam_api.services.request_context import RequestContext
+
+
+class AuthorizationError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class AuditStamp:
+    created_by_user_id: int | None
+    created_session_id: int | None
+    created_device_id: int | None
+    created_request_id: str | None
+
+
+class AccessPolicy:
+    def __init__(self, repository: AccessRepository, context: RequestContext | None) -> None:
+        self._repository = repository
+        self._context = context
+
+    @property
+    def context(self) -> RequestContext | None:
+        return self._context
+
+    def audit_stamp(self) -> AuditStamp:
+        if self._context is None:
+            return AuditStamp(None, None, None, None)
+        return AuditStamp(
+            created_by_user_id=self._context.user_id,
+            created_session_id=self._context.session_id,
+            created_device_id=self._context.device_id,
+            created_request_id=self._context.request_id,
+        )
+
+    async def list_readable_book_ids(self) -> list[int]:
+        if self._context is None:
+            return []
+        return await self._repository.list_user_book_ids(self._context.user_id)
+
+    async def require_book_role(self, book_id: int, allowed_roles: set[str]) -> str:
+        if self._context is None:
+            raise AuthorizationError("authentication required")
+        role = await self._repository.get_book_role(self._context.user_id, book_id)
+        if role not in allowed_roles:
+            raise AuthorizationError("book access denied")
+        return role
+
+    async def require_book_read(self, book_id: int) -> None:
+        await self.require_book_role(book_id, {"owner", "editor", "viewer"})
+
+    async def require_book_write(self, book_id: int) -> None:
+        await self.require_book_role(book_id, {"owner", "editor"})

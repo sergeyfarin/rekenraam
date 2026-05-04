@@ -15,8 +15,12 @@ class AccountRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_accounts(self) -> list[Account]:
+    async def list_accounts(self, book_ids: list[int] | None = None) -> list[Account]:
         statement: Select[tuple[Account]] = select(Account).order_by(Account.parent_id.nullsfirst(), Account.id)
+        if book_ids is not None:
+            if not book_ids:
+                return []
+            statement = statement.where(Account.book_id.in_(book_ids))
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -113,13 +117,17 @@ class AccountRepository:
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def get_account_balances(self) -> dict[int, int]:
+    async def get_account_balances(self, book_ids: list[int] | None = None) -> dict[int, int]:
         statement = (
             select(Split.account_id, func.coalesce(func.sum(Split.amount_minor), 0))
             .join(Transaction, Transaction.id == Split.tx_id)
             .where(Transaction.status != "void")
             .group_by(Split.account_id)
         )
+        if book_ids is not None:
+            if not book_ids:
+                return {}
+            statement = statement.where(Transaction.book_id.in_(book_ids))
         result = await self._session.execute(statement)
         return {account_id: balance_minor for account_id, balance_minor in result.all()}
 
@@ -238,6 +246,10 @@ class AccountRepository:
         as_of_date: date,
         balance_minor: int,
         memo: str | None,
+        created_by_user_id: int | None = None,
+        created_session_id: int | None = None,
+        created_device_id: int | None = None,
+        created_request_id: str | None = None,
     ) -> AccountBalancing | None:
         account = await self.get_account_by_id(account_id)
         if account is None:
@@ -257,6 +269,10 @@ class AccountRepository:
             balance_minor=balance_minor,
             memo=memo,
             created_at=datetime.now(UTC),
+            created_by_user_id=created_by_user_id,
+            created_session_id=created_session_id,
+            created_device_id=created_device_id,
+            created_request_id=created_request_id,
             voided_at=None,
             void_reason=None,
         )

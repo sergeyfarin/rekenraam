@@ -30,6 +30,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rekenraam}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
+      FIRST_ADMIN_DISPLAY_NAME: ${FIRST_ADMIN_DISPLAY_NAME:-Admin}
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v1/health"]
       interval: 5s

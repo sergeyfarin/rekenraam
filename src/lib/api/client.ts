@@ -42,6 +42,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
@@ -52,7 +53,8 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(await parseError(response));
   }
 
-  return (await response.json()) as T;
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
@@ -79,7 +81,7 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
     throw new Error("PUBLIC_API_BASE_URL is not configured");
   }
 
-  const response = await fetch(`${baseUrl}${path}`, { method: "DELETE" });
+  const response = await fetch(`${baseUrl}${path}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
     throw new Error(await parseError(response));
   }

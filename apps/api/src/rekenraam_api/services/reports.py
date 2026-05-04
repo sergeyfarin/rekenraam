@@ -3,6 +3,7 @@ import hashlib
 import json
 
 from rekenraam_api.repositories.reports import ReportRepository
+from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.schemas.reports import (
     CashflowReportInput,
     CashflowRow,
@@ -19,10 +20,13 @@ from rekenraam_api.schemas.reports import (
 
 
 class ReportService:
-    def __init__(self, repository: ReportRepository) -> None:
+    def __init__(self, repository: ReportRepository, access_policy: AccessPolicy | None = None) -> None:
         self._repository = repository
+        self._access_policy = access_policy
 
     async def list_report_definitions(self, book_id: int) -> list[ReportDefinitionSummary]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(book_id)
         rows = await self._repository.list_report_definitions(book_id)
         return [self._to_report_definition_summary(row) for row in rows]
 
@@ -30,10 +34,14 @@ class ReportService:
         row = await self._repository.get_report_definition(definition_id)
         if row is None:
             return None
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(row.book_id)
         return self._to_report_definition_summary(row)
 
     async def create_report_definition(self, input: ReportDefinitionCreateInput) -> ReportDefinitionSummary:
         self._validate_report_definition(input.kind, input.query_type)
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(input.book_id)
         row = await self._repository.create_report_definition(
             book_id=input.book_id,
             name=input.name,
@@ -46,6 +54,11 @@ class ReportService:
 
     async def update_report_definition(self, input: ReportDefinitionUpdateInput) -> ReportDefinitionSummary | None:
         self._validate_report_definition(input.kind, input.query_type)
+        current = await self._repository.get_report_definition(input.id)
+        if current is not None and self._access_policy is not None:
+            await self._access_policy.require_book_write(current.book_id)
+            if input.book_id != current.book_id:
+                raise ValueError("report definition book cannot be changed")
         row = await self._repository.update_report_definition(
             definition_id=input.id,
             book_id=input.book_id,
@@ -60,15 +73,22 @@ class ReportService:
         return self._to_report_definition_summary(row)
 
     async def delete_report_definition(self, definition_id: int) -> bool:
+        current = await self._repository.get_report_definition(definition_id)
+        if current is not None and self._access_policy is not None:
+            await self._access_policy.require_book_write(current.book_id)
         return await self._repository.delete_report_definition(definition_id)
 
     async def list_report_runs(self, book_id: int, definition_id: int | None = None) -> list[ReportRunSummary]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(book_id)
         rows = await self._repository.list_report_runs(book_id, definition_id)
         return [self._to_report_run_summary(row) for row in rows]
 
     async def create_report_run(self, input: ReportRunCreateInput) -> ReportRunSummary:
         if input.pricing_mode not in {"frozen", "latest_corrected"}:
             raise ValueError("pricing_mode must be frozen or latest_corrected")
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(input.book_id)
         definition = await self._repository.get_report_definition(input.definition_id)
         if definition is None:
             raise ValueError("report definition not found")
@@ -87,6 +107,8 @@ class ReportService:
         return self._to_report_run_summary(row)
 
     async def report_cashflow(self, input: CashflowReportInput) -> list[CashflowRow]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(input.book_id)
         group_by = (input.group_by or "month").strip().lower()
         if group_by not in {"day", "month", "quarter", "year"}:
             raise ValueError("group_by must be day, month, quarter, or year")
@@ -114,6 +136,8 @@ class ReportService:
         return mapped_rows
 
     async def report_category_spend(self, input: CategorySpendReportInput) -> list[CategorySpendRow]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(input.book_id)
         cached_rows = await self._get_cached_rows("category_spend", input)
         if cached_rows is not None:
             return [CategorySpendRow.model_validate(row) for row in cached_rows]
@@ -132,6 +156,8 @@ class ReportService:
         return mapped_rows
 
     async def report_payee_totals(self, input: PayeeTotalsReportInput) -> list[PayeeTotalRow]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(input.book_id)
         cached_rows = await self._get_cached_rows("payee_totals", input)
         if cached_rows is not None:
             return [PayeeTotalRow.model_validate(row) for row in cached_rows]
@@ -147,6 +173,8 @@ class ReportService:
         return mapped_rows
 
     async def bump_report_state(self, book_id: int) -> int:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(book_id)
         return await self._repository.bump_book_change_seq(book_id)
 
     async def _get_cached_rows(self, report_type: str, input) -> list[dict[str, object]] | None:

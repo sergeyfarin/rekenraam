@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.repositories.accounts import AccountRepository
+from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
@@ -26,11 +27,13 @@ class _TreeState:
 
 
 class AccountService:
-    def __init__(self, repository: AccountRepository) -> None:
+    def __init__(self, repository: AccountRepository, access_policy: AccessPolicy | None = None) -> None:
         self._repository = repository
+        self._access_policy = access_policy
 
     async def list_accounts(self) -> list[AccountSummary]:
-        accounts = await self._repository.list_accounts()
+        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
+        accounts = await self._repository.list_accounts(book_ids)
         return [self._to_summary(account) for account in accounts]
 
     async def create_account(self, input: AccountCreateInput) -> AccountSummary:
@@ -40,6 +43,8 @@ class AccountService:
             raise ValueError("name is required")
         if account_type not in {"cash", "checking", "savings", "credit", "loan", "investment", "asset", "liability", "income", "expense", "equity"}:
             raise ValueError("account type is invalid")
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(input.book_id)
         account = await self._repository.create_account(
             book_id=input.book_id,
             parent_id=input.parent_id,
@@ -65,6 +70,10 @@ class AccountService:
         current = await self._repository.get_account_by_id(account_id)
         if current is None:
             return None
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(current.book_id)
+            if input.book_id != current.book_id:
+                raise ValueError("account book cannot be changed")
         if current.is_system:
             raise ValueError("system accounts cannot be updated")
 
@@ -88,6 +97,8 @@ class AccountService:
         current = await self._repository.get_account_by_id(account_id)
         if current is None:
             return False
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(current.book_id)
         if current.is_system:
             raise ValueError("system accounts cannot be deleted")
         try:
@@ -102,10 +113,13 @@ class AccountService:
         account = await self._repository.get_account_by_id(account_id)
         if account is None:
             return None
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(account.book_id)
         return self._to_summary(account)
 
     async def list_account_balances(self) -> list[AccountBalanceSummary]:
-        balances = await self._repository.get_account_balances()
+        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
+        balances = await self._repository.get_account_balances(book_ids)
         return [
             AccountBalanceSummary(account_id=account_id, balance_minor=balance_minor)
             for account_id, balance_minor in sorted(balances.items())
@@ -167,6 +181,8 @@ class AccountService:
         if not confirm:
             raise ValueError("unlock not confirmed")
         account = await self._repository.get_account_by_id(account_id)
+        if account is not None and self._access_policy is not None:
+            await self._access_policy.require_book_write(account.book_id)
         count = await self._repository.unlock_account_balancings(account_id, from_date, reason)
         if count and account is not None:
             await bump_report_state(getattr(self._repository, "_session", None), account.book_id)
@@ -176,6 +192,8 @@ class AccountService:
         account = await self._repository.get_account_by_id(account_id)
         if account is None:
             return None
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(account.book_id)
 
         issues: list[str] = []
         if account.is_system:
@@ -189,12 +207,19 @@ class AccountService:
 
     async def create_account_balancing(self, input: AccountBalancingCreateInput) -> AccountBalancingSummary | None:
         try:
+            if self._access_policy is not None:
+                await self._access_policy.require_book_write(input.book_id)
+            audit = self._access_policy.audit_stamp() if self._access_policy is not None else None
             balancing = await self._repository.create_account_balancing(
                 book_id=input.book_id,
                 account_id=input.account_id,
                 as_of_date=input.as_of_date,
                 balance_minor=input.balance_minor,
                 memo=input.memo,
+                created_by_user_id=audit.created_by_user_id if audit is not None else None,
+                created_session_id=audit.created_session_id if audit is not None else None,
+                created_device_id=audit.created_device_id if audit is not None else None,
+                created_request_id=audit.created_request_id if audit is not None else None,
             )
         except ValueError:
             raise
@@ -213,7 +238,8 @@ class AccountService:
         )
 
     async def list_account_tree(self) -> list[AccountTreeNode]:
-        accounts = await self._repository.list_accounts()
+        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
+        accounts = await self._repository.list_accounts(book_ids)
         if not accounts:
             return []
 

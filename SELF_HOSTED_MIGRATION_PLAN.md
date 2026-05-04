@@ -94,6 +94,8 @@ Correctness:
 
 ## Milestone 1: Roadmap And Documentation Reset
 
+Status: Complete.
+
 Goal: make the self-hosted roadmap the only active plan.
 
 Tasks:
@@ -113,6 +115,8 @@ Exit criteria:
 - old TODO archives are removed
 
 ## Milestone 2: Web-Native Frontend Cleanup
+
+Status: Complete.
 
 Goal: remove stale desktop assumptions from the current Svelte app without
 prematurely moving folders.

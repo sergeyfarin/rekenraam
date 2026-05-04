@@ -1,4 +1,4 @@
-from rekenraam_api.db.models.access import BookMembership, User
+from rekenraam_api.db.models.access import AuthSession, BookMembership, User, UserDevice
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import Lot, PriceObservation, SplitLotAllocation
@@ -10,11 +10,13 @@ from rekenraam_api.db.models.transactions import Split, Transaction
 
 __all__ = [
 	"BookMembership",
+	"AuthSession",
 	"Account",
 	"AccountBalancing",
 	"Book",
 	"BookState",
 	"User",
+	"UserDevice",
 	"Lot",
 	"PriceObservation",
 	"SplitLotAllocation",

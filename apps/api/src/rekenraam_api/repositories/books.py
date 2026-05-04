@@ -8,8 +8,12 @@ class BookRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_books(self) -> list[Book]:
+    async def list_books(self, book_ids: list[int] | None = None) -> list[Book]:
         statement: Select[tuple[Book]] = select(Book).order_by(Book.id)
+        if book_ids is not None:
+            if not book_ids:
+                return []
+            statement = statement.where(Book.id.in_(book_ids))
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 

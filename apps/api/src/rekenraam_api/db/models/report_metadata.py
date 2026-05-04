@@ -27,6 +27,10 @@ class ReportDefinition(Base):
     query_text: Mapped[str] = mapped_column(Text, nullable=False)
     params_schema: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_session_id: Mapped[int | None] = mapped_column(ForeignKey("auth_sessions.id", ondelete="SET NULL"))
+    created_device_id: Mapped[int | None] = mapped_column(ForeignKey("user_devices.id", ondelete="SET NULL"))
+    created_request_id: Mapped[str | None] = mapped_column(String(64))
 
 
 class ReportRun(Base):
@@ -50,3 +54,7 @@ class ReportRun(Base):
     pricing_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     result_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_session_id: Mapped[int | None] = mapped_column(ForeignKey("auth_sessions.id", ondelete="SET NULL"))
+    created_device_id: Mapped[int | None] = mapped_column(ForeignKey("user_devices.id", ondelete="SET NULL"))
+    created_request_id: Mapped[str | None] = mapped_column(String(64))

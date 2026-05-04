@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     )
     pricing_scheduler_enabled: bool = True
     pricing_scheduler_poll_seconds: int = 60
+    first_admin_email: str | None = None
+    first_admin_password: str | None = None
+    first_admin_display_name: str = "Admin"
 
     @property
     def database_url(self) -> str:
