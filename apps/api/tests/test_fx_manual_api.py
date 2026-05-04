@@ -35,11 +35,22 @@ async def test_commodity_autocomplete_and_manual_fx_observations(
     usd_id = await repository_session.scalar(
         select(Commodity.id).where(Commodity.book_id == 1).where(Commodity.symbol == "USD").limit(1)
     )
+    if usd_id is None:
+        usd = Commodity(book_id=1, kind="currency", symbol="USD", name="US Dollar", scale=2, metadata_text=None)
+        repository_session.add(usd)
+        await repository_session.commit()
+        await repository_session.refresh(usd)
+        usd_id = usd.id
+
     eur_id = await repository_session.scalar(
         select(Commodity.id).where(Commodity.book_id == 1).where(Commodity.symbol == "EUR").limit(1)
     )
-    if usd_id is None or eur_id is None:
-        pytest.skip("seed currencies not available")
+    if eur_id is None:
+        eur = Commodity(book_id=1, kind="currency", symbol="EUR", name="Euro", scale=2, metadata_text=None)
+        repository_session.add(eur)
+        await repository_session.commit()
+        await repository_session.refresh(eur)
+        eur_id = eur.id
 
     autocomplete_response = await client.get("/api/v1/commodities/autocomplete", params={"query": "us", "book_id": 1})
     assert autocomplete_response.status_code == 200

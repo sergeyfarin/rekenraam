@@ -84,26 +84,6 @@ def upgrade() -> None:
     op.create_index("ix_report_definitions_previous", "report_definitions", ["previous_report_definition_id"], unique=False)
 
     op.create_table(
-        "report_runs",
-        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
-        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("definition_id", sa.BigInteger(), sa.ForeignKey("report_definitions.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("params_hash", sa.String(length=128), nullable=False),
-        sa.Column("as_of_seq", sa.Integer(), nullable=False),
-        sa.Column("pricing_mode", sa.String(length=32), nullable=False, server_default=sa.text("'latest_corrected'")),
-        sa.Column("pricing_policy_id", sa.BigInteger(), sa.ForeignKey("pricing_policies.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("pricing_policy_version", sa.String(length=255), nullable=True),
-        sa.Column("valuation_snapshot_id", sa.BigInteger(), nullable=True),
-        sa.Column("pricing_resolved_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("result_json", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.CheckConstraint("pricing_mode IN ('frozen', 'latest_corrected')", name="ck_report_runs_pricing_mode"),
-        sa.UniqueConstraint("book_id", "definition_id", "params_hash", "as_of_seq", name="uq_report_runs_entry"),
-    )
-    op.create_index("ix_report_runs_book_def", "report_runs", ["book_id", "definition_id"], unique=False)
-    op.create_index("ix_report_runs_book_seq", "report_runs", ["book_id", "as_of_seq"], unique=False)
-
-    op.create_table(
         "commodities",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
@@ -445,6 +425,26 @@ def upgrade() -> None:
     )
     op.create_index("ix_pricing_refresh_runs_book_id", "pricing_refresh_runs", ["book_id"], unique=False)
     op.create_index("ix_pricing_refresh_runs_finished_at", "pricing_refresh_runs", ["finished_at"], unique=False)
+
+    op.create_table(
+        "report_runs",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("definition_id", sa.BigInteger(), sa.ForeignKey("report_definitions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("params_hash", sa.String(length=128), nullable=False),
+        sa.Column("as_of_seq", sa.Integer(), nullable=False),
+        sa.Column("pricing_mode", sa.String(length=32), nullable=False, server_default=sa.text("'latest_corrected'")),
+        sa.Column("pricing_policy_id", sa.BigInteger(), sa.ForeignKey("pricing_policies.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("pricing_policy_version", sa.String(length=255), nullable=True),
+        sa.Column("valuation_snapshot_id", sa.BigInteger(), nullable=True),
+        sa.Column("pricing_resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("result_json", sa.Text(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("pricing_mode IN ('frozen', 'latest_corrected')", name="ck_report_runs_pricing_mode"),
+        sa.UniqueConstraint("book_id", "definition_id", "params_hash", "as_of_seq", name="uq_report_runs_entry"),
+    )
+    op.create_index("ix_report_runs_book_def", "report_runs", ["book_id", "definition_id"], unique=False)
+    op.create_index("ix_report_runs_book_seq", "report_runs", ["book_id", "as_of_seq"], unique=False)
 
     op.create_table(
         "book_memberships",
