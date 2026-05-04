@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut, hasApiBaseUrl, invokeTauri } from "$lib/api/client";
+import { apiDelete, apiGet, apiPost, apiPut, hasApiBaseUrl } from "$lib/api/client";
 
 function requireDesktopPricingAutomation(feature: string): void {
 	if (hasApiBaseUrl()) {
@@ -87,24 +87,15 @@ export async function listFxRatesOfficial<T>(bookId = 1): Promise<T> {
 }
 
 export async function listFxRateSources<T>(bookId = 1): Promise<T> {
-	if (hasApiBaseUrl()) {
-		return apiGet<T>(`/pricing/sources?book_id=${bookId}`);
-	}
-	return invokeTauri<T>("list_fx_rate_sources", { bookId });
+	return apiGet<T>(`/pricing/sources?book_id=${bookId}`);
 }
 
 export async function getFxRateSettings<T>(bookId = 1): Promise<T> {
-	if (hasApiBaseUrl()) {
-		return apiGet<T>(`/pricing/policy?book_id=${bookId}`);
-	}
-	return invokeTauri<T>("get_fx_rate_settings", { bookId });
+	return apiGet<T>(`/pricing/policy?book_id=${bookId}`);
 }
 
 export async function setFxRateSettings<T>(settings: Record<string, unknown>): Promise<T> {
-	if (hasApiBaseUrl()) {
-		return apiPut<T, Record<string, unknown>>("/pricing/policy", settings);
-	}
-	return invokeTauri<T>("set_fx_rate_settings", { settings });
+	return apiPut<T, Record<string, unknown>>("/pricing/policy", settings);
 }
 
 export async function restartFxRateScheduler(): Promise<void> {
@@ -135,10 +126,7 @@ export async function deleteFxRateSourceAssignment(id: number): Promise<void> {
 }
 
 export async function listFxRateRefreshState<T>(bookId = 1): Promise<T> {
-	if (hasApiBaseUrl()) {
-		return apiGet<T>(`/pricing/refresh-state?book_id=${bookId}`);
-	}
-	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
+	return apiGet<T>(`/pricing/refresh-state?book_id=${bookId}`);
 }
 
 export async function getFxRefreshExecutionStatus<T>(bookId = 1): Promise<T> {
@@ -146,7 +134,7 @@ export async function getFxRefreshExecutionStatus<T>(bookId = 1): Promise<T> {
 		return apiGet<T>(`/pricing/refresh/execution-status?book_id=${bookId}`);
 	}
 	requireDesktopPricingAutomation("Backend-owned FX execution status");
-	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
+	throw new Error("Backend-owned FX execution status is not supported in this build.");
 }
 
 export async function listFxRefreshRunHistory<T>(bookId = 1, limit = 10): Promise<T> {
@@ -154,7 +142,7 @@ export async function listFxRefreshRunHistory<T>(bookId = 1, limit = 10): Promis
 		return apiGet<T>(`/pricing/refresh/history?book_id=${bookId}&limit=${limit}`);
 	}
 	requireDesktopPricingAutomation("Backend-owned FX refresh history");
-	return invokeTauri<T>("list_fx_rate_refresh_state", { bookId });
+	throw new Error("Backend-owned FX refresh history is not supported in this build.");
 }
 
 export async function refreshFxRatesNow<T>(): Promise<T> {
@@ -162,7 +150,7 @@ export async function refreshFxRatesNow<T>(): Promise<T> {
 		return apiPost<T, { book_id: number }>("/pricing/refresh/run", { book_id: 1 });
 	}
 	requireDesktopPricingAutomation("Manual FX refresh");
-	return invokeTauri<T>("refresh_fx_rates_now");
+	throw new Error("Manual FX refresh is not supported in this build.");
 }
 
 export async function createFxRateDaily(input: Record<string, unknown>): Promise<void> {

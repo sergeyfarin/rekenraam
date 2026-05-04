@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-
 const rawApiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL?.trim() ?? "";
 
 function getApiBaseUrl(): string | null {
@@ -88,8 +86,4 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
 
   const text = await response.text();
   return (text ? JSON.parse(text) : undefined) as TResponse;
-}
-
-export async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  return invoke<T>(command, args);
 }
