@@ -17,6 +17,15 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    async def list_book_commodities(self, book_id: int) -> list[Commodity]:
+        statement: Select[tuple[Commodity]] = (
+            select(Commodity)
+            .where(Commodity.book_id == book_id)
+            .order_by(Commodity.name.asc(), Commodity.id.asc())
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
     async def update_commodity(
         self,
         *,

@@ -3,6 +3,72 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class FxRateDailySummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    book_id: int
+    from_currency_id: int
+    from_currency_symbol: str | None
+    to_currency_id: int
+    to_currency_symbol: str | None
+    rate_date: date
+    rate: float
+    source: str | None
+    source_id: int | None = None
+    is_derived: bool = False
+    derived_via_currency_id: int | None = None
+    created_at: datetime
+
+
+class FxRateDailyCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    from_currency_id: int
+    to_currency_id: int
+    rate_date: date
+    rate: float
+    source: str | None = None
+
+
+class FxRateOfficialSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    book_id: int
+    from_currency_id: int
+    from_currency_symbol: str | None
+    to_currency_id: int
+    to_currency_symbol: str | None
+    period_type: str
+    period_year: int
+    period_month: int | None
+    rate: float
+    source_name: str
+    source_url: str | None = None
+    source_date: date | None = None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FxRateOfficialCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    from_currency_id: int
+    to_currency_id: int
+    period_type: str
+    period_year: int
+    period_month: int | None = None
+    rate: float
+    source_name: str
+    source_url: str | None = None
+    source_date: date | None = None
+    notes: str | None = None
+
+
 class PriceSourceSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 

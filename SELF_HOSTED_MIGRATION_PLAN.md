@@ -1,6 +1,6 @@
 # Rekenraam Self-Hosted Migration Plan
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Purpose
 
@@ -711,10 +711,9 @@ Progress note:
 - The accounts page account-tree plus balance plus metadata lookup loads, the account-detail summary plus balance plus balancings plus directives plus booking-policy read/write plus form lookup loads plus register read plus on-demand transaction detail read plus transaction create/update/delete plus duplicate/bulk helpers plus unlock helper, and the transactions page form lookup loads plus transaction list read are now on that seam.
 - The dashboard page now uses HTTP-only health and book metadata reads, and the old desktop storage/file-picker onboarding flow has been removed from that route.
 - The reports page now uses Python HTTP endpoints for cashflow, category-spend, payee totals, and realized/unrealized gains, and the investments page now also has Python HTTP coverage for read models plus buy/sell/dividend mutations.
-- The frontend is still rooted in `src/`, but the remaining Tauri-dependent frontend slices are now concentrated in FX-specific commodities flows, admin/storage flows, and a smaller set of desktop-oriented helpers rather than the core dashboard, transaction, reports, investment, institution, commodity-edit, and currency-maintenance flows.
-- With the FX execution/status/history slice now landed, the next active migration target should move to report-state and cache foundations: `book_state`, `report_cache`, then `report_definitions` and `report_runs`, so backend-owned reporting can gain stable invalidation and saved-run support before the remaining admin/import work.
-- The first part of that slice is now in the web baseline schema: `book_state` and `report_cache` exist in the single current Alembic baseline, while report-definition and report-run persistence plus invalidation wiring still remain.
-- Report-definition and report-run persistence are now also in the baseline schema and exposed over Python endpoints; the remaining gap in this area is wiring `book_state` / `report_cache` invalidation and connecting the generic metadata layer to report execution.
+- The frontend is still rooted in `src/`, but the remaining Tauri-dependent frontend slices are now concentrated in admin/storage flows, commodity autocomplete and manual price-entry helpers, and compatibility fallbacks in the shared client seam rather than the core dashboard, transaction, reports, investment, institution, commodity-edit, and currency-maintenance flows.
+- The report-state/cache foundation is now landed in the web baseline and service layer: `book_state`, `report_cache`, `report_definitions`, and `report_runs` exist in the single current Alembic baseline, and current report endpoints now use persisted cache state plus invalidation bumps on report-relevant writes.
+- The remaining report-area gap is no longer the cache foundation itself; it is widening that foundation into broader saved-report execution, broader cache coverage, and adjacent reporting features after the core frontend seam and write-path work are cleaner.
 - The next frontend migration step should continue incremental route conversion, not a big-bang folder move.
 
 ## Recommended Immediate Next Execution Order
@@ -736,11 +735,11 @@ Priority work:
 
 Immediate route-by-route execution checklist:
 
-1. `src/routes/+layout.svelte`: remove Tauri-dependent global session/runtime shortcuts or replace them with web-safe no-op or HTTP-backed equivalents so the layout no longer anchors the app to desktop behavior.
+1. Complete: `src/routes/+layout.svelte`: the layout no longer anchors the web app to desktop runtime behavior; remaining Tauri coupling is now below the shared client seam and admin/storage helpers rather than in the global shell.
 2. Complete: `src/routes/+page.svelte`: dashboard health and default-currency reads are now HTTP-only, and desktop storage onboarding has been removed from that route.
-3. `src/routes/settings/+page.svelte`: move settings landing-page loads and navigation helpers to the shared client seam.
+3. `src/routes/settings/+page.svelte`: keep the settings shell itself thin; the remaining blocker here is not tab navigation but the desktop-only admin/storage helpers still used by the database and year-end settings surfaces.
 4. Complete: `src/routes/settings/InstitutionSettings.svelte`: institution writes now use Python-backed endpoints and no longer need direct Tauri mutation calls.
-5. `src/routes/settings/CommoditySettings.svelte`: currency activation now has an explicit Python-backed model: store `is_active` in `commodities.metadata_text` JSON, keep the default currency always active, and exclude inactive currencies from FX entry/refresh selectors while still showing them in settings. The FX settings tab now reads and writes Python-backed pricing configuration and status over `/api/v1/pricing/*` in web mode. Scheduled execution and manual refresh now run in a backend-owned Python worker with `/api/v1/pricing/refresh/run` and `/api/v1/pricing/refresh/execution-status`; the browser still does not run or restart pricing jobs.
+5. `src/routes/settings/CommoditySettings.svelte`: currency activation now has an explicit Python-backed model: store `is_active` in `commodities.metadata_text` JSON, keep the default currency always active, and exclude inactive currencies from FX entry/refresh selectors while still showing them in settings. The FX settings tab now reads and writes Python-backed pricing configuration and status over `/api/v1/pricing/*` in web mode. Scheduled execution and manual refresh now run in a backend-owned Python worker with `/api/v1/pricing/refresh/run` and `/api/v1/pricing/refresh/execution-status`; the remaining desktop-only helpers in this area are commodity autocomplete and manual daily/official price entry paths that still call Tauri commands directly.
 6. `src/routes/reports/+page.svelte`: keep this on the Python seam and use it as the reference shape for future report invalidation/cache work.
 7. `src/routes/investments/+page.svelte`: keep this on the Python seam and widen next into reinvested dividends or stricter account-type/booking validations rather than new Tauri wrappers.
 
@@ -800,7 +799,7 @@ Target outcome:
 
 Priority work:
 
-1. migrate `book_state` and `report_cache` as the report invalidation foundation
+1. widen the already-landed `book_state` and `report_cache` foundation into broader saved-report execution and adjacent reporting capabilities
 2. migrate commodities and pricing-history foundations using the append-only plus `current_*` view approach
 3. widen the now-landed lots/pricing foundation into reinvested dividends, corporate actions, and stricter investment booking validations before broader FX/report expansion
 4. move the frontend from root `src/` into `apps/web` only after the client seam is stable enough to justify the move

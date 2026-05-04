@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Query
 
 from rekenraam_api.api.dependencies import get_metadata_service
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
+    CommodityAutocompleteOption,
     CategoryUpdateInput,
     CurrencyActivationInput,
     CurrencyCreateInput,
@@ -30,6 +32,22 @@ from rekenraam_api.services.metadata import MetadataService
 
 
 router = APIRouter(tags=["metadata"])
+
+
+@router.get("/commodities/autocomplete", response_model=list[CommodityAutocompleteOption])
+async def autocomplete_commodities(
+    query: str = Query(min_length=1),
+    book_id: int = Query(default=1),
+    limit: int = Query(default=12, ge=1, le=50),
+    active_only: bool = Query(default=False),
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> list[CommodityAutocompleteOption]:
+    return await metadata_service.autocomplete_commodities(
+        book_id=book_id,
+        query=query,
+        limit=limit,
+        active_only=active_only,
+    )
 
 
 @router.get("/commodities", response_model=list[CommoditySummary])

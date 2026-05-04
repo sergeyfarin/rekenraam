@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, delete, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -406,8 +407,130 @@ class PricingRepository:
         await self._session.refresh(row)
         return row
 
+    async def list_fx_rate_daily_observations(
+        self,
+        *,
+        book_id: int,
+        limit: int,
+    ) -> list[tuple[PriceObservation, Commodity, Commodity]]:
+        from_currency = aliased(Commodity)
+        to_currency = aliased(Commodity)
+        statement = (
+            select(PriceObservation, from_currency, to_currency)
+            .join(from_currency, PriceObservation.commodity_id == from_currency.id)
+            .join(to_currency, PriceObservation.quote_commodity_id == to_currency.id)
+            .where(PriceObservation.book_id == book_id)
+            .where(PriceObservation.observation_kind == "fx_daily")
+            .order_by(PriceObservation.price_date.desc(), PriceObservation.created_at.desc(), PriceObservation.id.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return list(result.all())
+
+    async def create_fx_rate_daily_observation(
+        self,
+        *,
+        book_id: int,
+        from_currency_id: int,
+        to_currency_id: int,
+        rate_date: date,
+        rate: Decimal,
+        source: str | None,
+    ) -> PriceObservation:
+        from_currency = await self._require_currency(book_id, from_currency_id)
+        await self._require_currency(book_id, to_currency_id)
+
+        scale_factor = Decimal(10) ** from_currency.scale
+        price_minor = int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
+        observation = PriceObservation(
+            book_id=book_id,
+            commodity_id=from_currency_id,
+            quote_commodity_id=to_currency_id,
+            observation_kind="fx_daily",
+            price_minor=price_minor,
+            price_date=rate_date,
+            source=source,
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(observation)
+        await self._session.commit()
+        await self._session.refresh(observation)
+        return observation
+
+    async def delete_fx_rate_daily_observation(self, observation_id: int) -> bool:
+        observation = await self._session.get(PriceObservation, observation_id)
+        if observation is None or observation.observation_kind != "fx_daily":
+            return False
+        await self._session.delete(observation)
+        await self._session.commit()
+        return True
+
+    async def list_fx_rate_official_observations(
+        self,
+        *,
+        book_id: int,
+        limit: int,
+    ) -> list[tuple[PriceObservation, Commodity, Commodity]]:
+        from_currency = aliased(Commodity)
+        to_currency = aliased(Commodity)
+        statement = (
+            select(PriceObservation, from_currency, to_currency)
+            .join(from_currency, PriceObservation.commodity_id == from_currency.id)
+            .join(to_currency, PriceObservation.quote_commodity_id == to_currency.id)
+            .where(PriceObservation.book_id == book_id)
+            .where(PriceObservation.observation_kind == "fx_manual")
+            .order_by(PriceObservation.price_date.desc(), PriceObservation.created_at.desc(), PriceObservation.id.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return list(result.all())
+
+    async def create_fx_rate_official_observation(
+        self,
+        *,
+        book_id: int,
+        from_currency_id: int,
+        to_currency_id: int,
+        price_date: date,
+        rate: Decimal,
+        source_name: str,
+    ) -> PriceObservation:
+        from_currency = await self._require_currency(book_id, from_currency_id)
+        await self._require_currency(book_id, to_currency_id)
+
+        scale_factor = Decimal(10) ** from_currency.scale
+        price_minor = int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
+        observation = PriceObservation(
+            book_id=book_id,
+            commodity_id=from_currency_id,
+            quote_commodity_id=to_currency_id,
+            observation_kind="fx_manual",
+            price_minor=price_minor,
+            price_date=price_date,
+            source=source_name,
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(observation)
+        await self._session.commit()
+        await self._session.refresh(observation)
+        return observation
+
+    async def delete_fx_rate_official_observation(self, observation_id: int) -> bool:
+        observation = await self._session.get(PriceObservation, observation_id)
+        if observation is None or observation.observation_kind != "fx_manual":
+            return False
+        await self._session.delete(observation)
+        await self._session.commit()
+        return True
+
     async def rollback(self) -> None:
         await self._session.rollback()
+
+    async def _require_currency(self, book_id: int, commodity_id: int) -> Commodity:
+        commodity = await self._session.get(Commodity, commodity_id)
+        if commodity is None or commodity.book_id != book_id or commodity.kind != "currency":
+            raise ValueError("currency not found")
+        return commodity
 
     async def _validate_assignment_refs(self, *, book_id: int, from_currency_id: int, to_currency_id: int, source_id: int) -> None:
         from_currency = await self._session.get(Commodity, from_currency_id)

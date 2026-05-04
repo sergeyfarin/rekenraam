@@ -1,49 +1,50 @@
 # Rekenraam — Personal Finance Tracker
 
-Modern MS Money–style desktop application built with Tauri (Rust) and Svelte (TypeScript).
-Offline-first, multi-currency, multi-account, with optional FX refresh and a roadmap for
-future sync, import, and plugins.
+Personal finance application in active migration from a Tauri desktop runtime to a
+self-hosted SvelteKit + FastAPI web stack. Tauri remains only as transitional
+compatibility scaffolding for slices that have not yet been moved.
 
-## Current Status (April 2026)
+## Current Status (May 2026)
 
-See [MASTER_PLAN.md](MASTER_PLAN.md) for the full execution roadmap.
+See [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) for the active
+self-hosted migration roadmap. [MASTER_PLAN.md](MASTER_PLAN.md) is now mainly
+historical desktop/product planning context.
 
 **Working:**
-- SQLite storage with WAL, versioned migrations, backup/restore
-- Account CRUD with tree view and rollup balances
-- Transaction/split create and edit with double-entry enforcement
-- Account register with running balance
-- Reconciliation wizard with balance verification and account locking
-- Investment: holdings, lots, buy/sell/dividend, realized/unrealized gains
-- FX: rate scheduler, source providers, daily/official rates
-- Reports: cashflow, category spend, payee totals, gains
-- Settings: categories, payees, tags, commodities, institutions, database management
+- Dockerized web stack with PostgreSQL, FastAPI, and a separately served Svelte frontend
+- Books, accounts, balances, register, transactions, metadata, classic reports, investments, and FX settings on Python HTTP endpoints
+- Backend-owned pricing refresh worker with persisted run history and UI polling
+- Report cache/state foundation with `book_state`, `report_cache`, `report_definitions`, and `report_runs` in the web baseline
+- Current report endpoints using persisted cache state plus invalidation bumps on report-relevant writes
+- Shared frontend API seam with same-origin `/api/v1` support for the containerized web frontend
 
-**Recently completed (March 2026):**
-- Onboarding: welcome screen on first launch (no DB path stored)
-- Transaction register improvements: server-side filters and sorting, infinite scroll, smart date parsing, duplication, bulk actions
-- Structured backend errors (`AppError`), frontend error formatting, logging, read/write DB split
-- Year-end close UI in Settings → Year-End tab
-- Reconciliation wizard and account-level reconciliation status
+**Recently completed:**
+- Full Compose path for `postgres`, `api`, and `frontend`
+- Browser-safe API connectivity through same-origin `/api/v1` plus frontend nginx proxying
+- Python-backed report metadata persistence and report invalidation/cache wiring
+- Python-backed FX execution status, history, provider coverage, and web-mode settings integration
 
 **Next up:**
-- Import pipeline completion: backend hardening plus 3-step import wizard UI
-- Reports page charts using existing data APIs
-- Planning page implementation (scheduled transactions and budgeting remain placeholders)
+- Finish retiring the remaining desktop-only frontend paths: admin/storage settings, commodity autocomplete, and manual price-entry helpers
+- Start the thin audit/session/device attribution foundation needed before broader mutation parity work
+- Continue transaction/account write parity and only then widen further into import and broader reporting/investment expansion
 
 **Planning note:**
-- [MASTER_PLAN.md](MASTER_PLAN.md) is the active roadmap.
+- [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) is the active migration roadmap.
+- [docs/parity/desktop-to-python.md](docs/parity/desktop-to-python.md) tracks capability-by-capability parity state.
 - `OLD_TODOS/` is historical reference material; keep it for background, not active prioritization.
 
 ## Architecture
 
 | Layer | Technology |
 |-------|-----------|
-| Desktop runtime | Tauri 2.x |
+| Transitional desktop runtime | Tauri 2.x |
+| Web runtime | Docker Compose + nginx |
 | UI | SvelteKit 2 + Svelte 5 + TypeScript |
 | UI components | shadcn-svelte + Bits UI + Tailwind 4 |
-| Backend | Rust (Tauri commands) |
-| Storage | SQLite (rusqlite, WAL mode, versioned migrations) |
+| Backend | FastAPI + SQLAlchemy + Pydantic |
+| Web storage | PostgreSQL |
+| Legacy desktop storage | SQLite |
 
 ## Running
 
@@ -73,11 +74,14 @@ Svelte build, so bundling Node build output and static file serving into the Pyt
 API image would mix two runtimes and make cache/build behavior worse without adding
 useful coupling.
 
-The frontend migration seam can now target the Python API through:
+For host-side development outside the proxied frontend container, the frontend can still target the Python API through:
 
 ```bash
 PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
 ```
+
+For the containerized web frontend, the default path is now same-origin `/api/v1`
+through the nginx proxy in front of the static frontend.
 
 Frontend routes that have been migrated to the shared client layer will prefer
 HTTP and fall back to Tauri commands if the Python API is not yet configured or
@@ -101,6 +105,13 @@ Current migrated frontend read slices:
 - settings categories, payees, and tags read loads via shared seam
 - transactions page categories, payees, tags, people, projects, and commodities lookups
 - transactions page transaction list read
+
+Remaining web-frontend blockers before the Tauri fallback seam can be removed cleanly:
+
+- `src/lib/api/admin.ts` and `src/routes/settings/DatabaseSettings.svelte` still depend on desktop-only storage, backup, restore, and DB-maintenance commands
+- `src/routes/settings/+page.svelte` still uses the Tauri-backed fiscal year close helper from `src/lib/api/admin.ts`
+- `src/lib/api/commodities.ts` still uses Tauri-only helpers for commodity autocomplete and manual daily/official price entry flows
+- `src/lib/api/accounts.ts`, `src/lib/api/transactions.ts`, and `src/lib/api/metadata.ts` still expose HTTP-first plus Tauri-fallback wrappers, even where Python endpoints now exist, because desktop compatibility has not been formally retired yet
 
 If you previously ran the old Rust API scaffold against Docker, the existing
 Postgres volume may contain incompatible tables. The Python scaffold now uses a

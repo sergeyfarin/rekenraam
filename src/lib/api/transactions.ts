@@ -1,4 +1,4 @@
-import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPost, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
+import { apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
 
 export type TransactionFilter = {
   book_id?: number;
@@ -230,13 +230,8 @@ function mapTransactionToRegisterEntries(transactions: TransactionWithSplits[], 
 
 export async function listTransactions(filter: TransactionFilter): Promise<TransactionWithSplits[]> {
   const path = `/transactions${toQueryString(filter)}`;
-
-  try {
-    const response = await apiGet<ApiTransaction[]>(path);
-    return response.map(mapTransaction);
-  } catch {
-    return apiGetWithTauriFallback<TransactionWithSplits[]>(path, "list_transactions", { filter });
-  }
+  const response = await apiGet<ApiTransaction[]>(path);
+  return response.map(mapTransaction);
 }
 
 export async function getTransactionById(transactionId: number): Promise<TransactionWithSplits | null> {
@@ -247,38 +242,17 @@ export async function getTransactionById(transactionId: number): Promise<Transac
     if (error instanceof Error && error.message.includes("transaction not found")) {
       return null;
     }
-    try {
-      return await apiGetWithTauriFallback<TransactionWithSplits>(
-        `/transactions/${transactionId}`,
-        "get_transaction_with_splits",
-        { id: transactionId }
-      );
-    } catch (fallbackError) {
-      if (fallbackError instanceof Error && fallbackError.message.includes("transaction not found")) {
-        return null;
-      }
-      throw fallbackError;
-    }
+    throw error;
   }
 }
 
 export async function listAccountRegister(accountId: number): Promise<AccountRegisterEntry[]> {
-  try {
-    const response = await apiGet<ApiRegisterEntry[]>(`/accounts/${accountId}/register`);
-    return response.map(mapRegisterEntry);
-  } catch {
-    const transactions = await listTransactions({ account_id: accountId, limit: 10000, offset: 0 });
-    return mapTransactionToRegisterEntries(transactions, accountId);
-  }
+  const response = await apiGet<ApiRegisterEntry[]>(`/accounts/${accountId}/register`);
+  return response.map(mapRegisterEntry);
 }
 
 export async function createTransaction(input: TransactionMutationInput): Promise<void> {
-  await apiPostWithTauriFallback<unknown, TransactionMutationInput>(
-    "/transactions",
-    input,
-    "create_transaction_with_splits",
-    { input }
-  );
+  await apiPost<unknown, TransactionMutationInput>("/transactions", input);
 }
 
 export async function updateTransaction(input: TransactionMutationInput): Promise<void> {
@@ -286,16 +260,11 @@ export async function updateTransaction(input: TransactionMutationInput): Promis
     throw new Error("Transaction id is required for updates");
   }
 
-  await apiPutWithTauriFallback<unknown, TransactionMutationInput>(
-    `/transactions/${input.id}`,
-    input,
-    "update_transaction_with_splits",
-    { input }
-  );
+  await apiPut<unknown, TransactionMutationInput>(`/transactions/${input.id}`, input);
 }
 
 export async function deleteTransaction(transactionId: number): Promise<void> {
-  await apiDeleteWithTauriFallback<unknown>(`/transactions/${transactionId}`, "delete_transaction", { id: transactionId });
+  await apiDelete<unknown>(`/transactions/${transactionId}`);
 }
 
 export async function duplicateTransaction(transactionId: number, today: string): Promise<void> {
@@ -303,29 +272,11 @@ export async function duplicateTransaction(transactionId: number, today: string)
 }
 
 export async function bulkVoidTransactions(transactionIds: number[]): Promise<number> {
-  try {
-    return await apiPostWithTauriFallback<number, number[]>(
-      "/transactions/bulk-void",
-      transactionIds,
-      "bulk_void_transactions",
-      { ids: transactionIds }
-    );
-  } catch {
-    return invokeTauri<number>("bulk_void_transactions", { ids: transactionIds });
-  }
+  return apiPost<number, number[]>("/transactions/bulk-void", transactionIds);
 }
 
 export async function bulkDeleteTransactions(transactionIds: number[]): Promise<number> {
-  try {
-    return await apiPostWithTauriFallback<number, number[]>(
-      "/transactions/bulk-delete",
-      transactionIds,
-      "bulk_delete_transactions",
-      { ids: transactionIds }
-    );
-  } catch {
-    return invokeTauri<number>("bulk_delete_transactions", { ids: transactionIds });
-  }
+  return apiPost<number, number[]>("/transactions/bulk-delete", transactionIds);
 }
 
 export async function getPayeeDefaults(payeeId: number, accountId?: number): Promise<{ category_id: number | null; memo: string | null }> {
@@ -334,12 +285,5 @@ export async function getPayeeDefaults(payeeId: number, accountId?: number): Pro
     params.set("account_id", String(accountId));
   }
 
-  try {
-    return await apiGet<{ category_id: number | null; memo: string | null }>(`/transactions/payee-defaults?${params.toString()}`);
-  } catch {
-    return invokeTauri<{ category_id: number | null; memo: string | null }>("get_payee_defaults", {
-      payeeId,
-      accountId,
-    });
-  }
+  return apiGet<{ category_id: number | null; memo: string | null }>(`/transactions/payee-defaults?${params.toString()}`);
 }

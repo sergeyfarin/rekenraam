@@ -1,4 +1,4 @@
-import { apiDeleteWithTauriFallback, apiGet, apiGetWithTauriFallback, apiPostWithTauriFallback, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
+import { apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
 
 export type AccountTreeNode = {
   id: number;
@@ -77,43 +77,41 @@ export type AccountClosingValidationResult = {
 };
 
 export async function listAccounts(bookId = 1): Promise<AccountSummary[]> {
-  return apiGetWithTauriFallback<AccountSummary[]>(`/accounts`, "list_accounts", { bookId });
+  void bookId;
+  return apiGet<AccountSummary[]>(`/accounts`);
 }
 
 export async function createAccount(input: AccountCreateInput): Promise<AccountSummary> {
-  return apiPostWithTauriFallback<AccountSummary, AccountCreateInput>("/accounts", input, "create_account", { input });
+  return apiPost<AccountSummary, AccountCreateInput>("/accounts", input);
 }
 
 export async function updateAccount(input: AccountCreateInput & { id: number }): Promise<AccountSummary> {
-  return apiPutWithTauriFallback<AccountSummary, AccountCreateInput>(`/accounts/${input.id}`, input, "update_account", { input });
+  return apiPut<AccountSummary, AccountCreateInput>(`/accounts/${input.id}`, input);
 }
 
 export async function deleteAccount(accountId: number, bookId = 1): Promise<void> {
-  await apiDeleteWithTauriFallback<void>(`/accounts/${accountId}`, "delete_account", { accountId, bookId });
+  void bookId;
+  await apiDelete<void>(`/accounts/${accountId}`);
 }
 
 export async function validateAccountClosing(accountId: number, bookId = 1): Promise<AccountClosingValidationResult> {
-  try {
-    return await apiGet<AccountClosingValidationResult>(`/accounts/${accountId}/closing-validation`);
-  } catch {
-    const result = await invokeTauri<boolean>("validate_account_closing", { accountId, bookId });
-    return result
-      ? { valid: true, issues: [] }
-      : { valid: false, issues: ["Account closing validation failed."] };
-  }
+  void bookId;
+  return apiGet<AccountClosingValidationResult>(`/accounts/${accountId}/closing-validation`);
 }
 
 export async function listAccountTree(bookId = 1): Promise<AccountTreeNode[]> {
-  return apiGetWithTauriFallback<AccountTreeNode[]>(`/accounts/tree`, "get_account_tree", { bookId });
+  void bookId;
+  return apiGet<AccountTreeNode[]>(`/accounts/tree`);
 }
 
 export async function listAccountBalances(bookId = 1): Promise<AccountBalanceSummary[]> {
-  return apiGetWithTauriFallback<AccountBalanceSummary[]>(`/accounts/balances`, "list_account_balances", { bookId });
+  void bookId;
+  return apiGet<AccountBalanceSummary[]>(`/accounts/balances`);
 }
 
 export async function getAccountById(accountId: number): Promise<AccountSummary | null> {
   try {
-    return await apiGetWithTauriFallback<AccountSummary>(`/accounts/${accountId}`, "get_account", { id: accountId });
+    return await apiGet<AccountSummary>(`/accounts/${accountId}`);
   } catch (error) {
     if (error instanceof Error && error.message.includes("account not found")) {
       return null;
@@ -123,33 +121,21 @@ export async function getAccountById(accountId: number): Promise<AccountSummary 
 }
 
 export async function listAccountBalancings(accountId: number): Promise<AccountBalancingSummary[]> {
-  return apiGetWithTauriFallback<AccountBalancingSummary[]>(
-    `/accounts/${accountId}/balancings`,
-    "list_account_balancings",
-    { accountId }
-  );
+  return apiGet<AccountBalancingSummary[]>(`/accounts/${accountId}/balancings`);
 }
 
 export async function listAccountDirectives(accountId: number): Promise<AccountDirectiveSummary[]> {
-  return apiGetWithTauriFallback<AccountDirectiveSummary[]>(
-    `/accounts/${accountId}/directives`,
-    "list_account_directives",
-    { accountId }
-  );
+  return apiGet<AccountDirectiveSummary[]>(`/accounts/${accountId}/directives`);
 }
 
 export async function getAccountBookingPolicy(accountId: number): Promise<string> {
-  return apiGetWithTauriFallback<string>(`/accounts/${accountId}/booking-policy`, "get_account_booking_policy", {
-    accountId,
-  });
+  return apiGet<string>(`/accounts/${accountId}/booking-policy`);
 }
 
 export async function setAccountBookingPolicy(accountId: number, bookingPolicy: string): Promise<string> {
-  return apiPutWithTauriFallback<string, { booking_policy: string }>(
+  return apiPut<string, { booking_policy: string }>(
     `/accounts/${accountId}/booking-policy`,
-    { booking_policy: bookingPolicy },
-    "set_account_booking_policy",
-    { input: { account_id: accountId, booking_policy: bookingPolicy } }
+    { booking_policy: bookingPolicy }
   );
 }
 
@@ -159,11 +145,9 @@ export async function unlockAccountBalancings(
   reason: string | null,
   confirm: boolean,
 ): Promise<number> {
-  return apiPostWithTauriFallback<number, { from_date: string; reason: string | null; confirm: boolean }>(
+  return apiPost<number, { from_date: string; reason: string | null; confirm: boolean }>(
     `/accounts/${accountId}/balancings/unlock`,
     { from_date: fromDate, reason, confirm },
-    "unlock_account_balancings",
-    { input: { account_id: accountId, from_date: fromDate, reason, confirm } },
   );
 }
 
@@ -174,10 +158,5 @@ export async function createAccountBalancing(input: {
   balance_minor: number;
   memo: string | null;
 }): Promise<AccountBalancingSummary | void> {
-  return apiPostWithTauriFallback<AccountBalancingSummary, typeof input>(
-    `/accounts/${input.account_id}/balancings`,
-    input,
-    "create_account_balancing",
-    { input }
-  );
+  return apiPost<AccountBalancingSummary, typeof input>(`/accounts/${input.account_id}/balancings`, input);
 }

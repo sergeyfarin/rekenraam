@@ -3,6 +3,19 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class CommodityAutocompleteOption(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    book_id: int
+    kind: str
+    symbol: str | None
+    name: str
+    is_active: bool
+    is_default: bool
+    score: int
+
+
 class CommoditySummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 

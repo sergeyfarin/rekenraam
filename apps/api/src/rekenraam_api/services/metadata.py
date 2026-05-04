@@ -7,6 +7,7 @@ from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
+    CommodityAutocompleteOption,
     CategoryUpdateInput,
     CurrencyActivationInput,
     CurrencyCreateInput,
@@ -34,6 +35,68 @@ from rekenraam_api.schemas.metadata import (
 class MetadataService:
     def __init__(self, repository: MetadataRepository) -> None:
         self._repository = repository
+
+    async def autocomplete_commodities(
+        self,
+        *,
+        book_id: int,
+        query: str,
+        limit: int,
+        active_only: bool,
+    ) -> list[CommodityAutocompleteOption]:
+        normalized = query.strip().lower()
+        rows = await self._repository.list_book_commodities(book_id)
+        _, base_currency_code = await self._repository.list_currencies(book_id)
+
+        options: list[CommodityAutocompleteOption] = []
+        for row in rows:
+            symbol = row.symbol or ""
+            symbol_lower = symbol.lower()
+            name_lower = row.name.lower()
+            is_active = row.kind != "currency" or self._currency_is_active(row, base_currency_code)
+            is_default = row.kind == "currency" and base_currency_code is not None and row.symbol == base_currency_code
+            if active_only and not is_active:
+                continue
+            if normalized and normalized not in symbol_lower and normalized not in name_lower:
+                continue
+
+            score = 10
+            if symbol_lower == normalized:
+                score = 120
+            elif name_lower == normalized:
+                score = 110
+            elif symbol_lower.startswith(normalized):
+                score = 100
+            elif name_lower.startswith(normalized):
+                score = 90
+            elif normalized and normalized in symbol_lower:
+                score = 70
+            elif normalized and normalized in name_lower:
+                score = 60
+
+            options.append(
+                CommodityAutocompleteOption(
+                    id=row.id,
+                    book_id=row.book_id,
+                    kind=row.kind,
+                    symbol=row.symbol,
+                    name=row.name,
+                    is_active=is_active,
+                    is_default=is_default,
+                    score=score,
+                )
+            )
+
+        options.sort(
+            key=lambda option: (
+                -option.score,
+                -int(option.is_default),
+                -int(option.is_active),
+                len(option.symbol or option.name),
+                option.name.lower(),
+            )
+        )
+        return options[: max(1, min(limit, 50))]
 
     async def list_commodities(self) -> list[CommoditySummary]:
         rows = await self._repository.list_commodities()

@@ -1,8 +1,16 @@
+from datetime import date
+from decimal import Decimal
+
 from rekenraam_api.db.models.metadata import Commodity
+from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState, PricingSourceAssignment
 from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.pricing import (
+    FxRateDailyCreateInput,
+    FxRateDailySummary,
+    FxRateOfficialCreateInput,
+    FxRateOfficialSummary,
     PriceSourceSummary,
     PricingPolicySummary,
     PricingPolicyUpdateInput,
@@ -88,6 +96,78 @@ class PricingService:
         rows = await self._repository.list_pricing_refresh_state(book_id)
         return [self._to_refresh_state_summary(state, from_currency, to_currency, source) for state, from_currency, to_currency, source in rows]
 
+    async def list_fx_rates_daily(self, book_id: int, limit: int = 100) -> list[FxRateDailySummary]:
+        rows = await self._repository.list_fx_rate_daily_observations(book_id=book_id, limit=limit)
+        return [self._to_fx_rate_daily_summary(observation, from_currency, to_currency) for observation, from_currency, to_currency in rows]
+
+    async def create_fx_rate_daily(self, input: FxRateDailyCreateInput) -> FxRateDailySummary:
+        if input.rate <= 0:
+            raise ValueError("rate must be greater than zero")
+        observation = await self._repository.create_fx_rate_daily_observation(
+            book_id=input.book_id,
+            from_currency_id=input.from_currency_id,
+            to_currency_id=input.to_currency_id,
+            rate_date=input.rate_date,
+            rate=Decimal(str(input.rate)),
+            source=self._clean_optional_text(input.source),
+        )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        from_currency = await self._repository.get_commodity(observation.commodity_id)
+        to_currency = await self._repository.get_commodity(observation.quote_commodity_id)
+        if from_currency is None or to_currency is None:
+            raise ValueError("currency not found")
+        return self._to_fx_rate_daily_summary(observation, from_currency, to_currency)
+
+    async def delete_fx_rate_daily(self, observation_id: int) -> bool:
+        observation = await self._repository._session.get(PriceObservation, observation_id)
+        deleted = await self._repository.delete_fx_rate_daily_observation(observation_id)
+        if deleted and observation is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
+        return deleted
+
+    async def list_fx_rates_official(self, book_id: int, limit: int = 100) -> list[FxRateOfficialSummary]:
+        rows = await self._repository.list_fx_rate_official_observations(book_id=book_id, limit=limit)
+        return [self._to_fx_rate_official_summary(observation, from_currency, to_currency) for observation, from_currency, to_currency in rows]
+
+    async def create_fx_rate_official(self, input: FxRateOfficialCreateInput) -> FxRateOfficialSummary:
+        if input.period_type not in {"yearly", "monthly"}:
+            raise ValueError("period_type must be yearly or monthly")
+        if input.period_type == "monthly" and (input.period_month is None or input.period_month < 1 or input.period_month > 12):
+            raise ValueError("period_month must be between 1 and 12")
+        if input.period_type == "yearly":
+            period_month = None
+            price_date = date(input.period_year, 1, 1)
+        else:
+            period_month = input.period_month
+            price_date = date(input.period_year, period_month, 1)
+        if input.rate <= 0:
+            raise ValueError("rate must be greater than zero")
+        source_name = input.source_name.strip()
+        if not source_name:
+            raise ValueError("source_name is required")
+
+        observation = await self._repository.create_fx_rate_official_observation(
+            book_id=input.book_id,
+            from_currency_id=input.from_currency_id,
+            to_currency_id=input.to_currency_id,
+            price_date=price_date,
+            rate=Decimal(str(input.rate)),
+            source_name=source_name,
+        )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        from_currency = await self._repository.get_commodity(observation.commodity_id)
+        to_currency = await self._repository.get_commodity(observation.quote_commodity_id)
+        if from_currency is None or to_currency is None:
+            raise ValueError("currency not found")
+        return self._to_fx_rate_official_summary(observation, from_currency, to_currency)
+
+    async def delete_fx_rate_official(self, observation_id: int) -> bool:
+        observation = await self._repository._session.get(PriceObservation, observation_id)
+        deleted = await self._repository.delete_fx_rate_official_observation(observation_id)
+        if deleted and observation is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
+        return deleted
+
     async def _build_policy_summary(self, policy: PricingPolicy) -> PricingPolicySummary:
         base_currency = await self._repository.get_commodity(policy.base_commodity_id)
         default_source = await self._repository.get_price_source(policy.default_source_id) if policy.default_source_id is not None else None
@@ -172,6 +252,54 @@ class PricingService:
         )
 
     @staticmethod
+    def _to_fx_rate_daily_summary(
+        observation: PriceObservation,
+        from_currency: Commodity,
+        to_currency: Commodity,
+    ) -> FxRateDailySummary:
+        scale_factor = 10 ** from_currency.scale
+        return FxRateDailySummary(
+            id=observation.id,
+            book_id=observation.book_id,
+            from_currency_id=observation.commodity_id,
+            from_currency_symbol=from_currency.symbol,
+            to_currency_id=observation.quote_commodity_id,
+            to_currency_symbol=to_currency.symbol,
+            rate_date=observation.price_date,
+            rate=observation.price_minor / scale_factor,
+            source=observation.source,
+            created_at=observation.created_at,
+        )
+
+    @staticmethod
+    def _to_fx_rate_official_summary(
+        observation: PriceObservation,
+        from_currency: Commodity,
+        to_currency: Commodity,
+    ) -> FxRateOfficialSummary:
+        scale_factor = 10 ** from_currency.scale
+        period_month = observation.price_date.month if observation.price_date.month != 1 else None
+        period_type = "monthly" if period_month is not None else "yearly"
+        return FxRateOfficialSummary(
+            id=observation.id,
+            book_id=observation.book_id,
+            from_currency_id=observation.commodity_id,
+            from_currency_symbol=from_currency.symbol,
+            to_currency_id=observation.quote_commodity_id,
+            to_currency_symbol=to_currency.symbol,
+            period_type=period_type,
+            period_year=observation.price_date.year,
+            period_month=period_month,
+            rate=observation.price_minor / scale_factor,
+            source_name=observation.source or "Manual",
+            source_url=None,
+            source_date=observation.price_date,
+            notes=None,
+            created_at=observation.created_at,
+            updated_at=observation.created_at,
+        )
+
+    @staticmethod
     def _validate_policy_input(input: PricingPolicyUpdateInput) -> None:
         if input.refresh_hour_utc < 0 or input.refresh_hour_utc > 23:
             raise ValueError("refresh hour must be between 0 and 23")
@@ -186,3 +314,10 @@ class PricingService:
     def _validate_assignment_dates(effective_from: object, effective_to: object) -> None:
         if effective_to is not None and effective_to < effective_from:
             raise ValueError("effective_to must be on or after effective_from")
+
+    @staticmethod
+    def _clean_optional_text(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None

@@ -90,58 +90,6 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
   return (text ? JSON.parse(text) : undefined) as TResponse;
 }
 
-export async function apiGetWithTauriFallback<T>(path: string, command: string, args?: Record<string, unknown>): Promise<T> {
-  try {
-    return await apiGet<T>(path);
-  } catch {
-    return await invoke<T>(command, args);
-  }
-}
-
-export async function apiPutWithTauriFallback<TResponse, TBody>(
-  path: string,
-  body: TBody,
-  command: string,
-  args?: Record<string, unknown>
-): Promise<TResponse> {
-  try {
-    return await apiJson<TResponse>(path, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    });
-  } catch {
-    return await invoke<TResponse>(command, args);
-  }
-}
-
-export async function apiPostWithTauriFallback<TResponse, TBody>(
-  path: string,
-  body: TBody,
-  command: string,
-  args?: Record<string, unknown>
-): Promise<TResponse> {
-  try {
-    return await apiJson<TResponse>(path, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-  } catch {
-    return await invoke<TResponse>(command, args);
-  }
-}
-
-export async function apiDeleteWithTauriFallback<TResponse>(
-  path: string,
-  command: string,
-  args?: Record<string, unknown>
-): Promise<TResponse> {
-  try {
-    return await apiDelete<TResponse>(path);
-  } catch {
-    return await invoke<TResponse>(command, args);
-  }
-}
-
 export async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   return invoke<T>(command, args);
 }

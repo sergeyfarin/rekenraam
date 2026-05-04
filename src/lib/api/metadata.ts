@@ -1,4 +1,4 @@
-import { apiDelete, apiDeleteWithTauriFallback, apiGetWithTauriFallback, apiPost, apiPostWithTauriFallback, apiPut, apiPutWithTauriFallback, invokeTauri } from "$lib/api/client";
+import { apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
 
 export type CommoditySummary = {
   id: number;
@@ -139,84 +139,90 @@ export type InstitutionSettingsInput = {
 };
 
 export async function listCommodities(bookId = 1): Promise<CommoditySummary[]> {
-  return apiGetWithTauriFallback<CommoditySummary[]>(`/commodities`, "list_commodities", { bookId });
+  void bookId;
+  return apiGet<CommoditySummary[]>(`/commodities`);
 }
 
 export async function listCountries(bookId = 1): Promise<CountrySummary[]> {
-  return apiGetWithTauriFallback<CountrySummary[]>(`/countries`, "list_countries", { bookId });
+  void bookId;
+  return apiGet<CountrySummary[]>(`/countries`);
 }
 
 export async function listInstitutions(bookId = 1): Promise<InstitutionSummary[]> {
-  return apiGetWithTauriFallback<InstitutionSummary[]>(`/institutions`, "list_institutions", { bookId });
+  void bookId;
+  return apiGet<InstitutionSummary[]>(`/institutions`);
 }
 
 export async function listCategories(bookId = 1): Promise<CategorySummary[]> {
-  return apiGetWithTauriFallback<CategorySummary[]>(`/categories`, "list_categories", { bookId });
+  void bookId;
+  return apiGet<CategorySummary[]>(`/categories`);
 }
 
 export async function createCategory(input: CategoryCreateInput): Promise<CategorySummary> {
-  return apiPostWithTauriFallback<CategorySummary, CategoryCreateInput>("/categories", input, "create_category", { input });
+  return apiPost<CategorySummary, CategoryCreateInput>("/categories", input);
 }
 
 export async function updateCategory(category: CategoryCreateInput & { id: number }): Promise<void> {
-  await apiPutWithTauriFallback<CategorySummary, CategoryCreateInput>(
-    `/categories/${category.id}`,
-    category,
-    "update_category",
-    { category }
-  );
+  await apiPut<CategorySummary, CategoryCreateInput>(`/categories/${category.id}`, category);
 }
 
 export async function deleteCategory(categoryId: number, bookId = 1): Promise<void> {
-  await apiDeleteWithTauriFallback<void>(`/categories/${categoryId}`, "delete_category", { categoryId, bookId });
+  void bookId;
+  await apiDelete<void>(`/categories/${categoryId}`);
 }
 
 export async function listPayees(bookId = 1): Promise<PayeeSummary[]> {
-  return apiGetWithTauriFallback<PayeeSummary[]>(`/payees`, "list_payees", { bookId });
+  void bookId;
+  return apiGet<PayeeSummary[]>(`/payees`);
 }
 
 export async function createPayee(input: PayeeCreateInput): Promise<PayeeSummary> {
-  return apiPostWithTauriFallback<PayeeSummary, PayeeCreateInput>("/payees", input, "create_payee", { input });
+  return apiPost<PayeeSummary, PayeeCreateInput>("/payees", input);
 }
 
 export async function updatePayee(payee: PayeeCreateInput & { id: number }): Promise<void> {
-  await apiPutWithTauriFallback<PayeeSummary, PayeeCreateInput>(`/payees/${payee.id}`, payee, "update_payee", { payee });
+  await apiPut<PayeeSummary, PayeeCreateInput>(`/payees/${payee.id}`, payee);
 }
 
 export async function deletePayee(payeeId: number, bookId = 1): Promise<void> {
-  await apiDeleteWithTauriFallback<void>(`/payees/${payeeId}`, "delete_payee", { payeeId, bookId });
+  void bookId;
+  await apiDelete<void>(`/payees/${payeeId}`);
 }
 
 export async function listTags(bookId = 1): Promise<TagSummary[]> {
-  return apiGetWithTauriFallback<TagSummary[]>(`/tags`, "list_tags", { bookId });
+  void bookId;
+  return apiGet<TagSummary[]>(`/tags`);
 }
 
 export async function createTag(input: TagCreateInput): Promise<TagSummary> {
-  return apiPostWithTauriFallback<TagSummary, TagCreateInput>("/tags", input, "create_tag", { input });
+  return apiPost<TagSummary, TagCreateInput>("/tags", input);
 }
 
 export async function updateTag(tag: TagCreateInput & { id: number }): Promise<void> {
-  await apiPutWithTauriFallback<TagSummary, TagCreateInput>(`/tags/${tag.id}`, tag, "update_tag", { tag });
+  await apiPut<TagSummary, TagCreateInput>(`/tags/${tag.id}`, tag);
 }
 
 export async function deleteTag(tagId: number, bookId = 1): Promise<void> {
-  await apiDeleteWithTauriFallback<void>(`/tags/${tagId}`, "delete_tag", { tagId, bookId });
+  void bookId;
+  await apiDelete<void>(`/tags/${tagId}`);
 }
 
 export async function listPeople(bookId = 1): Promise<PersonSummary[]> {
-  return apiGetWithTauriFallback<PersonSummary[]>(`/people`, "list_people", { bookId });
+  void bookId;
+  return apiGet<PersonSummary[]>(`/people`);
 }
 
 export async function createPerson(input: PersonCreateInput): Promise<PersonSummary> {
-  return apiPostWithTauriFallback<PersonSummary, PersonCreateInput>("/people", input, "create_person", { input });
+  return apiPost<PersonSummary, PersonCreateInput>("/people", input);
 }
 
 export async function listProjects(bookId = 1): Promise<ProjectSummary[]> {
-  return apiGetWithTauriFallback<ProjectSummary[]>(`/projects`, "list_projects", { bookId });
+  void bookId;
+  return apiGet<ProjectSummary[]>(`/projects`);
 }
 
 export async function createProject(input: ProjectCreateInput): Promise<ProjectSummary> {
-  return apiPostWithTauriFallback<ProjectSummary, ProjectCreateInput>("/projects", input, "create_project", { input });
+  return apiPost<ProjectSummary, ProjectCreateInput>("/projects", input);
 }
 
 export async function createInstitution(input: InstitutionCreateInput): Promise<InstitutionSummary> {

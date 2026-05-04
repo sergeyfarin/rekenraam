@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rekenraam_api.config.settings import get_settings
 from rekenraam_api.db.session import session_factory
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.repositories.books import BookRepository
@@ -12,6 +13,7 @@ from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.repositories.reports import ReportRepository
 from rekenraam_api.repositories.transactions import TransactionRepository
 from rekenraam_api.services.accounts import AccountService
+from rekenraam_api.services.admin import AdminService
 from rekenraam_api.services.books import BookService
 from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.metadata import MetadataService
@@ -35,6 +37,10 @@ def get_book_service(session: AsyncSession = Depends(get_db_session)) -> BookSer
 def get_account_service(session: AsyncSession = Depends(get_db_session)) -> AccountService:
     repository = AccountRepository(session)
     return AccountService(repository)
+
+
+def get_admin_service(session: AsyncSession = Depends(get_db_session)) -> AdminService:
+    return AdminService(session, get_settings())
 
 
 def get_transaction_service(session: AsyncSession = Depends(get_db_session)) -> TransactionService:

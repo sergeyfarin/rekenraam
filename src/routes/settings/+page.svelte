@@ -161,7 +161,7 @@
     yearEndResult = null;
     yearEndRunning = true;
     try {
-      yearEndResult = await closeFiscalYear<FiscalYearCloseResult>({ close_date: yearEndDate, memo: yearEndMemo || null });
+      yearEndResult = await closeFiscalYear({ close_date: yearEndDate, memo: yearEndMemo || null });
     } catch (e) {
       yearEndError = String(e);
     } finally {

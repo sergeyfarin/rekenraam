@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import get_pricing_service, get_pricing_worker
 from rekenraam_api.schemas.pricing import (
+    FxRateDailyCreateInput,
+    FxRateDailySummary,
+    FxRateOfficialCreateInput,
+    FxRateOfficialSummary,
     PricingExecutionStatusSummary,
     PriceSourceSummary,
     PricingPolicySummary,
@@ -18,6 +22,66 @@ from rekenraam_api.workers.pricing import PricingRefreshWorker
 
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
+
+
+@router.get("/rates/daily", response_model=list[FxRateDailySummary])
+async def list_fx_rates_daily(
+    book_id: int = Query(default=1),
+    limit: int = Query(default=100, ge=1, le=1000),
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> list[FxRateDailySummary]:
+    return await pricing_service.list_fx_rates_daily(book_id, limit)
+
+
+@router.post("/rates/daily", response_model=FxRateDailySummary)
+async def create_fx_rate_daily(
+    input: FxRateDailyCreateInput,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> FxRateDailySummary:
+    try:
+        return await pricing_service.create_fx_rate_daily(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.delete("/rates/daily/{observation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_fx_rate_daily(
+    observation_id: int,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> None:
+    deleted = await pricing_service.delete_fx_rate_daily(observation_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="daily FX rate not found")
+
+
+@router.get("/rates/official", response_model=list[FxRateOfficialSummary])
+async def list_fx_rates_official(
+    book_id: int = Query(default=1),
+    limit: int = Query(default=100, ge=1, le=1000),
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> list[FxRateOfficialSummary]:
+    return await pricing_service.list_fx_rates_official(book_id, limit)
+
+
+@router.post("/rates/official", response_model=FxRateOfficialSummary)
+async def create_fx_rate_official(
+    input: FxRateOfficialCreateInput,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> FxRateOfficialSummary:
+    try:
+        return await pricing_service.create_fx_rate_official(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.delete("/rates/official/{observation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_fx_rate_official(
+    observation_id: int,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> None:
+    deleted = await pricing_service.delete_fx_rate_official(observation_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="official FX rate not found")
 
 
 @router.get("/sources", response_model=list[PriceSourceSummary])
