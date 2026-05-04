@@ -121,7 +121,7 @@
       balanceMap.set(b.account_id, b.native_balance_minor);
     }
 
-    // Asset types — must match ACCOUNT_TYPES in src-tauri/src/validation.rs
+    // Asset types should stay aligned with backend account validation.
     const assetTypes = ["cash", "checking", "savings", "asset", "investment"];
     // Liability types
     const liabilityTypes = ["credit", "loan", "liability"];

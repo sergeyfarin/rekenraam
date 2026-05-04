@@ -1,5 +1,3 @@
-// Tauri doesn't have a Node.js server to do proper SSR
-// so we use adapter-static with a fallback to index.html to put the site in SPA mode
-// See: https://svelte.dev/docs/kit/single-page-apps
-// See: https://v2.tauri.app/start/frontend/sveltekit/ for more info
+// The current Docker frontend is served as a static SvelteKit build.
+// Keep SSR disabled until the self-hosted web runtime moves to a server adapter.
 export const ssr = false;

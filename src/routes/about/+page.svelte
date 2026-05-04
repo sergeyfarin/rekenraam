@@ -6,7 +6,7 @@
   <div class="container mx-auto px-6 space-y-6">
     <div>
       <h1 class="text-3xl font-bold tracking-tight">About</h1>
-      <p class="text-muted-foreground">Rekenraam desktop app — local, private, and fast.</p>
+      <p class="text-muted-foreground">Self-hosted personal finance management.</p>
     </div>
 
     <Card.Root>
@@ -16,12 +16,12 @@
       </Card.Header>
       <Card.Content class="space-y-4">
         <p class="text-sm text-muted-foreground">
-          A feature-complete personal finance application built with Tauri, Svelte, and SQLite.
+          A personal finance application built for a self-hosted SvelteKit, FastAPI, and PostgreSQL stack.
         </p>
         <ul class="list-disc list-inside text-sm text-muted-foreground space-y-1">
-          <li>Local-first: Your data stays on your machine</li>
-          <li>Privacy-focused: No cloud sync, no telemetry</li>
-          <li>Fast: Native performance with Rust backend</li>
+          <li>Self-hosted: Run the web app and database in Docker</li>
+          <li>Private by design: No hosted service or telemetry requirement</li>
+          <li>Web-native: Shared access across browsers and devices</li>
           <li>Double-entry accounting: Professional-grade bookkeeping</li>
           <li>Investment tracking: Lots, cost basis, and capital gains</li>
         </ul>

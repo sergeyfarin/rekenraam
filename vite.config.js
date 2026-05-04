@@ -9,11 +9,11 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [tailwindcss(), sveltekit()],
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
+  // Keep the legacy fixed-port settings while src-tauri remains a migration reference.
   //
-  // 1. prevent Vite from obscuring rust errors
+  // Keep command output visible during transitional desktop reference runs.
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // Use a fixed port for compatibility with the transitional desktop reference.
   server: {
     port: 1420,
     strictPort: true,
@@ -26,7 +26,7 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
+      // Avoid watching the legacy desktop reference tree.
       ignored: ["**/src-tauri/**"],
     },
   },

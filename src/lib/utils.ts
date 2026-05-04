@@ -2,8 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /**
- * Structured error returned by Tauri commands that use AppError.
- * Matches the Rust `#[serde(tag = "type", content = "data")]` serialization.
+ * Structured legacy error shape retained while old migration-reference flows are retired.
  */
 type AppError =
   | { type: "Validation"; data: { field: string; message: string } }
@@ -13,8 +12,7 @@ type AppError =
   | { type: "Internal"; data: { message: string } };
 
 /**
- * Convert a Tauri command error to a human-readable string.
- * Handles structured AppError objects as well as plain strings/errors.
+ * Convert an unknown API or legacy command error to a human-readable string.
  */
 export function formatError(e: unknown): string {
   if (e === null || e === undefined) return "Unknown error";
