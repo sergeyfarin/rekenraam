@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -11,6 +11,8 @@ class Account(Base):
     __table_args__ = (
         Index("ix_accounts_book_id", "book_id"),
         Index("ix_accounts_parent_id", "parent_id"),
+        Index("ix_accounts_previous_account_id", "previous_account_id"),
+        UniqueConstraint("previous_account_id", name="uq_accounts_previous_account_id"),
         CheckConstraint(
             "account_type IN ('cash', 'checking', 'savings', 'credit', 'loan', 'investment', 'asset', 'liability', 'income', 'expense', 'equity')",
             name="ck_accounts_account_type",
@@ -23,6 +25,10 @@ class Account(Base):
             "lifecycle_event IN ('open', 'close', 'reopen', 'update')",
             name="ck_accounts_lifecycle_event",
         ),
+        CheckConstraint(
+            "(system_role IS NULL) OR is_system",
+            name="ck_accounts_system_role_requires_system",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -31,7 +37,7 @@ class Account(Base):
     previous_account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
     account_type: Mapped[str] = mapped_column(String(32), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    commodity_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False)
     booking_policy: Mapped[str] = mapped_column(String(16), nullable=False, server_default="fifo")
     number_last4: Mapped[str | None] = mapped_column(String(4))
     is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

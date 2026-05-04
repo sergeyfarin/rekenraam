@@ -5,11 +5,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import ValidationError
 
 from rekenraam_api.api.dependencies import get_transaction_service
-from rekenraam_api.schemas.transactions import PayeeDefaults, TransactionListFilters, TransactionMutationInput, TransactionSummary
+from rekenraam_api.schemas.transactions import (
+    PayeeDefaults,
+    TransactionListFilters,
+    TransactionMutationInput,
+    TransactionPage,
+    TransactionSummary,
+)
 from rekenraam_api.services.transactions import TransactionService
 
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+def _mutation_error(error: ValueError) -> HTTPException:
+    message = str(error)
+    conflict_prefixes = (
+        "cannot post transaction dated",
+        "transaction cannot use closed accounts",
+        "transaction cannot use protected system accounts",
+    )
+    status_code = status.HTTP_409_CONFLICT if message.startswith(conflict_prefixes) else status.HTTP_400_BAD_REQUEST
+    return HTTPException(status_code=status_code, detail=message)
 
 
 def get_transaction_list_filters(
@@ -17,8 +34,8 @@ def get_transaction_list_filters(
     account_id: int | None = Query(default=None),
     payee_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
-    occurred_from: str | None = Query(default=None),
-    occurred_to: str | None = Query(default=None),
+    occurred_from: date | None = Query(default=None),
+    occurred_to: date | None = Query(default=None),
     search: str | None = Query(default=None),
     amount_min: int | None = Query(default=None),
     amount_max: int | None = Query(default=None),
@@ -26,6 +43,7 @@ def get_transaction_list_filters(
     sort_dir: str | None = Query(default=None),
     limit: int | None = Query(default=None),
     offset: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
 ) -> TransactionListFilters:
     try:
         return TransactionListFilters(
@@ -42,6 +60,7 @@ def get_transaction_list_filters(
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
+            cursor=cursor,
         )
     except ValidationError as exc:
         raise HTTPException(
@@ -50,11 +69,11 @@ def get_transaction_list_filters(
         ) from exc
 
 
-@router.get("", response_model=list[TransactionSummary])
+@router.get("", response_model=TransactionPage)
 async def list_transactions(
     filters: Annotated[TransactionListFilters, Depends(get_transaction_list_filters)],
     transaction_service: TransactionService = Depends(get_transaction_service),
-) -> list[TransactionSummary]:
+) -> TransactionPage:
     return await transaction_service.list_transactions(filters)
 
 
@@ -86,7 +105,7 @@ async def create_transaction(
     try:
         return await transaction_service.create_transaction(input)
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise _mutation_error(error) from error
 
 
 @router.put("/{transaction_id}", response_model=TransactionSummary)
@@ -98,7 +117,7 @@ async def update_transaction(
     try:
         transaction = await transaction_service.update_transaction(transaction_id, input)
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise _mutation_error(error) from error
 
     if transaction is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="transaction not found")
@@ -110,7 +129,10 @@ async def delete_transaction(
     transaction_id: int,
     transaction_service: TransactionService = Depends(get_transaction_service),
 ) -> None:
-    deleted = await transaction_service.delete_transaction(transaction_id)
+    try:
+        deleted = await transaction_service.delete_transaction(transaction_id)
+    except ValueError as error:
+        raise _mutation_error(error) from error
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="transaction not found")
 

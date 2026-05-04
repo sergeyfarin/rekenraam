@@ -138,6 +138,8 @@ Exit criteria:
 
 ## Milestone 3: Auth, Audit, And Request Context Foundation
 
+Status: Completed, but not verified.
+
 Goal: establish the server identity model before broad immutable writes.
 
 Tasks:

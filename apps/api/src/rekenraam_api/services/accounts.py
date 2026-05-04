@@ -33,7 +33,7 @@ class AccountService:
 
     async def list_accounts(self) -> list[AccountSummary]:
         book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        accounts = await self._repository.list_accounts(book_ids)
+        accounts = await self._repository.list_accounts(book_ids) if book_ids is not None else await self._repository.list_accounts()
         return [self._to_summary(account) for account in accounts]
 
     async def create_account(self, input: AccountCreateInput) -> AccountSummary:
@@ -76,6 +76,10 @@ class AccountService:
                 raise ValueError("account book cannot be changed")
         if current.is_system:
             raise ValueError("system accounts cannot be updated")
+        if input.is_closed and not current.is_closed:
+            closing = await self.validate_account_closing(account_id)
+            if closing is not None and not closing.valid:
+                raise ValueError("; ".join(closing.issues))
 
         account = await self._repository.update_account(
             account_id=account_id,
@@ -119,7 +123,7 @@ class AccountService:
 
     async def list_account_balances(self) -> list[AccountBalanceSummary]:
         book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        balances = await self._repository.get_account_balances(book_ids)
+        balances = await self._repository.get_account_balances(book_ids) if book_ids is not None else await self._repository.get_account_balances()
         return [
             AccountBalanceSummary(account_id=account_id, balance_minor=balance_minor)
             for account_id, balance_minor in sorted(balances.items())
@@ -167,13 +171,16 @@ class AccountService:
         if normalized_policy not in {"fifo", "lifo", "strict", "average"}:
             raise ValueError("booking policy must be fifo, lifo, strict, or average")
 
+        current = await self._repository.get_account_by_id(account_id)
+        if current is None:
+            return None
+        if current.is_system:
+            raise ValueError("system accounts cannot be updated")
+        if current.account_type != "investment":
+            raise ValueError("booking policy only applies to investment accounts")
         account = await self._repository.set_account_booking_policy(account_id, normalized_policy)
         if account is None:
             return None
-        if account.is_system:
-            raise ValueError("system accounts cannot be updated")
-        if account.account_type != "investment":
-            raise ValueError("booking policy only applies to investment accounts")
         await bump_report_state(getattr(self._repository, "_session", None), account.book_id)
         return account.booking_policy or "fifo"
 
@@ -202,6 +209,9 @@ class AccountService:
         balances = await self._repository.get_account_balances()
         if balances.get(account_id, 0) != 0:
             issues.append("account balance is not zero")
+        balancings = await self._repository.list_account_balancings(account_id)
+        if balancings:
+            issues.append("account has locked balancing history")
 
         return AccountClosingValidationResult(valid=len(issues) == 0, issues=tuple(issues))
 
@@ -239,7 +249,7 @@ class AccountService:
 
     async def list_account_tree(self) -> list[AccountTreeNode]:
         book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        accounts = await self._repository.list_accounts(book_ids)
+        accounts = await self._repository.list_accounts(book_ids) if book_ids is not None else await self._repository.list_accounts()
         if not accounts:
             return []
 

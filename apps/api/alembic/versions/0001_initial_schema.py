@@ -226,7 +226,7 @@ def upgrade() -> None:
         sa.Column("previous_account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True),
         sa.Column("account_type", sa.String(length=32), nullable=False),
         sa.Column("name", sa.String(length=200), nullable=False),
-        sa.Column("commodity_id", sa.BigInteger(), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("booking_policy", sa.String(length=16), nullable=False, server_default=sa.text("'fifo'")),
         sa.Column("number_last4", sa.String(length=4), nullable=True),
         sa.Column("is_closed", sa.Boolean(), nullable=False, server_default=sa.text("false")),
@@ -248,9 +248,12 @@ def upgrade() -> None:
             "lifecycle_event IN ('open', 'close', 'reopen', 'update')",
             name="ck_accounts_lifecycle_event",
         ),
+        sa.CheckConstraint("(system_role IS NULL) OR is_system", name="ck_accounts_system_role_requires_system"),
+        sa.UniqueConstraint("previous_account_id", name="uq_accounts_previous_account_id"),
     )
     op.create_index("ix_accounts_book_id", "accounts", ["book_id"], unique=False)
     op.create_index("ix_accounts_parent_id", "accounts", ["parent_id"], unique=False)
+    op.create_index("ix_accounts_previous_account_id", "accounts", ["previous_account_id"], unique=False)
 
     op.create_table(
         "account_balancings",
@@ -286,6 +289,7 @@ def upgrade() -> None:
         "transactions",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("previous_tx_id", sa.BigInteger(), sa.ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True),
         sa.Column("occurred_date", sa.Date(), nullable=False),
         sa.Column("posted_date", sa.Date(), nullable=False),
         sa.Column("payee_id", sa.BigInteger(), sa.ForeignKey("payees.id", ondelete="SET NULL"), nullable=True),
@@ -301,8 +305,10 @@ def upgrade() -> None:
             "status IN ('uncleared', 'cleared', 'reconciled', 'void')",
             name="ck_transactions_status",
         ),
+        sa.UniqueConstraint("previous_tx_id", name="uq_transactions_previous_tx_id"),
     )
     op.create_index("ix_transactions_book_occurred_date", "transactions", ["book_id", "occurred_date"])
+    op.create_index("ix_transactions_previous_tx_id", "transactions", ["previous_tx_id"])
 
     op.create_table(
         "splits",
@@ -620,6 +626,7 @@ def downgrade() -> None:
     op.drop_index("ix_splits_tx_id", table_name="splits")
     op.drop_table("splits")
     op.drop_index("ix_transactions_book_occurred_date", table_name="transactions")
+    op.drop_index("ix_transactions_previous_tx_id", table_name="transactions")
     op.drop_table("transactions")
     op.drop_index("ix_projects_book_id", table_name="projects")
     op.drop_table("projects")
@@ -633,6 +640,7 @@ def downgrade() -> None:
     op.drop_index("ix_categories_book_id", table_name="categories")
     op.drop_table("categories")
     op.drop_index("ix_accounts_parent_id", table_name="accounts")
+    op.drop_index("ix_accounts_previous_account_id", table_name="accounts")
     op.drop_index("ix_accounts_book_id", table_name="accounts")
     op.drop_table("accounts")
     op.drop_index("ix_institutions_book_id", table_name="institutions")

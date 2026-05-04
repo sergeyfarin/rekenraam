@@ -162,10 +162,6 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
             ColumnContract("as_of_seq", "integer", False),
             ColumnContract("book_id", "bigint", False),
             ColumnContract("created_at", "timestamp with time zone", False),
-            ColumnContract("created_by_user_id", "bigint", True),
-            ColumnContract("created_device_id", "bigint", True),
-            ColumnContract("created_request_id", "varchar(64)", True),
-            ColumnContract("created_session_id", "bigint", True),
             ColumnContract("id", "bigint", False),
             ColumnContract("params_hash", "varchar(128)", False),
             ColumnContract("params_json", "text", True),
@@ -410,9 +406,11 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
         indexes=(
             IndexContract("ix_accounts_book_id", ("book_id",), False),
             IndexContract("ix_accounts_parent_id", ("parent_id",), False),
+            IndexContract("ix_accounts_previous_account_id", ("previous_account_id",), False),
         ),
         foreign_keys=(
             ForeignKeyContract(("book_id",), "books", ("id",), "CASCADE"),
+            ForeignKeyContract(("commodity_id",), "commodities", ("id",), "RESTRICT"),
             ForeignKeyContract(("parent_id",), "accounts", ("id",), "SET NULL"),
             ForeignKeyContract(("previous_account_id",), "accounts", ("id",), "SET NULL"),
         ),
@@ -429,7 +427,12 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
                 "ck_accounts_lifecycle_event",
                 "lifecycle_event in ('open', 'close', 'reopen', 'update')",
             ),
+            CheckConstraintContract(
+                "ck_accounts_system_role_requires_system",
+                "(system_role is null) or is_system",
+            ),
         ),
+        unique_constraints=(UniqueConstraintContract("uq_accounts_previous_account_id", ("previous_account_id",)),),
     ),
     "account_balancings": _table(
         columns=(
@@ -438,6 +441,10 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
             ColumnContract("balance_minor", "bigint", False),
             ColumnContract("book_id", "bigint", False),
             ColumnContract("created_at", "timestamp with time zone", False),
+            ColumnContract("created_by_user_id", "bigint", True),
+            ColumnContract("created_device_id", "bigint", True),
+            ColumnContract("created_request_id", "varchar(64)", True),
+            ColumnContract("created_session_id", "bigint", True),
             ColumnContract("id", "bigint", False),
             ColumnContract("memo", "text", True),
             ColumnContract("previous_account_balancing_id", "bigint", True),
@@ -476,17 +483,22 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
             ColumnContract("occurred_date", "date", False),
             ColumnContract("payee_id", "bigint", True),
             ColumnContract("posted_date", "date", False),
+            ColumnContract("previous_tx_id", "bigint", True),
             ColumnContract("reference", "text", True),
             ColumnContract("status", "varchar(20)", False),
         ),
         primary_key=("id",),
-        indexes=(IndexContract("ix_transactions_book_occurred_date", ("book_id", "occurred_date"), False),),
+        indexes=(
+            IndexContract("ix_transactions_book_occurred_date", ("book_id", "occurred_date"), False),
+            IndexContract("ix_transactions_previous_tx_id", ("previous_tx_id",), False),
+        ),
         foreign_keys=(
             ForeignKeyContract(("book_id",), "books", ("id",), "CASCADE"),
             ForeignKeyContract(("created_by_user_id",), "users", ("id",), "SET NULL"),
             ForeignKeyContract(("created_device_id",), "user_devices", ("id",), "SET NULL"),
             ForeignKeyContract(("created_session_id",), "auth_sessions", ("id",), "SET NULL"),
             ForeignKeyContract(("payee_id",), "payees", ("id",), "SET NULL"),
+            ForeignKeyContract(("previous_tx_id",), "transactions", ("id",), "SET NULL"),
         ),
         check_constraints=(
             CheckConstraintContract(
@@ -494,6 +506,7 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
                 "status in ('uncleared', 'cleared', 'reconciled', 'void')",
             ),
         ),
+        unique_constraints=(UniqueConstraintContract("uq_transactions_previous_tx_id", ("previous_tx_id",)),),
     ),
     "splits": _table(
         columns=(

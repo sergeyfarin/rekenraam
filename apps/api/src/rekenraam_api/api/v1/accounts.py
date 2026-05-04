@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from rekenraam_api.api.dependencies import get_account_service
 from rekenraam_api.api.dependencies import get_transaction_service
-from rekenraam_api.schemas.register import RegisterEntry
+from rekenraam_api.schemas.register import RegisterPage
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingCreateInput,
@@ -202,14 +202,16 @@ async def get_account(
     return account
 
 
-@router.get("/{account_id}/register", response_model=list[RegisterEntry])
+@router.get("/{account_id}/register", response_model=RegisterPage)
 async def get_account_register(
     account_id: int,
+    limit: int = 100,
+    cursor: str | None = None,
     account_service: AccountService = Depends(get_account_service),
     transaction_service: TransactionService = Depends(get_transaction_service),
-) -> list[RegisterEntry]:
+) -> RegisterPage:
     account = await account_service.get_account_by_id(account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
 
-    return await transaction_service.list_account_register(account_id)
+    return await transaction_service.list_account_register(account_id, limit=limit, cursor=cursor)

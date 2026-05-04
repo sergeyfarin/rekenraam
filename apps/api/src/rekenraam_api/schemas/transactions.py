@@ -19,6 +19,7 @@ class TransactionListFilters(BaseModel):
     sort_dir: str | None = None
     limit: int | None = None
     offset: int | None = None
+    cursor: str | None = None
 
     @model_validator(mode="after")
     def validate_date_range(self) -> "TransactionListFilters":
@@ -80,6 +81,7 @@ class TransactionSummary(BaseModel):
 
     id: int
     book_id: int
+    previous_tx_id: int | None = None
     occurred_date: date
     posted_date: date
     payee_id: int | None
@@ -88,6 +90,13 @@ class TransactionSummary(BaseModel):
     reference: str | None
     created_at: datetime
     splits: tuple[SplitEntry, ...]
+
+
+class TransactionPage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    items: tuple[TransactionSummary, ...]
+    next_cursor: str | None
 
 
 class PayeeDefaults(BaseModel):

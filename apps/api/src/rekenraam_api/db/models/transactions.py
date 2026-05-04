@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -10,6 +10,8 @@ class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         Index("ix_transactions_book_occurred_date", "book_id", "occurred_date"),
+        Index("ix_transactions_previous_tx_id", "previous_tx_id"),
+        UniqueConstraint("previous_tx_id", name="uq_transactions_previous_tx_id"),
         CheckConstraint(
             "status IN ('uncleared', 'cleared', 'reconciled', 'void')",
             name="ck_transactions_status",
@@ -18,6 +20,7 @@ class Transaction(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    previous_tx_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id", ondelete="SET NULL"))
     occurred_date: Mapped[date] = mapped_column(Date, nullable=False)
     posted_date: Mapped[date] = mapped_column(Date, nullable=False)
     payee_id: Mapped[int | None] = mapped_column(ForeignKey("payees.id", ondelete="SET NULL"))

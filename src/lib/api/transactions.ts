@@ -14,6 +14,7 @@ export type TransactionFilter = {
   sort_dir?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  cursor?: string;
 };
 
 export type TransactionRecord = {
@@ -85,6 +86,11 @@ export type AccountRegisterEntry = {
   created_at: string;
 };
 
+export type Page<T> = {
+  items: T[];
+  next_cursor: string | null;
+};
+
 type ApiSplit = {
   id: number;
   tx_id: number;
@@ -110,6 +116,11 @@ type ApiTransaction = {
   reference: string | null;
   created_at: string;
   splits: ApiSplit[];
+};
+
+type ApiPage<T> = {
+  items: T[];
+  next_cursor: string | null;
 };
 
 type ApiRegisterEntry = {
@@ -145,6 +156,7 @@ function toQueryString(filter: TransactionFilter): string {
   if (filter.sort_dir) params.set("sort_dir", filter.sort_dir);
   if (filter.limit !== undefined) params.set("limit", String(filter.limit));
   if (filter.offset !== undefined) params.set("offset", String(filter.offset));
+  if (filter.cursor) params.set("cursor", filter.cursor);
 
   const query = params.toString();
   return query ? `?${query}` : "";
@@ -230,8 +242,17 @@ function mapTransactionToRegisterEntries(transactions: TransactionWithSplits[], 
 
 export async function listTransactions(filter: TransactionFilter): Promise<TransactionWithSplits[]> {
   const path = `/transactions${toQueryString(filter)}`;
-  const response = await apiGet<ApiTransaction[]>(path);
-  return response.map(mapTransaction);
+  const response = await apiGet<ApiPage<ApiTransaction>>(path);
+  return response.items.map(mapTransaction);
+}
+
+export async function listTransactionsPage(filter: TransactionFilter): Promise<Page<TransactionWithSplits>> {
+  const path = `/transactions${toQueryString(filter)}`;
+  const response = await apiGet<ApiPage<ApiTransaction>>(path);
+  return {
+    items: response.items.map(mapTransaction),
+    next_cursor: response.next_cursor,
+  };
 }
 
 export async function getTransactionById(transactionId: number): Promise<TransactionWithSplits | null> {
@@ -247,8 +268,20 @@ export async function getTransactionById(transactionId: number): Promise<Transac
 }
 
 export async function listAccountRegister(accountId: number): Promise<AccountRegisterEntry[]> {
-  const response = await apiGet<ApiRegisterEntry[]>(`/accounts/${accountId}/register`);
-  return response.map(mapRegisterEntry);
+  const response = await apiGet<ApiPage<ApiRegisterEntry>>(`/accounts/${accountId}/register`);
+  return response.items.map(mapRegisterEntry);
+}
+
+export async function listAccountRegisterPage(accountId: number, limit?: number, cursor?: string): Promise<Page<AccountRegisterEntry>> {
+  const params = new URLSearchParams();
+  if (limit !== undefined) params.set("limit", String(limit));
+  if (cursor) params.set("cursor", cursor);
+  const query = params.toString();
+  const response = await apiGet<ApiPage<ApiRegisterEntry>>(`/accounts/${accountId}/register${query ? `?${query}` : ""}`);
+  return {
+    items: response.items.map(mapRegisterEntry),
+    next_cursor: response.next_cursor,
+  };
 }
 
 export async function createTransaction(input: TransactionMutationInput): Promise<void> {

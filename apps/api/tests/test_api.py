@@ -34,8 +34,8 @@ from rekenraam_api.schemas.metadata import (
     TagSummary,
 )
 from rekenraam_api.schemas.reports import CashflowRow, CategorySpendRow, PayeeTotalRow
-from rekenraam_api.schemas.register import RegisterEntry
-from rekenraam_api.schemas.transactions import PayeeDefaults, SplitEntry, TransactionListFilters, TransactionMutationInput, TransactionSummary
+from rekenraam_api.schemas.register import RegisterEntry, RegisterPage
+from rekenraam_api.schemas.transactions import PayeeDefaults, SplitEntry, TransactionListFilters, TransactionMutationInput, TransactionPage, TransactionSummary
 
 
 class StubBookService:
@@ -277,7 +277,7 @@ class StubTransactionService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
     last_filters: TransactionListFilters | None = None
 
-    async def list_transactions(self, filters: TransactionListFilters | None = None) -> list[TransactionSummary]:
+    async def list_transactions(self, filters: TransactionListFilters | None = None) -> TransactionPage:
         self.last_filters = filters
         transactions = [
             TransactionSummary(
@@ -364,19 +364,19 @@ class StubTransactionService:
             ),
         ]
         if filters is None:
-            return transactions
-        return [
+            return TransactionPage(items=tuple(transactions), next_cursor=None)
+        return TransactionPage(items=tuple(
             transaction
             for transaction in transactions
             if (filters.status is None or transaction.status == filters.status)
             and (filters.account_id is None or any(split.account_id == filters.account_id for split in transaction.splits))
             and (filters.occurred_from is None or transaction.occurred_date >= filters.occurred_from)
             and (filters.occurred_to is None or transaction.occurred_date <= filters.occurred_to)
-        ]
+        ), next_cursor=None)
 
     async def get_transaction_by_id(self, transaction_id: int) -> TransactionSummary | None:
         if transaction_id == 1:
-            return (await self.list_transactions())[0]
+            return (await self.list_transactions()).items[0]
         return None
 
     async def create_transaction(self, input: TransactionMutationInput) -> TransactionSummary:
@@ -526,10 +526,10 @@ class StubTransactionService:
             return PayeeDefaults(category_id=1, memo="Pending groceries")
         return PayeeDefaults(category_id=None, memo=None)
 
-    async def list_account_register(self, account_id: int) -> list[RegisterEntry]:
+    async def list_account_register(self, account_id: int, *, limit: int = 100, cursor: str | None = None) -> RegisterPage:
         if account_id != 2:
-            return []
-        return [
+            return RegisterPage(items=(), next_cursor=None)
+        return RegisterPage(items=(
             RegisterEntry(
                 tx_id=1,
                 split_id=1,
@@ -545,8 +545,8 @@ class StubTransactionService:
                 amount_minor=500000,
                 running_balance_minor=500000,
                 created_at=self._created_at,
-            )
-        ]
+            ),
+        ), next_cursor=None)
 
 
 class StubMetadataService:
@@ -1100,7 +1100,7 @@ async def test_list_transactions_returns_nested_splits(client: AsyncClient) -> N
     response = await client.get("/api/v1/transactions")
 
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["items"]
     assert body[0]["memo"] == "Initial opening balance"
     assert len(body) == 2
     assert len(body[0]["splits"]) == 2
@@ -1263,7 +1263,7 @@ async def test_list_transactions_applies_query_filters(client: AsyncClient) -> N
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["items"]
     assert [item["id"] for item in body] == [2]
     assert service.last_filters == TransactionListFilters(
         account_id=2,
@@ -1376,7 +1376,7 @@ async def test_get_account_register_returns_running_balance_entries(client: Asyn
     response = await client.get("/api/v1/accounts/2/register")
 
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["items"]
     assert body[0]["amount_minor"] == 500000
     assert body[0]["running_balance_minor"] == 500000
     assert body[0]["payee_id"] is None

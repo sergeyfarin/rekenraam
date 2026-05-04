@@ -8,6 +8,7 @@ from sqlalchemy.orm import aliased
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
 from rekenraam_api.db.models.books import Book
+from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
 
 
@@ -16,7 +17,13 @@ class AccountRepository:
         self._session = session
 
     async def list_accounts(self, book_ids: list[int] | None = None) -> list[Account]:
-        statement: Select[tuple[Account]] = select(Account).order_by(Account.parent_id.nullsfirst(), Account.id)
+        newer = aliased(Account)
+        statement: Select[tuple[Account]] = (
+            select(Account)
+            .where(~exists(select(literal(1)).where(newer.previous_account_id == Account.id)))
+            .where(Account.is_hidden.is_(False))
+            .order_by(Account.parent_id.nullsfirst(), Account.id)
+        )
         if book_ids is not None:
             if not book_ids:
                 return []
@@ -37,6 +44,15 @@ class AccountRepository:
         number_last4: str | None,
         is_closed: bool,
     ) -> Account:
+        if parent_id is not None:
+            parent = await self.get_account_by_id(parent_id)
+            if parent is None or parent.book_id != book_id:
+                raise ValueError("parent account does not belong to book")
+        commodity_book_id = await self._session.scalar(select(Commodity.book_id).where(Commodity.id == commodity_id))
+        if commodity_book_id is None:
+            raise ValueError("commodity not found")
+        if commodity_book_id != book_id:
+            raise ValueError("commodity does not belong to book")
         account = Account(
             book_id=book_id,
             parent_id=parent_id,
@@ -58,9 +74,16 @@ class AccountRepository:
         return account
 
     async def get_account_by_id(self, account_id: int) -> Account | None:
-        statement: Select[tuple[Account]] = select(Account).where(Account.id == account_id)
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
+        account = await self._session.get(Account, account_id)
+        if account is None:
+            return None
+
+        while True:
+            statement: Select[tuple[Account]] = select(Account).where(Account.previous_account_id == account.id).limit(1)
+            newer = await self._session.scalar(statement)
+            if newer is None:
+                return None if account.is_hidden else account
+            account = newer
 
     async def update_account(
         self,
@@ -80,31 +103,72 @@ class AccountRepository:
             return None
 
         previous_closed = account.is_closed
-        account.parent_id = parent_id
-        account.account_type = account_type
-        account.name = name
-        account.commodity_id = commodity_id
-        account.number_last4 = number_last4
-        account.is_closed = is_closed
-        account.updated_at = datetime.now(UTC)
-        account.effective_at = date.today()
+        if parent_id is not None:
+            parent = await self.get_account_by_id(parent_id)
+            if parent is None or parent.book_id != account.book_id:
+                raise ValueError("parent account does not belong to book")
+            parent_chain_ids = await self.list_account_chain_ids(parent_id)
+            account_chain_ids = await self.list_account_chain_ids(account.id)
+            if set(parent_chain_ids) & set(account_chain_ids):
+                raise ValueError("account cannot be its own parent")
+        commodity_book_id = await self._session.scalar(select(Commodity.book_id).where(Commodity.id == commodity_id))
+        if commodity_book_id is None:
+            raise ValueError("commodity not found")
+        if commodity_book_id != account.book_id:
+            raise ValueError("commodity does not belong to book")
         if not previous_closed and is_closed:
-            account.lifecycle_event = "close"
+            lifecycle_event = "close"
         elif previous_closed and not is_closed:
-            account.lifecycle_event = "reopen"
+            lifecycle_event = "reopen"
         else:
-            account.lifecycle_event = "update"
+            lifecycle_event = "update"
 
+        replacement = Account(
+            book_id=account.book_id,
+            parent_id=parent_id,
+            previous_account_id=account.id,
+            account_type=account_type,
+            name=name,
+            commodity_id=commodity_id,
+            booking_policy=account.booking_policy,
+            number_last4=number_last4,
+            is_closed=is_closed,
+            is_hidden=account.is_hidden,
+            is_system=account.is_system,
+            system_role=account.system_role,
+            effective_at=date.today(),
+            lifecycle_event=lifecycle_event,
+            updated_at=datetime.now(UTC),
+        )
+        self._session.add(replacement)
         await self._session.commit()
-        await self._session.refresh(account)
-        return account
+        await self._session.refresh(replacement)
+        return replacement
 
     async def delete_account(self, account_id: int) -> bool:
         account = await self.get_account_by_id(account_id)
         if account is None:
             return False
 
-        await self._session.delete(account)
+        tombstone = Account(
+            book_id=account.book_id,
+            parent_id=account.parent_id,
+            previous_account_id=account.id,
+            account_type=account.account_type,
+            name=account.name,
+            commodity_id=account.commodity_id,
+            booking_policy=account.booking_policy,
+            number_last4=account.number_last4,
+            is_closed=True,
+            is_hidden=True,
+            is_system=account.is_system,
+            system_role=account.system_role,
+            effective_at=date.today(),
+            lifecycle_event="close",
+            lifecycle_note="deleted",
+            updated_at=datetime.now(UTC),
+        )
+        self._session.add(tombstone)
         try:
             await self._session.commit()
         except IntegrityError:
@@ -118,10 +182,17 @@ class AccountRepository:
         return result.scalar_one_or_none()
 
     async def get_account_balances(self, book_ids: list[int] | None = None) -> dict[int, int]:
+        current_accounts = await self.list_accounts(book_ids)
+        current_id_by_chain_id: dict[int, int] = {}
+        for account in current_accounts:
+            for chain_id in await self.list_account_chain_ids(account.id):
+                current_id_by_chain_id[chain_id] = account.id
+        newer_transaction = aliased(Transaction)
         statement = (
             select(Split.account_id, func.coalesce(func.sum(Split.amount_minor), 0))
             .join(Transaction, Transaction.id == Split.tx_id)
             .where(Transaction.status != "void")
+            .where(~exists(select(literal(1)).where(newer_transaction.previous_tx_id == Transaction.id)))
             .group_by(Split.account_id)
         )
         if book_ids is not None:
@@ -129,7 +200,12 @@ class AccountRepository:
                 return {}
             statement = statement.where(Transaction.book_id.in_(book_ids))
         result = await self._session.execute(statement)
-        return {account_id: balance_minor for account_id, balance_minor in result.all()}
+        balances: dict[int, int] = {}
+        for raw_account_id, balance_minor in result.all():
+            account_id = int(raw_account_id)
+            current_id = current_id_by_chain_id.get(account_id, account_id)
+            balances[current_id] = balances.get(current_id, 0) + int(balance_minor)
+        return balances
 
     async def list_account_balancings(self, account_id: int) -> list[AccountBalancing]:
         newer_balancing = aliased(AccountBalancing)
@@ -184,6 +260,22 @@ class AccountRepository:
             reverse=True,
         )
 
+    async def list_account_chain_ids(self, account_id: int) -> list[int]:
+        result = await self._session.execute(select(Account).order_by(Account.id.asc()))
+        accounts = list(result.scalars().all())
+        chain_ids = {account_id}
+        changed = True
+        while changed:
+            changed = False
+            for account in accounts:
+                if account.id in chain_ids and account.previous_account_id is not None and account.previous_account_id not in chain_ids:
+                    chain_ids.add(account.previous_account_id)
+                    changed = True
+                if account.previous_account_id in chain_ids and account.id not in chain_ids:
+                    chain_ids.add(account.id)
+                    changed = True
+        return sorted(chain_ids)
+
     async def get_account_booking_policy(self, account_id: int) -> tuple[Account | None, str | None]:
         account = await self.get_account_by_id(account_id)
         if account is None:
@@ -195,10 +287,27 @@ class AccountRepository:
         if account is None:
             return None
 
-        account.booking_policy = booking_policy
+        replacement = Account(
+            book_id=account.book_id,
+            parent_id=account.parent_id,
+            previous_account_id=account.id,
+            account_type=account.account_type,
+            name=account.name,
+            commodity_id=account.commodity_id,
+            booking_policy=booking_policy,
+            number_last4=account.number_last4,
+            is_closed=account.is_closed,
+            is_hidden=account.is_hidden,
+            is_system=account.is_system,
+            system_role=account.system_role,
+            effective_at=date.today(),
+            lifecycle_event="update",
+            updated_at=datetime.now(UTC),
+        )
+        self._session.add(replacement)
         await self._session.commit()
-        await self._session.refresh(account)
-        return account
+        await self._session.refresh(replacement)
+        return replacement
 
     async def unlock_account_balancings(self, account_id: int, from_date: date, reason: str | None) -> int:
         newer_balancing = aliased(AccountBalancing)

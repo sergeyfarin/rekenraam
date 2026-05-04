@@ -20,3 +20,10 @@ class RegisterEntry(BaseModel):
     amount_minor: int
     running_balance_minor: int
     created_at: datetime
+
+
+class RegisterPage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    items: tuple[RegisterEntry, ...]
+    next_cursor: str | None
