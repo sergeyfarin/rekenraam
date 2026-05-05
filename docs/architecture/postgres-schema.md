@@ -48,13 +48,13 @@ Already represented in the web baseline:
   defaults
 - markdown notes
 - audit events
-
-Planned schema families:
-
 - budgets and budget lines
 - scheduled transactions and recurrence state
 - loan/mortgage amortization helpers where account and transaction tables are
   not sufficient
+
+Planned schema families:
+
 - uploaded documents and attachment metadata
 - events, if they remain distinct from audit events and notes
 - plugin manifests/status

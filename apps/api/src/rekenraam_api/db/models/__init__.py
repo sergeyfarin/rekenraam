@@ -29,6 +29,15 @@ from rekenraam_api.db.models.metadata import (
     Project,
     Tag,
 )
+from rekenraam_api.db.models.planning import (
+    Budget,
+    BudgetTarget,
+    Loan,
+    LoanTerm,
+    ScheduledTransaction,
+    ScheduledTransactionOccurrence,
+    ScheduledTransactionSplit,
+)
 from rekenraam_api.db.models.pricing import (
     PriceSource,
     PricingPolicy,
@@ -51,6 +60,8 @@ __all__ = [
     "Book",
     "BookMembership",
     "BookState",
+    "Budget",
+    "BudgetTarget",
     "Category",
     "Commodity",
     "Country",
@@ -59,6 +70,8 @@ __all__ = [
     "ImportSession",
     "ImportSessionTransaction",
     "Lot",
+    "Loan",
+    "LoanTerm",
     "MarkdownNote",
     "Payee",
     "PayeeDefault",
@@ -74,6 +87,9 @@ __all__ = [
     "ReportCache",
     "ReportDefinition",
     "ReportRun",
+    "ScheduledTransaction",
+    "ScheduledTransactionOccurrence",
+    "ScheduledTransactionSplit",
     "Split",
     "SplitLotAllocation",
     "Tag",

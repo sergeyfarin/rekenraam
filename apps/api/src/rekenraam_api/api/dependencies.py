@@ -14,6 +14,7 @@ from rekenraam_api.repositories.ergonomics import ErgonomicsRepository
 from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.repositories.investments import InvestmentRepository
 from rekenraam_api.repositories.metadata import MetadataRepository
+from rekenraam_api.repositories.planning import PlanningRepository
 from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.repositories.reconciliation import ReconciliationRepository
 from rekenraam_api.repositories.reports import ReportRepository
@@ -28,6 +29,7 @@ from rekenraam_api.services.exports import ExportService
 from rekenraam_api.services.imports import ImportService
 from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.metadata import MetadataService
+from rekenraam_api.services.planning import PlanningService
 from rekenraam_api.services.pricing import PricingService
 from rekenraam_api.services.pricing_execution import PricingExecutionService
 from rekenraam_api.services.reconciliation import ReconciliationService
@@ -127,6 +129,16 @@ def get_transaction_service(
 ) -> TransactionService:
     repository = TransactionRepository(session)
     return TransactionService(repository, access_policy)
+
+
+def get_planning_service(
+    session: AsyncSession = Depends(get_db_session),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+) -> PlanningService:
+    repository = PlanningRepository(session)
+    transaction_repository = TransactionRepository(session)
+    transaction_service = TransactionService(transaction_repository, access_policy)
+    return PlanningService(repository, transaction_service, access_policy)
 
 
 def get_metadata_service(session: AsyncSession = Depends(get_db_session)) -> MetadataService:

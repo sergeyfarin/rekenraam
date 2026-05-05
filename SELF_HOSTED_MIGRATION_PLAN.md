@@ -14,12 +14,12 @@ self-hosted personal finance web app:
 - trusted plugin extension points
 - themeable frontend
 
-Milestones 1-6 are complete as baseline web slices. That means the core
+Milestones 1-7 are complete as baseline web slices. That means the core
 self-hosted architecture, auth/request context, accounting writes,
 reconciliation, import/export, reports, investments, pricing, and admin
-foundations exist in Python/HTTP/PostgreSQL. The remaining roadmap is about v1
-feature breadth, correctness hardening, operational readiness, and final Tauri
-removal.
+foundations plus budgets, schedules, projected cash planning, and loans exist
+in Python/HTTP/PostgreSQL. The remaining roadmap is about v1 feature breadth,
+correctness hardening, operational readiness, and final Tauri removal.
 
 The v1 product target is personal finance first. Small-business use cases should
 shape the architecture, but invoices, customers, VAT workflows, and other
@@ -54,8 +54,9 @@ Working today:
 - Python-backed books, accounts, transactions, metadata, reconciliation,
   imports, exports, reports, investments, pricing settings, FX refresh
   status/history, admin runtime health, user administration, preferences,
-  saved transaction views, transaction templates, payee defaults, notes, and
-  audit slices
+  saved transaction views, transaction templates, payee defaults, notes,
+  budgets, scheduled transactions, projected cash planning, loans, and audit
+  slices
 - shared frontend API seam under `src/lib/api`
 - frontend routes for dashboard, accounts, account registers, reconciliation,
   transactions, import/export, reports, investments, tax, planning, settings,
@@ -64,7 +65,9 @@ Working today:
   books, commodities/currencies, metadata, accounts, account balancings,
   reconciliation checks/adjustments/constraints, transactions, splits, lots,
   split-lot allocations, price observations, pricing configuration and refresh
-  runs, imports, report state/cache, report definitions, and report runs
+  runs, imports, report state/cache, report definitions, report runs, budgets,
+  budget targets, scheduled transactions, scheduled occurrences, loans, and
+  loan terms
 - backend tests for API, services, repositories, schema/migrations, auth,
   reconciliation, imports/exports, reports, investments, pricing, metadata, and
   admin workflows
@@ -74,11 +77,11 @@ Still transitional:
 - frontend source remains in root `src`
 - `src-tauri` remains as parity reference
 - Tauri dependencies remain until the final deletion gate is met
-- milestones 1-6 are baseline complete but still need broader v1 hardening,
+- milestones 1-7 are baseline complete but still need broader v1 hardening,
   fixtures, and UX depth
-- budgets, schedules, loans, multi-currency transfers, plugins, themes,
-  attachment/document uploads, backup/restore documentation, and final
-  CI/deployment gates remain to be completed
+- multi-currency transfers, plugins, themes, attachment/document uploads,
+  backup/restore documentation, and final CI/deployment gates remain to be
+  completed
 
 ## Architecture Defaults
 
@@ -259,9 +262,11 @@ Public API:
 
 ## Milestone 7: Budgets, Schedules, Loans, And Planning
 
+Status: Complete as baseline.
+
 Goal: complete the personal finance planning workflows expected in v1.
 
-Tasks:
+Completed:
 
 1. Budgets: monthly/annual budgets, category targets, rollover, and
    planned-vs-actual reporting.
@@ -273,11 +278,19 @@ Tasks:
 5. Add schema, services, HTTP APIs, and frontend routes without reintroducing
    desktop storage assumptions.
 
+Remaining hardening:
+
+- broaden recurrence coverage for end-of-month, yearly, and edited future
+  occurrences
+- add richer account/category selection validation and non-USD commodity support
+- polish planning UX for editing/deleting targets, schedules, and loans
+- expand loan workflows beyond fixed-rate monthly amortization
+
 Public API targets:
 
-- `/api/v1/budgets/*`
-- `/api/v1/schedules/*`
-- `/api/v1/loans/*`
+- existing `/api/v1/budgets/*`
+- existing `/api/v1/schedules/*`
+- existing `/api/v1/loans/*`
 
 Exit criteria:
 

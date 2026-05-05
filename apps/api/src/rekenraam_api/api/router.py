@@ -11,6 +11,7 @@ from rekenraam_api.api.v1.imports import router as imports_router
 from rekenraam_api.api.v1.investments import router as investments_router
 from rekenraam_api.api.v1.metadata import router as metadata_router
 from rekenraam_api.api.v1.notes import router as notes_router
+from rekenraam_api.api.v1.planning import budgets_router, loans_router, schedules_router
 from rekenraam_api.api.v1.preferences import router as preferences_router
 from rekenraam_api.api.v1.pricing import router as pricing_router
 from rekenraam_api.api.v1.reconciliation import router as reconciliation_router
@@ -26,15 +27,18 @@ protected_dependencies = [Depends(require_request_context)]
 api_router.include_router(admin_router, dependencies=protected_dependencies)
 api_router.include_router(accounts_router, dependencies=protected_dependencies)
 api_router.include_router(books_router, dependencies=protected_dependencies)
+api_router.include_router(budgets_router, dependencies=protected_dependencies)
 api_router.include_router(exports_router, dependencies=protected_dependencies)
 api_router.include_router(imports_router, dependencies=protected_dependencies)
 api_router.include_router(investments_router, dependencies=protected_dependencies)
+api_router.include_router(loans_router, dependencies=protected_dependencies)
 api_router.include_router(metadata_router, dependencies=protected_dependencies)
 api_router.include_router(notes_router, dependencies=protected_dependencies)
 api_router.include_router(preferences_router, dependencies=protected_dependencies)
 api_router.include_router(pricing_router, dependencies=protected_dependencies)
 api_router.include_router(reconciliation_router, dependencies=protected_dependencies)
 api_router.include_router(reports_router, dependencies=protected_dependencies)
+api_router.include_router(schedules_router, dependencies=protected_dependencies)
 api_router.include_router(search_router, dependencies=protected_dependencies)
 api_router.include_router(templates_router, dependencies=protected_dependencies)
 api_router.include_router(transactions_router, dependencies=protected_dependencies)
