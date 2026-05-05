@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace
 
-from sqlalchemy import CheckConstraint, Index, MetaData, Table, UniqueConstraint, inspect
+from sqlalchemy import CheckConstraint, MetaData, Table, UniqueConstraint, inspect
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Connection
 
@@ -88,6 +88,7 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
             ColumnContract("display_name", "varchar(200)", False),
             ColumnContract("email", "varchar(320)", False),
             ColumnContract("id", "bigint", False),
+            ColumnContract("is_active", "boolean", False),
             ColumnContract("is_admin", "boolean", False),
             ColumnContract("password_hash", "text", True),
             ColumnContract("updated_at", "timestamp with time zone", False),
@@ -556,10 +557,16 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
             ColumnContract("created_request_id", "varchar(64)", True),
             ColumnContract("created_session_id", "bigint", True),
             ColumnContract("id", "bigint", False),
+            ColumnContract("import_id", "varchar(255)", True),
+            ColumnContract("import_session_id", "bigint", True),
             ColumnContract("memo", "text", True),
+            ColumnContract("occurred_at_utc", "timestamp with time zone", True),
             ColumnContract("occurred_date", "date", False),
+            ColumnContract("occurred_tz", "varchar(64)", True),
             ColumnContract("payee_id", "bigint", True),
+            ColumnContract("posted_at_utc", "timestamp with time zone", True),
             ColumnContract("posted_date", "date", False),
+            ColumnContract("posted_tz", "varchar(64)", True),
             ColumnContract("previous_tx_id", "bigint", True),
             ColumnContract("reference", "text", True),
             ColumnContract("status", "varchar(20)", False),
@@ -567,6 +574,8 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
         primary_key=("id",),
         indexes=(
             IndexContract("ix_transactions_book_occurred_date", ("book_id", "occurred_date"), False),
+            IndexContract("ix_transactions_import_id", ("import_id",), False),
+            IndexContract("ix_transactions_import_session_id", ("import_session_id",), False),
             IndexContract("ix_transactions_previous_tx_id", ("previous_tx_id",), False),
         ),
         foreign_keys=(
@@ -574,6 +583,7 @@ STAGE2_SCHEMA_CONTRACT: dict[str, TableContract] = {
             ForeignKeyContract(("created_by_user_id",), "users", ("id",), "SET NULL"),
             ForeignKeyContract(("created_device_id",), "user_devices", ("id",), "SET NULL"),
             ForeignKeyContract(("created_session_id",), "auth_sessions", ("id",), "SET NULL"),
+            ForeignKeyContract(("import_session_id",), "import_sessions", ("id",), "SET NULL"),
             ForeignKeyContract(("payee_id",), "payees", ("id",), "SET NULL"),
             ForeignKeyContract(("previous_tx_id",), "transactions", ("id",), "SET NULL"),
         ),

@@ -5,7 +5,7 @@ from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
-from rekenraam_api.db.models.metadata import Payee
+from rekenraam_api.db.models.metadata import Category, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.repositories.books import BookRepository
@@ -23,7 +23,7 @@ async def _insert_test_transaction(
     status: str,
     payee_id: int | None = None,
     reference: str | None = None,
-    splits: list[tuple[int, int, str]] = [],
+    splits: list[tuple[int, int, str]] | None = None,
 ) -> None:
     created_at = datetime(2026, 5, 3, tzinfo=UTC)
     session.add(
@@ -40,7 +40,7 @@ async def _insert_test_transaction(
         )
     )
     await session.flush()
-    for offset, (account_id, amount_minor, split_memo) in enumerate(splits, start=1):
+    for offset, (account_id, amount_minor, split_memo) in enumerate(splits or [], start=1):
         session.add(
             Split(
                 id=transaction_id * 10 + offset,
@@ -323,13 +323,14 @@ async def test_account_repository_returns_booking_policy(repository_session: Asy
 async def test_transaction_repository_lists_seeded_transactions(repository_session: AsyncSession) -> None:
     repository = TransactionRepository(repository_session)
 
-    transactions = await repository.list_transactions()
+    transactions, next_cursor = await repository.list_transactions()
 
     assert len(transactions) == 1
     assert transactions[0].memo == "Initial opening balance"
     assert transactions[0].status == "cleared"
     assert transactions[0].payee_id is None
     assert transactions[0].reference is None
+    assert next_cursor is None
 
 
 @pytest.mark.asyncio
@@ -357,7 +358,7 @@ async def test_transaction_repository_applies_status_account_and_date_filters(
         )
         repository = TransactionRepository(repository_session)
 
-        filtered = await repository.list_transactions(
+        filtered, next_cursor = await repository.list_transactions(
             TransactionListFilters(
                 account_id=2,
                 status="uncleared",
@@ -367,6 +368,7 @@ async def test_transaction_repository_applies_status_account_and_date_filters(
         )
 
         assert [transaction.id for transaction in filtered] == [2]
+        assert next_cursor is None
     finally:
         await repository_session.execute(delete(Transaction).where(Transaction.id.in_([2, 3])))
         await repository_session.commit()
@@ -401,7 +403,7 @@ async def test_transaction_repository_applies_search_amount_and_pagination_filte
             splits=[(2, -4500, "Bulk"), (3, 4500, "Offset")],
         )
 
-        filtered = await TransactionRepository(repository_session).list_transactions(
+        filtered, next_cursor = await TransactionRepository(repository_session).list_transactions(
             TransactionListFilters(
                 search="Local",
                 amount_min=1200,
@@ -414,6 +416,7 @@ async def test_transaction_repository_applies_search_amount_and_pagination_filte
         )
 
         assert [transaction.id for transaction in filtered] == [2]
+        assert next_cursor is None
     finally:
         await repository_session.execute(delete(Transaction).where(Transaction.id.in_([2, 3])))
         await repository_session.execute(delete(Payee).where(Payee.id == 1))
@@ -502,17 +505,24 @@ async def test_transaction_repository_returns_none_for_missing_transaction(repos
 async def test_transaction_repository_lists_account_register_rows(repository_session: AsyncSession) -> None:
     repository = TransactionRepository(repository_session)
 
-    rows = await repository.list_account_register_splits(2)
+    rows, next_cursor = await repository.list_account_register_splits(2)
 
     assert len(rows) == 1
-    transaction, split = rows[0]
+    transaction, split, running_balance = rows[0]
     assert transaction.memo == "Initial opening balance"
     assert split.amount_minor == 500000
+    assert running_balance == 500000
+    assert next_cursor is None
 
 
 @pytest.mark.asyncio
 async def test_transaction_repository_returns_payee_defaults(repository_session: AsyncSession) -> None:
-    repository_session.add(Payee(id=2, book_id=1, name="Corner Shop", kind="business", metadata_text=None))
+    repository_session.add(
+        Payee(id=2, book_id=1, name="Corner Shop", kind="business", metadata_text=None)
+    )
+    repository_session.add(
+        Category(id=1, book_id=1, name="Groceries", kind="expense", color=None)
+    )
     await repository_session.commit()
 
     await _insert_test_transaction(
@@ -539,7 +549,7 @@ async def test_transaction_repository_duplicates_and_bulk_mutates_transactions(r
 
     duplicated = await repository.duplicate_transaction(1, date(2026, 5, 4))
     voided = await repository.bulk_void_transactions([1])
-    deleted = await repository.bulk_delete_transactions([1])
+    deleted = await repository.bulk_delete_transactions([duplicated.id])
 
     assert duplicated is not None
     assert duplicated.occurred_date == date(2026, 5, 4)

@@ -54,6 +54,22 @@ async def test_budget_schedule_projection_and_loan_workflows(client: AsyncClient
     )
     assert category.status_code == 200
     category_id = category.json()["id"]
+    offset_account = await client.post(
+        "/api/v1/accounts",
+        json={
+            "book_id": 1,
+            "parent_id": 1,
+            "account_type": "savings",
+            "name": "Savings",
+            "commodity_id": 1,
+            "institution_id": None,
+            "country_id": None,
+            "number_last4": None,
+            "is_closed": False,
+        },
+    )
+    assert offset_account.status_code == 200
+    offset_account_id = offset_account.json()["id"]
 
     budget = await client.post(
         "/api/v1/budgets",
@@ -104,7 +120,7 @@ async def test_budget_schedule_projection_and_loan_workflows(client: AsyncClient
                     "memo": "source",
                 },
                 {
-                    "account_id": 3,
+                    "account_id": offset_account_id,
                     "commodity_id": 1,
                     "amount_minor": 25000,
                     "category_id": None,

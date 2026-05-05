@@ -129,6 +129,22 @@ async def test_preferences_profile_password_saved_views_templates_defaults_and_n
     listed = await client.get("/api/v1/search/transaction-views?book_id=1")
     assert listed.status_code == 200
     assert [view["id"] for view in listed.json()] == [view_id]
+    offset_account = await client.post(
+        "/api/v1/accounts",
+        json={
+            "book_id": 1,
+            "parent_id": 1,
+            "account_type": "asset",
+            "name": "Template offset",
+            "commodity_id": 1,
+            "institution_id": None,
+            "country_id": None,
+            "number_last4": None,
+            "is_closed": False,
+        },
+    )
+    assert offset_account.status_code == 200
+    offset_account_id = offset_account.json()["id"]
 
     template = await client.post(
         "/api/v1/templates/transactions",
@@ -151,11 +167,11 @@ async def test_preferences_profile_password_saved_views_templates_defaults_and_n
                     "project_id": None,
                     "share_bps": None,
                     "memo": "source",
-                },
-                {
-                    "account_id": 3,
-                    "commodity_id": 1,
-                    "amount_minor": 1000,
+                    },
+                    {
+                        "account_id": offset_account_id,
+                        "commodity_id": 1,
+                        "amount_minor": 1000,
                     "category_id": None,
                     "tag_id": None,
                     "person_id": None,

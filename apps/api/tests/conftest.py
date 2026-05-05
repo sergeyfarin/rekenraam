@@ -83,7 +83,7 @@ def _run_migrations(database_name: str) -> None:
         get_settings.cache_clear()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def repository_database_url() -> Iterator[str]:
     database_name = f"rekenraam_test_{uuid.uuid4().hex}"
     try:

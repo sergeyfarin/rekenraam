@@ -32,7 +32,7 @@ from rekenraam_api.schemas.transactions import TransactionMutationInput, Transac
 from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.services.transactions import TransactionService
 
-_CASH_ACCOUNT_TYPES = {"cash", "checking", "savings", "credit", "liability", "loan"}
+_CASH_ACCOUNT_TYPES = {"asset", "cash", "checking", "savings", "credit", "liability", "loan"}
 
 
 def _add_months(value: date, months: int) -> date:

@@ -417,7 +417,9 @@ class TransactionRepository:
             opening_statement = opening_statement.where(before_clause)
             statement = statement.where(after_clause)
 
-        opening_balance = int(await self._session.scalar(opening_statement) or 0)
+        opening_balance = (
+            0 if decoded is None else int(await self._session.scalar(opening_statement) or 0)
+        )
         statement = statement.order_by(Transaction.occurred_date.asc(), Transaction.id.asc(), Split.id.asc()).limit(limit + 1)
         result = await self._session.execute(statement)
         raw_rows = list(result.all())

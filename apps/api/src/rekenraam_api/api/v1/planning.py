@@ -122,42 +122,6 @@ async def create_schedule(
         raise _bad_request(error) from error
 
 
-@schedules_router.get("/{schedule_id}", response_model=ScheduleSummary)
-async def get_schedule(
-    schedule_id: int,
-    planning_service: PlanningService = Depends(get_planning_service),
-) -> ScheduleSummary:
-    schedule = await planning_service.get_schedule(schedule_id)
-    if schedule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="schedule not found")
-    return schedule
-
-
-@schedules_router.put("/{schedule_id}", response_model=ScheduleSummary)
-async def update_schedule(
-    schedule_id: int,
-    input: ScheduleMutationInput,
-    planning_service: PlanningService = Depends(get_planning_service),
-) -> ScheduleSummary:
-    try:
-        schedule = await planning_service.update_schedule(schedule_id, input)
-    except ValueError as error:
-        raise _bad_request(error) from error
-    if schedule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="schedule not found")
-    return schedule
-
-
-@schedules_router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_schedule(
-    schedule_id: int,
-    planning_service: PlanningService = Depends(get_planning_service),
-) -> None:
-    deleted = await planning_service.delete_schedule(schedule_id)
-    if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="schedule not found")
-
-
 @schedules_router.get("/instances", response_model=list[ScheduleOccurrenceSummary])
 async def projected_instances(
     book_id: int = Query(default=1),
@@ -200,6 +164,42 @@ async def projected_cash(
     planning_service: PlanningService = Depends(get_planning_service),
 ) -> list[ProjectedCashRow]:
     return await planning_service.projected_cash(book_id, start, end)
+
+
+@schedules_router.get("/{schedule_id}", response_model=ScheduleSummary)
+async def get_schedule(
+    schedule_id: int,
+    planning_service: PlanningService = Depends(get_planning_service),
+) -> ScheduleSummary:
+    schedule = await planning_service.get_schedule(schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="schedule not found")
+    return schedule
+
+
+@schedules_router.put("/{schedule_id}", response_model=ScheduleSummary)
+async def update_schedule(
+    schedule_id: int,
+    input: ScheduleMutationInput,
+    planning_service: PlanningService = Depends(get_planning_service),
+) -> ScheduleSummary:
+    try:
+        schedule = await planning_service.update_schedule(schedule_id, input)
+    except ValueError as error:
+        raise _bad_request(error) from error
+    if schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="schedule not found")
+    return schedule
+
+
+@schedules_router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_schedule(
+    schedule_id: int,
+    planning_service: PlanningService = Depends(get_planning_service),
+) -> None:
+    deleted = await planning_service.delete_schedule(schedule_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="schedule not found")
 
 
 @loans_router.get("", response_model=list[LoanSummary])
