@@ -10,6 +10,7 @@ Requires-Dist: fastapi==0.136.1
 Requires-Dist: httpx==0.28.1
 Requires-Dist: pydantic==2.11.7
 Requires-Dist: pydantic-settings==2.10.1
+Requires-Dist: python-calamine>=0.6.2
 Requires-Dist: sqlalchemy[asyncio]==2.0.42
 Requires-Dist: uvicorn[standard]==0.46.0
 Provides-Extra: dev

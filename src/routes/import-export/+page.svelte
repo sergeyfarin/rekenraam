@@ -6,10 +6,32 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { listAccounts, type AccountSummary } from "$lib/api/accounts";
-  import { commitImport, previewImport, type ImportPreviewResult } from "$lib/api/imports";
-  import { exportAccountsCsv, exportRegisterQif, exportTransactionsCsv } from "$lib/api/exports";
+  import {
+    commitImport,
+    createImportRule,
+    deleteImportRule,
+    listImportRules,
+    previewImport,
+    type ImportPreviewResult,
+    type ImportRule
+  } from "$lib/api/imports";
+  import {
+    exportAccountsCsv,
+    exportRegisterQif,
+    exportReportCsv,
+    exportTransactionsCsv
+  } from "$lib/api/exports";
+  import {
+    listCategories,
+    listPayees,
+    type CategorySummary,
+    type PayeeSummary
+  } from "$lib/api/metadata";
 
   let accounts: AccountSummary[] = [];
+  let categories: CategorySummary[] = [];
+  let payees: PayeeSummary[] = [];
+  let rules: ImportRule[] = [];
   let accountId = 0;
   let format = "auto";
   let csvDelimiter = ",";
@@ -20,12 +42,27 @@
   let mode = "match_and_enrich";
   let selectedFile: File | null = null;
   let preview: ImportPreviewResult | null = null;
+  let reportKind = "cashflow";
+  let reportDateFrom = "";
+  let reportDateTo = "";
+  let ruleKind = "payee";
+  let ruleMatchType = "contains";
+  let ruleMatchText = "";
+  let rulePriority = 100;
+  let ruleTargetAccountId = "";
+  let ruleTargetCategoryId = "";
+  let ruleTargetPayeeId = "";
   let busy = false;
   let error = "";
   let result = "";
 
   onMount(async () => {
-    accounts = await listAccounts();
+    [accounts, categories, payees, rules] = await Promise.all([
+      listAccounts(),
+      listCategories(),
+      listPayees(),
+      listImportRules()
+    ]);
     accountId = accounts.find((account) => !account.is_closed)?.id ?? accounts[0]?.id ?? 0;
   });
 
@@ -125,6 +162,67 @@
     }
   }
 
+  async function downloadReport() {
+    busy = true;
+    error = "";
+    try {
+      saveText(
+        `${reportKind}.csv`,
+        await exportReportCsv(reportKind, {
+          book_id: 1,
+          date_from: reportDateFrom || null,
+          date_to: reportDateTo || null,
+          base_commodity_id: null,
+          as_of_date: null
+        })
+      );
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function addRule() {
+    if (!ruleMatchText.trim()) return;
+    busy = true;
+    error = "";
+    try {
+      await createImportRule({
+        book_id: 1,
+        rule_kind: ruleKind,
+        match_type: ruleMatchType,
+        match_text: ruleMatchText.trim(),
+        priority: rulePriority,
+        target_account_id: ruleTargetAccountId ? Number(ruleTargetAccountId) : null,
+        target_category_id: ruleTargetCategoryId ? Number(ruleTargetCategoryId) : null,
+        target_payee_id: ruleTargetPayeeId ? Number(ruleTargetPayeeId) : null
+      });
+      rules = await listImportRules();
+      ruleMatchText = "";
+      ruleTargetAccountId = "";
+      ruleTargetCategoryId = "";
+      ruleTargetPayeeId = "";
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function removeRule(ruleId: number) {
+    busy = true;
+    error = "";
+    try {
+      await deleteImportRule(ruleId);
+      rules = rules.filter((rule) => rule.id !== ruleId);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
   $: validRows = preview?.rows.filter((row) => row.draft && !row.error).length ?? 0;
   $: duplicateRows = preview?.rows.filter((row) => row.is_duplicate).length ?? 0;
   $: errorRows = preview?.rows.filter((row) => row.error).length ?? 0;
@@ -151,7 +249,7 @@
         <Card.Root>
           <Card.Header>
             <Card.Title>Import</Card.Title>
-            <Card.Description>CSV, XLS/XLSX, QIF, and OFX/QFX</Card.Description>
+            <Card.Description>CSV, XLS, XLSX, QIF, and OFX/QFX</Card.Description>
           </Card.Header>
           <Card.Content class="space-y-4">
             <div class="grid gap-4 md:grid-cols-2">
@@ -260,9 +358,73 @@
             </Card.Content>
           </Card.Root>
         {/if}
+
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Mapping Rules</Card.Title>
+            <Card.Description>{rules.length} active rules</Card.Description>
+          </Card.Header>
+          <Card.Content class="space-y-4">
+            <div class="grid gap-3 md:grid-cols-[130px_130px_1fr_96px]">
+              <select bind:value={ruleKind} class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                <option value="payee">Payee</option>
+                <option value="memo">Memo</option>
+                <option value="amount">Amount</option>
+                <option value="date">Date</option>
+                <option value="account">Account</option>
+              </select>
+              <select bind:value={ruleMatchType} class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                <option value="contains">Contains</option>
+                <option value="equals">Equals</option>
+              </select>
+              <Input bind:value={ruleMatchText} placeholder="Match text" />
+              <Input bind:value={rulePriority} type="number" min="1" />
+            </div>
+            <div class="grid gap-3 md:grid-cols-3">
+              <select bind:value={ruleTargetAccountId} class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">No account target</option>
+                {#each accounts as account}
+                  <option value={account.id}>{account.name}</option>
+                {/each}
+              </select>
+              <select bind:value={ruleTargetCategoryId} class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">No category target</option>
+                {#each categories as category}
+                  <option value={category.id}>{category.name}</option>
+                {/each}
+              </select>
+              <select bind:value={ruleTargetPayeeId} class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">No payee target</option>
+                {#each payees as payee}
+                  <option value={payee.id}>{payee.name}</option>
+                {/each}
+              </select>
+            </div>
+            <Button onclick={addRule} disabled={busy || !ruleMatchText.trim()}>Add Rule</Button>
+
+            {#if rules.length}
+              <div class="divide-y rounded-md border">
+                {#each rules as rule}
+                  <div class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <div class="min-w-0">
+                      <div class="font-medium">{rule.rule_kind} {rule.match_type} "{rule.match_text}"</div>
+                      <div class="truncate text-muted-foreground">
+                        priority {rule.priority}
+                        {#if rule.target_account_id} · account #{rule.target_account_id}{/if}
+                        {#if rule.target_category_id} · category #{rule.target_category_id}{/if}
+                        {#if rule.target_payee_id} · payee #{rule.target_payee_id}{/if}
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onclick={() => removeRule(rule.id)} disabled={busy}>Delete</Button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </Card.Content>
+        </Card.Root>
       </section>
 
-      <aside>
+      <aside class="space-y-4">
         <Card.Root>
           <Card.Header>
             <Card.Title>Export</Card.Title>
@@ -277,6 +439,26 @@
             </Button>
             <Button variant="outline" onclick={() => download("qif")} disabled={busy || !accountId}>
               <Download class="mr-2 size-4" /> Register QIF
+            </Button>
+          </Card.Content>
+        </Card.Root>
+
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Report CSV</Card.Title>
+            <Card.Description>Existing report data</Card.Description>
+          </Card.Header>
+          <Card.Content class="grid gap-3">
+            <select bind:value={reportKind} class="h-10 rounded-md border border-input bg-background px-3 text-sm">
+              <option value="cashflow">Cashflow</option>
+              <option value="category-spend">Category Spend</option>
+              <option value="payee-totals">Payee Totals</option>
+              <option value="realized-gains">Realized Gains</option>
+            </select>
+            <Input type="date" bind:value={reportDateFrom} />
+            <Input type="date" bind:value={reportDateTo} />
+            <Button variant="outline" onclick={downloadReport} disabled={busy}>
+              <Download class="mr-2 size-4" /> Report CSV
             </Button>
           </Card.Content>
         </Card.Root>

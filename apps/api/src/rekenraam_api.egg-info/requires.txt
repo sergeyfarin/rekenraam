@@ -5,6 +5,7 @@ fastapi==0.136.1
 httpx==0.28.1
 pydantic==2.11.7
 pydantic-settings==2.10.1
+python-calamine>=0.6.2
 sqlalchemy[asyncio]==2.0.42
 uvicorn[standard]==0.46.0
 

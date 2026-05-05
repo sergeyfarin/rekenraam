@@ -1,3 +1,6 @@
+import base64
+import io
+import zipfile
 from datetime import date
 
 import pytest
@@ -10,7 +13,12 @@ from rekenraam_api.db.models.transactions import Transaction
 from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.repositories.investments import InvestmentRepository
 from rekenraam_api.repositories.reports import ReportRepository
-from rekenraam_api.schemas.imports import ImportCommitRequest, ImportPreviewRequest
+from rekenraam_api.schemas.imports import (
+    ImportCommitRequest,
+    ImportDraft,
+    ImportPreviewRequest,
+    ImportRulesApplyRequest,
+)
 from rekenraam_api.services.exports import ExportService
 from rekenraam_api.services.imports import ImportService
 from rekenraam_api.services.investments import InvestmentService
@@ -22,12 +30,93 @@ class _FakeCommodity:
     symbol = "USD"
 
 
+class _FakeRule:
+    rule_kind = "payee"
+    match_type = "contains"
+    match_text = "Cafe"
+    priority = 1
+    amount_min_minor = None
+    amount_max_minor = None
+    date_from = None
+    date_to = None
+    match_account_id = None
+    target_account_id = None
+    target_category_id = 42
+    target_payee_id = None
+
+
 class _FakeImportRepository:
     async def get_account_commodity(self, account_id: int) -> _FakeCommodity:
         return _FakeCommodity()
 
     async def find_matching_transaction(self, *args, **kwargs) -> None:
         return None
+
+    async def list_rules(self, book_id: int) -> list[_FakeRule]:
+        return [_FakeRule()]
+
+
+def _minimal_xlsx_base64() -> str:
+    output = io.BytesIO()
+    package_rels = "http://schemas.openxmlformats.org/package/2006/relationships"
+    office_rels = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    app_vnd = "application/vnd.openxmlformats-"
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            f"""<?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="{app_vnd}package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml"
+                ContentType="{app_vnd}officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml"
+                ContentType="{app_vnd}officedocument.spreadsheetml.worksheet+xml"/>
+            </Types>""",
+        )
+        archive.writestr(
+            "_rels/.rels",
+            f"""<?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="{package_rels}">
+              <Relationship Id="rId1" Type="{office_rels}/officeDocument"
+                Target="xl/workbook.xml"/>
+            </Relationships>""",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            f"""<?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="{package_rels}">
+              <Relationship Id="rId1" Type="{office_rels}/worksheet"
+                Target="worksheets/sheet1.xml"/>
+            </Relationships>""",
+        )
+        archive.writestr(
+            "xl/workbook.xml",
+            """<?xml version="1.0" encoding="UTF-8"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
+            </workbook>""",
+        )
+        archive.writestr(
+            "xl/worksheets/sheet1.xml",
+            """<?xml version="1.0" encoding="UTF-8"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" t="inlineStr"><is><t>date</t></is></c>
+                  <c r="B1" t="inlineStr"><is><t>amount</t></is></c>
+                  <c r="C1" t="inlineStr"><is><t>payee</t></is></c>
+                </row>
+                <row r="2">
+                  <c r="A2" t="inlineStr"><is><t>2026-05-03</t></is></c>
+                  <c r="B2"><v>7.50</v></c>
+                  <c r="C2" t="inlineStr"><is><t>Bakery</t></is></c>
+                </row>
+              </sheetData>
+            </worksheet>""",
+        )
+    return base64.b64encode(output.getvalue()).decode()
 
 
 @pytest.mark.asyncio
@@ -46,6 +135,64 @@ async def test_import_preview_parses_csv_without_database() -> None:
     assert preview.rows[0].draft is not None
     assert preview.rows[0].draft.amount_minor == 1234
     assert preview.rows[0].draft.txn_date == date(2026, 5, 1)
+
+
+@pytest.mark.asyncio
+async def test_import_preview_parses_qif_ofx_and_xlsx_without_database() -> None:
+    service = ImportService(_FakeImportRepository())  # type: ignore[arg-type]
+
+    qif = await service.preview(
+        ImportPreviewRequest(
+            account_id=2,
+            format="qif",
+            content="!Type:Bank\nD05/02/2026\nT-4.20\nPCafe\nMMocha\n^\n",
+            file_name="bank.qif",
+        )
+    )
+    ofx = await service.preview(
+        ImportPreviewRequest(
+            account_id=2,
+            format="ofx",
+            content="<OFX><CURDEF>USD<STMTTRN><DTPOSTED>20260503120000<TRNAMT>7.50<NAME>Bakery<FITID>ofx-1</STMTTRN>",
+            file_name="bank.ofx",
+        )
+    )
+    xlsx = await service.preview(
+        ImportPreviewRequest(
+            account_id=2,
+            format="xlsx",
+            content_base64=_minimal_xlsx_base64(),
+            file_name="bank.xlsx",
+        )
+    )
+
+    assert qif.rows[0].draft is not None
+    assert qif.rows[0].draft.amount_minor == -420
+    assert ofx.rows[0].draft is not None
+    assert ofx.rows[0].draft.import_id == "ofx-1"
+    assert xlsx.file_error is None
+    assert xlsx.rows[0].draft is not None
+    assert xlsx.rows[0].draft.payee_name == "Bakery"
+
+
+@pytest.mark.asyncio
+async def test_import_rules_apply_without_database() -> None:
+    service = ImportService(_FakeImportRepository())  # type: ignore[arg-type]
+
+    drafts = await service.apply_rules(
+        ImportRulesApplyRequest(
+            book_id=1,
+            drafts=(
+                ImportDraft(
+                    payee_name="Cafe Nero",
+                    txn_date=date(2026, 5, 1),
+                    amount_minor=-450,
+                ),
+            ),
+        )
+    )
+
+    assert drafts[0].category_id == 42
 
 
 @pytest.mark.asyncio
@@ -143,11 +290,11 @@ async def test_import_commit_marks_session_abandoned_on_locked_account(
             ImportCommitRequest(
                 account_id=account.id,
                 drafts=(
-                    {
-                        "txn_date": "2026-05-02",
-                        "amount_minor": 100,
-                        "payee_name": "Late",
-                    },
+                    ImportDraft(
+                        txn_date=date(2026, 5, 2),
+                        amount_minor=100,
+                        payee_name="Late",
+                    ),
                 ),
                 file_name="locked.csv",
             )

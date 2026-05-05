@@ -4,10 +4,10 @@ import base64
 import csv
 import io
 import re
-import xml.etree.ElementTree as ET
-import zipfile
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+
+from python_calamine import load_workbook
 
 from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.schemas.imports import (
@@ -615,39 +615,17 @@ class ImportService:
         )
 
     def _read_xlsx_rows(self, content: bytes) -> list[list[str]]:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            shared_strings: list[str] = []
-            if "xl/sharedStrings.xml" in archive.namelist():
-                root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
-                ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-                for item in root.findall("x:si", ns):
-                    shared_strings.append(
-                        "".join(text.text or "" for text in item.findall(".//x:t", ns))
-                    )
-            sheet_name = next(
-                (
-                    name
-                    for name in archive.namelist()
-                    if name.startswith("xl/worksheets/sheet") and name.endswith(".xml")
-                ),
-                None,
-            )
-            if sheet_name is None:
-                return []
-            root = ET.fromstring(archive.read(sheet_name))
-            ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-            rows: list[list[str]] = []
-            for row in root.findall(".//x:sheetData/x:row", ns):
-                values: list[str] = []
-                for cell in row.findall("x:c", ns):
-                    value = cell.find("x:v", ns)
-                    text = value.text if value is not None and value.text is not None else ""
-                    if cell.attrib.get("t") == "s" and text:
-                        text = shared_strings[int(text)]
-                    values.append(text)
-                if any(value.strip() for value in values):
-                    rows.append(values)
-            return rows
+        workbook = load_workbook(io.BytesIO(content))
+        if not workbook.sheet_names:
+            return []
+        sheet = workbook.get_sheet_by_index(0)
+        rows: list[list[str]] = []
+        for row in sheet.iter_rows():
+            values = ["" if value is None else str(value) for value in row]
+            if any(value.strip() for value in values):
+                rows.append(values)
+        workbook.close()
+        return rows
 
     def _map_rule(self, rule) -> ImportRuleSummary:
         return ImportRuleSummary(
