@@ -4,7 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import ValidationError
 
-from rekenraam_api.api.dependencies import get_transaction_service
+from rekenraam_api.api.dependencies import get_ergonomics_service, get_transaction_service
+from rekenraam_api.schemas.ergonomics import PayeeDefaultInput, PayeeDefaultSummary
 from rekenraam_api.schemas.transactions import (
     PayeeDefaults,
     TransactionListFilters,
@@ -12,8 +13,9 @@ from rekenraam_api.schemas.transactions import (
     TransactionPage,
     TransactionSummary,
 )
+from rekenraam_api.services.access import AuthorizationError
+from rekenraam_api.services.ergonomics import ErgonomicsService
 from rekenraam_api.services.transactions import TransactionService
-
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -25,7 +27,11 @@ def _mutation_error(error: ValueError) -> HTTPException:
         "transaction cannot use closed accounts",
         "transaction cannot use protected system accounts",
     )
-    status_code = status.HTTP_409_CONFLICT if message.startswith(conflict_prefixes) else status.HTTP_400_BAD_REQUEST
+    status_code = (
+        status.HTTP_409_CONFLICT
+        if message.startswith(conflict_prefixes)
+        else status.HTTP_400_BAD_REQUEST
+    )
     return HTTPException(status_code=status_code, detail=message)
 
 
@@ -81,9 +87,33 @@ async def list_transactions(
 async def get_payee_defaults(
     payee_id: int = Query(...),
     account_id: int | None = Query(default=None),
+    book_id: int | None = Query(default=None),
     transaction_service: TransactionService = Depends(get_transaction_service),
+    ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
 ) -> PayeeDefaults:
+    if book_id is not None:
+        try:
+            explicit = await ergonomics_service.get_explicit_payee_default(
+                book_id=book_id, payee_id=payee_id, account_id=account_id
+            )
+        except AuthorizationError as error:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+        if explicit is not None:
+            return PayeeDefaults(category_id=explicit.category_id, memo=explicit.memo)
     return await transaction_service.get_payee_defaults(payee_id, account_id)
+
+
+@router.put("/payee-defaults", response_model=PayeeDefaultSummary)
+async def set_payee_default(
+    input: PayeeDefaultInput,
+    ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
+) -> PayeeDefaultSummary:
+    try:
+        return await ergonomics_service.upsert_payee_default(input)
+    except AuthorizationError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
 @router.get("/{transaction_id}", response_model=TransactionSummary)

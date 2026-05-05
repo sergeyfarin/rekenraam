@@ -32,6 +32,12 @@
     listTransactions as fetchTransactions,
     updateTransaction,
   } from "$lib/api/transactions";
+  import { createTransactionView, listTransactionViews, type TransactionSavedView } from "$lib/api/search";
+  import {
+    listTransactionTemplates,
+    postTransactionTemplate,
+    type TransactionTemplate,
+  } from "$lib/api/templates";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -103,6 +109,11 @@
   let people: PersonSummary[] = [];
   let projects: ProjectSummary[] = [];
   let commodities: CommoditySummary[] = [];
+  let savedViews: TransactionSavedView[] = [];
+  let templates: TransactionTemplate[] = [];
+  let selectedSavedViewId: number | null = null;
+  let selectedTemplateId: number | null = null;
+  let newSavedViewName = "";
   let loading = true;
   let error = "";
 
@@ -228,6 +239,7 @@
 
   onMount(async () => {
     await loadLookups();
+    await loadErgonomics();
     await loadTransactions();
     // Auto-open create dialog if URL has ?new=1 (e.g. from global keyboard shortcut)
     if (page.url.searchParams.get("new") === "1") {
@@ -258,6 +270,18 @@
       commodities = commodityList;
     } catch (e) {
       error = `Failed to load lookup data: ${formatError(e)}`;
+    }
+  }
+
+  async function loadErgonomics() {
+    try {
+      [savedViews, templates] = await Promise.all([
+        listTransactionViews(bookId),
+        listTransactionTemplates(bookId),
+      ]);
+    } catch {
+      savedViews = [];
+      templates = [];
     }
   }
 
@@ -327,6 +351,47 @@
   function onSearchInput() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => loadTransactions(false), 400);
+  }
+
+  async function saveCurrentView() {
+    if (!newSavedViewName.trim()) return;
+    try {
+      await createTransactionView({
+        book_id: bookId,
+        name: newSavedViewName.trim(),
+        filters: buildFilter(0),
+        is_shared: false,
+      });
+      newSavedViewName = "";
+      await loadErgonomics();
+    } catch (e) {
+      error = `Failed to save view: ${formatError(e)}`;
+    }
+  }
+
+  async function applySavedView() {
+    const view = savedViews.find((item) => item.id === selectedSavedViewId);
+    if (!view) return;
+    search = view.filters.search ?? "";
+    dateFrom = view.filters.date_from ?? "";
+    dateTo = view.filters.date_to ?? "";
+    statusFilter = view.filters.status ?? "";
+    accountFilterId = view.filters.account_id ?? null;
+    amountMin = view.filters.amount_min !== undefined ? String(view.filters.amount_min / 100) : "";
+    amountMax = view.filters.amount_max !== undefined ? String(view.filters.amount_max / 100) : "";
+    sortBy = view.filters.sort_by ?? "date";
+    sortDir = view.filters.sort_dir ?? "desc";
+    await loadTransactions(false);
+  }
+
+  async function postSelectedTemplate() {
+    if (!selectedTemplateId) return;
+    try {
+      await postTransactionTemplate(selectedTemplateId, new Date().toISOString().slice(0, 10));
+      await loadTransactions(false);
+    } catch (e) {
+      error = `Failed to post template: ${formatError(e)}`;
+    }
   }
 
   function formatMinorWithScale(amountMinor: number, scale: number): string {
@@ -1148,6 +1213,34 @@
             oninput={onSearchInput}
             class="max-w-sm"
           />
+        </div>
+
+        <div class="mb-4 flex flex-wrap items-end gap-3 rounded-md border bg-muted/30 p-3">
+          <div class="space-y-1">
+            <Label for="saved-view-select">Saved view</Label>
+            <select id="saved-view-select" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={selectedSavedViewId}>
+              <option value={null}>Select view</option>
+              {#each savedViews as view}
+                <option value={view.id}>{view.name}</option>
+              {/each}
+            </select>
+          </div>
+          <Button variant="secondary" size="sm" onclick={applySavedView} disabled={!selectedSavedViewId}>Apply view</Button>
+          <div class="space-y-1">
+            <Label for="saved-view-name">Save current filters</Label>
+            <Input id="saved-view-name" bind:value={newSavedViewName} placeholder="View name" class="w-48" />
+          </div>
+          <Button variant="outline" size="sm" onclick={saveCurrentView} disabled={!newSavedViewName.trim()}>Save view</Button>
+          <div class="space-y-1">
+            <Label for="template-select">Template</Label>
+            <select id="template-select" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={selectedTemplateId}>
+              <option value={null}>Select template</option>
+              {#each templates as template}
+                <option value={template.id}>{template.name}</option>
+              {/each}
+            </select>
+          </div>
+          <Button variant="secondary" size="sm" onclick={postSelectedTemplate} disabled={!selectedTemplateId}>Post today</Button>
         </div>
 
         {#if loading}

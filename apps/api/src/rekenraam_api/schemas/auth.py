@@ -23,6 +23,7 @@ class AuthUserSummary(BaseModel):
     email: str
     display_name: str
     is_admin: bool
+    is_active: bool
 
 
 class AuthSessionSummary(BaseModel):

@@ -43,6 +43,11 @@ Already represented in the web baseline:
 - pricing sources, policies, assignments, refresh state, and refresh runs
 - import rules, import sessions, and import session transactions
 - report state/cache, definitions, and runs
+- user preferences
+- saved transaction views, transaction templates, template splits, and payee
+  defaults
+- markdown notes
+- audit events
 
 Planned schema families:
 
@@ -50,10 +55,8 @@ Planned schema families:
 - scheduled transactions and recurrence state
 - loan/mortgage amortization helpers where account and transaction tables are
   not sufficient
-- saved searches/views, transaction templates, memorized splits, and richer
-  payee defaults
-- user preferences
-- notes, events, and documents
+- uploaded documents and attachment metadata
+- events, if they remain distinct from audit events and notes
 - plugin manifests/status
 - theme manifests/preferences
 - operational backup metadata only where useful for server administration

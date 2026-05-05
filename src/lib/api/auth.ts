@@ -10,6 +10,7 @@ export type AuthMe = {
     email: string;
     display_name: string;
     is_admin: boolean;
+    is_active: boolean;
   };
   session: {
     id: number;

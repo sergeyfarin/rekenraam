@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from python_calamine import load_workbook
 
 from rekenraam_api.repositories.imports import ImportRepository
+from rekenraam_api.db.models.ergonomics import AuditEvent
 from rekenraam_api.schemas.imports import (
     ImportBatchResult,
     ImportCommitRequest,
@@ -125,6 +126,22 @@ class ImportService:
             await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
             session_obj = committed or session
             if db_session is not None:
+                db_session.add(
+                    AuditEvent(
+                        book_id=input.book_id,
+                        actor_user_id=audit["created_by_user_id"],
+                        actor_session_id=audit["created_session_id"],
+                        actor_device_id=audit["created_device_id"],
+                        actor_request_id=str(audit["created_request_id"])
+                        if audit["created_request_id"] is not None
+                        else None,
+                        event_type="import.committed",
+                        target_type="import_session",
+                        target_id=session.id,
+                        summary=f"Committed import session {session.id}",
+                        metadata_json=None,
+                    )
+                )
                 await db_session.commit()
             return ImportCommitResult(session=self._map_session(session_obj), batch=batch)
         except Exception as error:

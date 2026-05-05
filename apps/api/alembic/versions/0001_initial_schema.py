@@ -25,6 +25,7 @@ def upgrade() -> None:
         sa.Column("password_hash", sa.Text(), nullable=True),
         sa.Column("display_name", sa.String(length=200), nullable=False),
         sa.Column("is_admin", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
@@ -650,6 +651,126 @@ def upgrade() -> None:
     op.create_index("ix_report_runs_book_seq", "report_runs", ["book_id", "as_of_seq"], unique=False)
 
     op.create_table(
+        "user_preferences",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("default_book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("locale", sa.String(length=64), nullable=True),
+        sa.Column("date_format", sa.String(length=32), nullable=False, server_default=sa.text("'iso'")),
+        sa.Column("number_format", sa.String(length=32), nullable=False, server_default=sa.text("'system'")),
+        sa.Column("theme", sa.String(length=64), nullable=False, server_default=sa.text("'system'")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", name="uq_user_preferences_user_id"),
+    )
+
+    op.create_table(
+        "audit_events",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("actor_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("actor_session_id", sa.BigInteger(), sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("actor_device_id", sa.BigInteger(), sa.ForeignKey("user_devices.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("actor_request_id", sa.String(length=64), nullable=True),
+        sa.Column("event_type", sa.String(length=100), nullable=False),
+        sa.Column("target_type", sa.String(length=64), nullable=True),
+        sa.Column("target_id", sa.BigInteger(), nullable=True),
+        sa.Column("summary", sa.Text(), nullable=False),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+    )
+    op.create_index("ix_audit_events_book_created", "audit_events", ["book_id", "created_at"], unique=False)
+    op.create_index("ix_audit_events_actor_created", "audit_events", ["actor_user_id", "created_at"], unique=False)
+    op.create_index("ix_audit_events_event_type", "audit_events", ["event_type"], unique=False)
+
+    op.create_table(
+        "transaction_saved_views",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=120), nullable=False),
+        sa.Column("filters_json", sa.Text(), nullable=False),
+        sa.Column("is_shared", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", "book_id", "name", name="uq_transaction_saved_views_user_book_name"),
+    )
+    op.create_index("ix_transaction_saved_views_user_book", "transaction_saved_views", ["user_id", "book_id"], unique=False)
+
+    op.create_table(
+        "transaction_templates",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=120), nullable=False),
+        sa.Column("payee_id", sa.BigInteger(), sa.ForeignKey("payees.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default=sa.text("'uncleared'")),
+        sa.Column("reference", sa.Text(), nullable=True),
+        sa.Column("is_shared", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", "book_id", "name", name="uq_transaction_templates_user_book_name"),
+    )
+    op.create_index("ix_transaction_templates_user_book", "transaction_templates", ["user_id", "book_id"], unique=False)
+
+    op.create_table(
+        "transaction_template_splits",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("template_id", sa.BigInteger(), sa.ForeignKey("transaction_templates.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("line_order", sa.Integer(), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("category_id", sa.BigInteger(), sa.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("tag_id", sa.BigInteger(), sa.ForeignKey("tags.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("person_id", sa.BigInteger(), sa.ForeignKey("people.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("project_id", sa.BigInteger(), sa.ForeignKey("projects.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("share_bps", sa.BigInteger(), nullable=True),
+        sa.Column("memo", sa.Text(), nullable=True),
+    )
+    op.create_index("ix_transaction_template_splits_template", "transaction_template_splits", ["template_id", "line_order"], unique=False)
+
+    op.create_table(
+        "payee_defaults",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("payee_id", sa.BigInteger(), sa.ForeignKey("payees.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("category_id", sa.BigInteger(), sa.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", "book_id", "payee_id", "account_id", name="uq_payee_defaults_scope"),
+    )
+    op.create_index("ix_payee_defaults_user_book", "payee_defaults", ["user_id", "book_id"], unique=False)
+
+    op.create_table(
+        "markdown_notes",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("target_type", sa.String(length=20), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), sa.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("transaction_id", sa.BigInteger(), sa.ForeignKey("transactions.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("body_markdown", sa.Text(), nullable=False),
+        sa.Column("pinned", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("updated_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.CheckConstraint("target_type IN ('account', 'transaction')", name="ck_markdown_notes_target_type"),
+        sa.CheckConstraint(
+            "(target_type = 'account' AND account_id IS NOT NULL AND transaction_id IS NULL) OR "
+            "(target_type = 'transaction' AND transaction_id IS NOT NULL AND account_id IS NULL)",
+            name="ck_markdown_notes_single_target",
+        ),
+    )
+    op.create_index("ix_markdown_notes_account", "markdown_notes", ["account_id", "pinned", "updated_at"], unique=False)
+    op.create_index("ix_markdown_notes_transaction", "markdown_notes", ["transaction_id", "pinned", "updated_at"], unique=False)
+
+    op.create_table(
         "book_memberships",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
@@ -735,6 +856,22 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_markdown_notes_transaction", table_name="markdown_notes")
+    op.drop_index("ix_markdown_notes_account", table_name="markdown_notes")
+    op.drop_table("markdown_notes")
+    op.drop_index("ix_payee_defaults_user_book", table_name="payee_defaults")
+    op.drop_table("payee_defaults")
+    op.drop_index("ix_transaction_template_splits_template", table_name="transaction_template_splits")
+    op.drop_table("transaction_template_splits")
+    op.drop_index("ix_transaction_templates_user_book", table_name="transaction_templates")
+    op.drop_table("transaction_templates")
+    op.drop_index("ix_transaction_saved_views_user_book", table_name="transaction_saved_views")
+    op.drop_table("transaction_saved_views")
+    op.drop_index("ix_audit_events_event_type", table_name="audit_events")
+    op.drop_index("ix_audit_events_actor_created", table_name="audit_events")
+    op.drop_index("ix_audit_events_book_created", table_name="audit_events")
+    op.drop_table("audit_events")
+    op.drop_table("user_preferences")
     op.drop_index("ix_report_runs_book_seq", table_name="report_runs")
     op.drop_index("ix_report_runs_book_def", table_name="report_runs")
     op.drop_table("report_runs")

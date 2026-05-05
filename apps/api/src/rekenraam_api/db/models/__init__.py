@@ -8,6 +8,15 @@ from rekenraam_api.db.models.accounts import (
     ReconciliationPreference,
 )
 from rekenraam_api.db.models.books import Book
+from rekenraam_api.db.models.ergonomics import (
+    AuditEvent,
+    MarkdownNote,
+    PayeeDefault,
+    TransactionSavedView,
+    TransactionTemplate,
+    TransactionTemplateSplit,
+    UserPreference,
+)
 from rekenraam_api.db.models.investments import Lot, PriceObservation, SplitLotAllocation
 from rekenraam_api.db.models.imports import ImportRule, ImportSession, ImportSessionTransaction
 from rekenraam_api.db.models.metadata import (
@@ -35,6 +44,7 @@ __all__ = [
     "Account",
     "AccountBalancing",
     "AuthSession",
+    "AuditEvent",
     "BalanceAdjustment",
     "BalanceCheck",
     "BalanceConstraint",
@@ -49,7 +59,9 @@ __all__ = [
     "ImportSession",
     "ImportSessionTransaction",
     "Lot",
+    "MarkdownNote",
     "Payee",
+    "PayeeDefault",
     "Person",
     "PriceObservation",
     "PriceSource",
@@ -66,6 +78,10 @@ __all__ = [
     "SplitLotAllocation",
     "Tag",
     "Transaction",
+    "TransactionSavedView",
+    "TransactionTemplate",
+    "TransactionTemplateSplit",
     "User",
     "UserDevice",
+    "UserPreference",
 ]

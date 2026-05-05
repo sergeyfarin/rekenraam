@@ -29,8 +29,21 @@ async def client(repository_session: AsyncSession) -> AsyncClient:
         yield async_client
 
 
+async def _bootstrap_admin(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/auth/bootstrap/admin",
+        json={
+            "email": "admin-api@example.test",
+            "password": "correct horse battery staple",
+            "display_name": "Admin",
+        },
+    )
+    assert response.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_runtime_status_exposes_web_runtime(client: AsyncClient) -> None:
+    await _bootstrap_admin(client)
     response = await client.get("/api/v1/admin/runtime")
 
     assert response.status_code == 200
@@ -42,6 +55,7 @@ async def test_runtime_status_exposes_web_runtime(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_integrity_check_returns_ok(client: AsyncClient) -> None:
+    await _bootstrap_admin(client)
     response = await client.post("/api/v1/admin/integrity-check", json={})
 
     assert response.status_code == 200
@@ -53,6 +67,7 @@ async def test_fiscal_year_close_creates_balancing_transaction(
     client: AsyncClient,
     repository_session: AsyncSession,
 ) -> None:
+    await _bootstrap_admin(client)
     commodity_id = await repository_session.scalar(
         select(Commodity.id).where(Commodity.book_id == 1).where(Commodity.symbol == "USD").limit(1)
     )

@@ -10,8 +10,9 @@ from rekenraam_api.db.session import session_factory
 from rekenraam_api.repositories.access import AccessRepository
 from rekenraam_api.repositories.accounts import AccountRepository
 from rekenraam_api.repositories.books import BookRepository
-from rekenraam_api.repositories.investments import InvestmentRepository
+from rekenraam_api.repositories.ergonomics import ErgonomicsRepository
 from rekenraam_api.repositories.imports import ImportRepository
+from rekenraam_api.repositories.investments import InvestmentRepository
 from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.repositories.reconciliation import ReconciliationRepository
@@ -22,9 +23,10 @@ from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.admin import AdminService
 from rekenraam_api.services.auth import SESSION_COOKIE_NAME, AuthService
 from rekenraam_api.services.books import BookService
+from rekenraam_api.services.ergonomics import AdminRequiredError, ErgonomicsService
 from rekenraam_api.services.exports import ExportService
-from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.imports import ImportService
+from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.metadata import MetadataService
 from rekenraam_api.services.pricing import PricingService
 from rekenraam_api.services.pricing_execution import PricingExecutionService
@@ -54,10 +56,14 @@ async def require_request_context(
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> RequestContext:
     if session_token is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required"
+        )
     authenticated = await auth_service.authenticate_token(session_token)
     if authenticated is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required"
+        )
     _user, auth_session = authenticated
     context = RequestContext(
         user_id=auth_session.user_id,
@@ -76,6 +82,23 @@ def get_access_policy(
     repository: AccessRepository = Depends(get_access_repository),
 ) -> AccessPolicy:
     return AccessPolicy(repository, context)
+
+
+def get_ergonomics_service(
+    session: AsyncSession = Depends(get_db_session),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+) -> ErgonomicsService:
+    repository = ErgonomicsRepository(session)
+    return ErgonomicsService(repository, access_policy)
+
+
+async def require_admin_user(
+    ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
+) -> None:
+    try:
+        await ergonomics_service.require_admin()
+    except AdminRequiredError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
 
 
 def get_book_service(
@@ -121,7 +144,9 @@ def get_pricing_service(session: AsyncSession = Depends(get_db_session)) -> Pric
     return PricingService(repository)
 
 
-def get_pricing_execution_service(session: AsyncSession = Depends(get_db_session)) -> PricingExecutionService:
+def get_pricing_execution_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> PricingExecutionService:
     repository = PricingRepository(session)
     return PricingExecutionService(repository)
 

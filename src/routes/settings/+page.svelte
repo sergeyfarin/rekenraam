@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { closeFiscalYear } from "$lib/api/admin";
+  import { getCurrentUser } from "$lib/api/auth";
   import * as Tabs from "$lib/components/ui/tabs";
   import * as Card from "$lib/components/ui/card";
   import * as Alert from "$lib/components/ui/alert";
@@ -13,6 +14,10 @@
   import TagSettings from "./TagSettings.svelte";
   import CommoditySettings from "./CommoditySettings.svelte";
   import InstitutionSettings from "./InstitutionSettings.svelte";
+  import UserSettings from "./UserSettings.svelte";
+  import PreferenceSettings from "./PreferenceSettings.svelte";
+  import AuditSettings from "./AuditSettings.svelte";
+  import SavedTemplateSettings from "./SavedTemplateSettings.svelte";
 
   // Types matching the component types
   type Category = {
@@ -70,8 +75,9 @@
   };
 
   // Tab state
-  let activeTab: "database" | "categories" | "payees" | "tags" | "commodities" | "institutions" | "year-end" = "database";
+  let activeTab: "preferences" | "database" | "users" | "audit" | "saved" | "categories" | "payees" | "tags" | "commodities" | "institutions" | "year-end" = "preferences";
   let loadedTabs = new Set<string>();
+  let isAdmin = false;
 
   // Year-End Close state
   type FiscalYearCloseResult = {
@@ -105,6 +111,11 @@
   let institutions: Institution[] = [];
 
   onMount(async () => {
+    try {
+      isAdmin = (await getCurrentUser()).user.is_admin;
+    } catch {
+      isAdmin = false;
+    }
     await ensureActiveTabLoaded(activeTab);
   });
 
@@ -112,6 +123,11 @@
 
   async function ensureActiveTabLoaded(tab: typeof activeTab) {
     if (loadedTabs.has(tab)) {
+      return;
+    }
+
+    if (tab === "preferences" || tab === "users" || tab === "audit" || tab === "saved") {
+      loadedTabs.add(tab);
       return;
     }
 
@@ -186,18 +202,42 @@
     <!-- Tabs -->
     <Tabs.Root bind:value={activeTab}>
       <Tabs.List class="flex-wrap">
-        <Tabs.Trigger value="database">Database</Tabs.Trigger>
+        <Tabs.Trigger value="preferences">Preferences</Tabs.Trigger>
+        <Tabs.Trigger value="saved">Saved & Templates</Tabs.Trigger>
+        {#if isAdmin}
+          <Tabs.Trigger value="users">Users</Tabs.Trigger>
+          <Tabs.Trigger value="audit">Audit</Tabs.Trigger>
+          <Tabs.Trigger value="database">Database</Tabs.Trigger>
+        {/if}
         <Tabs.Trigger value="categories">Categories ({categories.length})</Tabs.Trigger>
         <Tabs.Trigger value="payees">Payees ({payees.length})</Tabs.Trigger>
         <Tabs.Trigger value="tags">Tags ({tags.length})</Tabs.Trigger>
         <Tabs.Trigger value="commodities">Currencies ({commodities.length})</Tabs.Trigger>
         <Tabs.Trigger value="institutions">Institutions ({institutions.length})</Tabs.Trigger>
-        <Tabs.Trigger value="year-end">Year-End</Tabs.Trigger>
+        {#if isAdmin}
+          <Tabs.Trigger value="year-end">Year-End</Tabs.Trigger>
+        {/if}
       </Tabs.List>
     </Tabs.Root>
 
+    {#if activeTab === "preferences"}
+      <PreferenceSettings />
+    {/if}
+
+    {#if activeTab === "saved"}
+      <SavedTemplateSettings />
+    {/if}
+
+    {#if activeTab === "users" && isAdmin}
+      <UserSettings />
+    {/if}
+
+    {#if activeTab === "audit" && isAdmin}
+      <AuditSettings />
+    {/if}
+
     <!-- Database Tab -->
-    {#if activeTab === "database"}
+    {#if activeTab === "database" && isAdmin}
       <DatabaseSettings bind:this={databaseSettings} bind:busy />
     {/if}
 
@@ -227,7 +267,7 @@
     {/if}
 
     <!-- Year-End Close Tab -->
-    {#if activeTab === "year-end"}
+    {#if activeTab === "year-end" && isAdmin}
       <Card.Root>
         <Card.Header>
           <Card.Title>Year-End Close</Card.Title>

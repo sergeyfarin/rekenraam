@@ -91,7 +91,7 @@ class AuthService:
         ip_address: str | None,
     ) -> CreatedSession:
         user = await self._repository.get_user_by_email(email)
-        if user is None or user.password_hash is None:
+        if user is None or user.password_hash is None or not user.is_active:
             raise AuthenticationError("invalid email or password")
         try:
             valid = _password_hasher.verify(user.password_hash, password)
@@ -111,7 +111,7 @@ class AuthService:
         if session is None:
             return None
         user = await self._repository.get_user_by_id(session.user_id)
-        if user is None:
+        if user is None or not user.is_active:
             return None
         await self._repository.touch_session(session.id)
         await self._repository.commit()
@@ -153,6 +153,7 @@ def to_auth_me(user: User, session: AuthSession) -> AuthMe:
             email=user.email,
             display_name=user.display_name,
             is_admin=user.is_admin,
+            is_active=user.is_active,
         ),
         session=AuthSessionSummary(
             id=session.id,

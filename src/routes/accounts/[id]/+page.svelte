@@ -52,6 +52,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { Badge } from "$lib/components/ui/badge";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import NotesPanel from "$lib/components/NotesPanel.svelte";
   import { formatError } from "$lib/utils";
 
   type SplitDraft = {
@@ -1005,6 +1006,10 @@
           </div>
         </div>
       </div>
+
+      {#if accountId}
+        <NotesPanel targetType="account" targetId={accountId} />
+      {/if}
 
       <div class="page-row">
         <div class="page-col">

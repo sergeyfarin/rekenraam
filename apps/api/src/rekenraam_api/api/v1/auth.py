@@ -1,17 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from rekenraam_api.api.dependencies import get_auth_service, require_request_context
+from rekenraam_api.api.dependencies import (
+    get_auth_service,
+    get_ergonomics_service,
+    require_request_context,
+)
 from rekenraam_api.schemas.auth import AuthMe, BootstrapAdminInput, BootstrapStatus, LoginInput
+from rekenraam_api.schemas.ergonomics import PasswordChangeInput, ProfileUpdateInput
 from rekenraam_api.services.auth import (
     SESSION_COOKIE_NAME,
     SESSION_DAYS,
-    AuthService,
     AuthenticationError,
+    AuthService,
     BootstrapUnavailableError,
     to_auth_me,
 )
+from rekenraam_api.services.ergonomics import ErgonomicsService
 from rekenraam_api.services.request_context import RequestContext
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,7 +47,9 @@ def _clear_session_cookie(response: Response) -> None:
 
 
 @router.get("/bootstrap/status", response_model=BootstrapStatus)
-async def get_bootstrap_status(auth_service: AuthService = Depends(get_auth_service)) -> BootstrapStatus:
+async def get_bootstrap_status(
+    auth_service: AuthService = Depends(get_auth_service),
+) -> BootstrapStatus:
     return BootstrapStatus(bootstrap_required=await auth_service.bootstrap_required())
 
 
@@ -102,7 +109,29 @@ async def get_me(
     context: RequestContext = Depends(require_request_context),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> AuthMe:
+    return await auth_service.me(context)
+
+
+@router.put("/me/profile", response_model=AuthMe)
+async def update_profile(
+    input: ProfileUpdateInput,
+    context=Depends(require_request_context),
+    auth_service: AuthService = Depends(get_auth_service),
+    ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
+) -> AuthMe:
     try:
+        await ergonomics_service.update_profile(input)
         return await auth_service.me(context)
-    except AuthenticationError as error:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    input: PasswordChangeInput,
+    ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
+) -> None:
+    try:
+        await ergonomics_service.change_password(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

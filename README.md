@@ -20,6 +20,8 @@ Working today:
   transactions, metadata, reconciliation, imports, exports, reports,
   investments, pricing settings, FX refresh state/history, and admin runtime
   health
+- local user administration, book roles, preferences, saved transaction views,
+  transaction templates, markdown notes, and audit-event visibility
 - backend-owned pricing refresh worker
 - PostgreSQL Alembic baseline with auth/session, reconciliation, import,
   report state/cache, investment, and pricing foundations
@@ -29,12 +31,11 @@ Still in migration:
 
 - budgets and scheduled transactions
 - loans, mortgages, amortization, and liability workflow helpers
-- advanced transaction search, saved views, templates, memorized splits, and
-  broader payee defaults
+- richer daily-use polish for transaction search, saved views, templates,
+  memorized splits, and payee defaults
 - explicit multi-currency transfer workflows
 - broader reports, tax, investment, pricing, and valuation depth
-- user administration, book role management, preferences, audit visibility, and
-  optional notes/documents
+- attachment/document uploads and email-based invites/password reset
 - plugin and theme systems
 - production deployment guidance, backup/restore smoke checks, and final CI
   gates

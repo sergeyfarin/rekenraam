@@ -15,6 +15,7 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(Text)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

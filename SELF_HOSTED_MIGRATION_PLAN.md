@@ -53,7 +53,9 @@ Working today:
   request context, and book membership enforcement
 - Python-backed books, accounts, transactions, metadata, reconciliation,
   imports, exports, reports, investments, pricing settings, FX refresh
-  status/history, and admin runtime health slices
+  status/history, admin runtime health, user administration, preferences,
+  saved transaction views, transaction templates, payee defaults, notes, and
+  audit slices
 - shared frontend API seam under `src/lib/api`
 - frontend routes for dashboard, accounts, account registers, reconciliation,
   transactions, import/export, reports, investments, tax, planning, settings,
@@ -74,10 +76,9 @@ Still transitional:
 - Tauri dependencies remain until the final deletion gate is met
 - milestones 1-6 are baseline complete but still need broader v1 hardening,
   fixtures, and UX depth
-- budgets, schedules, loans, advanced search/saved views, templates,
-  multi-currency transfers, plugins, themes, user administration, preferences,
-  notes/documents, backup/restore documentation, and final CI/deployment gates
-  remain to be completed
+- budgets, schedules, loans, multi-currency transfers, plugins, themes,
+  attachment/document uploads, backup/restore documentation, and final
+  CI/deployment gates remain to be completed
 
 ## Architecture Defaults
 
@@ -316,30 +317,41 @@ Exit criteria:
 
 ## Milestone 9: Search, Templates, Preferences, Notes, And Administration
 
+Status: Complete as baseline.
+
 Goal: add the everyday ergonomics and administration expected from a self-hosted
 personal finance product.
 
-Tasks:
+Completed:
 
 1. Transaction finder, advanced register filtering/search, saved views, and
-   keyboard-first quick entry.
+   keyboard-first quick entry foundations.
 2. Memorized transactions, payee defaults, memorized splits, and transaction
-   templates.
+   templates baseline.
 3. Per-user preferences: default book, date format, number format, locale,
-   theme selection, and other display preferences.
-4. Notes/documents on accounts and transactions if they do not delay core v1
-   release gates.
+   theme selection, and other display preferences baseline.
+4. Markdown notes on accounts and transactions.
 5. Admin account management: create/invite/deactivate users, change/reset
    passwords, manage book roles, inspect integrity checks, view migration
    version, and review audit/import history.
 
+Remaining hardening:
+
+- broaden saved-view and template UX from baseline controls into polished daily
+  workflows
+- add richer audit coverage for every write family
+- defer file attachments/document uploads until after v1
+- keep email invite/reset delivery deferred after v1
+
 Public API targets:
 
-- `/api/v1/search/*` or saved-view endpoints under existing slices
-- `/api/v1/templates/*`
-- `/api/v1/preferences/*`
+- existing `/api/v1/search/transaction-views/*`
+- existing `/api/v1/templates/transactions/*`
+- existing `/api/v1/preferences/*`
 - `/api/v1/notes/*` and `/api/v1/documents/*` if included in v1
-- `/api/v1/admin/users/*` or `/api/v1/users/*`
+- existing `/api/v1/notes/*`
+- existing `/api/v1/admin/users/*`
+- existing `/api/v1/admin/audit-events`
 
 Exit criteria:
 
