@@ -1,6 +1,6 @@
 # PostgreSQL Schema Direction
 
-Last updated: 2026-05-04
+Last updated: 2026-05-05
 
 ## Source Of Truth
 
@@ -31,24 +31,28 @@ work to the SQLite/Tauri migration path.
 
 Already represented in the web baseline:
 
-- users and book memberships
+- users, user devices, auth sessions, and book memberships
 - books
 - commodities/currencies metadata
 - countries and institutions
-- accounts and account balancings
-- transactions and splits
 - categories, payees, tags, people, and projects
-- investments, lots, and split-lot allocations
-- pricing sources, policies, assignments, refresh state/runs, and observations
+- accounts, account balancings, balance checks, balance adjustments, balance
+  constraints, and reconciliation preferences
+- transactions and splits
+- investments, lots, split-lot allocations, and price observations
+- pricing sources, policies, assignments, refresh state, and refresh runs
+- import rules, import sessions, and import session transactions
 - report state/cache, definitions, and runs
 
 Planned schema families:
 
-- auth sessions and device attribution
-- reconciliation balance checks, adjustments, and constraints
-- import sessions, import rows, import rules, and mapping templates
 - budgets and budget lines
 - scheduled transactions and recurrence state
+- loan/mortgage amortization helpers where account and transaction tables are
+  not sufficient
+- saved searches/views, transaction templates, memorized splits, and richer
+  payee defaults
+- user preferences
 - notes, events, and documents
 - plugin manifests/status
 - theme manifests/preferences
@@ -63,8 +67,8 @@ Replace:
   server admin status.
 - desktop backup scheduling with Postgres backups using `pg_dump`,
   `pg_restore`, and volume snapshots.
-- SQLite import/export needs with a web import pipeline, including a legacy
-  SQLite-to-Postgres importer.
+- SQLite import/export needs with the web import/export pipeline. SQLite
+  desktop-to-Postgres import is deferred after v1 rather than a v1 release gate.
 
 Drop as direct table ports:
 
@@ -90,13 +94,15 @@ Prefer this split:
 
 Important invariant families to preserve:
 
-- account, category, split, lot, commodity, and transaction rows must remain
-  inside the same book where relevant
+- account, category, split, lot, commodity, price, import, reconciliation, and
+  transaction rows must remain inside the same book where relevant
 - transaction splits must balance according to the book/account commodity rules
 - locked/reconciled ranges must reject unsafe mutations
 - system accounts and system roles must be protected
 - commodity scale/precision must stay inside supported bounds
 - price observations must keep source/correction/derivation integrity
+- import commits must be auditable and idempotent enough to avoid accidental
+  duplicate posting
 
 ## Operational Schema Rules
 

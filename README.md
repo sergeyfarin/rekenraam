@@ -14,20 +14,30 @@ Working today:
   frontend
 - same-origin `/api/v1` frontend-to-backend proxying in the containerized web
   stack
+- first-admin bootstrap, login/logout, sessions, device attribution, request
+  context, and protected API routes
 - Python HTTP endpoints for books, accounts, balances, registers,
-  transactions, metadata, reports, investments, pricing settings, FX refresh
-  state/history, and admin runtime health
+  transactions, metadata, reconciliation, imports, exports, reports,
+  investments, pricing settings, FX refresh state/history, and admin runtime
+  health
 - backend-owned pricing refresh worker
-- PostgreSQL Alembic baseline with report state/cache and pricing foundations
+- PostgreSQL Alembic baseline with auth/session, reconciliation, import,
+  report state/cache, investment, and pricing foundations
 - shared frontend API seam under `src/lib/api`
 
 Still in migration:
 
-- auth/audit/session foundation
-- reconciliation
-- import/export, including legacy SQLite-to-Postgres import
 - budgets and scheduled transactions
+- loans, mortgages, amortization, and liability workflow helpers
+- advanced transaction search, saved views, templates, memorized splits, and
+  broader payee defaults
+- explicit multi-currency transfer workflows
+- broader reports, tax, investment, pricing, and valuation depth
+- user administration, book role management, preferences, audit visibility, and
+  optional notes/documents
 - plugin and theme systems
+- production deployment guidance, backup/restore smoke checks, and final CI
+  gates
 - final Tauri dependency and `src-tauri/` deletion
 
 ## Run The Self-Hosted Stack
@@ -128,14 +138,19 @@ Current layout:
 ## API Examples
 
 ```bash
+curl http://localhost:8080/api/v1/health
 curl http://localhost:8080/api/v1/books
 curl http://localhost:8080/api/v1/accounts
 curl http://localhost:8080/api/v1/accounts/tree
 curl http://localhost:8080/api/v1/accounts/2/register
 curl http://localhost:8080/api/v1/transactions
+curl http://localhost:8080/api/v1/reconciliation/accounts/2/start
+curl http://localhost:8080/api/v1/imports/sessions
+curl http://localhost:8080/api/v1/reports/definitions
 curl http://localhost:8080/api/v1/pricing/refresh-state
 curl http://localhost:8080/api/v1/pricing/refresh/execution-status
 curl http://localhost:8080/api/v1/pricing/refresh/history
+curl http://localhost:8080/api/v1/admin/runtime
 ```
 
 Manual pricing refresh:
