@@ -9,10 +9,10 @@ from pathlib import Path
 import asyncpg
 import pytest
 import pytest_asyncio
-from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from alembic import command
 from rekenraam_api.config.settings import get_settings
 
 

@@ -1,19 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi import Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import get_metadata_service
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
-    CommodityAutocompleteOption,
     CategoryUpdateInput,
+    CommodityAutocompleteOption,
+    CommoditySummary,
+    CommodityUpdateInput,
+    CountrySummary,
     CurrencyActivationInput,
     CurrencyCreateInput,
     CurrencySummary,
     CurrencyUpdateInput,
-    CommodityUpdateInput,
-    CommoditySummary,
-    CountrySummary,
     InstitutionCreateInput,
     InstitutionSummary,
     InstitutionUpdateInput,
@@ -29,7 +28,6 @@ from rekenraam_api.schemas.metadata import (
     TagUpdateInput,
 )
 from rekenraam_api.services.metadata import MetadataService
-
 
 router = APIRouter(tags=["metadata"])
 

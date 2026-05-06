@@ -5,8 +5,6 @@ from sqlalchemy.exc import IntegrityError
 
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.repositories.accounts import AccountRepository
-from rekenraam_api.services.access import AccessPolicy
-from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingCreateInput,
@@ -18,12 +16,14 @@ from rekenraam_api.schemas.accounts import (
     AccountTreeNode,
     AccountUpdateInput,
 )
+from rekenraam_api.services.access import AccessPolicy
+from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 @dataclass
 class _TreeState:
     account: Account
-    children: list[int] = field(default_factory=list)
+    children: list[int] = field(default_factory=lambda: [])
 
 
 class AccountService:

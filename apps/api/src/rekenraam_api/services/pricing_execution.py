@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from typing import ClassVar, cast
 
 import httpx
 
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy
+from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshRun
 from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.schemas.pricing import PricingExecutionStatusSummary, PricingRefreshRunSummary
 
@@ -63,14 +64,19 @@ class FrankfurterProvider(PricingRateProvider):
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url)
             response.raise_for_status()
-            payload = response.json()
+        payload = cast(dict[str, object], response.json())
         base = str(payload.get("base", request.base))
         points: list[FxRatePoint] = []
-        for date_text, quotes in payload.get("rates", {}).items():
+        rates = payload.get("rates")
+        if not isinstance(rates, dict):
+            return points
+        for date_text, quotes in cast(dict[object, object], rates).items():
+            if not isinstance(date_text, str):
+                continue
             if not isinstance(quotes, dict):
                 continue
             point_date = date.fromisoformat(date_text)
-            for quote, rate in quotes.items():
+            for quote, rate in cast(dict[object, object], quotes).items():
                 decimal_rate = Decimal(str(rate))
                 if decimal_rate <= 0:
                     continue
@@ -79,7 +85,7 @@ class FrankfurterProvider(PricingRateProvider):
 
 
 class FederalReserveProvider(PricingRateProvider):
-    _series_map = {
+    _series_map: ClassVar[dict[str, str]] = {
         "EUR": "DEXUSEU",
         "GBP": "DEXUSUK",
         "JPY": "DEXJPUS",
@@ -113,9 +119,15 @@ class FederalReserveProvider(PricingRateProvider):
                 )
                 response = await client.get(url)
                 response.raise_for_status()
-                payload = response.json()
-                for row in payload.get("observations", []):
-                    value = row.get("value")
+                payload = cast(dict[str, object], response.json())
+                observations = payload.get("observations")
+                if not isinstance(observations, list):
+                    continue
+                for row in cast(list[object], observations):
+                    if not isinstance(row, dict):
+                        continue
+                    typed_row = cast(dict[str, object], row)
+                    value = typed_row.get("value")
                     if value in {None, "."}:
                         continue
                     rate = Decimal(str(value))
@@ -125,7 +137,7 @@ class FederalReserveProvider(PricingRateProvider):
                         rate = Decimal("1") / rate
                     points.append(
                         FxRatePoint(
-                            date=date.fromisoformat(str(row["date"])),
+                            date=date.fromisoformat(str(typed_row["date"])),
                             base=request.base,
                             quote=quote,
                             rate=rate,
@@ -152,10 +164,17 @@ class BankOfCanadaProvider(PricingRateProvider):
                 )
                 response = await client.get(url)
                 response.raise_for_status()
-                payload = response.json()
-                for row in payload.get("observations", []):
-                    point_date = row.get("d")
-                    value = row.get(series, {}).get("v")
+                payload = cast(dict[str, object], response.json())
+                observations = payload.get("observations")
+                if not isinstance(observations, list):
+                    continue
+                for row in cast(list[object], observations):
+                    if not isinstance(row, dict):
+                        continue
+                    typed_row = cast(dict[str, object], row)
+                    point_date = typed_row.get("d")
+                    series_payload = typed_row.get(series)
+                    value = cast(dict[str, object], series_payload).get("v") if isinstance(series_payload, dict) else None
                     if point_date in {None, ""} or value in {None, ""}:
                         continue
                     rate = Decimal(str(value))
@@ -188,14 +207,19 @@ class ExchangeRateHostProvider(PricingRateProvider):
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url)
             response.raise_for_status()
-            payload = response.json()
+        payload = cast(dict[str, object], response.json())
         base = str(payload.get("base", request.base))
         points: list[FxRatePoint] = []
-        for date_text, quotes in payload.get("rates", {}).items():
+        rates = payload.get("rates")
+        if not isinstance(rates, dict):
+            return points
+        for date_text, quotes in cast(dict[object, object], rates).items():
+            if not isinstance(date_text, str):
+                continue
             if not isinstance(quotes, dict):
                 continue
             point_date = date.fromisoformat(date_text)
-            for quote, rate in quotes.items():
+            for quote, rate in cast(dict[object, object], quotes).items():
                 decimal_rate = Decimal(str(rate))
                 if decimal_rate <= 0:
                     continue
@@ -220,17 +244,35 @@ class YahooFinanceProvider(PricingRateProvider):
                 )
                 response = await client.get(url)
                 response.raise_for_status()
-                payload = response.json()
-                result = payload.get("chart", {}).get("result", [])
+                payload = cast(dict[str, object], response.json())
+                chart = payload.get("chart")
+                result: Sequence[object] = []
+                if isinstance(chart, dict):
+                    chart_payload = cast(dict[str, object], chart)
+                    raw_result = chart_payload.get("result")
+                    if isinstance(raw_result, list):
+                        result = cast(list[object], raw_result)
                 if not result:
                     continue
                 row = result[0]
-                timestamps = row.get("timestamp") or []
-                closes = (((row.get("indicators") or {}).get("quote") or [{}])[0].get("close") or [])
+                if not isinstance(row, dict):
+                    continue
+                typed_row = cast(dict[str, object], row)
+                raw_timestamps = typed_row.get("timestamp")
+                timestamps: Sequence[object] = cast(Sequence[object], raw_timestamps) if isinstance(raw_timestamps, list) else ()
+                raw_closes: object = ()
+                indicators = typed_row.get("indicators")
+                if isinstance(indicators, dict):
+                    quote_rows = cast(dict[str, object], indicators).get("quote")
+                    if isinstance(quote_rows, list) and quote_rows and isinstance(quote_rows[0], dict):
+                        raw_closes = cast(dict[str, object], quote_rows[0]).get("close") or []
+                closes: Sequence[object] = cast(Sequence[object], raw_closes) if isinstance(raw_closes, list) else ()
                 for index, timestamp in enumerate(timestamps):
                     if index >= len(closes):
                         continue
                     close = closes[index]
+                    if not isinstance(timestamp, int | float | str):
+                        continue
                     if close in {None, 0}:
                         continue
                     decimal_rate = Decimal(str(close))
@@ -467,6 +509,8 @@ class PricingExecutionService:
     ) -> tuple[int, int, list[PriceObservation]]:
         currencies, _ = await self._repository.list_book_currencies(book_id)
         symbol_map = {currency.symbol: currency for currency in currencies if currency.symbol is not None}
+        if base_currency.symbol is None:
+            raise ValueError("base currency symbol is required for pricing refresh")
         symbol_map[base_currency.symbol] = base_currency
 
         observations: list[PriceObservation] = []
@@ -482,7 +526,7 @@ class PricingExecutionService:
         self,
         book_id: int,
         point: FxRatePoint,
-        symbol_map: dict[str | None, Commodity],
+        symbol_map: dict[str, Commodity],
         observations: list[PriceObservation],
     ) -> int:
         from_currency = symbol_map.get(point.base)
@@ -598,7 +642,7 @@ class PricingExecutionService:
         return current if current.tzinfo is not None else current.replace(tzinfo=UTC)
 
     @staticmethod
-    def _to_refresh_run_summary(row: object) -> PricingRefreshRunSummary:
+    def _to_refresh_run_summary(row: PricingRefreshRun) -> PricingRefreshRunSummary:
         return PricingRefreshRunSummary(
             book_id=row.book_id,
             trigger=row.trigger,

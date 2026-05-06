@@ -4,16 +4,21 @@ from datetime import UTC, date, datetime
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from rekenraam_api.api.dependencies import get_pricing_service, get_pricing_worker
+from rekenraam_api.api.dependencies import (
+    get_pricing_service,
+    get_pricing_worker,
+    require_request_context,
+)
 from rekenraam_api.app import app
 from rekenraam_api.schemas.pricing import (
-    PricingExecutionStatusSummary,
     PriceSourceSummary,
+    PricingExecutionStatusSummary,
     PricingPolicySummary,
     PricingRefreshRunSummary,
     PricingRefreshStateSummary,
     PricingSourceAssignmentSummary,
 )
+from rekenraam_api.services.request_context import RequestContext
 
 
 class StubPricingService:
@@ -196,7 +201,17 @@ class StubPricingWorker:
 
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides() -> AsyncIterator[None]:
+    async def stub_request_context() -> RequestContext:
+        return RequestContext(
+            user_id=1,
+            session_id=1,
+            device_id=1,
+            request_id="test-request",
+            request_timestamp=datetime(2026, 5, 3, tzinfo=UTC),
+        )
+
     app.dependency_overrides.clear()
+    app.dependency_overrides[require_request_context] = stub_request_context
     yield
     app.dependency_overrides.clear()
 

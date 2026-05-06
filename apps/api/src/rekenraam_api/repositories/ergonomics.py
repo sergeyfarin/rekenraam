@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import Select, delete, func, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.access import AuthSession, BookMembership, User
@@ -79,7 +81,7 @@ class ErgonomicsRepository:
             .values(revoked_at=datetime.now(UTC))
         )
         await self._session.flush()
-        return int(result.rowcount or 0)
+        return int(cast(CursorResult[object], result).rowcount or 0)
 
     async def list_memberships(
         self, user_ids: list[int] | None = None
@@ -117,7 +119,7 @@ class ErgonomicsRepository:
             )
         )
         await self._session.flush()
-        return bool(result.rowcount)
+        return bool(cast(CursorResult[object], result).rowcount)
 
     async def get_book(self, book_id: int) -> Book | None:
         return await self._session.get(Book, book_id)

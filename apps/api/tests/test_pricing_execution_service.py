@@ -6,8 +6,19 @@ from decimal import Decimal
 import pytest
 
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshRun, PricingRefreshState
-from rekenraam_api.services.pricing_execution import FxRatePoint, PricingExecutionService, PricingProviderRegistry, PricingRateProvider, ProviderRequest
+from rekenraam_api.db.models.pricing import (
+    PriceSource,
+    PricingPolicy,
+    PricingRefreshRun,
+    PricingRefreshState,
+)
+from rekenraam_api.services.pricing_execution import (
+    FxRatePoint,
+    PricingExecutionService,
+    PricingProviderRegistry,
+    PricingRateProvider,
+    ProviderRequest,
+)
 
 
 class StubProvider(PricingRateProvider):

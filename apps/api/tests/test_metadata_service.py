@@ -2,13 +2,22 @@ from datetime import UTC, datetime
 
 import pytest
 
-from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
+from rekenraam_api.db.models.metadata import (
+    Category,
+    Commodity,
+    Country,
+    Institution,
+    Payee,
+    Person,
+    Project,
+    Tag,
+)
 from rekenraam_api.schemas.metadata import (
     CategoryUpdateInput,
+    CommodityUpdateInput,
     CurrencyActivationInput,
     CurrencyCreateInput,
     CurrencyUpdateInput,
-    CommodityUpdateInput,
     InstitutionCreateInput,
     InstitutionUpdateInput,
     PayeeUpdateInput,

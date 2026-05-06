@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from sqlalchemy import CheckConstraint, MetaData, Table, UniqueConstraint, inspect
 from sqlalchemy.dialects import postgresql

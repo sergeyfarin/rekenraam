@@ -86,7 +86,7 @@ class ImportRepository:
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def create_rule(self, **values) -> ImportRule:
+    async def create_rule(self, **values: object) -> ImportRule:
         rule = ImportRule(**values)
         self._session.add(rule)
         await self._session.commit()
@@ -104,7 +104,7 @@ class ImportRepository:
         await self._session.commit()
         return True
 
-    async def create_session(self, **values) -> ImportSession:
+    async def create_session(self, **values: object) -> ImportSession:
         item = ImportSession(**values)
         self._session.add(item)
         await self._session.flush()

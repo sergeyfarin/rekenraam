@@ -121,6 +121,7 @@ class StubInvestmentRepository:
         book_id: int,
         date_from: date | None,
         date_to: date | None,
+        cost_basis_profile_id: int | None,
     ) -> list[dict[str, object]]:
         return [
             {
@@ -142,6 +143,7 @@ class StubInvestmentRepository:
         book_id: int,
         base_commodity_id: int,
         as_of_date: date | None,
+        cost_basis_profile_id: int | None,
     ) -> list[dict[str, object]]:
         return [
             {

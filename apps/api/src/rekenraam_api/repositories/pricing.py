@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from typing import cast
 
-from sqlalchemy import Select, delete, or_, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -12,7 +13,13 @@ from sqlalchemy.orm import aliased
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshRun, PricingRefreshState, PricingSourceAssignment
+from rekenraam_api.db.models.pricing import (
+    PriceSource,
+    PricingPolicy,
+    PricingRefreshRun,
+    PricingRefreshState,
+    PricingSourceAssignment,
+)
 
 
 class PricingRepository:
@@ -161,7 +168,7 @@ class PricingRepository:
             )
         )
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def list_effective_pricing_source_assignments(
         self, book_id: int, effective_on: date
@@ -189,7 +196,7 @@ class PricingRepository:
             )
         )
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def create_pricing_source_assignment(
         self,
@@ -265,7 +272,7 @@ class PricingRepository:
             .order_by(from_currency.symbol.asc(), to_currency.symbol.asc(), PriceSource.name.asc(), PricingRefreshState.id.asc())
         )
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def list_pricing_refresh_state_rows(self, book_id: int) -> list[PricingRefreshState]:
         statement: Select[tuple[PricingRefreshState]] = (
@@ -425,7 +432,7 @@ class PricingRepository:
             .limit(limit)
         )
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def list_market_price_observations(
         self,
@@ -451,7 +458,7 @@ class PricingRepository:
         if quote_commodity_id is not None:
             statement = statement.where(PriceObservation.quote_commodity_id == quote_commodity_id)
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def create_market_price_observation(
         self,
@@ -548,7 +555,7 @@ class PricingRepository:
             .limit(limit)
         )
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def create_fx_rate_official_observation(
         self,
@@ -591,6 +598,9 @@ class PricingRepository:
     async def rollback(self) -> None:
         await self._session.rollback()
 
+    async def get_price_observation(self, observation_id: int) -> PriceObservation | None:
+        return await self._session.get(PriceObservation, observation_id)
+
     async def _require_currency(self, book_id: int, commodity_id: int) -> Commodity:
         commodity = await self._session.get(Commodity, commodity_id)
         if commodity is None or commodity.book_id != book_id or commodity.kind != "currency":
@@ -620,5 +630,6 @@ class PricingRepository:
             return True
         if not isinstance(payload, dict):
             return True
-        is_active = payload.get("is_active")
+        metadata = cast(dict[str, object], payload)
+        is_active = metadata.get("is_active")
         return is_active if isinstance(is_active, bool) else True

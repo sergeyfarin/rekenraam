@@ -1,32 +1,43 @@
-from datetime import date
 import hashlib
 import json
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from datetime import date
+from typing import Protocol, cast
 
+from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
 from rekenraam_api.repositories.reports import ReportRepository
-from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.schemas.reports import (
-    CashflowReportInput,
-    CashflowRow,
     AccountTrendReportInput,
     AccountTrendRow,
+    CashflowReportInput,
+    CashflowRow,
     CategorySpendReportInput,
     CategorySpendRow,
     NetWorthReportInput,
     NetWorthRow,
-    PayeeTotalsReportInput,
     PayeeTotalRow,
+    PayeeTotalsReportInput,
     ReportDefinitionCreateInput,
     ReportDefinitionSummary,
     ReportDefinitionUpdateInput,
     ReportRunCreateInput,
     ReportRunSummary,
 )
+from rekenraam_api.services.access import AccessPolicy
 
 
 class CacheableReportRow(Protocol):
     def model_dump(self, *, mode: str) -> dict[str, object]:
         ...
+
+
+type ReportCacheInput = (
+    CashflowReportInput
+    | NetWorthReportInput
+    | AccountTrendReportInput
+    | CategorySpendReportInput
+    | PayeeTotalsReportInput
+)
 
 
 class ReportService:
@@ -238,7 +249,7 @@ class ReportService:
             await self._access_policy.require_book_write(book_id)
         return await self._repository.bump_book_change_seq(book_id)
 
-    async def _get_cached_rows(self, report_type: str, input) -> list[dict[str, object]] | None:
+    async def _get_cached_rows(self, report_type: str, input: ReportCacheInput) -> list[dict[str, object]] | None:
         params_json = self._params_json(input)
         params_hash = self._params_hash(params_json)
         as_of_seq = await self._repository.get_book_change_seq(input.book_id)
@@ -250,9 +261,9 @@ class ReportService:
         )
         if cache_row is None:
             return None
-        return json.loads(cache_row.payload_json)
+        return cast(list[dict[str, object]], json.loads(cache_row.payload_json))
 
-    async def _save_cached_rows(self, report_type: str, input, rows: Sequence[CacheableReportRow]) -> None:
+    async def _save_cached_rows(self, report_type: str, input: ReportCacheInput, rows: Sequence[CacheableReportRow]) -> None:
         params_json = self._params_json(input)
         params_hash = self._params_hash(params_json)
         as_of_seq = await self._repository.get_book_change_seq(input.book_id)
@@ -266,7 +277,7 @@ class ReportService:
         )
 
     @staticmethod
-    def _params_json(input) -> str:
+    def _params_json(input: ReportCacheInput) -> str:
         return json.dumps(input.model_dump(mode="json"), sort_keys=True)
 
     @staticmethod
@@ -288,7 +299,7 @@ class ReportService:
         return group_by
 
     @staticmethod
-    def _to_report_definition_summary(row) -> ReportDefinitionSummary:
+    def _to_report_definition_summary(row: ReportDefinition) -> ReportDefinitionSummary:
         return ReportDefinitionSummary(
             id=row.id,
             book_id=row.book_id,
@@ -301,7 +312,7 @@ class ReportService:
         )
 
     @staticmethod
-    def _to_report_run_summary(row) -> ReportRunSummary:
+    def _to_report_run_summary(row: ReportRun) -> ReportRunSummary:
         return ReportRunSummary(
             id=row.id,
             book_id=row.book_id,

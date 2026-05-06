@@ -43,7 +43,7 @@ class ImportPreviewRequest(BaseModel):
     locale: ImportLocaleOptions | None = None
 
     @model_validator(mode="after")
-    def validate_content(self) -> "ImportPreviewRequest":
+    def validate_content(self) -> ImportPreviewRequest:
         if self.content is None and self.content_base64 is None:
             raise ValueError("content or content_base64 is required")
         return self
@@ -86,7 +86,7 @@ class ImportRuleCreate(BaseModel):
     target_payee_id: int | None = None
 
     @model_validator(mode="after")
-    def validate_ranges(self) -> "ImportRuleCreate":
+    def validate_ranges(self) -> ImportRuleCreate:
         if (
             self.amount_min_minor is not None
             and self.amount_max_minor is not None

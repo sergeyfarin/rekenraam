@@ -1,24 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from rekenraam_api.api.dependencies import get_account_service
-from rekenraam_api.api.dependencies import get_transaction_service
-from rekenraam_api.schemas.register import RegisterPage
+from rekenraam_api.api.dependencies import get_account_service, get_transaction_service
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingCreateInput,
     AccountBalancingSummary,
-    AccountClosingValidationResult,
     AccountBalancingUnlockInput,
     AccountBookingPolicyUpdate,
+    AccountClosingValidationResult,
     AccountCreateInput,
     AccountDirectiveSummary,
     AccountSummary,
     AccountTreeNode,
     AccountUpdateInput,
 )
+from rekenraam_api.schemas.register import RegisterPage
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.transactions import TransactionService
-
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 

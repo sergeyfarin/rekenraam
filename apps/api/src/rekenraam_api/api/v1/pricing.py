@@ -8,9 +8,8 @@ from rekenraam_api.schemas.pricing import (
     FxRateOfficialSummary,
     MarketPriceCreateInput,
     MarketPriceSummary,
-    PricingExecutionStatusSummary,
     PriceSourceSummary,
-    PricingSourceHealthSummary,
+    PricingExecutionStatusSummary,
     PricingPolicySummary,
     PricingPolicyUpdateInput,
     PricingRefreshRunInput,
@@ -19,10 +18,10 @@ from rekenraam_api.schemas.pricing import (
     PricingSourceAssignmentCreateInput,
     PricingSourceAssignmentSummary,
     PricingSourceAssignmentUpdateInput,
+    PricingSourceHealthSummary,
 )
 from rekenraam_api.services.pricing import PricingService
 from rekenraam_api.workers.pricing import PricingRefreshWorker
-
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 

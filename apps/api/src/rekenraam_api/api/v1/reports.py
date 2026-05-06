@@ -16,16 +16,16 @@ from rekenraam_api.schemas.investments import (
     UnrealizedGainsQuery,
 )
 from rekenraam_api.schemas.reports import (
-    CashflowReportInput,
-    CashflowRow,
     AccountTrendReportInput,
     AccountTrendRow,
+    CashflowReportInput,
+    CashflowRow,
     CategorySpendReportInput,
     CategorySpendRow,
     NetWorthReportInput,
     NetWorthRow,
-    PayeeTotalsReportInput,
     PayeeTotalRow,
+    PayeeTotalsReportInput,
     ReportDefinitionCreateInput,
     ReportDefinitionSummary,
     ReportDefinitionUpdateInput,
@@ -34,7 +34,6 @@ from rekenraam_api.schemas.reports import (
 )
 from rekenraam_api.services.investments import InvestmentService
 from rekenraam_api.services.reports import ReportService
-
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 

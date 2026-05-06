@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from rekenraam_api.db.models.accounts import (
     Account,
@@ -39,7 +39,7 @@ class ReconciliationService:
         self._access_policy = access_policy
 
     async def start(
-        self, account_id: int, as_of_date, statement_start_date=None
+        self, account_id: int, as_of_date: date, statement_start_date: date | None = None
     ) -> ReconciliationStartResponse | None:
         account = await self._repository.get_account(account_id)
         if account is None:
@@ -283,7 +283,7 @@ class ReconciliationService:
         )
 
     async def unlock(
-        self, account_id: int, from_date, reason: str | None, confirm: bool
+        self, account_id: int, from_date: date, reason: str | None, confirm: bool
     ) -> int | None:
         if not confirm:
             raise ValueError("unlock not confirmed")

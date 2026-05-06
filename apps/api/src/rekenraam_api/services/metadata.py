@@ -1,21 +1,22 @@
 import json
+from typing import cast
 
 from sqlalchemy.exc import IntegrityError
 
+from rekenraam_api.db.models.metadata import Category, Commodity, Payee, Person, Project, Tag
 from rekenraam_api.repositories.metadata import MetadataRepository
-from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
     CategorySummary,
-    CommodityAutocompleteOption,
     CategoryUpdateInput,
+    CommodityAutocompleteOption,
+    CommoditySummary,
+    CommodityUpdateInput,
+    CountrySummary,
     CurrencyActivationInput,
     CurrencyCreateInput,
     CurrencySummary,
     CurrencyUpdateInput,
-    CommodityUpdateInput,
-    CommoditySummary,
-    CountrySummary,
     InstitutionCreateInput,
     InstitutionSummary,
     InstitutionUpdateInput,
@@ -30,6 +31,7 @@ from rekenraam_api.schemas.metadata import (
     TagSummary,
     TagUpdateInput,
 )
+from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 class MetadataService:
@@ -133,7 +135,7 @@ class MetadataService:
             id=row.id,
             book_id=row.book_id,
             kind=row.kind,
-            symbol=row.symbol,
+            symbol=row.symbol or "",
             name=row.name,
             scale=row.scale,
             metadata=row.metadata_text,
@@ -520,7 +522,7 @@ class MetadataService:
         return self._to_project_summary(row)
 
     @staticmethod
-    def _to_category_summary(row: object) -> CategorySummary:
+    def _to_category_summary(row: Category) -> CategorySummary:
         return CategorySummary(
             id=row.id,
             book_id=row.book_id,
@@ -533,7 +535,7 @@ class MetadataService:
         )
 
     @staticmethod
-    def _to_payee_summary(row: object) -> PayeeSummary:
+    def _to_payee_summary(row: Payee) -> PayeeSummary:
         return PayeeSummary(
             id=row.id,
             book_id=row.book_id,
@@ -545,7 +547,7 @@ class MetadataService:
         )
 
     @staticmethod
-    def _to_tag_summary(row: object) -> TagSummary:
+    def _to_tag_summary(row: Tag) -> TagSummary:
         return TagSummary(
             id=row.id,
             book_id=row.book_id,
@@ -558,7 +560,7 @@ class MetadataService:
     @classmethod
     def _to_currency_summary(
         cls,
-        row: object,
+        row: Commodity,
         base_currency_code: str | None,
         display_symbol_override: str | None = None,
     ) -> CurrencySummary:
@@ -568,7 +570,7 @@ class MetadataService:
         return CurrencySummary(
             id=row.id,
             book_id=row.book_id,
-            symbol=row.symbol,
+            symbol=row.symbol or "",
             display_symbol=display_symbol,
             name=row.name,
             scale=row.scale,
@@ -579,7 +581,7 @@ class MetadataService:
         )
 
     @classmethod
-    def _currency_is_active(cls, row: object, base_currency_code: str | None) -> bool:
+    def _currency_is_active(cls, row: Commodity, base_currency_code: str | None) -> bool:
         if row.symbol is not None and base_currency_code is not None and row.symbol == base_currency_code:
             return True
         is_active = cls._parse_currency_metadata(row.metadata_text).get("is_active")
@@ -605,7 +607,7 @@ class MetadataService:
             return {}
         if not isinstance(payload, dict):
             return {}
-        return dict(payload)
+        return {str(key): value for key, value in cast(dict[object, object], payload).items()}
 
     @classmethod
     def _currency_metadata_text(
@@ -643,7 +645,7 @@ class MetadataService:
         return cleaned
 
     @staticmethod
-    def _to_person_summary(row: object) -> PersonSummary:
+    def _to_person_summary(row: Person) -> PersonSummary:
         return PersonSummary(
             id=row.id,
             book_id=row.book_id,
@@ -655,7 +657,7 @@ class MetadataService:
         )
 
     @staticmethod
-    def _to_project_summary(row: object) -> ProjectSummary:
+    def _to_project_summary(row: Project) -> ProjectSummary:
         return ProjectSummary(
             id=row.id,
             book_id=row.book_id,

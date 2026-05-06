@@ -6,10 +6,10 @@ from rekenraam_api.api.dependencies import get_investment_service
 from rekenraam_api.schemas.investments import (
     AccountValuationRow,
     BuyCommodityInput,
-    CorporateActionCreateInput,
-    CorporateActionSummary,
     ConvertedPosition,
     ConvertedPositionsQuery,
+    CorporateActionCreateInput,
+    CorporateActionSummary,
     CostBasisProfileCreateInput,
     CostBasisProfileSummary,
     CostBasisProfileUpdateInput,
@@ -22,16 +22,15 @@ from rekenraam_api.schemas.investments import (
     InvestmentInstrumentUpdateInput,
     LotHoldingPeriod,
     LotsHoldingQuery,
-    Position,
     PortfolioPerformanceQuery,
     PortfolioPerformanceSummary,
+    Position,
     PositionsQuery,
+    ReinvestedDividendInput,
     SellCommodityInput,
     TradeResult,
-    ReinvestedDividendInput,
 )
 from rekenraam_api.services.investments import InvestmentService
-
 
 router = APIRouter(prefix="/investments", tags=["investments"])
 

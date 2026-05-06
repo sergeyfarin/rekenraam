@@ -11,13 +11,17 @@ from rekenraam_api.schemas.accounts import (
     AccountBalancingCreateInput,
     AccountBalancingSummary,
     AccountClosingValidationResult,
-    AccountCreateInput,
     AccountDirectiveSummary,
     AccountTreeNode,
     AccountUpdateInput,
 )
 from rekenraam_api.schemas.register import RegisterEntry, RegisterPage
-from rekenraam_api.schemas.transactions import PayeeDefaults, TransactionListFilters, TransactionMutationInput, TransactionPage
+from rekenraam_api.schemas.transactions import (
+    PayeeDefaults,
+    TransactionListFilters,
+    TransactionMutationInput,
+    TransactionPage,
+)
 from rekenraam_api.services.accounts import AccountService
 from rekenraam_api.services.books import BookService
 from rekenraam_api.services.transactions import TransactionService
@@ -333,6 +337,7 @@ class StubTransactionRepository:
         memo: str | None,
         status: str,
         reference: str | None,
+        import_id: str | None = None,
         previous_tx_id: int | None = None,
         created_by_user_id: int | None = None,
         created_session_id: int | None = None,

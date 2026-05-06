@@ -1,8 +1,6 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
-
-from datetime import UTC, datetime
 
 from rekenraam_api.schemas.reports import (
     CashflowReportInput,

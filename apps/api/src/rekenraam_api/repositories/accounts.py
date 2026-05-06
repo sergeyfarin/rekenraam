@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import Select, exists, func, literal, select
 from sqlalchemy.exc import IntegrityError

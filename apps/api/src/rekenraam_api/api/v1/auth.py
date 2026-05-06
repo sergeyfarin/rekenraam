@@ -115,7 +115,7 @@ async def get_me(
 @router.put("/me/profile", response_model=AuthMe)
 async def update_profile(
     input: ProfileUpdateInput,
-    context=Depends(require_request_context),
+    context: RequestContext = Depends(require_request_context),
     auth_service: AuthService = Depends(get_auth_service),
     ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
 ) -> AuthMe:

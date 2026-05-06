@@ -4,13 +4,16 @@ from datetime import UTC, date, datetime
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from rekenraam_api.api.dependencies import get_account_service, get_book_service, require_request_context
-from rekenraam_api.api.dependencies import get_metadata_service
-from rekenraam_api.api.dependencies import get_reconciliation_service
-from rekenraam_api.api.dependencies import get_report_service
-from rekenraam_api.api.dependencies import get_transaction_service
+from rekenraam_api.api.dependencies import (
+    get_account_service,
+    get_book_service,
+    get_metadata_service,
+    get_reconciliation_service,
+    get_report_service,
+    get_transaction_service,
+    require_request_context,
+)
 from rekenraam_api.app import app
-from rekenraam_api.services.request_context import RequestContext
 from rekenraam_api.schemas.accounts import (
     AccountBalanceSummary,
     AccountBalancingCreateInput,
@@ -45,9 +48,17 @@ from rekenraam_api.schemas.reconciliation import (
     ReconciliationHistoryResponse,
     ReconciliationStartResponse,
 )
-from rekenraam_api.schemas.reports import CashflowRow, CategorySpendRow, PayeeTotalRow
 from rekenraam_api.schemas.register import RegisterEntry, RegisterPage
-from rekenraam_api.schemas.transactions import PayeeDefaults, SplitEntry, TransactionListFilters, TransactionMutationInput, TransactionPage, TransactionSummary
+from rekenraam_api.schemas.reports import CashflowRow, CategorySpendRow, PayeeTotalRow
+from rekenraam_api.schemas.transactions import (
+    PayeeDefaults,
+    SplitEntry,
+    TransactionListFilters,
+    TransactionMutationInput,
+    TransactionPage,
+    TransactionSummary,
+)
+from rekenraam_api.services.request_context import RequestContext
 
 
 class StubBookService:

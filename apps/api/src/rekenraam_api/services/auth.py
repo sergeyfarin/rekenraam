@@ -13,7 +13,6 @@ from rekenraam_api.repositories.access import AccessRepository
 from rekenraam_api.schemas.auth import AuthMe, AuthSessionSummary, AuthUserSummary
 from rekenraam_api.services.request_context import RequestContext
 
-
 SESSION_COOKIE_NAME = "rekenraam_session"
 SESSION_DAYS = 14
 

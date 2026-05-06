@@ -4,7 +4,6 @@ from rekenraam_api.api.dependencies import get_book_service
 from rekenraam_api.schemas.books import BookSummary
 from rekenraam_api.services.books import BookService
 
-
 router = APIRouter(prefix="/books", tags=["books"])
 
 

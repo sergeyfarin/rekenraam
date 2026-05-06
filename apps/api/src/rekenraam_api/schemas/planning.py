@@ -92,7 +92,7 @@ class ScheduleMutationInput(BaseModel):
     splits: tuple[ScheduleSplitInput, ...]
 
     @model_validator(mode="after")
-    def validate_schedule(self) -> "ScheduleMutationInput":
+    def validate_schedule(self) -> ScheduleMutationInput:
         if self.interval < 1:
             raise ValueError("interval must be at least 1")
         if self.end_date is not None and self.end_date < self.start_date:

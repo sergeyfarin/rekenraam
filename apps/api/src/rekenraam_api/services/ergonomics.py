@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Sequence
+from datetime import date
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -339,7 +340,7 @@ class ErgonomicsService:
         return True
 
     async def template_to_transaction_input(
-        self, template_id: int, txn_date
+        self, template_id: int, txn_date: date
     ) -> TransactionMutationInput | None:
         row = await self._repository.get_template(template_id)
         if row is None:

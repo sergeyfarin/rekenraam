@@ -3,8 +3,16 @@ from datetime import UTC, date, datetime
 import pytest
 
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState, PricingSourceAssignment
-from rekenraam_api.schemas.pricing import PricingPolicyUpdateInput, PricingSourceAssignmentCreateInput
+from rekenraam_api.db.models.pricing import (
+    PriceSource,
+    PricingPolicy,
+    PricingRefreshState,
+    PricingSourceAssignment,
+)
+from rekenraam_api.schemas.pricing import (
+    PricingPolicyUpdateInput,
+    PricingSourceAssignmentCreateInput,
+)
 from rekenraam_api.services.pricing import PricingService
 
 

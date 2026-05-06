@@ -11,9 +11,12 @@ from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
-from rekenraam_api.schemas.admin import AdminRuntimeStatusSummary, FiscalYearCloseInput, FiscalYearCloseResult
+from rekenraam_api.schemas.admin import (
+    AdminRuntimeStatusSummary,
+    FiscalYearCloseInput,
+    FiscalYearCloseResult,
+)
 from rekenraam_api.services.report_invalidation import bump_report_state
-
 
 LATEST_MIGRATION_VERSION = "0001_initial_schema"
 

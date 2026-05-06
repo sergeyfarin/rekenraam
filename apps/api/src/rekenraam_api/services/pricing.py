@@ -1,11 +1,15 @@
 from datetime import date
 from decimal import Decimal
 
-from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.investments import PriceObservation
-from rekenraam_api.db.models.pricing import PriceSource, PricingPolicy, PricingRefreshState, PricingSourceAssignment
+from rekenraam_api.db.models.metadata import Commodity
+from rekenraam_api.db.models.pricing import (
+    PriceSource,
+    PricingPolicy,
+    PricingRefreshState,
+    PricingSourceAssignment,
+)
 from rekenraam_api.repositories.pricing import PricingRepository
-from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.pricing import (
     FxRateDailyCreateInput,
     FxRateDailySummary,
@@ -14,14 +18,15 @@ from rekenraam_api.schemas.pricing import (
     MarketPriceCreateInput,
     MarketPriceSummary,
     PriceSourceSummary,
-    PricingSourceHealthSummary,
     PricingPolicySummary,
     PricingPolicyUpdateInput,
     PricingRefreshStateSummary,
     PricingSourceAssignmentCreateInput,
     PricingSourceAssignmentSummary,
     PricingSourceAssignmentUpdateInput,
+    PricingSourceHealthSummary,
 )
+from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 class PricingService:
@@ -161,7 +166,7 @@ class PricingService:
         return self._to_market_price_summary(observation, commodity, quote)
 
     async def delete_market_price(self, observation_id: int) -> bool:
-        observation = await self._repository._session.get(PriceObservation, observation_id)
+        observation = await self._repository.get_price_observation(observation_id)
         deleted = await self._repository.delete_market_price_observation(observation_id)
         if deleted and observation is not None:
             await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
@@ -190,7 +195,7 @@ class PricingService:
         return self._to_fx_rate_daily_summary(observation, from_currency, to_currency)
 
     async def delete_fx_rate_daily(self, observation_id: int) -> bool:
-        observation = await self._repository._session.get(PriceObservation, observation_id)
+        observation = await self._repository.get_price_observation(observation_id)
         deleted = await self._repository.delete_fx_rate_daily_observation(observation_id)
         if deleted and observation is not None:
             await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
@@ -235,7 +240,7 @@ class PricingService:
         return self._to_fx_rate_official_summary(observation, from_currency, to_currency)
 
     async def delete_fx_rate_official(self, observation_id: int) -> bool:
-        observation = await self._repository._session.get(PriceObservation, observation_id)
+        observation = await self._repository.get_price_observation(observation_id)
         deleted = await self._repository.delete_fx_rate_official_observation(observation_id)
         if deleted and observation is not None:
             await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)

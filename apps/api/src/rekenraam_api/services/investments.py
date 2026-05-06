@@ -1,12 +1,11 @@
 from rekenraam_api.repositories.investments import InvestmentRepository
-from rekenraam_api.services.report_invalidation import bump_report_state
 from rekenraam_api.schemas.investments import (
     AccountValuationRow,
     BuyCommodityInput,
-    CorporateActionCreateInput,
-    CorporateActionSummary,
     ConvertedPosition,
     ConvertedPositionsQuery,
+    CorporateActionCreateInput,
+    CorporateActionSummary,
     CostBasisProfileCreateInput,
     CostBasisProfileSummary,
     CostBasisProfileUpdateInput,
@@ -19,9 +18,9 @@ from rekenraam_api.schemas.investments import (
     InvestmentInstrumentUpdateInput,
     LotHoldingPeriod,
     LotsHoldingQuery,
-    Position,
     PortfolioPerformanceQuery,
     PortfolioPerformanceSummary,
+    Position,
     PositionsQuery,
     RealizedGainEntry,
     RealizedGainsQuery,
@@ -31,6 +30,7 @@ from rekenraam_api.schemas.investments import (
     UnrealizedGainEntry,
     UnrealizedGainsQuery,
 )
+from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 class InvestmentService:

@@ -5,7 +5,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.books import Book
-from rekenraam_api.db.models.metadata import Category, Commodity, Country, Institution, Payee, Person, Project, Tag
+from rekenraam_api.db.models.metadata import (
+    Category,
+    Commodity,
+    Country,
+    Institution,
+    Payee,
+    Person,
+    Project,
+    Tag,
+)
 
 
 class MetadataRepository:
@@ -144,7 +153,7 @@ class MetadataRepository:
             .order_by(Institution.name.asc(), Institution.id.asc())
         )
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def create_institution(
         self,

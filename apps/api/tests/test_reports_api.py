@@ -1,13 +1,18 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from rekenraam_api.api.dependencies import get_investment_service, get_report_service
+from rekenraam_api.api.dependencies import (
+    get_investment_service,
+    get_report_service,
+    require_request_context,
+)
 from rekenraam_api.app import app
 from rekenraam_api.schemas.investments import RealizedGainEntry, UnrealizedGainEntry
 from rekenraam_api.schemas.reports import ReportDefinitionSummary, ReportRunSummary
+from rekenraam_api.services.request_context import RequestContext
 
 
 class StubReportService:
@@ -124,8 +129,18 @@ class StubInvestmentService:
 
 
 @pytest.fixture(autouse=True)
-def clear_dependency_overrides() -> AsyncIterator[None]:
+def clear_dependency_overrides() -> Iterator[None]:
+    async def stub_request_context() -> RequestContext:
+        return RequestContext(
+            user_id=1,
+            session_id=1,
+            device_id=1,
+            request_id="test-request",
+            request_timestamp=datetime(2026, 5, 3, tzinfo=UTC),
+        )
+
     app.dependency_overrides.clear()
+    app.dependency_overrides[require_request_context] = stub_request_context
     yield
     app.dependency_overrides.clear()
 

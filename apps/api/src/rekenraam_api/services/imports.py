@@ -4,13 +4,18 @@ import base64
 import csv
 import io
 import re
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import Any, Literal, cast
 
-from python_calamine import load_workbook
+from python_calamine import (
+    load_workbook as _load_workbook,  # pyright: ignore[reportUnknownVariableType]
+)
 
-from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.db.models.ergonomics import AuditEvent
+from rekenraam_api.db.models.imports import ImportRule, ImportSession
+from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.schemas.imports import (
     ImportBatchResult,
     ImportCommitRequest,
@@ -29,6 +34,10 @@ from rekenraam_api.schemas.imports import (
 )
 from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.services.report_invalidation import bump_report_state
+
+load_workbook = cast(Callable[[io.BytesIO], Any], _load_workbook)
+ImportRuleKind = Literal["payee", "memo", "amount", "date", "account"]
+ImportMatchType = Literal["contains", "equals"]
 
 
 class ImportService:
@@ -602,7 +611,7 @@ class ImportService:
         if raw is None:
             return None
         text = raw.strip().replace("\\", "/")
-        formats = []
+        formats: list[str] = []
         if locale and locale.date_format:
             formats.append(self._python_date_format(locale.date_format))
         formats.extend(["%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%m/%d/%y", "%d/%m/%Y", "%d/%m/%y"])
@@ -637,20 +646,20 @@ class ImportService:
             return []
         sheet = workbook.get_sheet_by_index(0)
         rows: list[list[str]] = []
-        for row in sheet.iter_rows():
+        for row in cast(Iterable[Sequence[object | None]], sheet.iter_rows()):
             values = ["" if value is None else str(value) for value in row]
             if any(value.strip() for value in values):
                 rows.append(values)
         workbook.close()
         return rows
 
-    def _map_rule(self, rule) -> ImportRuleSummary:
+    def _map_rule(self, rule: ImportRule) -> ImportRuleSummary:
         return ImportRuleSummary(
             id=rule.id,
             previous_import_rule_id=rule.previous_import_rule_id,
             book_id=rule.book_id,
-            rule_kind=rule.rule_kind,
-            match_type=rule.match_type,
+            rule_kind=cast(ImportRuleKind, rule.rule_kind),
+            match_type=cast(ImportMatchType, rule.match_type),
             match_text=rule.match_text,
             priority=rule.priority,
             amount_min_minor=rule.amount_min_minor,
@@ -665,7 +674,7 @@ class ImportService:
             created_at=rule.created_at,
         )
 
-    def _map_session(self, session) -> ImportSessionSummary:
+    def _map_session(self, session: ImportSession) -> ImportSessionSummary:
         return ImportSessionSummary(
             id=session.id,
             book_id=session.book_id,

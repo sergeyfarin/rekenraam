@@ -7,18 +7,17 @@ from pathlib import Path
 
 import asyncpg
 import pytest
-from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from rekenraam_api.config.settings import get_settings
-
 from stage2_schema_contract import (
     STAGE2_SCHEMA_CONTRACT,
     TAURI_RUNTIME_TABLES,
     database_stage2_schema_contract,
     without_check_sqltext,
 )
+
+from alembic import command
+from rekenraam_api.config.settings import get_settings
 
 
 def _admin_connection_kwargs() -> dict[str, str | int]:

@@ -8,7 +8,14 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account
-from rekenraam_api.db.models.investments import CorporateAction, CostBasisProfile, InvestmentInstrument, Lot, PriceObservation, SplitLotAllocation
+from rekenraam_api.db.models.investments import (
+    CorporateAction,
+    CostBasisProfile,
+    InvestmentInstrument,
+    Lot,
+    PriceObservation,
+    SplitLotAllocation,
+)
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
 

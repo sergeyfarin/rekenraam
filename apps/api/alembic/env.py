@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from rekenraam_api.config.settings import get_settings
-from rekenraam_api.db.base import Base
 from rekenraam_api.db import models  # noqa: F401
+from rekenraam_api.db.base import Base
 
 config = context.config
 

@@ -1,5 +1,4 @@
 # FastAPI dependency injection uses callable defaults throughout this codebase.
-# ruff: noqa: B008
 
 from datetime import date
 

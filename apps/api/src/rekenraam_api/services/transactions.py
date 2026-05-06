@@ -1,10 +1,9 @@
-from rekenraam_api.db.models.transactions import Split, Transaction
+from datetime import date
+
 from rekenraam_api.db.models.ergonomics import AuditEvent
+from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.transactions import TransactionRepository
-from rekenraam_api.services.report_invalidation import bump_report_state
-from rekenraam_api.services.access import AccessPolicy
-from rekenraam_api.schemas.register import RegisterEntry
-from rekenraam_api.schemas.register import RegisterPage
+from rekenraam_api.schemas.register import RegisterEntry, RegisterPage
 from rekenraam_api.schemas.transactions import (
     PayeeDefaults,
     SplitEntry,
@@ -13,6 +12,8 @@ from rekenraam_api.schemas.transactions import (
     TransactionPage,
     TransactionSummary,
 )
+from rekenraam_api.services.access import AccessPolicy
+from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 class TransactionService:
@@ -184,7 +185,7 @@ class TransactionService:
             )
         return deleted
 
-    async def duplicate_transaction(self, transaction_id: int, today) -> TransactionSummary | None:
+    async def duplicate_transaction(self, transaction_id: int, today: date) -> TransactionSummary | None:
         source = await self._repository.get_transaction_by_id(transaction_id)
         if source is not None and self._access_policy is not None:
             await self._access_policy.require_book_write(source.book_id)
@@ -349,7 +350,7 @@ class TransactionService:
         if not refs_valid:
             raise ValueError("transaction metadata references must belong to book")
 
-    async def _ensure_unlocked(self, account_ids: set[int], occurred_date) -> None:
+    async def _ensure_unlocked(self, account_ids: set[int], occurred_date: date) -> None:
         locked = await self._repository.get_locked_account_ids(account_ids, occurred_date)
         if locked:
             details = ", ".join(

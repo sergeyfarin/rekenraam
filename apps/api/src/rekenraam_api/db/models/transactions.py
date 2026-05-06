@@ -1,6 +1,17 @@
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -11,6 +22,8 @@ class Transaction(Base):
     __table_args__ = (
         Index("ix_transactions_book_occurred_date", "book_id", "occurred_date"),
         Index("ix_transactions_previous_tx_id", "previous_tx_id"),
+        Index("ix_transactions_import_id", "import_id"),
+        Index("ix_transactions_import_session_id", "import_session_id"),
         UniqueConstraint("previous_tx_id", name="uq_transactions_previous_tx_id"),
         CheckConstraint(
             "status IN ('uncleared', 'cleared', 'reconciled', 'void')",

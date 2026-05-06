@@ -1,12 +1,12 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
-from rekenraam_api.db.models.report_state import BookState, ReportCache
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.metadata import Category, Payee
+from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
+from rekenraam_api.db.models.report_state import BookState, ReportCache
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.services.request_context import get_request_context
 
@@ -236,7 +236,7 @@ class ReportRepository:
         pricing_policy_id: int | None,
         pricing_policy_version: str | None,
         valuation_snapshot_id: int | None,
-        pricing_resolved_at,
+        pricing_resolved_at: datetime | None,
         result_json: str,
     ) -> ReportRun:
         row = ReportRun(
@@ -261,8 +261,8 @@ class ReportRepository:
         self,
         *,
         book_id: int,
-        date_from,
-        date_to,
+        date_from: date | None,
+        date_to: date | None,
         group_by: str,
     ) -> list[tuple[str, int, int, int]]:
         if group_by == "year":
@@ -295,14 +295,14 @@ class ReportRepository:
             statement = statement.where(Transaction.occurred_date <= date_to)
 
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def report_net_worth(
         self,
         *,
         book_id: int,
-        date_from,
-        date_to,
+        date_from: date | None,
+        date_to: date | None,
         group_by: str,
     ) -> list[tuple[str, int, int, int]]:
         period_expr = self._period_expr(group_by)
@@ -327,15 +327,15 @@ class ReportRepository:
         if date_to is not None:
             statement = statement.where(Transaction.occurred_date <= date_to)
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def report_account_trends(
         self,
         *,
         book_id: int,
         account_ids: tuple[int, ...] | None,
-        date_from,
-        date_to,
+        date_from: date | None,
+        date_to: date | None,
         group_by: str,
     ) -> list[tuple[str, int, str, int]]:
         period_expr = self._period_expr(group_by)
@@ -359,14 +359,14 @@ class ReportRepository:
         if date_to is not None:
             statement = statement.where(Transaction.occurred_date <= date_to)
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def report_category_spend(
         self,
         *,
         book_id: int,
-        date_from,
-        date_to,
+        date_from: date | None,
+        date_to: date | None,
         category_ids: tuple[int, ...] | None,
     ) -> list[tuple[int, str, int]]:
         statement: Select[tuple[int, str, int]] = (
@@ -391,14 +391,14 @@ class ReportRepository:
             statement = statement.where(Category.id.in_(category_ids))
 
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def report_payee_totals(
         self,
         *,
         book_id: int,
-        date_from,
-        date_to,
+        date_from: date | None,
+        date_to: date | None,
         payee_ids: tuple[int, ...] | None,
     ) -> list[tuple[int, str, int]]:
         statement: Select[tuple[int, str, int]] = (
@@ -422,7 +422,7 @@ class ReportRepository:
             statement = statement.where(Payee.id.in_(payee_ids))
 
         result = await self._session.execute(statement)
-        return list(result.all())
+        return list(result.tuples().all())
 
     @staticmethod
     def _period_expr(group_by: str):

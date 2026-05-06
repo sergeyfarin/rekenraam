@@ -22,7 +22,7 @@ class TransactionListFilters(BaseModel):
     cursor: str | None = None
 
     @model_validator(mode="after")
-    def validate_date_range(self) -> "TransactionListFilters":
+    def validate_date_range(self) -> TransactionListFilters:
         if (
             self.occurred_from is not None
             and self.occurred_to is not None
