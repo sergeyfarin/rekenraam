@@ -1,6 +1,6 @@
 # Rekenraam Self-Hosted Migration Plan
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Summary
 
@@ -11,8 +11,8 @@ self-hosted personal finance web app:
 - PostgreSQL database
 - SvelteKit frontend
 - Docker-based development and deployment
-- trusted plugin extension points
-- themeable frontend
+- architecture that can grow trusted plugin extension points after b1
+- persisted theme preference kept as a future theming foothold
 
 Milestones 1-7 are complete as baseline web slices. That means the core
 self-hosted architecture, auth/request context, accounting writes,
@@ -79,9 +79,9 @@ Still transitional:
 - Tauri dependencies remain until the final deletion gate is met
 - milestones 1-7 are baseline complete but still need broader v1 hardening,
   fixtures, and UX depth
-- multi-currency transfers, plugins, themes, attachment/document uploads,
-  backup/restore documentation, and final CI/deployment gates remain to be
-  completed
+- multi-currency transfers, attachment/document uploads, backup/restore
+  documentation, final CI/deployment gates, and post-b1 plugin/theme
+  architecture remain to be completed or consciously deferred
 
 ## Architecture Defaults
 
@@ -371,49 +371,59 @@ Exit criteria:
 - repeated data-entry, review, and administration workflows are efficient and
   auditable for a self-hosted household or small trusted group
 
-## Milestone 10: Plugins And Themes
+## Milestone 10: Post-B1 Plugin And Theme Architecture
 
-Goal: make extension points explicit without allowing arbitrary remote code
-execution.
+Goal: keep b1/v1 unblocked by plugin/theme implementation while preserving an
+additive path for trusted extensions after b1.
 
-Plugin model:
+Compatibility guardrails for b1:
 
-- trusted server-installed plugins only for v1
-- install through Docker image layers or mounted volumes
-- backend plugin manifests declare extension points
-- frontend receives a constrained plugin manifest from the backend
+- core behavior stays behind typed `/api/v1` APIs
+- backend logic remains separated across routes, services, and repositories
+- frontend routes continue using `src/lib/api` rather than direct backend
+  assumptions
+- user preferences keep the existing `theme` string so built-in themes can
+  arrive later without breaking preference data
 
-Backend extension points:
+Future plugin candidates:
 
 - import providers
 - report providers
 - pricing providers
 - transaction enrichment rules
+- static plugin assets
+- Docker image layer or mounted-volume installation for trusted local plugins
 
-Frontend extension points:
+Future frontend candidates:
 
-- navigation item
-- settings panel
-- report panel
-- static assets owned by installed plugins
+- manifest-driven navigation items
+- manifest-driven settings panels
+- manifest-driven report panels
+- constrained plugin asset references served by the backend
 
-Theme model:
+Future runtime/security questions:
+
+- evaluate Extism/WASM for server-side plugins and any limited
+  frontend-compatible execution after b1
+- design granular permission manifests before executing plugin code
+- consider GitHub-sourced manifests or plugin bundles only after local trusted
+  installation and permission review are designed
+- do not allow arbitrary downloaded plugin execution in b1/v1
+
+Future theme candidates:
 
 - built-in CSS token packs in the frontend
-- custom theme manifests later through admin-managed files or mounted volumes
-- theme selection persisted per user
+- custom theme manifests through admin-managed files or mounted volumes
+- deterministic token fallback
+- existing per-user theme preference remains the stable selection field
 
-Public API targets:
+Public API reservation:
 
-- `/api/v1/plugins/*`
-- `/api/v1/themes/*`
-
-Exit criteria:
-
-- plugin manifests validate
-- disabled or failing plugins do not break core startup
-- frontend renders only allowed plugin slots
-- theme token fallback is deterministic
+- no `/api/v1/plugins/*` or `/api/v1/themes/*` endpoints in b1
+- reserve `/api/v1/plugins/*` and `/api/v1/themes/*` as future additive
+  namespaces only
+- do not introduce plugin tables, theme tables, manifest schemas, permission
+  models, Extism/WASM dependencies, or no-op registries before b1
 
 ## Milestone 11: Operational Self-Hosting
 
@@ -497,12 +507,11 @@ Docker:
 - Compose health smoke for Postgres, API, frontend, migrations, and documented
   backup/restore commands
 
-Plugin/theme:
+Post-b1 plugin/theme:
 
-- manifest validation
-- disabled-plugin behavior
-- failed-plugin isolation
-- theme token fallback
+- docs consistency scan confirms plugins/themes are not b1/v1 release gates
+- future implementation must add manifest validation, disabled/failed-plugin
+  isolation, permission checks, and theme token fallback before execution
 
 Docs:
 
@@ -543,11 +552,14 @@ Planned or widened slices:
 - `/api/v1/preferences/*`
 - `/api/v1/notes/*`
 - `/api/v1/documents/*`
-- `/api/v1/plugins/*`
-- `/api/v1/themes/*`
 - wider `/api/v1/reports/*`
 - wider `/api/v1/investments/*`
 - wider `/api/v1/pricing/*`
+
+Future additive reservations:
+
+- `/api/v1/plugins/*`
+- `/api/v1/themes/*`
 
 Every request and response shape should be represented by typed Pydantic models.
 
@@ -557,8 +569,12 @@ Every request and response shape should be represented by typed Pydantic models.
 - small-business features are deferred but not blocked architecturally.
 - milestones 1-6 are baseline complete, not final v1 feature-complete.
 - SQLite desktop import remains deferred after v1.
-- plugins are trusted and server-installed in v1.
-- themes are token packs, not arbitrary frontend code.
+- b1 is the first beta/release-readiness milestone before a fuller post-b1
+  extension system.
+- plugins, plugin execution, granular permissions, GitHub-sourced manifests,
+  and Extism/WASM evaluation are deferred until after b1/v1.
+- built-in theme implementation is not required for b1; the existing persisted
+  `theme` preference is the compatibility foothold.
 - notes/documents are useful v1 candidates but should not delay core release
   gates.
 - Tauri code is deleted only after the final deletion gate.

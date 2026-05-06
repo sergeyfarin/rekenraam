@@ -1,6 +1,6 @@
 # Desktop To Python Parity Matrix
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 Status values:
 
@@ -37,7 +37,7 @@ slices move, each row can be expanded into per-command or per-use-case entries.
 | budgets | no strong desktop equivalent | `apps/api/src/rekenraam_api/services/planning.py`, planning models/repository | `/api/v1/budgets*` | baseline complete | Monthly/annual budgets, category targets, rollover calculation, and planned-vs-actual reporting are Python-backed. Remaining work is UX polish, broader validation, and fixture coverage. |
 | scheduled transactions and planning | desktop recurrence/planning references | `apps/api/src/rekenraam_api/services/planning.py`, planning models/repository | `/api/v1/schedules*` | baseline complete | Recurrence, reminders, projected instances, skip/post flows, and projected cash balance from scheduled transactions are Python-backed. Remaining work is richer recurrence edge cases and editing future occurrences. |
 | loans and liabilities | account/transaction primitives | `apps/api/src/rekenraam_api/services/planning.py`, planning models/repository | `/api/v1/loans*` | baseline complete | Fixed-rate monthly loans/mortgages, amortization schedules, and loan-payment assistant are Python-backed. Remaining work is richer liability validation and advanced loan scenarios. |
-| plugins and themes | none | planned plugin/theme services | planned `/api/v1/plugins*`, `/api/v1/themes*` | not started | V1 uses trusted server-installed plugin manifests and built-in frontend theme token packs with persisted selection. |
+| plugins and themes | none | future plugin/theme architecture | reserved future `/api/v1/plugins*`, `/api/v1/themes*` | deferred | Post-b1 work may add trusted server-installed plugins, granular permissions, GitHub-sourced manifests, Extism/WASM evaluation, frontend manifest slots, and theme token packs. B1 keeps only compatibility guardrails and the persisted `theme` preference. |
 | backup and restore settings | `src-tauri/src/db_storage.rs`, `src-tauri/migrations/V1__init.sql` | server admin docs and operational smoke checks | admin/status endpoints plus docs | in progress | Legacy `backup_settings` is replaced by Postgres-native backup/restore docs, `pg_dump`/`pg_restore`, volume snapshots, and operational status views. |
 | desktop runtime session state | `src-tauri/src/db.rs`, `src-tauri/src/session.rs` | FastAPI request context, auth sessions, and devices | `/api/v1/auth/*` | dropped | `app_runtime_session` is a desktop-process marker and is intentionally not ported as a PostgreSQL table. Web session/device/request context replaces it. |
 | undo/redo | `src-tauri/src/session.rs` | future server-side mutation history or conscious removal | none yet | dropped | `session_undo_stack`, `session_redo_stack`, and `session_reverts` are intentionally not direct table ports. Undo/redo can return only with a server-safe design. |
@@ -63,6 +63,9 @@ slices move, each row can be expanded into per-command or per-use-case entries.
 | PDF statement parsing | deferred | post-v1 import enrichment |
 | attachments OCR | deferred | post-v1 document processing |
 | PSD2/open banking and online bank connectivity | deferred | post-v1 connectivity |
+| trusted plugin execution and frontend plugin slots | deferred | post-b1 extension architecture |
+| theme token packs beyond persisted preference | deferred | post-b1 theming architecture |
+| granular plugin permissions, GitHub-sourced manifests, and Extism/WASM evaluation | deferred | post-b1 plugin runtime design |
 | remote plugin marketplace or arbitrary downloaded plugin execution | deferred | post-v1 plugin distribution, if ever |
 | encrypted-at-rest database packaging | deferred | post-v1 deployment/security packaging |
 | country-specific tax filing exports | deferred | post-v1 tax localization |
@@ -75,9 +78,8 @@ slices move, each row can be expanded into per-command or per-use-case entries.
 | budgets and scheduled transactions | expected personal finance breadth and release gate |
 | loans, mortgages, and amortization | needed for liability workflows beyond basic accounts |
 | search, saved views, and transaction templates | daily-use ergonomics and data-entry speed |
-| per-user preferences | required for self-hosted multi-user comfort and theme persistence |
+| per-user preferences | required for self-hosted multi-user comfort; the persisted `theme` field also preserves a later theming path |
 | user administration and book role management | required beyond first-admin bootstrap |
-| plugin/theme manifests | v1 extension and theming model |
 | backup/restore smoke checks | production self-hosting confidence |
 
 ## current_* View Direction

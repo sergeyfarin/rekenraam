@@ -36,10 +36,16 @@ Still in migration:
 - explicit multi-currency transfer workflows
 - broader reports, tax, investment, pricing, and valuation depth
 - attachment/document uploads and email-based invites/password reset
-- plugin and theme systems
 - production deployment guidance, backup/restore smoke checks, and final CI
   gates
 - final Tauri dependency and `src-tauri/` deletion
+
+Deferred after b1/v1:
+
+- plugin execution, frontend plugin slots, granular permissions,
+  GitHub-sourced manifests, and Extism/WASM evaluation
+- built-in/custom theme token packs beyond the existing persisted `theme`
+  preference
 
 ## Run The Self-Hosted Stack
 

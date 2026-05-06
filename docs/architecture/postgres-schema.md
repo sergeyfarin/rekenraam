@@ -1,6 +1,6 @@
 # PostgreSQL Schema Direction
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Source Of Truth
 
@@ -57,9 +57,14 @@ Planned schema families:
 
 - uploaded documents and attachment metadata
 - events, if they remain distinct from audit events and notes
-- plugin manifests/status
-- theme manifests/preferences
 - operational backup metadata only where useful for server administration
+
+Future reserved schema families:
+
+- plugin manifests/status, permission grants, and runtime state only after the
+  post-b1 plugin design is settled
+- theme manifests only after token-pack theming is implemented; the existing
+  user preference `theme` string remains the b1 compatibility foothold
 
 ## Desktop Concepts To Replace Or Drop
 

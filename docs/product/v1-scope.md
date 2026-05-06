@@ -1,6 +1,6 @@
 # Rekenraam V1 Product Scope
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Product Target
 
@@ -48,11 +48,6 @@ Small-business support is an architectural future option, not a v1 release gate.
   balances
 - basic tax summaries for capital gains and dividends with configurable
   category tax codes
-- trusted server-installed plugin manifests for importers, reports, pricing
-  providers, and transaction enrichment rules
-- frontend plugin manifest slots for navigation, settings panels, and report
-  panels
-- built-in theme token packs and persisted per-user theme selection
 - per-user preferences for default book, date format, number format, locale,
   and theme
 - admin operational status views for database health, integrity checks,
@@ -85,6 +80,13 @@ Small-business support is an architectural future option, not a v1 release gate.
 - attachments OCR
 - advanced forecasting / projected cashflow using machine learning
 - PSD2/open banking and online bank connectivity
+- trusted plugin execution for importers, reports, pricing providers, and
+  transaction enrichment rules
+- frontend plugin manifest slots for navigation, settings panels, and report
+  panels
+- built-in/custom theme token packs beyond the persisted `theme` preference
+- granular plugin permissions, Extism/WASM evaluation, and GitHub-sourced
+  plugin manifests or bundles
 - remote plugin marketplace or arbitrary downloaded plugin execution
 - encrypted-at-rest database packaging
 - full country-specific tax filing exports
@@ -99,9 +101,23 @@ V1 can release when:
 - self-hosted Docker deployment works from fresh setup instructions
 - authenticated users can safely manage at least one personal book
 - core account, register, transaction, reconciliation, import/export, report,
-  budget, schedule, loan/liability, investment, pricing, plugin, theme,
-  preference, and administration workflows are usable without Tauri
+  budget, schedule, loan/liability, investment, pricing, preference, and
+  administration workflows are usable without Tauri
 - backups and restores are documented and smoke-tested
 - frontend no longer needs Tauri runtime APIs
 - deployment, frontend, and core workflows no longer depend on Tauri runtime or
   build artifacts
+
+## Post-B1 Compatibility Guardrails
+
+Plugin and theme implementation is deferred after b1/v1, but b1 should avoid
+blocking later extension work:
+
+- core behavior remains behind typed `/api/v1` APIs
+- backend behavior stays separated across routes, services, and repositories
+- frontend data access continues through `src/lib/api`
+- the existing persisted `theme` preference remains stable for later built-in
+  theme token packs
+- `/api/v1/plugins/*` and `/api/v1/themes/*` are reserved as future additive
+  namespaces only; no placeholder endpoints, plugin/theme tables, manifest
+  schemas, permission models, or plugin runtimes are required for b1
