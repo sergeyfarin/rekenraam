@@ -92,6 +92,7 @@ async def test_bootstrap_login_logout_and_protected_routes(client: AsyncClient) 
     )
     assert good_login.status_code == 200
     assert good_login.json()["user"]["display_name"] == "Admin"
+    assert good_login.json()["mfa_required"] is False
 
 
 @pytest.mark.asyncio

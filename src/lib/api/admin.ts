@@ -4,6 +4,8 @@ export type AdminRuntimeStatus = {
   database_kind: string;
   database_name: string;
   database_host: string | null;
+  database_user: string | null;
+  postgres_version: string | null;
   display_path: string;
   size_bytes: number | null;
   writable: boolean;
@@ -11,7 +13,19 @@ export type AdminRuntimeStatus = {
   current_version: string | null;
   latest_version: string;
   pending_versions: string[];
+  pending_migration_count: number;
+  health_status: string;
+  backup_status: string;
+  backup_guidance: string;
+  last_integrity_status: string | null;
+  last_integrity_checked_at: string | null;
   note: string;
+};
+
+export type IntegrityCheck = {
+  status: string;
+  checked_at: string | null;
+  checks: { name: string; status: string; detail: string }[];
 };
 
 export type FiscalYearCloseResponse = {
@@ -29,9 +43,8 @@ export async function getAdminRuntimeStatus(): Promise<AdminRuntimeStatus> {
   return apiGet<AdminRuntimeStatus>("/admin/runtime");
 }
 
-export async function dbIntegrityCheck(): Promise<string> {
-  const response = await apiPost<{ status: string }, Record<string, never>>("/admin/integrity-check", {});
-  return response.status;
+export async function dbIntegrityCheck(): Promise<IntegrityCheck> {
+  return apiPost<IntegrityCheck, Record<string, never>>("/admin/integrity-check", {});
 }
 
 export type BookMembership = {
@@ -47,6 +60,7 @@ export type AdminUser = {
   display_name: string;
   is_admin: boolean;
   is_active: boolean;
+  mfa_required: boolean;
   created_at: string;
   updated_at: string;
   memberships: BookMembership[];
@@ -82,8 +96,13 @@ export async function updateAdminUser(userId: number, input: {
   display_name?: string;
   is_admin?: boolean;
   is_active?: boolean;
+  mfa_required?: boolean;
 }): Promise<AdminUser> {
   return apiPut<AdminUser, typeof input>(`/admin/users/${userId}`, input);
+}
+
+export async function resetAdminUserMfa(userId: number): Promise<void> {
+  return apiDelete<void>(`/admin/users/${userId}/mfa`);
 }
 
 export async function resetAdminUserPassword(userId: number, password: string): Promise<AdminUser> {

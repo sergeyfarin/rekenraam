@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import (
     get_admin_service,
+    get_auth_service,
     get_ergonomics_service,
     require_admin_user,
+    require_request_context,
 )
 from rekenraam_api.schemas.admin import (
     AdminRuntimeStatusSummary,
@@ -20,7 +22,9 @@ from rekenraam_api.schemas.ergonomics import (
     BookMembershipInput,
 )
 from rekenraam_api.services.admin import AdminService
+from rekenraam_api.services.auth import AuthService
 from rekenraam_api.services.ergonomics import ErgonomicsService
+from rekenraam_api.services.request_context import RequestContext
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin_user)])
 
@@ -36,8 +40,7 @@ async def get_runtime_status(
 async def run_integrity_check(
     admin_service: AdminService = Depends(get_admin_service),
 ) -> IntegrityCheckSummary:
-    status_text = await admin_service.run_integrity_check()
-    return IntegrityCheckSummary(status=status_text)
+    return await admin_service.run_integrity_check()
 
 
 @router.post("/fiscal-year-close", response_model=FiscalYearCloseResult)
@@ -116,6 +119,15 @@ async def revoke_user_sessions(
         return await ergonomics_service.revoke_user_sessions(user_id)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.delete("/users/{user_id}/mfa", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_user_mfa(
+    user_id: int,
+    context: RequestContext = Depends(require_request_context),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> None:
+    await auth_service.admin_reset_mfa(admin_context=context, user_id=user_id)
 
 
 @router.put("/users/{user_id}/memberships", response_model=AdminUserSummary)

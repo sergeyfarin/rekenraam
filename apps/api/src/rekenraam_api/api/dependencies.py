@@ -49,7 +49,7 @@ def get_access_repository(session: AsyncSession = Depends(get_db_session)) -> Ac
 
 
 def get_auth_service(repository: AccessRepository = Depends(get_access_repository)) -> AuthService:
-    return AuthService(repository)
+    return AuthService(repository, get_settings())
 
 
 async def require_request_context(

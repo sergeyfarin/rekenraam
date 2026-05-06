@@ -4,7 +4,7 @@ CONTAINER_RUNTIME ?= docker
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up
+.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up prod-config-check backup-now backup-smoke restore-smoke
 
 api-check:
 	cd $(API_DIR) && python -m py_compile $$(find src -name '*.py')
@@ -74,6 +74,21 @@ web-up:
 
 web-dev-up:
 	$(DEV_DOCKER) up -d --build postgres api-dev frontend-dev
+
+prod-config-check:
+	$(DOCKER) -f compose.yaml -f compose.prod.example.yaml config >/dev/null
+
+backup-now:
+	$(DOCKER) -f compose.yaml -f compose.prod.example.yaml --profile backup run --rm backup
+
+backup-smoke:
+	@mkdir -p backups
+	$(DOCKER) -f compose.yaml -f compose.prod.example.yaml --profile backup run --rm -e BACKUP_RETENTION_DAYS=0 backup
+	@test -n "$$(ls -t backups/rekenraam-*.dump 2>/dev/null | head -n 1)"
+
+restore-smoke:
+	@test -n "$(BACKUP)" || (echo "Usage: make restore-smoke BACKUP=backups/rekenraam-YYYYmmdd-HHMMSS.dump" && exit 1)
+	DOCKER='$(DOCKER)' BACKUP='$(BACKUP)' ./scripts/restore_smoke.sh
 
 api-migrate-new:
 	@test -n "$(NAME)" || (echo "Usage: make api-migrate-new NAME=create_users" && exit 1)

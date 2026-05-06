@@ -3,6 +3,7 @@
     dbIntegrityCheck,
     getAdminRuntimeStatus,
     type AdminRuntimeStatus,
+    type IntegrityCheck,
   } from "$lib/api/admin";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
@@ -12,7 +13,7 @@
 
   let error = "";
   let runtimeStatus: AdminRuntimeStatus | null = null;
-  let integrityStatus = "";
+  let integrityStatus: IntegrityCheck | null = null;
   let maintenanceStatus = "";
   let maintenanceError = "";
 
@@ -44,11 +45,11 @@
   async function runIntegrityCheck() {
     maintenanceError = "";
     maintenanceStatus = "";
-    integrityStatus = "";
+    integrityStatus = null;
     busy = true;
     try {
       integrityStatus = await dbIntegrityCheck();
-      maintenanceStatus = integrityStatus === "ok" ? "Integrity check passed." : "Integrity check reported issues.";
+      maintenanceStatus = integrityStatus.status === "ok" ? "Integrity check passed." : "Integrity check reported issues.";
     } catch (e) {
       maintenanceError = `Integrity check failed: ${String(e)}`;
     } finally {
@@ -153,7 +154,19 @@
         <p class="text-sm text-muted-foreground">Host</p>
         <p>{runtimeStatus?.database_host || "—"}</p>
       </div>
+      <div>
+        <p class="text-sm text-muted-foreground">Health</p>
+        <p>{runtimeStatus?.health_status || "—"}</p>
+      </div>
+      <div>
+        <p class="text-sm text-muted-foreground">Backup</p>
+        <p>{runtimeStatus?.backup_status || "—"}</p>
+      </div>
     </div>
+    {#if runtimeStatus}
+      <p class="mt-4 text-sm text-muted-foreground">{runtimeStatus.backup_guidance}</p>
+      <p class="mt-1 text-xs text-muted-foreground">PostgreSQL: {runtimeStatus.postgres_version ?? "—"}</p>
+    {/if}
 
     <div class="flex flex-wrap gap-2 mt-4">
       <Button variant="secondary" onclick={refreshMaintenance} disabled={busy}>
@@ -165,7 +178,12 @@
     </div>
 
     {#if integrityStatus}
-      <p class="text-sm text-muted-foreground mt-4">Integrity status: {integrityStatus}</p>
+      <p class="text-sm text-muted-foreground mt-4">Integrity status: {integrityStatus.status}</p>
+      <ul class="mt-2 space-y-1 text-sm text-muted-foreground">
+        {#each integrityStatus.checks as check}
+          <li>{check.name}: {check.status} — {check.detail}</li>
+        {/each}
+      </ul>
     {/if}
     {#if maintenanceStatus}
       <p class="text-sm text-status-success mt-4">{maintenanceStatus}</p>

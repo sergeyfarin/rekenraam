@@ -3,6 +3,7 @@
   import {
     createAdminUser,
     listAdminUsers,
+    resetAdminUserMfa,
     resetAdminUserPassword,
     revokeAdminUserSessions,
     setAdminUserMembership,
@@ -75,6 +76,11 @@
     await load();
   }
 
+  async function toggleMfaRequired(user: AdminUser) {
+    await updateAdminUser(user.id, { mfa_required: !user.mfa_required });
+    await load();
+  }
+
   async function resetPassword(user: AdminUser) {
     const password = window.prompt(`New temporary password for ${user.email}`);
     if (!password) return;
@@ -86,6 +92,12 @@
   async function revokeSessions(user: AdminUser) {
     const count = await revokeAdminUserSessions(user.id);
     status = `Revoked ${count} session${count === 1 ? "" : "s"}.`;
+  }
+
+  async function resetMfa(user: AdminUser) {
+    await resetAdminUserMfa(user.id);
+    status = `MFA reset for ${user.email}.`;
+    await load();
   }
 
   async function setRole(user: AdminUser, bookId: number, role: "owner" | "editor" | "viewer") {
@@ -151,7 +163,7 @@
                 <div class="font-medium">{user.display_name}</div>
                 <div class="text-xs text-muted-foreground">{user.email}</div>
               </td>
-              <td>{user.is_active ? "active" : "deactivated"}{user.is_admin ? " · admin" : ""}</td>
+              <td>{user.is_active ? "active" : "deactivated"}{user.is_admin ? " · admin" : ""}{user.mfa_required ? " · MFA required" : ""}</td>
               <td>
                 {#each books as book}
                   <select
@@ -167,8 +179,10 @@
               </td>
               <td class="text-right">
                 <Button variant="ghost" size="sm" onclick={() => toggleAdmin(user)}>{user.is_admin ? "Remove admin" : "Make admin"}</Button>
+                <Button variant="ghost" size="sm" onclick={() => toggleMfaRequired(user)}>{user.mfa_required ? "MFA optional" : "Require MFA"}</Button>
                 <Button variant="ghost" size="sm" onclick={() => toggleActive(user)}>{user.is_active ? "Deactivate" : "Reactivate"}</Button>
                 <Button variant="ghost" size="sm" onclick={() => resetPassword(user)}>Password</Button>
+                <Button variant="ghost" size="sm" onclick={() => resetMfa(user)}>Reset MFA</Button>
                 <Button variant="ghost" size="sm" onclick={() => revokeSessions(user)}>Revoke sessions</Button>
               </td>
             </tr>

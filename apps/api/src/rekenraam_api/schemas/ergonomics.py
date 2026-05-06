@@ -26,6 +26,7 @@ class AdminUserSummary(BaseModel):
     display_name: str
     is_admin: bool
     is_active: bool
+    mfa_required: bool
     created_at: datetime
     updated_at: datetime
     memberships: tuple[BookMembershipSummary, ...]
@@ -47,6 +48,7 @@ class AdminUserUpdateInput(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     is_admin: bool | None = None
     is_active: bool | None = None
+    mfa_required: bool | None = None
 
 
 class AdminPasswordResetInput(BaseModel):

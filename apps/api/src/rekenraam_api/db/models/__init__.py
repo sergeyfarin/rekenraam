@@ -1,4 +1,12 @@
-from rekenraam_api.db.models.access import AuthSession, BookMembership, User, UserDevice
+from rekenraam_api.db.models.access import (
+    AuthSession,
+    BookMembership,
+    MfaChallenge,
+    MfaRecoveryCode,
+    User,
+    UserDevice,
+    UserMfaTotp,
+)
 from rekenraam_api.db.models.accounts import (
     Account,
     AccountBalancing,
@@ -83,6 +91,8 @@ __all__ = [
     "LoanTerm",
     "Lot",
     "MarkdownNote",
+    "MfaChallenge",
+    "MfaRecoveryCode",
     "Payee",
     "PayeeDefault",
     "Person",
@@ -109,5 +119,6 @@ __all__ = [
     "TransactionTemplateSplit",
     "User",
     "UserDevice",
+    "UserMfaTotp",
     "UserPreference",
 ]

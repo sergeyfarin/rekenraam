@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from pathlib import Path
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,10 +18,12 @@ from rekenraam_api.schemas.admin import (
     AdminRuntimeStatusSummary,
     FiscalYearCloseInput,
     FiscalYearCloseResult,
+    IntegrityCheckSummary,
+    RuntimeCheckSummary,
 )
 from rekenraam_api.services.report_invalidation import bump_report_state
 
-LATEST_MIGRATION_VERSION = "0001_initial_schema"
+API_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True)
@@ -36,41 +41,140 @@ class AdminService:
 
     async def get_runtime_status(self) -> AdminRuntimeStatusSummary:
         database_name = await self._session.scalar(select(func.current_database()))
+        database_user = await self._session.scalar(select(func.current_user()))
+        postgres_version = await self._session.scalar(select(func.version()))
         size_bytes = await self._session.scalar(select(func.pg_database_size(func.current_database())))
 
-        current_version: str | None = None
-        try:
-            current_version = await self._session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1"))
-        except Exception:
-            current_version = None
-
-        pending_versions: tuple[str, ...]
-        if current_version in {None, LATEST_MIGRATION_VERSION}:
-            pending_versions = ()
-        else:
-            pending_versions = (LATEST_MIGRATION_VERSION,)
+        current_version = await self._current_migration_version()
+        latest_version = self._latest_migration_version()
+        pending_versions: tuple[str, ...] = () if current_version == latest_version else (latest_version,)
+        writable = await self._probe_writable()
 
         display_path = f"{self._settings.postgres_host}:{self._settings.postgres_port}/{database_name or self._settings.postgres_db}"
         return AdminRuntimeStatusSummary(
             database_kind="postgresql",
             database_name=database_name or self._settings.postgres_db,
             database_host=self._settings.postgres_host,
+            database_user=database_user,
+            postgres_version=postgres_version,
             display_path=display_path,
             size_bytes=size_bytes,
-            writable=True,
+            writable=writable,
             foreign_keys=True,
             current_version=current_version,
-            latest_version=LATEST_MIGRATION_VERSION,
+            latest_version=latest_version,
             pending_versions=pending_versions,
+            pending_migration_count=len(pending_versions),
+            health_status="ok" if writable and not pending_versions else "warning",
             note=(
                 "The web runtime uses a server-managed PostgreSQL database. Desktop file pickers,"
                 " path switching, and local backup folder selection do not apply in this deployment."
             ),
         )
 
-    async def run_integrity_check(self) -> str:
+    async def run_integrity_check(self) -> IntegrityCheckSummary:
+        checks: list[RuntimeCheckSummary] = []
         await self._session.execute(text("SELECT 1"))
-        return "ok"
+        checks.append(RuntimeCheckSummary(name="database_connectivity", status="ok", detail="Database responded."))
+
+        current_version = await self._current_migration_version()
+        latest_version = self._latest_migration_version()
+        checks.append(
+            RuntimeCheckSummary(
+                name="migrations",
+                status="ok" if current_version == latest_version else "warning",
+                detail=f"Current {current_version or 'none'}; latest {latest_version}.",
+            )
+        )
+
+        writable = await self._probe_writable()
+        checks.append(
+            RuntimeCheckSummary(
+                name="writable",
+                status="ok" if writable else "failed",
+                detail="Writable probe completed." if writable else "Writable probe failed.",
+            )
+        )
+        await self._add_count_check(
+            checks,
+            "double_entry_balance",
+            "SELECT count(*) FROM (SELECT tx_id FROM splits GROUP BY tx_id HAVING sum(amount_minor) <> 0) bad",
+            "All transactions balance to zero.",
+            "{count} transaction(s) have unbalanced splits.",
+        )
+        await self._add_count_check(
+            checks,
+            "orphan_splits",
+            """
+            SELECT count(*)
+            FROM splits s
+            LEFT JOIN transactions t ON t.id = s.tx_id
+            LEFT JOIN accounts a ON a.id = s.account_id
+            WHERE t.id IS NULL OR a.id IS NULL
+            """,
+            "No orphan split references found.",
+            "{count} orphan split reference(s) found.",
+        )
+        await self._add_count_check(
+            checks,
+            "auth_sessions",
+            """
+            SELECT count(*)
+            FROM auth_sessions s
+            LEFT JOIN users u ON u.id = s.user_id
+            WHERE u.id IS NULL
+            """,
+            "Auth sessions reference valid users.",
+            "{count} auth session(s) reference missing users.",
+        )
+        failed = any(check.status == "failed" for check in checks)
+        warning = any(check.status == "warning" for check in checks)
+        return IntegrityCheckSummary(
+            status="failed" if failed else "warning" if warning else "ok",
+            checked_at=datetime.now(UTC).isoformat(),
+            checks=tuple(checks),
+        )
+
+    async def _add_count_check(
+        self,
+        checks: list[RuntimeCheckSummary],
+        name: str,
+        sql: str,
+        ok_detail: str,
+        fail_detail: str,
+    ) -> None:
+        count = int((await self._session.scalar(text(sql))) or 0)
+        checks.append(
+            RuntimeCheckSummary(
+                name=name,
+                status="ok" if count == 0 else "failed",
+                detail=ok_detail if count == 0 else fail_detail.format(count=count),
+            )
+        )
+
+    async def _current_migration_version(self) -> str | None:
+        try:
+            return await self._session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1"))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _latest_migration_version() -> str:
+        config = Config(str(API_ROOT / "alembic.ini"))
+        config.set_main_option("script_location", str(API_ROOT / "alembic"))
+        return str(ScriptDirectory.from_config(config).get_current_head())
+
+    async def _probe_writable(self) -> bool:
+        try:
+            await self._session.execute(
+                text("CREATE TEMP TABLE IF NOT EXISTS rekenraam_writable_probe (id integer) ON COMMIT DROP")
+            )
+            await self._session.execute(text("INSERT INTO rekenraam_writable_probe (id) VALUES (1)"))
+            await self._session.execute(text("TRUNCATE rekenraam_writable_probe"))
+            return True
+        except Exception:
+            await self._session.rollback()
+            return False
 
     async def close_fiscal_year(self, input: FiscalYearCloseInput) -> FiscalYearCloseResult:
         today = date.today()

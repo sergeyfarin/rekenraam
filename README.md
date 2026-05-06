@@ -36,8 +36,7 @@ Still in migration:
 - explicit multi-currency transfer workflows
 - broader reports, tax, investment, pricing, and valuation depth
 - attachment/document uploads and email-based invites/password reset
-- production deployment guidance, backup/restore smoke checks, and final CI
-  gates
+- final CI hardening beyond the operational deployment and backup smoke path
 - final Tauri dependency and `src-tauri/` deletion
 
 Deferred after b1/v1:
@@ -178,9 +177,19 @@ operations such as `pg_dump`, `pg_restore`, and volume snapshots. Desktop-style
 database folder selection and file-picker storage management are not part of the
 target web product.
 
-The active migration plan includes a dedicated operational milestone for
-production Compose examples, backup jobs, restore smoke checks, and admin status
-views.
+Production self-hosting guidance lives in
+[`docs/deployment/self-hosting.md`](docs/deployment/self-hosting.md).
+
+Common operations:
+
+```bash
+make prod-config-check
+make backup-now
+make restore-smoke BACKUP=backups/rekenraam-YYYYmmdd-HHMMSS.dump
+```
+
+Public VPS deployments should serve Rekenraam over HTTPS, use file-backed
+secrets, keep PostgreSQL private to the Compose network, and enable MFA.
 
 ## Active Documents
 
@@ -190,6 +199,7 @@ views.
 | [docs/product/v1-scope.md](docs/product/v1-scope.md) | Personal-first v1 product scope |
 | [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) | PostgreSQL schema direction |
 | [docs/architecture/post-b1-extensibility.md](docs/architecture/post-b1-extensibility.md) | Future plugin and theme architecture guardrails |
+| [docs/deployment/self-hosting.md](docs/deployment/self-hosting.md) | VPS/home server deployment, backup, restore, and security guide |
 | [docs/parity/desktop-to-python.md](docs/parity/desktop-to-python.md) | Desktop-to-web parity matrix |
 
 ## Contribution Notes

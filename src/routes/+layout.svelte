@@ -7,6 +7,7 @@
   import { Input } from "$lib/components/ui/input";
   import * as Dialog from "$lib/components/ui/dialog";
   import {
+    completeMfaLogin,
     createFirstAdmin,
     getBootstrapStatus,
     getCurrentUser,
@@ -41,6 +42,8 @@
   let displayName = "";
   let email = "";
   let password = "";
+  let mfaCode = "";
+  let mfaChallengeToken = "";
 
   onMount(() => {
     void refreshAuth();
@@ -71,11 +74,37 @@
     try {
       authUser = bootstrapRequired
         ? await createFirstAdmin({ email, password, display_name: displayName })
-        : await login({ email, password });
+        : null;
+      if (!bootstrapRequired) {
+        const result = await login({ email, password });
+        if (result.mfa_required && result.challenge_token) {
+          mfaChallengeToken = result.challenge_token;
+          password = "";
+          return;
+        }
+        if (result.user && result.session) {
+          authUser = { user: result.user, session: result.session };
+        }
+      }
       bootstrapRequired = false;
       password = "";
     } catch (error) {
       authError = error instanceof Error ? error.message : "Authentication failed";
+    } finally {
+      authSubmitting = false;
+    }
+  }
+
+  async function submitMfa() {
+    authSubmitting = true;
+    authError = "";
+    try {
+      authUser = await completeMfaLogin({ challenge_token: mfaChallengeToken, code: mfaCode });
+      mfaChallengeToken = "";
+      mfaCode = "";
+      bootstrapRequired = false;
+    } catch (error) {
+      authError = error instanceof Error ? error.message : "MFA verification failed";
     } finally {
       authSubmitting = false;
     }
@@ -127,11 +156,14 @@
   </main>
 {:else if !authUser}
   <main class="grid min-h-screen place-items-center bg-background px-6">
-    <form class="w-full max-w-sm space-y-4" on:submit|preventDefault={submitAuth}>
+    <form class="w-full max-w-sm space-y-4" on:submit|preventDefault={mfaChallengeToken ? submitMfa : submitAuth}>
       <div class="space-y-1">
-        <h1 class="text-2xl font-semibold">{bootstrapRequired ? "Create Admin" : "Sign In"}</h1>
+        <h1 class="text-2xl font-semibold">{mfaChallengeToken ? "Two-factor code" : bootstrapRequired ? "Create Admin" : "Sign In"}</h1>
         <p class="text-sm text-muted-foreground">Rekenraam</p>
       </div>
+      {#if mfaChallengeToken}
+        <Input bind:value={mfaCode} placeholder="Authenticator or recovery code" autocomplete="one-time-code" required />
+      {:else}
       {#if bootstrapRequired}
         <Input bind:value={displayName} placeholder="Display name" autocomplete="name" required />
       {/if}
@@ -144,11 +176,12 @@
         required
         minlength={bootstrapRequired ? 12 : 1}
       />
+      {/if}
       {#if authError}
         <p class="text-sm text-destructive">{authError}</p>
       {/if}
       <Button type="submit" class="w-full" disabled={authSubmitting}>
-        {authSubmitting ? "Please wait" : bootstrapRequired ? "Create Admin" : "Sign In"}
+        {authSubmitting ? "Please wait" : mfaChallengeToken ? "Verify" : bootstrapRequired ? "Create Admin" : "Sign In"}
       </Button>
     </form>
   </main>

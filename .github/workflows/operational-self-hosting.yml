@@ -1,0 +1,74 @@
+name: Operational Self-Hosting
+
+on:
+  push:
+    paths:
+      - ".github/workflows/operational-self-hosting.yml"
+      - "apps/api/**"
+      - "src/**"
+      - "docker/**"
+      - "scripts/**"
+      - "compose.yaml"
+      - "compose.prod.example.yaml"
+      - "Dockerfile.frontend"
+      - "Makefile"
+      - "package*.json"
+  pull_request:
+    paths:
+      - ".github/workflows/operational-self-hosting.yml"
+      - "apps/api/**"
+      - "src/**"
+      - "docker/**"
+      - "scripts/**"
+      - "compose.yaml"
+      - "compose.prod.example.yaml"
+      - "Dockerfile.frontend"
+      - "Makefile"
+      - "package*.json"
+
+jobs:
+  deployment-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Frontend check and build
+        run: |
+          npm ci
+          npm run check
+          npm run build
+
+      - name: Prepare production secrets
+        run: |
+          mkdir -p secrets backups
+          printf 'ci-postgres-password\n' > secrets/postgres_password.txt
+          printf 'ci-first-admin-password\n' > secrets/first_admin_password.txt
+          cp .env.production.example .env
+          sed -i 's#https://finance.example.com#http://localhost:3000#' .env
+          sed -i 's#replace-with-a-long-random-string#ci-mfa-secret-key-ci-mfa-secret-key#' .env
+          sed -i 's#SESSION_COOKIE_SECURE=true#SESSION_COOKIE_SECURE=false#' .env
+
+      - name: Compose config
+        run: make prod-config-check
+
+      - name: Docker build and health
+        run: |
+          docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build postgres api frontend
+          for i in $(seq 1 60); do
+            curl --fail http://localhost:3000/api/v1/health && exit 0
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+
+      - name: Backup and restore smoke
+        run: |
+          make backup-smoke
+          latest="$(ls -t backups/rekenraam-*.dump | head -n 1)"
+          make restore-smoke BACKUP="$latest"

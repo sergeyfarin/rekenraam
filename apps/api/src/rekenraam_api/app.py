@@ -16,7 +16,7 @@ from rekenraam_api.workers.pricing import pricing_refresh_worker
 async def seed_first_admin_from_env() -> None:
 	settings = get_settings()
 	email = (settings.first_admin_email or "").strip()
-	password = settings.first_admin_password or ""
+	password = settings.resolved_first_admin_password or ""
 	if not email and not password:
 		return
 	if not email or not password:
@@ -25,7 +25,7 @@ async def seed_first_admin_from_env() -> None:
 		raise RuntimeError("FIRST_ADMIN_PASSWORD must be at least 12 characters")
 
 	async with session_factory() as session:
-		await AuthService(AccessRepository(session)).seed_first_admin(
+		await AuthService(AccessRepository(session), settings).seed_first_admin(
 			email=email,
 			password=password,
 			display_name=settings.first_admin_display_name,

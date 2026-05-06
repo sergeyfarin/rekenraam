@@ -492,20 +492,26 @@ Tasks:
 
 1. Keep `compose.yaml` as the primary deployment entrypoint.
 2. Add production Compose example with Postgres volume, API, frontend/reverse
-   proxy, backups, and environment docs.
+   proxy, backups, file-backed secrets, and environment docs for both VPS and
+   home/LAN installs.
 3. Replace desktop storage UI with server admin status: DB host/name/version,
-   migration status, writable check, health check, and integrity check.
+   migration status, writable check, health check, backup guidance, and
+   structured integrity check.
 4. Add backup/restore docs and commands using `pg_dump`, `pg_restore`, and
    volume snapshots.
 5. Smoke-test backup and restore docs.
 6. Add CI gates for API lint/typecheck/tests/migrations, frontend check/build,
    Docker build, and Compose health.
+7. Harden public VPS login with secure cookie settings, trusted proxy handling,
+   failed-login rate limiting, and optional/enforced TOTP MFA with recovery
+   codes.
 
 Exit criteria:
 
 - a fresh server can be deployed from documented Docker steps
 - backup and restore are documented and smoke-tested
 - CI covers the deployment-critical path
+- public VPS docs require HTTPS, secure cookies, private Postgres, and MFA
 
 ## Milestone 12: Final Tauri Deletion
 

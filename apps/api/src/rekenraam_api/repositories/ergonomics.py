@@ -60,6 +60,7 @@ class ErgonomicsRepository:
         display_name: str | None = None,
         is_admin: bool | None = None,
         is_active: bool | None = None,
+        mfa_required: bool | None = None,
         password_hash: str | None = None,
     ) -> User:
         if display_name is not None:
@@ -68,6 +69,8 @@ class ErgonomicsRepository:
             user.is_admin = is_admin
         if is_active is not None:
             user.is_active = is_active
+        if mfa_required is not None:
+            user.mfa_required = mfa_required
         if password_hash is not None:
             user.password_hash = password_hash
         user.updated_at = datetime.now(UTC)

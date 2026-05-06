@@ -111,6 +111,7 @@ class ErgonomicsService:
             display_name=input.display_name.strip() if input.display_name is not None else None,
             is_admin=input.is_admin,
             is_active=input.is_active,
+            mfa_required=input.mfa_required,
         )
         if input.is_active is False:
             await self._repository.revoke_user_sessions(user_id)
@@ -570,6 +571,7 @@ class ErgonomicsService:
             display_name=user.display_name,
             is_admin=user.is_admin,
             is_active=user.is_active,
+            mfa_required=user.mfa_required,
             created_at=user.created_at,
             updated_at=user.updated_at,
             memberships=tuple(

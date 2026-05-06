@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
     postgres_db: str = "rekenraam"
     postgres_user: str = "rekenraam"
     postgres_password: str = "change-me"
+    postgres_password_file: str | None = None
     postgres_host: str = "postgres"
     postgres_port: int = 5432
     cors_allowed_origins: str = (
@@ -22,18 +24,51 @@ class Settings(BaseSettings):
     pricing_scheduler_poll_seconds: int = 60
     first_admin_email: str | None = None
     first_admin_password: str | None = None
+    first_admin_password_file: str | None = None
     first_admin_display_name: str = "Admin"
+    session_cookie_secure: bool = False
+    session_cookie_samesite: str = "lax"
+    trusted_proxy_cidrs: str = ""
+    login_rate_limit_attempts: int = 8
+    login_rate_limit_window_seconds: int = 300
+    mfa_enforced: bool = False
+    mfa_secret_key: str = "dev-only-change-me"
+
+    @property
+    def resolved_postgres_password(self) -> str:
+        return self._resolve_secret("POSTGRES_PASSWORD", self.postgres_password, self.postgres_password_file)
+
+    @property
+    def resolved_first_admin_password(self) -> str | None:
+        if self.first_admin_password is None and self.first_admin_password_file is None:
+            return None
+        return self._resolve_secret(
+            "FIRST_ADMIN_PASSWORD", self.first_admin_password or "", self.first_admin_password_file
+        )
+
+    @staticmethod
+    def _resolve_secret(name: str, direct_value: str, file_path: str | None) -> str:
+        if not file_path:
+            return direct_value
+        file_value = Path(file_path).read_text(encoding="utf-8").strip()
+        if direct_value and direct_value not in {"change-me", "rekenraam"} and direct_value != file_value:
+            raise ValueError(f"{name} and {name}_FILE are both set with different values")
+        return file_value
 
     @property
     def database_url(self) -> str:
         return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+asyncpg://{self.postgres_user}:{self.resolved_postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
     @property
     def cors_allowed_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_proxy_cidrs_list(self) -> list[str]:
+        return [cidr.strip() for cidr in self.trusted_proxy_cidrs.split(",") if cidr.strip()]
 
 
 @lru_cache(maxsize=1)

@@ -54,8 +54,10 @@ Small-business support is an architectural future option, not a v1 release gate.
 - per-user preferences for default book, date format, number format, locale,
   and theme
 - admin operational status views for database health, integrity checks,
-  migration/schema version, and audit/import history
+  migration/schema version, backup guidance, and audit/import history
 - documented backup/restore with Postgres-native operations
+- public VPS hardening with HTTPS-oriented cookie settings, private Postgres,
+  failed-login throttling, and TOTP MFA support
 
 ## V1 Should Have
 
@@ -102,6 +104,8 @@ Small-business support is an architectural future option, not a v1 release gate.
 V1 can release when:
 
 - self-hosted Docker deployment works from fresh setup instructions
+- public deployments have documented HTTPS, secure-cookie, backup, and MFA
+  requirements
 - authenticated users can safely manage at least one personal book
 - core account, register, transaction, reconciliation, import/export, report,
   budget, schedule, loan/liability, investment, pricing, preference, and

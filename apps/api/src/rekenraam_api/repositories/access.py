@@ -2,11 +2,20 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rekenraam_api.db.models.access import AuthSession, BookMembership, User, UserDevice
+from rekenraam_api.db.models.access import (
+    AuthSession,
+    BookMembership,
+    MfaChallenge,
+    MfaRecoveryCode,
+    User,
+    UserDevice,
+    UserMfaTotp,
+)
 from rekenraam_api.db.models.books import Book
+from rekenraam_api.db.models.ergonomics import AuditEvent
 
 
 class AccessRepository:
@@ -77,6 +86,128 @@ class AccessRepository:
         self._session.add(session)
         await self._session.flush()
         return session
+
+    async def get_confirmed_totp(self, user_id: int) -> UserMfaTotp | None:
+        result = await self._session.execute(
+            select(UserMfaTotp).where(UserMfaTotp.user_id == user_id, UserMfaTotp.confirmed_at.is_not(None))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_totp(self, user_id: int) -> UserMfaTotp | None:
+        result = await self._session.execute(select(UserMfaTotp).where(UserMfaTotp.user_id == user_id))
+        return result.scalar_one_or_none()
+
+    async def upsert_totp_secret(self, *, user_id: int, secret_ciphertext: str, confirmed_at: datetime | None) -> UserMfaTotp:
+        row = await self.get_totp(user_id)
+        if row is None:
+            row = UserMfaTotp(user_id=user_id, secret_ciphertext=secret_ciphertext, confirmed_at=confirmed_at)
+            self._session.add(row)
+        else:
+            row.secret_ciphertext = secret_ciphertext
+            row.confirmed_at = confirmed_at
+            row.updated_at = datetime.now(UTC)
+        await self._session.flush()
+        return row
+
+    async def delete_mfa(self, user_id: int) -> None:
+        await self._session.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id))
+        await self._session.execute(delete(UserMfaTotp).where(UserMfaTotp.user_id == user_id))
+        await self._session.flush()
+
+    async def replace_recovery_codes(self, *, user_id: int, code_hashes: list[str]) -> None:
+        await self._session.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id))
+        for code_hash in code_hashes:
+            self._session.add(MfaRecoveryCode(user_id=user_id, code_hash=code_hash))
+        await self._session.flush()
+
+    async def consume_recovery_code(self, *, user_id: int, code_hash: str) -> bool:
+        result = await self._session.execute(
+            select(MfaRecoveryCode).where(
+                MfaRecoveryCode.user_id == user_id,
+                MfaRecoveryCode.code_hash == code_hash,
+                MfaRecoveryCode.used_at.is_(None),
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        row.used_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
+
+    async def count_unused_recovery_codes(self, user_id: int) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(MfaRecoveryCode).where(
+                MfaRecoveryCode.user_id == user_id,
+                MfaRecoveryCode.used_at.is_(None),
+            )
+        )
+        return int(result.scalar_one())
+
+    async def create_mfa_challenge(
+        self,
+        *,
+        user_id: int,
+        token_hash: str,
+        user_agent: str | None,
+        ip_address: str | None,
+        expires_at: datetime,
+    ) -> MfaChallenge:
+        row = MfaChallenge(
+            user_id=user_id,
+            token_hash=token_hash,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            expires_at=expires_at,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get_active_mfa_challenge(self, token_hash: str, now: datetime) -> MfaChallenge | None:
+        result = await self._session.execute(
+            select(MfaChallenge).where(
+                MfaChallenge.token_hash == token_hash,
+                MfaChallenge.used_at.is_(None),
+                MfaChallenge.expires_at > now,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def mark_mfa_challenge_used(self, challenge: MfaChallenge) -> None:
+        challenge.used_at = datetime.now(UTC)
+        await self._session.flush()
+
+    async def increment_mfa_challenge_attempts(self, challenge: MfaChallenge) -> None:
+        challenge.attempts += 1
+        await self._session.flush()
+
+    async def audit(
+        self,
+        *,
+        user_id: int | None,
+        session_id: int | None,
+        device_id: int | None,
+        event_type: str,
+        summary: str,
+        target_type: str | None = None,
+        target_id: int | None = None,
+    ) -> None:
+        self._session.add(
+            AuditEvent(
+                book_id=None,
+                actor_user_id=user_id,
+                actor_session_id=session_id,
+                actor_device_id=device_id,
+                actor_request_id=None,
+                event_type=event_type,
+                target_type=target_type,
+                target_id=target_id,
+                summary=summary,
+                metadata_json=None,
+            )
+        )
+        await self._session.flush()
 
     async def get_active_session_by_token_hash(self, token_hash: str, now: datetime) -> AuthSession | None:
         statement: Select[tuple[AuthSession]] = select(AuthSession).where(
