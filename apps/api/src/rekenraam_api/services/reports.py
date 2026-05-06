@@ -1,14 +1,19 @@
 from datetime import date
 import hashlib
 import json
+from typing import Protocol, Sequence
 
 from rekenraam_api.repositories.reports import ReportRepository
 from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.schemas.reports import (
     CashflowReportInput,
     CashflowRow,
+    AccountTrendReportInput,
+    AccountTrendRow,
     CategorySpendReportInput,
     CategorySpendRow,
+    NetWorthReportInput,
+    NetWorthRow,
     PayeeTotalsReportInput,
     PayeeTotalRow,
     ReportDefinitionCreateInput,
@@ -17,6 +22,11 @@ from rekenraam_api.schemas.reports import (
     ReportRunCreateInput,
     ReportRunSummary,
 )
+
+
+class CacheableReportRow(Protocol):
+    def model_dump(self, *, mode: str) -> dict[str, object]:
+        ...
 
 
 class ReportService:
@@ -135,6 +145,57 @@ class ReportService:
         await self._save_cached_rows("cashflow", input, mapped_rows)
         return mapped_rows
 
+    async def report_net_worth(self, input: NetWorthReportInput) -> list[NetWorthRow]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(input.book_id)
+        group_by = self._validate_group_by(input.group_by)
+        cached_rows = await self._get_cached_rows("net_worth", input)
+        if cached_rows is not None:
+            return [NetWorthRow.model_validate(row) for row in cached_rows]
+        rows = await self._repository.report_net_worth(
+            book_id=input.book_id,
+            date_from=input.date_from,
+            date_to=input.date_to,
+            group_by=group_by,
+        )
+        mapped_rows = [
+            NetWorthRow(
+                period_start=date.fromisoformat(period_start),
+                assets_minor=assets_minor,
+                liabilities_minor=liabilities_minor,
+                net_worth_minor=net_worth_minor,
+            )
+            for period_start, assets_minor, liabilities_minor, net_worth_minor in rows
+        ]
+        await self._save_cached_rows("net_worth", input, mapped_rows)
+        return mapped_rows
+
+    async def report_account_trends(self, input: AccountTrendReportInput) -> list[AccountTrendRow]:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(input.book_id)
+        group_by = self._validate_group_by(input.group_by)
+        cached_rows = await self._get_cached_rows("account_trends", input)
+        if cached_rows is not None:
+            return [AccountTrendRow.model_validate(row) for row in cached_rows]
+        rows = await self._repository.report_account_trends(
+            book_id=input.book_id,
+            account_ids=input.account_ids,
+            date_from=input.date_from,
+            date_to=input.date_to,
+            group_by=group_by,
+        )
+        mapped_rows = [
+            AccountTrendRow(
+                period_start=date.fromisoformat(period_start),
+                account_id=account_id,
+                account_name=account_name,
+                balance_minor=balance_minor,
+            )
+            for period_start, account_id, account_name, balance_minor in rows
+        ]
+        await self._save_cached_rows("account_trends", input, mapped_rows)
+        return mapped_rows
+
     async def report_category_spend(self, input: CategorySpendReportInput) -> list[CategorySpendRow]:
         if self._access_policy is not None:
             await self._access_policy.require_book_read(input.book_id)
@@ -191,7 +252,7 @@ class ReportService:
             return None
         return json.loads(cache_row.payload_json)
 
-    async def _save_cached_rows(self, report_type: str, input, rows: list[object]) -> None:
+    async def _save_cached_rows(self, report_type: str, input, rows: Sequence[CacheableReportRow]) -> None:
         params_json = self._params_json(input)
         params_hash = self._params_hash(params_json)
         as_of_seq = await self._repository.get_book_change_seq(input.book_id)
@@ -218,6 +279,13 @@ class ReportService:
             raise ValueError("kind must be builtin or custom")
         if query_type not in {"sql", "template"}:
             raise ValueError("query_type must be sql or template")
+
+    @staticmethod
+    def _validate_group_by(value: str | None) -> str:
+        group_by = (value or "month").strip().lower()
+        if group_by not in {"day", "month", "quarter", "year"}:
+            raise ValueError("group_by must be day, month, quarter, or year")
+        return group_by
 
     @staticmethod
     def _to_report_definition_summary(row) -> ReportDefinitionSummary:

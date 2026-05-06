@@ -11,7 +11,10 @@ from rekenraam_api.schemas.pricing import (
     FxRateDailySummary,
     FxRateOfficialCreateInput,
     FxRateOfficialSummary,
+    MarketPriceCreateInput,
+    MarketPriceSummary,
     PriceSourceSummary,
+    PricingSourceHealthSummary,
     PricingPolicySummary,
     PricingPolicyUpdateInput,
     PricingRefreshStateSummary,
@@ -96,6 +99,74 @@ class PricingService:
         rows = await self._repository.list_pricing_refresh_state(book_id)
         return [self._to_refresh_state_summary(state, from_currency, to_currency, source) for state, from_currency, to_currency, source in rows]
 
+    async def list_source_health(self, book_id: int) -> list[PricingSourceHealthSummary]:
+        rows = await self._repository.list_pricing_refresh_state(book_id)
+        summaries: list[PricingSourceHealthSummary] = []
+        for state, commodity, quote, source in rows:
+            if state.last_error:
+                status = "failed"
+            elif state.last_success_date is None:
+                status = "missing"
+            else:
+                status = "ok"
+            summaries.append(
+                PricingSourceHealthSummary(
+                    book_id=state.book_id,
+                    commodity_id=state.commodity_id,
+                    commodity_symbol=commodity.symbol,
+                    quote_commodity_id=state.quote_commodity_id,
+                    quote_commodity_symbol=quote.symbol,
+                    source_id=state.source_id,
+                    source_name=source.name,
+                    status=status,
+                    last_success_date=state.last_success_date,
+                    last_attempt_at=state.last_attempt_at,
+                    last_error=state.last_error,
+                )
+            )
+        return summaries
+
+    async def list_market_prices(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None,
+        quote_commodity_id: int | None,
+        limit: int,
+    ) -> list[MarketPriceSummary]:
+        rows = await self._repository.list_market_price_observations(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            quote_commodity_id=quote_commodity_id,
+            limit=limit,
+        )
+        return [self._to_market_price_summary(observation, commodity, quote) for observation, commodity, quote in rows]
+
+    async def create_market_price(self, input: MarketPriceCreateInput) -> MarketPriceSummary:
+        if input.price_minor <= 0:
+            raise ValueError("price_minor must be positive")
+        observation = await self._repository.create_market_price_observation(
+            book_id=input.book_id,
+            commodity_id=input.commodity_id,
+            quote_commodity_id=input.quote_commodity_id,
+            price_date=input.price_date,
+            price_minor=input.price_minor,
+            source=self._clean_optional_text(input.source),
+        )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        commodity = await self._repository.get_commodity(observation.commodity_id)
+        quote = await self._repository.get_commodity(observation.quote_commodity_id)
+        if commodity is None or quote is None:
+            raise ValueError("price observation references missing commodity")
+        return self._to_market_price_summary(observation, commodity, quote)
+
+    async def delete_market_price(self, observation_id: int) -> bool:
+        observation = await self._repository._session.get(PriceObservation, observation_id)
+        deleted = await self._repository.delete_market_price_observation(observation_id)
+        if deleted and observation is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
+        return deleted
+
     async def list_fx_rates_daily(self, book_id: int, limit: int = 100) -> list[FxRateDailySummary]:
         rows = await self._repository.list_fx_rate_daily_observations(book_id=book_id, limit=limit)
         return [self._to_fx_rate_daily_summary(observation, from_currency, to_currency) for observation, from_currency, to_currency in rows]
@@ -138,6 +209,8 @@ class PricingService:
             period_month = None
             price_date = date(input.period_year, 1, 1)
         else:
+            if input.period_month is None:
+                raise ValueError("period_month must be between 1 and 12")
             period_month = input.period_month
             price_date = date(input.period_year, period_month, 1)
         if input.rate <= 0:
@@ -272,6 +345,26 @@ class PricingService:
         )
 
     @staticmethod
+    def _to_market_price_summary(
+        observation: PriceObservation,
+        commodity: Commodity,
+        quote: Commodity,
+    ) -> MarketPriceSummary:
+        return MarketPriceSummary(
+            id=observation.id,
+            book_id=observation.book_id,
+            commodity_id=observation.commodity_id,
+            commodity_symbol=commodity.symbol,
+            commodity_name=commodity.name,
+            quote_commodity_id=observation.quote_commodity_id,
+            quote_commodity_symbol=quote.symbol,
+            price_date=observation.price_date,
+            price_minor=observation.price_minor,
+            source=observation.source,
+            created_at=observation.created_at,
+        )
+
+    @staticmethod
     def _to_fx_rate_official_summary(
         observation: PriceObservation,
         from_currency: Commodity,
@@ -311,7 +404,7 @@ class PricingService:
             raise ValueError("weekend policy must be skip, fill_previous, or download")
 
     @staticmethod
-    def _validate_assignment_dates(effective_from: object, effective_to: object) -> None:
+    def _validate_assignment_dates(effective_from: date, effective_to: date | None) -> None:
         if effective_to is not None and effective_to < effective_from:
             raise ValueError("effective_to must be on or after effective_from")
 

@@ -30,11 +30,14 @@ Small-business support is an architectural future option, not a v1 release gate.
 - CSV/QIF export and report data export
 - core reports: net worth, cash flow, spending by category/payee, account
   trends, realized/unrealized gains, and saved report execution
-- investment basics: holdings, lots, buys, sells, dividends, reinvested
-  dividends, corporate actions, cost basis, and performance
+- investment workflows: extensible instrument/security master for listed
+  securities, funds, bonds, options, futures, crypto spot assets, private
+  investments, and generic instruments; holdings, lots, long/short activity,
+  dividends, reinvested dividends, structured corporate actions, cost-basis
+  profiles, valuation, and performance
 - FX/pricing settings, manual refresh, scheduled refresh state/history, manual
-  price entry, historical FX/price backfill, source assignment, and source
-  health/status views
+  FX and non-currency market price entry, historical FX/price backfill, source
+  assignment, and source health/status views
 - budgets with monthly/annual targets, rollover, and planned-vs-actual reporting
 - scheduled transactions with recurrence, reminders, skip, and post flows
 - basic projected cash balance from scheduled transactions
@@ -46,8 +49,8 @@ Small-business support is an architectural future option, not a v1 release gate.
 - explicit multi-currency account and cross-currency transfer support
 - explicit uncleared, cleared, and reconciled transaction states with running
   balances
-- basic tax summaries for capital gains and dividends with configurable
-  category tax codes
+- raw investment accounting reports for gains, distributions, and corporate
+  actions; country-specific tax summaries and filing exports are deferred
 - per-user preferences for default book, date format, number format, locale,
   and theme
 - admin operational status views for database health, integrity checks,
@@ -68,8 +71,8 @@ Small-business support is an architectural future option, not a v1 release gate.
   core workflows
 - keyboard-first quick entry and shortcut support
 - payee merge/dedup tooling
-- advanced investment corporate actions beyond buys and sells, such as splits,
-  mergers, and write-offs
+- deeper automated accounting for complex corporate actions and derivative
+  lifecycle events beyond the v1 structured event records
 - production Compose example with reverse proxy/TLS guidance
 
 ## Deferred After V1
@@ -89,7 +92,7 @@ Small-business support is an architectural future option, not a v1 release gate.
   plugin manifests or bundles
 - remote plugin marketplace or arbitrary downloaded plugin execution
 - encrypted-at-rest database packaging
-- full country-specific tax filing exports
+- built-in country-specific tax summaries and filing exports
 - advanced forecasting and scenario planning beyond scheduled-transaction-based
   projections
 - server-side undo/redo unless redesigned around mutation history

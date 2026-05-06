@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account
-from rekenraam_api.db.models.investments import Lot, PriceObservation, SplitLotAllocation
+from rekenraam_api.db.models.investments import CorporateAction, CostBasisProfile, InvestmentInstrument, Lot, PriceObservation, SplitLotAllocation
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
 
@@ -16,6 +16,111 @@ from rekenraam_api.db.models.transactions import Split, Transaction
 class InvestmentRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def list_instruments(self, book_id: int) -> list[InvestmentInstrument]:
+        result = await self._session.execute(
+            select(InvestmentInstrument)
+            .where(InvestmentInstrument.book_id == book_id)
+            .order_by(InvestmentInstrument.display_name.asc(), InvestmentInstrument.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def create_instrument(self, **values: Any) -> InvestmentInstrument:
+        await self._validate_instrument_refs(values)
+        row = InvestmentInstrument(**values)
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def update_instrument(self, instrument_id: int, **values: Any) -> InvestmentInstrument | None:
+        row = await self._session.get(InvestmentInstrument, instrument_id)
+        if row is None or row.book_id != values["book_id"]:
+            return None
+        await self._validate_instrument_refs(values)
+        for key, value in values.items():
+            setattr(row, key, value)
+        row.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def list_cost_basis_profiles(self, book_id: int) -> list[CostBasisProfile]:
+        await self.ensure_default_cost_basis_profile(book_id)
+        result = await self._session.execute(
+            select(CostBasisProfile)
+            .where(CostBasisProfile.book_id == book_id)
+            .order_by(CostBasisProfile.is_default.desc(), CostBasisProfile.name.asc(), CostBasisProfile.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def ensure_default_cost_basis_profile(self, book_id: int) -> CostBasisProfile:
+        row = await self._session.scalar(
+            select(CostBasisProfile)
+            .where(CostBasisProfile.book_id == book_id)
+            .where(CostBasisProfile.is_default.is_(True))
+            .limit(1)
+        )
+        if row is not None:
+            return row
+        row = CostBasisProfile(
+            book_id=book_id,
+            name="Default FIFO",
+            method="fifo",
+            description="Default personal accounting cost-basis profile",
+            is_default=True,
+            metadata_json=None,
+        )
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def create_cost_basis_profile(self, **values: Any) -> CostBasisProfile:
+        if values.get("is_default"):
+            await self._clear_default_cost_basis_profiles(values["book_id"])
+        row = CostBasisProfile(**values)
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def update_cost_basis_profile(self, profile_id: int, **values: Any) -> CostBasisProfile | None:
+        row = await self._session.get(CostBasisProfile, profile_id)
+        if row is None or row.book_id != values["book_id"]:
+            return None
+        if values.get("is_default"):
+            await self._clear_default_cost_basis_profiles(values["book_id"])
+        for key, value in values.items():
+            setattr(row, key, value)
+        row.updated_at = datetime.now(UTC)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def get_cost_basis_profile(self, profile_id: int | None, book_id: int) -> CostBasisProfile:
+        if profile_id is None:
+            return await self.ensure_default_cost_basis_profile(book_id)
+        row = await self._session.get(CostBasisProfile, profile_id)
+        if row is None or row.book_id != book_id:
+            raise ValueError("cost basis profile not found")
+        return row
+
+    async def list_corporate_actions(self, book_id: int) -> list[CorporateAction]:
+        result = await self._session.execute(
+            select(CorporateAction)
+            .where(CorporateAction.book_id == book_id)
+            .order_by(CorporateAction.effective_date.desc(), CorporateAction.id.desc())
+        )
+        return list(result.scalars().all())
+
+    async def create_corporate_action(self, **values: Any) -> CorporateAction:
+        await self._validate_corporate_action_refs(values)
+        row = CorporateAction(**values)
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
 
     async def create_buy(
         self,
@@ -264,6 +369,84 @@ class InvestmentRepository:
         await self._session.commit()
         return {"transaction_id": transaction.id}
 
+    async def create_reinvested_dividend(
+        self,
+        *,
+        book_id: int,
+        txn_date: date,
+        commodity_id: int,
+        investment_account_id: int,
+        income_account_id: int,
+        quantity_minor: int,
+        amount_minor: int,
+        memo: str | None,
+        payee_id: int | None,
+        status: str,
+    ) -> dict[str, Any]:
+        investment_account = await self._get_account(investment_account_id)
+        income_account = await self._get_account(income_account_id)
+        if investment_account is None or income_account is None:
+            raise ValueError("account not found")
+        if investment_account.book_id != book_id or income_account.book_id != book_id:
+            raise ValueError("accounts must belong to the book")
+
+        transaction = Transaction(
+            book_id=book_id,
+            occurred_date=txn_date,
+            posted_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=None,
+        )
+        self._session.add(transaction)
+        await self._session.flush()
+
+        security_split = Split(
+            tx_id=transaction.id,
+            account_id=investment_account_id,
+            commodity_id=commodity_id,
+            amount_minor=quantity_minor,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo="Reinvested dividend quantity",
+        )
+        income_split = Split(
+            tx_id=transaction.id,
+            account_id=income_account_id,
+            commodity_id=income_account.commodity_id,
+            amount_minor=-amount_minor,
+            category_id=None,
+            tag_id=None,
+            person_id=None,
+            project_id=None,
+            share_bps=None,
+            memo="Reinvested dividend income",
+        )
+        self._session.add_all([security_split, income_split])
+        await self._session.flush()
+
+        lot = Lot(
+            book_id=book_id,
+            account_id=investment_account_id,
+            commodity_id=commodity_id,
+            opened_date=txn_date,
+            notes="Reinvested dividend",
+            cost_basis_minor=amount_minor,
+        )
+        self._session.add(lot)
+        await self._session.flush()
+        self._session.add(SplitLotAllocation(split_id=security_split.id, lot_id=lot.id, quantity_minor=quantity_minor))
+        await self._session.commit()
+        return {
+            "transaction_id": transaction.id,
+            "allocations": [{"lot_id": lot.id, "quantity_minor": quantity_minor}],
+            "lot_id": lot.id,
+        }
+
     async def list_positions(self, *, book_id: int, as_of_date: date | None) -> list[dict[str, Any]]:
         balance_expr = func.coalesce(func.sum(Split.amount_minor), 0)
         position_statement: Select[tuple[int, str, str, int, str, int, int]] = (
@@ -480,7 +663,9 @@ class InvestmentRepository:
         book_id: int,
         date_from: date | None,
         date_to: date | None,
+        cost_basis_profile_id: int | None = None,
     ) -> list[dict[str, Any]]:
+        await self.get_cost_basis_profile(cost_basis_profile_id, book_id)
         statement: Select[tuple[int, date, int, int, int]] = (
             select(
                 Transaction.id,
@@ -572,7 +757,9 @@ class InvestmentRepository:
         book_id: int,
         base_commodity_id: int,
         as_of_date: date | None,
+        cost_basis_profile_id: int | None = None,
     ) -> list[dict[str, Any]]:
+        await self.get_cost_basis_profile(cost_basis_profile_id, book_id)
         converted_positions = await self.convert_positions(
             book_id=book_id,
             base_commodity_id=base_commodity_id,
@@ -602,6 +789,120 @@ class InvestmentRepository:
 
         return results
 
+    async def portfolio_performance(
+        self,
+        *,
+        book_id: int,
+        base_commodity_id: int,
+        as_of_date: date | None,
+        cost_basis_profile_id: int | None,
+    ) -> dict[str, Any]:
+        unrealized = await self.report_unrealized_gains(
+            book_id=book_id,
+            base_commodity_id=base_commodity_id,
+            as_of_date=as_of_date,
+            cost_basis_profile_id=cost_basis_profile_id,
+        )
+        realized = await self.report_realized_gains(
+            book_id=book_id,
+            date_from=None,
+            date_to=as_of_date,
+            cost_basis_profile_id=cost_basis_profile_id,
+        )
+        income_statement = (
+            select(func.coalesce(func.sum(-Split.amount_minor), 0))
+            .join(Transaction, Transaction.id == Split.tx_id)
+            .join(Account, Account.id == Split.account_id)
+            .where(Transaction.book_id == book_id)
+            .where(Account.account_type == "income")
+        )
+        if as_of_date is not None:
+            income_statement = income_statement.where(Transaction.occurred_date <= as_of_date)
+        income_rows = (await self._session.execute(income_statement)).scalar_one()
+        market_value_minor = sum(int(row["value_minor"]) for row in unrealized)
+        cost_basis_minor = sum(int(row["cost_basis_minor"]) for row in unrealized)
+        unrealized_gain_minor = sum(int(row["unrealized_gain_minor"]) for row in unrealized)
+        realized_gain_minor = sum(int(row["gain_loss_minor"]) for row in realized)
+        price_missing_count = sum(1 for row in unrealized if row["price_missing"])
+        return {
+            "book_id": book_id,
+            "base_commodity_id": base_commodity_id,
+            "as_of_date": as_of_date,
+            "market_value_minor": market_value_minor,
+            "cost_basis_minor": cost_basis_minor,
+            "unrealized_gain_minor": unrealized_gain_minor,
+            "realized_gain_minor": realized_gain_minor,
+            "income_minor": int(income_rows or 0),
+            "price_missing_count": price_missing_count,
+        }
+
+    async def account_valuation(
+        self,
+        *,
+        book_id: int,
+        base_commodity_id: int,
+        as_of_date: date | None,
+        cost_basis_profile_id: int | None,
+    ) -> list[dict[str, Any]]:
+        await self.get_cost_basis_profile(cost_basis_profile_id, book_id)
+        converted_positions = await self.convert_positions(
+            book_id=book_id,
+            base_commodity_id=base_commodity_id,
+            as_of_date=as_of_date,
+        )
+        account_ids = [int(position["account_id"]) for position in converted_positions]
+        account_currency: dict[int, int] = {}
+        if account_ids:
+            account_rows = (await self._session.execute(select(Account.id, Account.commodity_id).where(Account.id.in_(account_ids)))).all()
+            account_currency = {account_id: commodity_id for account_id, commodity_id in account_rows}
+
+        totals: dict[int, dict[str, Any]] = {}
+        for position in converted_positions:
+            account_id = int(position["account_id"])
+            row = totals.setdefault(
+                account_id,
+                {
+                    "account_id": account_id,
+                    "account_name": position["account_name"],
+                    "account_commodity_id": account_currency.get(account_id, base_commodity_id),
+                    "market_value_minor": 0,
+                    "cost_basis_minor": 0,
+                    "unrealized_gain_minor": 0,
+                    "price_missing": False,
+                    "fx_missing": False,
+                },
+            )
+            cost_basis_minor = sum(int(lot["converted_cost_basis_minor"]) for lot in position["lots"] if lot["converted_cost_basis_minor"] is not None)
+            row["market_value_minor"] += int(position["value_minor"])
+            row["cost_basis_minor"] += cost_basis_minor
+            row["unrealized_gain_minor"] += int(position["value_minor"]) - cost_basis_minor
+            row["price_missing"] = bool(row["price_missing"] or position["price_missing"])
+        return list(totals.values())
+
+    async def currency_exposure(
+        self,
+        *,
+        book_id: int,
+        as_of_date: date | None,
+    ) -> list[dict[str, Any]]:
+        positions = await self.list_positions(book_id=book_id, as_of_date=as_of_date)
+        exposure: dict[int, dict[str, Any]] = {}
+        for position in positions:
+            commodity_id = int(position["commodity_id"])
+            row = exposure.setdefault(
+                commodity_id,
+                {
+                    "commodity_id": commodity_id,
+                    "commodity_name": position["commodity_name"],
+                    "quantity_minor": 0,
+                    "native_value_minor": 0,
+                    "price_missing": False,
+                },
+            )
+            row["quantity_minor"] += int(position["balance_minor"])
+            row["native_value_minor"] += int(position["balance_minor"])
+        return list(exposure.values())
+
     async def _latest_prices(
         self,
         *,
@@ -630,6 +931,40 @@ class InvestmentRepository:
             )
         ).all()
         return {commodity_id: price_minor for commodity_id, price_minor in rows}
+
+    async def _clear_default_cost_basis_profiles(self, book_id: int) -> None:
+        rows = await self._session.execute(select(CostBasisProfile).where(CostBasisProfile.book_id == book_id))
+        for row in rows.scalars().all():
+            row.is_default = False
+            row.updated_at = datetime.now(UTC)
+
+    async def _validate_instrument_refs(self, values: dict[str, Any]) -> None:
+        book_id = int(values["book_id"])
+        commodity = await self._session.get(Commodity, values["commodity_id"])
+        if commodity is None or commodity.book_id != book_id:
+            raise ValueError("commodity not found")
+        for key in ("quote_commodity_id", "trading_commodity_id"):
+            commodity_id = values.get(key)
+            if commodity_id is None:
+                continue
+            row = await self._session.get(Commodity, commodity_id)
+            if row is None or row.book_id != book_id:
+                raise ValueError(f"{key} not found")
+
+    async def _validate_corporate_action_refs(self, values: dict[str, Any]) -> None:
+        book_id = int(values["book_id"])
+        for key in ("old_instrument_id", "new_instrument_id"):
+            instrument_id = values.get(key)
+            if instrument_id is None:
+                continue
+            row = await self._session.get(InvestmentInstrument, instrument_id)
+            if row is None or row.book_id != book_id:
+                raise ValueError(f"{key} not found")
+        cash_commodity_id = values.get("cash_commodity_id")
+        if cash_commodity_id is not None:
+            row = await self._session.get(Commodity, cash_commodity_id)
+            if row is None or row.book_id != book_id:
+                raise ValueError("cash commodity not found")
 
     async def _get_account(self, account_id: int) -> Account | None:
         result = await self._session.execute(select(Account).where(Account.id == account_id))

@@ -55,6 +55,43 @@ class PayeeTotalRow(BaseModel):
     total_minor: int
 
 
+class NetWorthReportInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    date_from: date | None = None
+    date_to: date | None = None
+    group_by: str | None = None
+
+
+class NetWorthRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    period_start: date
+    assets_minor: int
+    liabilities_minor: int
+    net_worth_minor: int
+
+
+class AccountTrendReportInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    account_ids: tuple[int, ...] | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+    group_by: str | None = None
+
+
+class AccountTrendRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    period_start: date
+    account_id: int
+    account_name: str
+    balance_minor: int
+
+
 class ReportDefinitionCreateInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 

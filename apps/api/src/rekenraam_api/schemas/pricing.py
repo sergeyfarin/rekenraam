@@ -69,6 +69,49 @@ class FxRateOfficialCreateInput(BaseModel):
     notes: str | None = None
 
 
+class MarketPriceSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    book_id: int
+    commodity_id: int
+    commodity_symbol: str | None
+    commodity_name: str
+    quote_commodity_id: int
+    quote_commodity_symbol: str | None
+    price_date: date
+    price_minor: int
+    source: str | None
+    created_at: datetime
+
+
+class MarketPriceCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
+    commodity_id: int
+    quote_commodity_id: int
+    price_date: date
+    price_minor: int
+    source: str | None = None
+
+
+class PricingSourceHealthSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    commodity_id: int
+    commodity_symbol: str | None
+    quote_commodity_id: int
+    quote_commodity_symbol: str | None
+    source_id: int
+    source_name: str | None
+    status: str
+    last_success_date: date | None
+    last_attempt_at: datetime | None
+    last_error: str | None
+
+
 class PriceSourceSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 

@@ -3,12 +3,27 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import get_investment_service, get_report_service
-from rekenraam_api.schemas.investments import RealizedGainEntry, RealizedGainsQuery, UnrealizedGainEntry, UnrealizedGainsQuery
+from rekenraam_api.schemas.investments import (
+    AccountValuationRow,
+    CorporateActionSummary,
+    CurrencyExposureRow,
+    PortfolioPerformanceQuery,
+    PortfolioPerformanceSummary,
+    PositionsQuery,
+    RealizedGainEntry,
+    RealizedGainsQuery,
+    UnrealizedGainEntry,
+    UnrealizedGainsQuery,
+)
 from rekenraam_api.schemas.reports import (
     CashflowReportInput,
     CashflowRow,
+    AccountTrendReportInput,
+    AccountTrendRow,
     CategorySpendReportInput,
     CategorySpendRow,
+    NetWorthReportInput,
+    NetWorthRow,
     PayeeTotalsReportInput,
     PayeeTotalRow,
     ReportDefinitionCreateInput,
@@ -115,6 +130,28 @@ async def report_cashflow(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
+@router.post("/net-worth", response_model=list[NetWorthRow])
+async def report_net_worth(
+    input: NetWorthReportInput,
+    report_service: ReportService = Depends(get_report_service),
+) -> list[NetWorthRow]:
+    try:
+        return await report_service.report_net_worth(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/account-trends", response_model=list[AccountTrendRow])
+async def report_account_trends(
+    input: AccountTrendReportInput,
+    report_service: ReportService = Depends(get_report_service),
+) -> list[AccountTrendRow]:
+    try:
+        return await report_service.report_account_trends(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
 @router.post("/category-spend", response_model=list[CategorySpendRow])
 async def report_category_spend(
     input: CategorySpendReportInput,
@@ -136,10 +173,16 @@ async def report_realized_gains(
     book_id: int = Query(default=1),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
+    cost_basis_profile_id: int | None = Query(default=None),
     investment_service: InvestmentService = Depends(get_investment_service),
 ) -> list[RealizedGainEntry]:
     return await investment_service.report_realized_gains(
-        RealizedGainsQuery(book_id=book_id, date_from=date_from, date_to=date_to)
+        RealizedGainsQuery(
+            book_id=book_id,
+            date_from=date_from,
+            date_to=date_to,
+            cost_basis_profile_id=cost_basis_profile_id,
+        )
     )
 
 
@@ -148,8 +191,67 @@ async def report_unrealized_gains(
     book_id: int = Query(default=1),
     base_commodity_id: int = Query(...),
     as_of_date: date | None = Query(default=None),
+    cost_basis_profile_id: int | None = Query(default=None),
     investment_service: InvestmentService = Depends(get_investment_service),
 ) -> list[UnrealizedGainEntry]:
     return await investment_service.report_unrealized_gains(
-        UnrealizedGainsQuery(book_id=book_id, base_commodity_id=base_commodity_id, as_of_date=as_of_date)
+        UnrealizedGainsQuery(
+            book_id=book_id,
+            base_commodity_id=base_commodity_id,
+            as_of_date=as_of_date,
+            cost_basis_profile_id=cost_basis_profile_id,
+        )
     )
+
+
+@router.get("/investment-performance", response_model=PortfolioPerformanceSummary)
+async def report_investment_performance(
+    book_id: int = Query(default=1),
+    base_commodity_id: int = Query(...),
+    as_of_date: date | None = Query(default=None),
+    cost_basis_profile_id: int | None = Query(default=None),
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> PortfolioPerformanceSummary:
+    return await investment_service.portfolio_performance(
+        PortfolioPerformanceQuery(
+            book_id=book_id,
+            base_commodity_id=base_commodity_id,
+            as_of_date=as_of_date,
+            cost_basis_profile_id=cost_basis_profile_id,
+        )
+    )
+
+
+@router.get("/account-valuation", response_model=list[AccountValuationRow])
+async def report_account_valuation(
+    book_id: int = Query(default=1),
+    base_commodity_id: int = Query(...),
+    as_of_date: date | None = Query(default=None),
+    cost_basis_profile_id: int | None = Query(default=None),
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> list[AccountValuationRow]:
+    return await investment_service.account_valuation(
+        PortfolioPerformanceQuery(
+            book_id=book_id,
+            base_commodity_id=base_commodity_id,
+            as_of_date=as_of_date,
+            cost_basis_profile_id=cost_basis_profile_id,
+        )
+    )
+
+
+@router.get("/currency-exposure", response_model=list[CurrencyExposureRow])
+async def report_currency_exposure(
+    book_id: int = Query(default=1),
+    as_of_date: date | None = Query(default=None),
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> list[CurrencyExposureRow]:
+    return await investment_service.currency_exposure(PositionsQuery(book_id=book_id, as_of_date=as_of_date))
+
+
+@router.get("/corporate-actions", response_model=list[CorporateActionSummary])
+async def report_corporate_actions(
+    book_id: int = Query(default=1),
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> list[CorporateActionSummary]:
+    return await investment_service.list_corporate_actions(book_id)

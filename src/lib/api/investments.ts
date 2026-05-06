@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "$lib/api/client";
+import { apiGet, apiPost, apiPut } from "$lib/api/client";
 
 function buildQuery(params: Record<string, string | number | null | undefined>): string {
   const searchParams = new URLSearchParams();
@@ -16,6 +16,38 @@ function buildQuery(params: Record<string, string | number | null | undefined>):
 export async function getPositions<T>(asOfDate?: string | null): Promise<T> {
   const path = `/investments/positions${buildQuery({ book_id: 1, as_of_date: asOfDate ?? null })}`;
   return apiGet<T>(path);
+}
+
+export async function listInvestmentInstruments<T>(): Promise<T> {
+  return apiGet<T>("/investments/instruments?book_id=1");
+}
+
+export async function saveInvestmentInstrument<T>(input: Record<string, unknown>): Promise<T> {
+  const id = input.id;
+  if (typeof id === "number") {
+    return apiPut<T, Record<string, unknown>>(`/investments/instruments/${id}`, input);
+  }
+  return apiPost<T, Record<string, unknown>>("/investments/instruments", input);
+}
+
+export async function listCostBasisProfiles<T>(): Promise<T> {
+  return apiGet<T>("/investments/cost-basis-profiles?book_id=1");
+}
+
+export async function saveCostBasisProfile<T>(input: Record<string, unknown>): Promise<T> {
+  const id = input.id;
+  if (typeof id === "number") {
+    return apiPut<T, Record<string, unknown>>(`/investments/cost-basis-profiles/${id}`, input);
+  }
+  return apiPost<T, Record<string, unknown>>("/investments/cost-basis-profiles", input);
+}
+
+export async function listCorporateActions<T>(): Promise<T> {
+  return apiGet<T>("/investments/corporate-actions?book_id=1");
+}
+
+export async function createCorporateAction<T>(input: Record<string, unknown>): Promise<T> {
+  return apiPost<T, Record<string, unknown>>("/investments/corporate-actions", input);
 }
 
 export async function convertPositions<T>(_positions: unknown[], baseCommodityId: number, asOfDate?: string | null): Promise<T> {
@@ -43,4 +75,23 @@ export async function sellCommodity(input: Record<string, unknown>): Promise<voi
 
 export async function createDividendTransaction(input: Record<string, unknown>): Promise<void> {
   await apiPost<void, Record<string, unknown>>("/investments/dividend", input);
+}
+
+export async function createReinvestedDividend(input: Record<string, unknown>): Promise<void> {
+  await apiPost<void, Record<string, unknown>>("/investments/reinvested-dividend", input);
+}
+
+export async function getPortfolioPerformance<T>(baseCommodityId: number, asOfDate?: string | null, costBasisProfileId?: number | null): Promise<T> {
+  const path = `/investments/performance${buildQuery({ book_id: 1, base_commodity_id: baseCommodityId, as_of_date: asOfDate ?? null, cost_basis_profile_id: costBasisProfileId ?? null })}`;
+  return apiGet<T>(path);
+}
+
+export async function getAccountValuation<T>(baseCommodityId: number, asOfDate?: string | null, costBasisProfileId?: number | null): Promise<T> {
+  const path = `/investments/account-valuation${buildQuery({ book_id: 1, base_commodity_id: baseCommodityId, as_of_date: asOfDate ?? null, cost_basis_profile_id: costBasisProfileId ?? null })}`;
+  return apiGet<T>(path);
+}
+
+export async function getCurrencyExposure<T>(asOfDate?: string | null): Promise<T> {
+  const path = `/investments/currency-exposure${buildQuery({ book_id: 1, as_of_date: asOfDate ?? null })}`;
+  return apiGet<T>(path);
 }

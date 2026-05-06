@@ -40,6 +40,8 @@ Already represented in the web baseline:
   constraints, and reconciliation preferences
 - transactions and splits
 - investments, lots, split-lot allocations, and price observations
+- investment instruments/security master, cost-basis profiles, and structured
+  corporate actions
 - pricing sources, policies, assignments, refresh state, and refresh runs
 - import rules, import sessions, and import session transactions
 - report state/cache, definitions, and runs
@@ -109,6 +111,10 @@ Important invariant families to preserve:
 - system accounts and system roles must be protected
 - commodity scale/precision must stay inside supported bounds
 - price observations must keep source/correction/derivation integrity
+- investment valuation must keep instrument quantity, quote currency, account
+  currency, and book/report currency distinct
+- cost-basis profiles must be reusable by reports without embedding
+  country-specific tax rules into core accounting
 - import commits must be auditable and idempotent enough to avoid accidental
   duplicate posting
 

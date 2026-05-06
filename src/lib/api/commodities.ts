@@ -168,3 +168,19 @@ export async function createFxRateOfficial(input: Record<string, unknown>): Prom
 export async function deleteFxRateOfficial(id: number): Promise<void> {
 	await apiDelete(`/pricing/rates/official/${id}`);
 }
+
+export async function listMarketPrices<T>(bookId = 1, limit = 100): Promise<T> {
+	return apiGet<T>(`/pricing/market-prices?book_id=${bookId}&limit=${limit}`);
+}
+
+export async function createMarketPrice(input: Record<string, unknown>): Promise<void> {
+	await apiPost("/pricing/market-prices", input);
+}
+
+export async function deleteMarketPrice(id: number): Promise<void> {
+	await apiDelete(`/pricing/market-prices/${id}`);
+}
+
+export async function listPricingSourceHealth<T>(bookId = 1): Promise<T> {
+	return apiGet<T>(`/pricing/source-health?book_id=${bookId}`);
+}

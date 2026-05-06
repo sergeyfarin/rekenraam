@@ -14,7 +14,8 @@ self-hosted personal finance web app:
 - architecture that can grow trusted plugin extension points after b1
 - persisted theme preference kept as a future theming foothold
 
-Milestones 1-7 are complete as baseline web slices. That means the core
+Milestones 1-9 are complete as baseline web slices, with Milestone 8 now
+expanded as the investment-first v1 foundation. That means the core
 self-hosted architecture, auth/request context, accounting writes,
 reconciliation, import/export, reports, investments, pricing, and admin
 foundations plus budgets, schedules, projected cash planning, and loans exist
@@ -56,7 +57,9 @@ Working today:
   status/history, admin runtime health, user administration, preferences,
   saved transaction views, transaction templates, payee defaults, notes,
   budgets, scheduled transactions, projected cash planning, loans, and audit
-  slices
+  slices, plus an extensible investment instrument master, cost-basis profiles,
+  corporate-action records, non-currency market prices, source-health views,
+  investment performance, account valuation, and currency exposure
 - shared frontend API seam under `src/lib/api`
 - frontend routes for dashboard, accounts, account registers, reconciliation,
   transactions, import/export, reports, investments, tax, planning, settings,
@@ -79,7 +82,7 @@ Still transitional:
 - Tauri dependencies remain until the final deletion gate is met
 - milestones 1-7 are baseline complete but still need broader v1 hardening,
   fixtures, and UX depth
-- multi-currency transfers, attachment/document uploads, backup/restore
+- multi-currency transfers, tax-country modules, attachment/document uploads, backup/restore
   documentation, final CI/deployment gates, and post-b1 plugin/theme
   architecture remain to be completed or consciously deferred
 
@@ -297,38 +300,62 @@ Exit criteria:
 - users can budget, schedule recurring activity, project near-term balances,
   and manage personal liabilities without returning to the desktop app
 
-## Milestone 8: Reports, Tax, Investments, Pricing, And Valuation Expansion
+## Milestone 8: Investments, Pricing, Reports, And Valuation Expansion
 
-Goal: widen the already migrated reporting, investment, tax, and pricing
-foundations into v1-complete personal finance workflows.
+Status: Complete as baseline.
 
-Note on capital gains realized and not realized: find a nice and elegant way to manage different capital gains for different purposes. E.g. different tax authorities may require different tax gains calculation different from what I use for personal accounting. Furthermore some brokers might dictate yet their own capital gains (FIFO, LIFO or Average cost). It may be further complicated if securities are traded in different currency vs. currency of the account (Trading 212, Trade Republic)
+Goal: widen the already migrated investment, pricing, and reporting
+foundations into v1-complete personal finance valuation workflows while keeping
+country-specific tax calculations deferred.
 
-Tasks:
+Completed:
 
-1. Reports: net worth over time, account trends, budget variance, saved/custom
-   reports, chart views, account statement/income-expense style reports, and
-   exportable/print-friendly report data.
-2. Tax: capital gains and dividend summaries plus configurable category tax
-   codes; country-specific exports later.
-3. Investments: reinvested dividends, advanced corporate actions, stricter
-   lot/account validations, portfolio performance, and clearer cost-basis
-   policy.
-4. Pricing/valuation: historical FX and price backfill, source health/status
-   views, per-currency or per-commodity source assignment, broader market-price
-   ingestion, and valuation snapshots when report workloads require them.
+1. Instrument/security master exists on top of commodities for stocks, ETFs,
+   funds, bonds, options, futures, crypto spot assets, private investments, and
+   generic instruments.
+2. Investment valuation separates account currency, instrument quantity, quote
+   currency, and book/report currency.
+3. Cost-basis profiles exist per book with FIFO, LIFO, average-cost, and
+   specific-lot modes so personal accounting, broker reconciliation, and future
+   tax interpretations can use different policies.
+4. Reinvested dividends, short sale/cover endpoints, generic derivative/private
+   investment event recording, and structured corporate-action records exist
+   for splits, spin-offs, mergers/acquisitions, conversions, return of capital,
+   delisting, and write-offs.
+5. Pricing supports manual market-price observations for non-currency
+   instruments, per-instrument source assignment through existing pricing
+   assignments, historical/as-of lookup, and source health/status summaries.
+6. Investment/reporting surfaces include portfolio performance, account
+   valuation, book-level currency exposure without forced conversion,
+   policy-aware realized/unrealized gains, corporate-action history, net worth,
+   and account trends.
+7. Tax-specific calculations are consciously deferred after v1 because tax
+   treatment is country-specific and may later be implemented through trusted
+   plugins or optional modules.
+
+Remaining hardening:
+
+- broaden fixtures for multi-currency brokerage accounts where quote currency,
+  account currency, and book currency differ
+- deepen derivative lifecycle posting beyond event records where accounting
+  mechanics are clear
+- add richer private-investment valuation workflows and audit references
+- extend corporate-action generated posting for complex actions such as
+  mixed-consideration mergers and cash-in-lieu
+- improve investment/report chart UX and print-friendly exports
+- measure whether persisted valuation snapshots are needed for heavy reports
 
 Public API targets:
 
-- wider `/api/v1/reports/*`
-- wider `/api/v1/investments/*`
-- wider `/api/v1/pricing/*`
-- `/api/v1/tax/*` if tax-specific state grows beyond reports
+- existing wider `/api/v1/investments/*`
+- existing wider `/api/v1/pricing/*`
+- existing wider `/api/v1/reports/*`
+- no v1 country-specific `/api/v1/tax/*` calculation surface
 
 Exit criteria:
 
-- v1 reporting, tax, investment, and pricing workflows are useful without
-  desktop parity fallbacks
+- v1 investment, valuation, pricing, and investment-focused reporting workflows
+  are useful without desktop parity fallbacks
 
 ## Milestone 9: Search, Templates, Preferences, Notes, And Administration
 

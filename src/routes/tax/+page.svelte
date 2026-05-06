@@ -11,44 +11,44 @@
     </div>
 
     <Alert.Root>
-      <Alert.Title>Coming Soon</Alert.Title>
+      <Alert.Title>Post-v1 tax modules</Alert.Title>
       <Alert.Description>
-        Tax reporting features are currently under development.
+        Country-specific tax calculations are deferred. Use the investment reports for raw realized gains, unrealized gains, distributions, and corporate action history.
       </Alert.Description>
     </Alert.Root>
 
     <Card.Root>
       <Card.Header>
-        <Card.Title>Capital Gains Summary</Card.Title>
-        <Card.Description>Track realized gains and losses</Card.Description>
+        <Card.Title>Raw Gain Reports</Card.Title>
+        <Card.Description>Accounting data without tax interpretation</Card.Description>
       </Card.Header>
       <Card.Content>
         <p class="text-sm text-muted-foreground">
-          Generate reports of realized capital gains and losses for tax year reporting. Includes short-term vs long-term classification.
+          Realized and unrealized gain reports support reusable cost-basis profiles for personal, broker, or future tax views.
         </p>
       </Card.Content>
     </Card.Root>
 
     <Card.Root>
       <Card.Header>
-        <Card.Title>Dividend Income</Card.Title>
-        <Card.Description>Summarize dividend payments</Card.Description>
+        <Card.Title>Distribution Data</Card.Title>
+        <Card.Description>Dividends, interest, and reinvested activity</Card.Description>
       </Card.Header>
       <Card.Content>
         <p class="text-sm text-muted-foreground">
-          Track and categorize dividend income by source, including qualified vs ordinary dividends for tax purposes.
+          Investment reports expose distributions as accounting data. Qualified, exempt, or country-specific treatment is intentionally not calculated in v1.
         </p>
       </Card.Content>
     </Card.Root>
 
     <Card.Root>
       <Card.Header>
-        <Card.Title>Tax Year Reports</Card.Title>
-        <Card.Description>Export data for tax preparation</Card.Description>
+        <Card.Title>Future Extensions</Card.Title>
+        <Card.Description>Reserved for post-v1 tax modules</Card.Description>
       </Card.Header>
       <Card.Content>
         <p class="text-sm text-muted-foreground">
-          Export investment summaries and transaction reports in formats suitable for tax software or accountants.
+          Future trusted plugins or optional modules can add country-specific rules and exports without changing the core investment ledger.
         </p>
       </Card.Content>
     </Card.Root>

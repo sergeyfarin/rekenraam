@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
 from rekenraam_api.db.models.report_state import BookState, ReportCache
+from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.metadata import Category, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.services.request_context import get_request_context
@@ -296,6 +297,70 @@ class ReportRepository:
         result = await self._session.execute(statement)
         return list(result.all())
 
+    async def report_net_worth(
+        self,
+        *,
+        book_id: int,
+        date_from,
+        date_to,
+        group_by: str,
+    ) -> list[tuple[str, int, int, int]]:
+        period_expr = self._period_expr(group_by)
+        assets_expr = func.coalesce(func.sum(case((Account.account_type == "asset", Split.amount_minor), else_=0)), 0)
+        liabilities_expr = func.coalesce(func.sum(case((Account.account_type == "liability", Split.amount_minor), else_=0)), 0)
+        statement = (
+            select(
+                period_expr.label("period_start"),
+                assets_expr.label("assets_minor"),
+                liabilities_expr.label("liabilities_minor"),
+                (assets_expr + liabilities_expr).label("net_worth_minor"),
+            )
+            .join(Split, Split.tx_id == Transaction.id)
+            .join(Account, Account.id == Split.account_id)
+            .where(Transaction.book_id == book_id)
+            .where(Account.account_type.in_(["asset", "liability"]))
+            .group_by(period_expr)
+            .order_by(period_expr.asc())
+        )
+        if date_from is not None:
+            statement = statement.where(Transaction.occurred_date >= date_from)
+        if date_to is not None:
+            statement = statement.where(Transaction.occurred_date <= date_to)
+        result = await self._session.execute(statement)
+        return list(result.all())
+
+    async def report_account_trends(
+        self,
+        *,
+        book_id: int,
+        account_ids: tuple[int, ...] | None,
+        date_from,
+        date_to,
+        group_by: str,
+    ) -> list[tuple[str, int, str, int]]:
+        period_expr = self._period_expr(group_by)
+        statement = (
+            select(
+                period_expr.label("period_start"),
+                Account.id,
+                Account.name,
+                func.coalesce(func.sum(Split.amount_minor), 0).label("balance_minor"),
+            )
+            .join(Split, Split.tx_id == Transaction.id)
+            .join(Account, Account.id == Split.account_id)
+            .where(Transaction.book_id == book_id)
+            .group_by(period_expr, Account.id, Account.name)
+            .order_by(period_expr.asc(), Account.name.asc())
+        )
+        if account_ids:
+            statement = statement.where(Account.id.in_(account_ids))
+        if date_from is not None:
+            statement = statement.where(Transaction.occurred_date >= date_from)
+        if date_to is not None:
+            statement = statement.where(Transaction.occurred_date <= date_to)
+        result = await self._session.execute(statement)
+        return list(result.all())
+
     async def report_category_spend(
         self,
         *,
@@ -358,3 +423,13 @@ class ReportRepository:
 
         result = await self._session.execute(statement)
         return list(result.all())
+
+    @staticmethod
+    def _period_expr(group_by: str):
+        if group_by == "year":
+            return func.to_char(func.date_trunc("year", Transaction.occurred_date), "YYYY-MM-DD")
+        if group_by == "quarter":
+            return func.to_char(func.date_trunc("quarter", Transaction.occurred_date), "YYYY-MM-DD")
+        if group_by == "day":
+            return func.to_char(Transaction.occurred_date, "YYYY-MM-DD")
+        return func.to_char(func.date_trunc("month", Transaction.occurred_date), "YYYY-MM-DD")

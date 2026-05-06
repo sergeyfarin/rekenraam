@@ -6,8 +6,11 @@ from rekenraam_api.schemas.pricing import (
     FxRateDailySummary,
     FxRateOfficialCreateInput,
     FxRateOfficialSummary,
+    MarketPriceCreateInput,
+    MarketPriceSummary,
     PricingExecutionStatusSummary,
     PriceSourceSummary,
+    PricingSourceHealthSummary,
     PricingPolicySummary,
     PricingPolicyUpdateInput,
     PricingRefreshRunInput,
@@ -82,6 +85,43 @@ async def delete_fx_rate_official(
     deleted = await pricing_service.delete_fx_rate_official(observation_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="official FX rate not found")
+
+
+@router.get("/market-prices", response_model=list[MarketPriceSummary])
+async def list_market_prices(
+    book_id: int = Query(default=1),
+    commodity_id: int | None = Query(default=None),
+    quote_commodity_id: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> list[MarketPriceSummary]:
+    return await pricing_service.list_market_prices(
+        book_id=book_id,
+        commodity_id=commodity_id,
+        quote_commodity_id=quote_commodity_id,
+        limit=limit,
+    )
+
+
+@router.post("/market-prices", response_model=MarketPriceSummary)
+async def create_market_price(
+    input: MarketPriceCreateInput,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> MarketPriceSummary:
+    try:
+        return await pricing_service.create_market_price(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.delete("/market-prices/{observation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_market_price(
+    observation_id: int,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> None:
+    deleted = await pricing_service.delete_market_price(observation_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="market price not found")
 
 
 @router.get("/sources", response_model=list[PriceSourceSummary])
@@ -166,6 +206,14 @@ async def list_pricing_refresh_state(
     pricing_service: PricingService = Depends(get_pricing_service),
 ) -> list[PricingRefreshStateSummary]:
     return await pricing_service.list_pricing_refresh_state(book_id)
+
+
+@router.get("/source-health", response_model=list[PricingSourceHealthSummary])
+async def list_source_health(
+    book_id: int = Query(default=1),
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> list[PricingSourceHealthSummary]:
+    return await pricing_service.list_source_health(book_id)
 
 
 @router.post("/refresh/run", response_model=PricingRefreshRunSummary)

@@ -427,6 +427,71 @@ class PricingRepository:
         result = await self._session.execute(statement)
         return list(result.all())
 
+    async def list_market_price_observations(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None,
+        quote_commodity_id: int | None,
+        limit: int,
+    ) -> list[tuple[PriceObservation, Commodity, Commodity]]:
+        commodity = aliased(Commodity)
+        quote = aliased(Commodity)
+        statement = (
+            select(PriceObservation, commodity, quote)
+            .join(commodity, PriceObservation.commodity_id == commodity.id)
+            .join(quote, PriceObservation.quote_commodity_id == quote.id)
+            .where(PriceObservation.book_id == book_id)
+            .where(PriceObservation.observation_kind.in_(["commodity_market", "valuation_override"]))
+            .order_by(PriceObservation.price_date.desc(), PriceObservation.created_at.desc(), PriceObservation.id.desc())
+            .limit(limit)
+        )
+        if commodity_id is not None:
+            statement = statement.where(PriceObservation.commodity_id == commodity_id)
+        if quote_commodity_id is not None:
+            statement = statement.where(PriceObservation.quote_commodity_id == quote_commodity_id)
+        result = await self._session.execute(statement)
+        return list(result.all())
+
+    async def create_market_price_observation(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        quote_commodity_id: int,
+        price_date: date,
+        price_minor: int,
+        source: str | None,
+    ) -> PriceObservation:
+        commodity = await self._session.get(Commodity, commodity_id)
+        quote = await self._session.get(Commodity, quote_commodity_id)
+        if commodity is None or commodity.book_id != book_id:
+            raise ValueError("commodity not found")
+        if quote is None or quote.book_id != book_id:
+            raise ValueError("quote commodity not found")
+        observation = PriceObservation(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            quote_commodity_id=quote_commodity_id,
+            observation_kind="commodity_market",
+            price_minor=price_minor,
+            price_date=price_date,
+            source=source,
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(observation)
+        await self._session.commit()
+        await self._session.refresh(observation)
+        return observation
+
+    async def delete_market_price_observation(self, observation_id: int) -> bool:
+        observation = await self._session.get(PriceObservation, observation_id)
+        if observation is None or observation.observation_kind not in {"commodity_market", "valuation_override"}:
+            return False
+        await self._session.delete(observation)
+        await self._session.commit()
+        return True
+
     async def create_fx_rate_daily_observation(
         self,
         *,
