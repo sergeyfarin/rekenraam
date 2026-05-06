@@ -34,6 +34,7 @@ consciously dropped.
 
 - Product scope: `docs/product/v1-scope.md`
 - PostgreSQL schema direction: `docs/architecture/postgres-schema.md`
+- Post-b1 extensibility direction: `docs/architecture/post-b1-extensibility.md`
 - Desktop-to-web parity tracking: `docs/parity/desktop-to-python.md`
 - Deployment entrypoint: `compose.yaml`
 - API source: `apps/api`
@@ -405,6 +406,8 @@ Exit criteria:
 Goal: keep b1/v1 unblocked by plugin/theme implementation while preserving an
 additive path for trusted extensions after b1.
 
+Status: Ready for b1 as an extensibility guardrail.
+
 Compatibility guardrails for b1:
 
 - core behavior stays behind typed `/api/v1` APIs
@@ -413,6 +416,11 @@ Compatibility guardrails for b1:
   assumptions
 - user preferences keep the existing `theme` string so built-in themes can
   arrive later without breaking preference data
+- semantic CSS tokens cover core surfaces, status states, charts, money colors,
+  and account/transaction concepts so later theme packs can swap token values
+  instead of rewriting route markup
+- `/api/v1/plugins/*` and `/api/v1/themes/*` remain unimplemented and covered
+  by negative route tests
 
 Future plugin candidates:
 
@@ -422,6 +430,19 @@ Future plugin candidates:
 - transaction enrichment rules
 - static plugin assets
 - Docker image layer or mounted-volume installation for trusted local plugins
+
+Future plugin host model:
+
+- prefer sandboxed WebAssembly plugins for constrained extension logic after
+  evaluating the Component Model, WASI capabilities, Wasmtime, and
+  Extism-style host functions
+- support arbitrary-language plugins through isolated sidecar containers over a
+  narrow local HTTP/gRPC contract rather than in-process Python package loading
+- expose typed host capabilities instead of database credentials, repositories,
+  or internal SQLAlchemy models
+- enforce permissions at the host-function/API boundary with per-book grants,
+  network allowlists, plugin storage quotas, timeout/memory limits, explicit
+  secret grants, disabled/failed-plugin isolation, and full audit attribution
 
 Future frontend candidates:
 
@@ -445,6 +466,8 @@ Future theme candidates:
 - custom theme manifests through admin-managed files or mounted volumes
 - deterministic token fallback
 - existing per-user theme preference remains the stable selection field
+- custom CSS, if ever allowed, requires admin enablement, validation, strict CSP
+  guidance, deterministic fallback, and no arbitrary remote CSS loading
 
 Public API reservation:
 
@@ -453,6 +476,13 @@ Public API reservation:
   namespaces only
 - do not introduce plugin tables, theme tables, manifest schemas, permission
   models, Extism/WASM dependencies, or no-op registries before b1
+
+Implementation notes:
+
+- the b1 reference architecture is documented in
+  `docs/architecture/post-b1-extensibility.md`
+- tests assert reserved namespaces stay absent, the `theme` preference remains
+  future-compatible, and docs keep plugin/theme execution deferred
 
 ## Milestone 11: Operational Self-Hosting
 

@@ -1356,7 +1356,7 @@
             {@const balanced = total === 0}
             <div class="flex items-center gap-2 mt-2">
               <span class="text-sm font-medium">Balance:</span>
-              <span class="text-sm font-mono {balanced ? 'text-green-600' : 'text-red-600'}">
+              <span class="text-sm font-mono {balanced ? 'text-money-positive' : 'text-money-negative'}">
                 {#if balanced}
                   ✓ Balanced
                 {:else}
@@ -1443,7 +1443,7 @@
     flex-wrap: wrap;
     gap: 1rem;
     font-size: 0.875rem;
-    color: #64748b;
+    color: var(--muted-foreground);
   }
 
   .booking-policy {
@@ -1485,7 +1485,7 @@
   }
 
   .sort-button:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
 </style>

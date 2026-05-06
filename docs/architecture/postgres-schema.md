@@ -67,6 +67,9 @@ Future reserved schema families:
   post-b1 plugin design is settled
 - theme manifests only after token-pack theming is implemented; the existing
   user preference `theme` string remains the b1 compatibility foothold
+- b1 must not add plugin/theme tables, no-op registries, or placeholder
+  manifest tables; future plugin storage should be introduced only with a
+  permissioned host/runtime design
 
 ## Desktop Concepts To Replace Or Drop
 

@@ -102,7 +102,7 @@
   </Card.Header>
   <Card.Content>
     {#if categoryStatus}
-      <p class="text-sm text-green-600">{categoryStatus}</p>
+      <p class="text-sm text-status-success">{categoryStatus}</p>
     {/if}
     {#if categoryError}
       <p class="text-sm text-destructive">{categoryError}</p>

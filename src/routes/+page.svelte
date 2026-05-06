@@ -236,7 +236,7 @@
 
     <!-- Net Worth Summary Cards -->
     <div class="grid gap-4 md:grid-cols-3">
-      <Card.Root class={netWorth >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+      <Card.Root class={netWorth >= 0 ? "surface-money-positive" : "surface-money-negative"}>
         <Card.Header class="pb-2">
           <Card.Description>Net Worth</Card.Description>
         </Card.Header>
@@ -245,21 +245,21 @@
         </Card.Content>
       </Card.Root>
 
-      <Card.Root class="border-emerald-200 bg-emerald-50">
+      <Card.Root class="surface-money-asset">
         <Card.Header class="pb-2">
           <Card.Description>Total Assets</Card.Description>
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-semibold text-emerald-700">{formatCurrency(totalAssets)}</div>
+          <div class="text-2xl font-semibold text-money-asset-strong">{formatCurrency(totalAssets)}</div>
         </Card.Content>
       </Card.Root>
 
-      <Card.Root class="border-rose-200 bg-rose-50">
+      <Card.Root class="surface-money-liability">
         <Card.Header class="pb-2">
           <Card.Description>Total Liabilities</Card.Description>
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-semibold text-rose-700">{formatCurrency(Math.abs(totalLiabilities))}</div>
+          <div class="text-2xl font-semibold text-money-liability-strong">{formatCurrency(Math.abs(totalLiabilities))}</div>
         </Card.Content>
       </Card.Root>
     </div>
@@ -337,7 +337,7 @@
                     class="flex justify-between items-center py-2 px-3 rounded-md hover:bg-accent transition-colors"
                   >
                     <span class="font-medium">{account.name}</span>
-                    <span class="font-mono text-sm text-rose-600">{formatCurrency(Math.abs(balance))}</span>
+                    <span class="font-mono text-sm text-money-liability">{formatCurrency(Math.abs(balance))}</span>
                   </a>
                 {/each}
               </div>
@@ -365,7 +365,7 @@
                   </div>
                   <span
                     class="font-mono text-sm {getTransactionAmount(tx) > 0
-                      ? 'text-emerald-600'
+                      ? 'text-money-positive'
                       : 'text-foreground'}"
                   >
                     {formatCurrency(getTransactionAmount(tx))}

@@ -285,7 +285,7 @@
           {/if}
 
           {#if yearEndResult}
-            <Alert.Root class="border-green-200 bg-green-50">
+            <Alert.Root class="surface-status-success">
               <Alert.Title>Year closed successfully</Alert.Title>
               <Alert.Description class="space-y-1">
                 <p>Close date: <strong>{yearEndResult.close_date}</strong></p>

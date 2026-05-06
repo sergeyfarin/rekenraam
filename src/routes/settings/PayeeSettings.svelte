@@ -100,7 +100,7 @@
   </Card.Header>
   <Card.Content>
     {#if payeeStatus}
-      <p class="text-sm text-green-600">{payeeStatus}</p>
+      <p class="text-sm text-status-success">{payeeStatus}</p>
     {/if}
     {#if payeeError}
       <p class="text-sm text-destructive">{payeeError}</p>

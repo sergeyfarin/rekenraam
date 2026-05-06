@@ -97,7 +97,7 @@
   </Card.Header>
   <Card.Content>
     {#if tagStatus}
-      <p class="text-sm text-green-600">{tagStatus}</p>
+      <p class="text-sm text-status-success">{tagStatus}</p>
     {/if}
     {#if tagError}
       <p class="text-sm text-destructive">{tagError}</p>

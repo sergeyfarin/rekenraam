@@ -133,7 +133,7 @@
   </Card.Header>
   <Card.Content>
     {#if institutionStatus}
-      <p class="text-sm text-green-600">{institutionStatus}</p>
+      <p class="text-sm text-status-success">{institutionStatus}</p>
     {/if}
     {#if institutionError}
       <p class="text-sm text-destructive">{institutionError}</p>

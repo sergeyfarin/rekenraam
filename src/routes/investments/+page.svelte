@@ -494,7 +494,7 @@
           <div class="text-2xl font-bold">{formatCurrency(totalCostBasis)}</div>
         </Card.Content>
       </Card.Root>
-      <Card.Root class={totalGainLoss >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+      <Card.Root class={totalGainLoss >= 0 ? "surface-money-positive" : "surface-money-negative"}>
         <Card.Header class="pb-2">
           <Card.Description>Unrealized Gain/Loss</Card.Description>
         </Card.Header>
@@ -540,11 +540,11 @@
                       <Table.Cell class="text-right">
                         {formatCurrency(value)}
                         {#if 'price_missing' in pos && pos.price_missing}
-                          <span class="text-yellow-600" title="Price missing">⚠</span>
+                          <span class="text-status-warning" title="Price missing">⚠</span>
                         {/if}
                       </Table.Cell>
                       <Table.Cell class="text-right">{formatCurrency(costBasis)}</Table.Cell>
-                      <Table.Cell class="text-right {gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}">
+                      <Table.Cell class="text-right {gainLoss >= 0 ? 'text-money-positive' : 'text-money-negative'}">
                         {formatCurrency(gainLoss)}
                       </Table.Cell>
                     </Table.Row>

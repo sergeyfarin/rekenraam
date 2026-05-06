@@ -1414,7 +1414,7 @@
                         </Badge>
                       </Table.Cell>
                       <Table.Cell class="text-sm">{accountName(primarySplit(tx, accountFilterId).account_id)}</Table.Cell>
-                      <Table.Cell class="text-right font-mono {primarySplit(tx, accountFilterId).amount_minor < 0 ? 'text-red-600' : 'text-green-600'}">
+                      <Table.Cell class="text-right font-mono {primarySplit(tx, accountFilterId).amount_minor < 0 ? 'text-money-negative' : 'text-money-positive'}">
                         {formatAmount(primarySplit(tx, accountFilterId).amount_minor, primarySplit(tx, accountFilterId).commodity_id)}
                       </Table.Cell>
                       <Table.Cell class="text-right">
@@ -1469,13 +1469,13 @@
               value={formDateRaw}
               oninput={(e) => onDateInput((e.currentTarget as HTMLInputElement).value)}
               onblur={onDateBlur}
-              class={!formDate && formDateRaw ? "border-red-500" : ""}
+              class={!formDate && formDateRaw ? "border-status-danger" : ""}
               required
             />
             {#if formDateHint}
               <p class="text-xs text-muted-foreground">→ {formDateHint}</p>
             {:else if !formDate && formDateRaw}
-              <p class="text-xs text-red-500">Date not recognized</p>
+              <p class="text-xs text-status-danger">Date not recognized</p>
             {/if}
           </div>
 
@@ -1687,7 +1687,7 @@
             {@const balanced = total === 0}
             <div class="flex items-center gap-2 mt-2">
               <span class="text-sm font-medium">Balance:</span>
-              <span class="text-sm font-mono {balanced ? 'text-green-600' : 'text-red-600'}">
+              <span class="text-sm font-mono {balanced ? 'text-money-positive' : 'text-money-negative'}">
                 {#if total === 0}
                   ✓ Balanced
                 {:else}

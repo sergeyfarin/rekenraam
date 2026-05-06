@@ -356,23 +356,23 @@
               <p class="text-muted-foreground">No data for selected period.</p>
             {:else}
               <div class="grid gap-4 md:grid-cols-3 mb-6">
-                <Card.Root class="border-green-200 bg-green-50">
+                <Card.Root class="surface-money-positive">
                   <Card.Header class="pb-2">
                     <Card.Description>Total Inflow</Card.Description>
                   </Card.Header>
                   <Card.Content>
-                    <div class="text-2xl font-bold text-green-700">{formatCurrency(cashflowTotals.inflow)}</div>
+                    <div class="text-2xl font-bold text-money-positive-strong">{formatCurrency(cashflowTotals.inflow)}</div>
                   </Card.Content>
                 </Card.Root>
-                <Card.Root class="border-red-200 bg-red-50">
+                <Card.Root class="surface-money-negative">
                   <Card.Header class="pb-2">
                     <Card.Description>Total Outflow</Card.Description>
                   </Card.Header>
                   <Card.Content>
-                    <div class="text-2xl font-bold text-red-700">{formatCurrency(cashflowTotals.outflow)}</div>
+                    <div class="text-2xl font-bold text-money-negative-strong">{formatCurrency(cashflowTotals.outflow)}</div>
                   </Card.Content>
                 </Card.Root>
-                <Card.Root class={cashflowTotals.net >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+                <Card.Root class={cashflowTotals.net >= 0 ? "surface-money-positive" : "surface-money-negative"}>
                   <Card.Header class="pb-2">
                     <Card.Description>Net Cash Flow</Card.Description>
                   </Card.Header>
@@ -395,9 +395,9 @@
                   {#each cashflowData as row}
                     <Table.Row>
                       <Table.Cell>{formatPeriod(row.period_start)}</Table.Cell>
-                      <Table.Cell class="text-right text-green-600">{formatCurrency(row.inflow_minor)}</Table.Cell>
-                      <Table.Cell class="text-right text-red-600">{formatCurrency(row.outflow_minor)}</Table.Cell>
-                      <Table.Cell class="text-right {row.net_minor >= 0 ? 'text-green-600' : 'text-red-600'}">
+                      <Table.Cell class="text-right text-money-positive">{formatCurrency(row.inflow_minor)}</Table.Cell>
+                      <Table.Cell class="text-right text-money-negative">{formatCurrency(row.outflow_minor)}</Table.Cell>
+                      <Table.Cell class="text-right {row.net_minor >= 0 ? 'text-money-positive' : 'text-money-negative'}">
                         {formatCurrency(row.net_minor)}
                       </Table.Cell>
                     </Table.Row>
@@ -420,12 +420,12 @@
               <p class="text-muted-foreground">No spending data for selected period.</p>
             {:else}
               <div class="mb-6">
-                <Card.Root class="border-red-200 bg-red-50 w-fit">
+                <Card.Root class="surface-money-negative w-fit">
                   <Card.Header class="pb-2">
                     <Card.Description>Total Spending</Card.Description>
                   </Card.Header>
                   <Card.Content>
-                    <div class="text-2xl font-bold text-red-700">{formatCurrency(Math.abs(categorySpendTotal))}</div>
+                    <div class="text-2xl font-bold text-money-negative-strong">{formatCurrency(Math.abs(categorySpendTotal))}</div>
                   </Card.Content>
                 </Card.Root>
               </div>
@@ -442,7 +442,7 @@
                   {#each categorySpendData.sort((a, b) => Math.abs(b.total_minor) - Math.abs(a.total_minor)) as row}
                     <Table.Row>
                       <Table.Cell>{row.category_name || "(No category)"}</Table.Cell>
-                      <Table.Cell class="text-right {row.total_minor < 0 ? 'text-red-600' : 'text-green-600'}">
+                      <Table.Cell class="text-right {row.total_minor < 0 ? 'text-money-negative' : 'text-money-positive'}">
                         {formatCurrency(row.total_minor)}
                       </Table.Cell>
                       <Table.Cell class="text-right text-muted-foreground">
@@ -490,7 +490,7 @@
                   {#each payeeTotalsData.sort((a, b) => Math.abs(b.total_minor) - Math.abs(a.total_minor)) as row}
                     <Table.Row>
                       <Table.Cell>{row.payee_name || "(No payee)"}</Table.Cell>
-                      <Table.Cell class="text-right {row.total_minor < 0 ? 'text-red-600' : 'text-green-600'}">
+                      <Table.Cell class="text-right {row.total_minor < 0 ? 'text-money-negative' : 'text-money-positive'}">
                         {formatCurrency(row.total_minor)}
                       </Table.Cell>
                       <Table.Cell class="text-right text-muted-foreground">
@@ -517,7 +517,7 @@
                 <p class="text-muted-foreground">No realized gains for selected period.</p>
               {:else}
                 <div class="mb-6">
-                  <Card.Root class={realizedGainsTotal >= 0 ? "border-green-200 bg-green-50 w-fit" : "border-red-200 bg-red-50 w-fit"}>
+                  <Card.Root class={realizedGainsTotal >= 0 ? "surface-money-positive w-fit" : "surface-money-negative w-fit"}>
                     <Card.Header class="pb-2">
                       <Card.Description>Total Realized Gain/Loss</Card.Description>
                     </Card.Header>
@@ -544,7 +544,7 @@
                         <Table.Cell class="text-right">{(row.quantity_minor / 1000000).toFixed(4)}</Table.Cell>
                         <Table.Cell class="text-right">{formatCurrency(row.proceeds_minor)}</Table.Cell>
                         <Table.Cell class="text-right">{formatCurrency(row.cost_basis_minor)}</Table.Cell>
-                        <Table.Cell class="text-right {row.gain_loss_minor >= 0 ? 'text-green-600' : 'text-red-600'}">
+                        <Table.Cell class="text-right {row.gain_loss_minor >= 0 ? 'text-money-positive' : 'text-money-negative'}">
                           {formatCurrency(row.gain_loss_minor)}
                         </Table.Cell>
                       </Table.Row>
@@ -564,7 +564,7 @@
                 <p class="text-muted-foreground">No unrealized gains data available.</p>
               {:else}
                 <div class="mb-6">
-                  <Card.Root class={unrealizedGainsTotal >= 0 ? "border-green-200 bg-green-50 w-fit" : "border-red-200 bg-red-50 w-fit"}>
+                  <Card.Root class={unrealizedGainsTotal >= 0 ? "surface-money-positive w-fit" : "surface-money-negative w-fit"}>
                     <Card.Header class="pb-2">
                       <Card.Description>Total Unrealized Gain/Loss</Card.Description>
                     </Card.Header>
@@ -591,10 +591,10 @@
                         <Table.Cell>{row.commodity_name}</Table.Cell>
                         <Table.Cell class="text-right">{formatCurrency(row.value_minor)}</Table.Cell>
                         <Table.Cell class="text-right">{formatCurrency(row.cost_basis_minor)}</Table.Cell>
-                        <Table.Cell class="text-right {row.unrealized_gain_minor >= 0 ? 'text-green-600' : 'text-red-600'}">
+                        <Table.Cell class="text-right {row.unrealized_gain_minor >= 0 ? 'text-money-positive' : 'text-money-negative'}">
                           {formatCurrency(row.unrealized_gain_minor)}
                           {#if row.price_missing}
-                            <span class="text-yellow-600" title="Price missing">⚠</span>
+                            <span class="text-status-warning" title="Price missing">⚠</span>
                           {/if}
                         </Table.Cell>
                       </Table.Row>

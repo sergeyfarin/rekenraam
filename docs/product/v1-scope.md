@@ -121,6 +121,14 @@ blocking later extension work:
 - frontend data access continues through `src/lib/api`
 - the existing persisted `theme` preference remains stable for later built-in
   theme token packs
+- semantic CSS tokens should be used for app surfaces, statuses, chart colors,
+  money colors, and account/transaction states so later theme packs can be
+  implemented by swapping token values
 - `/api/v1/plugins/*` and `/api/v1/themes/*` are reserved as future additive
   namespaces only; no placeholder endpoints, plugin/theme tables, manifest
   schemas, permission models, or plugin runtimes are required for b1
+- future arbitrary-language plugins should run out of process as isolated
+  sidecars; constrained trusted plugins should prefer a sandboxed
+  WebAssembly/WASI-style host once the post-b1 runtime is designed
+- future plugin permissions must be manifest-declared, admin-reviewed, scoped by
+  book/capability, enforced at the host boundary, and audited

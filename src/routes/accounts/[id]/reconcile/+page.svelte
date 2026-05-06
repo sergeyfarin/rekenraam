@@ -235,7 +235,7 @@
             </div>
             <div>
               <p class="text-xs uppercase text-muted-foreground">Difference</p>
-              <p class="font-mono font-semibold {needsOffset ? 'text-red-600' : 'text-green-600'}">{differenceMinor === null ? "-" : formatMinor(differenceMinor)}</p>
+              <p class="font-mono font-semibold {needsOffset ? 'text-money-negative' : 'text-money-positive'}">{differenceMinor === null ? "-" : formatMinor(differenceMinor)}</p>
             </div>
           </div>
         </div>
@@ -269,7 +269,7 @@
               <div class="data-cell">{payeeName(tx.transaction.payee_id)}</div>
               <div class="data-cell text-muted-foreground">{tx.transaction.memo ?? "-"}</div>
               <div class="data-cell"><span class="badge">{tx.transaction.status}</span></div>
-              <div class="data-cell amount {amount >= 0 ? 'text-green-600' : 'text-red-600'}">{formatMinor(amount)}</div>
+              <div class="data-cell amount {amount >= 0 ? 'text-money-positive' : 'text-money-negative'}">{formatMinor(amount)}</div>
             </label>
           {/each}
         </div>
@@ -354,7 +354,7 @@
   }
 
   .reconcile-row-label.is-checked {
-    background: color-mix(in srgb, var(--color-primary, #2563eb) 8%, transparent);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
   }
 
   .amount {

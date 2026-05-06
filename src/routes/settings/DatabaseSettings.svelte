@@ -136,7 +136,7 @@
           {runtimeStatus ? `${runtimeStatus.current_version ?? "—"} / ${runtimeStatus.latest_version}` : "—"}
         </p>
         {#if runtimeStatus && runtimeStatus.pending_versions.length > 0}
-          <p class="text-sm text-yellow-600">
+          <p class="text-sm text-status-warning">
             Pending migrations: {runtimeStatus.pending_versions.join(", ")}
           </p>
         {/if}
@@ -168,7 +168,7 @@
       <p class="text-sm text-muted-foreground mt-4">Integrity status: {integrityStatus}</p>
     {/if}
     {#if maintenanceStatus}
-      <p class="text-sm text-green-600 mt-4">{maintenanceStatus}</p>
+      <p class="text-sm text-status-success mt-4">{maintenanceStatus}</p>
     {/if}
     {#if maintenanceError}
       <p class="text-sm text-destructive mt-4">{maintenanceError}</p>

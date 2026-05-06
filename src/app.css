@@ -29,6 +29,38 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+  --status-success: oklch(0.527 0.154 150.069);
+  --status-success-surface: oklch(0.982 0.018 155.826);
+  --status-success-border: oklch(0.871 0.15 154.449);
+  --status-warning: oklch(0.681 0.162 75.834);
+  --status-warning-surface: oklch(0.987 0.026 102.212);
+  --status-warning-border: oklch(0.905 0.182 98.111);
+  --status-danger: var(--destructive);
+  --status-danger-surface: oklch(0.971 0.013 17.38);
+  --status-danger-border: oklch(0.885 0.062 18.334);
+  --money-positive: oklch(0.527 0.154 150.069);
+  --money-positive-strong: oklch(0.448 0.119 151.328);
+  --money-positive-surface: oklch(0.982 0.018 155.826);
+  --money-positive-border: oklch(0.871 0.15 154.449);
+  --money-negative: oklch(0.577 0.245 27.325);
+  --money-negative-strong: oklch(0.505 0.213 27.518);
+  --money-negative-surface: oklch(0.971 0.013 17.38);
+  --money-negative-border: oklch(0.885 0.062 18.334);
+  --money-asset: oklch(0.508 0.118 165.612);
+  --money-asset-strong: oklch(0.437 0.095 166.913);
+  --money-asset-surface: oklch(0.979 0.021 166.113);
+  --money-asset-border: oklch(0.845 0.143 164.978);
+  --money-liability: oklch(0.586 0.253 17.585);
+  --money-liability-strong: oklch(0.514 0.222 16.935);
+  --money-liability-surface: oklch(0.969 0.015 12.422);
+  --money-liability-border: oklch(0.892 0.058 10.001);
+  --account-asset: var(--money-asset);
+  --account-liability: var(--money-liability);
+  --account-income: var(--money-positive);
+  --account-expense: var(--money-negative);
+  --transaction-uncleared: var(--muted-foreground);
+  --transaction-cleared: var(--status-success);
+  --transaction-reconciled: var(--primary);
   --sidebar: oklch(0.984 0.003 247.858);
   --sidebar-foreground: oklch(0.129 0.042 264.695);
   --sidebar-primary: oklch(0.208 0.042 265.755);
@@ -63,6 +95,38 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+  --status-success: oklch(0.696 0.17 162.48);
+  --status-success-surface: oklch(0.266 0.065 152.934);
+  --status-success-border: oklch(0.448 0.119 151.328);
+  --status-warning: oklch(0.769 0.188 70.08);
+  --status-warning-surface: oklch(0.286 0.066 53.813);
+  --status-warning-border: oklch(0.554 0.135 66.442);
+  --status-danger: var(--destructive);
+  --status-danger-surface: oklch(0.258 0.092 26.042);
+  --status-danger-border: oklch(0.505 0.213 27.518);
+  --money-positive: oklch(0.696 0.17 162.48);
+  --money-positive-strong: oklch(0.845 0.143 164.978);
+  --money-positive-surface: oklch(0.266 0.065 152.934);
+  --money-positive-border: oklch(0.448 0.119 151.328);
+  --money-negative: oklch(0.704 0.191 22.216);
+  --money-negative-strong: oklch(0.808 0.114 19.571);
+  --money-negative-surface: oklch(0.258 0.092 26.042);
+  --money-negative-border: oklch(0.505 0.213 27.518);
+  --money-asset: oklch(0.696 0.17 162.48);
+  --money-asset-strong: oklch(0.845 0.143 164.978);
+  --money-asset-surface: oklch(0.266 0.065 152.934);
+  --money-asset-border: oklch(0.448 0.119 151.328);
+  --money-liability: oklch(0.704 0.191 22.216);
+  --money-liability-strong: oklch(0.808 0.114 19.571);
+  --money-liability-surface: oklch(0.258 0.092 26.042);
+  --money-liability-border: oklch(0.505 0.213 27.518);
+  --account-asset: var(--money-asset);
+  --account-liability: var(--money-liability);
+  --account-income: var(--money-positive);
+  --account-expense: var(--money-negative);
+  --transaction-uncleared: var(--muted-foreground);
+  --transaction-cleared: var(--status-success);
+  --transaction-reconciled: var(--primary);
   --sidebar: oklch(0.208 0.042 265.755);
   --sidebar-foreground: oklch(0.984 0.003 247.858);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -71,6 +135,81 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@layer utilities {
+  .text-money-positive {
+    color: var(--money-positive);
+  }
+
+  .text-money-positive-strong {
+    color: var(--money-positive-strong);
+  }
+
+  .text-money-negative {
+    color: var(--money-negative);
+  }
+
+  .text-money-negative-strong {
+    color: var(--money-negative-strong);
+  }
+
+  .text-money-asset {
+    color: var(--money-asset);
+  }
+
+  .text-money-asset-strong {
+    color: var(--money-asset-strong);
+  }
+
+  .text-money-liability {
+    color: var(--money-liability);
+  }
+
+  .text-money-liability-strong {
+    color: var(--money-liability-strong);
+  }
+
+  .text-status-success {
+    color: var(--status-success);
+  }
+
+  .text-status-warning {
+    color: var(--status-warning);
+  }
+
+  .text-status-danger {
+    color: var(--status-danger);
+  }
+
+  .border-status-danger {
+    border-color: var(--status-danger);
+  }
+
+  .surface-money-positive {
+    background-color: var(--money-positive-surface);
+    border-color: var(--money-positive-border);
+  }
+
+  .surface-money-negative {
+    background-color: var(--money-negative-surface);
+    border-color: var(--money-negative-border);
+  }
+
+  .surface-money-asset {
+    background-color: var(--money-asset-surface);
+    border-color: var(--money-asset-border);
+  }
+
+  .surface-money-liability {
+    background-color: var(--money-liability-surface);
+    border-color: var(--money-liability-border);
+  }
+
+  .surface-status-success {
+    background-color: var(--status-success-surface);
+    border-color: var(--status-success-border);
+  }
 }
 /* 
 @theme inline {

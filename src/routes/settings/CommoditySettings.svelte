@@ -788,7 +788,7 @@
         <Button onclick={openNewCurrency} disabled={busy} size="sm">Add Currency</Button>
       </div>
       {#if currencyStatus}
-        <p class="text-sm text-green-600 mb-2">{currencyStatus}</p>
+        <p class="text-sm text-status-success mb-2">{currencyStatus}</p>
       {/if}
       {#if currencyError}
         <p class="text-sm text-destructive mb-2">{currencyError}</p>
@@ -843,7 +843,7 @@
     <!-- Other Commodities Sub-tab -->
     {#if commoditiesSubTab === 'commodities'}
       {#if commodityStatus}
-        <p class="text-sm text-green-600 mb-2">{commodityStatus}</p>
+        <p class="text-sm text-status-success mb-2">{commodityStatus}</p>
       {/if}
       {#if commodityError}
         <p class="text-sm text-destructive mb-2">{commodityError}</p>
@@ -888,7 +888,7 @@
         <Button onclick={openNewFxDaily} disabled={busy} size="sm">Add Rate</Button>
       </div>
       {#if fxRateStatus}
-        <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
+        <p class="text-sm text-status-success mb-2">{fxRateStatus}</p>
       {/if}
       {#if fxRateError}
         <p class="text-sm text-destructive mb-2">{fxRateError}</p>
@@ -933,7 +933,7 @@
         <Button onclick={openNewFxOfficial} disabled={busy} size="sm">Add Official Rate</Button>
       </div>
       {#if fxRateStatus}
-        <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
+        <p class="text-sm text-status-success mb-2">{fxRateStatus}</p>
       {/if}
       {#if fxRateError}
         <p class="text-sm text-destructive mb-2">{fxRateError}</p>
@@ -1003,7 +1003,7 @@
       {/if}
 
       {#if fxRateStatus}
-        <p class="text-sm text-green-600 mb-2">{fxRateStatus}</p>
+        <p class="text-sm text-status-success mb-2">{fxRateStatus}</p>
       {/if}
       {#if fxRateError}
         <p class="text-sm text-destructive mb-2">{fxRateError}</p>

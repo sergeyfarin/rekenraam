@@ -43,9 +43,12 @@ Still in migration:
 Deferred after b1/v1:
 
 - plugin execution, frontend plugin slots, granular permissions,
-  GitHub-sourced manifests, and Extism/WASM evaluation
-- built-in/custom theme token packs beyond the existing persisted `theme`
-  preference
+  GitHub-sourced manifests, and WebAssembly/WASI or Extism-style runtime
+  evaluation
+- arbitrary-language plugins, which should use isolated sidecars rather than
+  in-process execution
+- built-in/custom theme token packs beyond semantic CSS tokens and the existing
+  persisted `theme` preference
 
 ## Run The Self-Hosted Stack
 
@@ -186,6 +189,7 @@ views.
 | [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) | Canonical migration and execution roadmap |
 | [docs/product/v1-scope.md](docs/product/v1-scope.md) | Personal-first v1 product scope |
 | [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) | PostgreSQL schema direction |
+| [docs/architecture/post-b1-extensibility.md](docs/architecture/post-b1-extensibility.md) | Future plugin and theme architecture guardrails |
 | [docs/parity/desktop-to-python.md](docs/parity/desktop-to-python.md) | Desktop-to-web parity matrix |
 
 ## Contribution Notes
