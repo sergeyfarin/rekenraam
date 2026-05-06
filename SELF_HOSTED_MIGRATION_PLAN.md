@@ -302,6 +302,8 @@ Exit criteria:
 Goal: widen the already migrated reporting, investment, tax, and pricing
 foundations into v1-complete personal finance workflows.
 
+Note on capital gains realized and not realized: find a nice and elegant way to manage different capital gains for different purposes. E.g. different tax authorities may require different tax gains calculation different from what I use for personal accounting. Furthermore some brokers might dictate yet their own capital gains (FIFO, LIFO or Average cost). It may be further complicated if securities are traded in different currency vs. currency of the account (Trading 212, Trade Republic)
+
 Tasks:
 
 1. Reports: net worth over time, account trends, budget variance, saved/custom
