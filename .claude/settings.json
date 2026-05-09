@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /home/reken/Repos/rekenraam/apps/api && cat Makefile 2>/dev/null | head -20 ; echo \"---\" ; cat ../../Makefile 2>/dev/null | head -50)",
+      "Read(//home/reken/**)",
+      "Bash(pg_isready -h 127.0.0.1 -p 5432)",
+      "Bash(PGPASSWORD=rekenraam psql -h 127.0.0.1 -U rekenraam -d postgres -c '\\\\l')",
+      "Bash(psql -h 127.0.0.1 -U postgres -d postgres -c 'select 1')",
+      "Bash(sudo -n -u postgres psql -c 'select 1')",
+      "Bash(docker --version)",
+      "Bash(POSTGRES_PORT=55432 docker compose -f compose.yaml -f compose.dev.yaml up -d postgres)",
+      "Bash(docker compose *)",
+      "Bash(docker run *)",
+      "Bash(docker exec *)",
+      "Bash(break)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/python --version)",
+      "Bash(grep -E '^\\(pytest|pyright|ruff\\)$')",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest tests/e2e/test_smoke.py -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest tests/test_repositories.py -q)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest -q)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest tests/test_migrations.py -q)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_migrations.py apps/api/tests/test_auth_api.py apps/api/tests/test_pricing_repository.py apps/api/tests/test_reports_repository.py apps/api/tests/test_fx_manual_api.py apps/api/tests/test_imports_exports.py -q)",
+      "Bash(git stash *)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_repositories.py apps/api/tests/e2e/ -q)",
+      "Bash(docker stop *)"
+    ]
+  }
+}
