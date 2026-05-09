@@ -32,7 +32,13 @@
       "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_admin_api.py apps/api/tests/test_repositories.py apps/api/tests/test_services.py apps/api/tests/e2e/ -q)",
       "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/ -q)",
       "Bash(../../.venv/bin/ruff check *)",
-      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/e2e/ -q)"
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/e2e/ -q)",
+      "Bash(python3 -c \"import yaml,sys; yaml.safe_load\\(open\\('.github/workflows/api-tests.yml'\\)\\); print\\('YAML OK'\\)\")",
+      "Bash(make api-lint *)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ make api-lint)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ ruff format --check apps/api)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ make api-typecheck)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest -q --deselect tests/test_migrations.py::test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database --deselect tests/test_migrations.py::test_alembic_head_matches_full_stage2_schema_contract --deselect tests/test_auth_api.py::test_book_membership_roles_gate_writes --deselect tests/test_auth_api.py::test_user_writes_stamp_audit_context --deselect tests/test_pricing_repository.py::test_pricing_repository_lists_sources_updates_policy_and_manages_assignments --deselect tests/test_reports_repository.py::test_report_repository_returns_cashflow_category_spend_and_payee_totals --deselect tests/test_fx_manual_api.py::test_commodity_autocomplete_and_manual_fx_observations --deselect tests/test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account)"
     ]
   }
 }

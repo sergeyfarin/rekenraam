@@ -195,6 +195,7 @@ secrets, keep PostgreSQL private to the Compose network, and enable MFA.
 
 | Document | Purpose |
 | --- | --- |
+| [TODO.md](TODO.md) | Live dashboard of in-flight work, active focus, and open findings |
 | [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) | Canonical migration and execution roadmap |
 | [docs/product/v1-scope.md](docs/product/v1-scope.md) | Personal-first v1 product scope |
 | [docs/product/v1-gap-plan.md](docs/product/v1-gap-plan.md) | Active V1 gap analysis, phase status, and fix plan |

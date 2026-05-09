@@ -4,6 +4,8 @@ Last updated: 2026-05-09
 
 Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity. Items marked **DONE** have shipped; the relevant section retains the original gap description for historical context.
 
+For the day-to-day "what's next" view, see [TODO.md](../../TODO.md).
+
 Severity legend:
 - **B** — release blocker (gate per `v1-scope.md` "Release Gate" or scope `Must Have`)
 - **H** — hardening (correctness or operational risk; should ship at v1)

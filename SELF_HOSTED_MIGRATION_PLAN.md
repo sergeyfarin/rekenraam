@@ -32,6 +32,7 @@ consciously dropped.
 
 ## Sources Of Truth
 
+- Live in-flight TODO dashboard: `TODO.md`
 - Product scope: `docs/product/v1-scope.md`
 - V1 gap analysis & fix plan: `docs/product/v1-gap-plan.md`
 - PostgreSQL schema direction: `docs/architecture/postgres-schema.md`

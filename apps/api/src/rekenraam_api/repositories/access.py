@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.access import (
@@ -282,7 +284,7 @@ class AccessRepository:
             .values(revoked_at=datetime.now(UTC))
         )
         await self._session.flush()
-        return int(result.rowcount or 0)
+        return int(cast(CursorResult[object], result).rowcount or 0)
 
     async def list_user_book_ids(self, user_id: int) -> list[int]:
         result = await self._session.execute(
