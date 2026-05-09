@@ -32,6 +32,18 @@ async def test_commodity_autocomplete_and_manual_fx_observations(
     client: AsyncClient,
     repository_session: AsyncSession,
 ) -> None:
+    # All /api/v1/commodities and /api/v1/pricing routes require an authenticated
+    # session, so bootstrap an admin first to leave the client logged in.
+    bootstrap = await client.post(
+        "/api/v1/auth/bootstrap/admin",
+        json={
+            "email": "admin@example.test",
+            "password": "correct horse battery staple",
+            "display_name": "Admin",
+        },
+    )
+    assert bootstrap.status_code == 200
+
     usd_id = await repository_session.scalar(
         select(Commodity.id).where(Commodity.book_id == 1).where(Commodity.symbol == "USD").limit(1)
     )

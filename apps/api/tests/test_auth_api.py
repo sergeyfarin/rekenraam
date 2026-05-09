@@ -152,6 +152,26 @@ async def test_user_writes_stamp_audit_context(
 ) -> None:
     await _bootstrap_admin(client)
 
+    # Account 3 is the seeded "Opening Balances" system account; the transaction
+    # service refuses splits against protected system accounts. Create a regular
+    # expense account to use as the offset side instead.
+    expense = await client.post(
+        "/api/v1/accounts",
+        json={
+            "book_id": 1,
+            "parent_id": None,
+            "account_type": "expense",
+            "name": "Groceries",
+            "commodity_id": 1,
+            "institution_id": None,
+            "country_id": None,
+            "number_last4": None,
+            "is_closed": False,
+        },
+    )
+    assert expense.status_code == 200
+    expense_id = expense.json()["id"]
+
     transaction = await client.post(
         "/api/v1/transactions",
         json={
@@ -174,7 +194,7 @@ async def test_user_writes_stamp_audit_context(
                     "memo": "cash",
                 },
                 {
-                    "account_id": 3,
+                    "account_id": expense_id,
                     "commodity_id": 1,
                     "amount_minor": 1000,
                     "category_id": None,

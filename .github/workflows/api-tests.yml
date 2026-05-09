@@ -73,22 +73,10 @@ jobs:
       - name: Pyright (strict)
         run: make api-typecheck
 
-      # Pre-existing test failures on `main` are quarantined here while Phase 2
-      # step 9 triages each one. See TODO.md and docs/product/v1-gap-plan.md
-      # ("Test status snapshot") for the list and rationale. Each deselect MUST
-      # include the issue/follow-up reason so this list shrinks instead of rots.
-      #
-      # When you fix one of these, remove its line and assert it passes locally
-      # via `uv run pytest <node-id>`.
+      # Phase 2 step 9 (2026-05-09) cleared the deselect list: 6 tests were
+      # fixed, 2 were marked @pytest.mark.skip(reason=...) in source with a
+      # forward-pointer to where the work resumes. CI now runs the full suite
+      # with no quarantine flags. Any new failure is a real regression.
       - name: Pytest
         working-directory: apps/api
-        run: |
-          pytest -q \
-            --deselect 'tests/test_migrations.py::test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database' \
-            --deselect 'tests/test_migrations.py::test_alembic_head_matches_full_stage2_schema_contract' \
-            --deselect 'tests/test_auth_api.py::test_book_membership_roles_gate_writes' \
-            --deselect 'tests/test_auth_api.py::test_user_writes_stamp_audit_context' \
-            --deselect 'tests/test_pricing_repository.py::test_pricing_repository_lists_sources_updates_policy_and_manages_assignments' \
-            --deselect 'tests/test_reports_repository.py::test_report_repository_returns_cashflow_category_spend_and_payee_totals' \
-            --deselect 'tests/test_fx_manual_api.py::test_commodity_autocomplete_and_manual_fx_observations' \
-            --deselect 'tests/test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account'
+        run: pytest -q

@@ -3,7 +3,7 @@
 Single dashboard for in-flight Rekenraam V1 work. Links back to the canonical
 specs — does **not** duplicate them. Update this file when items move state.
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 ## Sources of truth
 
@@ -15,12 +15,12 @@ Last updated: 2026-05-09
 
 ## Active focus
 
-**Pivot in progress.** Before continuing Phase 1 feature work, stabilize the test signal so future changes self-police on PR. See [Decision below](#decision-2026-05-09-stabilize-before-features) for rationale.
+**Stabilize-before-features pivot.** Steps 1 and 2 of the original active-focus list are done; the test signal is now trustworthy. CI runs the full suite with no quarantine flags, lint clean, pyright strict clean.
 
-1. [ ] **Phase 1 step 7** — Add CI API test job. Spec: [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md). Output: `.github/workflows/api-tests.yml` running `ruff check`, `ruff format --check`, `pyright`, `pytest` against a Postgres service. Acceptance: a deliberately-broken PR fails CI.
-2. [ ] **Phase 2 step 9** — Triage the 8 pre-existing test failures listed in [v1-gap-plan.md §Test status snapshot](docs/product/v1-gap-plan.md). Each: fix or quarantine with an explicit `@pytest.mark.skip(reason=...)` referencing a follow-up TODO entry. Acceptance: `pytest apps/api/tests/` passes on a fresh checkout of `main`.
-3. [ ] **Phase 2 step 10** — Rebuild [stage2_schema_contract.py](apps/api/tests/stage2_schema_contract.py) from `Base.metadata` so it can't drift silently. Acceptance: `test_alembic_head_matches_full_stage2_schema_contract` passes; deleting any model attribute makes it fail.
-4. [ ] **Phase 1 step 2** — User invite flow. Resume after the three above are green.
+1. [x] **Phase 1 step 7** — Add CI API test job. Shipped 2026-05-09.
+2. [x] **Phase 2 step 9** — Triage 8 pre-existing test failures. Shipped 2026-05-10. 6 fixed, 2 explicitly skipped with forward-pointers; CI no longer needs `--deselect` flags. Per-test outcomes: see [v1-gap-plan.md §Phase 2 step 9](docs/product/v1-gap-plan.md).
+3. [ ] **Phase 2 step 10** — Rebuild [stage2_schema_contract.py](apps/api/tests/stage2_schema_contract.py) from `Base.metadata` so it can't drift silently. Acceptance: re-enable `test_alembic_head_matches_full_stage2_schema_contract` (currently `@pytest.mark.skip`); deleting any model attribute makes it fail.
+4. [ ] **Phase 1 step 2** — User invite flow. Resume after step 3 lands so the schema-drift detector is back online before more migrations ship.
 
 After (4) lands, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md).
 
@@ -44,7 +44,7 @@ After (4) lands, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](do
 | 4 | Stock-split lot rewrite | not started | gap-plan §1.6.1, §Phase 1 |
 | 5 | Cross-session OFX duplicate detection | not started | gap-plan §1.4.3, §Phase 1 |
 | 6 | Reverse-proxy + TLS production example | not started | gap-plan §1.7.1, §Phase 1 |
-| 7 | CI API test job | **next** | gap-plan §1.7.2, §Phase 1 |
+| 7 | CI API test job | **DONE 2026-05-09** | gap-plan §1.7.2, §Phase 1 |
 | 8 | Tauri removal | not started — requires Phase 0 e2e + parity sign-off | gap-plan §1.8, migration-plan Milestone 12 |
 
 ## Phase 2 — Hardening (high-risk correctness)
@@ -59,20 +59,23 @@ Reference for full detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.m
 | 4 | Pricing supersession & cross-rate triangulation | not started |
 | 5 | Report cache invalidation on writes/currency-change | not started |
 | 6 | Budget rollover, schedule recurrence, loan amortization edge cases | not started |
-| 7 | Auth depth (deactivate-revokes-sessions, persistent throttling, MFA paths) | not started |
+| 7 | Auth depth (deactivate-revokes-sessions, persistent throttling, MFA paths) | partial — `AuthorizationError` no longer inherits `ValueError` (fixed 2026-05-10 in step 9), so 403s aren't masked as 400s. Remaining work as listed in gap plan. |
 | 8 | CSV export escaping & locale | not started |
-| 9 | Triage 8 pre-existing test failures | **#2 in active focus** |
+| 9 | Triage 8 pre-existing test failures | **DONE 2026-05-10** |
 | 10 | Rebuild `stage2_schema_contract.py` from metadata | **#3 in active focus** |
 | 11 | Unauth `/api/v1/health` (remove transitive `require_request_context`) | not started |
 
 ## Open findings (severity B/H, not yet in a phase)
 
-These came out of Phase 0 / Phase 1 step 1 and should not be lost. Logged in detail in [v1-gap-plan.md §Findings](docs/product/v1-gap-plan.md).
+These came out of Phase 0 / Phase 1 step 1 / Phase 1 step 7 / Phase 2 step 9. Logged in detail in [v1-gap-plan.md §Findings](docs/product/v1-gap-plan.md).
 
 - [ ] **`/api/v1/health` is auth-protected.** Severity H. Phase 2 step 11.
 - [ ] **`/api/v1/accounts/balances` excludes zero-balance accounts.** Severity N. Decide: include zero rows or document the contract.
 - [ ] **`stage2_schema_contract.py` is materially incomplete.** Severity B. Phase 2 step 10.
-- [ ] **8 pre-existing failing tests on `main`.** Severity B for the migration-contract one, H for the rest. Phase 2 step 9.
+- [x] **8 pre-existing failing tests on `main`.** Resolved 2026-05-10 in Phase 2 step 9.
+- [ ] **`ruff format` not enforced.** Severity N. 70+ files would need reformatting; bulk-format the repo as a single focused PR, then enable `ruff format --check` in [.github/workflows/api-tests.yml](.github/workflows/api-tests.yml).
+- [ ] **`AuthorizationError` was masked as 400 in many routes.** Severity H, **fixed in step 9** by changing the base class from `ValueError` to `Exception`. Still worth a follow-up: audit every `except ValueError` in `apps/api/src/rekenraam_api/api/v1/` to confirm no other auth-shaped errors are similarly swallowed (Phase 2 step 7).
+- [ ] **Service-level locked-range import test fails with `MissingGreenlet`.** Severity H, the underlying behavior is correct (verified at HTTP layer), the test wiring isn't. Skipped pending an e2e rewrite as part of Phase 2 step 1.
 
 ## Open hardening items from milestone roadmap not yet in the gap plan
 
@@ -88,6 +91,8 @@ Not all of [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md)'s "Rem
 
 - 2026-05-09 — Phase 0: end-to-end test seam ([v1-gap-plan.md §Phase 0](docs/product/v1-gap-plan.md)).
 - 2026-05-09 — Phase 1 step 1: self-service password reset ([v1-gap-plan.md §Phase 1 step 1](docs/product/v1-gap-plan.md)).
+- 2026-05-09 — Phase 1 step 7: CI API test job at [.github/workflows/api-tests.yml](.github/workflows/api-tests.yml). Pyright caught a strict-mode bug in `revoke_all_user_sessions`'s rowcount handling that the local pytest run missed; fixed in the same PR.
+- 2026-05-10 — Phase 2 step 9: triaged 8 pre-existing test failures. 6 fixed, 2 explicitly skipped with forward-pointers; deselect list pruned from CI. Side fix: `AuthorizationError` no longer inherits `ValueError`, which was systemically masking 403s as 400s across many routes ([v1-gap-plan.md §Phase 2 step 9](docs/product/v1-gap-plan.md)).
 
 ## Decision 2026-05-09 — stabilize before features
 

@@ -1,6 +1,6 @@
 # V1 Gap Analysis & Fix Plan
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity. Items marked **DONE** have shipped; the relevant section retains the original gap description for historical context.
 
@@ -11,36 +11,34 @@ Severity legend:
 - **H** — hardening (correctness or operational risk; should ship at v1)
 - **N** — nice-to-have (scope `Should Have`, can defer if time-boxed)
 
-## Test status snapshot (2026-05-09)
+## Test status snapshot (2026-05-10, after Phase 2 step 9)
 
-Backend `pytest apps/api/tests/`:
+Backend in [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml):
 
-- **141 passed, 8 failed.** All 8 failures are pre-existing on `main` (verified by stashing changes and re-running). My Phase-0/Phase-1 work added 11 new passing tests (10 e2e + 1 admin migration-version check) and zero new failures.
-- The 8 pre-existing failures, captured for triage:
-  1. `test_migrations.py::test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database` — `Path doesn't exist: alembic` when running from repo root; cwd-relative `script_location` resolution.
-  2. `test_migrations.py::test_alembic_head_matches_full_stage2_schema_contract` — schema-contract drift (see findings).
-  3. `test_auth_api.py::test_book_membership_roles_gate_writes`
-  4. `test_auth_api.py::test_user_writes_stamp_audit_context`
-  5. `test_pricing_repository.py::test_pricing_repository_lists_sources_updates_policy_and_manages_assignments`
-  6. `test_reports_repository.py::test_report_repository_returns_cashflow_category_spend_and_payee_totals`
-  7. `test_fx_manual_api.py::test_commodity_autocomplete_and_manual_fx_observations`
-  8. `test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account`
+- **CI verdict: 147 passed, 2 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite. Skipped tests are explicit `@pytest.mark.skip(reason=…)` with forward-pointers.
+- Pyright (strict): clean.
+- Ruff check: clean.
+- Ruff format check: not yet a gate (70/123 files would need reformatting).
 
-Tracked in Phase 2 step 9. CI does not currently run the API test suite, so this drift has been invisible to PR review (Phase 1 step 7 fixes that).
+The 2 explicit skips:
+
+  - `test_migrations.py::test_alembic_head_matches_full_stage2_schema_contract` — schema contract is materially incomplete (Phase 2 step 10 will rebuild it from `Base.metadata`).
+  - `test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account` — service-level test fails with `sqlalchemy.exc.MissingGreenlet` during the post-error abandonment path; behavior is correct at HTTP layer. To be rewritten as an e2e test alongside Phase 2 step 1.
 
 ## Phase status
 
 - [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
-- [ ] **Phase 1** — release-blocker scope items (1/8 items done)
+- [ ] **Phase 1** — release-blocker scope items (2/8 items done)
   - [x] 1. Self-service password reset (completed 2026-05-09)
   - [ ] 2. User invite flow
   - [ ] 3. Cross-currency transfer endpoint
   - [ ] 4. Stock-split lot rewrite
   - [ ] 5. Cross-session OFX duplicate detection
   - [ ] 6. Reverse-proxy + TLS production example
-  - [ ] 7. CI API test job
+  - [x] 7. CI API test job (completed 2026-05-09)
   - [ ] 8. Tauri removal
-- [ ] **Phase 2** — hardening of high-risk service code
+- [ ] **Phase 2** — hardening of high-risk service code (1/11 items done)
+  - [x] 9. Triage 8 pre-existing test failures (completed 2026-05-10)
 - [ ] **Phase 3** — frontend tests
 - [ ] **Phase 4** — nice-to-have scope items
 
@@ -50,9 +48,13 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 - **`/api/v1/health` is transitively auth-protected.** The route depends on `get_book_service`, which depends on `get_access_policy`, which depends on `require_request_context`. Health checks should be unauthenticated. Severity **H**; address in Phase 2 alongside other auth wiring fixes. Location: [apps/api/src/rekenraam_api/api/v1/health.py](../../apps/api/src/rekenraam_api/api/v1/health.py).
 - **`/api/v1/accounts/balances` only returns accounts with at least one posted split.** Documented in the smoke test. Severity **N** (UI works around it). May surprise API consumers; consider returning a zero-balance row for every active account.
-- **8 pre-existing test failures on `main`.** Enumerated in the "Test status snapshot" above and verified by stashing changes and running on bare `main`. Severity **B** for the migration-contract drift (schema versus model is a release-gate concern); the rest are **H** until triaged. Tracked in Phase 2 step 9. Should be investigated and either fixed or quarantined before Phase 1 lands more feature work that piles on top.
+- **8 pre-existing test failures on `main` — RESOLVED 2026-05-10.** Phase 2 step 9 fixed 6, skipped 2 with forward-pointers. CI now runs the full suite with no quarantine flags. See the per-test outcome in §Phase 2 step 9 below.
+
+- **`AuthorizationError` was masked as 400 in many routes — FIXED 2026-05-10.** While triaging Phase 2 step 9, discovered that `AuthorizationError` inheriting from `ValueError` meant any route with `try: ... except ValueError: HTTP_400_BAD_REQUEST` was silently swallowing 403 errors. Fixed at the root by changing the base class to `Exception`. A follow-up audit (Phase 2 step 7) should grep every `except ValueError` in `apps/api/src/rekenraam_api/api/v1/` to confirm no other auth-shaped errors are similarly affected.
 
 - **`stage2_schema_contract.py` is materially incomplete.** Spot-checked while shipping the password-reset migration: the contract has no entries for `mfa_challenges`, `mfa_recovery_codes`, or `user_mfa_totp` (added in migration 0004) and is missing `password_reset_tokens` (added in migration 0005). The drift on the `users` table that the test reports is real but only the surface symptom — large parts of the schema are simply not described by the contract. Phase 2 should rebuild this contract from `Base.metadata` rather than continue patching it by hand. Severity **B** because the contract is a release-gate signal that currently can't be trusted.
+
+- **`ruff format` not enforced.** Discovered while wiring CI in Phase 1 step 7: `ruff format --check apps/api` reports 70 of 123 Python files would be reformatted. Adding the check as a CI gate now would block every PR. Bulk-format the repo as one focused PR, then enable the gate. Severity **N** (cosmetic, but a real risk-reduction once enforced because review diffs become smaller). Not in any phase yet — tracked in [TODO.md](../../TODO.md).
 
 ---
 
@@ -121,7 +123,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 | # | Gap | Location | Sev |
 |---|---|---|---|
 | 1.7.1 | `compose.prod.example.yaml` does not include a **reverse proxy / TLS** example (Caddy or nginx with Let's Encrypt). Scope release gate explicitly requires "documented HTTPS … requirements". | [compose.prod.example.yaml](../../compose.prod.example.yaml), [docs/deployment/self-hosting.md](../../docs/deployment/self-hosting.md) | B |
-| 1.7.2 | CI exists for migrations + ops smoke + frontend, but **no API test job** runs `pytest`, `ruff`, or `pyright`. | new `.github/workflows/api-tests.yml` | B |
+| 1.7.2 | CI API test job — **DONE 2026-05-09.** [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) runs `ruff check`, `pyright` (strict), and `pytest` against a Postgres 16 service. Triggers on changes under `apps/api/**`, `pyproject.toml`, `uv.lock`, or `Makefile`. Uses `astral-sh/setup-uv` + `uv sync --frozen` so what runs in CI matches local `uv sync`. The 8 pre-existing failures are quarantined inline via `--deselect`; Phase 2 step 9 will convert each to an in-source skip and remove the corresponding deselect. `ruff format --check` is intentionally NOT yet a gate — see findings. | [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) | B |
 | 1.7.3 | **Backup smoke test** present (`scripts/restore_smoke.sh`) but not wired into CI on a schedule. | `.github/workflows/operational-self-hosting.yml` | H |
 | 1.7.4 | **Rate-limit / failed-login** state in Postgres or Redis instead of process memory (see 1.1.5). | `services/auth.py` | H |
 
@@ -300,7 +302,11 @@ In order:
 4. **Stock-split lot rewrite** (1.6.1): on `corporate_action.kind == 'split'` post, supersede affected lots with adjusted quantity and per-share basis. Tests: realized gain after split, holding-period preservation.
 5. **Cross-session OFX duplicate detection** (1.4.3): unique partial index on `(account_id, fitid)` where fitid IS NOT NULL; service path checks before insert.
 6. **Reverse-proxy + TLS production example** (1.7.1): add Caddy service to `compose.prod.example.yaml` with auto-TLS; document Let's Encrypt setup in `docs/deployment/self-hosting.md`.
-7. **CI API test job** (1.7.2): new `.github/workflows/api-tests.yml` running `ruff check`, `ruff format --check`, `pyright`, `pytest` against a Postgres service.
+7. **CI API test job** (1.7.2) — **DONE 2026-05-09.** Delivered:
+   - [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) with a Postgres 16 service container, `astral-sh/setup-uv@v6`, `uv sync --frozen`, then `make api-lint` (ruff), `make api-typecheck` (pyright strict), and `pytest` with the 8 pre-existing failures quarantined via `--deselect`.
+   - Triggers on push and pull_request when `apps/api/**`, `pyproject.toml`, `uv.lock`, `Makefile`, or the workflow itself changes.
+   - First useful catch: pyright caught a `reportUnknownMemberType` regression in [`AccessRepository.revoke_all_user_sessions`](../../apps/api/src/rekenraam_api/repositories/access.py) that local pytest had passed. Fixed in the same PR by mirroring the `cast(CursorResult[object], result).rowcount` pattern used in [ergonomics.py](../../apps/api/src/rekenraam_api/repositories/ergonomics.py).
+   - **Not enforced yet:** `ruff format --check`. 70 of 123 Python files would need reformatting and that bulk change should land as a single focused PR (tracked as a new finding below and in [TODO.md](../../TODO.md)).
 8. **Tauri removal** (1.8.1–1.8.3): delete `src-tauri/`, drop `@tauri-apps/*` deps, drop `"tauri"` script, remove Tauri-specific Vite config. Verify `npm run check` and `npm run build` still pass.
 
 Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a documented deferral.
@@ -322,7 +328,18 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
 6. **Budget rollover, schedule recurrence, loan amortization** (2.6).
 7. **Auth depth** (1.1.3, 1.1.5, 2.7): session revocation on deactivate; persistent throttling state (Postgres table or Redis); session expiry tests; cross-book isolation tests.
 8. **CSV export escaping & locale** (1.4.4, 2.8).
-9. **Pre-existing test failures** (per the findings above): triage the 8 tests that fail on `main`, fix or quarantine each. Most likely root causes are the `users` schema drift and Alembic-script-path resolution in `test_migrations.py`.
+9. **Pre-existing test failures** (per the findings above) — **DONE 2026-05-10.** Per-test outcomes:
+   - **Fixed (6):**
+     - `test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database` — set `script_location` explicitly so the test is cwd-independent.
+     - `test_book_membership_roles_gate_writes` — surfaced a systemic bug: `AuthorizationError` extending `ValueError` was being swallowed by the `except ValueError` in many route handlers, returning 400 instead of 403. Fixed at the root by changing `AuthorizationError` to inherit from `Exception`. The global FastAPI exception handler still maps it to 403; routes that already explicitly catch `AuthorizationError` continue to work.
+     - `test_user_writes_stamp_audit_context` — replaced the seeded system-account leg (Opening Balances) with a freshly-created Expense account. The transaction service correctly refuses splits on protected system accounts; the test was written before that guard.
+     - `test_pricing_repository_lists_sources_updates_policy_and_manages_assignments` — `session.merge()` returns the merged persistent instance; the original `Commodity()` argument stays detached, so the subsequent `.refresh()` raised `InvalidRequestError`. Bound the merged instance back to `eur`.
+     - `test_report_repository_returns_cashflow_category_spend_and_payee_totals` — the test asserted a non-empty cashflow row, but `report_cashflow` filters via `Category.kind in ('income','expense')` and the seeded transaction has no category. Updated assertions to the correct empty-shape contract.
+     - `test_commodity_autocomplete_and_manual_fx_observations` — added a bootstrap-admin call so the now-protected commodities/pricing routes don't 401.
+   - **Skipped with forward-pointer (2):**
+     - `test_alembic_head_matches_full_stage2_schema_contract` — schema-contract drift (Phase 2 step 10).
+     - `test_import_commit_marks_session_abandoned_on_locked_account` — `sqlalchemy.exc.MissingGreenlet` during the post-error abandonment path on the service-level test. Behavior is correct at the HTTP layer. To be rewritten as an e2e test alongside Phase 2 step 1 (reconciliation correctness).
+   - CI workflow updated: deselect list pruned, `pytest -q` runs the full suite. 147 passed, 2 skipped, 0 failed.
 10. **Schema-contract rebuild**: rewrite `apps/api/tests/stage2_schema_contract.py` so the contract is generated from `Base.metadata` (or autogenerated from a fresh-migration DB) rather than maintained by hand. The hand-maintained contract is materially incomplete (missing migration-0004 and 0005 tables) and any future migration will continue to break the test for the wrong reason.
 11. **Health endpoint deauth** (Phase 0 finding): remove the transitive `require_request_context` dependency from `/api/v1/health` so the deployment health probe works without a session cookie.
 
@@ -348,11 +365,11 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (1 of 8 items shipped). Continue:
+Phase 0 is **done**. Phase 1 is in flight (2 of 8 items shipped — items 1 and 7). Phase 2 step 9 is **done**, putting CI on a known-clean baseline. Continue:
 
-- **Next:** Phase 1 step 2 (user invite). Mirrors the password-reset shape, so it should land faster now that the e2e seam is proven.
-- **In parallel, when convenient:** Phase 1 step 7 (CI API test job). Without it the 8 pre-existing test failures keep landing on `main` invisibly.
-- **After all of Phase 1 lands:** triage the 8 pre-existing failures (Phase 2 step 9) before adding more service-level tests in Phase 2 — otherwise red noise drowns out new signal.
+- **Next:** Phase 2 step 10 (rebuild schema contract from `Base.metadata`). Re-enabling the schema-drift detector is the last stabilization piece before more migrations land.
+- **Then:** Phase 1 step 2 (user invite). Mirrors the password-reset shape, so it should land faster now that the e2e seam, CI, and clean test signal are all in place.
+- **Then:** the rest of Phase 1 in any order convenient (cross-currency transfer, stock-split lot rewrite, OFX duplicate detection, reverse-proxy/TLS, Tauri removal).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
-Approximate remaining total: **13-19 engineering days** to v1-ready (was 15-22 before Phase 0 and Phase 1 step 1 shipped).
+Approximate remaining total: **11-17 engineering days** to v1-ready (was 12-18 before Phase 2 step 9 shipped).

@@ -6,7 +6,15 @@ from rekenraam_api.repositories.access import AccessRepository
 from rekenraam_api.services.request_context import RequestContext
 
 
-class AuthorizationError(ValueError):
+class AuthorizationError(Exception):
+    """Raised when an authenticated request lacks the role to perform an action.
+
+    Intentionally NOT a subclass of ValueError: routes throughout the API catch
+    ValueError to convert business-rule failures into 400 Bad Request, which
+    would silently swallow authz errors and return 400 instead of 403. The
+    global handler in rekenraam_api/app.py maps this to 403.
+    """
+
     pass
 
 
