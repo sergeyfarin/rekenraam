@@ -22,6 +22,8 @@ from rekenraam_api.schemas.auth import (
     MfaSetupInput,
     MfaSetupResult,
     MfaStatus,
+    PasswordResetConfirmInput,
+    PasswordResetRequestInput,
 )
 from rekenraam_api.schemas.ergonomics import PasswordChangeInput, ProfileUpdateInput
 from rekenraam_api.services.auth import (
@@ -31,6 +33,7 @@ from rekenraam_api.services.auth import (
     AuthService,
     BootstrapUnavailableError,
     MfaRequiredError,
+    PasswordResetError,
     to_auth_me,
 )
 from rekenraam_api.services.ergonomics import ErgonomicsService
@@ -146,6 +149,37 @@ async def complete_mfa_login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error
     _set_session_cookie(response, created.token)
     return to_auth_me(created.user, created.session)
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_204_NO_CONTENT)
+async def request_password_reset(
+    input: PasswordResetRequestInput,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> None:
+    """Request a password-reset token. Always returns 204 to avoid leaking
+    whether an email is registered. Token (when one is issued) is recorded in
+    the audit log; SMTP delivery is deferred."""
+
+    try:
+        await auth_service.request_password_reset(
+            email=input.email,
+            user_agent=request.headers.get("user-agent"),
+            ip_address=_client_ip(request),
+        )
+    except BootstrapUnavailableError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_password_reset(
+    input: PasswordResetConfirmInput,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> None:
+    try:
+        await auth_service.confirm_password_reset(token=input.token, new_password=input.new_password)
+    except PasswordResetError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

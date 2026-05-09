@@ -22,7 +22,17 @@
       "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_migrations.py apps/api/tests/test_auth_api.py apps/api/tests/test_pricing_repository.py apps/api/tests/test_reports_repository.py apps/api/tests/test_fx_manual_api.py apps/api/tests/test_imports_exports.py -q)",
       "Bash(git stash *)",
       "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_repositories.py apps/api/tests/e2e/ -q)",
-      "Bash(docker stop *)"
+      "Bash(docker stop *)",
+      "Bash(python -c \"from rekenraam_api.api.v1.auth import router; print\\('auth OK', len\\(router.routes\\), 'routes'\\)\")",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/python -c \"from rekenraam_api.api.v1.auth import router; print\\('auth OK,', len\\(router.routes\\), 'routes'\\); print\\('paths:', sorted\\(r.path for r in router.routes if hasattr\\(r, 'path'\\)\\)\\)\")",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/e2e/ -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/ -q --ignore=apps/api/tests/e2e)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_admin_api.py::test_runtime_status_exposes_web_runtime -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_migrations.py::test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_admin_api.py apps/api/tests/test_repositories.py apps/api/tests/test_services.py apps/api/tests/e2e/ -q)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/ -q)",
+      "Bash(../../.venv/bin/ruff check *)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/e2e/ -q)"
     ]
   }
 }

@@ -27,7 +27,6 @@ from e2e.factories import (
     post_transaction,
 )
 
-
 # Seeded by Alembic migration 0001 — see apps/api/alembic/versions/0001_initial_schema.py.
 SEEDED_CASH_ACCOUNT_ID = 2
 SEEDED_CASH_OPENING_BALANCE_MINOR = 500_000

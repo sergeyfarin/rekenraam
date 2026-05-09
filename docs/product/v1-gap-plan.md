@@ -1,13 +1,56 @@
 # V1 Gap Analysis & Fix Plan
 
-Last updated: 2026-05-07
+Last updated: 2026-05-09
 
-Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity.
+Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity. Items marked **DONE** have shipped; the relevant section retains the original gap description for historical context.
 
 Severity legend:
 - **B** — release blocker (gate per `v1-scope.md` "Release Gate" or scope `Must Have`)
 - **H** — hardening (correctness or operational risk; should ship at v1)
 - **N** — nice-to-have (scope `Should Have`, can defer if time-boxed)
+
+## Test status snapshot (2026-05-09)
+
+Backend `pytest apps/api/tests/`:
+
+- **141 passed, 8 failed.** All 8 failures are pre-existing on `main` (verified by stashing changes and re-running). My Phase-0/Phase-1 work added 11 new passing tests (10 e2e + 1 admin migration-version check) and zero new failures.
+- The 8 pre-existing failures, captured for triage:
+  1. `test_migrations.py::test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database` — `Path doesn't exist: alembic` when running from repo root; cwd-relative `script_location` resolution.
+  2. `test_migrations.py::test_alembic_head_matches_full_stage2_schema_contract` — schema-contract drift (see findings).
+  3. `test_auth_api.py::test_book_membership_roles_gate_writes`
+  4. `test_auth_api.py::test_user_writes_stamp_audit_context`
+  5. `test_pricing_repository.py::test_pricing_repository_lists_sources_updates_policy_and_manages_assignments`
+  6. `test_reports_repository.py::test_report_repository_returns_cashflow_category_spend_and_payee_totals`
+  7. `test_fx_manual_api.py::test_commodity_autocomplete_and_manual_fx_observations`
+  8. `test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account`
+
+Tracked in Phase 2 step 9. CI does not currently run the API test suite, so this drift has been invisible to PR review (Phase 1 step 7 fixes that).
+
+## Phase status
+
+- [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
+- [ ] **Phase 1** — release-blocker scope items (1/8 items done)
+  - [x] 1. Self-service password reset (completed 2026-05-09)
+  - [ ] 2. User invite flow
+  - [ ] 3. Cross-currency transfer endpoint
+  - [ ] 4. Stock-split lot rewrite
+  - [ ] 5. Cross-session OFX duplicate detection
+  - [ ] 6. Reverse-proxy + TLS production example
+  - [ ] 7. CI API test job
+  - [ ] 8. Tauri removal
+- [ ] **Phase 2** — hardening of high-risk service code
+- [ ] **Phase 3** — frontend tests
+- [ ] **Phase 4** — nice-to-have scope items
+
+## Findings discovered while executing the plan
+
+These were found while building Phase 0 and are tracked here so they don't get lost:
+
+- **`/api/v1/health` is transitively auth-protected.** The route depends on `get_book_service`, which depends on `get_access_policy`, which depends on `require_request_context`. Health checks should be unauthenticated. Severity **H**; address in Phase 2 alongside other auth wiring fixes. Location: [apps/api/src/rekenraam_api/api/v1/health.py](../../apps/api/src/rekenraam_api/api/v1/health.py).
+- **`/api/v1/accounts/balances` only returns accounts with at least one posted split.** Documented in the smoke test. Severity **N** (UI works around it). May surprise API consumers; consider returning a zero-balance row for every active account.
+- **8 pre-existing test failures on `main`.** Enumerated in the "Test status snapshot" above and verified by stashing changes and running on bare `main`. Severity **B** for the migration-contract drift (schema versus model is a release-gate concern); the rest are **H** until triaged. Tracked in Phase 2 step 9. Should be investigated and either fixed or quarantined before Phase 1 lands more feature work that piles on top.
+
+- **`stage2_schema_contract.py` is materially incomplete.** Spot-checked while shipping the password-reset migration: the contract has no entries for `mfa_challenges`, `mfa_recovery_codes`, or `user_mfa_totp` (added in migration 0004) and is missing `password_reset_tokens` (added in migration 0005). The drift on the `users` table that the test reports is real but only the surface symptom — large parts of the schema are simply not described by the contract. Phase 2 should rebuild this contract from `Base.metadata` rather than continue patching it by hand. Severity **B** because the contract is a release-gate signal that currently can't be trusted.
 
 ---
 
@@ -17,7 +60,7 @@ Severity legend:
 
 | # | Gap | Location | Sev |
 |---|---|---|---|
-| 1.1.1 | **Self-service password reset** missing. Only admin reset exists at [admin.py:96](../../apps/api/src/rekenraam_api/api/v1/admin.py#L96). No reset-token model, no `/api/v1/auth/password-reset/{request,confirm}`, no token expiry, no rate limiting. Email delivery is intentionally deferred — but the token-based flow must work via admin-issued or copy-paste link to satisfy "password change/reset path" in scope. | [auth.py](../../apps/api/src/rekenraam_api/api/v1/auth.py), [services/auth.py](../../apps/api/src/rekenraam_api/services/auth.py), new `password_reset_tokens` table | B |
+| 1.1.1 | **Self-service password reset** — **DONE 2026-05-09.** Two public endpoints (`/api/v1/auth/password-reset/request`, `/api/v1/auth/password-reset/confirm`); 24-hour single-use tokens; sessions revoked on confirm; request endpoint always returns 204 to avoid email enumeration; SMTP delivery deferred (audit log is the v1 hand-off mechanism). 9 e2e tests cover happy-path, token reuse, expiry, unknown email, inactive user, bootstrap-not-done, and session revocation. | [auth.py](../../apps/api/src/rekenraam_api/api/v1/auth.py), [services/auth.py](../../apps/api/src/rekenraam_api/services/auth.py), [migration 0005](../../apps/api/alembic/versions/0005_password_reset_tokens.py) | B |
 | 1.1.2 | **User invite flow** missing. Only admin POST `/admin/users` with a chosen password exists. No invite token, no first-login password set, no expiry. Scope says "create/invite/deactivate users". | [admin.py](../../apps/api/src/rekenraam_api/api/v1/admin.py), `services/ergonomics.py`, new `user_invites` table | B |
 | 1.1.3 | **Explicit deactivate** missing. PUT `/admin/users/{id}` accepts `is_active` but there is no audited deactivate path that revokes sessions. Sessions of a deactivated user keep working until expiry. | `services/ergonomics.py`, `services/auth.py` (session revocation) | H |
 | 1.1.4 | MFA recovery code regeneration without disabling MFA missing. `confirm_mfa_setup` is the only generator. | `services/auth.py:227-268` | H |
@@ -208,24 +251,48 @@ Zero tests. Minimum to pull in:
 
 Plan is grouped into phases ordered by release-blocker first. Each phase lists outputs and an acceptance check. Estimates are ranges in engineering-days assuming one engineer.
 
-### Phase 0 — End-to-end test seam (prerequisite, 2-3 d)
+### Phase 0 — End-to-end test seam (prerequisite) — **DONE** 2026-05-09
 
 Without this, every other test improvement layers more fakes onto the existing test pyramid that already doesn't catch real bugs.
 
-- Add a `test_e2e_*` fixture set in `apps/api/tests/` that:
-  - Boots FastAPI app with **real** services and repositories.
-  - Connects to a per-test Postgres schema (use `testcontainers-postgres` or reuse the dev compose DB with txn rollback).
-  - Provides factories for users, books, accounts, currencies, instruments.
-- Migrate the existing `test_api.py` stub tests into this seam over time; do not rewrite at once.
-- Add a CI job that runs the e2e tests against a Postgres service container.
+Delivered:
 
-Acceptance: a single test that creates a user → logs in → creates an account → posts a txn → reads register → asserts balance, all through HTTP, all against real DB.
+- Shared `temporary_database()` helper in [apps/api/tests/_postgres.py](../../apps/api/tests/_postgres.py): creates a fresh Postgres database, runs Alembic to head, drops it on exit.
+- Refactored [apps/api/tests/conftest.py](../../apps/api/tests/conftest.py) to use the shared helper. The 22 existing repository tests still pass.
+- New e2e fixture in [apps/api/tests/e2e/conftest.py](../../apps/api/tests/e2e/conftest.py): per-test Postgres, real `async_sessionmaker`, `app.dependency_overrides[get_db_session]` swap, `httpx.AsyncClient` against the real FastAPI app. Lifespan deliberately not run (would otherwise attempt to read first-admin env vars and start the pricing-refresh worker).
+- Factory helpers in [apps/api/tests/e2e/factories.py](../../apps/api/tests/e2e/factories.py): `bootstrap_admin`, `login`, `create_account`, `post_transaction`.
+- Canonical smoke test [apps/api/tests/e2e/test_smoke.py](../../apps/api/tests/e2e/test_smoke.py): bootstrap status → bootstrap admin → 409 on second bootstrap → list books → create account → check seeded opening balance → post a balanced transfer → re-check balances → register reads with running balance → logout → 401 on protected route → re-login → 200 again. Runs in ~1.7s end-to-end through the real router/service/repo/Postgres stack.
+
+Not yet delivered (deferred to Phase 1 alongside the API CI job):
+
+- CI workflow that runs the e2e tests against a Postgres service container. Will be folded into the `api-tests.yml` workflow being added in Phase 1 step 7.
+- Migrating the existing `test_api.py` stub tests onto the seam. This is intentional drip-work — new tests should use the seam; old stub tests can stay until the modules they cover get a real Phase 2 service-level rewrite.
+
+How to run locally:
+
+```bash
+TEST_POSTGRES_HOST=127.0.0.1 \
+TEST_POSTGRES_PORT=55432 \
+TEST_POSTGRES_USER=rekenraam \
+TEST_POSTGRES_PASSWORD=rekenraam \
+TEST_POSTGRES_ADMIN_DB=rekenraam \
+.venv/bin/pytest apps/api/tests/e2e/
+```
+
+The same env-var convention (`TEST_POSTGRES_*`) is honored by the existing repository tests, so a single Postgres instance covers both.
 
 ### Phase 1 — Release-blocker scope items (5-7 d)
 
 In order:
 
-1. **Self-service password reset** (1.1.1): token model, two endpoints (`request`, `confirm`), 24h expiry, single-use. Tests: full e2e flow + token reuse rejection + expiry.
+1. **Self-service password reset** (1.1.1) — **DONE 2026-05-09.** Delivered:
+   - Migration [0005_password_reset_tokens.py](../../apps/api/alembic/versions/0005_password_reset_tokens.py) creates `password_reset_tokens` (token-hash unique index, expires-at index, FK to users with cascade).
+   - `PasswordResetToken` ORM model in [db/models/access.py](../../apps/api/src/rekenraam_api/db/models/access.py) mirroring `MfaChallenge`.
+   - Repository methods on [`AccessRepository`](../../apps/api/src/rekenraam_api/repositories/access.py): `create_password_reset_token`, `get_active_password_reset_token`, `mark_password_reset_token_used`, `update_user_password_hash`, plus a new `revoke_all_user_sessions` for the post-confirm session sweep.
+   - Service methods on [`AuthService`](../../apps/api/src/rekenraam_api/services/auth.py): `request_password_reset` (emits 24h-TTL token, audit row for known/unknown/inactive paths, refuses before bootstrap) and `confirm_password_reset` (validates active token, hashes new password via argon2, marks token used, revokes all sessions for the user, emits audit row).
+   - Endpoints `POST /api/v1/auth/password-reset/{request,confirm}` in [api/v1/auth.py](../../apps/api/src/rekenraam_api/api/v1/auth.py); request endpoint always 204 to prevent email enumeration; confirm returns 400 on bad/expired/used tokens, 422 on Pydantic validation, 204 on success.
+   - 9 e2e tests in [tests/e2e/test_password_reset.py](../../apps/api/tests/e2e/test_password_reset.py): known-vs-unknown email both 204, no token row for unknown; bootstrap-required gate; full round-trip with new-password login and old-password rejection; single-use enforcement; expiry enforcement (DB-aged token); short-password rejection without consuming the token; bogus-token rejection; session revocation on confirm; inactive user treated as unknown.
+   - SMTP delivery is deferred to post-v1; until then admins retrieve the issued token from the audit log to hand to the user. The wire contract supports adding email later without breaking changes.
 2. **User invite** (1.1.2): admin issues invite token; `accept-invite` endpoint sets password and activates user. Tests: e2e + token reuse + expiry.
 3. **Cross-currency transfer endpoint** (1.2.2): explicit endpoint that takes source/dest accounts, amounts in each commodity, FX rate, and writes a balanced txn with FX gain/loss split. Tests: balanced-in-base assertion, FX gain/loss correctness, rejection when rate not provided.
 4. **Stock-split lot rewrite** (1.6.1): on `corporate_action.kind == 'split'` post, supersede affected lots with adjusted quantity and per-share basis. Tests: realized gain after split, holding-period preservation.
@@ -253,6 +320,9 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
 6. **Budget rollover, schedule recurrence, loan amortization** (2.6).
 7. **Auth depth** (1.1.3, 1.1.5, 2.7): session revocation on deactivate; persistent throttling state (Postgres table or Redis); session expiry tests; cross-book isolation tests.
 8. **CSV export escaping & locale** (1.4.4, 2.8).
+9. **Pre-existing test failures** (per the findings above): triage the 8 tests that fail on `main`, fix or quarantine each. Most likely root causes are the `users` schema drift and Alembic-script-path resolution in `test_migrations.py`.
+10. **Schema-contract rebuild**: rewrite `apps/api/tests/stage2_schema_contract.py` so the contract is generated from `Base.metadata` (or autogenerated from a fresh-migration DB) rather than maintained by hand. The hand-maintained contract is materially incomplete (missing migration-0004 and 0005 tables) and any future migration will continue to break the test for the wrong reason.
+11. **Health endpoint deauth** (Phase 0 finding): remove the transitive `require_request_context` dependency from `/api/v1/health` so the deployment health probe works without a session cookie.
 
 Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded existing one) that exercises the seam from Phase 0 and covers the missing scenarios named in §2.
 
@@ -276,6 +346,11 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Run **Phase 0 first**. It is a small investment that makes every subsequent test write payoff much higher — and it is currently the single biggest reason real bugs could ship. Phase 1 is the release-blocker list. Phase 2 is where the bulk of correctness risk lives, and where the request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
+Phase 0 is **done**. Phase 1 is in flight (1 of 8 items shipped). Continue:
 
-Approximate total: **15-22 engineering days** to v1-ready, of which ~8 days are net-new feature work (Phase 1) and the rest is correctness and tests.
+- **Next:** Phase 1 step 2 (user invite). Mirrors the password-reset shape, so it should land faster now that the e2e seam is proven.
+- **In parallel, when convenient:** Phase 1 step 7 (CI API test job). Without it the 8 pre-existing test failures keep landing on `main` invisibly.
+- **After all of Phase 1 lands:** triage the 8 pre-existing failures (Phase 2 step 9) before adding more service-level tests in Phase 2 — otherwise red noise drowns out new signal.
+- Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
+
+Approximate remaining total: **13-19 engineering days** to v1-ready (was 15-22 before Phase 0 and Phase 1 step 1 shipped).

@@ -10,6 +10,7 @@ from rekenraam_api.db.models.access import (
     BookMembership,
     MfaChallenge,
     MfaRecoveryCode,
+    PasswordResetToken,
     User,
     UserDevice,
     UserMfaTotp,
@@ -182,6 +183,47 @@ class AccessRepository:
         challenge.attempts += 1
         await self._session.flush()
 
+    async def create_password_reset_token(
+        self,
+        *,
+        user_id: int,
+        token_hash: str,
+        user_agent: str | None,
+        ip_address: str | None,
+        expires_at: datetime,
+    ) -> PasswordResetToken:
+        row = PasswordResetToken(
+            user_id=user_id,
+            token_hash=token_hash,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            expires_at=expires_at,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get_active_password_reset_token(
+        self, token_hash: str, now: datetime
+    ) -> PasswordResetToken | None:
+        result = await self._session.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.token_hash == token_hash,
+                PasswordResetToken.used_at.is_(None),
+                PasswordResetToken.expires_at > now,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def mark_password_reset_token_used(self, token: PasswordResetToken) -> None:
+        token.used_at = datetime.now(UTC)
+        await self._session.flush()
+
+    async def update_user_password_hash(self, user: User, *, password_hash: str) -> None:
+        user.password_hash = password_hash
+        user.updated_at = datetime.now(UTC)
+        await self._session.flush()
+
     async def audit(
         self,
         *,
@@ -232,6 +274,15 @@ class AccessRepository:
             update(AuthSession).where(AuthSession.id == session_id).values(revoked_at=datetime.now(UTC))
         )
         await self._session.flush()
+
+    async def revoke_all_user_sessions(self, user_id: int) -> int:
+        result = await self._session.execute(
+            update(AuthSession)
+            .where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+        return int(result.rowcount or 0)
 
     async def list_user_book_ids(self, user_id: int) -> list[int]:
         result = await self._session.execute(

@@ -49,7 +49,7 @@ async def test_runtime_status_exposes_web_runtime(client: AsyncClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["database_kind"] == "postgresql"
-    assert payload["latest_version"] == "0004_operational_self_hosting"
+    assert payload["latest_version"] == "0005_password_reset_tokens"
     assert payload["pending_migration_count"] == 0
     assert payload["writable"] is True
     assert "server-managed PostgreSQL" in payload["note"]

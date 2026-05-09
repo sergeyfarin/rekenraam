@@ -1,6 +1,6 @@
 # Rekenraam Self-Hosted Migration Plan
 
-Last updated: 2026-05-06
+Last updated: 2026-05-09
 
 ## Summary
 
@@ -33,6 +33,7 @@ consciously dropped.
 ## Sources Of Truth
 
 - Product scope: `docs/product/v1-scope.md`
+- V1 gap analysis & fix plan: `docs/product/v1-gap-plan.md`
 - PostgreSQL schema direction: `docs/architecture/postgres-schema.md`
 - Post-b1 extensibility direction: `docs/architecture/post-b1-extensibility.md`
 - Desktop-to-web parity tracking: `docs/parity/desktop-to-python.md`
@@ -175,7 +176,9 @@ Completed:
 Remaining hardening:
 
 - user/admin management beyond first-admin bootstrap
-- password change/reset path
+- self-service password reset (token-based, single-use, 24h TTL) shipped
+  2026-05-09 via `/api/v1/auth/password-reset/{request,confirm}`; SMTP delivery
+  remains deferred and admins retrieve issued tokens from the audit log
 - user invite/create/deactivate flows
 - book role management UI and API
 - user-visible audit trail for writes, imports, and admin actions

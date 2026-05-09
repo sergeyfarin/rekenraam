@@ -197,6 +197,7 @@ secrets, keep PostgreSQL private to the Compose network, and enable MFA.
 | --- | --- |
 | [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) | Canonical migration and execution roadmap |
 | [docs/product/v1-scope.md](docs/product/v1-scope.md) | Personal-first v1 product scope |
+| [docs/product/v1-gap-plan.md](docs/product/v1-gap-plan.md) | Active V1 gap analysis, phase status, and fix plan |
 | [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) | PostgreSQL schema direction |
 | [docs/architecture/post-b1-extensibility.md](docs/architecture/post-b1-extensibility.md) | Future plugin and theme architecture guardrails |
 | [docs/deployment/self-hosting.md](docs/deployment/self-hosting.md) | VPS/home server deployment, backup, restore, and security guide |

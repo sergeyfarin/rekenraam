@@ -31,7 +31,8 @@ work to the SQLite/Tauri migration path.
 
 Already represented in the web baseline:
 
-- users, user devices, auth sessions, and book memberships
+- users, user devices, auth sessions, book memberships, MFA TOTP secrets,
+  MFA recovery codes, MFA challenges, and password-reset tokens
 - books
 - commodities/currencies metadata
 - countries and institutions

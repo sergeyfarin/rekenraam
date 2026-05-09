@@ -11,7 +11,6 @@ from datetime import date
 
 from httpx import AsyncClient
 
-
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
 DEFAULT_ADMIN_PASSWORD = "correct-horse-battery-staple"
 DEFAULT_ADMIN_NAME = "Admin"

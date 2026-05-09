@@ -23,6 +23,8 @@ SESSION_COOKIE_NAME = "rekenraam_session"
 SESSION_DAYS = 14
 MFA_CHALLENGE_MINUTES = 5
 MFA_RECOVERY_CODE_COUNT = 10
+PASSWORD_RESET_TOKEN_HOURS = 24
+PASSWORD_RESET_MIN_LENGTH = 12
 
 _password_hasher = PasswordHasher()
 _login_failures: dict[str, list[float]] = {}
@@ -33,6 +35,10 @@ class AuthenticationError(ValueError):
 
 
 class BootstrapUnavailableError(ValueError):
+    pass
+
+
+class PasswordResetError(ValueError):
     pass
 
 
@@ -293,6 +299,90 @@ class AuthService:
             target_type="user",
             target_id=user_id,
             summary=f"Reset MFA for user {user_id}",
+        )
+        await self._repository.commit()
+
+    async def request_password_reset(
+        self,
+        *,
+        email: str,
+        user_agent: str | None,
+        ip_address: str | None,
+    ) -> str | None:
+        """Issue a password-reset token for the given email if a matching active
+        user exists. Always behaves the same on the wire (the caller never gets
+        an email-enumeration signal); the returned token is `None` when no
+        matching user is found and is recorded in audit metadata otherwise so
+        admins can hand it to the user until SMTP is wired up.
+        """
+
+        if await self.bootstrap_required():
+            raise BootstrapUnavailableError("bootstrap is not complete")
+        user = await self._repository.get_user_by_email(email)
+        if user is None or not user.is_active:
+            await self._repository.audit(
+                user_id=None,
+                session_id=None,
+                device_id=None,
+                event_type="auth.password_reset.requested_unknown",
+                target_type="email",
+                target_id=None,
+                summary=f"Password reset requested for unknown or inactive email {email}",
+            )
+            await self._repository.commit()
+            return None
+        token = secrets.token_urlsafe(48)
+        await self._repository.create_password_reset_token(
+            user_id=user.id,
+            token_hash=hash_session_token(token),
+            user_agent=user_agent,
+            ip_address=ip_address,
+            expires_at=datetime.now(UTC) + timedelta(hours=PASSWORD_RESET_TOKEN_HOURS),
+        )
+        await self._repository.audit(
+            user_id=user.id,
+            session_id=None,
+            device_id=None,
+            event_type="auth.password_reset.requested",
+            target_type="user",
+            target_id=user.id,
+            summary=f"Password reset requested for {user.email}",
+        )
+        await self._repository.commit()
+        return token
+
+    async def confirm_password_reset(
+        self,
+        *,
+        token: str,
+        new_password: str,
+    ) -> None:
+        if len(new_password) < PASSWORD_RESET_MIN_LENGTH:
+            raise PasswordResetError(
+                f"password must be at least {PASSWORD_RESET_MIN_LENGTH} characters"
+            )
+        now = datetime.now(UTC)
+        record = await self._repository.get_active_password_reset_token(
+            hash_session_token(token), now
+        )
+        if record is None:
+            raise PasswordResetError("invalid or expired password reset token")
+        user = await self._repository.get_user_by_id(record.user_id)
+        if user is None or not user.is_active:
+            raise PasswordResetError("invalid or expired password reset token")
+        await self._repository.update_user_password_hash(
+            user, password_hash=_password_hasher.hash(new_password)
+        )
+        await self._repository.mark_password_reset_token_used(record)
+        revoked = await self._repository.revoke_all_user_sessions(user.id)
+        await self._repository.audit(
+            user_id=user.id,
+            session_id=None,
+            device_id=None,
+            event_type="auth.password_reset.confirmed",
+            target_type="user",
+            target_id=user.id,
+            summary=f"Password reset for {user.email} (revoked {revoked} sessions)",
         )
         await self._repository.commit()
 

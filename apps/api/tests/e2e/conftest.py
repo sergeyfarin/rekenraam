@@ -14,15 +14,33 @@ Lifespan is intentionally NOT executed:
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import dataclass
 
 import pytest
 import pytest_asyncio
+from _postgres import temporary_database
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from rekenraam_api.api.dependencies import get_db_session
 from rekenraam_api.app import app
-from _postgres import temporary_database
+
+
+@dataclass
+class E2EApp:
+    """Bundle of resources for an e2e test: the HTTP client plus the engine
+    that backs it, so tests can poke the database directly when they need to
+    inspect state that isn't reachable through the public API (e.g. issued
+    password-reset tokens, audit rows)."""
+
+    client: AsyncClient
+    engine: AsyncEngine
+    sessionmaker: async_sessionmaker[AsyncSession]
 
 
 @pytest.fixture()
@@ -35,7 +53,7 @@ def e2e_database_url() -> Iterator[str]:
 
 
 @pytest_asyncio.fixture()
-async def e2e_client(e2e_database_url: str) -> AsyncIterator[AsyncClient]:
+async def e2e_app(e2e_database_url: str) -> AsyncIterator[E2EApp]:
     engine = create_async_engine(e2e_database_url, future=True)
     sessionmaker = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -47,7 +65,14 @@ async def e2e_client(e2e_database_url: str) -> AsyncIterator[AsyncClient]:
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://e2e") as client:
-            yield client
+            yield E2EApp(client=client, engine=engine, sessionmaker=sessionmaker)
     finally:
         app.dependency_overrides.pop(get_db_session, None)
         await engine.dispose()
+
+
+@pytest_asyncio.fixture()
+async def e2e_client(e2e_app: E2EApp) -> AsyncIterator[AsyncClient]:
+    """Convenience fixture for tests that only need the HTTP client."""
+
+    yield e2e_app.client

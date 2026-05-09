@@ -76,3 +76,12 @@ class MfaDisableInput(BaseModel):
 class MfaLoginInput(BaseModel):
     challenge_token: str = Field(min_length=16, max_length=256)
     code: str = Field(min_length=6, max_length=64)
+
+
+class PasswordResetRequestInput(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class PasswordResetConfirmInput(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    new_password: str = Field(min_length=12, max_length=1024)
