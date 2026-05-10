@@ -139,6 +139,115 @@ class InvestmentRepository:
         await self._session.refresh(row)
         return row
 
+    async def create_stock_split_corporate_action(self, **values: Any) -> CorporateAction:
+        await self._validate_corporate_action_refs(values)
+        action_type = str(values["action_type"])
+        if action_type not in {"split", "reverse_split"}:
+            raise ValueError("stock split action type is required")
+        ratio_numerator = int(values["ratio_numerator"])
+        ratio_denominator = int(values["ratio_denominator"])
+        old_instrument_id = int(values["old_instrument_id"])
+        effective_date = values["effective_date"]
+
+        old_instrument = await self._session.get(InvestmentInstrument, old_instrument_id)
+        if old_instrument is None:
+            raise ValueError("old_instrument_id not found")
+
+        affected_lots = await self._list_positive_lots_for_split(
+            book_id=int(values["book_id"]),
+            commodity_id=old_instrument.commodity_id,
+            effective_date=effective_date,
+        )
+        replacements: list[dict[str, Any]] = []
+        for lot in affected_lots:
+            remaining_quantity = int(lot["quantity_minor"])
+            adjusted_numerator = remaining_quantity * ratio_numerator
+            if adjusted_numerator % ratio_denominator != 0:
+                raise ValueError("stock split would create fractional minor units")
+            replacements.append(
+                {
+                    **lot,
+                    "adjusted_quantity_minor": adjusted_numerator // ratio_denominator,
+                }
+            )
+
+        row = CorporateAction(**values)
+        self._session.add(row)
+        await self._session.flush()
+
+        if replacements:
+            transaction = Transaction(
+                book_id=row.book_id,
+                occurred_date=effective_date,
+                posted_date=effective_date,
+                payee_id=None,
+                memo=values.get("memo") or f"{action_type.replace('_', ' ').title()}",
+                status="cleared",
+                reference=values.get("source_reference"),
+            )
+            self._session.add(transaction)
+            await self._session.flush()
+
+            for lot in replacements:
+                close_split = Split(
+                    tx_id=transaction.id,
+                    account_id=int(lot["account_id"]),
+                    commodity_id=old_instrument.commodity_id,
+                    amount_minor=-int(lot["quantity_minor"]),
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo=f"{action_type} close lot {lot['lot_id']}",
+                )
+                replacement_split = Split(
+                    tx_id=transaction.id,
+                    account_id=int(lot["account_id"]),
+                    commodity_id=old_instrument.commodity_id,
+                    amount_minor=int(lot["adjusted_quantity_minor"]),
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo=f"{action_type} replacement lot {lot['lot_id']}",
+                )
+                self._session.add_all([close_split, replacement_split])
+                await self._session.flush()
+
+                replacement_lot = Lot(
+                    book_id=row.book_id,
+                    account_id=int(lot["account_id"]),
+                    commodity_id=old_instrument.commodity_id,
+                    opened_date=lot["opened_date"],
+                    notes=f"{action_type} replacement for lot {lot['lot_id']}",
+                    cost_basis_minor=int(lot["remaining_cost_basis_minor"]),
+                )
+                self._session.add(replacement_lot)
+                await self._session.flush()
+
+                self._session.add_all(
+                    [
+                        SplitLotAllocation(
+                            split_id=close_split.id,
+                            lot_id=int(lot["lot_id"]),
+                            quantity_minor=-int(lot["quantity_minor"]),
+                        ),
+                        SplitLotAllocation(
+                            split_id=replacement_split.id,
+                            lot_id=replacement_lot.id,
+                            quantity_minor=int(lot["adjusted_quantity_minor"]),
+                        ),
+                    ]
+                )
+
+            row.generated_transaction_id = transaction.id
+
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
     async def create_buy(
         self,
         *,
@@ -738,6 +847,12 @@ class InvestmentRepository:
             .where(SplitLotAllocation.quantity_minor < 0)
             .order_by(Transaction.occurred_date.asc(), Transaction.id.asc())
         )
+        generated_split_tx_ids = select(CorporateAction.generated_transaction_id).where(
+            CorporateAction.book_id == book_id,
+            CorporateAction.action_type.in_(("split", "reverse_split")),
+            CorporateAction.generated_transaction_id.is_not(None),
+        )
+        statement = statement.where(Transaction.id.not_in(generated_split_tx_ids))
         if date_from is not None:
             statement = statement.where(Transaction.occurred_date >= date_from)
         if date_to is not None:
@@ -1079,6 +1194,62 @@ class InvestmentRepository:
             {"lot_id": lot_id, "opened_date": opened_date, "balance_minor": balance_minor}
             for lot_id, opened_date, balance_minor in rows
         ]
+
+    async def _list_positive_lots_for_split(
+        self, *, book_id: int, commodity_id: int, effective_date: date
+    ) -> list[dict[str, Any]]:
+        balance_expr = func.coalesce(func.sum(SplitLotAllocation.quantity_minor), 0)
+        total_positive_expr = func.coalesce(
+            func.sum(
+                case(
+                    (SplitLotAllocation.quantity_minor > 0, SplitLotAllocation.quantity_minor),
+                    else_=0,
+                )
+            ),
+            0,
+        )
+        statement = (
+            select(
+                Lot.id,
+                Lot.account_id,
+                Lot.opened_date,
+                Lot.cost_basis_minor,
+                balance_expr.label("quantity_minor"),
+                total_positive_expr.label("total_positive"),
+            )
+            .outerjoin(SplitLotAllocation, SplitLotAllocation.lot_id == Lot.id)
+            .outerjoin(Split, Split.id == SplitLotAllocation.split_id)
+            .outerjoin(Transaction, Transaction.id == Split.tx_id)
+            .where(Lot.book_id == book_id)
+            .where(Lot.commodity_id == commodity_id)
+            .where(or_(Transaction.occurred_date <= effective_date, Transaction.id.is_(None)))
+            .group_by(Lot.id, Lot.account_id, Lot.opened_date, Lot.cost_basis_minor)
+            .having(balance_expr > 0)
+            .order_by(Lot.opened_date.asc(), Lot.id.asc())
+        )
+        rows = (await self._session.execute(statement)).all()
+        lots: list[dict[str, Any]] = []
+        for (
+            lot_id,
+            account_id,
+            opened_date,
+            cost_basis_minor,
+            quantity_minor,
+            total_positive,
+        ) in rows:
+            remaining_cost_basis_minor = 0
+            if total_positive > 0:
+                remaining_cost_basis_minor = (cost_basis_minor * quantity_minor) // total_positive
+            lots.append(
+                {
+                    "lot_id": lot_id,
+                    "account_id": account_id,
+                    "opened_date": opened_date,
+                    "quantity_minor": quantity_minor,
+                    "remaining_cost_basis_minor": remaining_cost_basis_minor,
+                }
+            )
+        return lots
 
     async def _create_short_lot(
         self, *, book_id: int, account_id: int, commodity_id: int, opened_date: date

@@ -8,6 +8,7 @@ from rekenraam_api.api.dependencies import get_investment_service, require_reque
 from rekenraam_api.app import app
 from rekenraam_api.schemas.investments import (
     ConvertedPosition,
+    CorporateActionSummary,
     DividendResult,
     LotHoldingPeriod,
     Position,
@@ -21,6 +22,27 @@ from rekenraam_api.services.request_context import RequestContext
 
 
 class StubInvestmentService:
+    async def create_corporate_action(self, input: object) -> CorporateActionSummary:
+        if getattr(input, "ratio_numerator", None) == getattr(input, "ratio_denominator", None):
+            raise ValueError("split ratio must not be 1:1")
+        return CorporateActionSummary(
+            id=20,
+            book_id=1,
+            action_type="split",
+            old_instrument_id=2,
+            new_instrument_id=None,
+            effective_date=date(2026, 2, 1),
+            ratio_numerator=2,
+            ratio_denominator=1,
+            cash_in_lieu_minor=None,
+            cash_commodity_id=None,
+            source_reference=None,
+            memo="2-for-1 split",
+            metadata_json=None,
+            generated_transaction_id=99,
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+
     async def create_buy(self, input: object) -> TradeResult:
         return TradeResult(
             transaction_id=10,
@@ -219,3 +241,45 @@ async def test_investment_endpoints_return_positions_lots_and_gains(client: Asyn
     assert realized_response.json()[0]["gain_loss_minor"] == 20000
     assert unrealized_response.status_code == 200
     assert unrealized_response.json()[0]["unrealized_gain_minor"] == 30000
+
+
+@pytest.mark.asyncio
+async def test_corporate_action_endpoint_returns_generated_split_transaction(
+    client: AsyncClient,
+) -> None:
+    app.dependency_overrides[get_investment_service] = lambda: StubInvestmentService()
+
+    response = await client.post(
+        "/api/v1/investments/corporate-actions",
+        json={
+            "action_type": "split",
+            "old_instrument_id": 2,
+            "effective_date": "2026-02-01",
+            "ratio_numerator": 2,
+            "ratio_denominator": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["generated_transaction_id"] == 99
+
+
+@pytest.mark.asyncio
+async def test_corporate_action_endpoint_returns_400_for_invalid_split(
+    client: AsyncClient,
+) -> None:
+    app.dependency_overrides[get_investment_service] = lambda: StubInvestmentService()
+
+    response = await client.post(
+        "/api/v1/investments/corporate-actions",
+        json={
+            "action_type": "split",
+            "old_instrument_id": 2,
+            "effective_date": "2026-02-01",
+            "ratio_numerator": 1,
+            "ratio_denominator": 1,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "split ratio must not be 1:1"}

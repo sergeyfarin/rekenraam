@@ -25,11 +25,11 @@ Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Tw
 ## Phase status
 
 - [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
-- [ ] **Phase 1** — release-blocker scope items (4/8 items done)
+- [ ] **Phase 1** — release-blocker scope items (5/8 items done)
   - [x] 1. Self-service password reset (completed 2026-05-09)
   - [x] 2. User invite flow (completed 2026-05-12)
   - [x] 3. Cross-currency transfer endpoint (completed 2026-05-10)
-  - [ ] 4. Stock-split lot rewrite
+  - [x] 4. Stock-split lot rewrite (completed 2026-05-10)
   - [ ] 5. Cross-session OFX duplicate detection
   - [ ] 6. Reverse-proxy + TLS production example
   - [x] 7. CI API test job (completed 2026-05-09)
@@ -117,7 +117,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 | # | Gap | Location | Sev |
 |---|---|---|---|
-| 1.6.1 | **Stock-split lot adjustment** posting: `corporate_actions` records exist, but no service path that, given a 2-for-1 split, rewrites or supersedes lot quantities. Result: realized-gains math after a split is wrong. | `services/investments.py` | B |
+| 1.6.1 | **Stock-split lot adjustment** — **DONE 2026-05-10.** `split` and `reverse_split` corporate actions now rewrite positive open lots through a generated transaction: old lots are closed, replacement lots preserve opened date and remaining cost basis, fractional minor-unit outcomes are rejected, and generated close allocations are excluded from realized-gains reporting. | [services/investments.py](../../apps/api/src/rekenraam_api/services/investments.py), [repositories/investments.py](../../apps/api/src/rekenraam_api/repositories/investments.py) | B |
 | 1.6.2 | **Mixed-consideration corporate actions** (cash + stock) and **cash-in-lieu** for fractional shares are recorded but not posted. Scope explicitly accepts "structured event records" but valuation will be off. | `services/investments.py` | H |
 | 1.6.3 | **Short-cover gain/loss**: the endpoint exists; cost-basis treatment for short positions (negative lots) is not documented and may not handle wash-sale-like edge cases. | `services/investments.py` | H |
 | 1.6.4 | **FX cross-rate triangulation** when a direct pair is missing (e.g. need EUR→JPY, only have EUR→USD and USD→JPY). | `services/pricing_execution.py` | H |
@@ -316,7 +316,11 @@ In order:
    - The write path posts the source leg in the source account currency, destination leg in the destination account currency, and an optional realized FX gain/loss split in the source currency when `source_amount_minor` differs from `destination_amount_minor * fx_rate` after half-up rounding.
    - [`TransactionRepository.create_manual_fx_observation`](../../apps/api/src/rekenraam_api/repositories/transactions.py) stamps the transfer-date rate as an `fx_manual` `price_observations` row (`source='transfer:{transaction_id}'`), preserving the post-time FX rate used by the transfer.
    - 3 e2e tests in [tests/e2e/test_cross_currency_transfer.py](../../apps/api/tests/e2e/test_cross_currency_transfer.py): two-sided mixed-currency transfer with FX observation, realized gain/loss split correctness, and 422 rejection when the required rate is omitted.
-4. **Stock-split lot rewrite** (1.6.1): on `corporate_action.kind == 'split'` post, supersede affected lots with adjusted quantity and per-share basis. Tests: realized gain after split, holding-period preservation.
+4. **Stock-split lot rewrite** (1.6.1) — **DONE 2026-05-10.** Delivered:
+   - `POST /api/v1/investments/corporate-actions` keeps its existing wire shape, but `split` and `reverse_split` actions now require valid directional ratios and reject cash-in-lieu/fractional minor-unit outcomes.
+   - [`InvestmentRepository.create_stock_split_corporate_action`](../../apps/api/src/rekenraam_api/repositories/investments.py) records the corporate action, creates a generated transaction, closes affected positive lots, creates replacement lots with preserved `opened_date` and remaining cost basis, and sets `generated_transaction_id`.
+   - Realized-gains reporting ignores generated split/reverse-split close allocations so split mechanics are not treated as sales.
+   - Focused Postgres tests cover full-sale after 2-for-1 split, partial-sale-before-split basis preservation, holding-period preservation, exact reverse split, fractional rollback, and generated-allocation exclusion.
 5. **Cross-session OFX duplicate detection** (1.4.3): unique partial index on `(account_id, fitid)` where fitid IS NOT NULL; service path checks before insert.
 6. **Reverse-proxy + TLS production example** (1.7.1): add Caddy service to `compose.prod.example.yaml` with auto-TLS; document Let's Encrypt setup in `docs/deployment/self-hosting.md`.
 7. **CI API test job** (1.7.2) — **DONE 2026-05-09.** Delivered:
@@ -392,9 +396,9 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (4 of 8 items shipped — items 1, 2, 3, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
+Phase 0 is **done**. Phase 1 is in flight (5 of 8 items shipped — items 1, 2, 3, 4, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
 
-- **Next:** stock-split lot rewrite (#4), then OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
+- **Next:** OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
 Approximate remaining total: **8-13 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped).

@@ -22,15 +22,16 @@ Last updated: 2026-05-12
 3. [x] **Phase 2 step 10** — Rebuild [stage2_schema_contract.py](apps/api/tests/stage2_schema_contract.py) from `Base.metadata`. Shipped 2026-05-11.
 4. [x] **Phase 1 step 2** — User invite flow. Shipped 2026-05-12. Detail: [v1-gap-plan.md §Phase 1 step 2](docs/product/v1-gap-plan.md).
 5. [x] **Phase 1 step 3** — Cross-currency transfer endpoint. Shipped 2026-05-10. Detail: [v1-gap-plan.md §Phase 1 step 3](docs/product/v1-gap-plan.md).
+6. [x] **Phase 1 step 4** — Stock-split lot rewrite. Shipped 2026-05-10. Detail: [v1-gap-plan.md §Phase 1 step 4](docs/product/v1-gap-plan.md).
 
-Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md): stock-split lot rewrite (#4), OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
+Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md): OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
 
 ## Phase status
 
 | Phase | Status | Reference |
 |---|---|---|
 | Phase 0 — e2e test seam | **DONE** 2026-05-09 | [v1-gap-plan.md §Phase 0](docs/product/v1-gap-plan.md) |
-| Phase 1 — release-blocker scope items | 4/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
+| Phase 1 — release-blocker scope items | 5/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
 | Phase 2 — hardening of high-risk service code | not started | [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md) |
 | Phase 3 — frontend tests | not started | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
 | Phase 4 — nice-to-have scope items | not started | [v1-gap-plan.md §Phase 4](docs/product/v1-gap-plan.md) |
@@ -42,7 +43,7 @@ Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/
 | 1 | Self-service password reset | **DONE** 2026-05-09 | gap-plan §Phase 1, item 1.1.1 |
 | 2 | User invite flow | **DONE 2026-05-12** | gap-plan §1.1.2, §Phase 1 |
 | 3 | Cross-currency transfer endpoint | **DONE 2026-05-10** | gap-plan §1.2.2, §Phase 1 |
-| 4 | Stock-split lot rewrite | not started | gap-plan §1.6.1, §Phase 1 |
+| 4 | Stock-split lot rewrite | **DONE 2026-05-10** | gap-plan §1.6.1, §Phase 1 |
 | 5 | Cross-session OFX duplicate detection | not started | gap-plan §1.4.3, §Phase 1 |
 | 6 | Reverse-proxy + TLS production example | not started | gap-plan §1.7.1, §Phase 1 |
 | 7 | CI API test job | **DONE 2026-05-09** | gap-plan §1.7.2, §Phase 1 |
@@ -99,6 +100,7 @@ Not all of [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md)'s "Rem
 - 2026-05-09 — Phase 1 step 7: CI API test job at [.github/workflows/api-tests.yml](.github/workflows/api-tests.yml). Pyright caught a strict-mode bug in `revoke_all_user_sessions`'s rowcount handling that the local pytest run missed; fixed in the same PR.
 - 2026-05-10 — Phase 2 step 9: triaged 8 pre-existing test failures. 6 fixed, 2 explicitly skipped with forward-pointers; deselect list pruned from CI. Side fix: `AuthorizationError` no longer inherits `ValueError`, which was systemically masking 403s as 400s across many routes ([v1-gap-plan.md §Phase 2 step 9](docs/product/v1-gap-plan.md)).
 - 2026-05-10 — Phase 1 step 3: shipped cross-currency transfer endpoint. New `POST /api/v1/transactions/transfer` takes source/destination accounts, source/destination amounts, and an explicit FX rate; posts both currency legs, stamps the transfer-date manual FX observation, and writes an optional realized FX gain/loss split when the paid source amount differs from the rate-implied amount ([v1-gap-plan.md §Phase 1 step 3](docs/product/v1-gap-plan.md)).
+- 2026-05-10 — Phase 1 step 4: shipped stock-split lot rewrite. Split and reverse-split corporate actions now generate lot-closing/replacement transactions that preserve holding period and remaining cost basis; generated close allocations are excluded from realized gains ([v1-gap-plan.md §Phase 1 step 4](docs/product/v1-gap-plan.md)).
 - 2026-05-10 — Resolved the `ruff format` finding: ran a focused `ruff format apps/api` pass, added `make api-format-check`, and enabled the new check in API CI.
 - 2026-05-11 — Phase 2 step 10: rebuilt `apps/api/tests/stage2_schema_contract.py` from `Base.metadata`. Dropped the 800-line hand-written `STAGE2_SCHEMA_CONTRACT` (was missing 24 of 57 tables and silently drifting). Added `server_default` as a tracked dimension; fixed 32 ORM columns and 6 migration columns to use `sa.text(...)` for non-string defaults. Added 12-test self-test suite in [test_schema_contract.py](apps/api/tests/test_schema_contract.py) so the detector itself can't silently regress. Re-enabled the migration-vs-ORM drift test ([v1-gap-plan.md §Phase 2 step 10](docs/product/v1-gap-plan.md)).
 - 2026-05-12 — Phase 1 step 2: shipped admin-issued user invite flow. New `user_invites` table in the baseline schema, `UserInvite` ORM model, `ErgonomicsService.create_invite` (admin-only, idempotent for re-invites of pending users) and `AuthService.accept_invite` (public, single-use token, anti-enumeration error message), `POST /api/v1/admin/invites` and `POST /api/v1/auth/invite/accept` endpoints. 11 e2e tests cover the full lifecycle ([v1-gap-plan.md §Phase 1 step 2](docs/product/v1-gap-plan.md)).

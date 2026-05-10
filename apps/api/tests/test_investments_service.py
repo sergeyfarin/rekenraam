@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 
 from rekenraam_api.schemas.investments import (
     BuyCommodityInput,
     ConvertedPositionsQuery,
+    CorporateActionCreateInput,
     DividendInput,
     LotsHoldingQuery,
     PositionsQuery,
@@ -16,6 +18,28 @@ from rekenraam_api.services.investments import InvestmentService
 
 
 class StubInvestmentRepository:
+    def __init__(self) -> None:
+        self.stock_split_calls = 0
+        self.record_only_calls = 0
+
+    async def create_stock_split_corporate_action(self, **values: object) -> object:
+        self.stock_split_calls += 1
+        return SimpleNamespace(
+            id=15,
+            generated_transaction_id=99,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            **values,
+        )
+
+    async def create_corporate_action(self, **values: object) -> object:
+        self.record_only_calls += 1
+        return SimpleNamespace(
+            id=16,
+            generated_transaction_id=None,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            **values,
+        )
+
     async def create_buy(self, **_: object) -> dict[str, object]:
         return {
             "transaction_id": 10,
@@ -215,3 +239,61 @@ async def test_investment_service_maps_positions_lots_and_gains() -> None:
     assert lots[0].is_long_term is True
     assert realized[0].gain_loss_minor == 20000
     assert unrealized[0].unrealized_gain_minor == 30000
+
+
+@pytest.mark.asyncio
+async def test_investment_service_dispatches_stock_splits_to_rewrite_path() -> None:
+    repository = StubInvestmentRepository()
+    service = InvestmentService(repository)
+
+    split = await service.create_corporate_action(
+        CorporateActionCreateInput(
+            action_type="split",
+            old_instrument_id=7,
+            effective_date=date(2026, 2, 1),
+            ratio_numerator=2,
+            ratio_denominator=1,
+        )
+    )
+    spin_off = await service.create_corporate_action(
+        CorporateActionCreateInput(
+            action_type="spin_off",
+            old_instrument_id=7,
+            effective_date=date(2026, 3, 1),
+            ratio_numerator=1,
+            ratio_denominator=1,
+        )
+    )
+
+    assert split.generated_transaction_id == 99
+    assert spin_off.generated_transaction_id is None
+    assert repository.stock_split_calls == 1
+    assert repository.record_only_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_investment_service_rejects_invalid_stock_split_ratios() -> None:
+    service = InvestmentService(StubInvestmentRepository())
+
+    with pytest.raises(ValueError, match="split ratio must not be 1:1"):
+        await service.create_corporate_action(
+            CorporateActionCreateInput(
+                action_type="split",
+                old_instrument_id=7,
+                effective_date=date(2026, 2, 1),
+                ratio_numerator=1,
+                ratio_denominator=1,
+            )
+        )
+
+    with pytest.raises(ValueError, match="cash-in-lieu is not supported"):
+        await service.create_corporate_action(
+            CorporateActionCreateInput(
+                action_type="split",
+                old_instrument_id=7,
+                effective_date=date(2026, 2, 1),
+                ratio_numerator=2,
+                ratio_denominator=1,
+                cash_in_lieu_minor=50,
+            )
+        )

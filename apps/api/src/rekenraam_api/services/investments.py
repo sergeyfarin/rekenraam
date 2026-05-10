@@ -91,7 +91,10 @@ class InvestmentService:
         self, input: CorporateActionCreateInput
     ) -> CorporateActionSummary:
         self._validate_corporate_action(input)
-        row = await self._repository.create_corporate_action(**input.model_dump())
+        if input.action_type in {"split", "reverse_split"}:
+            row = await self._repository.create_stock_split_corporate_action(**input.model_dump())
+        else:
+            row = await self._repository.create_corporate_action(**input.model_dump())
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return CorporateActionSummary.model_validate(row, from_attributes=True)
 
@@ -314,6 +317,24 @@ class InvestmentService:
         }
         if input.action_type not in valid:
             raise ValueError("unsupported corporate action type")
+        if input.action_type in {"split", "reverse_split"}:
+            if input.old_instrument_id is None:
+                raise ValueError("old_instrument_id is required")
+            if input.ratio_numerator is None:
+                raise ValueError("ratio_numerator is required")
+            if input.ratio_denominator is None:
+                raise ValueError("ratio_denominator is required")
+            if input.cash_in_lieu_minor is not None:
+                raise ValueError("cash-in-lieu is not supported for stock splits")
+            if input.ratio_numerator == input.ratio_denominator:
+                raise ValueError("split ratio must not be 1:1")
+            if input.action_type == "split" and input.ratio_numerator < input.ratio_denominator:
+                raise ValueError("split ratio numerator must be greater than denominator")
+            if (
+                input.action_type == "reverse_split"
+                and input.ratio_numerator > input.ratio_denominator
+            ):
+                raise ValueError("reverse split ratio numerator must be less than denominator")
         if input.action_type in {
             "split",
             "reverse_split",

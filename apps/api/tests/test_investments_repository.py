@@ -1,11 +1,17 @@
 from datetime import date
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account
-from rekenraam_api.db.models.investments import Lot, PriceObservation, SplitLotAllocation
+from rekenraam_api.db.models.investments import (
+    CorporateAction,
+    InvestmentInstrument,
+    Lot,
+    PriceObservation,
+    SplitLotAllocation,
+)
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.investments import InvestmentRepository
@@ -134,6 +140,53 @@ async def _seed_investment_data(session: AsyncSession) -> tuple[int, int]:
     )
     await session.commit()
     return brokerage.id, security.id
+
+
+async def _seed_split_security(session: AsyncSession) -> tuple[int, int, int]:
+    security = Commodity(book_id=1, kind="stock", symbol="SPLT", name="Split Corp", scale=4)
+    brokerage = Account(
+        book_id=1,
+        parent_id=1,
+        previous_account_id=None,
+        account_type="investment",
+        name="Split Brokerage",
+        commodity_id=1,
+        booking_policy="fifo",
+        number_last4=None,
+        is_closed=False,
+        is_hidden=False,
+        is_system=False,
+        system_role=None,
+        effective_at=date(2026, 1, 1),
+        lifecycle_event="open",
+        lifecycle_note=None,
+        lifecycle_metadata=None,
+    )
+    session.add_all([security, brokerage])
+    await session.flush()
+    instrument = InvestmentInstrument(
+        book_id=1,
+        commodity_id=security.id,
+        instrument_type="stock",
+        display_name="Split Corp",
+        symbol="SPLT",
+        isin=None,
+        cusip=None,
+        figi=None,
+        exchange=None,
+        venue=None,
+        issuer=None,
+        country_code=None,
+        quote_commodity_id=1,
+        trading_commodity_id=1,
+        quantity_scale=4,
+        price_scale=4,
+        is_active=True,
+        metadata_json=None,
+    )
+    session.add(instrument)
+    await session.commit()
+    return brokerage.id, security.id, instrument.id
 
 
 @pytest.mark.asyncio
@@ -296,3 +349,276 @@ async def test_investment_repository_creates_buy_sell_and_dividend_transactions(
     assert buy_lot is not None
     assert buy_lot.cost_basis_minor == 70000
     assert sell_allocations[0].quantity_minor == -30000
+
+
+@pytest.mark.asyncio
+async def test_stock_split_rewrites_lots_and_realized_gain_uses_preserved_basis(
+    repository_session: AsyncSession,
+) -> None:
+    brokerage_id, security_id, instrument_id = await _seed_split_security(repository_session)
+    repository = InvestmentRepository(repository_session)
+    await repository.create_buy(
+        book_id=1,
+        txn_date=date(2026, 1, 10),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=100_000,
+        cash_amount_minor=100_000,
+        memo="Buy SPLT",
+        payee_id=None,
+        status="cleared",
+    )
+
+    action = await repository.create_stock_split_corporate_action(
+        book_id=1,
+        action_type="split",
+        old_instrument_id=instrument_id,
+        new_instrument_id=None,
+        effective_date=date(2026, 2, 1),
+        ratio_numerator=2,
+        ratio_denominator=1,
+        cash_in_lieu_minor=None,
+        cash_commodity_id=None,
+        source_reference="board",
+        memo="2-for-1 split",
+        generated_transaction_id=None,
+        metadata_json=None,
+    )
+    split_gains = await repository.report_realized_gains(
+        book_id=1, date_from=date(2026, 2, 1), date_to=date(2026, 2, 1)
+    )
+    sell_result = await repository.create_sell(
+        book_id=1,
+        txn_date=date(2026, 3, 1),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=200_000,
+        cash_amount_minor=120_000,
+        lot_strategy="fifo",
+        lot_allocations=None,
+        allow_short=False,
+        memo="Sell after split",
+        payee_id=None,
+        status="cleared",
+    )
+    realized = await repository.report_realized_gains(
+        book_id=1, date_from=date(2026, 3, 1), date_to=date(2026, 3, 1)
+    )
+
+    assert action.generated_transaction_id is not None
+    assert split_gains == []
+    assert sell_result["allocations"] == [{"lot_id": 2, "quantity_minor": 200_000}]
+    assert realized[0]["cost_basis_minor"] == 100_000
+    assert realized[0]["gain_loss_minor"] == 20_000
+
+
+@pytest.mark.asyncio
+async def test_stock_split_after_partial_sale_preserves_remaining_basis(
+    repository_session: AsyncSession,
+) -> None:
+    brokerage_id, security_id, instrument_id = await _seed_split_security(repository_session)
+    repository = InvestmentRepository(repository_session)
+    await repository.create_buy(
+        book_id=1,
+        txn_date=date(2026, 1, 10),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=100_000,
+        cash_amount_minor=100_000,
+        memo="Buy SPLT",
+        payee_id=None,
+        status="cleared",
+    )
+    await repository.create_sell(
+        book_id=1,
+        txn_date=date(2026, 1, 20),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=40_000,
+        cash_amount_minor=48_000,
+        lot_strategy="fifo",
+        lot_allocations=None,
+        allow_short=False,
+        memo="Pre-split sale",
+        payee_id=None,
+        status="cleared",
+    )
+
+    await repository.create_stock_split_corporate_action(
+        book_id=1,
+        action_type="split",
+        old_instrument_id=instrument_id,
+        new_instrument_id=None,
+        effective_date=date(2026, 2, 1),
+        ratio_numerator=2,
+        ratio_denominator=1,
+        cash_in_lieu_minor=None,
+        cash_commodity_id=None,
+        source_reference=None,
+        memo="2-for-1 split",
+        generated_transaction_id=None,
+        metadata_json=None,
+    )
+    await repository.create_sell(
+        book_id=1,
+        txn_date=date(2026, 3, 1),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=120_000,
+        cash_amount_minor=72_000,
+        lot_strategy="fifo",
+        lot_allocations=None,
+        allow_short=False,
+        memo="Sell remaining split shares",
+        payee_id=None,
+        status="cleared",
+    )
+    realized = await repository.report_realized_gains(
+        book_id=1, date_from=date(2026, 3, 1), date_to=date(2026, 3, 1)
+    )
+
+    assert realized[0]["cost_basis_minor"] == 60_000
+    assert realized[0]["gain_loss_minor"] == 12_000
+
+
+@pytest.mark.asyncio
+async def test_stock_split_replacement_lot_preserves_holding_period(
+    repository_session: AsyncSession,
+) -> None:
+    brokerage_id, security_id, instrument_id = await _seed_split_security(repository_session)
+    repository = InvestmentRepository(repository_session)
+    await repository.create_buy(
+        book_id=1,
+        txn_date=date(2026, 1, 10),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=100_000,
+        cash_amount_minor=100_000,
+        memo="Buy SPLT",
+        payee_id=None,
+        status="cleared",
+    )
+    await repository.create_stock_split_corporate_action(
+        book_id=1,
+        action_type="split",
+        old_instrument_id=instrument_id,
+        new_instrument_id=None,
+        effective_date=date(2026, 2, 1),
+        ratio_numerator=2,
+        ratio_denominator=1,
+        cash_in_lieu_minor=None,
+        cash_commodity_id=None,
+        source_reference=None,
+        memo="2-for-1 split",
+        generated_transaction_id=None,
+        metadata_json=None,
+    )
+
+    lots = await repository.list_lots_with_holding_period(
+        book_id=1,
+        account_id=brokerage_id,
+        commodity_id=security_id,
+        as_of_date=date(2027, 2, 1),
+    )
+
+    assert len(lots) == 1
+    assert lots[0]["opened_date"] == date(2026, 1, 10)
+    assert lots[0]["quantity_minor"] == 200_000
+    assert lots[0]["is_long_term"] is True
+
+
+@pytest.mark.asyncio
+async def test_reverse_split_rewrites_lots_when_ratio_divides_evenly(
+    repository_session: AsyncSession,
+) -> None:
+    brokerage_id, security_id, instrument_id = await _seed_split_security(repository_session)
+    repository = InvestmentRepository(repository_session)
+    await repository.create_buy(
+        book_id=1,
+        txn_date=date(2026, 1, 10),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=100_000,
+        cash_amount_minor=100_000,
+        memo="Buy SPLT",
+        payee_id=None,
+        status="cleared",
+    )
+
+    action = await repository.create_stock_split_corporate_action(
+        book_id=1,
+        action_type="reverse_split",
+        old_instrument_id=instrument_id,
+        new_instrument_id=None,
+        effective_date=date(2026, 2, 1),
+        ratio_numerator=1,
+        ratio_denominator=2,
+        cash_in_lieu_minor=None,
+        cash_commodity_id=None,
+        source_reference=None,
+        memo="1-for-2 reverse split",
+        generated_transaction_id=None,
+        metadata_json=None,
+    )
+    lots = await repository.list_lots_with_holding_period(
+        book_id=1,
+        account_id=brokerage_id,
+        commodity_id=security_id,
+        as_of_date=date(2026, 2, 2),
+    )
+
+    assert action.generated_transaction_id is not None
+    assert len(lots) == 1
+    assert lots[0]["quantity_minor"] == 50_000
+    assert lots[0]["cost_basis_minor"] == 100_000
+
+
+@pytest.mark.asyncio
+async def test_fractional_stock_split_rejects_and_rolls_back(
+    repository_session: AsyncSession,
+) -> None:
+    brokerage_id, security_id, instrument_id = await _seed_split_security(repository_session)
+    repository = InvestmentRepository(repository_session)
+    await repository.create_buy(
+        book_id=1,
+        txn_date=date(2026, 1, 10),
+        commodity_id=security_id,
+        investment_account_id=brokerage_id,
+        cash_account_id=2,
+        quantity_minor=100_001,
+        cash_amount_minor=100_000,
+        memo="Buy SPLT",
+        payee_id=None,
+        status="cleared",
+    )
+
+    with pytest.raises(ValueError, match="fractional minor units"):
+        await repository.create_stock_split_corporate_action(
+            book_id=1,
+            action_type="split",
+            old_instrument_id=instrument_id,
+            new_instrument_id=None,
+            effective_date=date(2026, 2, 1),
+            ratio_numerator=3,
+            ratio_denominator=2,
+            cash_in_lieu_minor=None,
+            cash_commodity_id=None,
+            source_reference=None,
+            memo="3-for-2 split",
+            generated_transaction_id=None,
+            metadata_json=None,
+        )
+
+    action_count = await repository_session.scalar(select(func.count(CorporateAction.id)))
+    generated_tx_count = await repository_session.scalar(
+        select(func.count(Transaction.id)).where(Transaction.memo == "3-for-2 split")
+    )
+    assert action_count == 0
+    assert generated_tx_count == 0
