@@ -1002,8 +1002,6 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 @pytest.mark.asyncio
 async def test_health_returns_expected_payload(client: AsyncClient) -> None:
-    app.dependency_overrides[get_book_service] = StubBookService
-
     response = await client.get("/api/v1/health")
 
     assert response.status_code == 200
@@ -1015,9 +1013,16 @@ async def test_health_returns_expected_payload(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_preflight_allows_local_frontend_origin(client: AsyncClient) -> None:
-    app.dependency_overrides[get_book_service] = StubBookService
+async def test_health_does_not_require_authentication(client: AsyncClient) -> None:
+    app.dependency_overrides.pop(require_request_context, None)
 
+    response = await client.get("/api/v1/health")
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_health_preflight_allows_local_frontend_origin(client: AsyncClient) -> None:
     response = await client.options(
         "/api/v1/health",
         headers={
