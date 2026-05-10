@@ -1,33 +1,17 @@
+"""Smoke checks that ORM models declare the columns each milestone needs.
+
+The fuller schema contract is asserted by
+`test_alembic_head_matches_full_stage2_schema_contract` in `test_migrations.py`,
+which compares `Base.metadata` to a freshly-migrated Postgres. This file
+keeps a small set of column-presence assertions per milestone so that a
+removed-by-accident column shows up in a fast, DB-free unit test before the
+heavier migration test runs in CI.
+"""
+
 from __future__ import annotations
 
-from stage2_schema_contract import STAGE2_SCHEMA_CONTRACT, metadata_stage2_schema_contract
-
-import rekenraam_api.db.models  # noqa: F401
+import rekenraam_api.db.models  # noqa: F401  -- registers all ORM tables on Base.metadata
 from rekenraam_api.db.base import Base
-
-
-def test_sqlalchemy_metadata_matches_stage2_schema_contract() -> None:
-    table_names = set(Base.metadata.tables)
-    planning_tables = {
-        "budgets",
-        "budget_targets",
-        "scheduled_transactions",
-        "scheduled_transaction_splits",
-        "scheduled_transaction_occurrences",
-        "loans",
-        "loan_terms",
-    }
-    assert set(STAGE2_SCHEMA_CONTRACT) | planning_tables <= table_names
-
-    actual_schema = metadata_stage2_schema_contract(Base.metadata)
-    for table_name, expected in STAGE2_SCHEMA_CONTRACT.items():
-        actual = actual_schema[table_name]
-        assert actual.primary_key == expected.primary_key
-        assert set(expected.columns) <= set(actual.columns)
-        assert set(expected.indexes) <= set(actual.indexes)
-        assert set(expected.foreign_keys) <= set(actual.foreign_keys)
-        assert set(expected.check_constraints) <= set(actual.check_constraints)
-        assert set(expected.unique_constraints) <= set(actual.unique_constraints)
 
 
 def test_milestone7_planning_tables_are_registered() -> None:

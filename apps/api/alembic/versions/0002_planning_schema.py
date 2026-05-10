@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("starts_on", sa.Date(), nullable=False),
         sa.Column("ends_on", sa.Date(), nullable=True),
         sa.Column("commodity_id", sa.BigInteger(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("book_id", sa.BigInteger(), nullable=False),
         sa.Column("category_id", sa.BigInteger(), nullable=False),
         sa.Column("amount_minor", sa.BigInteger(), nullable=False),
-        sa.Column("rollover_enabled", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column("rollover_enabled", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
@@ -73,11 +73,11 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=20), server_default="uncleared", nullable=False),
         sa.Column("reference", sa.Text(), nullable=True),
         sa.Column("frequency", sa.String(length=20), nullable=False),
-        sa.Column("interval", sa.BigInteger(), server_default="1", nullable=False),
+        sa.Column("interval", sa.BigInteger(), server_default=sa.text("1"), nullable=False),
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=True),
-        sa.Column("reminder_days", sa.BigInteger(), server_default="0", nullable=False),
-        sa.Column("enabled", sa.Boolean(), server_default="true", nullable=False),
+        sa.Column("reminder_days", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
@@ -183,7 +183,7 @@ def upgrade() -> None:
         sa.Column("effective_date", sa.Date(), nullable=False),
         sa.Column("annual_rate_bps", sa.BigInteger(), nullable=False),
         sa.Column("payment_minor", sa.BigInteger(), nullable=True),
-        sa.Column("extra_principal_minor", sa.BigInteger(), server_default="0", nullable=False),
+        sa.Column("extra_principal_minor", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
         sa.Column("metadata_json", sa.Text(), nullable=True),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False

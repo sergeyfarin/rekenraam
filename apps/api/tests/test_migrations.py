@@ -8,16 +8,19 @@ from pathlib import Path
 import asyncpg
 import pytest
 from alembic.config import Config
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import create_async_engine
 from stage2_schema_contract import (
-    STAGE2_SCHEMA_CONTRACT,
     TAURI_RUNTIME_TABLES,
-    database_stage2_schema_contract,
-    without_check_sqltext,
+    contract_from_database,
+    contract_from_metadata,
+    normalize_for_comparison,
 )
 
+import rekenraam_api.db.models  # noqa: F401  -- registers all ORM tables on Base.metadata
 from alembic import command
 from rekenraam_api.config.settings import get_settings
+from rekenraam_api.db.base import Base
 
 
 def _admin_connection_kwargs() -> dict[str, str | int]:
@@ -140,47 +143,54 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
         asyncio.run(_drop_database(database_name))
 
 
-@pytest.mark.skip(
-    reason=(
-        "stage2_schema_contract.py is materially incomplete (missing migration-0004 MFA tables and "
-        "migration-0005 password_reset_tokens, plus drift on the users table). Tracked as Phase 2 "
-        "step 10 in docs/product/v1-gap-plan.md: rebuild the contract from Base.metadata so it "
-        "can't drift silently. Re-enable this test when that lands."
-    )
-)
 @pytest.mark.asyncio
 async def test_alembic_head_matches_full_stage2_schema_contract(repository_database_url: str) -> None:
+    """The migrated database must match what `Base.metadata` describes.
+
+    Drift in either direction (a column added to ORM but not migrated, or a
+    migration that creates something the ORM doesn't model) makes this test
+    fail. Both halves of the contract are derived from canonical sources —
+    no hand-maintained dictionary to keep in sync.
+    """
+
+    expected = contract_from_metadata(Base.metadata)
+    # Sanity: forgetting to import the model modules before reading
+    # `Base.metadata` would yield an empty contract that silently equals an
+    # empty actual, masking real drift. Guard against that.
+    assert len(expected) > 10, (
+        "Base.metadata has fewer tables than expected. Did the model "
+        "modules get imported before this test ran?"
+    )
+
     engine = create_async_engine(repository_database_url, future=True)
     try:
         async with engine.connect() as connection:
-            table_names = set(
-                await connection.run_sync(
-                    lambda sync_connection: set(database_stage2_schema_contract(sync_connection))
-                )
+            actual = await connection.run_sync(contract_from_database)
+
+            assert set(actual) == set(expected), (
+                "Tables in the migrated DB don't match Base.metadata. "
+                f"Only in DB: {sorted(set(actual) - set(expected))}; "
+                f"only in ORM: {sorted(set(expected) - set(actual))}."
             )
-            assert table_names == set(STAGE2_SCHEMA_CONTRACT)
 
-            actual_schema = await connection.run_sync(database_stage2_schema_contract)
-            assert without_check_sqltext(actual_schema) == without_check_sqltext(STAGE2_SCHEMA_CONTRACT)
+            assert normalize_for_comparison(actual) == normalize_for_comparison(expected), (
+                "Column/index/FK/unique drift between Base.metadata and the migrated DB."
+            )
 
-            actual_check_names = {
-                table_name: tuple(check.name for check in contract.check_constraints)
-                for table_name, contract in actual_schema.items()
-            }
-            expected_check_names = {
-                table_name: tuple(check.name for check in contract.check_constraints)
-                for table_name, contract in STAGE2_SCHEMA_CONTRACT.items()
-            }
-            assert actual_check_names == expected_check_names
+            # CHECK constraint names must match across both sides; their
+            # sqltext is normalized away above (Postgres canonicalizes the
+            # expression, which the ORM doesn't reproduce verbatim). Asserting
+            # the DB has a non-empty sqltext for every CHECK keeps the
+            # constraints meaningful.
             assert all(
                 check.sqltext
-                for contract in actual_schema.values()
+                for contract in actual.values()
                 for check in contract.check_constraints
             )
 
             reflected_table_names = set(
                 await connection.run_sync(
-                    lambda sync_connection: set(sync_connection.dialect.get_table_names(sync_connection))
+                    lambda sync_connection: set(inspect(sync_connection).get_table_names())
                 )
             )
             assert "alembic_version" in reflected_table_names

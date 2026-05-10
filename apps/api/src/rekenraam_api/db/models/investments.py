@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,9 +64,9 @@ class InvestmentInstrument(Base):
     country_code: Mapped[str | None] = mapped_column(String(3))
     quote_commodity_id: Mapped[int | None] = mapped_column(ForeignKey("commodities.id", ondelete="SET NULL"))
     trading_commodity_id: Mapped[int | None] = mapped_column(ForeignKey("commodities.id", ondelete="SET NULL"))
-    quantity_scale: Mapped[int] = mapped_column(Integer, nullable=False, server_default="4")
-    price_scale: Mapped[int] = mapped_column(Integer, nullable=False, server_default="4")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    quantity_scale: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4"))
+    price_scale: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     metadata_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -84,7 +85,7 @@ class CostBasisProfile(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     method: Mapped[str] = mapped_column(String(32), nullable=False, server_default="fifo")
     description: Mapped[str | None] = mapped_column(Text)
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     metadata_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

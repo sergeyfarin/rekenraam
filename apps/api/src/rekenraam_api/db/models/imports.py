@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,7 +40,7 @@ class ImportRule(Base):
     rule_kind: Mapped[str] = mapped_column(String(20), nullable=False)
     match_type: Mapped[str] = mapped_column(String(20), nullable=False, server_default="contains")
     match_text: Mapped[str] = mapped_column(Text, nullable=False)
-    priority: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="100")
+    priority: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("100"))
     amount_min_minor: Mapped[int | None] = mapped_column(BigInteger)
     amount_max_minor: Mapped[int | None] = mapped_column(BigInteger)
     date_from: Mapped[date | None] = mapped_column(Date)

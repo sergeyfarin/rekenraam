@@ -64,7 +64,27 @@
       "Bash(PATH=.venv/bin:__TRACKED_VAR__ make api-lint)",
       "Bash(PATH=.venv/bin:__TRACKED_VAR__ make api-typecheck)",
       "Bash(env PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ make api-lint)",
-      "Bash(env PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ make api-typecheck)"
+      "Bash(env PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ make api-typecheck)",
+      "Bash(python3 -c ' *)",
+      "Bash(PATH=.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam .venv/bin/python /tmp/contract_diff.py)",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(PATH=.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam .venv/bin/python /tmp/check_defaults.py)",
+      "Bash(PATH=.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_migrations.py -v)",
+      "Bash(git checkout *)",
+      "Bash(.venv/bin/python)",
+      "Bash(PATH=.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam .venv/bin/pytest apps/api/tests/test_schema_contract.py -v)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest -q -rs)",
+      "Bash(env PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ cd /home/reken/Repos/rekenraam/apps/api)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/ruff check *)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_pricing_api.py)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_pricing_api.py apps/api/tests/test_migrations.py)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_migrations.py apps/api/tests/test_pricing_api.py)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_milestone9_api.py::test_admin_user_lifecycle_roles_audit_and_deactivation)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_milestone9_api.py)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/ -q)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

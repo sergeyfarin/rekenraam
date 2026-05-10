@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,7 +35,7 @@ class Budget(Base):
     commodity_id: Mapped[int] = mapped_column(
         ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -59,7 +60,7 @@ class BudgetTarget(Base):
         ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
     )
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    rollover_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    rollover_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -86,11 +87,11 @@ class ScheduledTransaction(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="uncleared")
     reference: Mapped[str | None] = mapped_column(Text)
     frequency: Mapped[str] = mapped_column(String(20), nullable=False)
-    interval: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="1")
+    interval: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"))
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date)
-    reminder_days: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    reminder_days: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -195,7 +196,7 @@ class LoanTerm(Base):
     annual_rate_bps: Mapped[int] = mapped_column(BigInteger, nullable=False)
     payment_minor: Mapped[int | None] = mapped_column(BigInteger)
     extra_principal_minor: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, server_default="0"
+        BigInteger, nullable=False, server_default=text("0")
     )
     metadata_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(

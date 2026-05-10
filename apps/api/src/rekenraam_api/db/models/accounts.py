@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -57,9 +58,9 @@ class Account(Base):
     )
     booking_policy: Mapped[str] = mapped_column(String(16), nullable=False, server_default="fifo")
     number_last4: Mapped[str | None] = mapped_column(String(4))
-    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     system_role: Mapped[str | None] = mapped_column(String(64))
     effective_at: Mapped[date] = mapped_column(
         Date, nullable=False, server_default=func.current_date()

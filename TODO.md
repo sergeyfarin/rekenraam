@@ -3,7 +3,7 @@
 Single dashboard for in-flight Rekenraam V1 work. Links back to the canonical
 specs — does **not** duplicate them. Update this file when items move state.
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ## Sources of truth
 
@@ -15,12 +15,12 @@ Last updated: 2026-05-10
 
 ## Active focus
 
-**Stabilize-before-features pivot.** Steps 1 and 2 of the original active-focus list are done; the test signal is now trustworthy. CI runs the full suite with no quarantine flags, lint clean, pyright strict clean.
+**Stabilize-before-features pivot — DONE.** All three stabilization items are shipped. CI runs the full suite with no quarantine flags, lint clean, pyright strict clean. Time to resume feature work.
 
 1. [x] **Phase 1 step 7** — Add CI API test job. Shipped 2026-05-09.
-2. [x] **Phase 2 step 9** — Triage 8 pre-existing test failures. Shipped 2026-05-10. 6 fixed, 2 explicitly skipped with forward-pointers; CI no longer needs `--deselect` flags. Per-test outcomes: see [v1-gap-plan.md §Phase 2 step 9](docs/product/v1-gap-plan.md).
-3. [ ] **Phase 2 step 10** — Rebuild [stage2_schema_contract.py](apps/api/tests/stage2_schema_contract.py) from `Base.metadata` so it can't drift silently. Acceptance: re-enable `test_alembic_head_matches_full_stage2_schema_contract` (currently `@pytest.mark.skip`); deleting any model attribute makes it fail.
-4. [ ] **Phase 1 step 2** — User invite flow. Resume after step 3 lands so the schema-drift detector is back online before more migrations ship.
+2. [x] **Phase 2 step 9** — Triage 8 pre-existing test failures. Shipped 2026-05-10.
+3. [x] **Phase 2 step 10** — Rebuild [stage2_schema_contract.py](apps/api/tests/stage2_schema_contract.py) from `Base.metadata`. Shipped 2026-05-11. Per-detail summary: [v1-gap-plan.md §Phase 2 step 10](docs/product/v1-gap-plan.md).
+4. [ ] **Phase 1 step 2** — User invite flow. **Now ready to resume.**
 
 After (4) lands, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md).
 
@@ -62,20 +62,23 @@ Reference for full detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.m
 | 7 | Auth depth (deactivate-revokes-sessions, persistent throttling, MFA paths) | partial — `AuthorizationError` no longer inherits `ValueError` (fixed 2026-05-10 in step 9), so 403s aren't masked as 400s. Remaining work as listed in gap plan. |
 | 8 | CSV export escaping & locale | not started |
 | 9 | Triage 8 pre-existing test failures | **DONE 2026-05-10** |
-| 10 | Rebuild `stage2_schema_contract.py` from metadata | **#3 in active focus** |
+| 10 | Rebuild `stage2_schema_contract.py` from metadata | **DONE 2026-05-11** |
 | 11 | Unauth `/api/v1/health` (remove transitive `require_request_context`) | not started |
 
 ## Open findings (severity B/H, not yet in a phase)
 
-These came out of Phase 0 / Phase 1 step 1 / Phase 1 step 7 / Phase 2 step 9. Logged in detail in [v1-gap-plan.md §Findings](docs/product/v1-gap-plan.md).
+These came out of Phase 0 / Phase 1 step 1 / Phase 1 step 7 / Phase 2 step 9 / Phase 2 step 10. Logged in detail in [v1-gap-plan.md §Findings](docs/product/v1-gap-plan.md).
 
 - [ ] **`/api/v1/health` is auth-protected.** Severity H. Phase 2 step 11.
 - [ ] **`/api/v1/accounts/balances` excludes zero-balance accounts.** Severity N. Decide: include zero rows or document the contract.
-- [ ] **`stage2_schema_contract.py` is materially incomplete.** Severity B. Phase 2 step 10.
+- [x] **`stage2_schema_contract.py` is materially incomplete.** Resolved 2026-05-11 in Phase 2 step 10.
 - [x] **8 pre-existing failing tests on `main`.** Resolved 2026-05-10 in Phase 2 step 9.
 - [ ] **`ruff format` not enforced.** Severity N. 70+ files would need reformatting; bulk-format the repo as a single focused PR, then enable `ruff format --check` in [.github/workflows/api-tests.yml](.github/workflows/api-tests.yml).
 - [ ] **`AuthorizationError` was masked as 400 in many routes.** Severity H, **fixed in step 9** by changing the base class from `ValueError` to `Exception`. Still worth a follow-up: audit every `except ValueError` in `apps/api/src/rekenraam_api/api/v1/` to confirm no other auth-shaped errors are similarly swallowed (Phase 2 step 7).
 - [ ] **Service-level locked-range import test fails with `MissingGreenlet`.** Severity H, the underlying behavior is correct (verified at HTTP layer), the test wiring isn't. Skipped pending an e2e rewrite as part of Phase 2 step 1.
+- [ ] **Numeric/boolean `server_default` strings need `sa.text(...)` everywhere.** Severity N. Fixed for all 32 ORM columns + 6 migration columns in step 10 (the schema-drift detector caught them). Future migrations and ORM changes must follow the same pattern; consider a CI lint or a code review checklist item. Background: SQLAlchemy auto-quotes `server_default="0"` to `DEFAULT '0'`, which Postgres implicit-casts and stores as the text `'0'`. The cleaner pattern is `server_default=text("0")` — generates `DEFAULT 0` directly.
+- [ ] **Migration 0002 `scheduled_transactions.interval` column is named after a Postgres reserved word.** Severity N. Works because SQLAlchemy quotes column names, but a footgun for raw SQL. Worth renaming to `interval_count` in a forward migration if/when convenient.
+- [ ] **`PasswordResetToken` was missing from `db/models/__init__.py` re-export list.** Severity N, fixed in step 10. The class still landed in `Base.metadata` because the parent module gets imported transitively, but the missing entry was inconsistent. Future ORM additions should always be added to the `__init__.py` re-exports too.
 
 ## Open hardening items from milestone roadmap not yet in the gap plan
 
@@ -93,6 +96,7 @@ Not all of [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md)'s "Rem
 - 2026-05-09 — Phase 1 step 1: self-service password reset ([v1-gap-plan.md §Phase 1 step 1](docs/product/v1-gap-plan.md)).
 - 2026-05-09 — Phase 1 step 7: CI API test job at [.github/workflows/api-tests.yml](.github/workflows/api-tests.yml). Pyright caught a strict-mode bug in `revoke_all_user_sessions`'s rowcount handling that the local pytest run missed; fixed in the same PR.
 - 2026-05-10 — Phase 2 step 9: triaged 8 pre-existing test failures. 6 fixed, 2 explicitly skipped with forward-pointers; deselect list pruned from CI. Side fix: `AuthorizationError` no longer inherits `ValueError`, which was systemically masking 403s as 400s across many routes ([v1-gap-plan.md §Phase 2 step 9](docs/product/v1-gap-plan.md)).
+- 2026-05-11 — Phase 2 step 10: rebuilt `apps/api/tests/stage2_schema_contract.py` from `Base.metadata`. Dropped the 800-line hand-written `STAGE2_SCHEMA_CONTRACT` (was missing 24 of 57 tables and silently drifting). Added `server_default` as a tracked dimension; fixed 32 ORM columns and 6 migration columns to use `sa.text(...)` for non-string defaults. Added 12-test self-test suite in [test_schema_contract.py](apps/api/tests/test_schema_contract.py) so the detector itself can't silently regress. Re-enabled the migration-vs-ORM drift test ([v1-gap-plan.md §Phase 2 step 10](docs/product/v1-gap-plan.md)).
 
 ## Decision 2026-05-09 — stabilize before features
 

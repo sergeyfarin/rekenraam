@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -79,7 +80,7 @@ class TransactionSavedView(Base):
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     filters_json: Mapped[str] = mapped_column(Text, nullable=False)
-    is_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -105,7 +106,7 @@ class TransactionTemplate(Base):
     memo: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="uncleared")
     reference: Mapped[str | None] = mapped_column(Text)
-    is_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -194,7 +195,7 @@ class MarkdownNote(Base):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body_markdown: Mapped[str] = mapped_column(Text, nullable=False)
-    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

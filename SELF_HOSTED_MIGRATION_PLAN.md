@@ -1,6 +1,6 @@
 # Rekenraam Self-Hosted Migration Plan
 
-Last updated: 2026-05-09
+Last updated: 2026-05-11
 
 ## Summary
 
@@ -548,10 +548,13 @@ Exit criteria:
 Backend:
 
 - Ruff check
-- Ruff format check
+- Ruff format check (not yet enforced; bulk reformat tracked in TODO.md)
 - Pyright strict
 - pytest service/repository/API tests
 - Alembic upgrade/downgrade smoke
+- ORM-vs-migrated-Postgres schema-drift contract (rebuilt 2026-05-11 to be
+  derived from `Base.metadata`; covers all tables, columns, indexes, FKs,
+  unique constraints, CHECK names, and `server_default` values)
 - auth/session/device/request-context tests
 - book access-policy tests
 - reconciliation/import/export/report/investment/pricing/admin tests

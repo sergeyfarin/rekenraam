@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -51,10 +52,10 @@ class PricingPolicy(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     base_commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False)
-    refresh_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    refresh_hour_utc: Mapped[int] = mapped_column(Integer, nullable=False, server_default="4")
-    refresh_minute_utc: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    max_backfill_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="370")
+    refresh_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    refresh_hour_utc: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4"))
+    refresh_minute_utc: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    max_backfill_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("370"))
     weekend_policy: Mapped[str] = mapped_column(String(32), nullable=False, server_default="skip")
     default_source_id: Mapped[int | None] = mapped_column(ForeignKey("price_sources.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -73,7 +74,7 @@ class PricingSourceAssignment(Base):
     commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False)
     quote_commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False)
     source_id: Mapped[int] = mapped_column(ForeignKey("price_sources.id", ondelete="CASCADE"), nullable=False)
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default="100")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("100"))
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -117,10 +118,10 @@ class PricingRefreshRun(Base):
     trigger: Mapped[str] = mapped_column(String(32), nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    pairs_total: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    pairs_success: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    pairs_failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    rates_inserted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    derived_inserted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    pairs_total: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    pairs_success: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    pairs_failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    rates_inserted: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    derived_inserted: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     last_error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

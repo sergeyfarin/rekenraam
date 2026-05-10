@@ -1,6 +1,6 @@
 # V1 Gap Analysis & Fix Plan
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity. Items marked **DONE** have shipped; the relevant section retains the original gap description for historical context.
 
@@ -11,19 +11,16 @@ Severity legend:
 - **H** — hardening (correctness or operational risk; should ship at v1)
 - **N** — nice-to-have (scope `Should Have`, can defer if time-boxed)
 
-## Test status snapshot (2026-05-10, after Phase 2 step 9)
+## Test status snapshot (2026-05-11, after Phase 2 step 10)
 
 Backend in [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml):
 
-- **CI verdict: 147 passed, 2 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite. Skipped tests are explicit `@pytest.mark.skip(reason=…)` with forward-pointers.
+- **CI verdict: 159 passed, 1 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite.
 - Pyright (strict): clean.
 - Ruff check: clean.
 - Ruff format check: not yet a gate (70/123 files would need reformatting).
 
-The 2 explicit skips:
-
-  - `test_migrations.py::test_alembic_head_matches_full_stage2_schema_contract` — schema contract is materially incomplete (Phase 2 step 10 will rebuild it from `Base.metadata`).
-  - `test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account` — service-level test fails with `sqlalchemy.exc.MissingGreenlet` during the post-error abandonment path; behavior is correct at HTTP layer. To be rewritten as an e2e test alongside Phase 2 step 1.
+Net change since Phase 2 step 9: **+12 self-tests** for the rebuilt schema-contract module + the schema-drift test re-enabled. The only remaining skip is the `MissingGreenlet` import test (Phase 2 step 1 will rewrite it as e2e).
 
 ## Phase status
 
@@ -37,8 +34,9 @@ The 2 explicit skips:
   - [ ] 6. Reverse-proxy + TLS production example
   - [x] 7. CI API test job (completed 2026-05-09)
   - [ ] 8. Tauri removal
-- [ ] **Phase 2** — hardening of high-risk service code (1/11 items done)
+- [ ] **Phase 2** — hardening of high-risk service code (2/11 items done)
   - [x] 9. Triage 8 pre-existing test failures (completed 2026-05-10)
+  - [x] 10. Rebuild stage2_schema_contract.py from Base.metadata (completed 2026-05-11)
 - [ ] **Phase 3** — frontend tests
 - [ ] **Phase 4** — nice-to-have scope items
 
@@ -52,9 +50,15 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 - **`AuthorizationError` was masked as 400 in many routes — FIXED 2026-05-10.** While triaging Phase 2 step 9, discovered that `AuthorizationError` inheriting from `ValueError` meant any route with `try: ... except ValueError: HTTP_400_BAD_REQUEST` was silently swallowing 403 errors. Fixed at the root by changing the base class to `Exception`. A follow-up audit (Phase 2 step 7) should grep every `except ValueError` in `apps/api/src/rekenraam_api/api/v1/` to confirm no other auth-shaped errors are similarly affected.
 
-- **`stage2_schema_contract.py` is materially incomplete.** Spot-checked while shipping the password-reset migration: the contract has no entries for `mfa_challenges`, `mfa_recovery_codes`, or `user_mfa_totp` (added in migration 0004) and is missing `password_reset_tokens` (added in migration 0005). The drift on the `users` table that the test reports is real but only the surface symptom — large parts of the schema are simply not described by the contract. Phase 2 should rebuild this contract from `Base.metadata` rather than continue patching it by hand. Severity **B** because the contract is a release-gate signal that currently can't be trusted.
+- **`stage2_schema_contract.py` is materially incomplete — RESOLVED 2026-05-11.** Phase 2 step 10 rebuilt the module to derive both halves of the contract from canonical sources (`Base.metadata` for ORM, Postgres reflection for the migrated DB). 24 tables that were missing from the hand-written dict (the milestone 7 planning, milestone 8 investments, milestone 9 ergonomics/templates, milestone 10 MFA, and Phase 1 password-reset families) are now covered. Side findings logged below.
 
 - **`ruff format` not enforced.** Discovered while wiring CI in Phase 1 step 7: `ruff format --check apps/api` reports 70 of 123 Python files would be reformatted. Adding the check as a CI gate now would block every PR. Bulk-format the repo as one focused PR, then enable the gate. Severity **N** (cosmetic, but a real risk-reduction once enforced because review diffs become smaller). Not in any phase yet — tracked in [TODO.md](../../TODO.md).
+
+- **Numeric/boolean `server_default` strings need `sa.text(...)` everywhere — RESOLVED 2026-05-11 across ORM and migrations.** Surfaced in step 10 by the schema-drift detector. Detail: `server_default="0"` (raw string) compiles to `DEFAULT '0'` (a string literal) under SQLAlchemy. Postgres implicit-casts `'0'::bigint` and stores `'0'` as text in `pg_attrdef`, so reflection returns `'0'` (with quotes). The clean pattern is `server_default=text("0")`, which produces `DEFAULT 0` and round-trips identically through reflection. 32 ORM columns and 6 migration columns were converted. Severity **N** because the in-database behavior was equivalent for our column types, but the inconsistency was a real footgun for any future use of `Base.metadata.create_all()` or fresh migrations on different DDL targets.
+
+- **`PasswordResetToken` was not exported from `db/models/__init__.py` — FIXED 2026-05-11.** Severity **N**. The class still landed in `Base.metadata` because the parent module gets imported transitively, but the `__init__.py` re-export list was inconsistent. Style follow-up: future ORM additions must update both the class and the re-export list.
+
+- **Migration 0002's `scheduled_transactions.interval` column uses a Postgres reserved word.** Severity **N**. Works because SQLAlchemy quotes column names in its generated SQL, but a footgun for raw SQL elsewhere (`SELECT interval FROM scheduled_transactions` would fail). Worth renaming to `interval_count` or similar in a forward migration when convenient. Not in any phase.
 
 ---
 
@@ -340,7 +344,17 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
      - `test_alembic_head_matches_full_stage2_schema_contract` — schema-contract drift (Phase 2 step 10).
      - `test_import_commit_marks_session_abandoned_on_locked_account` — `sqlalchemy.exc.MissingGreenlet` during the post-error abandonment path on the service-level test. Behavior is correct at the HTTP layer. To be rewritten as an e2e test alongside Phase 2 step 1 (reconciliation correctness).
    - CI workflow updated: deselect list pruned, `pytest -q` runs the full suite. 147 passed, 2 skipped, 0 failed.
-10. **Schema-contract rebuild**: rewrite `apps/api/tests/stage2_schema_contract.py` so the contract is generated from `Base.metadata` (or autogenerated from a fresh-migration DB) rather than maintained by hand. The hand-maintained contract is materially incomplete (missing migration-0004 and 0005 tables) and any future migration will continue to break the test for the wrong reason.
+10. **Schema-contract rebuild** — **DONE 2026-05-11.** Delivered:
+    - Rewrote [apps/api/tests/stage2_schema_contract.py](../../apps/api/tests/stage2_schema_contract.py) (~250 LoC, down from ~1050) so the contract is derived from canonical sources rather than hand-written:
+      - `contract_from_metadata(Base.metadata)` produces one `TableContract` per ORM-registered table.
+      - `contract_from_database(connection)` reflects the same shape from a live Postgres connection.
+      - `normalize_for_comparison(schema)` strips legitimately-different fields (CHECK `sqltext` formatting between Postgres canonicalization and SQLAlchemy's render).
+      - Server defaults are now part of `ColumnContract`, with separate ORM and DB normalizers (`_normalize_orm_server_default`, `_normalize_db_server_default`) since the two sources have different shapes.
+    - Diagnostic-script run while building: 0 hand-written drift, but **18 server_default mismatches** between ORM and Postgres that the old contract missed entirely. 32 ORM columns fixed (`server_default="0"` → `server_default=text("0")` etc); 6 migration columns in `0002_planning_schema.py` fixed (`sa.Column(..., server_default="0", ...)` → `sa.Column(..., server_default=sa.text("0"), ...)`).
+    - Side fix in `0002_planning_schema.py` mirrors the ORM correction in the migration; for fresh deployments going forward the `pg_attrdef` text matches the ORM exactly. Existing deployed DBs are unaffected because migrations only run once.
+    - New self-test suite in [test_schema_contract.py](../../apps/api/tests/test_schema_contract.py) — 12 tests proving the detector itself works (column add, nullable flip, server_default flip, index add, normalization shapes for raw string / `sa.text(...)` / `func.now()` / autoincrement-PK-sequence). Without this, a future regression in the normalizer could silently mask all defaults.
+    - Removed the now-redundant `test_sqlalchemy_metadata_matches_stage2_schema_contract` from `test_orm_schema.py` (subsumed by the migration drift test). Kept `test_milestone7_planning_tables_are_registered` as a fast DB-free sanity check.
+    - Re-enabled `test_alembic_head_matches_full_stage2_schema_contract`. CI now runs it as part of the standard suite.
 11. **Health endpoint deauth** (Phase 0 finding): remove the transitive `require_request_context` dependency from `/api/v1/health` so the deployment health probe works without a session cookie.
 
 Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded existing one) that exercises the seam from Phase 0 and covers the missing scenarios named in §2.
@@ -365,11 +379,10 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (2 of 8 items shipped — items 1 and 7). Phase 2 step 9 is **done**, putting CI on a known-clean baseline. Continue:
+Phase 0 is **done**. Phase 1 is in flight (2 of 8 items shipped — items 1 and 7). Phase 2 step 9 and step 10 are **done**, putting CI on a fully-trustworthy baseline: 159 passed / 1 skipped / 0 failed, with the schema-drift detector now real and self-tested. Continue:
 
-- **Next:** Phase 2 step 10 (rebuild schema contract from `Base.metadata`). Re-enabling the schema-drift detector is the last stabilization piece before more migrations land.
-- **Then:** Phase 1 step 2 (user invite). Mirrors the password-reset shape, so it should land faster now that the e2e seam, CI, and clean test signal are all in place.
+- **Next:** Phase 1 step 2 (user invite flow). Mirrors the password-reset shape, so it should land fast now that the e2e seam, CI, drift detector, and clean test signal are all in place.
 - **Then:** the rest of Phase 1 in any order convenient (cross-currency transfer, stock-split lot rewrite, OFX duplicate detection, reverse-proxy/TLS, Tauri removal).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
-Approximate remaining total: **11-17 engineering days** to v1-ready (was 12-18 before Phase 2 step 9 shipped).
+Approximate remaining total: **10-15 engineering days** to v1-ready (was 11-17 before Phase 2 step 10 shipped).
