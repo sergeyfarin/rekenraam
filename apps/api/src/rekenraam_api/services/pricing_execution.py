@@ -80,7 +80,15 @@ class FrankfurterProvider(PricingRateProvider):
                 decimal_rate = Decimal(str(rate))
                 if decimal_rate <= 0:
                     continue
-                points.append(FxRatePoint(date=point_date, base=base, quote=str(quote), rate=decimal_rate, source_name=self.name))
+                points.append(
+                    FxRatePoint(
+                        date=point_date,
+                        base=base,
+                        quote=str(quote),
+                        rate=decimal_rate,
+                        source_name=self.name,
+                    )
+                )
         return points
 
 
@@ -174,7 +182,11 @@ class BankOfCanadaProvider(PricingRateProvider):
                     typed_row = cast(dict[str, object], row)
                     point_date = typed_row.get("d")
                     series_payload = typed_row.get(series)
-                    value = cast(dict[str, object], series_payload).get("v") if isinstance(series_payload, dict) else None
+                    value = (
+                        cast(dict[str, object], series_payload).get("v")
+                        if isinstance(series_payload, dict)
+                        else None
+                    )
                     if point_date in {None, ""} or value in {None, ""}:
                         continue
                     rate = Decimal(str(value))
@@ -223,7 +235,15 @@ class ExchangeRateHostProvider(PricingRateProvider):
                 decimal_rate = Decimal(str(rate))
                 if decimal_rate <= 0:
                     continue
-                points.append(FxRatePoint(date=point_date, base=base, quote=str(quote), rate=decimal_rate, source_name=self.name))
+                points.append(
+                    FxRatePoint(
+                        date=point_date,
+                        base=base,
+                        quote=str(quote),
+                        rate=decimal_rate,
+                        source_name=self.name,
+                    )
+                )
         return points
 
 
@@ -233,7 +253,11 @@ class YahooFinanceProvider(PricingRateProvider):
 
     async def fetch_daily_rates(self, request: ProviderRequest) -> list[FxRatePoint]:
         start_epoch = int(datetime.combine(request.start_date, time(0, 0, tzinfo=UTC)).timestamp())
-        end_epoch = int(datetime.combine(request.end_date + timedelta(days=1), time(0, 0, tzinfo=UTC)).timestamp())
+        end_epoch = int(
+            datetime.combine(
+                request.end_date + timedelta(days=1), time(0, 0, tzinfo=UTC)
+            ).timestamp()
+        )
         points: list[FxRatePoint] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             for quote in request.symbols:
@@ -259,14 +283,24 @@ class YahooFinanceProvider(PricingRateProvider):
                     continue
                 typed_row = cast(dict[str, object], row)
                 raw_timestamps = typed_row.get("timestamp")
-                timestamps: Sequence[object] = cast(Sequence[object], raw_timestamps) if isinstance(raw_timestamps, list) else ()
+                timestamps: Sequence[object] = (
+                    cast(Sequence[object], raw_timestamps)
+                    if isinstance(raw_timestamps, list)
+                    else ()
+                )
                 raw_closes: object = ()
                 indicators = typed_row.get("indicators")
                 if isinstance(indicators, dict):
                     quote_rows = cast(dict[str, object], indicators).get("quote")
-                    if isinstance(quote_rows, list) and quote_rows and isinstance(quote_rows[0], dict):
+                    if (
+                        isinstance(quote_rows, list)
+                        and quote_rows
+                        and isinstance(quote_rows[0], dict)
+                    ):
                         raw_closes = cast(dict[str, object], quote_rows[0]).get("close") or []
-                closes: Sequence[object] = cast(Sequence[object], raw_closes) if isinstance(raw_closes, list) else ()
+                closes: Sequence[object] = (
+                    cast(Sequence[object], raw_closes) if isinstance(raw_closes, list) else ()
+                )
                 for index, timestamp in enumerate(timestamps):
                     if index >= len(closes):
                         continue
@@ -279,7 +313,15 @@ class YahooFinanceProvider(PricingRateProvider):
                     if decimal_rate <= 0:
                         continue
                     point_date = datetime.fromtimestamp(int(timestamp), tz=UTC).date()
-                    points.append(FxRatePoint(date=point_date, base=request.base, quote=quote, rate=decimal_rate, source_name=self.name))
+                    points.append(
+                        FxRatePoint(
+                            date=point_date,
+                            base=request.base,
+                            quote=quote,
+                            rate=decimal_rate,
+                            source_name=self.name,
+                        )
+                    )
         return points
 
 
@@ -335,7 +377,9 @@ class PricingExecutionService:
         policies = await self._repository.list_enabled_pricing_policies()
         return [policy.book_id for policy in policies]
 
-    async def run_book_refresh(self, book_id: int, *, trigger: str, force: bool) -> PricingRefreshRunSummary | None:
+    async def run_book_refresh(
+        self, book_id: int, *, trigger: str, force: bool
+    ) -> PricingRefreshRunSummary | None:
         started_at = self._now()
         policy = await self._repository.get_pricing_policy(book_id)
         if policy is None:
@@ -354,7 +398,10 @@ class PricingExecutionService:
             return None
 
         tasks = await self._build_tasks(policy, base_currency, refresh_date)
-        if not force and not any(task.last_attempt_at is None or task.last_attempt_at.date() < refresh_date for task in tasks):
+        if not force and not any(
+            task.last_attempt_at is None or task.last_attempt_at.date() < refresh_date
+            for task in tasks
+        ):
             return None
 
         pairs_success = 0
@@ -370,7 +417,11 @@ class PricingExecutionService:
                 if provider is None:
                     raise ValueError(f"No provider implementation for source '{task.source.name}'")
                 direct_points, derived_points = await self._fetch_task_points(provider, task)
-                direct_inserted, derived_inserted_for_task, observations = await self._build_observations(
+                (
+                    direct_inserted,
+                    derived_inserted_for_task,
+                    observations,
+                ) = await self._build_observations(
                     book_id=book_id,
                     direct_points=direct_points,
                     derived_points=derived_points,
@@ -427,7 +478,9 @@ class PricingExecutionService:
         )
         return summary
 
-    async def list_refresh_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRunSummary]:
+    async def list_refresh_run_history(
+        self, book_id: int, limit: int = 10
+    ) -> list[PricingRefreshRunSummary]:
         rows = await self._repository.list_pricing_refresh_run_history(book_id, limit)
         return [self._to_refresh_run_summary(row) for row in rows]
 
@@ -448,7 +501,9 @@ class PricingExecutionService:
             latest_run = await self._repository.get_latest_pricing_refresh_run(book_id)
             if latest_run is not None:
                 last_run = self._to_refresh_run_summary(latest_run)
-        next_scheduled_at = self._scheduled_at(policy, self._now().date()) if policy.refresh_enabled else None
+        next_scheduled_at = (
+            self._scheduled_at(policy, self._now().date()) if policy.refresh_enabled else None
+        )
         if next_scheduled_at is not None and next_scheduled_at <= self._now():
             next_scheduled_at = next_scheduled_at + timedelta(days=1)
         return PricingExecutionStatusSummary(
@@ -462,17 +517,31 @@ class PricingExecutionService:
             last_run=last_run,
         )
 
-    async def _build_tasks(self, policy: PricingPolicy, base_currency: Commodity, refresh_date: date) -> list[PricingRefreshTask]:
+    async def _build_tasks(
+        self, policy: PricingPolicy, base_currency: Commodity, refresh_date: date
+    ) -> list[PricingRefreshTask]:
         currencies, base_currency_code = await self._repository.list_book_currencies(policy.book_id)
-        active_currencies = [currency for currency in currencies if self._repository.currency_is_active(currency, base_currency_code)]
-        assignments = await self._repository.list_effective_pricing_source_assignments(policy.book_id, refresh_date)
+        active_currencies = [
+            currency
+            for currency in currencies
+            if self._repository.currency_is_active(currency, base_currency_code)
+        ]
+        assignments = await self._repository.list_effective_pricing_source_assignments(
+            policy.book_id, refresh_date
+        )
         assignment_map: dict[tuple[int, int], tuple[object, Commodity, Commodity, PriceSource]] = {}
         for row in assignments:
             assignment = row[0]
             assignment_map.setdefault((assignment.commodity_id, assignment.quote_commodity_id), row)
-        default_source = await self._repository.get_price_source(policy.default_source_id) if policy.default_source_id is not None else None
+        default_source = (
+            await self._repository.get_price_source(policy.default_source_id)
+            if policy.default_source_id is not None
+            else None
+        )
         refresh_states = await self._repository.list_pricing_refresh_state_rows(policy.book_id)
-        refresh_state_map = {(row.commodity_id, row.quote_commodity_id, row.source_id): row for row in refresh_states}
+        refresh_state_map = {
+            (row.commodity_id, row.quote_commodity_id, row.source_id): row for row in refresh_states
+        }
 
         tasks: list[PricingRefreshTask] = []
         for currency in active_currencies:
@@ -484,7 +553,11 @@ class PricingExecutionService:
                 raise ValueError("no default pricing source configured for pricing refresh")
             state = refresh_state_map.get((currency.id, base_currency.id, source.id))
             last_success_date = state.last_success_date if state is not None else None
-            start_date = last_success_date + timedelta(days=1) if last_success_date is not None else refresh_date - timedelta(days=max(policy.max_backfill_days, 1))
+            start_date = (
+                last_success_date + timedelta(days=1)
+                if last_success_date is not None
+                else refresh_date - timedelta(days=max(policy.max_backfill_days, 1))
+            )
             if start_date > refresh_date:
                 continue
             tasks.append(
@@ -508,7 +581,9 @@ class PricingExecutionService:
         base_currency: Commodity,
     ) -> tuple[int, int, list[PriceObservation]]:
         currencies, _ = await self._repository.list_book_currencies(book_id)
-        symbol_map = {currency.symbol: currency for currency in currencies if currency.symbol is not None}
+        symbol_map = {
+            currency.symbol: currency for currency in currencies if currency.symbol is not None
+        }
         if base_currency.symbol is None:
             raise ValueError("base currency symbol is required for pricing refresh")
         symbol_map[base_currency.symbol] = base_currency
@@ -517,9 +592,13 @@ class PricingExecutionService:
         direct_inserted = 0
         derived_inserted = 0
         for point in direct_points:
-            direct_inserted += await self._append_observation(book_id, point, symbol_map, observations)
+            direct_inserted += await self._append_observation(
+                book_id, point, symbol_map, observations
+            )
         for point in derived_points:
-            derived_inserted += await self._append_observation(book_id, point, symbol_map, observations)
+            derived_inserted += await self._append_observation(
+                book_id, point, symbol_map, observations
+            )
         return direct_inserted, derived_inserted, observations
 
     async def _append_observation(
@@ -559,7 +638,9 @@ class PricingExecutionService:
         )
         return 1
 
-    async def _fetch_task_points(self, provider: PricingRateProvider, task: PricingRefreshTask) -> tuple[list[FxRatePoint], list[FxRatePoint]]:
+    async def _fetch_task_points(
+        self, provider: PricingRateProvider, task: PricingRefreshTask
+    ) -> tuple[list[FxRatePoint], list[FxRatePoint]]:
         if task.from_currency.symbol is None or task.to_currency.symbol is None:
             raise ValueError("currency symbol is required for pricing refresh")
         base_symbol = task.to_currency.symbol
@@ -594,11 +675,17 @@ class PricingExecutionService:
             )
             for point in direct_points
         ]
-        derived_points = self._derive_from_via(normalized_direct, derived_via, base_symbol, quote_symbol) if derived_via is not None else []
+        derived_points = (
+            self._derive_from_via(normalized_direct, derived_via, base_symbol, quote_symbol)
+            if derived_via is not None
+            else []
+        )
         return normalized_direct, derived_points
 
     @staticmethod
-    def _derive_from_via(points: list[FxRatePoint], via: str, base: str, quote: str) -> list[FxRatePoint]:
+    def _derive_from_via(
+        points: list[FxRatePoint], via: str, base: str, quote: str
+    ) -> list[FxRatePoint]:
         via_to_base: dict[date, Decimal] = {}
         via_to_quote: dict[date, Decimal] = {}
         for point in points:
@@ -626,7 +713,9 @@ class PricingExecutionService:
 
     @staticmethod
     def _scheduled_at(policy: PricingPolicy, target_date: date) -> datetime:
-        return datetime.combine(target_date, time(policy.refresh_hour_utc, policy.refresh_minute_utc, tzinfo=UTC))
+        return datetime.combine(
+            target_date, time(policy.refresh_hour_utc, policy.refresh_minute_utc, tzinfo=UTC)
+        )
 
     @staticmethod
     def _adjust_for_weekend(weekend_policy: str, target_date: date) -> date:

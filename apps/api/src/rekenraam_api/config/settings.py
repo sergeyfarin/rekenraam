@@ -36,7 +36,9 @@ class Settings(BaseSettings):
 
     @property
     def resolved_postgres_password(self) -> str:
-        return self._resolve_secret("POSTGRES_PASSWORD", self.postgres_password, self.postgres_password_file)
+        return self._resolve_secret(
+            "POSTGRES_PASSWORD", self.postgres_password, self.postgres_password_file
+        )
 
     @property
     def resolved_first_admin_password(self) -> str | None:
@@ -51,7 +53,11 @@ class Settings(BaseSettings):
         if not file_path:
             return direct_value
         file_value = Path(file_path).read_text(encoding="utf-8").strip()
-        if direct_value and direct_value not in {"change-me", "rekenraam"} and direct_value != file_value:
+        if (
+            direct_value
+            and direct_value not in {"change-me", "rekenraam"}
+            and direct_value != file_value
+        ):
             raise ValueError(f"{name} and {name}_FILE are both set with different values")
         return file_value
 

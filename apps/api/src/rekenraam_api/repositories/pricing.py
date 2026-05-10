@@ -27,11 +27,15 @@ class PricingRepository:
         self._session = session
 
     async def list_price_sources(self) -> list[PriceSource]:
-        statement: Select[tuple[PriceSource]] = select(PriceSource).order_by(PriceSource.name.asc(), PriceSource.id.asc())
+        statement: Select[tuple[PriceSource]] = select(PriceSource).order_by(
+            PriceSource.name.asc(), PriceSource.id.asc()
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def list_pricing_refresh_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRun]:
+    async def list_pricing_refresh_run_history(
+        self, book_id: int, limit: int = 10
+    ) -> list[PricingRefreshRun]:
         statement: Select[tuple[PricingRefreshRun]] = (
             select(PricingRefreshRun)
             .where(PricingRefreshRun.book_id == book_id)
@@ -60,7 +64,9 @@ class PricingRepository:
         return list(result.scalars().all())
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicy | None:
-        policy = await self._session.scalar(select(PricingPolicy).where(PricingPolicy.book_id == book_id))
+        policy = await self._session.scalar(
+            select(PricingPolicy).where(PricingPolicy.book_id == book_id)
+        )
         if policy is not None:
             return policy
 
@@ -110,7 +116,12 @@ class PricingRepository:
             return None
 
         base_currency = await self._session.get(Commodity, base_currency_id)
-        if base_currency is None or base_currency.book_id != book_id or base_currency.kind != "currency" or base_currency.symbol is None:
+        if (
+            base_currency is None
+            or base_currency.book_id != book_id
+            or base_currency.kind != "currency"
+            or base_currency.symbol is None
+        ):
             raise ValueError("base currency not found")
 
         if default_source_id is not None:
@@ -148,10 +159,14 @@ class PricingRepository:
             .order_by(Commodity.symbol.asc(), Commodity.id.asc())
         )
         result = await self._session.execute(statement)
-        base_currency_code = await self._session.scalar(select(Book.base_currency_code).where(Book.id == book_id))
+        base_currency_code = await self._session.scalar(
+            select(Book.base_currency_code).where(Book.id == book_id)
+        )
         return list(result.scalars().all()), base_currency_code
 
-    async def list_pricing_source_assignments(self, book_id: int) -> list[tuple[PricingSourceAssignment, Commodity, Commodity, PriceSource]]:
+    async def list_pricing_source_assignments(
+        self, book_id: int
+    ) -> list[tuple[PricingSourceAssignment, Commodity, Commodity, PriceSource]]:
         from_currency = aliased(Commodity)
         to_currency = aliased(Commodity)
         statement = (
@@ -208,7 +223,12 @@ class PricingRepository:
         effective_from: date,
         effective_to: date | None,
     ) -> PricingSourceAssignment:
-        await self._validate_assignment_refs(book_id=book_id, from_currency_id=from_currency_id, to_currency_id=to_currency_id, source_id=source_id)
+        await self._validate_assignment_refs(
+            book_id=book_id,
+            from_currency_id=from_currency_id,
+            to_currency_id=to_currency_id,
+            source_id=source_id,
+        )
         assignment = PricingSourceAssignment(
             book_id=book_id,
             commodity_id=from_currency_id,
@@ -223,7 +243,9 @@ class PricingRepository:
         await self._session.refresh(assignment)
         return assignment
 
-    async def get_pricing_source_assignment(self, assignment_id: int) -> PricingSourceAssignment | None:
+    async def get_pricing_source_assignment(
+        self, assignment_id: int
+    ) -> PricingSourceAssignment | None:
         return await self._session.get(PricingSourceAssignment, assignment_id)
 
     async def update_pricing_source_assignment(
@@ -241,7 +263,12 @@ class PricingRepository:
         if assignment is None or assignment.book_id != book_id:
             return None
 
-        await self._validate_assignment_refs(book_id=book_id, from_currency_id=from_currency_id, to_currency_id=to_currency_id, source_id=source_id)
+        await self._validate_assignment_refs(
+            book_id=book_id,
+            from_currency_id=from_currency_id,
+            to_currency_id=to_currency_id,
+            source_id=source_id,
+        )
         assignment.commodity_id = from_currency_id
         assignment.quote_commodity_id = to_currency_id
         assignment.source_id = source_id
@@ -260,7 +287,9 @@ class PricingRepository:
         await self._session.commit()
         return True
 
-    async def list_pricing_refresh_state(self, book_id: int) -> list[tuple[PricingRefreshState, Commodity, Commodity, PriceSource]]:
+    async def list_pricing_refresh_state(
+        self, book_id: int
+    ) -> list[tuple[PricingRefreshState, Commodity, Commodity, PriceSource]]:
         from_currency = aliased(Commodity)
         to_currency = aliased(Commodity)
         statement = (
@@ -269,7 +298,12 @@ class PricingRepository:
             .join(to_currency, PricingRefreshState.quote_commodity_id == to_currency.id)
             .join(PriceSource, PricingRefreshState.source_id == PriceSource.id)
             .where(PricingRefreshState.book_id == book_id)
-            .order_by(from_currency.symbol.asc(), to_currency.symbol.asc(), PriceSource.name.asc(), PricingRefreshState.id.asc())
+            .order_by(
+                from_currency.symbol.asc(),
+                to_currency.symbol.asc(),
+                PriceSource.name.asc(),
+                PricingRefreshState.id.asc(),
+            )
         )
         result = await self._session.execute(statement)
         return list(result.tuples().all())
@@ -428,7 +462,11 @@ class PricingRepository:
             .join(to_currency, PriceObservation.quote_commodity_id == to_currency.id)
             .where(PriceObservation.book_id == book_id)
             .where(PriceObservation.observation_kind == "fx_daily")
-            .order_by(PriceObservation.price_date.desc(), PriceObservation.created_at.desc(), PriceObservation.id.desc())
+            .order_by(
+                PriceObservation.price_date.desc(),
+                PriceObservation.created_at.desc(),
+                PriceObservation.id.desc(),
+            )
             .limit(limit)
         )
         result = await self._session.execute(statement)
@@ -449,8 +487,14 @@ class PricingRepository:
             .join(commodity, PriceObservation.commodity_id == commodity.id)
             .join(quote, PriceObservation.quote_commodity_id == quote.id)
             .where(PriceObservation.book_id == book_id)
-            .where(PriceObservation.observation_kind.in_(["commodity_market", "valuation_override"]))
-            .order_by(PriceObservation.price_date.desc(), PriceObservation.created_at.desc(), PriceObservation.id.desc())
+            .where(
+                PriceObservation.observation_kind.in_(["commodity_market", "valuation_override"])
+            )
+            .order_by(
+                PriceObservation.price_date.desc(),
+                PriceObservation.created_at.desc(),
+                PriceObservation.id.desc(),
+            )
             .limit(limit)
         )
         if commodity_id is not None:
@@ -493,7 +537,10 @@ class PricingRepository:
 
     async def delete_market_price_observation(self, observation_id: int) -> bool:
         observation = await self._session.get(PriceObservation, observation_id)
-        if observation is None or observation.observation_kind not in {"commodity_market", "valuation_override"}:
+        if observation is None or observation.observation_kind not in {
+            "commodity_market",
+            "valuation_override",
+        }:
             return False
         await self._session.delete(observation)
         await self._session.commit()
@@ -551,7 +598,11 @@ class PricingRepository:
             .join(to_currency, PriceObservation.quote_commodity_id == to_currency.id)
             .where(PriceObservation.book_id == book_id)
             .where(PriceObservation.observation_kind == "fx_manual")
-            .order_by(PriceObservation.price_date.desc(), PriceObservation.created_at.desc(), PriceObservation.id.desc())
+            .order_by(
+                PriceObservation.price_date.desc(),
+                PriceObservation.created_at.desc(),
+                PriceObservation.id.desc(),
+            )
             .limit(limit)
         )
         result = await self._session.execute(statement)
@@ -607,11 +658,17 @@ class PricingRepository:
             raise ValueError("currency not found")
         return commodity
 
-    async def _validate_assignment_refs(self, *, book_id: int, from_currency_id: int, to_currency_id: int, source_id: int) -> None:
+    async def _validate_assignment_refs(
+        self, *, book_id: int, from_currency_id: int, to_currency_id: int, source_id: int
+    ) -> None:
         from_currency = await self._session.get(Commodity, from_currency_id)
         to_currency = await self._session.get(Commodity, to_currency_id)
         source = await self._session.get(PriceSource, source_id)
-        if from_currency is None or from_currency.book_id != book_id or from_currency.kind != "currency":
+        if (
+            from_currency is None
+            or from_currency.book_id != book_id
+            or from_currency.kind != "currency"
+        ):
             raise ValueError("from currency not found")
         if to_currency is None or to_currency.book_id != book_id or to_currency.kind != "currency":
             raise ValueError("to currency not found")
@@ -620,7 +677,11 @@ class PricingRepository:
 
     @staticmethod
     def currency_is_active(row: Commodity, base_currency_code: str | None) -> bool:
-        if row.symbol is not None and base_currency_code is not None and row.symbol == base_currency_code:
+        if (
+            row.symbol is not None
+            and base_currency_code is not None
+            and row.symbol == base_currency_code
+        ):
             return True
         if row.metadata_text is None:
             return True

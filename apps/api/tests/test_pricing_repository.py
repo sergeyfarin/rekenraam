@@ -11,7 +11,9 @@ from rekenraam_api.repositories.pricing import PricingRepository
 
 
 @pytest.mark.asyncio
-async def test_pricing_repository_lists_sources_updates_policy_and_manages_assignments(repository_session: AsyncSession) -> None:
+async def test_pricing_repository_lists_sources_updates_policy_and_manages_assignments(
+    repository_session: AsyncSession,
+) -> None:
     repository = PricingRepository(repository_session)
     # session.merge() returns the merged, persistent instance — the original
     # `Commodity()` argument stays detached, so subsequent .refresh() on it

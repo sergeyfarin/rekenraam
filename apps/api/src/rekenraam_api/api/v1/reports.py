@@ -53,7 +53,9 @@ async def get_report_definition(
 ) -> ReportDefinitionSummary:
     item = await report_service.get_report_definition(definition_id)
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found"
+        )
     return item
 
 
@@ -75,13 +77,17 @@ async def update_report_definition(
     report_service: ReportService = Depends(get_report_service),
 ) -> ReportDefinitionSummary:
     if definition_id != input.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path id must match body id")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="path id must match body id"
+        )
     try:
         item = await report_service.update_report_definition(input)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found"
+        )
     return item
 
 
@@ -92,7 +98,9 @@ async def delete_report_definition(
 ) -> None:
     deleted = await report_service.delete_report_definition(definition_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="report definition not found"
+        )
 
 
 @router.get("/runs", response_model=list[ReportRunSummary])
@@ -245,7 +253,9 @@ async def report_currency_exposure(
     as_of_date: date | None = Query(default=None),
     investment_service: InvestmentService = Depends(get_investment_service),
 ) -> list[CurrencyExposureRow]:
-    return await investment_service.currency_exposure(PositionsQuery(book_id=book_id, as_of_date=as_of_date))
+    return await investment_service.currency_exposure(
+        PositionsQuery(book_id=book_id, as_of_date=as_of_date)
+    )
 
 
 @router.get("/corporate-actions", response_model=list[CorporateActionSummary])

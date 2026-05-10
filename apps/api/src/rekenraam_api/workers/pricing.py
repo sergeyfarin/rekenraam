@@ -38,7 +38,9 @@ class PricingRefreshWorker:
                 pass
             self._task = None
 
-    async def run_book(self, book_id: int, *, trigger: str, force: bool) -> PricingRefreshRunSummary | None:
+    async def run_book(
+        self, book_id: int, *, trigger: str, force: bool
+    ) -> PricingRefreshRunSummary | None:
         async with self._state_lock:
             if book_id in self._active_book_ids:
                 return None
@@ -67,7 +69,9 @@ class PricingRefreshWorker:
                 last_run=None,
             )
 
-    async def get_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRunSummary]:
+    async def get_run_history(
+        self, book_id: int, limit: int = 10
+    ) -> list[PricingRefreshRunSummary]:
         async with session_factory() as session:
             service = PricingExecutionService(PricingRepository(session))
             return await service.list_refresh_run_history(book_id, limit)

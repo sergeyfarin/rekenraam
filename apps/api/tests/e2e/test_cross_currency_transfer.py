@@ -64,7 +64,9 @@ async def test_cross_currency_transfer_posts_two_sides_and_stamps_fx_rate(
 
     async with e2e_app.sessionmaker() as session:
         observation = await session.scalar(
-            select(PriceObservation).where(PriceObservation.source == f"transfer:{transaction['id']}")
+            select(PriceObservation).where(
+                PriceObservation.source == f"transfer:{transaction['id']}"
+            )
         )
     assert observation is not None
     assert observation.commodity_id == eur_id
@@ -106,8 +108,7 @@ async def test_cross_currency_transfer_writes_realized_fx_gain_loss_split(
     assert response.status_code == 200
     splits = response.json()["splits"]
     assert [
-        (split["account_id"], split["commodity_id"], split["amount_minor"])
-        for split in splits
+        (split["account_id"], split["commodity_id"], split["amount_minor"]) for split in splits
     ] == [
         (SEEDED_CASH_ACCOUNT_ID, SEEDED_USD_COMMODITY_ID, -11_350),
         (euro_account["id"], eur_id, 10_000),

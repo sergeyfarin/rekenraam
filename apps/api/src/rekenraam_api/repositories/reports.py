@@ -53,7 +53,9 @@ class ReportRepository:
         await self._session.refresh(row)
         return row.change_seq
 
-    async def get_cached_report(self, *, book_id: int, report_type: str, params_hash: str, as_of_seq: int) -> ReportCache | None:
+    async def get_cached_report(
+        self, *, book_id: int, report_type: str, params_hash: str, as_of_seq: int
+    ) -> ReportCache | None:
         statement: Select[tuple[ReportCache]] = (
             select(ReportCache)
             .where(ReportCache.book_id == book_id)
@@ -102,7 +104,10 @@ class ReportRepository:
         statement: Select[tuple[ReportDefinition]] = (
             select(ReportDefinition)
             .where(ReportDefinition.book_id == book_id)
-            .where((ReportDefinition.session_id.is_(None)) | (~ReportDefinition.session_id.like("void:%")))
+            .where(
+                (ReportDefinition.session_id.is_(None))
+                | (~ReportDefinition.session_id.like("void:%"))
+            )
             .where(
                 ~select(newer.c.id)
                 .where(newer.c.previous_report_definition_id == ReportDefinition.id)
@@ -118,7 +123,9 @@ class ReportRepository:
         return current_items[0] if current_items else None
 
     async def list_report_definitions_for_chain(self, definition_id: int) -> list[ReportDefinition]:
-        all_rows = await self._session.execute(select(ReportDefinition).order_by(ReportDefinition.id.asc()))
+        all_rows = await self._session.execute(
+            select(ReportDefinition).order_by(ReportDefinition.id.asc())
+        )
         rows = list(all_rows.scalars().all())
         row_by_id = {row.id: row for row in rows}
         chain_ids = {definition_id}
@@ -126,7 +133,11 @@ class ReportRepository:
         while changed:
             changed = False
             for row in rows:
-                if row.id in chain_ids and row.previous_report_definition_id is not None and row.previous_report_definition_id not in chain_ids:
+                if (
+                    row.id in chain_ids
+                    and row.previous_report_definition_id is not None
+                    and row.previous_report_definition_id not in chain_ids
+                ):
                     chain_ids.add(row.previous_report_definition_id)
                     changed = True
                 if row.previous_report_definition_id in chain_ids and row.id not in chain_ids:
@@ -214,7 +225,9 @@ class ReportRepository:
         await self._session.commit()
         return True
 
-    async def list_report_runs(self, book_id: int, definition_id: int | None = None) -> list[ReportRun]:
+    async def list_report_runs(
+        self, book_id: int, definition_id: int | None = None
+    ) -> list[ReportRun]:
         statement: Select[tuple[ReportRun]] = (
             select(ReportRun)
             .where(ReportRun.book_id == book_id)
@@ -266,19 +279,29 @@ class ReportRepository:
         group_by: str,
     ) -> list[tuple[str, int, int, int]]:
         if group_by == "year":
-            period_expr = func.to_char(func.date_trunc("year", Transaction.occurred_date), "YYYY-MM-DD")
+            period_expr = func.to_char(
+                func.date_trunc("year", Transaction.occurred_date), "YYYY-MM-DD"
+            )
         elif group_by == "quarter":
-            period_expr = func.to_char(func.date_trunc("quarter", Transaction.occurred_date), "YYYY-MM-DD")
+            period_expr = func.to_char(
+                func.date_trunc("quarter", Transaction.occurred_date), "YYYY-MM-DD"
+            )
         elif group_by == "day":
             period_expr = func.to_char(Transaction.occurred_date, "YYYY-MM-DD")
         else:
-            period_expr = func.to_char(func.date_trunc("month", Transaction.occurred_date), "YYYY-MM-DD")
+            period_expr = func.to_char(
+                func.date_trunc("month", Transaction.occurred_date), "YYYY-MM-DD"
+            )
 
         statement: Select[tuple[str, int, int, int]] = (
             select(
                 period_expr.label("period_start"),
-                func.coalesce(func.sum(case((Split.amount_minor > 0, Split.amount_minor), else_=0)), 0).label("inflow_minor"),
-                func.coalesce(func.sum(case((Split.amount_minor < 0, -Split.amount_minor), else_=0)), 0).label("outflow_minor"),
+                func.coalesce(
+                    func.sum(case((Split.amount_minor > 0, Split.amount_minor), else_=0)), 0
+                ).label("inflow_minor"),
+                func.coalesce(
+                    func.sum(case((Split.amount_minor < 0, -Split.amount_minor), else_=0)), 0
+                ).label("outflow_minor"),
                 func.coalesce(func.sum(Split.amount_minor), 0).label("net_minor"),
             )
             .join(Split, Split.tx_id == Transaction.id)
@@ -306,8 +329,12 @@ class ReportRepository:
         group_by: str,
     ) -> list[tuple[str, int, int, int]]:
         period_expr = self._period_expr(group_by)
-        assets_expr = func.coalesce(func.sum(case((Account.account_type == "asset", Split.amount_minor), else_=0)), 0)
-        liabilities_expr = func.coalesce(func.sum(case((Account.account_type == "liability", Split.amount_minor), else_=0)), 0)
+        assets_expr = func.coalesce(
+            func.sum(case((Account.account_type == "asset", Split.amount_minor), else_=0)), 0
+        )
+        liabilities_expr = func.coalesce(
+            func.sum(case((Account.account_type == "liability", Split.amount_minor), else_=0)), 0
+        )
         statement = (
             select(
                 period_expr.label("period_start"),
@@ -384,9 +411,13 @@ class ReportRepository:
         )
 
         if date_from is not None:
-            statement = statement.where((Transaction.id.is_(None)) | (Transaction.occurred_date >= date_from))
+            statement = statement.where(
+                (Transaction.id.is_(None)) | (Transaction.occurred_date >= date_from)
+            )
         if date_to is not None:
-            statement = statement.where((Transaction.id.is_(None)) | (Transaction.occurred_date <= date_to))
+            statement = statement.where(
+                (Transaction.id.is_(None)) | (Transaction.occurred_date <= date_to)
+            )
         if category_ids:
             statement = statement.where(Category.id.in_(category_ids))
 

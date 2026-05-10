@@ -82,6 +82,7 @@ class StubBookService:
             )
         return None
 
+
 class StubAccountService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
 
@@ -150,7 +151,9 @@ class StubAccountService:
             )
         return None
 
-    async def update_account(self, account_id: int, input: AccountUpdateInput) -> AccountSummary | None:
+    async def update_account(
+        self, account_id: int, input: AccountUpdateInput
+    ) -> AccountSummary | None:
         if account_id != 1:
             return None
         return AccountSummary(
@@ -240,7 +243,9 @@ class StubAccountService:
             )
         ]
 
-    async def create_account_balancing(self, input: AccountBalancingCreateInput) -> AccountBalancingSummary | None:
+    async def create_account_balancing(
+        self, input: AccountBalancingCreateInput
+    ) -> AccountBalancingSummary | None:
         if input.account_id == 99:
             return None
         return AccountBalancingSummary(
@@ -265,11 +270,15 @@ class StubAccountService:
             )
         ]
 
-    async def validate_account_closing(self, account_id: int) -> AccountClosingValidationResult | None:
+    async def validate_account_closing(
+        self, account_id: int
+    ) -> AccountClosingValidationResult | None:
         if account_id == 99:
             return None
         if account_id == 2:
-            return AccountClosingValidationResult(valid=False, issues=("account balance is not zero",))
+            return AccountClosingValidationResult(
+                valid=False, issues=("account balance is not zero",)
+            )
         return AccountClosingValidationResult(valid=True, issues=())
 
     async def get_account_booking_policy(self, account_id: int) -> str | None:
@@ -288,7 +297,9 @@ class StubAccountService:
             raise ValueError("booking policy must be fifo, lifo, strict, or average")
         return booking_policy
 
-    async def unlock_account_balancings(self, account_id: int, from_date: datetime.date, reason: str | None, confirm: bool) -> int:
+    async def unlock_account_balancings(
+        self, account_id: int, from_date: datetime.date, reason: str | None, confirm: bool
+    ) -> int:
         if account_id == 99:
             return 0
         if not confirm:
@@ -300,7 +311,9 @@ class StubTransactionService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
     last_filters: TransactionListFilters | None = None
 
-    async def list_transactions(self, filters: TransactionListFilters | None = None) -> TransactionPage:
+    async def list_transactions(
+        self, filters: TransactionListFilters | None = None
+    ) -> TransactionPage:
         self.last_filters = filters
         transactions = [
             TransactionSummary(
@@ -388,14 +401,25 @@ class StubTransactionService:
         ]
         if filters is None:
             return TransactionPage(items=tuple(transactions), next_cursor=None)
-        return TransactionPage(items=tuple(
-            transaction
-            for transaction in transactions
-            if (filters.status is None or transaction.status == filters.status)
-            and (filters.account_id is None or any(split.account_id == filters.account_id for split in transaction.splits))
-            and (filters.occurred_from is None or transaction.occurred_date >= filters.occurred_from)
-            and (filters.occurred_to is None or transaction.occurred_date <= filters.occurred_to)
-        ), next_cursor=None)
+        return TransactionPage(
+            items=tuple(
+                transaction
+                for transaction in transactions
+                if (filters.status is None or transaction.status == filters.status)
+                and (
+                    filters.account_id is None
+                    or any(split.account_id == filters.account_id for split in transaction.splits)
+                )
+                and (
+                    filters.occurred_from is None
+                    or transaction.occurred_date >= filters.occurred_from
+                )
+                and (
+                    filters.occurred_to is None or transaction.occurred_date <= filters.occurred_to
+                )
+            ),
+            next_cursor=None,
+        )
 
     async def get_transaction_by_id(self, transaction_id: int) -> TransactionSummary | None:
         if transaction_id == 1:
@@ -445,7 +469,9 @@ class StubTransactionService:
             ),
         )
 
-    async def update_transaction(self, transaction_id: int, input: TransactionMutationInput) -> TransactionSummary | None:
+    async def update_transaction(
+        self, transaction_id: int, input: TransactionMutationInput
+    ) -> TransactionSummary | None:
         if transaction_id != 1:
             return None
         return TransactionSummary(
@@ -493,7 +519,9 @@ class StubTransactionService:
     async def delete_transaction(self, transaction_id: int) -> bool:
         return transaction_id == 1
 
-    async def duplicate_transaction(self, transaction_id: int, today: datetime.date) -> TransactionSummary | None:
+    async def duplicate_transaction(
+        self, transaction_id: int, today: datetime.date
+    ) -> TransactionSummary | None:
         if transaction_id != 1:
             return None
         return TransactionSummary(
@@ -539,37 +567,48 @@ class StubTransactionService:
         )
 
     async def bulk_void_transactions(self, transaction_ids: list[int]) -> int:
-        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+        return len(
+            [transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}]
+        )
 
     async def bulk_delete_transactions(self, transaction_ids: list[int]) -> int:
-        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+        return len(
+            [transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}]
+        )
 
-    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> PayeeDefaults:
+    async def get_payee_defaults(
+        self, payee_id: int, account_id: int | None = None
+    ) -> PayeeDefaults:
         if payee_id == 1 and account_id in {None, 2}:
             return PayeeDefaults(category_id=1, memo="Pending groceries")
         return PayeeDefaults(category_id=None, memo=None)
 
-    async def list_account_register(self, account_id: int, *, limit: int = 100, cursor: str | None = None) -> RegisterPage:
+    async def list_account_register(
+        self, account_id: int, *, limit: int = 100, cursor: str | None = None
+    ) -> RegisterPage:
         if account_id != 2:
             return RegisterPage(items=(), next_cursor=None)
-        return RegisterPage(items=(
-            RegisterEntry(
-                tx_id=1,
-                split_id=1,
-                account_id=2,
-                occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
-                posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
-                payee_id=None,
-                memo="Initial opening balance",
-                status="cleared",
-                reference=None,
-                commodity_id=1,
-                category_id=None,
-                amount_minor=500000,
-                running_balance_minor=500000,
-                created_at=self._created_at,
+        return RegisterPage(
+            items=(
+                RegisterEntry(
+                    tx_id=1,
+                    split_id=1,
+                    account_id=2,
+                    occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                    posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                    payee_id=None,
+                    memo="Initial opening balance",
+                    status="cleared",
+                    reference=None,
+                    commodity_id=1,
+                    category_id=None,
+                    amount_minor=500000,
+                    running_balance_minor=500000,
+                    created_at=self._created_at,
+                ),
             ),
-        ), next_cursor=None)
+            next_cursor=None,
+        )
 
 
 class StubMetadataService:
@@ -651,7 +690,9 @@ class StubMetadataService:
             updated_at=self._created_at,
         )
 
-    async def set_default_currency(self, *, book_id: int, currency_id: int) -> CurrencySummary | None:
+    async def set_default_currency(
+        self, *, book_id: int, currency_id: int
+    ) -> CurrencySummary | None:
         if currency_id != 1:
             return None
         return CurrencySummary(
@@ -667,7 +708,9 @@ class StubMetadataService:
             updated_at=self._created_at,
         )
 
-    async def set_currency_active(self, *, currency_id: int, input: CurrencyActivationInput) -> CurrencySummary | None:
+    async def set_currency_active(
+        self, *, currency_id: int, input: CurrencyActivationInput
+    ) -> CurrencySummary | None:
         if currency_id != 1:
             return None
         return CurrencySummary(
@@ -718,7 +761,9 @@ class StubMetadataService:
             updated_at=self._created_at,
         )
 
-    async def update_institution(self, institution_id: int, input: object) -> InstitutionSummary | None:
+    async def update_institution(
+        self, institution_id: int, input: object
+    ) -> InstitutionSummary | None:
         if institution_id != 1:
             return None
         return InstitutionSummary(
@@ -825,7 +870,14 @@ class StubMetadataService:
 
 class StubReportService:
     async def report_cashflow(self, input: object) -> list[CashflowRow]:
-        return [CashflowRow(period_start=datetime(2026, 5, 1, tzinfo=UTC).date(), inflow_minor=500000, outflow_minor=500000, net_minor=0)]
+        return [
+            CashflowRow(
+                period_start=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                inflow_minor=500000,
+                outflow_minor=500000,
+                net_minor=0,
+            )
+        ]
 
     async def report_category_spend(self, input: object) -> list[CategorySpendRow]:
         return [CategorySpendRow(category_id=1, category_name="Groceries", total_minor=-1250)]
@@ -927,7 +979,9 @@ class StubReconciliationService:
     async def history(self, account_id: int) -> ReconciliationHistoryResponse | None:
         if account_id == 99:
             return None
-        return ReconciliationHistoryResponse(balancings=(), balance_checks=(), balance_adjustments=())
+        return ReconciliationHistoryResponse(
+            balancings=(), balance_checks=(), balance_adjustments=()
+        )
 
     async def unlock(
         self,
@@ -942,7 +996,9 @@ class StubReconciliationService:
             raise ValueError("unlock not confirmed")
         return 1
 
-    async def list_constraints(self, account_id: int) -> tuple[BalanceConstraintSummary, ...] | None:
+    async def list_constraints(
+        self, account_id: int
+    ) -> tuple[BalanceConstraintSummary, ...] | None:
         if account_id == 99:
             return None
         return ()
@@ -1208,7 +1264,9 @@ async def test_get_account_booking_policy_returns_policy(client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_get_account_booking_policy_rejects_non_investment_account(client: AsyncClient) -> None:
+async def test_get_account_booking_policy_rejects_non_investment_account(
+    client: AsyncClient,
+) -> None:
     app.dependency_overrides[get_account_service] = StubAccountService
 
     response = await client.get("/api/v1/accounts/2/booking-policy")
@@ -1221,7 +1279,9 @@ async def test_get_account_booking_policy_rejects_non_investment_account(client:
 async def test_set_account_booking_policy_updates_policy(client: AsyncClient) -> None:
     app.dependency_overrides[get_account_service] = StubAccountService
 
-    response = await client.put("/api/v1/accounts/9/booking-policy", json={"booking_policy": "lifo"})
+    response = await client.put(
+        "/api/v1/accounts/9/booking-policy", json={"booking_policy": "lifo"}
+    )
 
     assert response.status_code == 200
     assert response.json() == "lifo"
@@ -1231,7 +1291,9 @@ async def test_set_account_booking_policy_updates_policy(client: AsyncClient) ->
 async def test_set_account_booking_policy_rejects_invalid_value(client: AsyncClient) -> None:
     app.dependency_overrides[get_account_service] = StubAccountService
 
-    response = await client.put("/api/v1/accounts/9/booking-policy", json={"booking_policy": "bad-policy"})
+    response = await client.put(
+        "/api/v1/accounts/9/booking-policy", json={"booking_policy": "bad-policy"}
+    )
 
     assert response.status_code == 400
     assert response.json() == {"detail": "booking policy must be fifo, lifo, strict, or average"}
@@ -1316,12 +1378,19 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
 
 
 @pytest.mark.asyncio
-async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags_and_institutions(client: AsyncClient) -> None:
+async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags_and_institutions(
+    client: AsyncClient,
+) -> None:
     app.dependency_overrides[get_metadata_service] = StubMetadataService
 
     commodity_response = await client.put(
         "/api/v1/commodities/1",
-        json={"book_id": 1, "symbol": "USDX", "name": "US Dollar Updated", "metadata": "Primary currency"},
+        json={
+            "book_id": 1,
+            "symbol": "USDX",
+            "name": "US Dollar Updated",
+            "metadata": "Primary currency",
+        },
     )
     list_currencies_response = await client.get("/api/v1/currencies")
     create_currency_response = await client.post(
@@ -1330,7 +1399,13 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags
     )
     update_currency_response = await client.put(
         "/api/v1/currencies/1",
-        json={"book_id": 1, "symbol": "USD", "display_symbol": "USD", "name": "US Dollar", "scale": 2},
+        json={
+            "book_id": 1,
+            "symbol": "USD",
+            "display_symbol": "USD",
+            "name": "US Dollar",
+            "scale": 2,
+        },
     )
     default_currency_response = await client.post("/api/v1/currencies/1/default")
     activate_currency_response = await client.post(
@@ -1363,7 +1438,13 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags
     )
     category_response = await client.put(
         "/api/v1/categories/1",
-        json={"book_id": 1, "parent_id": None, "name": "Food", "kind": "expense", "color": "#111111"},
+        json={
+            "book_id": 1,
+            "parent_id": None,
+            "name": "Food",
+            "kind": "expense",
+            "color": "#111111",
+        },
     )
     payee_response = await client.put(
         "/api/v1/payees/1",
@@ -1410,9 +1491,18 @@ async def test_metadata_write_endpoints_update_and_delete_categories_payees_tags
 async def test_report_endpoints_return_expected_shapes(client: AsyncClient) -> None:
     app.dependency_overrides[get_report_service] = StubReportService
 
-    cashflow_response = await client.post("/api/v1/reports/cashflow", json={"book_id": 1, "date_from": None, "date_to": None, "group_by": "month"})
-    category_response = await client.post("/api/v1/reports/category-spend", json={"book_id": 1, "date_from": None, "date_to": None, "category_ids": None})
-    payee_response = await client.post("/api/v1/reports/payee-totals", json={"book_id": 1, "date_from": None, "date_to": None, "payee_ids": None})
+    cashflow_response = await client.post(
+        "/api/v1/reports/cashflow",
+        json={"book_id": 1, "date_from": None, "date_to": None, "group_by": "month"},
+    )
+    category_response = await client.post(
+        "/api/v1/reports/category-spend",
+        json={"book_id": 1, "date_from": None, "date_to": None, "category_ids": None},
+    )
+    payee_response = await client.post(
+        "/api/v1/reports/payee-totals",
+        json={"book_id": 1, "date_from": None, "date_to": None, "payee_ids": None},
+    )
 
     assert cashflow_response.status_code == 200
     assert cashflow_response.json()[0]["period_start"] == "2026-05-01"
@@ -1513,10 +1603,14 @@ async def test_transaction_write_endpoints_return_expected_shapes(client: AsyncC
 
 
 @pytest.mark.asyncio
-async def test_transaction_duplicate_and_bulk_endpoints_return_expected_shapes(client: AsyncClient) -> None:
+async def test_transaction_duplicate_and_bulk_endpoints_return_expected_shapes(
+    client: AsyncClient,
+) -> None:
     app.dependency_overrides[get_transaction_service] = StubTransactionService
 
-    duplicate_response = await client.post("/api/v1/transactions/1/duplicate", params={"today": "2026-05-04"})
+    duplicate_response = await client.post(
+        "/api/v1/transactions/1/duplicate", params={"today": "2026-05-04"}
+    )
     bulk_void_response = await client.post("/api/v1/transactions/bulk-void", json=[1, 2, 999])
     bulk_delete_response = await client.post("/api/v1/transactions/bulk-delete", json=[1, 2, 999])
 
@@ -1532,7 +1626,9 @@ async def test_transaction_duplicate_and_bulk_endpoints_return_expected_shapes(c
 async def test_get_payee_defaults_returns_expected_shape(client: AsyncClient) -> None:
     app.dependency_overrides[get_transaction_service] = StubTransactionService
 
-    response = await client.get("/api/v1/transactions/payee-defaults", params={"payee_id": 1, "account_id": 2})
+    response = await client.get(
+        "/api/v1/transactions/payee-defaults", params={"payee_id": 1, "account_id": 2}
+    )
 
     assert response.status_code == 200
     assert response.json() == {"category_id": 1, "memo": "Pending groceries"}
@@ -1618,7 +1714,9 @@ async def test_reconciliation_constraints_round_trip(client: AsyncClient) -> Non
             "sign_rule": "nonnegative",
         },
     )
-    validation_response = await client.get("/api/v1/reconciliation/accounts/2/constraints/validation")
+    validation_response = await client.get(
+        "/api/v1/reconciliation/accounts/2/constraints/validation"
+    )
     delete_response = await client.delete("/api/v1/reconciliation/accounts/2/constraints/13")
 
     assert create_response.status_code == 200

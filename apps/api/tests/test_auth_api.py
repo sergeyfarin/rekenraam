@@ -112,7 +112,13 @@ async def test_book_membership_roles_gate_writes(
         )
     )
     await repository_session.flush()
-    viewer_id = int((await repository_session.execute(select(User.id).where(User.email == "viewer@example.test"))).scalar_one())
+    viewer_id = int(
+        (
+            await repository_session.execute(
+                select(User.id).where(User.email == "viewer@example.test")
+            )
+        ).scalar_one()
+    )
     repository_session.add(BookMembership(user_id=viewer_id, book_id=1, role="viewer"))
     await repository_session.commit()
 

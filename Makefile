@@ -4,13 +4,16 @@ CONTAINER_RUNTIME ?= docker
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up prod-config-check backup-now backup-smoke restore-smoke
+.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-docker api-test-postgres api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up prod-config-check backup-now backup-smoke restore-smoke
 
 api-check:
 	cd $(API_DIR) && python -m py_compile $$(find src -name '*.py')
 
 api-lint:
 	cd $(API_DIR) && ruff check .
+
+api-format-check:
+	cd $(API_DIR) && ruff format --check .
 
 api-typecheck:
 	cd $(API_DIR) && pyright

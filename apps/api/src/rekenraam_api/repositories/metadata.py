@@ -22,7 +22,9 @@ class MetadataRepository:
         self._session = session
 
     async def list_commodities(self) -> list[Commodity]:
-        statement: Select[tuple[Commodity]] = select(Commodity).order_by(Commodity.name.asc(), Commodity.id.asc())
+        statement: Select[tuple[Commodity]] = select(Commodity).order_by(
+            Commodity.name.asc(), Commodity.id.asc()
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -62,23 +64,40 @@ class MetadataRepository:
             .order_by(Commodity.symbol.asc(), Commodity.id.asc())
         )
         result = await self._session.execute(statement)
-        base_currency_code = await self._session.scalar(select(Book.base_currency_code).where(Book.id == book_id))
+        base_currency_code = await self._session.scalar(
+            select(Book.base_currency_code).where(Book.id == book_id)
+        )
         return list(result.scalars().all()), base_currency_code
 
-    async def create_currency(self, *, book_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity:
+    async def create_currency(
+        self, *, book_id: int, symbol: str, name: str, scale: int, metadata: str | None
+    ) -> Commodity:
         duplicate = await self._session.scalar(
-            select(Commodity.id).where(Commodity.book_id == book_id, Commodity.kind == "currency", Commodity.symbol == symbol)
+            select(Commodity.id).where(
+                Commodity.book_id == book_id,
+                Commodity.kind == "currency",
+                Commodity.symbol == symbol,
+            )
         )
         if duplicate is not None:
             raise ValueError("currency with this symbol already exists")
 
-        commodity = Commodity(book_id=book_id, kind="currency", symbol=symbol, name=name, scale=scale, metadata_text=metadata)
+        commodity = Commodity(
+            book_id=book_id,
+            kind="currency",
+            symbol=symbol,
+            name=name,
+            scale=scale,
+            metadata_text=metadata,
+        )
         self._session.add(commodity)
         await self._session.commit()
         await self._session.refresh(commodity)
         return commodity
 
-    async def update_currency(self, *, currency_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity | None:
+    async def update_currency(
+        self, *, currency_id: int, symbol: str, name: str, scale: int, metadata: str | None
+    ) -> Commodity | None:
         commodity = await self._session.get(Commodity, currency_id)
         if commodity is None:
             return None
@@ -130,7 +149,9 @@ class MetadataRepository:
         await self._session.refresh(commodity)
         return commodity
 
-    async def set_currency_active(self, *, currency_id: int, metadata: str | None) -> Commodity | None:
+    async def set_currency_active(
+        self, *, currency_id: int, metadata: str | None
+    ) -> Commodity | None:
         commodity = await self._session.get(Commodity, currency_id)
         if commodity is None or commodity.kind != "currency":
             return None
@@ -142,7 +163,9 @@ class MetadataRepository:
         return commodity
 
     async def list_countries(self) -> list[Country]:
-        statement: Select[tuple[Country]] = select(Country).order_by(Country.name.asc(), Country.id.asc())
+        statement: Select[tuple[Country]] = select(Country).order_by(
+            Country.name.asc(), Country.id.asc()
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -220,7 +243,9 @@ class MetadataRepository:
         return True
 
     async def list_categories(self) -> list[Category]:
-        statement: Select[tuple[Category]] = select(Category).order_by(Category.name.asc(), Category.id.asc())
+        statement: Select[tuple[Category]] = select(Category).order_by(
+            Category.name.asc(), Category.id.asc()
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -279,14 +304,18 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def create_payee(self, *, book_id: int, name: str, kind: str, metadata: str | None) -> Payee:
+    async def create_payee(
+        self, *, book_id: int, name: str, kind: str, metadata: str | None
+    ) -> Payee:
         payee = Payee(book_id=book_id, name=name, kind=kind, metadata_text=metadata)
         self._session.add(payee)
         await self._session.commit()
         await self._session.refresh(payee)
         return payee
 
-    async def update_payee(self, *, payee_id: int, name: str, kind: str, metadata: str | None) -> Payee | None:
+    async def update_payee(
+        self, *, payee_id: int, name: str, kind: str, metadata: str | None
+    ) -> Payee | None:
         payee = await self._session.get(Payee, payee_id)
         if payee is None:
             return None
@@ -350,11 +379,15 @@ class MetadataRepository:
         return True
 
     async def list_people(self) -> list[Person]:
-        statement: Select[tuple[Person]] = select(Person).order_by(Person.name.asc(), Person.id.asc())
+        statement: Select[tuple[Person]] = select(Person).order_by(
+            Person.name.asc(), Person.id.asc()
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def create_person(self, *, book_id: int, name: str, role: str, metadata: str | None) -> Person:
+    async def create_person(
+        self, *, book_id: int, name: str, role: str, metadata: str | None
+    ) -> Person:
         person = Person(book_id=book_id, name=name, role=role, metadata_text=metadata)
         self._session.add(person)
         await self._session.commit()
@@ -362,11 +395,15 @@ class MetadataRepository:
         return person
 
     async def list_projects(self) -> list[Project]:
-        statement: Select[tuple[Project]] = select(Project).order_by(Project.name.asc(), Project.id.asc())
+        statement: Select[tuple[Project]] = select(Project).order_by(
+            Project.name.asc(), Project.id.asc()
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def create_project(self, *, book_id: int, name: str, status: str, metadata: str | None) -> Project:
+    async def create_project(
+        self, *, book_id: int, name: str, status: str, metadata: str | None
+    ) -> Project:
         project = Project(book_id=book_id, name=name, status=status, metadata_text=metadata)
         self._session.add(project)
         await self._session.commit()

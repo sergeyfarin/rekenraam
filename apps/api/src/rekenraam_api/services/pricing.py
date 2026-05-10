@@ -43,7 +43,9 @@ class PricingService:
             return None
         return await self._build_policy_summary(policy)
 
-    async def update_pricing_policy(self, input: PricingPolicyUpdateInput) -> PricingPolicySummary | None:
+    async def update_pricing_policy(
+        self, input: PricingPolicyUpdateInput
+    ) -> PricingPolicySummary | None:
         self._validate_policy_input(input)
         policy = await self._repository.update_pricing_policy(
             book_id=input.book_id,
@@ -60,11 +62,18 @@ class PricingService:
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return await self._build_policy_summary(policy)
 
-    async def list_pricing_source_assignments(self, book_id: int) -> list[PricingSourceAssignmentSummary]:
+    async def list_pricing_source_assignments(
+        self, book_id: int
+    ) -> list[PricingSourceAssignmentSummary]:
         rows = await self._repository.list_pricing_source_assignments(book_id)
-        return [self._to_assignment_summary(assignment, from_currency, to_currency, source) for assignment, from_currency, to_currency, source in rows]
+        return [
+            self._to_assignment_summary(assignment, from_currency, to_currency, source)
+            for assignment, from_currency, to_currency, source in rows
+        ]
 
-    async def create_pricing_source_assignment(self, input: PricingSourceAssignmentCreateInput) -> PricingSourceAssignmentSummary:
+    async def create_pricing_source_assignment(
+        self, input: PricingSourceAssignmentCreateInput
+    ) -> PricingSourceAssignmentSummary:
         self._validate_assignment_dates(input.effective_from, input.effective_to)
         assignment = await self._repository.create_pricing_source_assignment(
             book_id=input.book_id,
@@ -77,7 +86,9 @@ class PricingService:
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return await self._build_assignment_summary(assignment)
 
-    async def update_pricing_source_assignment(self, assignment_id: int, input: PricingSourceAssignmentUpdateInput) -> PricingSourceAssignmentSummary | None:
+    async def update_pricing_source_assignment(
+        self, assignment_id: int, input: PricingSourceAssignmentUpdateInput
+    ) -> PricingSourceAssignmentSummary | None:
         self._validate_assignment_dates(input.effective_from, input.effective_to)
         assignment = await self._repository.update_pricing_source_assignment(
             assignment_id=assignment_id,
@@ -97,12 +108,17 @@ class PricingService:
         assignment_row = await self._repository.get_pricing_source_assignment(assignment_id)
         deleted = await self._repository.delete_pricing_source_assignment(assignment_id)
         if deleted and assignment_row is not None:
-            await bump_report_state(getattr(self._repository, "_session", None), assignment_row.book_id)
+            await bump_report_state(
+                getattr(self._repository, "_session", None), assignment_row.book_id
+            )
         return deleted
 
     async def list_pricing_refresh_state(self, book_id: int) -> list[PricingRefreshStateSummary]:
         rows = await self._repository.list_pricing_refresh_state(book_id)
-        return [self._to_refresh_state_summary(state, from_currency, to_currency, source) for state, from_currency, to_currency, source in rows]
+        return [
+            self._to_refresh_state_summary(state, from_currency, to_currency, source)
+            for state, from_currency, to_currency, source in rows
+        ]
 
     async def list_source_health(self, book_id: int) -> list[PricingSourceHealthSummary]:
         rows = await self._repository.list_pricing_refresh_state(book_id)
@@ -145,7 +161,10 @@ class PricingService:
             quote_commodity_id=quote_commodity_id,
             limit=limit,
         )
-        return [self._to_market_price_summary(observation, commodity, quote) for observation, commodity, quote in rows]
+        return [
+            self._to_market_price_summary(observation, commodity, quote)
+            for observation, commodity, quote in rows
+        ]
 
     async def create_market_price(self, input: MarketPriceCreateInput) -> MarketPriceSummary:
         if input.price_minor <= 0:
@@ -169,12 +188,17 @@ class PricingService:
         observation = await self._repository.get_price_observation(observation_id)
         deleted = await self._repository.delete_market_price_observation(observation_id)
         if deleted and observation is not None:
-            await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
+            await bump_report_state(
+                getattr(self._repository, "_session", None), observation.book_id
+            )
         return deleted
 
     async def list_fx_rates_daily(self, book_id: int, limit: int = 100) -> list[FxRateDailySummary]:
         rows = await self._repository.list_fx_rate_daily_observations(book_id=book_id, limit=limit)
-        return [self._to_fx_rate_daily_summary(observation, from_currency, to_currency) for observation, from_currency, to_currency in rows]
+        return [
+            self._to_fx_rate_daily_summary(observation, from_currency, to_currency)
+            for observation, from_currency, to_currency in rows
+        ]
 
     async def create_fx_rate_daily(self, input: FxRateDailyCreateInput) -> FxRateDailySummary:
         if input.rate <= 0:
@@ -198,17 +222,30 @@ class PricingService:
         observation = await self._repository.get_price_observation(observation_id)
         deleted = await self._repository.delete_fx_rate_daily_observation(observation_id)
         if deleted and observation is not None:
-            await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
+            await bump_report_state(
+                getattr(self._repository, "_session", None), observation.book_id
+            )
         return deleted
 
-    async def list_fx_rates_official(self, book_id: int, limit: int = 100) -> list[FxRateOfficialSummary]:
-        rows = await self._repository.list_fx_rate_official_observations(book_id=book_id, limit=limit)
-        return [self._to_fx_rate_official_summary(observation, from_currency, to_currency) for observation, from_currency, to_currency in rows]
+    async def list_fx_rates_official(
+        self, book_id: int, limit: int = 100
+    ) -> list[FxRateOfficialSummary]:
+        rows = await self._repository.list_fx_rate_official_observations(
+            book_id=book_id, limit=limit
+        )
+        return [
+            self._to_fx_rate_official_summary(observation, from_currency, to_currency)
+            for observation, from_currency, to_currency in rows
+        ]
 
-    async def create_fx_rate_official(self, input: FxRateOfficialCreateInput) -> FxRateOfficialSummary:
+    async def create_fx_rate_official(
+        self, input: FxRateOfficialCreateInput
+    ) -> FxRateOfficialSummary:
         if input.period_type not in {"yearly", "monthly"}:
             raise ValueError("period_type must be yearly or monthly")
-        if input.period_type == "monthly" and (input.period_month is None or input.period_month < 1 or input.period_month > 12):
+        if input.period_type == "monthly" and (
+            input.period_month is None or input.period_month < 1 or input.period_month > 12
+        ):
             raise ValueError("period_month must be between 1 and 12")
         if input.period_type == "yearly":
             period_month = None
@@ -243,12 +280,18 @@ class PricingService:
         observation = await self._repository.get_price_observation(observation_id)
         deleted = await self._repository.delete_fx_rate_official_observation(observation_id)
         if deleted and observation is not None:
-            await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
+            await bump_report_state(
+                getattr(self._repository, "_session", None), observation.book_id
+            )
         return deleted
 
     async def _build_policy_summary(self, policy: PricingPolicy) -> PricingPolicySummary:
         base_currency = await self._repository.get_commodity(policy.base_commodity_id)
-        default_source = await self._repository.get_price_source(policy.default_source_id) if policy.default_source_id is not None else None
+        default_source = (
+            await self._repository.get_price_source(policy.default_source_id)
+            if policy.default_source_id is not None
+            else None
+        )
         return PricingPolicySummary(
             book_id=policy.book_id,
             base_currency_id=policy.base_commodity_id,
@@ -264,7 +307,9 @@ class PricingService:
             updated_at=policy.updated_at,
         )
 
-    async def _build_assignment_summary(self, assignment: PricingSourceAssignment) -> PricingSourceAssignmentSummary:
+    async def _build_assignment_summary(
+        self, assignment: PricingSourceAssignment
+    ) -> PricingSourceAssignmentSummary:
         from_currency = await self._repository.get_commodity(assignment.commodity_id)
         to_currency = await self._repository.get_commodity(assignment.quote_commodity_id)
         source = await self._repository.get_price_source(assignment.source_id)
@@ -335,7 +380,7 @@ class PricingService:
         from_currency: Commodity,
         to_currency: Commodity,
     ) -> FxRateDailySummary:
-        scale_factor = 10 ** from_currency.scale
+        scale_factor = 10**from_currency.scale
         return FxRateDailySummary(
             id=observation.id,
             book_id=observation.book_id,
@@ -375,7 +420,7 @@ class PricingService:
         from_currency: Commodity,
         to_currency: Commodity,
     ) -> FxRateOfficialSummary:
-        scale_factor = 10 ** from_currency.scale
+        scale_factor = 10**from_currency.scale
         period_month = observation.price_date.month if observation.price_date.month != 1 else None
         period_type = "monthly" if period_month is not None else "yearly"
         return FxRateOfficialSummary(

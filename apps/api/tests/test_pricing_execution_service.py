@@ -69,8 +69,28 @@ class StubPricingRepository:
 
     async def get_commodity(self, commodity_id: int) -> Commodity | None:
         data = {
-            1: Commodity(id=1, book_id=1, kind="currency", symbol="USD", name="US Dollar", scale=4, metadata_text=None, created_at=self._created_at, updated_at=self._created_at),
-            2: Commodity(id=2, book_id=1, kind="currency", symbol="EUR", name="Euro", scale=4, metadata_text='{"is_active": true}', created_at=self._created_at, updated_at=self._created_at),
+            1: Commodity(
+                id=1,
+                book_id=1,
+                kind="currency",
+                symbol="USD",
+                name="US Dollar",
+                scale=4,
+                metadata_text=None,
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            ),
+            2: Commodity(
+                id=2,
+                book_id=1,
+                kind="currency",
+                symbol="EUR",
+                name="Euro",
+                scale=4,
+                metadata_text='{"is_active": true}',
+                created_at=self._created_at,
+                updated_at=self._created_at,
+            ),
         }
         return data.get(commodity_id)
 
@@ -80,13 +100,22 @@ class StubPricingRepository:
         assert usd is not None and eur is not None
         return [usd, eur], "USD"
 
-    async def list_effective_pricing_source_assignments(self, book_id: int, effective_on: date) -> list[tuple[object, Commodity, Commodity, PriceSource]]:
+    async def list_effective_pricing_source_assignments(
+        self, book_id: int, effective_on: date
+    ) -> list[tuple[object, Commodity, Commodity, PriceSource]]:
         return []
 
     async def get_price_source(self, source_id: int | None) -> PriceSource | None:
         if source_id is None:
             return None
-        return PriceSource(id=1001, name="ECB", kind="provider", provider="ECB", base_url="https://ecb.test", created_at=self._created_at)
+        return PriceSource(
+            id=1001,
+            name="ECB",
+            kind="provider",
+            provider="ECB",
+            base_url="https://ecb.test",
+            created_at=self._created_at,
+        )
 
     async def list_pricing_refresh_state_rows(self, book_id: int) -> list[PricingRefreshState]:
         return [
@@ -117,11 +146,41 @@ class StubPricingRepository:
         self.run_calls.append(kwargs)
         return PricingRefreshRun(id=1, created_at=self._created_at, **kwargs)
 
-    async def list_pricing_refresh_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRun]:
-        return [PricingRefreshRun(id=1, book_id=1, trigger="manual", started_at=self._created_at, finished_at=self._created_at, pairs_total=1, pairs_success=1, pairs_failed=0, rates_inserted=1, derived_inserted=0, last_error=None, created_at=self._created_at)]
+    async def list_pricing_refresh_run_history(
+        self, book_id: int, limit: int = 10
+    ) -> list[PricingRefreshRun]:
+        return [
+            PricingRefreshRun(
+                id=1,
+                book_id=1,
+                trigger="manual",
+                started_at=self._created_at,
+                finished_at=self._created_at,
+                pairs_total=1,
+                pairs_success=1,
+                pairs_failed=0,
+                rates_inserted=1,
+                derived_inserted=0,
+                last_error=None,
+                created_at=self._created_at,
+            )
+        ]
 
     async def get_latest_pricing_refresh_run(self, book_id: int) -> PricingRefreshRun | None:
-        return PricingRefreshRun(id=1, book_id=1, trigger="manual", started_at=self._created_at, finished_at=self._created_at, pairs_total=1, pairs_success=1, pairs_failed=0, rates_inserted=1, derived_inserted=0, last_error=None, created_at=self._created_at)
+        return PricingRefreshRun(
+            id=1,
+            book_id=1,
+            trigger="manual",
+            started_at=self._created_at,
+            finished_at=self._created_at,
+            pairs_total=1,
+            pairs_success=1,
+            pairs_failed=0,
+            rates_inserted=1,
+            derived_inserted=0,
+            last_error=None,
+            created_at=self._created_at,
+        )
 
     async def rollback(self) -> None:
         return None
@@ -171,8 +230,26 @@ async def test_pricing_execution_service_skips_scheduled_run_before_due_time() -
 def test_pricing_provider_registry_resolves_aliases_beyond_initial_three() -> None:
     registry = PricingProviderRegistry()
 
-    hmrc = registry.resolve(PriceSource(id=1003, name="HMRC", kind="provider", provider="HMRC", base_url=None, created_at=datetime(2026, 5, 3, tzinfo=UTC)))
-    yahoo = registry.resolve(PriceSource(id=1010, name="Yahoo Finance", kind="provider", provider="Yahoo Finance", base_url=None, created_at=datetime(2026, 5, 3, tzinfo=UTC)))
+    hmrc = registry.resolve(
+        PriceSource(
+            id=1003,
+            name="HMRC",
+            kind="provider",
+            provider="HMRC",
+            base_url=None,
+            created_at=datetime(2026, 5, 3, tzinfo=UTC),
+        )
+    )
+    yahoo = registry.resolve(
+        PriceSource(
+            id=1010,
+            name="Yahoo Finance",
+            kind="provider",
+            provider="Yahoo Finance",
+            base_url=None,
+            created_at=datetime(2026, 5, 3, tzinfo=UTC),
+        )
+    )
 
     assert hmrc is not None
     assert hmrc.name == "ExchangeRate.host"

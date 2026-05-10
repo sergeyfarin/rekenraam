@@ -4,13 +4,23 @@ from rekenraam_api.services.access import AccessPolicy
 
 
 class BookService:
-    def __init__(self, repository: BookRepository, access_policy: AccessPolicy | None = None) -> None:
+    def __init__(
+        self, repository: BookRepository, access_policy: AccessPolicy | None = None
+    ) -> None:
         self._repository = repository
         self._access_policy = access_policy
 
     async def list_books(self) -> list[BookSummary]:
-        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        books = await self._repository.list_books(book_ids) if book_ids is not None else await self._repository.list_books()
+        book_ids = (
+            await self._access_policy.list_readable_book_ids()
+            if self._access_policy is not None
+            else None
+        )
+        books = (
+            await self._repository.list_books(book_ids)
+            if book_ids is not None
+            else await self._repository.list_books()
+        )
         return [
             BookSummary(
                 id=book.id,

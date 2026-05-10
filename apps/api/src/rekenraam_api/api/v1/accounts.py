@@ -22,7 +22,9 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
 @router.get("", response_model=list[AccountSummary])
-async def list_accounts(account_service: AccountService = Depends(get_account_service)) -> list[AccountSummary]:
+async def list_accounts(
+    account_service: AccountService = Depends(get_account_service),
+) -> list[AccountSummary]:
     return await account_service.list_accounts()
 
 
@@ -47,7 +49,11 @@ async def update_account(
         account = await account_service.update_account(account_id, input)
     except ValueError as error:
         message = str(error)
-        status_code = status.HTTP_409_CONFLICT if message == "system accounts cannot be updated" else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if message == "system accounts cannot be updated"
+            else status.HTTP_400_BAD_REQUEST
+        )
         raise HTTPException(status_code=status_code, detail=message) from error
 
     if account is None:
@@ -100,7 +106,11 @@ async def create_account_balancing(
         balancing = await account_service.create_account_balancing(input)
     except ValueError as error:
         message = str(error)
-        status_code = status.HTTP_409_CONFLICT if message == "account does not belong to book" else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if message == "account does not belong to book"
+            else status.HTTP_400_BAD_REQUEST
+        )
         raise HTTPException(status_code=status_code, detail=message) from error
 
     if balancing is None:
@@ -118,10 +128,16 @@ async def unlock_account_balancings(
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
     try:
-        return await account_service.unlock_account_balancings(account_id, input.from_date, input.reason, input.confirm)
+        return await account_service.unlock_account_balancings(
+            account_id, input.from_date, input.reason, input.confirm
+        )
     except ValueError as error:
         message = str(error)
-        status_code = status.HTTP_409_CONFLICT if message == "unlock not confirmed" else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if message == "unlock not confirmed"
+            else status.HTTP_400_BAD_REQUEST
+        )
         raise HTTPException(status_code=status_code, detail=message) from error
 
 

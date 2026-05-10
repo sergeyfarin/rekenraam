@@ -61,9 +61,7 @@ async def _issue_invite(
     return response.json()
 
 
-async def _accept_invite(
-    e2e_app: E2EApp, *, token: str, password: str = INVITE_PASSWORD
-) -> dict:
+async def _accept_invite(e2e_app: E2EApp, *, token: str, password: str = INVITE_PASSWORD) -> dict:
     response = await e2e_app.client.post(
         "/api/v1/auth/invite/accept",
         json={"token": token, "password": password},
@@ -73,9 +71,7 @@ async def _accept_invite(
 
 async def _expire_invite(session: AsyncSession, token_hash: str) -> None:
     await session.execute(
-        text(
-            "UPDATE user_invites SET expires_at = :expired WHERE token_hash = :hash"
-        ),
+        text("UPDATE user_invites SET expires_at = :expired WHERE token_hash = :hash"),
         {"expired": datetime.now(UTC) - timedelta(hours=1), "hash": token_hash},
     )
     await session.commit()
@@ -85,9 +81,7 @@ async def _expire_invite(session: AsyncSession, token_hash: str) -> None:
 async def test_full_invite_round_trip(e2e_app: E2EApp) -> None:
     await bootstrap_admin(e2e_app.client)
 
-    invite = await _issue_invite(
-        e2e_app, memberships=[(SEEDED_BOOK_ID, "editor")]
-    )
+    invite = await _issue_invite(e2e_app, memberships=[(SEEDED_BOOK_ID, "editor")])
     assert invite["user"]["email"] == INVITED_EMAIL
     assert invite["user"]["is_active"] is False, "invited user must be inactive until acceptance"
     assert any(
@@ -152,9 +146,7 @@ async def test_reinvite_pending_user_is_idempotent_and_invalidates_old_token(
 ) -> None:
     await bootstrap_admin(e2e_app.client)
     first = await _issue_invite(e2e_app)
-    second = await _issue_invite(
-        e2e_app, display_name="Newcomer Updated"
-    )
+    second = await _issue_invite(e2e_app, display_name="Newcomer Updated")
     assert first["user"]["id"] == second["user"]["id"], "same pending user reused"
     assert second["user"]["display_name"] == "Newcomer Updated"
     assert first["token"] != second["token"]

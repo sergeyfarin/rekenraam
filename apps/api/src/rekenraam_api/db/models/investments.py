@@ -29,12 +29,18 @@ class Lot(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
-    commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    commodity_id: Mapped[int] = mapped_column(
+        ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False
+    )
     opened_date: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(Text)
     cost_basis_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class InvestmentInstrument(Base):
@@ -46,12 +52,16 @@ class InvestmentInstrument(Base):
             "instrument_type IN ('stock', 'etf', 'mutual_fund', 'private_fund', 'bond', 'option', 'future', 'crypto', 'private_investment', 'generic')",
             name="ck_investment_instruments_type",
         ),
-        UniqueConstraint("book_id", "commodity_id", name="uq_investment_instruments_book_commodity"),
+        UniqueConstraint(
+            "book_id", "commodity_id", name="uq_investment_instruments_book_commodity"
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
-    commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False)
+    commodity_id: Mapped[int] = mapped_column(
+        ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False
+    )
     instrument_type: Mapped[str] = mapped_column(String(32), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     symbol: Mapped[str | None] = mapped_column(String(64))
@@ -62,21 +72,32 @@ class InvestmentInstrument(Base):
     venue: Mapped[str | None] = mapped_column(String(64))
     issuer: Mapped[str | None] = mapped_column(String(200))
     country_code: Mapped[str | None] = mapped_column(String(3))
-    quote_commodity_id: Mapped[int | None] = mapped_column(ForeignKey("commodities.id", ondelete="SET NULL"))
-    trading_commodity_id: Mapped[int | None] = mapped_column(ForeignKey("commodities.id", ondelete="SET NULL"))
+    quote_commodity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commodities.id", ondelete="SET NULL")
+    )
+    trading_commodity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commodities.id", ondelete="SET NULL")
+    )
     quantity_scale: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4"))
     price_scale: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     metadata_json: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class CostBasisProfile(Base):
     __tablename__ = "cost_basis_profiles"
     __table_args__ = (
         Index("ix_cost_basis_profiles_book_id", "book_id"),
-        CheckConstraint("method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')", name="ck_cost_basis_profiles_method"),
+        CheckConstraint(
+            "method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')",
+            name="ck_cost_basis_profiles_method",
+        ),
         UniqueConstraint("book_id", "name", name="uq_cost_basis_profiles_book_name"),
     )
 
@@ -87,8 +108,12 @@ class CostBasisProfile(Base):
     description: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     metadata_json: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class CorporateAction(Base):
@@ -105,18 +130,28 @@ class CorporateAction(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     action_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    old_instrument_id: Mapped[int | None] = mapped_column(ForeignKey("investment_instruments.id", ondelete="SET NULL"))
-    new_instrument_id: Mapped[int | None] = mapped_column(ForeignKey("investment_instruments.id", ondelete="SET NULL"))
+    old_instrument_id: Mapped[int | None] = mapped_column(
+        ForeignKey("investment_instruments.id", ondelete="SET NULL")
+    )
+    new_instrument_id: Mapped[int | None] = mapped_column(
+        ForeignKey("investment_instruments.id", ondelete="SET NULL")
+    )
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
     ratio_numerator: Mapped[int | None] = mapped_column(BigInteger)
     ratio_denominator: Mapped[int | None] = mapped_column(BigInteger)
     cash_in_lieu_minor: Mapped[int | None] = mapped_column(BigInteger)
-    cash_commodity_id: Mapped[int | None] = mapped_column(ForeignKey("commodities.id", ondelete="SET NULL"))
+    cash_commodity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commodities.id", ondelete="SET NULL")
+    )
     source_reference: Mapped[str | None] = mapped_column(Text)
     memo: Mapped[str | None] = mapped_column(Text)
-    generated_transaction_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id", ondelete="SET NULL"))
+    generated_transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="SET NULL")
+    )
     metadata_json: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class SplitLotAllocation(Base):
@@ -127,10 +162,14 @@ class SplitLotAllocation(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    split_id: Mapped[int] = mapped_column(ForeignKey("splits.id", ondelete="CASCADE"), nullable=False)
+    split_id: Mapped[int] = mapped_column(
+        ForeignKey("splits.id", ondelete="CASCADE"), nullable=False
+    )
     lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"), nullable=False)
     quantity_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class PriceObservation(Base):
@@ -152,10 +191,18 @@ class PriceObservation(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
-    commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False)
-    quote_commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False)
-    observation_kind: Mapped[str] = mapped_column(String(32), nullable=False, server_default="commodity_market")
+    commodity_id: Mapped[int] = mapped_column(
+        ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False
+    )
+    quote_commodity_id: Mapped[int] = mapped_column(
+        ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False
+    )
+    observation_kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="commodity_market"
+    )
     price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     price_date: Mapped[date] = mapped_column(Date, nullable=False)
     source: Mapped[str | None] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

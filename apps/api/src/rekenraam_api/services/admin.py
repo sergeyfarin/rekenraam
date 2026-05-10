@@ -43,11 +43,15 @@ class AdminService:
         database_name = await self._session.scalar(select(func.current_database()))
         database_user = await self._session.scalar(select(func.current_user()))
         postgres_version = await self._session.scalar(select(func.version()))
-        size_bytes = await self._session.scalar(select(func.pg_database_size(func.current_database())))
+        size_bytes = await self._session.scalar(
+            select(func.pg_database_size(func.current_database()))
+        )
 
         current_version = await self._current_migration_version()
         latest_version = self._latest_migration_version()
-        pending_versions: tuple[str, ...] = () if current_version == latest_version else (latest_version,)
+        pending_versions: tuple[str, ...] = (
+            () if current_version == latest_version else (latest_version,)
+        )
         writable = await self._probe_writable()
 
         display_path = f"{self._settings.postgres_host}:{self._settings.postgres_port}/{database_name or self._settings.postgres_db}"
@@ -75,7 +79,11 @@ class AdminService:
     async def run_integrity_check(self) -> IntegrityCheckSummary:
         checks: list[RuntimeCheckSummary] = []
         await self._session.execute(text("SELECT 1"))
-        checks.append(RuntimeCheckSummary(name="database_connectivity", status="ok", detail="Database responded."))
+        checks.append(
+            RuntimeCheckSummary(
+                name="database_connectivity", status="ok", detail="Database responded."
+            )
+        )
 
         current_version = await self._current_migration_version()
         latest_version = self._latest_migration_version()
@@ -154,7 +162,9 @@ class AdminService:
 
     async def _current_migration_version(self) -> str | None:
         try:
-            return await self._session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1"))
+            return await self._session.scalar(
+                text("SELECT version_num FROM alembic_version LIMIT 1")
+            )
         except Exception:
             return None
 
@@ -167,9 +177,13 @@ class AdminService:
     async def _probe_writable(self) -> bool:
         try:
             await self._session.execute(
-                text("CREATE TEMP TABLE IF NOT EXISTS rekenraam_writable_probe (id integer) ON COMMIT DROP")
+                text(
+                    "CREATE TEMP TABLE IF NOT EXISTS rekenraam_writable_probe (id integer) ON COMMIT DROP"
+                )
             )
-            await self._session.execute(text("INSERT INTO rekenraam_writable_probe (id) VALUES (1)"))
+            await self._session.execute(
+                text("INSERT INTO rekenraam_writable_probe (id) VALUES (1)")
+            )
             await self._session.execute(text("TRUNCATE rekenraam_writable_probe"))
             return True
         except Exception:
@@ -232,7 +246,9 @@ class AdminService:
         if expense_summary_balance != 0:
             splits.append((system_accounts.expense_summary_account_id, -expense_summary_balance))
         if retained_earnings_delta_minor != 0:
-            splits.append((system_accounts.retained_earnings_account_id, retained_earnings_delta_minor))
+            splits.append(
+                (system_accounts.retained_earnings_account_id, retained_earnings_delta_minor)
+            )
 
         if sum(amount_minor for _, amount_minor in splits) != 0:
             raise ValueError("fiscal close failed: generated splits are unbalanced")
@@ -374,7 +390,10 @@ class AdminService:
         close_date: date,
     ) -> list[tuple[int, str, int, int]]:
         balance_subquery = (
-            select(Split.account_id.label("account_id"), func.sum(Split.amount_minor).label("balance_minor"))
+            select(
+                Split.account_id.label("account_id"),
+                func.sum(Split.amount_minor).label("balance_minor"),
+            )
             .join(Transaction, Transaction.id == Split.tx_id)
             .where(Transaction.book_id == book_id)
             .where(Transaction.occurred_date <= close_date)
@@ -397,4 +416,7 @@ class AdminService:
             .where(func.coalesce(balance_subquery.c.balance_minor, 0) != 0)
         )
         result = await self._session.execute(statement)
-        return [(account_id, account_type, commodity_id, balance_minor) for account_id, account_type, commodity_id, balance_minor in result.all()]
+        return [
+            (account_id, account_type, commodity_id, balance_minor)
+            for account_id, account_type, commodity_id, balance_minor in result.all()
+        ]

@@ -6,7 +6,9 @@ from rekenraam_api.repositories.metadata import MetadataRepository
 
 
 @pytest.mark.asyncio
-async def test_metadata_repository_lists_seeded_commodities(repository_session: AsyncSession) -> None:
+async def test_metadata_repository_lists_seeded_commodities(
+    repository_session: AsyncSession,
+) -> None:
     repository = MetadataRepository(repository_session)
 
     commodities = await repository.list_commodities()
@@ -34,7 +36,9 @@ async def test_metadata_repository_updates_commodity(repository_session: AsyncSe
 
 
 @pytest.mark.asyncio
-async def test_metadata_repository_lists_creates_updates_and_sets_default_currency(repository_session: AsyncSession) -> None:
+async def test_metadata_repository_lists_creates_updates_and_sets_default_currency(
+    repository_session: AsyncSession,
+) -> None:
     repository = MetadataRepository(repository_session)
 
     currencies, base_currency_code = await repository.list_currencies(1)
@@ -42,7 +46,9 @@ async def test_metadata_repository_lists_creates_updates_and_sets_default_curren
     assert [currency.symbol for currency in currencies] == ["USD"]
     assert base_currency_code == "USD"
 
-    created = await repository.create_currency(book_id=1, symbol="EUR", name="Euro", scale=2, metadata='{"display_symbol":"EUR"}')
+    created = await repository.create_currency(
+        book_id=1, symbol="EUR", name="Euro", scale=2, metadata='{"display_symbol":"EUR"}'
+    )
     assert created.symbol == "EUR"
 
     updated = await repository.update_currency(
@@ -62,13 +68,17 @@ async def test_metadata_repository_lists_creates_updates_and_sets_default_curren
     _, updated_base_currency_code = await repository.list_currencies(1)
     assert updated_base_currency_code == "EUR"
 
-    deactivated = await repository.set_currency_active(currency_id=created.id, metadata='{"display_symbol":"EUR","is_active":false}')
+    deactivated = await repository.set_currency_active(
+        currency_id=created.id, metadata='{"display_symbol":"EUR","is_active":false}'
+    )
     assert deactivated is not None
     assert deactivated.metadata_text == '{"display_symbol":"EUR","is_active":false}'
 
 
 @pytest.mark.asyncio
-async def test_metadata_repository_lists_empty_countries_and_institutions(repository_session: AsyncSession) -> None:
+async def test_metadata_repository_lists_empty_countries_and_institutions(
+    repository_session: AsyncSession,
+) -> None:
     repository = MetadataRepository(repository_session)
 
     countries = await repository.list_countries()
@@ -79,7 +89,9 @@ async def test_metadata_repository_lists_empty_countries_and_institutions(reposi
 
 
 @pytest.mark.asyncio
-async def test_metadata_repository_creates_updates_and_deletes_institution(repository_session: AsyncSession) -> None:
+async def test_metadata_repository_creates_updates_and_deletes_institution(
+    repository_session: AsyncSession,
+) -> None:
     repository = MetadataRepository(repository_session)
 
     created = await repository.create_institution(
@@ -121,7 +133,9 @@ async def test_metadata_repository_creates_updates_and_deletes_institution(repos
 
 
 @pytest.mark.asyncio
-async def test_metadata_repository_lists_reference_data_by_name(repository_session: AsyncSession) -> None:
+async def test_metadata_repository_lists_reference_data_by_name(
+    repository_session: AsyncSession,
+) -> None:
     repository = MetadataRepository(repository_session)
     repository_session.add_all(
         [
@@ -148,9 +162,13 @@ async def test_metadata_repository_lists_reference_data_by_name(repository_sessi
 
 
 @pytest.mark.asyncio
-async def test_metadata_repository_updates_and_deletes_category_payee_and_tag(repository_session: AsyncSession) -> None:
+async def test_metadata_repository_updates_and_deletes_category_payee_and_tag(
+    repository_session: AsyncSession,
+) -> None:
     repository = MetadataRepository(repository_session)
-    category = Category(book_id=1, parent_id=None, name="Groceries", kind="expense", color="#00aa00")
+    category = Category(
+        book_id=1, parent_id=None, name="Groceries", kind="expense", color="#00aa00"
+    )
     payee = Payee(book_id=1, name="Local Market", kind="business", metadata_text=None)
     tag = Tag(book_id=1, name="Shared", color="#123456")
     repository_session.add_all([category, payee, tag])
@@ -167,7 +185,7 @@ async def test_metadata_repository_updates_and_deletes_category_payee_and_tag(re
         payee_id=payee.id,
         name="Corner Shop",
         kind="business",
-        metadata="{\"source\":\"manual\"}",
+        metadata='{"source":"manual"}',
     )
     updated_tag = await repository.update_tag(tag_id=tag.id, name="Family", color="#654321")
 

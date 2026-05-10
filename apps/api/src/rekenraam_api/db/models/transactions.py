@@ -33,7 +33,9 @@ class Transaction(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
-    previous_tx_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id", ondelete="SET NULL"))
+    previous_tx_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="SET NULL")
+    )
     occurred_date: Mapped[date] = mapped_column(Date, nullable=False)
     occurred_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     occurred_tz: Mapped[str | None] = mapped_column(String(64))
@@ -45,11 +47,21 @@ class Transaction(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="uncleared")
     reference: Mapped[str | None] = mapped_column(Text)
     import_id: Mapped[str | None] = mapped_column(String(255))
-    import_session_id: Mapped[int | None] = mapped_column(ForeignKey("import_sessions.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_session_id: Mapped[int | None] = mapped_column(ForeignKey("auth_sessions.id", ondelete="SET NULL"))
-    created_device_id: Mapped[int | None] = mapped_column(ForeignKey("user_devices.id", ondelete="SET NULL"))
+    import_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_sessions.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth_sessions.id", ondelete="SET NULL")
+    )
+    created_device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_devices.id", ondelete="SET NULL")
+    )
     created_request_id: Mapped[str | None] = mapped_column(String(64))
 
 
@@ -61,18 +73,34 @@ class Split(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    tx_id: Mapped[int] = mapped_column(ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False)
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False)
-    commodity_id: Mapped[int] = mapped_column(ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False)
+    tx_id: Mapped[int] = mapped_column(
+        ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
+    )
+    commodity_id: Mapped[int] = mapped_column(
+        ForeignKey("commodities.id", ondelete="RESTRICT"), nullable=False
+    )
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"))
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL")
+    )
     tag_id: Mapped[int | None] = mapped_column(ForeignKey("tags.id", ondelete="SET NULL"))
     person_id: Mapped[int | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"))
     share_bps: Mapped[int | None] = mapped_column(BigInteger)
     memo: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_session_id: Mapped[int | None] = mapped_column(ForeignKey("auth_sessions.id", ondelete="SET NULL"))
-    created_device_id: Mapped[int | None] = mapped_column(ForeignKey("user_devices.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth_sessions.id", ondelete="SET NULL")
+    )
+    created_device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_devices.id", ondelete="SET NULL")
+    )
     created_request_id: Mapped[str | None] = mapped_column(String(64))

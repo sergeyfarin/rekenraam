@@ -83,7 +83,9 @@ async def delete_fx_rate_official(
 ) -> None:
     deleted = await pricing_service.delete_fx_rate_official(observation_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="official FX rate not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="official FX rate not found"
+        )
 
 
 @router.get("/market-prices", response_model=list[MarketPriceSummary])
@@ -137,7 +139,9 @@ async def get_pricing_policy(
 ) -> PricingPolicySummary:
     policy = await pricing_service.get_pricing_policy(book_id)
     if policy is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pricing policy not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="pricing policy not found"
+        )
     return policy
 
 
@@ -151,7 +155,9 @@ async def update_pricing_policy(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     if policy is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pricing policy not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="pricing policy not found"
+        )
     return policy
 
 
@@ -185,7 +191,9 @@ async def update_pricing_source_assignment(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     if assignment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pricing source assignment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="pricing source assignment not found"
+        )
     return assignment
 
 
@@ -196,7 +204,9 @@ async def delete_pricing_source_assignment(
 ) -> None:
     deleted = await pricing_service.delete_pricing_source_assignment(assignment_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pricing source assignment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="pricing source assignment not found"
+        )
 
 
 @router.get("/refresh-state", response_model=list[PricingRefreshStateSummary])
@@ -228,7 +238,9 @@ async def run_pricing_refresh(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from error
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from error
     if summary is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pricing refresh already running")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="pricing refresh already running"
+        )
     return summary
 
 

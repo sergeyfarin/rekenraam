@@ -113,7 +113,9 @@ async def set_default_currency(
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> CurrencySummary:
     try:
-        currency = await metadata_service.set_default_currency(book_id=book_id, currency_id=currency_id)
+        currency = await metadata_service.set_default_currency(
+            book_id=book_id, currency_id=currency_id
+        )
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 

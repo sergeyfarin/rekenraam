@@ -114,11 +114,15 @@ class TransactionRepository:
             )
 
         if active_filters.amount_min is not None:
-            matching_tx_ids = select(Split.tx_id).where(func.abs(Split.amount_minor) >= active_filters.amount_min)
+            matching_tx_ids = select(Split.tx_id).where(
+                func.abs(Split.amount_minor) >= active_filters.amount_min
+            )
             statement = statement.where(Transaction.id.in_(matching_tx_ids))
 
         if active_filters.amount_max is not None:
-            matching_tx_ids = select(Split.tx_id).where(func.abs(Split.amount_minor) <= active_filters.amount_max)
+            matching_tx_ids = select(Split.tx_id).where(
+                func.abs(Split.amount_minor) <= active_filters.amount_max
+            )
             statement = statement.where(Transaction.id.in_(matching_tx_ids))
 
         sort_by = active_filters.sort_by or "date"
@@ -141,7 +145,9 @@ class TransactionRepository:
                 )
 
         primary_direction = asc if sort_dir == "asc" else desc
-        statement = statement.order_by(primary_direction(Transaction.occurred_date), primary_direction(Transaction.id)).limit(limit + 1)
+        statement = statement.order_by(
+            primary_direction(Transaction.occurred_date), primary_direction(Transaction.id)
+        ).limit(limit + 1)
         if active_filters.offset is not None and cursor is None:
             statement = statement.offset(max(active_filters.offset, 0))
 
@@ -160,7 +166,9 @@ class TransactionRepository:
             return None
 
         while True:
-            statement: Select[tuple[Transaction]] = select(Transaction).where(Transaction.previous_tx_id == transaction.id).limit(1)
+            statement: Select[tuple[Transaction]] = (
+                select(Transaction).where(Transaction.previous_tx_id == transaction.id).limit(1)
+            )
             newer = await self._session.scalar(statement)
             if newer is None:
                 return transaction
@@ -278,7 +286,9 @@ class TransactionRepository:
         if not transaction_ids:
             return []
 
-        statement: Select[tuple[Split]] = select(Split).where(Split.tx_id.in_(transaction_ids)).order_by(Split.id)
+        statement: Select[tuple[Split]] = (
+            select(Split).where(Split.tx_id.in_(transaction_ids)).order_by(Split.id)
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -361,7 +371,11 @@ class TransactionRepository:
         while changed:
             changed = False
             for account in accounts:
-                if account.id in chain_ids and account.previous_account_id is not None and account.previous_account_id not in chain_ids:
+                if (
+                    account.id in chain_ids
+                    and account.previous_account_id is not None
+                    and account.previous_account_id not in chain_ids
+                ):
                     chain_ids.add(account.previous_account_id)
                     changed = True
                 if account.previous_account_id in chain_ids and account.id not in chain_ids:
@@ -422,7 +436,9 @@ class TransactionRepository:
         opening_balance = (
             0 if decoded is None else int(await self._session.scalar(opening_statement) or 0)
         )
-        statement = statement.order_by(Transaction.occurred_date.asc(), Transaction.id.asc(), Split.id.asc()).limit(limit + 1)
+        statement = statement.order_by(
+            Transaction.occurred_date.asc(), Transaction.id.asc(), Split.id.asc()
+        ).limit(limit + 1)
         result = await self._session.execute(statement)
         raw_rows = list(result.all())
         next_cursor = None
@@ -442,7 +458,9 @@ class TransactionRepository:
             rows.append((transaction, split, running_balance))
         return rows, next_cursor
 
-    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> tuple[int | None, str | None]:
+    async def get_payee_defaults(
+        self, payee_id: int, account_id: int | None = None
+    ) -> tuple[int | None, str | None]:
         statement = (
             select(Split.category_id, Transaction.memo)
             .join(Transaction, Transaction.id == Split.tx_id)
@@ -456,7 +474,9 @@ class TransactionRepository:
             account_ids = await self.list_account_chain_ids(account_id)
             statement = statement.where(Split.account_id.in_(account_ids))
 
-        statement = statement.order_by(Transaction.occurred_date.desc(), Transaction.id.desc()).limit(1)
+        statement = statement.order_by(
+            Transaction.occurred_date.desc(), Transaction.id.desc()
+        ).limit(1)
         result = await self._session.execute(statement)
         row = result.first()
         if row is None:
@@ -588,7 +608,9 @@ class TransactionRepository:
         await self._session.flush()
         return observation
 
-    async def get_locked_account_ids(self, account_ids: set[int], occurred_date: date) -> list[tuple[int, date]]:
+    async def get_locked_account_ids(
+        self, account_ids: set[int], occurred_date: date
+    ) -> list[tuple[int, date]]:
         if not account_ids:
             return []
         newer_balancing = AccountBalancing.__table__.alias("newer_account_balancings")
@@ -597,7 +619,13 @@ class TransactionRepository:
             .where(AccountBalancing.account_id.in_(account_ids))
             .where(AccountBalancing.voided_at.is_(None))
             .where(AccountBalancing.as_of_date >= occurred_date)
-            .where(~exists(select(literal(1)).where(newer_balancing.c.previous_account_balancing_id == AccountBalancing.id)))
+            .where(
+                ~exists(
+                    select(literal(1)).where(
+                        newer_balancing.c.previous_account_balancing_id == AccountBalancing.id
+                    )
+                )
+            )
             .order_by(AccountBalancing.as_of_date.asc())
         )
         result = await self._session.execute(statement)
@@ -624,7 +652,12 @@ class TransactionRepository:
             if ids is None or ids == set():
                 continue
             id_set = {ids} if isinstance(ids, int) else ids
-            count = await self._session.scalar(select(func.count()).select_from(model).where(model.id.in_(id_set)).where(model.book_id == book_id))
+            count = await self._session.scalar(
+                select(func.count())
+                .select_from(model)
+                .where(model.id.in_(id_set))
+                .where(model.book_id == book_id)
+            )
             if count != len(id_set):
                 return False
         return True

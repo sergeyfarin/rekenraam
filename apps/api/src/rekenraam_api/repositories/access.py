@@ -48,13 +48,17 @@ class AccessRepository:
         self._session.add(user)
         await self._session.flush()
 
-        book_ids = list((await self._session.execute(select(Book.id).order_by(Book.id))).scalars().all())
+        book_ids = list(
+            (await self._session.execute(select(Book.id).order_by(Book.id))).scalars().all()
+        )
         for book_id in book_ids:
             self._session.add(BookMembership(user_id=user.id, book_id=book_id, role="owner"))
         await self._session.flush()
         return user
 
-    async def get_or_create_device(self, *, user_id: int, fingerprint: str, user_agent: str | None) -> UserDevice:
+    async def get_or_create_device(
+        self, *, user_id: int, fingerprint: str, user_agent: str | None
+    ) -> UserDevice:
         statement: Select[tuple[UserDevice]] = select(UserDevice).where(
             UserDevice.user_id == user_id,
             UserDevice.device_fingerprint == fingerprint,
@@ -62,7 +66,9 @@ class AccessRepository:
         result = await self._session.execute(statement)
         device = result.scalar_one_or_none()
         if device is None:
-            device = UserDevice(user_id=user_id, device_fingerprint=fingerprint, user_agent=user_agent)
+            device = UserDevice(
+                user_id=user_id, device_fingerprint=fingerprint, user_agent=user_agent
+            )
             self._session.add(device)
         device.user_agent = user_agent
         device.last_seen_at = datetime.now(UTC)
@@ -93,18 +99,26 @@ class AccessRepository:
 
     async def get_confirmed_totp(self, user_id: int) -> UserMfaTotp | None:
         result = await self._session.execute(
-            select(UserMfaTotp).where(UserMfaTotp.user_id == user_id, UserMfaTotp.confirmed_at.is_not(None))
+            select(UserMfaTotp).where(
+                UserMfaTotp.user_id == user_id, UserMfaTotp.confirmed_at.is_not(None)
+            )
         )
         return result.scalar_one_or_none()
 
     async def get_totp(self, user_id: int) -> UserMfaTotp | None:
-        result = await self._session.execute(select(UserMfaTotp).where(UserMfaTotp.user_id == user_id))
+        result = await self._session.execute(
+            select(UserMfaTotp).where(UserMfaTotp.user_id == user_id)
+        )
         return result.scalar_one_or_none()
 
-    async def upsert_totp_secret(self, *, user_id: int, secret_ciphertext: str, confirmed_at: datetime | None) -> UserMfaTotp:
+    async def upsert_totp_secret(
+        self, *, user_id: int, secret_ciphertext: str, confirmed_at: datetime | None
+    ) -> UserMfaTotp:
         row = await self.get_totp(user_id)
         if row is None:
-            row = UserMfaTotp(user_id=user_id, secret_ciphertext=secret_ciphertext, confirmed_at=confirmed_at)
+            row = UserMfaTotp(
+                user_id=user_id, secret_ciphertext=secret_ciphertext, confirmed_at=confirmed_at
+            )
             self._session.add(row)
         else:
             row.secret_ciphertext = secret_ciphertext
@@ -114,12 +128,16 @@ class AccessRepository:
         return row
 
     async def delete_mfa(self, user_id: int) -> None:
-        await self._session.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id))
+        await self._session.execute(
+            delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id)
+        )
         await self._session.execute(delete(UserMfaTotp).where(UserMfaTotp.user_id == user_id))
         await self._session.flush()
 
     async def replace_recovery_codes(self, *, user_id: int, code_hashes: list[str]) -> None:
-        await self._session.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id))
+        await self._session.execute(
+            delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id)
+        )
         for code_hash in code_hashes:
             self._session.add(MfaRecoveryCode(user_id=user_id, code_hash=code_hash))
         await self._session.flush()
@@ -141,7 +159,9 @@ class AccessRepository:
 
     async def count_unused_recovery_codes(self, user_id: int) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(MfaRecoveryCode).where(
+            select(func.count())
+            .select_from(MfaRecoveryCode)
+            .where(
                 MfaRecoveryCode.user_id == user_id,
                 MfaRecoveryCode.used_at.is_(None),
             )
@@ -249,9 +269,7 @@ class AccessRepository:
         await self._session.flush()
         return row
 
-    async def get_active_user_invite(
-        self, token_hash: str, now: datetime
-    ) -> UserInvite | None:
+    async def get_active_user_invite(self, token_hash: str, now: datetime) -> UserInvite | None:
         result = await self._session.execute(
             select(UserInvite).where(
                 UserInvite.token_hash == token_hash,
@@ -311,7 +329,9 @@ class AccessRepository:
         )
         await self._session.flush()
 
-    async def get_active_session_by_token_hash(self, token_hash: str, now: datetime) -> AuthSession | None:
+    async def get_active_session_by_token_hash(
+        self, token_hash: str, now: datetime
+    ) -> AuthSession | None:
         statement: Select[tuple[AuthSession]] = select(AuthSession).where(
             AuthSession.token_hash == token_hash,
             AuthSession.revoked_at.is_(None),
@@ -325,13 +345,17 @@ class AccessRepository:
 
     async def touch_session(self, session_id: int) -> None:
         await self._session.execute(
-            update(AuthSession).where(AuthSession.id == session_id).values(last_seen_at=datetime.now(UTC))
+            update(AuthSession)
+            .where(AuthSession.id == session_id)
+            .values(last_seen_at=datetime.now(UTC))
         )
         await self._session.flush()
 
     async def revoke_session(self, session_id: int) -> None:
         await self._session.execute(
-            update(AuthSession).where(AuthSession.id == session_id).values(revoked_at=datetime.now(UTC))
+            update(AuthSession)
+            .where(AuthSession.id == session_id)
+            .values(revoked_at=datetime.now(UTC))
         )
         await self._session.flush()
 
@@ -346,7 +370,9 @@ class AccessRepository:
 
     async def list_user_book_ids(self, user_id: int) -> list[int]:
         result = await self._session.execute(
-            select(BookMembership.book_id).where(BookMembership.user_id == user_id).order_by(BookMembership.book_id)
+            select(BookMembership.book_id)
+            .where(BookMembership.user_id == user_id)
+            .order_by(BookMembership.book_id)
         )
         return list(result.scalars().all())
 

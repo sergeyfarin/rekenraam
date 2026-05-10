@@ -56,7 +56,11 @@ class MetadataService:
             symbol_lower = symbol.lower()
             name_lower = row.name.lower()
             is_active = row.kind != "currency" or self._currency_is_active(row, base_currency_code)
-            is_default = row.kind == "currency" and base_currency_code is not None and row.symbol == base_currency_code
+            is_default = (
+                row.kind == "currency"
+                and base_currency_code is not None
+                and row.symbol == base_currency_code
+            )
             if active_only and not is_active:
                 continue
             if normalized and normalized not in symbol_lower and normalized not in name_lower:
@@ -117,7 +121,9 @@ class MetadataService:
             for row in rows
         ]
 
-    async def update_commodity(self, commodity_id: int, input: CommodityUpdateInput) -> CommoditySummary | None:
+    async def update_commodity(
+        self, commodity_id: int, input: CommodityUpdateInput
+    ) -> CommoditySummary | None:
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -145,7 +151,11 @@ class MetadataService:
 
     async def list_currencies(self, book_id: int) -> list[CurrencySummary]:
         rows, base_currency_code = await self._repository.list_currencies(book_id)
-        return [self._to_currency_summary(row, base_currency_code) for row in rows if row.symbol is not None]
+        return [
+            self._to_currency_summary(row, base_currency_code)
+            for row in rows
+            if row.symbol is not None
+        ]
 
     async def create_currency(self, input: CurrencyCreateInput) -> CurrencySummary:
         symbol = input.symbol.strip().upper()
@@ -162,12 +172,16 @@ class MetadataService:
             symbol=symbol,
             name=name,
             scale=input.scale,
-            metadata=self._currency_metadata_text(display_symbol=input.display_symbol, is_active=True),
+            metadata=self._currency_metadata_text(
+                display_symbol=input.display_symbol, is_active=True
+            ),
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_currency_summary(row, None)
 
-    async def update_currency(self, currency_id: int, input: CurrencyUpdateInput) -> CurrencySummary | None:
+    async def update_currency(
+        self, currency_id: int, input: CurrencyUpdateInput
+    ) -> CurrencySummary | None:
         symbol = input.symbol.strip().upper()
         name = input.name.strip()
         if not symbol:
@@ -177,8 +191,12 @@ class MetadataService:
         if input.scale < 0:
             raise ValueError("scale must be non-negative")
 
-        existing_rows, existing_base_currency_code = await self._repository.list_currencies(input.book_id)
-        existing_row = next((existing for existing in existing_rows if existing.id == currency_id), None)
+        existing_rows, existing_base_currency_code = await self._repository.list_currencies(
+            input.book_id
+        )
+        existing_row = next(
+            (existing for existing in existing_rows if existing.id == currency_id), None
+        )
         if existing_row is None:
             return None
 
@@ -202,7 +220,9 @@ class MetadataService:
             return self._to_currency_summary(row, effective_base_currency)
         return self._to_currency_summary(row, effective_base_currency)
 
-    async def set_default_currency(self, *, book_id: int, currency_id: int) -> CurrencySummary | None:
+    async def set_default_currency(
+        self, *, book_id: int, currency_id: int
+    ) -> CurrencySummary | None:
         row = await self._repository.set_default_currency(book_id=book_id, currency_id=currency_id)
         if row is None:
             return None
@@ -220,12 +240,18 @@ class MetadataService:
         await bump_report_state(getattr(self._repository, "_session", None), book_id)
         return self._to_currency_summary(row, row.symbol, None)
 
-    async def set_currency_active(self, *, currency_id: int, input: CurrencyActivationInput) -> CurrencySummary | None:
+    async def set_currency_active(
+        self, *, currency_id: int, input: CurrencyActivationInput
+    ) -> CurrencySummary | None:
         rows, base_currency_code = await self._repository.list_currencies(input.book_id)
         existing_row = next((existing for existing in rows if existing.id == currency_id), None)
         if existing_row is None or existing_row.symbol is None:
             return None
-        if not input.is_active and base_currency_code is not None and existing_row.symbol == base_currency_code:
+        if (
+            not input.is_active
+            and base_currency_code is not None
+            and existing_row.symbol == base_currency_code
+        ):
             raise ValueError("default currency must remain active")
 
         row = await self._repository.set_currency_active(
@@ -303,7 +329,9 @@ class MetadataService:
             updated_at=row.updated_at,
         )
 
-    async def update_institution(self, institution_id: int, input: InstitutionUpdateInput) -> InstitutionSummary | None:
+    async def update_institution(
+        self, institution_id: int, input: InstitutionUpdateInput
+    ) -> InstitutionSummary | None:
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -336,7 +364,10 @@ class MetadataService:
 
     async def delete_institution(self, institution_id: int) -> bool:
         institutions = await self._repository.list_institutions()
-        existing = next((institution for institution, _ in institutions if institution.id == institution_id), None)
+        existing = next(
+            (institution for institution, _ in institutions if institution.id == institution_id),
+            None,
+        )
         try:
             deleted = await self._repository.delete_institution(institution_id)
         except IntegrityError as error:
@@ -366,7 +397,9 @@ class MetadataService:
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_category_summary(row)
 
-    async def update_category(self, category_id: int, input: CategoryUpdateInput) -> CategorySummary | None:
+    async def update_category(
+        self, category_id: int, input: CategoryUpdateInput
+    ) -> CategorySummary | None:
         name = input.name.strip()
         kind = input.kind.strip().lower()
         if not name:
@@ -564,7 +597,11 @@ class MetadataService:
         base_currency_code: str | None,
         display_symbol_override: str | None = None,
     ) -> CurrencySummary:
-        display_symbol = display_symbol_override if display_symbol_override not in {None, ""} else cls._extract_display_symbol(row.metadata_text)
+        display_symbol = (
+            display_symbol_override
+            if display_symbol_override not in {None, ""}
+            else cls._extract_display_symbol(row.metadata_text)
+        )
         if display_symbol in {None, ""}:
             display_symbol = row.symbol
         return CurrencySummary(
@@ -582,7 +619,11 @@ class MetadataService:
 
     @classmethod
     def _currency_is_active(cls, row: Commodity, base_currency_code: str | None) -> bool:
-        if row.symbol is not None and base_currency_code is not None and row.symbol == base_currency_code:
+        if (
+            row.symbol is not None
+            and base_currency_code is not None
+            and row.symbol == base_currency_code
+        ):
             return True
         is_active = cls._parse_currency_metadata(row.metadata_text).get("is_active")
         if isinstance(is_active, bool):
@@ -641,7 +682,9 @@ class MetadataService:
         if not cleaned:
             return None
         if cleaned not in {"bank", "credit_union", "brokerage", "insurance", "employer", "other"}:
-            raise ValueError("institution kind must be bank, credit_union, brokerage, insurance, employer, or other")
+            raise ValueError(
+                "institution kind must be bank, credit_union, brokerage, insurance, employer, or other"
+            )
         return cleaned
 
     @staticmethod

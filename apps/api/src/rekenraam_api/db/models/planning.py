@@ -60,7 +60,9 @@ class BudgetTarget(Base):
         ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
     )
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    rollover_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    rollover_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

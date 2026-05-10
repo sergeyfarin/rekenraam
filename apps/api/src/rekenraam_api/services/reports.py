@@ -27,8 +27,7 @@ from rekenraam_api.services.access import AccessPolicy
 
 
 class CacheableReportRow(Protocol):
-    def model_dump(self, *, mode: str) -> dict[str, object]:
-        ...
+    def model_dump(self, *, mode: str) -> dict[str, object]: ...
 
 
 type ReportCacheInput = (
@@ -41,7 +40,9 @@ type ReportCacheInput = (
 
 
 class ReportService:
-    def __init__(self, repository: ReportRepository, access_policy: AccessPolicy | None = None) -> None:
+    def __init__(
+        self, repository: ReportRepository, access_policy: AccessPolicy | None = None
+    ) -> None:
         self._repository = repository
         self._access_policy = access_policy
 
@@ -59,7 +60,9 @@ class ReportService:
             await self._access_policy.require_book_read(row.book_id)
         return self._to_report_definition_summary(row)
 
-    async def create_report_definition(self, input: ReportDefinitionCreateInput) -> ReportDefinitionSummary:
+    async def create_report_definition(
+        self, input: ReportDefinitionCreateInput
+    ) -> ReportDefinitionSummary:
         self._validate_report_definition(input.kind, input.query_type)
         if self._access_policy is not None:
             await self._access_policy.require_book_write(input.book_id)
@@ -73,7 +76,9 @@ class ReportService:
         )
         return self._to_report_definition_summary(row)
 
-    async def update_report_definition(self, input: ReportDefinitionUpdateInput) -> ReportDefinitionSummary | None:
+    async def update_report_definition(
+        self, input: ReportDefinitionUpdateInput
+    ) -> ReportDefinitionSummary | None:
         self._validate_report_definition(input.kind, input.query_type)
         current = await self._repository.get_report_definition(input.id)
         if current is not None and self._access_policy is not None:
@@ -99,7 +104,9 @@ class ReportService:
             await self._access_policy.require_book_write(current.book_id)
         return await self._repository.delete_report_definition(definition_id)
 
-    async def list_report_runs(self, book_id: int, definition_id: int | None = None) -> list[ReportRunSummary]:
+    async def list_report_runs(
+        self, book_id: int, definition_id: int | None = None
+    ) -> list[ReportRunSummary]:
         if self._access_policy is not None:
             await self._access_policy.require_book_read(book_id)
         rows = await self._repository.list_report_runs(book_id, definition_id)
@@ -207,7 +214,9 @@ class ReportService:
         await self._save_cached_rows("account_trends", input, mapped_rows)
         return mapped_rows
 
-    async def report_category_spend(self, input: CategorySpendReportInput) -> list[CategorySpendRow]:
+    async def report_category_spend(
+        self, input: CategorySpendReportInput
+    ) -> list[CategorySpendRow]:
         if self._access_policy is not None:
             await self._access_policy.require_book_read(input.book_id)
         cached_rows = await self._get_cached_rows("category_spend", input)
@@ -221,7 +230,9 @@ class ReportService:
             category_ids=input.category_ids,
         )
         mapped_rows = [
-            CategorySpendRow(category_id=category_id, category_name=category_name, total_minor=total_minor)
+            CategorySpendRow(
+                category_id=category_id, category_name=category_name, total_minor=total_minor
+            )
             for category_id, category_name, total_minor in rows
         ]
         await self._save_cached_rows("category_spend", input, mapped_rows)
@@ -240,7 +251,10 @@ class ReportService:
             date_to=input.date_to,
             payee_ids=input.payee_ids,
         )
-        mapped_rows = [PayeeTotalRow(payee_id=payee_id, payee_name=payee_name, total_minor=total_minor) for payee_id, payee_name, total_minor in rows]
+        mapped_rows = [
+            PayeeTotalRow(payee_id=payee_id, payee_name=payee_name, total_minor=total_minor)
+            for payee_id, payee_name, total_minor in rows
+        ]
         await self._save_cached_rows("payee_totals", input, mapped_rows)
         return mapped_rows
 
@@ -249,7 +263,9 @@ class ReportService:
             await self._access_policy.require_book_write(book_id)
         return await self._repository.bump_book_change_seq(book_id)
 
-    async def _get_cached_rows(self, report_type: str, input: ReportCacheInput) -> list[dict[str, object]] | None:
+    async def _get_cached_rows(
+        self, report_type: str, input: ReportCacheInput
+    ) -> list[dict[str, object]] | None:
         params_json = self._params_json(input)
         params_hash = self._params_hash(params_json)
         as_of_seq = await self._repository.get_book_change_seq(input.book_id)
@@ -263,7 +279,9 @@ class ReportService:
             return None
         return cast(list[dict[str, object]], json.loads(cache_row.payload_json))
 
-    async def _save_cached_rows(self, report_type: str, input: ReportCacheInput, rows: Sequence[CacheableReportRow]) -> None:
+    async def _save_cached_rows(
+        self, report_type: str, input: ReportCacheInput, rows: Sequence[CacheableReportRow]
+    ) -> None:
         params_json = self._params_json(input)
         params_hash = self._params_hash(params_json)
         as_of_seq = await self._repository.get_book_change_seq(input.book_id)

@@ -22,10 +22,18 @@ from rekenraam_api.services.request_context import RequestContext
 
 class StubInvestmentService:
     async def create_buy(self, input: object) -> TradeResult:
-        return TradeResult(transaction_id=10, allocations=(TradeAllocation(lot_id=8, quantity_minor=60000),), lot_id=8)
+        return TradeResult(
+            transaction_id=10,
+            allocations=(TradeAllocation(lot_id=8, quantity_minor=60000),),
+            lot_id=8,
+        )
 
     async def create_sell(self, input: object) -> TradeResult:
-        return TradeResult(transaction_id=11, allocations=(TradeAllocation(lot_id=1, quantity_minor=40000),), lot_id=None)
+        return TradeResult(
+            transaction_id=11,
+            allocations=(TradeAllocation(lot_id=1, quantity_minor=40000),),
+            lot_id=None,
+        )
 
     async def create_dividend(self, input: object) -> DividendResult:
         return DividendResult(transaction_id=12)
@@ -188,7 +196,9 @@ async def test_investment_endpoints_return_positions_lots_and_gains(client: Asyn
         },
     )
     positions_response = await client.get("/api/v1/investments/positions")
-    converted_response = await client.get("/api/v1/investments/positions/converted?base_commodity_id=1")
+    converted_response = await client.get(
+        "/api/v1/investments/positions/converted?base_commodity_id=1"
+    )
     lots_response = await client.get("/api/v1/investments/lots")
     realized_response = await client.get("/api/v1/reports/realized-gains")
     unrealized_response = await client.get("/api/v1/reports/unrealized-gains?base_commodity_id=1")

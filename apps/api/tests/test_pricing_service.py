@@ -21,8 +21,22 @@ class StubPricingRepository:
 
     async def list_price_sources(self) -> list[PriceSource]:
         return [
-            PriceSource(id=1001, name="ECB", kind="provider", provider="ECB", base_url="https://ecb.test", created_at=self._created_at),
-            PriceSource(id=1005, name="Federal Reserve", kind="provider", provider="Federal Reserve", base_url="https://fed.test", created_at=self._created_at),
+            PriceSource(
+                id=1001,
+                name="ECB",
+                kind="provider",
+                provider="ECB",
+                base_url="https://ecb.test",
+                created_at=self._created_at,
+            ),
+            PriceSource(
+                id=1005,
+                name="Federal Reserve",
+                kind="provider",
+                provider="Federal Reserve",
+                base_url="https://fed.test",
+                created_at=self._created_at,
+            ),
         ]
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicy | None:
@@ -79,9 +93,18 @@ class StubPricingRepository:
     async def get_price_source(self, source_id: int | None) -> PriceSource | None:
         if source_id is None:
             return None
-        return PriceSource(id=source_id, name="ECB", kind="provider", provider="ECB", base_url="https://ecb.test", created_at=self._created_at)
+        return PriceSource(
+            id=source_id,
+            name="ECB",
+            kind="provider",
+            provider="ECB",
+            base_url="https://ecb.test",
+            created_at=self._created_at,
+        )
 
-    async def list_pricing_source_assignments(self, book_id: int) -> list[tuple[PricingSourceAssignment, Commodity, Commodity, PriceSource]]:
+    async def list_pricing_source_assignments(
+        self, book_id: int
+    ) -> list[tuple[PricingSourceAssignment, Commodity, Commodity, PriceSource]]:
         if book_id != 1:
             return []
         return [
@@ -98,9 +121,36 @@ class StubPricingRepository:
                     created_at=self._created_at,
                     updated_at=self._created_at,
                 ),
-                Commodity(id=2, book_id=1, kind="currency", symbol="EUR", name="Euro", scale=2, metadata_text=None, created_at=self._created_at, updated_at=self._created_at),
-                Commodity(id=1, book_id=1, kind="currency", symbol="USD", name="US Dollar", scale=2, metadata_text=None, created_at=self._created_at, updated_at=self._created_at),
-                PriceSource(id=1001, name="ECB", kind="provider", provider="ECB", base_url="https://ecb.test", created_at=self._created_at),
+                Commodity(
+                    id=2,
+                    book_id=1,
+                    kind="currency",
+                    symbol="EUR",
+                    name="Euro",
+                    scale=2,
+                    metadata_text=None,
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+                Commodity(
+                    id=1,
+                    book_id=1,
+                    kind="currency",
+                    symbol="USD",
+                    name="US Dollar",
+                    scale=2,
+                    metadata_text=None,
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+                PriceSource(
+                    id=1001,
+                    name="ECB",
+                    kind="provider",
+                    provider="ECB",
+                    base_url="https://ecb.test",
+                    created_at=self._created_at,
+                ),
             )
         ]
 
@@ -118,7 +168,9 @@ class StubPricingRepository:
             updated_at=self._created_at,
         )
 
-    async def update_pricing_source_assignment(self, **kwargs: object) -> PricingSourceAssignment | None:
+    async def update_pricing_source_assignment(
+        self, **kwargs: object
+    ) -> PricingSourceAssignment | None:
         if int(kwargs["assignment_id"]) != 10:
             return None
         return PricingSourceAssignment(
@@ -137,7 +189,9 @@ class StubPricingRepository:
     async def delete_pricing_source_assignment(self, assignment_id: int) -> bool:
         return assignment_id == 10
 
-    async def list_pricing_refresh_state(self, book_id: int) -> list[tuple[PricingRefreshState, Commodity, Commodity, PriceSource]]:
+    async def list_pricing_refresh_state(
+        self, book_id: int
+    ) -> list[tuple[PricingRefreshState, Commodity, Commodity, PriceSource]]:
         if book_id != 1:
             return []
         return [
@@ -154,9 +208,36 @@ class StubPricingRepository:
                     created_at=self._created_at,
                     updated_at=self._created_at,
                 ),
-                Commodity(id=2, book_id=1, kind="currency", symbol="EUR", name="Euro", scale=2, metadata_text=None, created_at=self._created_at, updated_at=self._created_at),
-                Commodity(id=1, book_id=1, kind="currency", symbol="USD", name="US Dollar", scale=2, metadata_text=None, created_at=self._created_at, updated_at=self._created_at),
-                PriceSource(id=1001, name="ECB", kind="provider", provider="ECB", base_url="https://ecb.test", created_at=self._created_at),
+                Commodity(
+                    id=2,
+                    book_id=1,
+                    kind="currency",
+                    symbol="EUR",
+                    name="Euro",
+                    scale=2,
+                    metadata_text=None,
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+                Commodity(
+                    id=1,
+                    book_id=1,
+                    kind="currency",
+                    symbol="USD",
+                    name="US Dollar",
+                    scale=2,
+                    metadata_text=None,
+                    created_at=self._created_at,
+                    updated_at=self._created_at,
+                ),
+                PriceSource(
+                    id=1001,
+                    name="ECB",
+                    kind="provider",
+                    provider="ECB",
+                    base_url="https://ecb.test",
+                    created_at=self._created_at,
+                ),
             )
         ]
 

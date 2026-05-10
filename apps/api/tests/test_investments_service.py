@@ -33,7 +33,9 @@ class StubInvestmentRepository:
     async def create_dividend(self, **_: object) -> dict[str, object]:
         return {"transaction_id": 12}
 
-    async def list_positions(self, *, book_id: int, as_of_date: date | None) -> list[dict[str, object]]:
+    async def list_positions(
+        self, *, book_id: int, as_of_date: date | None
+    ) -> list[dict[str, object]]:
         return [
             {
                 "account_id": 4,
@@ -194,10 +196,14 @@ async def test_investment_service_maps_positions_lots_and_gains() -> None:
         )
     )
     positions = await service.list_positions(PositionsQuery(book_id=1))
-    converted = await service.convert_positions(ConvertedPositionsQuery(book_id=1, base_commodity_id=1))
+    converted = await service.convert_positions(
+        ConvertedPositionsQuery(book_id=1, base_commodity_id=1)
+    )
     lots = await service.list_lots_with_holding_period(LotsHoldingQuery(book_id=1))
     realized = await service.report_realized_gains(RealizedGainsQuery(book_id=1))
-    unrealized = await service.report_unrealized_gains(UnrealizedGainsQuery(book_id=1, base_commodity_id=1))
+    unrealized = await service.report_unrealized_gains(
+        UnrealizedGainsQuery(book_id=1, base_commodity_id=1)
+    )
 
     assert buy.transaction_id == 10
     assert buy.lot_id == 8

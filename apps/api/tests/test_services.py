@@ -36,6 +36,7 @@ class StubBookRepository:
             return Book(id=1, slug="personal", name="Personal", base_currency_code="USD")
         return None
 
+
 class StubAccountRepository:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
 
@@ -207,20 +208,26 @@ class StubAccountRepository:
             )
         ]
 
-    async def get_account_booking_policy(self, account_id: int) -> tuple[Account | None, str | None]:
+    async def get_account_booking_policy(
+        self, account_id: int
+    ) -> tuple[Account | None, str | None]:
         account = await self.get_account_by_id(account_id)
         if account is None:
             return None, None
         return account, account.booking_policy
 
-    async def set_account_booking_policy(self, account_id: int, booking_policy: str) -> Account | None:
+    async def set_account_booking_policy(
+        self, account_id: int, booking_policy: str
+    ) -> Account | None:
         account = await self.get_account_by_id(account_id)
         if account is None:
             return None
         account.booking_policy = booking_policy
         return account
 
-    async def unlock_account_balancings(self, account_id: int, from_date: datetime.date, reason: str | None) -> int:
+    async def unlock_account_balancings(
+        self, account_id: int, from_date: datetime.date, reason: str | None
+    ) -> int:
         if account_id != 1:
             return 0
         return 2
@@ -294,7 +301,9 @@ class StubTransactionRepository:
             transaction
             for transaction in transactions
             if (filters.status is None or transaction.status == filters.status)
-            and (filters.occurred_from is None or transaction.occurred_date >= filters.occurred_from)
+            and (
+                filters.occurred_from is None or transaction.occurred_date >= filters.occurred_from
+            )
             and (filters.occurred_to is None or transaction.occurred_date <= filters.occurred_to)
         ], None
 
@@ -474,7 +483,9 @@ class StubTransactionRepository:
         created_device_id: int | None = None,
         created_request_id: str | None = None,
     ) -> int:
-        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+        return len(
+            [transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}]
+        )
 
     async def bulk_delete_transactions(
         self,
@@ -485,7 +496,9 @@ class StubTransactionRepository:
         created_device_id: int | None = None,
         created_request_id: str | None = None,
     ) -> int:
-        return len([transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}])
+        return len(
+            [transaction_id for transaction_id in transaction_ids if transaction_id in {1, 2}]
+        )
 
     async def list_account_register_splits(
         self,
@@ -537,7 +550,9 @@ class StubTransactionRepository:
             for account_id in sorted(account_ids)
         ]
 
-    async def get_locked_account_ids(self, account_ids: set[int], occurred_date: datetime.date) -> list[tuple[int, datetime.date]]:
+    async def get_locked_account_ids(
+        self, account_ids: set[int], occurred_date: datetime.date
+    ) -> list[tuple[int, datetime.date]]:
         return []
 
     async def metadata_refs_belong_to_book(
@@ -552,7 +567,9 @@ class StubTransactionRepository:
     ) -> bool:
         return True
 
-    async def get_payee_defaults(self, payee_id: int, account_id: int | None = None) -> tuple[int | None, str | None]:
+    async def get_payee_defaults(
+        self, payee_id: int, account_id: int | None = None
+    ) -> tuple[int | None, str | None]:
         if payee_id == 1 and account_id in {None, 2}:
             return 1, "Pending groceries"
         return None, None
@@ -631,7 +648,9 @@ async def test_account_service_validates_closing_and_creates_balancing() -> None
         )
     )
 
-    assert validation == AccountClosingValidationResult(valid=False, issues=("account has locked balancing history",))
+    assert validation == AccountClosingValidationResult(
+        valid=False, issues=("account has locked balancing history",)
+    )
     assert balancing is not None
     assert balancing.account_id == 1
 
@@ -732,7 +751,9 @@ async def test_account_service_rejects_invalid_booking_policy_updates() -> None:
 async def test_account_service_unlocks_balancings_when_confirmed() -> None:
     service = AccountService(StubAccountRepository())
 
-    result = await service.unlock_account_balancings(1, datetime(2026, 5, 2, tzinfo=UTC).date(), "retry", True)
+    result = await service.unlock_account_balancings(
+        1, datetime(2026, 5, 2, tzinfo=UTC).date(), "retry", True
+    )
 
     assert result == 2
 
@@ -742,7 +763,9 @@ async def test_account_service_rejects_unlock_without_confirmation() -> None:
     service = AccountService(StubAccountRepository())
 
     with pytest.raises(ValueError, match="unlock not confirmed"):
-        await service.unlock_account_balancings(1, datetime(2026, 5, 2, tzinfo=UTC).date(), None, False)
+        await service.unlock_account_balancings(
+            1, datetime(2026, 5, 2, tzinfo=UTC).date(), None, False
+        )
 
 
 @pytest.mark.asyncio
@@ -812,7 +835,9 @@ async def test_transaction_service_returns_transactions_with_splits() -> None:
 async def test_transaction_service_passes_filters_to_repository() -> None:
     repository = StubTransactionRepository()
     service = TransactionService(repository)
-    filters = TransactionListFilters(status="cleared", occurred_to=datetime(2026, 5, 1, tzinfo=UTC).date())
+    filters = TransactionListFilters(
+        status="cleared", occurred_to=datetime(2026, 5, 1, tzinfo=UTC).date()
+    )
 
     result = await service.list_transactions(filters)
 
@@ -881,24 +906,27 @@ async def test_transaction_service_builds_account_register_running_balance() -> 
 
     result = await service.list_account_register(2)
 
-    assert result == RegisterPage(items=(
-        RegisterEntry(
-            tx_id=1,
-            split_id=1,
-            account_id=2,
-            occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
-            posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
-            payee_id=None,
-            memo="Initial opening balance",
-            status="cleared",
-            reference=None,
-            commodity_id=1,
-            category_id=None,
-            amount_minor=500000,
-            running_balance_minor=500000,
-            created_at=StubTransactionRepository._created_at,
+    assert result == RegisterPage(
+        items=(
+            RegisterEntry(
+                tx_id=1,
+                split_id=1,
+                account_id=2,
+                occurred_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                posted_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+                payee_id=None,
+                memo="Initial opening balance",
+                status="cleared",
+                reference=None,
+                commodity_id=1,
+                category_id=None,
+                amount_minor=500000,
+                running_balance_minor=500000,
+                created_at=StubTransactionRepository._created_at,
+            ),
         ),
-    ), next_cursor=None)
+        next_cursor=None,
+    )
 
 
 @pytest.mark.asyncio

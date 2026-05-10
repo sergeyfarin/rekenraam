@@ -113,19 +113,46 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
 
     try:
         _run_migrations(database_name, "head")
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.user_devices')")) == "user_devices"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')")) == "auth_sessions"
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.user_devices')"))
+            == "user_devices"
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')"))
+            == "auth_sessions"
+        )
         assert (
             asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')"))
             == "book_memberships"
         )
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.books')")) == "books"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_state')")) == "book_state"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_cache')")) == "report_cache"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_definitions')")) == "report_definitions"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_runs')")) == "report_runs"
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.pricing_refresh_runs')")) == "pricing_refresh_runs"
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.books')")) == "books"
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_state')"))
+            == "book_state"
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_cache')"))
+            == "report_cache"
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_definitions')"))
+            == "report_definitions"
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_runs')"))
+            == "report_runs"
+        )
+        assert (
+            asyncio.run(
+                _fetchval(database_name, "SELECT to_regclass('public.pricing_refresh_runs')")
+            )
+            == "pricing_refresh_runs"
+        )
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM books")) == 1
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM book_state")) == 1
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM commodities")) == 1
@@ -133,18 +160,28 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
 
         _run_migrations(database_name, "base")
         assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) is None
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')")) is None
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')")) is None
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')"))
+            is None
+        )
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')"))
+            is None
+        )
 
         _run_migrations(database_name, "head")
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
+        assert (
+            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
+        )
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM books")) == 1
     finally:
         asyncio.run(_drop_database(database_name))
 
 
 @pytest.mark.asyncio
-async def test_alembic_head_matches_full_stage2_schema_contract(repository_database_url: str) -> None:
+async def test_alembic_head_matches_full_stage2_schema_contract(
+    repository_database_url: str,
+) -> None:
     """The migrated database must match what `Base.metadata` describes.
 
     Drift in either direction (a column added to ORM but not migrated, or a

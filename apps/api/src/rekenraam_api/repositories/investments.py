@@ -40,7 +40,9 @@ class InvestmentRepository:
         await self._session.refresh(row)
         return row
 
-    async def update_instrument(self, instrument_id: int, **values: Any) -> InvestmentInstrument | None:
+    async def update_instrument(
+        self, instrument_id: int, **values: Any
+    ) -> InvestmentInstrument | None:
         row = await self._session.get(InvestmentInstrument, instrument_id)
         if row is None or row.book_id != values["book_id"]:
             return None
@@ -57,7 +59,11 @@ class InvestmentRepository:
         result = await self._session.execute(
             select(CostBasisProfile)
             .where(CostBasisProfile.book_id == book_id)
-            .order_by(CostBasisProfile.is_default.desc(), CostBasisProfile.name.asc(), CostBasisProfile.id.asc())
+            .order_by(
+                CostBasisProfile.is_default.desc(),
+                CostBasisProfile.name.asc(),
+                CostBasisProfile.id.asc(),
+            )
         )
         return list(result.scalars().all())
 
@@ -92,7 +98,9 @@ class InvestmentRepository:
         await self._session.refresh(row)
         return row
 
-    async def update_cost_basis_profile(self, profile_id: int, **values: Any) -> CostBasisProfile | None:
+    async def update_cost_basis_profile(
+        self, profile_id: int, **values: Any
+    ) -> CostBasisProfile | None:
         row = await self._session.get(CostBasisProfile, profile_id)
         if row is None or row.book_id != values["book_id"]:
             return None
@@ -105,7 +113,9 @@ class InvestmentRepository:
         await self._session.refresh(row)
         return row
 
-    async def get_cost_basis_profile(self, profile_id: int | None, book_id: int) -> CostBasisProfile:
+    async def get_cost_basis_profile(
+        self, profile_id: int | None, book_id: int
+    ) -> CostBasisProfile:
         if profile_id is None:
             return await self.ensure_default_cost_basis_profile(book_id)
         row = await self._session.get(CostBasisProfile, profile_id)
@@ -446,7 +456,11 @@ class InvestmentRepository:
         )
         self._session.add(lot)
         await self._session.flush()
-        self._session.add(SplitLotAllocation(split_id=security_split.id, lot_id=lot.id, quantity_minor=quantity_minor))
+        self._session.add(
+            SplitLotAllocation(
+                split_id=security_split.id, lot_id=lot.id, quantity_minor=quantity_minor
+            )
+        )
         await self._session.commit()
         return {
             "transaction_id": transaction.id,
@@ -454,7 +468,9 @@ class InvestmentRepository:
             "lot_id": lot.id,
         }
 
-    async def list_positions(self, *, book_id: int, as_of_date: date | None) -> list[dict[str, Any]]:
+    async def list_positions(
+        self, *, book_id: int, as_of_date: date | None
+    ) -> list[dict[str, Any]]:
         balance_expr = func.coalesce(func.sum(Split.amount_minor), 0)
         position_statement: Select[tuple[int, str, str, int, str, int, int]] = (
             select(
@@ -486,7 +502,12 @@ class InvestmentRepository:
 
         lot_balance_expr = func.coalesce(func.sum(SplitLotAllocation.quantity_minor), 0)
         total_positive_expr = func.coalesce(
-            func.sum(case((SplitLotAllocation.quantity_minor > 0, SplitLotAllocation.quantity_minor), else_=0)),
+            func.sum(
+                case(
+                    (SplitLotAllocation.quantity_minor > 0, SplitLotAllocation.quantity_minor),
+                    else_=0,
+                )
+            ),
             0,
         )
         lot_statement: Select[tuple[int, int, int, date | None, int, int, int]] = (
@@ -514,13 +535,23 @@ class InvestmentRepository:
             .order_by(Lot.opened_date.asc(), Lot.id.asc())
         )
         if as_of_date is not None:
-            lot_statement = lot_statement.where(or_(Transaction.occurred_date <= as_of_date, Transaction.id.is_(None)))
+            lot_statement = lot_statement.where(
+                or_(Transaction.occurred_date <= as_of_date, Transaction.id.is_(None))
+            )
 
         position_rows = (await self._session.execute(position_statement)).all()
         lot_rows = (await self._session.execute(lot_statement)).all()
 
         lot_map: dict[tuple[int, int], list[dict[str, Any]]] = defaultdict(list)
-        for lot_id, account_id, commodity_id, opened_date, cost_basis_minor, balance_minor, total_positive in lot_rows:
+        for (
+            lot_id,
+            account_id,
+            commodity_id,
+            opened_date,
+            cost_basis_minor,
+            balance_minor,
+            total_positive,
+        ) in lot_rows:
             remaining_cost_basis_minor = 0
             if total_positive > 0:
                 remaining_cost_basis_minor = (cost_basis_minor * balance_minor) // total_positive
@@ -560,7 +591,9 @@ class InvestmentRepository:
         as_of_date: date | None,
     ) -> list[dict[str, Any]]:
         positions = await self.list_positions(book_id=book_id, as_of_date=as_of_date)
-        prices = await self._latest_prices(book_id=book_id, base_commodity_id=base_commodity_id, as_of_date=as_of_date)
+        prices = await self._latest_prices(
+            book_id=book_id, base_commodity_id=base_commodity_id, as_of_date=as_of_date
+        )
 
         converted_positions: list[dict[str, Any]] = []
         for position in positions:
@@ -574,7 +607,9 @@ class InvestmentRepository:
                     lot["converted_value_minor"] = int(lot["quantity_minor"])
                     lot["converted_cost_basis_minor"] = int(lot["remaining_cost_basis_minor"])
                     lot["price_missing"] = False
-                converted_positions.append({**position, "value_minor": balance_minor, "price_missing": False, "lots": lots})
+                converted_positions.append(
+                    {**position, "value_minor": balance_minor, "price_missing": False, "lots": lots}
+                )
                 continue
 
             price_minor = prices.get(commodity_id)
@@ -583,17 +618,23 @@ class InvestmentRepository:
                     lot["converted_value_minor"] = None
                     lot["converted_cost_basis_minor"] = None
                     lot["price_missing"] = True
-                converted_positions.append({**position, "value_minor": 0, "price_missing": True, "lots": lots})
+                converted_positions.append(
+                    {**position, "value_minor": 0, "price_missing": True, "lots": lots}
+                )
                 continue
 
-            scale_factor = 10 ** commodity_scale
+            scale_factor = 10**commodity_scale
             value_minor = (balance_minor * price_minor) // scale_factor
             for lot in lots:
-                lot["converted_value_minor"] = (int(lot["quantity_minor"]) * price_minor) // scale_factor
+                lot["converted_value_minor"] = (
+                    int(lot["quantity_minor"]) * price_minor
+                ) // scale_factor
                 lot["converted_cost_basis_minor"] = int(lot["remaining_cost_basis_minor"])
                 lot["price_missing"] = False
 
-            converted_positions.append({**position, "value_minor": value_minor, "price_missing": False, "lots": lots})
+            converted_positions.append(
+                {**position, "value_minor": value_minor, "price_missing": False, "lots": lots}
+            )
 
         return converted_positions
 
@@ -644,7 +685,17 @@ class InvestmentRepository:
         reference_date = as_of_date or date.today()
 
         results: list[dict[str, Any]] = []
-        for lot_id, row_account_id, account_name, row_commodity_id, commodity_name, opened_date, quantity_minor, cost_basis_minor, commodity_scale in rows:
+        for (
+            lot_id,
+            row_account_id,
+            account_name,
+            row_commodity_id,
+            commodity_name,
+            opened_date,
+            quantity_minor,
+            cost_basis_minor,
+            commodity_scale,
+        ) in rows:
             holding_days = None if opened_date is None else (reference_date - opened_date).days
             results.append(
                 {
@@ -700,7 +751,12 @@ class InvestmentRepository:
         tx_ids = sorted({tx_id for tx_id, _, _, _, _ in allocations})
 
         total_positive_expr = func.coalesce(
-            func.sum(case((SplitLotAllocation.quantity_minor > 0, SplitLotAllocation.quantity_minor), else_=0)),
+            func.sum(
+                case(
+                    (SplitLotAllocation.quantity_minor > 0, SplitLotAllocation.quantity_minor),
+                    else_=0,
+                )
+            ),
             0,
         )
         lot_rows = (
@@ -711,11 +767,18 @@ class InvestmentRepository:
                 .group_by(Lot.id, Lot.cost_basis_minor)
             )
         ).all()
-        lot_map = {lot_id: {"cost_basis_minor": cost_basis_minor, "total_positive": total_positive} for lot_id, cost_basis_minor, total_positive in lot_rows}
+        lot_map = {
+            lot_id: {"cost_basis_minor": cost_basis_minor, "total_positive": total_positive}
+            for lot_id, cost_basis_minor, total_positive in lot_rows
+        }
 
         cash_rows = (
             await self._session.execute(
-                select(Split.tx_id, Split.commodity_id, func.sum(Split.amount_minor).label("amount_minor"))
+                select(
+                    Split.tx_id,
+                    Split.commodity_id,
+                    func.sum(Split.amount_minor).label("amount_minor"),
+                )
                 .where(Split.tx_id.in_(tx_ids))
                 .where(Split.amount_minor > 0)
                 .group_by(Split.tx_id, Split.commodity_id)
@@ -731,9 +794,13 @@ class InvestmentRepository:
             total_positive = int(lot_info["total_positive"])
             cost_basis_minor = 0
             if total_positive > 0:
-                cost_basis_minor = (int(lot_info["cost_basis_minor"]) * quantity_minor) // total_positive
+                cost_basis_minor = (
+                    int(lot_info["cost_basis_minor"]) * quantity_minor
+                ) // total_positive
 
-            proceeds_options = [entry for entry in cash_map.get(tx_id, []) if entry[0] != commodity_id]
+            proceeds_options = [
+                entry for entry in cash_map.get(tx_id, []) if entry[0] != commodity_id
+            ]
             if len(proceeds_options) == 1:
                 quote_commodity_id, proceeds_minor = proceeds_options[0]
                 proceeds_missing = False
@@ -860,8 +927,14 @@ class InvestmentRepository:
         account_ids = [int(position["account_id"]) for position in converted_positions]
         account_currency: dict[int, int] = {}
         if account_ids:
-            account_rows = (await self._session.execute(select(Account.id, Account.commodity_id).where(Account.id.in_(account_ids)))).all()
-            account_currency = {account_id: commodity_id for account_id, commodity_id in account_rows}
+            account_rows = (
+                await self._session.execute(
+                    select(Account.id, Account.commodity_id).where(Account.id.in_(account_ids))
+                )
+            ).all()
+            account_currency = {
+                account_id: commodity_id for account_id, commodity_id in account_rows
+            }
 
         totals: dict[int, dict[str, Any]] = {}
         for position in converted_positions:
@@ -879,7 +952,11 @@ class InvestmentRepository:
                     "fx_missing": False,
                 },
             )
-            cost_basis_minor = sum(int(lot["converted_cost_basis_minor"]) for lot in position["lots"] if lot["converted_cost_basis_minor"] is not None)
+            cost_basis_minor = sum(
+                int(lot["converted_cost_basis_minor"])
+                for lot in position["lots"]
+                if lot["converted_cost_basis_minor"] is not None
+            )
             row["market_value_minor"] += int(position["value_minor"])
             row["cost_basis_minor"] += cost_basis_minor
             row["unrealized_gain_minor"] += int(position["value_minor"]) - cost_basis_minor
@@ -917,10 +994,14 @@ class InvestmentRepository:
         base_commodity_id: int,
         as_of_date: date | None,
     ) -> dict[int, int]:
-        ranking = func.row_number().over(
-            partition_by=PriceObservation.commodity_id,
-            order_by=(PriceObservation.price_date.desc(), PriceObservation.id.desc()),
-        ).label("rank_index")
+        ranking = (
+            func.row_number()
+            .over(
+                partition_by=PriceObservation.commodity_id,
+                order_by=(PriceObservation.price_date.desc(), PriceObservation.id.desc()),
+            )
+            .label("rank_index")
+        )
         statement = select(
             PriceObservation.commodity_id,
             PriceObservation.price_minor,
@@ -934,13 +1015,17 @@ class InvestmentRepository:
         ranked_prices = statement.subquery()
         rows = (
             await self._session.execute(
-                select(ranked_prices.c.commodity_id, ranked_prices.c.price_minor).where(ranked_prices.c.rank_index == 1)
+                select(ranked_prices.c.commodity_id, ranked_prices.c.price_minor).where(
+                    ranked_prices.c.rank_index == 1
+                )
             )
         ).all()
         return {commodity_id: price_minor for commodity_id, price_minor in rows}
 
     async def _clear_default_cost_basis_profiles(self, book_id: int) -> None:
-        rows = await self._session.execute(select(CostBasisProfile).where(CostBasisProfile.book_id == book_id))
+        rows = await self._session.execute(
+            select(CostBasisProfile).where(CostBasisProfile.book_id == book_id)
+        )
         for row in rows.scalars().all():
             row.is_default = False
             row.updated_at = datetime.now(UTC)
@@ -977,7 +1062,9 @@ class InvestmentRepository:
         result = await self._session.execute(select(Account).where(Account.id == account_id))
         return result.scalar_one_or_none()
 
-    async def _list_lot_balances(self, *, account_id: int, commodity_id: int) -> list[dict[str, Any]]:
+    async def _list_lot_balances(
+        self, *, account_id: int, commodity_id: int
+    ) -> list[dict[str, Any]]:
         balance_expr = func.coalesce(func.sum(SplitLotAllocation.quantity_minor), 0)
         statement = (
             select(Lot.id, Lot.opened_date, balance_expr.label("balance_minor"))
@@ -993,7 +1080,9 @@ class InvestmentRepository:
             for lot_id, opened_date, balance_minor in rows
         ]
 
-    async def _create_short_lot(self, *, book_id: int, account_id: int, commodity_id: int, opened_date: date) -> int:
+    async def _create_short_lot(
+        self, *, book_id: int, account_id: int, commodity_id: int, opened_date: date
+    ) -> int:
         lot = Lot(
             book_id=book_id,
             account_id=account_id,
@@ -1029,7 +1118,9 @@ class InvestmentRepository:
 
             lot_balances = {
                 lot["lot_id"]: int(lot["balance_minor"])
-                for lot in await self._list_lot_balances(account_id=investment_account_id, commodity_id=commodity_id)
+                for lot in await self._list_lot_balances(
+                    account_id=investment_account_id, commodity_id=commodity_id
+                )
             }
             for allocation in custom_allocations:
                 lot_id = int(allocation["lot_id"])
@@ -1041,7 +1132,9 @@ class InvestmentRepository:
                 allocations.append({"lot_id": lot_id, "quantity_minor": alloc_qty})
             return allocations
 
-        lots = await self._list_lot_balances(account_id=investment_account_id, commodity_id=commodity_id)
+        lots = await self._list_lot_balances(
+            account_id=investment_account_id, commodity_id=commodity_id
+        )
         positive_lots = [lot for lot in lots if int(lot["balance_minor"]) > 0]
 
         if strategy == "average":
@@ -1062,7 +1155,10 @@ class InvestmentRepository:
         else:
             ordered_lots = list(positive_lots)
             if strategy == "lifo":
-                ordered_lots.sort(key=lambda lot: (lot["opened_date"] or date.min, int(lot["lot_id"])), reverse=True)
+                ordered_lots.sort(
+                    key=lambda lot: (lot["opened_date"] or date.min, int(lot["lot_id"])),
+                    reverse=True,
+                )
             remaining = quantity_minor
             for lot in ordered_lots:
                 if remaining <= 0:

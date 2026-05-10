@@ -76,7 +76,9 @@ class StubReportService:
     async def delete_report_definition(self, definition_id: int) -> bool:
         return definition_id == 1
 
-    async def list_report_runs(self, book_id: int, definition_id: int | None = None) -> list[ReportRunSummary]:
+    async def list_report_runs(
+        self, book_id: int, definition_id: int | None = None
+    ) -> list[ReportRunSummary]:
         return [
             ReportRunSummary(
                 id=4,

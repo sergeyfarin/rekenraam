@@ -48,7 +48,9 @@ class AccountRepository:
             parent = await self.get_account_by_id(parent_id)
             if parent is None or parent.book_id != book_id:
                 raise ValueError("parent account does not belong to book")
-        commodity_book_id = await self._session.scalar(select(Commodity.book_id).where(Commodity.id == commodity_id))
+        commodity_book_id = await self._session.scalar(
+            select(Commodity.book_id).where(Commodity.id == commodity_id)
+        )
         if commodity_book_id is None:
             raise ValueError("commodity not found")
         if commodity_book_id != book_id:
@@ -79,7 +81,9 @@ class AccountRepository:
             return None
 
         while True:
-            statement: Select[tuple[Account]] = select(Account).where(Account.previous_account_id == account.id).limit(1)
+            statement: Select[tuple[Account]] = (
+                select(Account).where(Account.previous_account_id == account.id).limit(1)
+            )
             newer = await self._session.scalar(statement)
             if newer is None:
                 return None if account.is_hidden else account
@@ -111,7 +115,9 @@ class AccountRepository:
             account_chain_ids = await self.list_account_chain_ids(account.id)
             if set(parent_chain_ids) & set(account_chain_ids):
                 raise ValueError("account cannot be its own parent")
-        commodity_book_id = await self._session.scalar(select(Commodity.book_id).where(Commodity.id == commodity_id))
+        commodity_book_id = await self._session.scalar(
+            select(Commodity.book_id).where(Commodity.id == commodity_id)
+        )
         if commodity_book_id is None:
             raise ValueError("commodity not found")
         if commodity_book_id != account.book_id:
@@ -192,7 +198,11 @@ class AccountRepository:
             select(Split.account_id, func.coalesce(func.sum(Split.amount_minor), 0))
             .join(Transaction, Transaction.id == Split.tx_id)
             .where(Transaction.status != "void")
-            .where(~exists(select(literal(1)).where(newer_transaction.previous_tx_id == Transaction.id)))
+            .where(
+                ~exists(
+                    select(literal(1)).where(newer_transaction.previous_tx_id == Transaction.id)
+                )
+            )
             .group_by(Split.account_id)
         )
         if book_ids is not None:
@@ -214,7 +224,11 @@ class AccountRepository:
             .where(AccountBalancing.account_id == account_id)
             .where(AccountBalancing.voided_at.is_(None))
             .where(
-                ~exists(select(literal(1)).where(newer_balancing.previous_account_balancing_id == AccountBalancing.id))
+                ~exists(
+                    select(literal(1)).where(
+                        newer_balancing.previous_account_balancing_id == AccountBalancing.id
+                    )
+                )
             )
             .order_by(AccountBalancing.as_of_date.desc(), AccountBalancing.id.desc())
         )
@@ -254,7 +268,8 @@ class AccountRepository:
             [
                 account
                 for account_id_in_chain, account in account_by_id.items()
-                if account_id_in_chain in chain_ids and account.lifecycle_event in {"open", "close", "reopen"}
+                if account_id_in_chain in chain_ids
+                and account.lifecycle_event in {"open", "close", "reopen"}
             ],
             key=lambda account: (account.effective_at, account.id),
             reverse=True,
@@ -268,7 +283,11 @@ class AccountRepository:
         while changed:
             changed = False
             for account in accounts:
-                if account.id in chain_ids and account.previous_account_id is not None and account.previous_account_id not in chain_ids:
+                if (
+                    account.id in chain_ids
+                    and account.previous_account_id is not None
+                    and account.previous_account_id not in chain_ids
+                ):
                     chain_ids.add(account.previous_account_id)
                     changed = True
                 if account.previous_account_id in chain_ids and account.id not in chain_ids:
@@ -276,13 +295,17 @@ class AccountRepository:
                     changed = True
         return sorted(chain_ids)
 
-    async def get_account_booking_policy(self, account_id: int) -> tuple[Account | None, str | None]:
+    async def get_account_booking_policy(
+        self, account_id: int
+    ) -> tuple[Account | None, str | None]:
         account = await self.get_account_by_id(account_id)
         if account is None:
             return None, None
         return account, account.booking_policy
 
-    async def set_account_booking_policy(self, account_id: int, booking_policy: str) -> Account | None:
+    async def set_account_booking_policy(
+        self, account_id: int, booking_policy: str
+    ) -> Account | None:
         account = await self.get_account_by_id(account_id)
         if account is None:
             return None
@@ -309,7 +332,9 @@ class AccountRepository:
         await self._session.refresh(replacement)
         return replacement
 
-    async def unlock_account_balancings(self, account_id: int, from_date: date, reason: str | None) -> int:
+    async def unlock_account_balancings(
+        self, account_id: int, from_date: date, reason: str | None
+    ) -> int:
         newer_balancing = aliased(AccountBalancing)
         statement: Select[tuple[AccountBalancing]] = (
             select(AccountBalancing)
@@ -317,7 +342,11 @@ class AccountRepository:
             .where(AccountBalancing.voided_at.is_(None))
             .where(AccountBalancing.as_of_date >= from_date)
             .where(
-                ~exists(select(literal(1)).where(newer_balancing.previous_account_balancing_id == AccountBalancing.id))
+                ~exists(
+                    select(literal(1)).where(
+                        newer_balancing.previous_account_balancing_id == AccountBalancing.id
+                    )
+                )
             )
             .order_by(AccountBalancing.id)
         )

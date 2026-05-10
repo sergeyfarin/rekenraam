@@ -167,11 +167,11 @@ async def test_preferences_profile_password_saved_views_templates_defaults_and_n
                     "project_id": None,
                     "share_bps": None,
                     "memo": "source",
-                    },
-                    {
-                        "account_id": offset_account_id,
-                        "commodity_id": 1,
-                        "amount_minor": 1000,
+                },
+                {
+                    "account_id": offset_account_id,
+                    "commodity_id": 1,
+                    "amount_minor": 1000,
                     "category_id": None,
                     "tag_id": None,
                     "person_id": None,

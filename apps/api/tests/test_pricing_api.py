@@ -25,7 +25,17 @@ class StubPricingService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
 
     async def list_price_sources(self) -> list[PriceSourceSummary]:
-        return [PriceSourceSummary(id=1001, name="ECB", kind="provider", country_code=None, website_url="https://ecb.test", notes="ECB", created_at=self._created_at)]
+        return [
+            PriceSourceSummary(
+                id=1001,
+                name="ECB",
+                kind="provider",
+                country_code=None,
+                website_url="https://ecb.test",
+                notes="ECB",
+                created_at=self._created_at,
+            )
+        ]
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicySummary | None:
         if book_id != 1:
@@ -61,7 +71,9 @@ class StubPricingService:
             updated_at=self._created_at,
         )
 
-    async def list_pricing_source_assignments(self, book_id: int) -> list[PricingSourceAssignmentSummary]:
+    async def list_pricing_source_assignments(
+        self, book_id: int
+    ) -> list[PricingSourceAssignmentSummary]:
         return [
             PricingSourceAssignmentSummary(
                 id=10,
@@ -79,7 +91,9 @@ class StubPricingService:
             )
         ]
 
-    async def create_pricing_source_assignment(self, input: object) -> PricingSourceAssignmentSummary:
+    async def create_pricing_source_assignment(
+        self, input: object
+    ) -> PricingSourceAssignmentSummary:
         return PricingSourceAssignmentSummary(
             id=11,
             book_id=1,
@@ -95,7 +109,9 @@ class StubPricingService:
             updated_at=self._created_at,
         )
 
-    async def update_pricing_source_assignment(self, assignment_id: int, input: object) -> PricingSourceAssignmentSummary | None:
+    async def update_pricing_source_assignment(
+        self, assignment_id: int, input: object
+    ) -> PricingSourceAssignmentSummary | None:
         if assignment_id != 10:
             return None
         return PricingSourceAssignmentSummary(
@@ -139,7 +155,9 @@ class StubPricingService:
 class StubPricingWorker:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
 
-    async def run_book(self, book_id: int, *, trigger: str, force: bool) -> PricingRefreshRunSummary | None:
+    async def run_book(
+        self, book_id: int, *, trigger: str, force: bool
+    ) -> PricingRefreshRunSummary | None:
         if book_id != 1:
             raise ValueError("pricing policy not found")
         return PricingRefreshRunSummary(
@@ -180,7 +198,9 @@ class StubPricingWorker:
             ),
         )
 
-    async def get_run_history(self, book_id: int, limit: int = 10) -> list[PricingRefreshRunSummary]:
+    async def get_run_history(
+        self, book_id: int, limit: int = 10
+    ) -> list[PricingRefreshRunSummary]:
         if book_id != 1:
             raise ValueError("pricing policy not found")
         return [
@@ -224,7 +244,9 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 @pytest.mark.asyncio
-async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_state(client: AsyncClient) -> None:
+async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_state(
+    client: AsyncClient,
+) -> None:
     app.dependency_overrides[get_pricing_service] = lambda: StubPricingService()
     app.dependency_overrides[get_pricing_worker] = lambda: StubPricingWorker()
 

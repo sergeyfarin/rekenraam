@@ -99,7 +99,9 @@ async def update_cost_basis_profile(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="cost basis profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="cost basis profile not found"
+        )
     return row
 
 
@@ -128,7 +130,9 @@ async def list_positions(
     as_of_date: date | None = Query(default=None),
     investment_service: InvestmentService = Depends(get_investment_service),
 ) -> list[Position]:
-    return await investment_service.list_positions(PositionsQuery(book_id=book_id, as_of_date=as_of_date))
+    return await investment_service.list_positions(
+        PositionsQuery(book_id=book_id, as_of_date=as_of_date)
+    )
 
 
 @router.get("/positions/converted", response_model=list[ConvertedPosition])
@@ -139,7 +143,9 @@ async def convert_positions(
     investment_service: InvestmentService = Depends(get_investment_service),
 ) -> list[ConvertedPosition]:
     return await investment_service.convert_positions(
-        ConvertedPositionsQuery(book_id=book_id, base_commodity_id=base_commodity_id, as_of_date=as_of_date)
+        ConvertedPositionsQuery(
+            book_id=book_id, base_commodity_id=base_commodity_id, as_of_date=as_of_date
+        )
     )
 
 
@@ -185,7 +191,9 @@ async def currency_exposure(
     as_of_date: date | None = Query(default=None),
     investment_service: InvestmentService = Depends(get_investment_service),
 ) -> list[CurrencyExposureRow]:
-    return await investment_service.currency_exposure(PositionsQuery(book_id=book_id, as_of_date=as_of_date))
+    return await investment_service.currency_exposure(
+        PositionsQuery(book_id=book_id, as_of_date=as_of_date)
+    )
 
 
 @router.get("/lots", response_model=list[LotHoldingPeriod])

@@ -48,7 +48,11 @@ def _client_ip(request: Request) -> str | None:
     settings = get_settings()
     forwarded_for = request.headers.get("x-forwarded-for")
     client_host = request.client.host if request.client is not None else None
-    if forwarded_for and client_host and _trusted_proxy(client_host, settings.trusted_proxy_cidrs_list):
+    if (
+        forwarded_for
+        and client_host
+        and _trusted_proxy(client_host, settings.trusted_proxy_cidrs_list)
+    ):
         return forwarded_for.split(",", maxsplit=1)[0].strip()
     return client_host
 
@@ -65,7 +69,9 @@ def _set_session_cookie(response: Response, token: str) -> None:
     settings = get_settings()
     samesite = cast(
         Literal["lax", "strict", "none"],
-        settings.session_cookie_samesite if settings.session_cookie_samesite in {"lax", "strict", "none"} else "lax",
+        settings.session_cookie_samesite
+        if settings.session_cookie_samesite in {"lax", "strict", "none"}
+        else "lax",
     )
     response.set_cookie(
         SESSION_COOKIE_NAME,
@@ -179,7 +185,9 @@ async def confirm_password_reset(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> None:
     try:
-        await auth_service.confirm_password_reset(token=input.token, new_password=input.new_password)
+        await auth_service.confirm_password_reset(
+            token=input.token, new_password=input.new_password
+        )
     except PasswordResetError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
@@ -262,7 +270,9 @@ async def confirm_mfa_setup(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> MfaConfirmResult:
     try:
-        return MfaConfirmResult(recovery_codes=await auth_service.confirm_mfa_setup(context, input.code))
+        return MfaConfirmResult(
+            recovery_codes=await auth_service.confirm_mfa_setup(context, input.code)
+        )
     except AuthenticationError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 

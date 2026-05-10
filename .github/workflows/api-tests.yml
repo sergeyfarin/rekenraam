@@ -66,9 +66,8 @@ jobs:
       - name: Ruff check
         run: make api-lint
 
-      # ruff format is intentionally NOT enforced yet: 70+ existing files would
-      # need reformatting and that bulk change should land as a single
-      # focused PR. Tracked in TODO.md.
+      - name: Ruff format check
+        run: make api-format-check
 
       - name: Pyright (strict)
         run: make api-typecheck

@@ -139,7 +139,9 @@ class TransactionService:
         fx_gain_loss_account: Account | None = None
         if realized_gain_loss_minor != 0:
             if input.fx_gain_loss_account_id is None:
-                raise ValueError("fx gain/loss account required when realized gain/loss is non-zero")
+                raise ValueError(
+                    "fx gain/loss account required when realized gain/loss is non-zero"
+                )
             fx_gain_loss_account = account_by_id.get(input.fx_gain_loss_account_id)
             if fx_gain_loss_account is None:
                 raise ValueError("fx gain/loss account not found")
@@ -344,7 +346,9 @@ class TransactionService:
             )
         return deleted
 
-    async def duplicate_transaction(self, transaction_id: int, today: date) -> TransactionSummary | None:
+    async def duplicate_transaction(
+        self, transaction_id: int, today: date
+    ) -> TransactionSummary | None:
         source = await self._repository.get_transaction_by_id(transaction_id)
         if source is not None and self._access_policy is not None:
             await self._access_policy.require_book_write(source.book_id)

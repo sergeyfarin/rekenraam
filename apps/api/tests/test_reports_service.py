@@ -22,15 +22,31 @@ class StubReportRepository:
         self.category_calls = 0
         self.payee_calls = 0
 
-    async def report_cashflow(self, *, book_id: int, date_from: date | None, date_to: date | None, group_by: str) -> list[tuple[str, int, int, int]]:
+    async def report_cashflow(
+        self, *, book_id: int, date_from: date | None, date_to: date | None, group_by: str
+    ) -> list[tuple[str, int, int, int]]:
         self.cashflow_calls += 1
         return [("2026-05-01", 500000, 500000, 0)]
 
-    async def report_category_spend(self, *, book_id: int, date_from: date | None, date_to: date | None, category_ids: tuple[int, ...] | None) -> list[tuple[int, str, int]]:
+    async def report_category_spend(
+        self,
+        *,
+        book_id: int,
+        date_from: date | None,
+        date_to: date | None,
+        category_ids: tuple[int, ...] | None,
+    ) -> list[tuple[int, str, int]]:
         self.category_calls += 1
         return [(1, "Groceries", -1250)]
 
-    async def report_payee_totals(self, *, book_id: int, date_from: date | None, date_to: date | None, payee_ids: tuple[int, ...] | None) -> list[tuple[int, str, int]]:
+    async def report_payee_totals(
+        self,
+        *,
+        book_id: int,
+        date_from: date | None,
+        date_to: date | None,
+        payee_ids: tuple[int, ...] | None,
+    ) -> list[tuple[int, str, int]]:
         self.payee_calls += 1
         return [(1, "Local Market", -1250)]
 
@@ -41,23 +57,62 @@ class StubReportRepository:
         self.change_seq += 1
         return self.change_seq
 
-    async def get_cached_report(self, *, book_id: int, report_type: str, params_hash: str, as_of_seq: int) -> object | None:
+    async def get_cached_report(
+        self, *, book_id: int, report_type: str, params_hash: str, as_of_seq: int
+    ) -> object | None:
         payload_json = self.cached_reports.get((book_id, report_type, params_hash, as_of_seq))
         if payload_json is None:
             return None
         return type("CacheRow", (), {"payload_json": payload_json})()
 
-    async def save_cached_report(self, *, book_id: int, report_type: str, params_hash: str, params_json: str, as_of_seq: int, payload_json: str) -> object:
+    async def save_cached_report(
+        self,
+        *,
+        book_id: int,
+        report_type: str,
+        params_hash: str,
+        params_json: str,
+        as_of_seq: int,
+        payload_json: str,
+    ) -> object:
         self.cached_reports[(book_id, report_type, params_hash, as_of_seq)] = payload_json
         return type("CacheRow", (), {"payload_json": payload_json})()
 
     async def list_report_definitions(self, book_id: int) -> list[object]:
-        return [type("Row", (), {"id": 1, "book_id": 1, "name": "Cashflow", "kind": "custom", "query_type": "sql", "query_text": "SELECT 1", "params_schema": None, "created_at": self._created_at})()]
+        return [
+            type(
+                "Row",
+                (),
+                {
+                    "id": 1,
+                    "book_id": 1,
+                    "name": "Cashflow",
+                    "kind": "custom",
+                    "query_type": "sql",
+                    "query_text": "SELECT 1",
+                    "params_schema": None,
+                    "created_at": self._created_at,
+                },
+            )()
+        ]
 
     async def get_report_definition(self, definition_id: int) -> object | None:
         if definition_id != 1:
             return None
-        return type("Row", (), {"id": 1, "book_id": 1, "name": "Cashflow", "kind": "custom", "query_type": "sql", "query_text": "SELECT 1", "params_schema": None, "created_at": self._created_at})()
+        return type(
+            "Row",
+            (),
+            {
+                "id": 1,
+                "book_id": 1,
+                "name": "Cashflow",
+                "kind": "custom",
+                "query_type": "sql",
+                "query_text": "SELECT 1",
+                "params_schema": None,
+                "created_at": self._created_at,
+            },
+        )()
 
     async def create_report_definition(self, **kwargs: object) -> object:
         return type("Row", (), {"id": 2, "created_at": self._created_at, **kwargs})()
@@ -74,8 +129,29 @@ class StubReportRepository:
     async def delete_report_definition(self, definition_id: int) -> bool:
         return definition_id == 1
 
-    async def list_report_runs(self, book_id: int, definition_id: int | None = None) -> list[object]:
-        return [type("Row", (), {"id": 4, "book_id": 1, "definition_id": 1, "params_hash": "abc123", "as_of_seq": 0, "pricing_mode": "latest_corrected", "pricing_policy_id": None, "pricing_policy_version": None, "valuation_snapshot_id": None, "pricing_resolved_at": None, "result_json": "[]", "created_at": self._created_at})()]
+    async def list_report_runs(
+        self, book_id: int, definition_id: int | None = None
+    ) -> list[object]:
+        return [
+            type(
+                "Row",
+                (),
+                {
+                    "id": 4,
+                    "book_id": 1,
+                    "definition_id": 1,
+                    "params_hash": "abc123",
+                    "as_of_seq": 0,
+                    "pricing_mode": "latest_corrected",
+                    "pricing_policy_id": None,
+                    "pricing_policy_version": None,
+                    "valuation_snapshot_id": None,
+                    "pricing_resolved_at": None,
+                    "result_json": "[]",
+                    "created_at": self._created_at,
+                },
+            )()
+        ]
 
     async def create_report_run(self, **kwargs: object) -> object:
         return type("Row", (), {"id": 5, "created_at": self._created_at, **kwargs})()
@@ -117,11 +193,15 @@ async def test_report_service_manages_definition_and_run_metadata() -> None:
     service = ReportService(StubReportRepository())
 
     created_definition = await service.create_report_definition(
-        ReportDefinitionCreateInput(book_id=1, name="Cashflow", kind="custom", query_type="sql", query_text="SELECT 1")
+        ReportDefinitionCreateInput(
+            book_id=1, name="Cashflow", kind="custom", query_type="sql", query_text="SELECT 1"
+        )
     )
     definitions = await service.list_report_definitions(1)
     created_run = await service.create_report_run(
-        ReportRunCreateInput(book_id=1, definition_id=1, params_hash="abc123", as_of_seq=0, result_json="[]")
+        ReportRunCreateInput(
+            book_id=1, definition_id=1, params_hash="abc123", as_of_seq=0, result_json="[]"
+        )
     )
 
     assert created_definition.id == 2
@@ -135,10 +215,19 @@ async def test_report_service_rejects_invalid_report_metadata() -> None:
 
     with pytest.raises(ValueError):
         await service.create_report_definition(
-            ReportDefinitionCreateInput(book_id=1, name="Bad", kind="wrong", query_type="sql", query_text="SELECT 1")
+            ReportDefinitionCreateInput(
+                book_id=1, name="Bad", kind="wrong", query_type="sql", query_text="SELECT 1"
+            )
         )
 
     with pytest.raises(ValueError):
         await service.create_report_run(
-            ReportRunCreateInput(book_id=1, definition_id=1, params_hash="abc123", as_of_seq=0, pricing_mode="wrong", result_json="[]")
+            ReportRunCreateInput(
+                book_id=1,
+                definition_id=1,
+                params_hash="abc123",
+                as_of_seq=0,
+                pricing_mode="wrong",
+                result_json="[]",
+            )
         )

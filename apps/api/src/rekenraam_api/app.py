@@ -14,33 +14,33 @@ from rekenraam_api.workers.pricing import pricing_refresh_worker
 
 
 async def seed_first_admin_from_env() -> None:
-	settings = get_settings()
-	email = (settings.first_admin_email or "").strip()
-	password = settings.resolved_first_admin_password or ""
-	if not email and not password:
-		return
-	if not email or not password:
-		raise RuntimeError("FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD must be set together")
-	if len(password) < 12:
-		raise RuntimeError("FIRST_ADMIN_PASSWORD must be at least 12 characters")
+    settings = get_settings()
+    email = (settings.first_admin_email or "").strip()
+    password = settings.resolved_first_admin_password or ""
+    if not email and not password:
+        return
+    if not email or not password:
+        raise RuntimeError("FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD must be set together")
+    if len(password) < 12:
+        raise RuntimeError("FIRST_ADMIN_PASSWORD must be at least 12 characters")
 
-	async with session_factory() as session:
-		await AuthService(AccessRepository(session), settings).seed_first_admin(
-			email=email,
-			password=password,
-			display_name=settings.first_admin_display_name,
-		)
+    async with session_factory() as session:
+        await AuthService(AccessRepository(session), settings).seed_first_admin(
+            email=email,
+            password=password,
+            display_name=settings.first_admin_display_name,
+        )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-	await seed_first_admin_from_env()
-	app.state.pricing_worker = pricing_refresh_worker
-	await pricing_refresh_worker.start()
-	try:
-		yield
-	finally:
-		await pricing_refresh_worker.stop()
+    await seed_first_admin_from_env()
+    app.state.pricing_worker = pricing_refresh_worker
+    await pricing_refresh_worker.start()
+    try:
+        yield
+    finally:
+        await pricing_refresh_worker.stop()
 
 
 app = FastAPI(title="Rekenraam API", version="0.1.0", lifespan=lifespan)
@@ -48,15 +48,15 @@ app = FastAPI(title="Rekenraam API", version="0.1.0", lifespan=lifespan)
 
 @app.exception_handler(AuthorizationError)
 async def authorization_error_handler(_request: Request, exc: AuthorizationError) -> JSONResponse:
-	return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
 
 
 settings = get_settings()
 app.add_middleware(
-	CORSMiddleware,
-	allow_origins=settings.cors_allowed_origins_list,
-	allow_credentials=True,
-	allow_methods=["*"],
-	allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(api_router, prefix="/api/v1")

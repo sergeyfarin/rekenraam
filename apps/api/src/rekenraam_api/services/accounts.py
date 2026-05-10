@@ -27,13 +27,23 @@ class _TreeState:
 
 
 class AccountService:
-    def __init__(self, repository: AccountRepository, access_policy: AccessPolicy | None = None) -> None:
+    def __init__(
+        self, repository: AccountRepository, access_policy: AccessPolicy | None = None
+    ) -> None:
         self._repository = repository
         self._access_policy = access_policy
 
     async def list_accounts(self) -> list[AccountSummary]:
-        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        accounts = await self._repository.list_accounts(book_ids) if book_ids is not None else await self._repository.list_accounts()
+        book_ids = (
+            await self._access_policy.list_readable_book_ids()
+            if self._access_policy is not None
+            else None
+        )
+        accounts = (
+            await self._repository.list_accounts(book_ids)
+            if book_ids is not None
+            else await self._repository.list_accounts()
+        )
         return [self._to_summary(account) for account in accounts]
 
     async def create_account(self, input: AccountCreateInput) -> AccountSummary:
@@ -41,7 +51,19 @@ class AccountService:
         account_type = input.account_type.strip().lower()
         if not name:
             raise ValueError("name is required")
-        if account_type not in {"cash", "checking", "savings", "credit", "loan", "investment", "asset", "liability", "income", "expense", "equity"}:
+        if account_type not in {
+            "cash",
+            "checking",
+            "savings",
+            "credit",
+            "loan",
+            "investment",
+            "asset",
+            "liability",
+            "income",
+            "expense",
+            "equity",
+        }:
             raise ValueError("account type is invalid")
         if self._access_policy is not None:
             await self._access_policy.require_book_write(input.book_id)
@@ -59,12 +81,26 @@ class AccountService:
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_summary(account)
 
-    async def update_account(self, account_id: int, input: AccountUpdateInput) -> AccountSummary | None:
+    async def update_account(
+        self, account_id: int, input: AccountUpdateInput
+    ) -> AccountSummary | None:
         name = input.name.strip()
         account_type = input.account_type.strip().lower()
         if not name:
             raise ValueError("name is required")
-        if account_type not in {"cash", "checking", "savings", "credit", "loan", "investment", "asset", "liability", "income", "expense", "equity"}:
+        if account_type not in {
+            "cash",
+            "checking",
+            "savings",
+            "credit",
+            "loan",
+            "investment",
+            "asset",
+            "liability",
+            "income",
+            "expense",
+            "equity",
+        }:
             raise ValueError("account type is invalid")
 
         current = await self._repository.get_account_by_id(account_id)
@@ -122,8 +158,16 @@ class AccountService:
         return self._to_summary(account)
 
     async def list_account_balances(self) -> list[AccountBalanceSummary]:
-        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        balances = await self._repository.get_account_balances(book_ids) if book_ids is not None else await self._repository.get_account_balances()
+        book_ids = (
+            await self._access_policy.list_readable_book_ids()
+            if self._access_policy is not None
+            else None
+        )
+        balances = (
+            await self._repository.get_account_balances(book_ids)
+            if book_ids is not None
+            else await self._repository.get_account_balances()
+        )
         return [
             AccountBalanceSummary(account_id=account_id, balance_minor=balance_minor)
             for account_id, balance_minor in sorted(balances.items())
@@ -184,7 +228,9 @@ class AccountService:
         await bump_report_state(getattr(self._repository, "_session", None), account.book_id)
         return account.booking_policy or "fifo"
 
-    async def unlock_account_balancings(self, account_id: int, from_date: date, reason: str | None, confirm: bool) -> int:
+    async def unlock_account_balancings(
+        self, account_id: int, from_date: date, reason: str | None, confirm: bool
+    ) -> int:
         if not confirm:
             raise ValueError("unlock not confirmed")
         account = await self._repository.get_account_by_id(account_id)
@@ -195,7 +241,9 @@ class AccountService:
             await bump_report_state(getattr(self._repository, "_session", None), account.book_id)
         return count
 
-    async def validate_account_closing(self, account_id: int) -> AccountClosingValidationResult | None:
+    async def validate_account_closing(
+        self, account_id: int
+    ) -> AccountClosingValidationResult | None:
         account = await self._repository.get_account_by_id(account_id)
         if account is None:
             return None
@@ -215,7 +263,9 @@ class AccountService:
 
         return AccountClosingValidationResult(valid=len(issues) == 0, issues=tuple(issues))
 
-    async def create_account_balancing(self, input: AccountBalancingCreateInput) -> AccountBalancingSummary | None:
+    async def create_account_balancing(
+        self, input: AccountBalancingCreateInput
+    ) -> AccountBalancingSummary | None:
         try:
             if self._access_policy is not None:
                 await self._access_policy.require_book_write(input.book_id)
@@ -248,8 +298,16 @@ class AccountService:
         )
 
     async def list_account_tree(self) -> list[AccountTreeNode]:
-        book_ids = await self._access_policy.list_readable_book_ids() if self._access_policy is not None else None
-        accounts = await self._repository.list_accounts(book_ids) if book_ids is not None else await self._repository.list_accounts()
+        book_ids = (
+            await self._access_policy.list_readable_book_ids()
+            if self._access_policy is not None
+            else None
+        )
+        accounts = (
+            await self._repository.list_accounts(book_ids)
+            if book_ids is not None
+            else await self._repository.list_accounts()
+        )
         if not accounts:
             return []
 
@@ -265,7 +323,10 @@ class AccountService:
             else:
                 state_by_id[account.parent_id].children.append(account.id)
 
-        return [self._build_tree_node(state_by_id, root_id, commodity_name, balances) for root_id in root_ids]
+        return [
+            self._build_tree_node(state_by_id, root_id, commodity_name, balances)
+            for root_id in root_ids
+        ]
 
     @staticmethod
     def _to_summary(account: Account) -> AccountSummary:
@@ -298,10 +359,13 @@ class AccountService:
     ) -> AccountTreeNode:
         state = state_by_id[account_id]
         child_nodes = tuple(
-            self._build_tree_node(state_by_id, child_id, commodity_name, balances) for child_id in state.children
+            self._build_tree_node(state_by_id, child_id, commodity_name, balances)
+            for child_id in state.children
         )
         balance_minor = balances.get(account_id, 0)
-        rollup_balance_minor = balance_minor + sum(child.rollup_balance_minor for child in child_nodes)
+        rollup_balance_minor = balance_minor + sum(
+            child.rollup_balance_minor for child in child_nodes
+        )
 
         return AccountTreeNode(
             id=state.account.id,

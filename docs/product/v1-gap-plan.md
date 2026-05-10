@@ -18,7 +18,7 @@ Backend in [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.y
 - **CI verdict: 171 passed, 2 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite.
 - Pyright (strict): clean.
 - Ruff check: clean.
-- Ruff format check: not yet a gate (70/123 files would need reformatting).
+- Ruff format check: enforced and clean.
 
 Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Two intentional skips: the `MissingGreenlet` import test (Phase 2 step 1 will rewrite it as e2e) and an invite/deactivate-state test deferred until the pending-vs-deactivated user model is cleaned up (logged in §Findings).
 
@@ -52,7 +52,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 - **`stage2_schema_contract.py` is materially incomplete — RESOLVED 2026-05-11.** Phase 2 step 10 rebuilt the module to derive both halves of the contract from canonical sources (`Base.metadata` for ORM, Postgres reflection for the migrated DB). 24 tables that were missing from the hand-written dict (the milestone 7 planning, milestone 8 investments, milestone 9 ergonomics/templates, milestone 10 MFA, and Phase 1 password-reset families) are now covered. Side findings logged below.
 
-- **`ruff format` not enforced.** Discovered while wiring CI in Phase 1 step 7: `ruff format --check apps/api` reports 70 of 123 Python files would be reformatted. Adding the check as a CI gate now would block every PR. Bulk-format the repo as one focused PR, then enable the gate. Severity **N** (cosmetic, but a real risk-reduction once enforced because review diffs become smaller). Not in any phase yet — tracked in [TODO.md](../../TODO.md).
+- **`ruff format` not enforced — RESOLVED 2026-05-10.** Bulk-formatted `apps/api` with `ruff format`, added `make api-format-check`, and enabled `ruff format --check` in the API CI workflow. Future Python formatting drift now fails CI.
 
 - **Numeric/boolean `server_default` strings need `sa.text(...)` everywhere — RESOLVED 2026-05-11 across ORM and migrations.** Surfaced in step 10 by the schema-drift detector. Detail: `server_default="0"` (raw string) compiles to `DEFAULT '0'` (a string literal) under SQLAlchemy. Postgres implicit-casts `'0'::bigint` and stores `'0'` as text in `pg_attrdef`, so reflection returns `'0'` (with quotes). The clean pattern is `server_default=text("0")`, which produces `DEFAULT 0` and round-trips identically through reflection. 32 ORM columns and 6 migration columns were converted. Severity **N** because the in-database behavior was equivalent for our column types, but the inconsistency was a real footgun for any future use of `Base.metadata.create_all()` or fresh migrations on different DDL targets.
 
@@ -320,10 +320,10 @@ In order:
 5. **Cross-session OFX duplicate detection** (1.4.3): unique partial index on `(account_id, fitid)` where fitid IS NOT NULL; service path checks before insert.
 6. **Reverse-proxy + TLS production example** (1.7.1): add Caddy service to `compose.prod.example.yaml` with auto-TLS; document Let's Encrypt setup in `docs/deployment/self-hosting.md`.
 7. **CI API test job** (1.7.2) — **DONE 2026-05-09.** Delivered:
-   - [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) with a Postgres 16 service container, `astral-sh/setup-uv@v6`, `uv sync --frozen`, then `make api-lint` (ruff), `make api-typecheck` (pyright strict), and `pytest` with the 8 pre-existing failures quarantined via `--deselect`.
+   - [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) with a Postgres 16 service container, `astral-sh/setup-uv@v6`, `uv sync --frozen`, then `make api-lint` (ruff), `make api-format-check` (`ruff format --check`), `make api-typecheck` (pyright strict), and `pytest` with the 8 pre-existing failures quarantined via `--deselect`.
    - Triggers on push and pull_request when `apps/api/**`, `pyproject.toml`, `uv.lock`, `Makefile`, or the workflow itself changes.
    - First useful catch: pyright caught a `reportUnknownMemberType` regression in [`AccessRepository.revoke_all_user_sessions`](../../apps/api/src/rekenraam_api/repositories/access.py) that local pytest had passed. Fixed in the same PR by mirroring the `cast(CursorResult[object], result).rowcount` pattern used in [ergonomics.py](../../apps/api/src/rekenraam_api/repositories/ergonomics.py).
-   - **Not enforced yet:** `ruff format --check`. 70 of 123 Python files would need reformatting and that bulk change should land as a single focused PR (tracked as a new finding below and in [TODO.md](../../TODO.md)).
+   - `ruff format --check` was enabled 2026-05-10 after a focused bulk-format pass over `apps/api`.
 8. **Tauri removal** (1.8.1–1.8.3): delete `src-tauri/`, drop `@tauri-apps/*` deps, drop `"tauri"` script, remove Tauri-specific Vite config. Verify `npm run check` and `npm run build` still pass.
 
 Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a documented deferral.

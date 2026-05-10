@@ -65,11 +65,7 @@ async def test_plugin_and_theme_namespaces_are_reserved_but_not_implemented(
 def test_fastapi_route_table_has_no_b1_plugin_or_theme_routes() -> None:
     registered_paths = {getattr(route, "path", "") for route in app.routes}
 
-    assert not {
-        path
-        for path in registered_paths
-        if path.startswith(RESERVED_PREFIXES)
-    }
+    assert not {path for path in registered_paths if path.startswith(RESERVED_PREFIXES)}
 
 
 @pytest.mark.asyncio

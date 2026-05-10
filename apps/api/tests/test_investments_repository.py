@@ -137,24 +137,38 @@ async def _seed_investment_data(session: AsyncSession) -> tuple[int, int]:
 
 
 @pytest.mark.asyncio
-async def test_investment_repository_returns_positions_lots_and_gains(repository_session: AsyncSession) -> None:
+async def test_investment_repository_returns_positions_lots_and_gains(
+    repository_session: AsyncSession,
+) -> None:
     brokerage_id, security_id = await _seed_investment_data(repository_session)
     repository = InvestmentRepository(repository_session)
 
     positions = await repository.list_positions(book_id=1, as_of_date=date(2026, 6, 15))
-    converted_positions = await repository.convert_positions(book_id=1, base_commodity_id=1, as_of_date=date(2026, 6, 15))
+    converted_positions = await repository.convert_positions(
+        book_id=1, base_commodity_id=1, as_of_date=date(2026, 6, 15)
+    )
     lots = await repository.list_lots_with_holding_period(
         book_id=1,
         account_id=brokerage_id,
         commodity_id=security_id,
         as_of_date=date(2027, 6, 15),
     )
-    realized = await repository.report_realized_gains(book_id=1, date_from=date(2026, 6, 1), date_to=date(2026, 6, 30))
-    unrealized = await repository.report_unrealized_gains(book_id=1, base_commodity_id=1, as_of_date=date(2026, 6, 15))
+    realized = await repository.report_realized_gains(
+        book_id=1, date_from=date(2026, 6, 1), date_to=date(2026, 6, 30)
+    )
+    unrealized = await repository.report_unrealized_gains(
+        book_id=1, base_commodity_id=1, as_of_date=date(2026, 6, 15)
+    )
 
-    security_position = next(position for position in positions if position["commodity_id"] == security_id)
-    converted_security_position = next(position for position in converted_positions if position["commodity_id"] == security_id)
-    unrealized_security = next(position for position in unrealized if position["commodity_id"] == security_id)
+    security_position = next(
+        position for position in positions if position["commodity_id"] == security_id
+    )
+    converted_security_position = next(
+        position for position in converted_positions if position["commodity_id"] == security_id
+    )
+    unrealized_security = next(
+        position for position in unrealized if position["commodity_id"] == security_id
+    )
 
     assert security_position["balance_minor"] == 60000
     assert security_position["lots"][0]["remaining_cost_basis_minor"] == 150000
@@ -181,7 +195,9 @@ async def test_investment_repository_returns_positions_lots_and_gains(repository
 
 
 @pytest.mark.asyncio
-async def test_investment_repository_creates_buy_sell_and_dividend_transactions(repository_session: AsyncSession) -> None:
+async def test_investment_repository_creates_buy_sell_and_dividend_transactions(
+    repository_session: AsyncSession,
+) -> None:
     brokerage_id, security_id = await _seed_investment_data(repository_session)
     repository = InvestmentRepository(repository_session)
 
@@ -228,21 +244,48 @@ async def test_investment_repository_creates_buy_sell_and_dividend_transactions(
     dividend_tx = await repository._session.get(Transaction, dividend_result["transaction_id"])
 
     buy_splits = (
-        await repository._session.execute(select(Split).where(Split.tx_id == buy_result["transaction_id"]).order_by(Split.id))
-    ).scalars().all()
+        (
+            await repository._session.execute(
+                select(Split).where(Split.tx_id == buy_result["transaction_id"]).order_by(Split.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     sell_splits = (
-        await repository._session.execute(select(Split).where(Split.tx_id == sell_result["transaction_id"]).order_by(Split.id))
-    ).scalars().all()
+        (
+            await repository._session.execute(
+                select(Split).where(Split.tx_id == sell_result["transaction_id"]).order_by(Split.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     dividend_splits = (
-        await repository._session.execute(select(Split).where(Split.tx_id == dividend_result["transaction_id"]).order_by(Split.id))
-    ).scalars().all()
+        (
+            await repository._session.execute(
+                select(Split)
+                .where(Split.tx_id == dividend_result["transaction_id"])
+                .order_by(Split.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     buy_lot = await repository._session.get(Lot, buy_result["lot_id"])
     sell_allocations = (
-        await repository._session.execute(
-            select(SplitLotAllocation).where(SplitLotAllocation.split_id == next(split.id for split in sell_splits if split.account_id == brokerage_id))
+        (
+            await repository._session.execute(
+                select(SplitLotAllocation).where(
+                    SplitLotAllocation.split_id
+                    == next(split.id for split in sell_splits if split.account_id == brokerage_id)
+                )
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert buy_tx is not None
     assert sell_tx is not None

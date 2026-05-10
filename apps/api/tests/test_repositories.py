@@ -71,7 +71,9 @@ async def test_book_repository_lists_seeded_books(repository_session: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_book_repository_returns_none_for_unknown_slug(repository_session: AsyncSession) -> None:
+async def test_book_repository_returns_none_for_unknown_slug(
+    repository_session: AsyncSession,
+) -> None:
     repository = BookRepository(repository_session)
 
     book = await repository.get_book_by_slug("missing")
@@ -92,7 +94,9 @@ async def test_account_repository_lists_seeded_accounts_in_parent_first_order(
 
 
 @pytest.mark.asyncio
-async def test_account_repository_returns_expected_account_by_id(repository_session: AsyncSession) -> None:
+async def test_account_repository_returns_expected_account_by_id(
+    repository_session: AsyncSession,
+) -> None:
     repository = AccountRepository(repository_session)
 
     account = await repository.get_account_by_id(2)
@@ -105,7 +109,9 @@ async def test_account_repository_returns_expected_account_by_id(repository_sess
 
 
 @pytest.mark.asyncio
-async def test_account_repository_updates_existing_account(repository_session: AsyncSession) -> None:
+async def test_account_repository_updates_existing_account(
+    repository_session: AsyncSession,
+) -> None:
     repository = AccountRepository(repository_session)
 
     updated = await repository.update_account(
@@ -126,7 +132,9 @@ async def test_account_repository_updates_existing_account(repository_session: A
 
 
 @pytest.mark.asyncio
-async def test_account_repository_returns_none_for_missing_account(repository_session: AsyncSession) -> None:
+async def test_account_repository_returns_none_for_missing_account(
+    repository_session: AsyncSession,
+) -> None:
     repository = AccountRepository(repository_session)
 
     account = await repository.get_account_by_id(999)
@@ -135,7 +143,9 @@ async def test_account_repository_returns_none_for_missing_account(repository_se
 
 
 @pytest.mark.asyncio
-async def test_account_repository_returns_book_base_currency_code(repository_session: AsyncSession) -> None:
+async def test_account_repository_returns_book_base_currency_code(
+    repository_session: AsyncSession,
+) -> None:
     repository = AccountRepository(repository_session)
 
     base_currency_code = await repository.get_book_base_currency_code(1)
@@ -144,7 +154,9 @@ async def test_account_repository_returns_book_base_currency_code(repository_ses
 
 
 @pytest.mark.asyncio
-async def test_account_repository_returns_transaction_backed_balances(repository_session: AsyncSession) -> None:
+async def test_account_repository_returns_transaction_backed_balances(
+    repository_session: AsyncSession,
+) -> None:
     repository = AccountRepository(repository_session)
 
     balances = await repository.get_account_balances()
@@ -154,7 +166,9 @@ async def test_account_repository_returns_transaction_backed_balances(repository
 
 
 @pytest.mark.asyncio
-async def test_account_repository_lists_latest_active_balancings(repository_session: AsyncSession) -> None:
+async def test_account_repository_lists_latest_active_balancings(
+    repository_session: AsyncSession,
+) -> None:
     repository_session.add_all(
         [
             AccountBalancing(
@@ -192,7 +206,9 @@ async def test_account_repository_lists_latest_active_balancings(repository_sess
 
 
 @pytest.mark.asyncio
-async def test_account_repository_unlocks_active_balancings_from_date(repository_session: AsyncSession) -> None:
+async def test_account_repository_unlocks_active_balancings_from_date(
+    repository_session: AsyncSession,
+) -> None:
     repository_session.add(
         Account(
             id=12,
@@ -253,7 +269,9 @@ async def test_account_repository_unlocks_active_balancings_from_date(repository
     )
     await repository_session.commit()
 
-    unlocked = await AccountRepository(repository_session).unlock_account_balancings(12, date(2026, 5, 2), "retry")
+    unlocked = await AccountRepository(repository_session).unlock_account_balancings(
+        12, date(2026, 5, 2), "retry"
+    )
 
     assert unlocked == 1
     balancings = await AccountRepository(repository_session).list_account_balancings(12)
@@ -261,7 +279,9 @@ async def test_account_repository_unlocks_active_balancings_from_date(repository
 
 
 @pytest.mark.asyncio
-async def test_account_repository_creates_and_deletes_account_balancing_and_account(repository_session: AsyncSession) -> None:
+async def test_account_repository_creates_and_deletes_account_balancing_and_account(
+    repository_session: AsyncSession,
+) -> None:
     repository = AccountRepository(repository_session)
 
     balancing = await repository.create_account_balancing(
@@ -279,7 +299,9 @@ async def test_account_repository_creates_and_deletes_account_balancing_and_acco
 
 
 @pytest.mark.asyncio
-async def test_account_repository_lists_account_directives(repository_session: AsyncSession) -> None:
+async def test_account_repository_lists_account_directives(
+    repository_session: AsyncSession,
+) -> None:
     directives = await AccountRepository(repository_session).list_account_directives(2)
 
     assert [directive.id for directive in directives] == [2]
@@ -320,7 +342,9 @@ async def test_account_repository_returns_booking_policy(repository_session: Asy
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_lists_seeded_transactions(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_lists_seeded_transactions(
+    repository_session: AsyncSession,
+) -> None:
     repository = TransactionRepository(repository_session)
 
     transactions, next_cursor = await repository.list_transactions()
@@ -378,7 +402,9 @@ async def test_transaction_repository_applies_status_account_and_date_filters(
 async def test_transaction_repository_applies_search_amount_and_pagination_filters(
     repository_session: AsyncSession,
 ) -> None:
-    repository_session.add(Payee(id=1, book_id=1, name="Local Market", kind="business", metadata_text=None))
+    repository_session.add(
+        Payee(id=1, book_id=1, name="Local Market", kind="business", metadata_text=None)
+    )
     await repository_session.commit()
     try:
         await _insert_test_transaction(
@@ -424,7 +450,9 @@ async def test_transaction_repository_applies_search_amount_and_pagination_filte
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_lists_splits_for_transaction(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_lists_splits_for_transaction(
+    repository_session: AsyncSession,
+) -> None:
     repository = TransactionRepository(repository_session)
 
     splits = await repository.list_splits_for_transaction_ids([1])
@@ -435,7 +463,9 @@ async def test_transaction_repository_lists_splits_for_transaction(repository_se
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_creates_updates_and_deletes_transaction(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_creates_updates_and_deletes_transaction(
+    repository_session: AsyncSession,
+) -> None:
     repository = TransactionRepository(repository_session)
 
     transaction = await repository.create_transaction(
@@ -493,7 +523,9 @@ async def test_transaction_repository_creates_updates_and_deletes_transaction(re
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_returns_none_for_missing_transaction(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_returns_none_for_missing_transaction(
+    repository_session: AsyncSession,
+) -> None:
     repository = TransactionRepository(repository_session)
 
     transaction = await repository.get_transaction_by_id(999)
@@ -502,7 +534,9 @@ async def test_transaction_repository_returns_none_for_missing_transaction(repos
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_lists_account_register_rows(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_lists_account_register_rows(
+    repository_session: AsyncSession,
+) -> None:
     repository = TransactionRepository(repository_session)
 
     rows, next_cursor = await repository.list_account_register_splits(2)
@@ -516,13 +550,13 @@ async def test_transaction_repository_lists_account_register_rows(repository_ses
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_returns_payee_defaults(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_returns_payee_defaults(
+    repository_session: AsyncSession,
+) -> None:
     repository_session.add(
         Payee(id=2, book_id=1, name="Corner Shop", kind="business", metadata_text=None)
     )
-    repository_session.add(
-        Category(id=1, book_id=1, name="Groceries", kind="expense", color=None)
-    )
+    repository_session.add(Category(id=1, book_id=1, name="Groceries", kind="expense", color=None))
     await repository_session.commit()
 
     await _insert_test_transaction(
@@ -544,7 +578,9 @@ async def test_transaction_repository_returns_payee_defaults(repository_session:
 
 
 @pytest.mark.asyncio
-async def test_transaction_repository_duplicates_and_bulk_mutates_transactions(repository_session: AsyncSession) -> None:
+async def test_transaction_repository_duplicates_and_bulk_mutates_transactions(
+    repository_session: AsyncSession,
+) -> None:
     repository = TransactionRepository(repository_session)
 
     duplicated = await repository.duplicate_transaction(1, date(2026, 5, 4))

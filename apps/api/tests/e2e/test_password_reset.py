@@ -237,7 +237,10 @@ async def test_unknown_token_is_rejected(e2e_app: E2EApp) -> None:
 
     response = await e2e_app.client.post(
         "/api/v1/auth/password-reset/confirm",
-        json={"token": "totally-bogus-token-string-that-was-never-issued", "new_password": NEW_PASSWORD},
+        json={
+            "token": "totally-bogus-token-string-that-was-never-issued",
+            "new_password": NEW_PASSWORD,
+        },
     )
     assert response.status_code == 400
 

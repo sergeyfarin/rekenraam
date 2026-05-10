@@ -1,4 +1,3 @@
-
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,12 +5,20 @@ from rekenraam_api.repositories.reports import ReportRepository
 
 
 @pytest.mark.asyncio
-async def test_report_repository_returns_cashflow_category_spend_and_payee_totals(repository_session: AsyncSession) -> None:
+async def test_report_repository_returns_cashflow_category_spend_and_payee_totals(
+    repository_session: AsyncSession,
+) -> None:
     repository = ReportRepository(repository_session)
 
-    cashflow = await repository.report_cashflow(book_id=1, date_from=None, date_to=None, group_by="month")
-    category_spend = await repository.report_category_spend(book_id=1, date_from=None, date_to=None, category_ids=None)
-    payee_totals = await repository.report_payee_totals(book_id=1, date_from=None, date_to=None, payee_ids=None)
+    cashflow = await repository.report_cashflow(
+        book_id=1, date_from=None, date_to=None, group_by="month"
+    )
+    category_spend = await repository.report_category_spend(
+        book_id=1, date_from=None, date_to=None, category_ids=None
+    )
+    payee_totals = await repository.report_payee_totals(
+        book_id=1, date_from=None, date_to=None, payee_ids=None
+    )
 
     # The seeded opening-balance transaction has no category, and report_cashflow
     # joins on Category.kind in ('income','expense'), so a fresh DB returns no
@@ -22,7 +29,9 @@ async def test_report_repository_returns_cashflow_category_spend_and_payee_total
 
 
 @pytest.mark.asyncio
-async def test_report_repository_manages_report_definitions_and_runs(repository_session: AsyncSession) -> None:
+async def test_report_repository_manages_report_definitions_and_runs(
+    repository_session: AsyncSession,
+) -> None:
     repository = ReportRepository(repository_session)
 
     created_definition = await repository.create_report_definition(

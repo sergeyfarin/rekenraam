@@ -102,7 +102,9 @@ class AuthService:
         await self._repository.commit()
         return created
 
-    async def seed_first_admin(self, *, email: str, password: str, display_name: str) -> User | None:
+    async def seed_first_admin(
+        self, *, email: str, password: str, display_name: str
+    ) -> User | None:
         if not await self.bootstrap_required():
             return None
         user = await self._repository.create_admin_user(
@@ -179,7 +181,9 @@ class AuthService:
         ip_address: str | None,
     ) -> CreatedSession:
         now = datetime.now(UTC)
-        challenge = await self._repository.get_active_mfa_challenge(hash_session_token(challenge_token), now)
+        challenge = await self._repository.get_active_mfa_challenge(
+            hash_session_token(challenge_token), now
+        )
         if challenge is None or challenge.attempts >= 5:
             raise AuthenticationError("invalid or expired MFA challenge")
         user = await self._repository.get_user_by_id(challenge.user_id)
@@ -205,7 +209,9 @@ class AuthService:
 
     async def authenticate_token(self, token: str) -> tuple[User, AuthSession] | None:
         now = datetime.now(UTC)
-        session = await self._repository.get_active_session_by_token_hash(hash_session_token(token), now)
+        session = await self._repository.get_active_session_by_token_hash(
+            hash_session_token(token), now
+        )
         if session is None:
             return None
         user = await self._repository.get_user_by_id(session.user_id)
@@ -242,7 +248,9 @@ class AuthService:
         remaining = await self._repository.count_unused_recovery_codes(context.user_id)
         return enabled, remaining
 
-    async def begin_mfa_setup(self, context: RequestContext, current_password: str) -> tuple[str, str]:
+    async def begin_mfa_setup(
+        self, context: RequestContext, current_password: str
+    ) -> tuple[str, str]:
         user = await self._require_password(context.user_id, current_password)
         secret = base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
         await self._repository.upsert_totp_secret(
@@ -445,9 +453,7 @@ class AuthService:
         """
 
         if len(password) < INVITE_PASSWORD_MIN_LENGTH:
-            raise InviteError(
-                f"password must be at least {INVITE_PASSWORD_MIN_LENGTH} characters"
-            )
+            raise InviteError(f"password must be at least {INVITE_PASSWORD_MIN_LENGTH} characters")
         now = datetime.now(UTC)
         invite = await self._repository.get_active_user_invite(hash_session_token(token), now)
         if invite is None:
@@ -483,7 +489,9 @@ class AuthService:
 
     async def verify_mfa_code(self, user_id: int, code: str, *, consume_recovery: bool) -> bool:
         row = await self._repository.get_confirmed_totp(user_id)
-        if row is not None and self._verify_totp(self._unprotect_secret(row.secret_ciphertext), code):
+        if row is not None and self._verify_totp(
+            self._unprotect_secret(row.secret_ciphertext), code
+        ):
             return True
         if consume_recovery:
             return await self._repository.consume_recovery_code(
@@ -491,7 +499,9 @@ class AuthService:
             )
         return False
 
-    async def _create_session(self, user: User, *, user_agent: str | None, ip_address: str | None) -> CreatedSession:
+    async def _create_session(
+        self, user: User, *, user_agent: str | None, ip_address: str | None
+    ) -> CreatedSession:
         token = secrets.token_urlsafe(48)
         device = await self._repository.get_or_create_device(
             user_id=user.id,
@@ -561,7 +571,9 @@ class AuthService:
             if len(attempts) >= self._settings.login_rate_limit_attempts:
                 raise AuthenticationError("too many failed login attempts; try again later")
 
-    async def _record_failed_login(self, user_id: int | None, *, email: str, ip_address: str | None) -> None:
+    async def _record_failed_login(
+        self, user_id: int | None, *, email: str, ip_address: str | None
+    ) -> None:
         now = time.time()
         for key in self._rate_limit_keys(email=email, ip_address=ip_address):
             _login_failures.setdefault(key, []).append(now)

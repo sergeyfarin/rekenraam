@@ -47,7 +47,9 @@ class StubMetadataRepository:
     async def list_countries(self) -> list[Country]:
         return []
 
-    async def update_commodity(self, *, commodity_id: int, symbol: str | None, name: str, metadata: str | None) -> Commodity | None:
+    async def update_commodity(
+        self, *, commodity_id: int, symbol: str | None, name: str, metadata: str | None
+    ) -> Commodity | None:
         if commodity_id != 1:
             return None
         return Commodity(
@@ -91,7 +93,9 @@ class StubMetadataRepository:
             "USD",
         )
 
-    async def create_currency(self, *, book_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity:
+    async def create_currency(
+        self, *, book_id: int, symbol: str, name: str, scale: int, metadata: str | None
+    ) -> Commodity:
         return Commodity(
             id=2,
             book_id=book_id,
@@ -104,7 +108,9 @@ class StubMetadataRepository:
             updated_at=self._created_at,
         )
 
-    async def update_currency(self, *, currency_id: int, symbol: str, name: str, scale: int, metadata: str | None) -> Commodity | None:
+    async def update_currency(
+        self, *, currency_id: int, symbol: str, name: str, scale: int, metadata: str | None
+    ) -> Commodity | None:
         if currency_id != 1:
             return None
         return Commodity(
@@ -134,7 +140,9 @@ class StubMetadataRepository:
             updated_at=self._created_at,
         )
 
-    async def set_currency_active(self, *, currency_id: int, metadata: str | None) -> Commodity | None:
+    async def set_currency_active(
+        self, *, currency_id: int, metadata: str | None
+    ) -> Commodity | None:
         if currency_id not in {1, 2}:
             return None
         return Commodity(
@@ -182,7 +190,9 @@ class StubMetadataRepository:
             updated_at=self._created_at,
         )
 
-    async def update_institution(self, *, institution_id: int, **kwargs: object) -> Institution | None:
+    async def update_institution(
+        self, *, institution_id: int, **kwargs: object
+    ) -> Institution | None:
         if institution_id != 1:
             return None
         return Institution(
@@ -257,7 +267,9 @@ class StubMetadataRepository:
             )
         ]
 
-    async def update_category(self, *, category_id: int, parent_id: int | None, name: str, kind: str, color: str | None) -> Category | None:
+    async def update_category(
+        self, *, category_id: int, parent_id: int | None, name: str, kind: str, color: str | None
+    ) -> Category | None:
         if category_id != 1:
             return None
         return Category(
@@ -274,7 +286,9 @@ class StubMetadataRepository:
     async def delete_category(self, category_id: int) -> bool:
         return category_id == 1
 
-    async def update_payee(self, *, payee_id: int, name: str, kind: str, metadata: str | None) -> Payee | None:
+    async def update_payee(
+        self, *, payee_id: int, name: str, kind: str, metadata: str | None
+    ) -> Payee | None:
         if payee_id != 1:
             return None
         return Payee(
@@ -341,17 +355,23 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
 
     commodity = await service.update_commodity(
         1,
-        CommodityUpdateInput(book_id=1, symbol="USDX", name="US Dollar Updated", metadata="Primary currency"),
+        CommodityUpdateInput(
+            book_id=1, symbol="USDX", name="US Dollar Updated", metadata="Primary currency"
+        ),
     )
     created_currency = await service.create_currency(
         CurrencyCreateInput(book_id=1, symbol="EUR", display_symbol="EUR", name="Euro", scale=2)
     )
     updated_currency = await service.update_currency(
         1,
-        CurrencyUpdateInput(book_id=1, symbol="USD", display_symbol="USD", name="US Dollar", scale=2),
+        CurrencyUpdateInput(
+            book_id=1, symbol="USD", display_symbol="USD", name="US Dollar", scale=2
+        ),
     )
     default_currency = await service.set_default_currency(book_id=1, currency_id=1)
-    activated_currency = await service.set_currency_active(currency_id=2, input=CurrencyActivationInput(book_id=1, is_active=True))
+    activated_currency = await service.set_currency_active(
+        currency_id=2, input=CurrencyActivationInput(book_id=1, is_active=True)
+    )
 
     institution = await service.create_institution(
         InstitutionCreateInput(
@@ -379,13 +399,17 @@ async def test_metadata_service_updates_and_deletes_supported_reference_data() -
 
     category = await service.update_category(
         1,
-        input=CategoryUpdateInput(book_id=1, parent_id=None, name="Food", kind="expense", color="#111111"),
+        input=CategoryUpdateInput(
+            book_id=1, parent_id=None, name="Food", kind="expense", color="#111111"
+        ),
     )
     payee = await service.update_payee(
         1,
         input=PayeeUpdateInput(book_id=1, name="Corner Shop", kind="business", metadata=None),
     )
-    tag = await service.update_tag(1, input=TagUpdateInput(book_id=1, name="Shared", color="#222222"))
+    tag = await service.update_tag(
+        1, input=TagUpdateInput(book_id=1, name="Shared", color="#222222")
+    )
 
     assert commodity is not None
     assert commodity.symbol == "USDX"
@@ -415,5 +439,7 @@ async def test_metadata_service_rejects_deactivating_default_currency() -> None:
     service = MetadataService(StubMetadataRepository())
 
     with pytest.raises(ValueError, match="default currency must remain active"):
-        await service.set_currency_active(currency_id=1, input=CurrencyActivationInput(book_id=1, is_active=False))
+        await service.set_currency_active(
+            currency_id=1, input=CurrencyActivationInput(book_id=1, is_active=False)
+        )
     assert await service.delete_institution(1) is True
