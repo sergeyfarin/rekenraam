@@ -40,14 +40,20 @@ class ErgonomicsRepository:
         return list(result.scalars().all())
 
     async def create_user(
-        self, *, email: str, password_hash: str, display_name: str, is_admin: bool
+        self,
+        *,
+        email: str,
+        password_hash: str | None,
+        display_name: str,
+        is_admin: bool,
+        is_active: bool = True,
     ) -> User:
         user = User(
             email=email.lower(),
             password_hash=password_hash,
             display_name=display_name,
             is_admin=is_admin,
-            is_active=True,
+            is_active=is_active,
         )
         self._session.add(user)
         await self._session.flush()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from rekenraam_api.api.dependencies import (
     get_admin_service,
@@ -14,6 +14,8 @@ from rekenraam_api.schemas.admin import (
     IntegrityCheckSummary,
 )
 from rekenraam_api.schemas.ergonomics import (
+    AdminInviteCreated,
+    AdminInviteCreateInput,
     AdminPasswordResetInput,
     AdminUserCreateInput,
     AdminUserSummary,
@@ -74,6 +76,34 @@ async def create_user(
         return await ergonomics_service.create_admin_user(input)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/invites", response_model=AdminInviteCreated)
+async def invite_user(
+    input: AdminInviteCreateInput,
+    request: Request,
+    ergonomics_service: ErgonomicsService = Depends(get_ergonomics_service),
+) -> AdminInviteCreated:
+    """Issue a single-use invite token for a new or pending user.
+
+    The token plaintext is returned in the response; an admin would hand it
+    to the invitee via whatever out-of-band channel is in use until SMTP
+    delivery lands. Re-inviting a still-pending user is idempotent and
+    invalidates any prior outstanding token for them."""
+
+    try:
+        return await ergonomics_service.create_invite(
+            input,
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client is not None else None,
+        )
+    except ValueError as error:
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if str(error) == "user email already exists"
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
 
 
 @router.put("/users/{user_id}", response_model=AdminUserSummary)

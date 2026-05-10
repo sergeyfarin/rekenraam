@@ -1,6 +1,6 @@
 # Rekenraam Self-Hosted Migration Plan
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 ## Summary
 
@@ -180,7 +180,12 @@ Remaining hardening:
 - self-service password reset (token-based, single-use, 24h TTL) shipped
   2026-05-09 via `/api/v1/auth/password-reset/{request,confirm}`; SMTP delivery
   remains deferred and admins retrieve issued tokens from the audit log
-- user invite/create/deactivate flows
+- admin-issued user invites (single-use, 7d TTL, optional role memberships)
+  shipped 2026-05-12 via `/api/v1/admin/invites` and
+  `/api/v1/auth/invite/accept`
+- explicit deactivate semantics distinct from pending state (current
+  `is_active=False` is overloaded; tracked as a finding in
+  `docs/product/v1-gap-plan.md`)
 - book role management UI and API
 - user-visible audit trail for writes, imports, and admin actions
 

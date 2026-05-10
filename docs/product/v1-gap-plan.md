@@ -1,6 +1,6 @@
 # V1 Gap Analysis & Fix Plan
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity. Items marked **DONE** have shipped; the relevant section retains the original gap description for historical context.
 
@@ -11,23 +11,23 @@ Severity legend:
 - **H** — hardening (correctness or operational risk; should ship at v1)
 - **N** — nice-to-have (scope `Should Have`, can defer if time-boxed)
 
-## Test status snapshot (2026-05-11, after Phase 2 step 10)
+## Test status snapshot (2026-05-12, after Phase 1 step 2)
 
 Backend in [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml):
 
-- **CI verdict: 159 passed, 1 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite.
+- **CI verdict: 171 passed, 2 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite.
 - Pyright (strict): clean.
 - Ruff check: clean.
 - Ruff format check: not yet a gate (70/123 files would need reformatting).
 
-Net change since Phase 2 step 9: **+12 self-tests** for the rebuilt schema-contract module + the schema-drift test re-enabled. The only remaining skip is the `MissingGreenlet` import test (Phase 2 step 1 will rewrite it as e2e).
+Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Two intentional skips: the `MissingGreenlet` import test (Phase 2 step 1 will rewrite it as e2e) and an invite/deactivate-state test deferred until the pending-vs-deactivated user model is cleaned up (logged in §Findings).
 
 ## Phase status
 
 - [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
-- [ ] **Phase 1** — release-blocker scope items (2/8 items done)
+- [ ] **Phase 1** — release-blocker scope items (3/8 items done)
   - [x] 1. Self-service password reset (completed 2026-05-09)
-  - [ ] 2. User invite flow
+  - [x] 2. User invite flow (completed 2026-05-12)
   - [ ] 3. Cross-currency transfer endpoint
   - [ ] 4. Stock-split lot rewrite
   - [ ] 5. Cross-session OFX duplicate detection
@@ -60,6 +60,8 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 - **Migration 0002's `scheduled_transactions.interval` column uses a Postgres reserved word.** Severity **N**. Works because SQLAlchemy quotes column names in its generated SQL, but a footgun for raw SQL elsewhere (`SELECT interval FROM scheduled_transactions` would fail). Worth renaming to `interval_count` or similar in a forward migration when convenient. Not in any phase.
 
+- **Pending-user state vs deactivated-user state are conflated.** Severity **N**. Surfaced building Phase 1 step 2: an invited-but-not-accepted user has `is_active=False` and `password_hash IS NULL`. An admin-deactivated existing user also has `is_active=False`. The invite-accept path activates whoever owns the token, which is correct for the pending case. Today this can't be exploited — `create_invite` rejects emails belonging to any user with `password_hash IS NOT NULL` — but the model is fragile. Cleaner long-term: add a discriminator (`status: 'pending' | 'active' | 'deactivated'`) so the three cases are distinct. The invite e2e test `test_accept_rejects_when_user_deactivated_between_issue_and_accept` is `@pytest.mark.skip`-ped pending this. Worth pulling into Phase 2 step 7 (auth depth).
+
 ---
 
 ## 1. Scope coverage gaps
@@ -69,7 +71,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 | # | Gap | Location | Sev |
 |---|---|---|---|
 | 1.1.1 | **Self-service password reset** — **DONE 2026-05-09.** Two public endpoints (`/api/v1/auth/password-reset/request`, `/api/v1/auth/password-reset/confirm`); 24-hour single-use tokens; sessions revoked on confirm; request endpoint always returns 204 to avoid email enumeration; SMTP delivery deferred (audit log is the v1 hand-off mechanism). 9 e2e tests cover happy-path, token reuse, expiry, unknown email, inactive user, bootstrap-not-done, and session revocation. | [auth.py](../../apps/api/src/rekenraam_api/api/v1/auth.py), [services/auth.py](../../apps/api/src/rekenraam_api/services/auth.py), [migration 0005](../../apps/api/alembic/versions/0005_password_reset_tokens.py) | B |
-| 1.1.2 | **User invite flow** missing. Only admin POST `/admin/users` with a chosen password exists. No invite token, no first-login password set, no expiry. Scope says "create/invite/deactivate users". | [admin.py](../../apps/api/src/rekenraam_api/api/v1/admin.py), `services/ergonomics.py`, new `user_invites` table | B |
+| 1.1.2 | **User invite flow** — **DONE 2026-05-12.** New table `user_invites` (migration 0006), admin endpoint `POST /api/v1/admin/invites` (issues a 7-day single-use token, optionally with role memberships, idempotent for re-invites of pending users), public endpoint `POST /api/v1/auth/invite/accept` (sets password, activates user, creates session). Pending users sit at `is_active=False`/`password_hash=NULL`; accept flips both. 11 e2e tests cover happy-path, admin-gating, re-invite invalidation, expired token, reuse, short-password, audit rows, role honored. | [admin.py](../../apps/api/src/rekenraam_api/api/v1/admin.py), [services/ergonomics.py](../../apps/api/src/rekenraam_api/services/ergonomics.py), [services/auth.py](../../apps/api/src/rekenraam_api/services/auth.py), [migration 0006](../../apps/api/alembic/versions/0006_user_invites.py) | B |
 | 1.1.3 | **Explicit deactivate** missing. PUT `/admin/users/{id}` accepts `is_active` but there is no audited deactivate path that revokes sessions. Sessions of a deactivated user keep working until expiry. | `services/ergonomics.py`, `services/auth.py` (session revocation) | H |
 | 1.1.4 | MFA recovery code regeneration without disabling MFA missing. `confirm_mfa_setup` is the only generator. | `services/auth.py:227-268` | H |
 | 1.1.5 | Failed-login throttling is **in-memory** (`_login_failures` dict). Resets on restart and does not work across multiple API replicas. | `services/auth.py` | H |
@@ -301,7 +303,13 @@ In order:
    - Endpoints `POST /api/v1/auth/password-reset/{request,confirm}` in [api/v1/auth.py](../../apps/api/src/rekenraam_api/api/v1/auth.py); request endpoint always 204 to prevent email enumeration; confirm returns 400 on bad/expired/used tokens, 422 on Pydantic validation, 204 on success.
    - 9 e2e tests in [tests/e2e/test_password_reset.py](../../apps/api/tests/e2e/test_password_reset.py): known-vs-unknown email both 204, no token row for unknown; bootstrap-required gate; full round-trip with new-password login and old-password rejection; single-use enforcement; expiry enforcement (DB-aged token); short-password rejection without consuming the token; bogus-token rejection; session revocation on confirm; inactive user treated as unknown.
    - SMTP delivery is deferred to post-v1; until then admins retrieve the issued token from the audit log to hand to the user. The wire contract supports adding email later without breaking changes.
-2. **User invite** (1.1.2): admin issues invite token; `accept-invite` endpoint sets password and activates user. Tests: e2e + token reuse + expiry.
+2. **User invite** (1.1.2) — **DONE 2026-05-12.** Delivered:
+   - Migration [0006_user_invites.py](../../apps/api/alembic/versions/0006_user_invites.py) creates `user_invites` (token-hash unique index, expires-at index, `invited_by_user_id` FK with SET NULL).
+   - `UserInvite` ORM model; `ErgonomicsRepository.create_user` generalized to accept `password_hash: str | None` and `is_active: bool` so the same helper handles bootstrap-active users and pending-inactive invitees.
+   - Repository methods on [`AccessRepository`](../../apps/api/src/rekenraam_api/repositories/access.py): `create_user_invite`, `get_active_user_invite`, `mark_user_invite_used`, `invalidate_outstanding_user_invites`.
+   - Service split: [`AuthService.issue_invite_token`](../../apps/api/src/rekenraam_api/services/auth.py) owns the token lifecycle; [`AuthService.accept_invite`](../../apps/api/src/rekenraam_api/services/auth.py) handles the public accept flow (password set, activate, single-use token mark, session creation, audit). [`ErgonomicsService.create_invite`](../../apps/api/src/rekenraam_api/services/ergonomics.py) handles the admin-side user/membership creation and asks `AuthService` to mint the token. The two services collaborate via `auth_service` injection on the ergonomics constructor (TYPE_CHECKING import to avoid the cycle); the wiring is centralized in `get_ergonomics_service`.
+   - Endpoints `POST /api/v1/admin/invites` (admin-router-gated; returns `{user, token, expires_at}`) and `POST /api/v1/auth/invite/accept` (public; returns `AuthMe` and sets the session cookie).
+   - 11 e2e tests in [tests/e2e/test_user_invite.py](../../apps/api/tests/e2e/test_user_invite.py): full round-trip with role memberships, login pre-acceptance is rejected, admin-gating, conflict on already-accepted email, idempotent re-invite that invalidates prior token, unknown/expired/reused tokens rejected, short password rejected without consuming token, audit rows written, is_admin honored both ways. One test deferred-skipped pending the pending-vs-deactivated state model cleanup (logged below).
 3. **Cross-currency transfer endpoint** (1.2.2): explicit endpoint that takes source/dest accounts, amounts in each commodity, FX rate, and writes a balanced txn with FX gain/loss split. Tests: balanced-in-base assertion, FX gain/loss correctness, rejection when rate not provided.
 4. **Stock-split lot rewrite** (1.6.1): on `corporate_action.kind == 'split'` post, supersede affected lots with adjusted quantity and per-share basis. Tests: realized gain after split, holding-period preservation.
 5. **Cross-session OFX duplicate detection** (1.4.3): unique partial index on `(account_id, fitid)` where fitid IS NOT NULL; service path checks before insert.
@@ -379,10 +387,10 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (2 of 8 items shipped — items 1 and 7). Phase 2 step 9 and step 10 are **done**, putting CI on a fully-trustworthy baseline: 159 passed / 1 skipped / 0 failed, with the schema-drift detector now real and self-tested. Continue:
+Phase 0 is **done**. Phase 1 is in flight (3 of 8 items shipped — items 1, 2, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
 
-- **Next:** Phase 1 step 2 (user invite flow). Mirrors the password-reset shape, so it should land fast now that the e2e seam, CI, drift detector, and clean test signal are all in place.
-- **Then:** the rest of Phase 1 in any order convenient (cross-currency transfer, stock-split lot rewrite, OFX duplicate detection, reverse-proxy/TLS, Tauri removal).
+- **Next:** Phase 1 step 3 (cross-currency transfer endpoint). Larger than invite — needs FX-rate-stamping at post time and an FX gain/loss split. The existing transactions service has the infrastructure; this is mostly new schema + service logic + tests.
+- **Then:** stock-split lot rewrite (#4), OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
-Approximate remaining total: **10-15 engineering days** to v1-ready (was 11-17 before Phase 2 step 10 shipped).
+Approximate remaining total: **8-13 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped).

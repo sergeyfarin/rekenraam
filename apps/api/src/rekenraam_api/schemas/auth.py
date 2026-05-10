@@ -85,3 +85,8 @@ class PasswordResetRequestInput(BaseModel):
 class PasswordResetConfirmInput(BaseModel):
     token: str = Field(min_length=16, max_length=256)
     new_password: str = Field(min_length=12, max_length=1024)
+
+
+class InviteAcceptInput(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    password: str = Field(min_length=12, max_length=1024)

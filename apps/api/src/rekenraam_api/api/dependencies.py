@@ -89,9 +89,10 @@ def get_access_policy(
 def get_ergonomics_service(
     session: AsyncSession = Depends(get_db_session),
     access_policy: AccessPolicy = Depends(get_access_policy),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> ErgonomicsService:
     repository = ErgonomicsRepository(session)
-    return ErgonomicsService(repository, access_policy)
+    return ErgonomicsService(repository, access_policy, auth_service=auth_service)
 
 
 async def require_admin_user(

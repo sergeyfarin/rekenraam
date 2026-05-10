@@ -81,7 +81,10 @@
       "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_migrations.py apps/api/tests/test_pricing_api.py)",
       "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_milestone9_api.py::test_admin_user_lifecycle_roles_audit_and_deactivation)",
       "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/test_milestone9_api.py)",
-      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/ -q)"
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/ -q)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/python -c ' *)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest tests/e2e/test_user_invite.py -v)",
+      "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/e2e/ -q)"
     ],
     "additionalDirectories": [
       "/tmp"

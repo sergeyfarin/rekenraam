@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
+from typing import TYPE_CHECKING
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -21,6 +22,8 @@ from rekenraam_api.db.models.ergonomics import (
 )
 from rekenraam_api.repositories.ergonomics import ErgonomicsRepository
 from rekenraam_api.schemas.ergonomics import (
+    AdminInviteCreated,
+    AdminInviteCreateInput,
     AdminUserCreateInput,
     AdminUserSummary,
     AdminUserUpdateInput,
@@ -49,6 +52,9 @@ from rekenraam_api.schemas.transactions import (
 from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.services.request_context import RequestContext
 
+if TYPE_CHECKING:
+    from rekenraam_api.services.auth import AuthService
+
 _password_hasher = PasswordHasher()
 VALID_ROLES = {"owner", "editor", "viewer"}
 VALID_TX_STATUSES = {"uncleared", "cleared"}
@@ -59,9 +65,15 @@ class AdminRequiredError(ValueError):
 
 
 class ErgonomicsService:
-    def __init__(self, repository: ErgonomicsRepository, access_policy: AccessPolicy) -> None:
+    def __init__(
+        self,
+        repository: ErgonomicsRepository,
+        access_policy: AccessPolicy,
+        auth_service: AuthService | None = None,
+    ) -> None:
         self._repository = repository
         self._access_policy = access_policy
+        self._auth_service = auth_service
 
     async def require_admin(self) -> User:
         context = self._require_context()
@@ -95,6 +107,76 @@ class ErgonomicsService:
         await self._audit("admin.user.created", "user", user.id, f"Created user {user.email}", None)
         await self._repository.commit()
         return await self._load_user_summary(user.id)
+
+    async def create_invite(
+        self,
+        input: AdminInviteCreateInput,
+        *,
+        user_agent: str | None,
+        ip_address: str | None,
+    ) -> AdminInviteCreated:
+        """Issue a single-use invite token for a new or pending user.
+
+        Idempotent for re-invites: if a user with the email already exists
+        and is still pending (`password_hash IS NULL`), reuse the row and
+        invalidate any earlier outstanding invites. If the user already
+        accepted (has a password set), reject with `user email already exists`
+        — the admin reset endpoint is the right tool for those cases.
+        """
+
+        admin_user = await self.require_admin()
+        if self._auth_service is None:
+            # Defensive: callers wired through `get_ergonomics_service` always
+            # supply an AuthService. This branch only fires in tests that build
+            # the service without the dependency, in which case calling the
+            # invite path is a programming error.
+            raise RuntimeError("ErgonomicsService.create_invite requires AuthService injection")
+
+        email = input.email.strip().lower()
+        existing = await self._repository.get_user_by_email(email)
+        if existing is not None and existing.password_hash is not None:
+            raise ValueError("user email already exists")
+
+        if existing is None:
+            user = await self._repository.create_user(
+                email=email,
+                password_hash=None,
+                display_name=input.display_name.strip(),
+                is_admin=input.is_admin,
+                is_active=False,
+            )
+        else:
+            # Pending user already exists (a prior invite that hasn't been
+            # accepted). Refresh the metadata in case the admin changed
+            # display name or admin flag, but keep is_active=False until
+            # acceptance.
+            await self._repository.set_user_fields(
+                existing,
+                display_name=input.display_name.strip(),
+                is_admin=input.is_admin,
+                is_active=False,
+            )
+            user = existing
+
+        for book_id, role in input.memberships:
+            await self._set_membership_checked(user.id, int(book_id), str(role))
+
+        issued = await self._auth_service.issue_invite_token(
+            user_id=user.id,
+            invited_by_user_id=admin_user.id,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+        await self._audit(
+            "admin.user.invited",
+            "user",
+            user.id,
+            f"Invited {user.email}",
+            {"expires_at": issued.expires_at.isoformat()},
+        )
+        await self._repository.commit()
+        summary = await self._load_user_summary(user.id)
+        return AdminInviteCreated(user=summary, token=issued.token, expires_at=issued.expires_at)
 
     async def update_admin_user(
         self, user_id: int, input: AdminUserUpdateInput

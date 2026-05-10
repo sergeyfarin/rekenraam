@@ -6,6 +6,7 @@ from rekenraam_api.db.models.access import (
     PasswordResetToken,
     User,
     UserDevice,
+    UserInvite,
     UserMfaTotp,
 )
 from rekenraam_api.db.models.accounts import (
@@ -121,6 +122,7 @@ __all__ = [
     "TransactionTemplateSplit",
     "User",
     "UserDevice",
+    "UserInvite",
     "UserMfaTotp",
     "UserPreference",
 ]

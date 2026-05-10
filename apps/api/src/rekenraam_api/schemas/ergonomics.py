@@ -57,6 +57,23 @@ class AdminPasswordResetInput(BaseModel):
     password: str = Field(min_length=12, max_length=1024)
 
 
+class AdminInviteCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    email: str = Field(min_length=3, max_length=320)
+    display_name: str = Field(min_length=1, max_length=200)
+    is_admin: bool = False
+    memberships: tuple[tuple[int, str], ...] = ()
+
+
+class AdminInviteCreated(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    user: AdminUserSummary
+    token: str
+    expires_at: datetime
+
+
 class BookMembershipInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 

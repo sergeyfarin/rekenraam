@@ -25,6 +25,8 @@ MFA_CHALLENGE_MINUTES = 5
 MFA_RECOVERY_CODE_COUNT = 10
 PASSWORD_RESET_TOKEN_HOURS = 24
 PASSWORD_RESET_MIN_LENGTH = 12
+INVITE_TOKEN_DAYS = 7
+INVITE_PASSWORD_MIN_LENGTH = 12
 
 _password_hasher = PasswordHasher()
 _login_failures: dict[str, list[float]] = {}
@@ -40,6 +42,16 @@ class BootstrapUnavailableError(ValueError):
 
 class PasswordResetError(ValueError):
     pass
+
+
+class InviteError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class IssuedInvite:
+    token: str
+    expires_at: datetime
 
 
 @dataclass(frozen=True)
@@ -385,6 +397,89 @@ class AuthService:
             summary=f"Password reset for {user.email} (revoked {revoked} sessions)",
         )
         await self._repository.commit()
+
+    async def issue_invite_token(
+        self,
+        *,
+        user_id: int,
+        invited_by_user_id: int | None,
+        user_agent: str | None,
+        ip_address: str | None,
+    ) -> IssuedInvite:
+        """Issue a single-use invite token for a pending user.
+
+        Caller (the admin invite path in `ErgonomicsService`) is responsible
+        for having created the user row, set memberships, and run validation.
+        This method only owns the token lifecycle: invalidate any prior
+        outstanding invites for the same user, create a fresh token, return
+        the cleartext to the caller. The caller commits.
+        """
+
+        await self._repository.invalidate_outstanding_user_invites(user_id)
+        token = secrets.token_urlsafe(48)
+        expires_at = datetime.now(UTC) + timedelta(days=INVITE_TOKEN_DAYS)
+        await self._repository.create_user_invite(
+            user_id=user_id,
+            invited_by_user_id=invited_by_user_id,
+            token_hash=hash_session_token(token),
+            user_agent=user_agent,
+            ip_address=ip_address,
+            expires_at=expires_at,
+        )
+        return IssuedInvite(token=token, expires_at=expires_at)
+
+    async def accept_invite(
+        self,
+        *,
+        token: str,
+        password: str,
+        user_agent: str | None,
+        ip_address: str | None,
+    ) -> CreatedSession:
+        """Accept a pending invite: set the password, activate the user,
+        single-use the token, and start a fresh authenticated session.
+
+        Returns a generic `InviteError` on every failure mode (unknown token,
+        expired, already used, user later deactivated) so callers cannot use
+        the response shape to enumerate valid tokens.
+        """
+
+        if len(password) < INVITE_PASSWORD_MIN_LENGTH:
+            raise InviteError(
+                f"password must be at least {INVITE_PASSWORD_MIN_LENGTH} characters"
+            )
+        now = datetime.now(UTC)
+        invite = await self._repository.get_active_user_invite(hash_session_token(token), now)
+        if invite is None:
+            raise InviteError("invalid or expired invite token")
+        user = await self._repository.get_user_by_id(invite.user_id)
+        if user is None:
+            raise InviteError("invalid or expired invite token")
+        # `is_active=False` is the expected pending-user state at invite time;
+        # an admin who deactivated the user between issue and accept should
+        # see the accept fail. Activation happens below for the happy path.
+        if user.password_hash is not None:
+            # User has already accepted this or a prior invite. Reusing a
+            # cleartext invite is the most common cause of getting here.
+            raise InviteError("invalid or expired invite token")
+        await self._repository.update_user_password_hash(
+            user, password_hash=_password_hasher.hash(password)
+        )
+        # Re-activate in case the user was inactive (the normal pending state).
+        user.is_active = True
+        await self._repository.mark_user_invite_used(invite)
+        created = await self._create_session(user, user_agent=user_agent, ip_address=ip_address)
+        await self._repository.audit(
+            user_id=user.id,
+            session_id=created.session.id,
+            device_id=created.session.device_id,
+            event_type="auth.invite.accepted",
+            target_type="user",
+            target_id=user.id,
+            summary=f"Accepted invite for {user.email}",
+        )
+        await self._repository.commit()
+        return created
 
     async def verify_mfa_code(self, user_id: int, code: str, *, consume_recovery: bool) -> bool:
         row = await self._repository.get_confirmed_totp(user_id)

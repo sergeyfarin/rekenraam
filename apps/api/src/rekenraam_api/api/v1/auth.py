@@ -13,6 +13,7 @@ from rekenraam_api.schemas.auth import (
     AuthMe,
     BootstrapAdminInput,
     BootstrapStatus,
+    InviteAcceptInput,
     LoginInput,
     LoginResult,
     MfaConfirmInput,
@@ -32,6 +33,7 @@ from rekenraam_api.services.auth import (
     AuthenticationError,
     AuthService,
     BootstrapUnavailableError,
+    InviteError,
     MfaRequiredError,
     PasswordResetError,
     to_auth_me,
@@ -180,6 +182,33 @@ async def confirm_password_reset(
         await auth_service.confirm_password_reset(token=input.token, new_password=input.new_password)
     except PasswordResetError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/invite/accept", response_model=AuthMe)
+async def accept_invite(
+    input: InviteAcceptInput,
+    request: Request,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> AuthMe:
+    """Accept an admin-issued invite. Sets the user's password, activates
+    their account, marks the invite token used, and starts a session.
+
+    Every failure mode (unknown token, expired, already used, user
+    deactivated) returns a single generic 400 detail so callers can't probe
+    for valid tokens by response shape."""
+
+    try:
+        created = await auth_service.accept_invite(
+            token=input.token,
+            password=input.password,
+            user_agent=request.headers.get("user-agent"),
+            ip_address=_client_ip(request),
+        )
+    except InviteError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    _set_session_cookie(response, created.token)
+    return to_auth_me(created.user, created.session)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

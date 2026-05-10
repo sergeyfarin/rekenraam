@@ -15,6 +15,7 @@ from rekenraam_api.db.models.access import (
     PasswordResetToken,
     User,
     UserDevice,
+    UserInvite,
     UserMfaTotp,
 )
 from rekenraam_api.db.models.books import Book
@@ -224,6 +225,63 @@ class AccessRepository:
     async def update_user_password_hash(self, user: User, *, password_hash: str) -> None:
         user.password_hash = password_hash
         user.updated_at = datetime.now(UTC)
+        await self._session.flush()
+
+    async def create_user_invite(
+        self,
+        *,
+        user_id: int,
+        invited_by_user_id: int | None,
+        token_hash: str,
+        user_agent: str | None,
+        ip_address: str | None,
+        expires_at: datetime,
+    ) -> UserInvite:
+        row = UserInvite(
+            user_id=user_id,
+            invited_by_user_id=invited_by_user_id,
+            token_hash=token_hash,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            expires_at=expires_at,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get_active_user_invite(
+        self, token_hash: str, now: datetime
+    ) -> UserInvite | None:
+        result = await self._session.execute(
+            select(UserInvite).where(
+                UserInvite.token_hash == token_hash,
+                UserInvite.used_at.is_(None),
+                UserInvite.expires_at > now,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def invalidate_outstanding_user_invites(self, user_id: int) -> int:
+        """Mark any unused, unexpired invites for the user as used.
+
+        Used when re-inviting a still-pending user — the new token replaces
+        any prior token issued for them. Returns the number invalidated for
+        audit/logging.
+        """
+
+        result = await self._session.execute(
+            update(UserInvite)
+            .where(
+                UserInvite.user_id == user_id,
+                UserInvite.used_at.is_(None),
+            )
+            .values(used_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+        return int(cast(CursorResult[object], result).rowcount or 0)
+
+    async def mark_user_invite_used(self, invite: UserInvite) -> None:
+        invite.used_at = datetime.now(UTC)
         await self._session.flush()
 
     async def audit(
