@@ -25,10 +25,10 @@ Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Tw
 ## Phase status
 
 - [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
-- [ ] **Phase 1** — release-blocker scope items (3/8 items done)
+- [ ] **Phase 1** — release-blocker scope items (4/8 items done)
   - [x] 1. Self-service password reset (completed 2026-05-09)
   - [x] 2. User invite flow (completed 2026-05-12)
-  - [ ] 3. Cross-currency transfer endpoint
+  - [x] 3. Cross-currency transfer endpoint (completed 2026-05-10)
   - [ ] 4. Stock-split lot rewrite
   - [ ] 5. Cross-session OFX duplicate detection
   - [ ] 6. Reverse-proxy + TLS production example
@@ -82,7 +82,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 | # | Gap | Location | Sev |
 |---|---|---|---|
 | 1.2.1 | **Account close/reopen as first-class actions**: PUT `is_closed` works, records `lifecycle_event` (`close`/`reopen`), exposes directives, and close validation blocks invalid closes. Remaining work is a clearer dedicated close/reopen service/API shape and lifecycle-specific audit rows. | [accounts.py](../../apps/api/src/rekenraam_api/api/v1/accounts.py), `services/accounts.py:79` | H |
-| 1.2.2 | **Cross-currency transfers**: transaction mutation enforces zero-sum splits and account/commodity matching, so ordinary mixed-commodity balancing is intentionally rejected. Missing is a dedicated transfer endpoint that records both sides, stamps FX rate at post time, and writes realized FX gain/loss where needed. | `services/transactions.py`, new `/api/v1/transactions/transfer` or transfer-flag in mutation | B |
+| 1.2.2 | **Cross-currency transfers** — **DONE 2026-05-10.** Dedicated `POST /api/v1/transactions/transfer` records both currency legs, requires an explicit transfer-date FX rate, stamps that rate as a manual FX observation, and writes a realized FX gain/loss split when the source amount differs from the rate-implied amount. Ordinary transaction mutation still rejects mixed-commodity balancing. | [api/v1/transactions.py](../../apps/api/src/rekenraam_api/api/v1/transactions.py), [services/transactions.py](../../apps/api/src/rekenraam_api/services/transactions.py), [repositories/transactions.py](../../apps/api/src/rekenraam_api/repositories/transactions.py) | B |
 | 1.2.3 | Memorized **splits** & transaction templates exist as routes but split lines on templates are not validated to balance before save. | `services/ergonomics.py` (templates), `api/v1/templates.py` | H |
 | 1.2.4 | Locked-range validation is service-only. No DB constraint. A direct SQL write or a bug in `_ensure_unlocked` lets writes through. | add CHECK or trigger; or partial unique index on `(account_id, txn_date)` against locked range | H |
 | 1.2.5 | Bulk-void exists; **bulk-delete** exists; but there is no transactional guarantee tested that all-or-nothing on partial failure. | `services/transactions.py` | H |
@@ -310,7 +310,12 @@ In order:
    - Service split: [`AuthService.issue_invite_token`](../../apps/api/src/rekenraam_api/services/auth.py) owns the token lifecycle; [`AuthService.accept_invite`](../../apps/api/src/rekenraam_api/services/auth.py) handles the public accept flow (password set, activate, single-use token mark, session creation, audit). [`ErgonomicsService.create_invite`](../../apps/api/src/rekenraam_api/services/ergonomics.py) handles the admin-side user/membership creation and asks `AuthService` to mint the token. The two services collaborate via `auth_service` injection on the ergonomics constructor (TYPE_CHECKING import to avoid the cycle); the wiring is centralized in `get_ergonomics_service`.
    - Endpoints `POST /api/v1/admin/invites` (admin-router-gated; returns `{user, token, expires_at}`) and `POST /api/v1/auth/invite/accept` (public; returns `AuthMe` and sets the session cookie).
    - 11 e2e tests in [tests/e2e/test_user_invite.py](../../apps/api/tests/e2e/test_user_invite.py): full round-trip with role memberships, login pre-acceptance is rejected, admin-gating, conflict on already-accepted email, idempotent re-invite that invalidates prior token, unknown/expired/reused tokens rejected, short password rejected without consuming token, audit rows written, is_admin honored both ways. One test deferred-skipped pending the pending-vs-deactivated state model cleanup (logged below).
-3. **Cross-currency transfer endpoint** (1.2.2): explicit endpoint that takes source/dest accounts, amounts in each commodity, FX rate, and writes a balanced txn with FX gain/loss split. Tests: balanced-in-base assertion, FX gain/loss correctness, rejection when rate not provided.
+3. **Cross-currency transfer endpoint** (1.2.2) — **DONE 2026-05-10.** Delivered:
+   - Endpoint `POST /api/v1/transactions/transfer` in [api/v1/transactions.py](../../apps/api/src/rekenraam_api/api/v1/transactions.py) with a dedicated `CrossCurrencyTransferInput`.
+   - [`TransactionService.create_cross_currency_transfer`](../../apps/api/src/rekenraam_api/services/transactions.py) validates write access, account ownership, non-system/open accounts, different source/destination currencies, an explicit positive FX rate, and locked ranges.
+   - The write path posts the source leg in the source account currency, destination leg in the destination account currency, and an optional realized FX gain/loss split in the source currency when `source_amount_minor` differs from `destination_amount_minor * fx_rate` after half-up rounding.
+   - [`TransactionRepository.create_manual_fx_observation`](../../apps/api/src/rekenraam_api/repositories/transactions.py) stamps the transfer-date rate as an `fx_manual` `price_observations` row (`source='transfer:{transaction_id}'`), preserving the post-time FX rate used by the transfer.
+   - 3 e2e tests in [tests/e2e/test_cross_currency_transfer.py](../../apps/api/tests/e2e/test_cross_currency_transfer.py): two-sided mixed-currency transfer with FX observation, realized gain/loss split correctness, and 422 rejection when the required rate is omitted.
 4. **Stock-split lot rewrite** (1.6.1): on `corporate_action.kind == 'split'` post, supersede affected lots with adjusted quantity and per-share basis. Tests: realized gain after split, holding-period preservation.
 5. **Cross-session OFX duplicate detection** (1.4.3): unique partial index on `(account_id, fitid)` where fitid IS NOT NULL; service path checks before insert.
 6. **Reverse-proxy + TLS production example** (1.7.1): add Caddy service to `compose.prod.example.yaml` with auto-TLS; document Let's Encrypt setup in `docs/deployment/self-hosting.md`.
@@ -387,10 +392,9 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (3 of 8 items shipped — items 1, 2, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
+Phase 0 is **done**. Phase 1 is in flight (4 of 8 items shipped — items 1, 2, 3, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
 
-- **Next:** Phase 1 step 3 (cross-currency transfer endpoint). Larger than invite — needs FX-rate-stamping at post time and an FX gain/loss split. The existing transactions service has the infrastructure; this is mostly new schema + service logic + tests.
-- **Then:** stock-split lot rewrite (#4), OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
+- **Next:** stock-split lot rewrite (#4), then OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
 Approximate remaining total: **8-13 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped).

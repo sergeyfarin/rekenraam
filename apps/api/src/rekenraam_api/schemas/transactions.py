@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -74,6 +76,38 @@ class TransactionMutationInput(BaseModel):
     reference: str | None
     import_id: str | None = None
     splits: tuple[TransactionSplitInput, ...]
+
+
+class CrossCurrencyTransferInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int
+    txn_date: date
+    source_account_id: int
+    destination_account_id: int
+    source_amount_minor: int
+    destination_amount_minor: int
+    fx_rate: float
+    fx_gain_loss_account_id: int | None = None
+    payee_id: int | None = None
+    memo: str | None = None
+    status: str = "cleared"
+    reference: str | None = None
+    source_memo: str | None = None
+    destination_memo: str | None = None
+    fx_gain_loss_memo: str | None = None
+
+    @model_validator(mode="after")
+    def validate_transfer_shape(self) -> CrossCurrencyTransferInput:
+        if self.source_account_id == self.destination_account_id:
+            raise ValueError("source and destination accounts must differ")
+        if self.source_amount_minor <= 0:
+            raise ValueError("source_amount_minor must be greater than zero")
+        if self.destination_amount_minor <= 0:
+            raise ValueError("destination_amount_minor must be greater than zero")
+        if self.fx_rate <= 0:
+            raise ValueError("fx_rate must be greater than zero")
+        return self
 
 
 class TransactionSummary(BaseModel):

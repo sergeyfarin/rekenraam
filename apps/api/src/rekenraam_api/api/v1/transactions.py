@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from rekenraam_api.api.dependencies import get_ergonomics_service, get_transaction_service
 from rekenraam_api.schemas.ergonomics import PayeeDefaultInput, PayeeDefaultSummary
 from rekenraam_api.schemas.transactions import (
+    CrossCurrencyTransferInput,
     PayeeDefaults,
     TransactionListFilters,
     TransactionMutationInput,
@@ -134,6 +135,17 @@ async def create_transaction(
 ) -> TransactionSummary:
     try:
         return await transaction_service.create_transaction(input)
+    except ValueError as error:
+        raise _mutation_error(error) from error
+
+
+@router.post("/transfer", response_model=TransactionSummary)
+async def create_cross_currency_transfer(
+    input: CrossCurrencyTransferInput,
+    transaction_service: TransactionService = Depends(get_transaction_service),
+) -> TransactionSummary:
+    try:
+        return await transaction_service.create_cross_currency_transfer(input)
     except ValueError as error:
         raise _mutation_error(error) from error
 

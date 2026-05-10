@@ -1,15 +1,20 @@
+import json
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
+from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.ergonomics import AuditEvent
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.transactions import TransactionRepository
 from rekenraam_api.schemas.register import RegisterEntry, RegisterPage
 from rekenraam_api.schemas.transactions import (
+    CrossCurrencyTransferInput,
     PayeeDefaults,
     SplitEntry,
     TransactionListFilters,
     TransactionMutationInput,
     TransactionPage,
+    TransactionSplitInput,
     TransactionSummary,
 )
 from rekenraam_api.services.access import AccessPolicy
@@ -92,6 +97,160 @@ class TransactionService:
                     target_id=transaction.id,
                     summary=f"Created transaction {transaction.id}",
                     metadata_json=None,
+                )
+            )
+            await session.commit()
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        refreshed = await self.get_transaction_by_id(transaction.id)
+        if refreshed is None:
+            raise ValueError("transaction not found after create")
+        return refreshed
+
+    async def create_cross_currency_transfer(
+        self, input: CrossCurrencyTransferInput
+    ) -> TransactionSummary:
+        if input.status not in {"uncleared", "cleared"}:
+            raise ValueError("cross-currency transfer status must be uncleared or cleared")
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(input.book_id)
+
+        account_ids = {input.source_account_id, input.destination_account_id}
+        if input.fx_gain_loss_account_id is not None:
+            account_ids.add(input.fx_gain_loss_account_id)
+        accounts = await self._repository.list_accounts_by_ids(account_ids)
+        account_by_id = {account.id: account for account in accounts}
+        source_account = account_by_id.get(input.source_account_id)
+        destination_account = account_by_id.get(input.destination_account_id)
+        if source_account is None or destination_account is None:
+            raise ValueError("cross-currency transfer account not found")
+        self._validate_transfer_account(input.book_id, source_account)
+        self._validate_transfer_account(input.book_id, destination_account)
+        if source_account.commodity_id == destination_account.commodity_id:
+            raise ValueError("cross-currency transfer requires accounts with different currencies")
+
+        rate = Decimal(str(input.fx_rate))
+        expected_source_amount_minor = int(
+            (Decimal(input.destination_amount_minor) * rate).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
+        realized_gain_loss_minor = input.source_amount_minor - expected_source_amount_minor
+
+        fx_gain_loss_account: Account | None = None
+        if realized_gain_loss_minor != 0:
+            if input.fx_gain_loss_account_id is None:
+                raise ValueError("fx gain/loss account required when realized gain/loss is non-zero")
+            fx_gain_loss_account = account_by_id.get(input.fx_gain_loss_account_id)
+            if fx_gain_loss_account is None:
+                raise ValueError("fx gain/loss account not found")
+            self._validate_transfer_account(input.book_id, fx_gain_loss_account)
+            if fx_gain_loss_account.commodity_id != source_account.commodity_id:
+                raise ValueError("fx gain/loss account currency must match source account currency")
+
+        refs_valid = await self._repository.metadata_refs_belong_to_book(
+            book_id=input.book_id,
+            payee_id=input.payee_id,
+            category_ids=set(),
+            tag_ids=set(),
+            person_ids=set(),
+            project_ids=set(),
+        )
+        if not refs_valid:
+            raise ValueError("transaction metadata references must belong to book")
+
+        await self._ensure_unlocked(account_ids, input.txn_date)
+        audit = self._access_policy.audit_stamp() if self._access_policy is not None else None
+        transaction = await self._repository.create_transaction(
+            book_id=input.book_id,
+            txn_date=input.txn_date,
+            payee_id=input.payee_id,
+            memo=input.memo,
+            status=input.status,
+            reference=input.reference,
+            created_by_user_id=audit.created_by_user_id if audit is not None else None,
+            created_session_id=audit.created_session_id if audit is not None else None,
+            created_device_id=audit.created_device_id if audit is not None else None,
+            created_request_id=audit.created_request_id if audit is not None else None,
+        )
+        splits = [
+            TransactionSplitInput(
+                account_id=input.source_account_id,
+                commodity_id=source_account.commodity_id,
+                amount_minor=-input.source_amount_minor,
+                category_id=None,
+                tag_id=None,
+                person_id=None,
+                project_id=None,
+                share_bps=None,
+                memo=input.source_memo,
+            ),
+            TransactionSplitInput(
+                account_id=input.destination_account_id,
+                commodity_id=destination_account.commodity_id,
+                amount_minor=input.destination_amount_minor,
+                category_id=None,
+                tag_id=None,
+                person_id=None,
+                project_id=None,
+                share_bps=None,
+                memo=input.destination_memo,
+            ),
+        ]
+        if realized_gain_loss_minor != 0 and fx_gain_loss_account is not None:
+            splits.append(
+                TransactionSplitInput(
+                    account_id=fx_gain_loss_account.id,
+                    commodity_id=fx_gain_loss_account.commodity_id,
+                    amount_minor=realized_gain_loss_minor,
+                    category_id=None,
+                    tag_id=None,
+                    person_id=None,
+                    project_id=None,
+                    share_bps=None,
+                    memo=input.fx_gain_loss_memo or "Realized FX gain/loss",
+                )
+            )
+        await self._repository.replace_transaction_splits(
+            transaction.id,
+            [split.model_dump() for split in splits],
+            created_by_user_id=audit.created_by_user_id if audit is not None else None,
+            created_session_id=audit.created_session_id if audit is not None else None,
+            created_device_id=audit.created_device_id if audit is not None else None,
+            created_request_id=audit.created_request_id if audit is not None else None,
+        )
+        await self._repository.create_manual_fx_observation(
+            book_id=input.book_id,
+            from_currency_id=destination_account.commodity_id,
+            to_currency_id=source_account.commodity_id,
+            rate_date=input.txn_date,
+            rate=rate,
+            source=f"transfer:{transaction.id}",
+        )
+        session = getattr(self._repository, "_session", None)
+        if session is not None:
+            session.add(
+                AuditEvent(
+                    book_id=input.book_id,
+                    actor_user_id=audit.created_by_user_id if audit is not None else None,
+                    actor_session_id=audit.created_session_id if audit is not None else None,
+                    actor_device_id=audit.created_device_id if audit is not None else None,
+                    actor_request_id=audit.created_request_id if audit is not None else None,
+                    event_type="transaction.cross_currency_transfer.created",
+                    target_type="transaction",
+                    target_id=transaction.id,
+                    summary=f"Created cross-currency transfer {transaction.id}",
+                    metadata_json=json.dumps(
+                        {
+                            "source_account_id": input.source_account_id,
+                            "destination_account_id": input.destination_account_id,
+                            "source_amount_minor": input.source_amount_minor,
+                            "destination_amount_minor": input.destination_amount_minor,
+                            "fx_rate": str(rate),
+                            "expected_source_amount_minor": expected_source_amount_minor,
+                            "realized_gain_loss_minor": realized_gain_loss_minor,
+                        },
+                        sort_keys=True,
+                    ),
                 )
             )
             await session.commit()
@@ -349,6 +508,15 @@ class TransactionService:
         )
         if not refs_valid:
             raise ValueError("transaction metadata references must belong to book")
+
+    @staticmethod
+    def _validate_transfer_account(book_id: int, account: Account) -> None:
+        if account.book_id != book_id:
+            raise ValueError("cross-currency transfer account does not belong to book")
+        if account.is_closed:
+            raise ValueError("transaction cannot use closed accounts")
+        if account.is_system and account.system_role is not None:
+            raise ValueError("transaction cannot use protected system accounts")
 
     async def _ensure_unlocked(self, account_ids: set[int], occurred_date: date) -> None:
         locked = await self._repository.get_locked_account_ids(account_ids, occurred_date)

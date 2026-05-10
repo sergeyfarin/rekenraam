@@ -3,13 +3,15 @@ from __future__ import annotations
 import base64
 import json
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from sqlalchemy import Select, asc, desc, exists, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
-from rekenraam_api.db.models.metadata import Category, Payee, Person, Project, Tag
+from rekenraam_api.db.models.investments import PriceObservation
+from rekenraam_api.db.models.metadata import Category, Commodity, Payee, Person, Project, Tag
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.schemas.transactions import TransactionListFilters
 
@@ -546,6 +548,45 @@ class TransactionRepository:
             return []
         result = await self._session.execute(select(Account).where(Account.id.in_(account_ids)))
         return list(result.scalars().all())
+
+    async def get_commodity(self, commodity_id: int) -> Commodity | None:
+        return await self._session.get(Commodity, commodity_id)
+
+    async def create_manual_fx_observation(
+        self,
+        *,
+        book_id: int,
+        from_currency_id: int,
+        to_currency_id: int,
+        rate_date: date,
+        rate: Decimal,
+        source: str,
+    ) -> PriceObservation:
+        from_currency = await self._session.get(Commodity, from_currency_id)
+        to_currency = await self._session.get(Commodity, to_currency_id)
+        if (
+            from_currency is None
+            or to_currency is None
+            or from_currency.book_id != book_id
+            or to_currency.book_id != book_id
+            or from_currency.kind != "currency"
+            or to_currency.kind != "currency"
+        ):
+            raise ValueError("currency not found")
+
+        scale_factor = Decimal(10) ** from_currency.scale
+        observation = PriceObservation(
+            book_id=book_id,
+            commodity_id=from_currency_id,
+            quote_commodity_id=to_currency_id,
+            observation_kind="fx_manual",
+            price_minor=int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP)),
+            price_date=rate_date,
+            source=source,
+        )
+        self._session.add(observation)
+        await self._session.flush()
+        return observation
 
     async def get_locked_account_ids(self, account_ids: set[int], occurred_date: date) -> list[tuple[int, date]]:
         if not account_ids:
