@@ -26,6 +26,7 @@ def upgrade() -> None:
         sa.Column("display_name", sa.String(length=200), nullable=False),
         sa.Column("is_admin", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column("mfa_required", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
@@ -854,8 +855,335 @@ def upgrade() -> None:
         )
     )
 
+    op.create_table(
+        "budgets",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("book_id", sa.BigInteger(), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("period", sa.String(length=20), nullable=False),
+        sa.Column("starts_on", sa.Date(), nullable=False),
+        sa.Column("ends_on", sa.Date(), nullable=True),
+        sa.Column("commodity_id", sa.BigInteger(), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.CheckConstraint("period IN ('monthly', 'annual')", name="ck_budgets_period"),
+        sa.ForeignKeyConstraint(["book_id"], ["books.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["commodity_id"], ["commodities.id"], ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_budgets_book_id", "budgets", ["book_id"])
+
+    op.create_table(
+        "budget_targets",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("budget_id", sa.BigInteger(), nullable=False),
+        sa.Column("book_id", sa.BigInteger(), nullable=False),
+        sa.Column("category_id", sa.BigInteger(), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("rollover_enabled", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.ForeignKeyConstraint(["book_id"], ["books.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["budget_id"], ["budgets.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["category_id"], ["categories.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("budget_id", "category_id", name="uq_budget_targets_budget_category"),
+    )
+    op.create_index("ix_budget_targets_budget", "budget_targets", ["budget_id"])
+
+    op.create_table(
+        "scheduled_transactions",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("book_id", sa.BigInteger(), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("payee_id", sa.BigInteger(), nullable=True),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.Column("status", sa.String(length=20), server_default="uncleared", nullable=False),
+        sa.Column("reference", sa.Text(), nullable=True),
+        sa.Column("frequency", sa.String(length=20), nullable=False),
+        sa.Column("interval", sa.BigInteger(), server_default=sa.text("1"), nullable=False),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("end_date", sa.Date(), nullable=True),
+        sa.Column("reminder_days", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.CheckConstraint(
+            "frequency IN ('daily', 'weekly', 'monthly', 'yearly')",
+            name="ck_scheduled_transactions_frequency",
+        ),
+        sa.ForeignKeyConstraint(["book_id"], ["books.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["payee_id"], ["payees.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_scheduled_transactions_book", "scheduled_transactions", ["book_id"])
+
+    op.create_table(
+        "scheduled_transaction_splits",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("scheduled_transaction_id", sa.BigInteger(), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("category_id", sa.BigInteger(), nullable=True),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.ForeignKeyConstraint(["account_id"], ["accounts.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["category_id"], ["categories.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["commodity_id"], ["commodities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["scheduled_transaction_id"], ["scheduled_transactions.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_scheduled_transaction_splits_schedule",
+        "scheduled_transaction_splits",
+        ["scheduled_transaction_id"],
+    )
+
+    op.create_table(
+        "scheduled_transaction_occurrences",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("scheduled_transaction_id", sa.BigInteger(), nullable=False),
+        sa.Column("occurrence_date", sa.Date(), nullable=False),
+        sa.Column("status", sa.String(length=20), nullable=False),
+        sa.Column("posted_transaction_id", sa.BigInteger(), nullable=True),
+        sa.Column("note", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.CheckConstraint("status IN ('pending', 'skipped', 'posted')", name="ck_scheduled_occurrences_status"),
+        sa.ForeignKeyConstraint(["posted_transaction_id"], ["transactions.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["scheduled_transaction_id"], ["scheduled_transactions.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("scheduled_transaction_id", "occurrence_date", name="uq_scheduled_occurrence_date"),
+    )
+
+    op.create_table(
+        "loans",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("book_id", sa.BigInteger(), nullable=False),
+        sa.Column("account_id", sa.BigInteger(), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("principal_minor", sa.BigInteger(), nullable=False),
+        sa.Column("annual_rate_bps", sa.BigInteger(), nullable=False),
+        sa.Column("term_months", sa.BigInteger(), nullable=False),
+        sa.Column("payment_frequency", sa.String(length=20), server_default="monthly", nullable=False),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("payment_account_id", sa.BigInteger(), nullable=True),
+        sa.Column("interest_category_id", sa.BigInteger(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.ForeignKeyConstraint(["account_id"], ["accounts.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["book_id"], ["books.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["interest_category_id"], ["categories.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["payment_account_id"], ["accounts.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("account_id", name="uq_loans_account"),
+    )
+    op.create_index("ix_loans_book", "loans", ["book_id"])
+
+    op.create_table(
+        "loan_terms",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("loan_id", sa.BigInteger(), nullable=False),
+        sa.Column("effective_date", sa.Date(), nullable=False),
+        sa.Column("annual_rate_bps", sa.BigInteger(), nullable=False),
+        sa.Column("payment_minor", sa.BigInteger(), nullable=True),
+        sa.Column("extra_principal_minor", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.ForeignKeyConstraint(["loan_id"], ["loans.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_loan_terms_loan", "loan_terms", ["loan_id"])
+
+    op.create_table(
+        "investment_instruments",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("instrument_type", sa.String(length=32), nullable=False),
+        sa.Column("display_name", sa.String(length=200), nullable=False),
+        sa.Column("symbol", sa.String(length=64), nullable=True),
+        sa.Column("isin", sa.String(length=32), nullable=True),
+        sa.Column("cusip", sa.String(length=32), nullable=True),
+        sa.Column("figi", sa.String(length=32), nullable=True),
+        sa.Column("exchange", sa.String(length=64), nullable=True),
+        sa.Column("venue", sa.String(length=64), nullable=True),
+        sa.Column("issuer", sa.String(length=200), nullable=True),
+        sa.Column("country_code", sa.String(length=3), nullable=True),
+        sa.Column("quote_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("trading_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("quantity_scale", sa.Integer(), nullable=False, server_default=sa.text("4")),
+        sa.Column("price_scale", sa.Integer(), nullable=False, server_default=sa.text("4")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint(
+            "instrument_type IN ('stock', 'etf', 'mutual_fund', 'private_fund', 'bond', 'option', 'future', 'crypto', 'private_investment', 'generic')",
+            name="ck_investment_instruments_type",
+        ),
+        sa.UniqueConstraint("book_id", "commodity_id", name="uq_investment_instruments_book_commodity"),
+    )
+    op.create_index("ix_investment_instruments_book_id", "investment_instruments", ["book_id"], unique=False)
+    op.create_index("ix_investment_instruments_symbol", "investment_instruments", ["book_id", "symbol"], unique=False)
+
+    op.create_table(
+        "cost_basis_profiles",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("name", sa.String(length=120), nullable=False),
+        sa.Column("method", sa.String(length=32), nullable=False, server_default=sa.text("'fifo'")),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint("method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')", name="ck_cost_basis_profiles_method"),
+        sa.UniqueConstraint("book_id", "name", name="uq_cost_basis_profiles_book_name"),
+    )
+    op.create_index("ix_cost_basis_profiles_book_id", "cost_basis_profiles", ["book_id"], unique=False)
+
+    op.create_table(
+        "corporate_actions",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("book_id", sa.BigInteger(), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("action_type", sa.String(length=32), nullable=False),
+        sa.Column("old_instrument_id", sa.BigInteger(), sa.ForeignKey("investment_instruments.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("new_instrument_id", sa.BigInteger(), sa.ForeignKey("investment_instruments.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("effective_date", sa.Date(), nullable=False),
+        sa.Column("ratio_numerator", sa.BigInteger(), nullable=True),
+        sa.Column("ratio_denominator", sa.BigInteger(), nullable=True),
+        sa.Column("cash_in_lieu_minor", sa.BigInteger(), nullable=True),
+        sa.Column("cash_commodity_id", sa.BigInteger(), sa.ForeignKey("commodities.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("source_reference", sa.Text(), nullable=True),
+        sa.Column("memo", sa.Text(), nullable=True),
+        sa.Column("generated_transaction_id", sa.BigInteger(), sa.ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint(
+            "action_type IN ('split', 'reverse_split', 'spin_off', 'merger', 'acquisition', 'conversion', 'return_of_capital', 'delisting', 'write_off', 'derivative_lifecycle', 'private_investment_event')",
+            name="ck_corporate_actions_type",
+        ),
+    )
+    op.create_index("ix_corporate_actions_book_effective", "corporate_actions", ["book_id", "effective_date"], unique=False)
+    op.create_index("ix_corporate_actions_instrument", "corporate_actions", ["old_instrument_id", "new_instrument_id"], unique=False)
+
+    op.execute(
+        sa.text(
+            """
+            INSERT INTO cost_basis_profiles (book_id, name, method, description, is_default)
+            SELECT id, 'Default FIFO', 'fifo', 'Default personal accounting cost-basis profile', TRUE
+            FROM books
+            """
+        )
+    )
+
+    op.create_table(
+        "user_mfa_totp",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("secret_ciphertext", sa.Text(), nullable=False),
+        sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", name="uq_user_mfa_totp_user_id"),
+    )
+    op.create_table(
+        "mfa_recovery_codes",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("code_hash", sa.String(length=128), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_index("ix_mfa_recovery_codes_user_id", "mfa_recovery_codes", ["user_id"], unique=False)
+    op.create_index("ix_mfa_recovery_codes_code_hash", "mfa_recovery_codes", ["code_hash"], unique=True)
+
+    op.create_table(
+        "mfa_challenges",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("token_hash", sa.String(length=128), nullable=False),
+        sa.Column("user_agent", sa.Text(), nullable=True),
+        sa.Column("ip_address", sa.String(length=64), nullable=True),
+        sa.Column("attempts", sa.BigInteger(), nullable=False, server_default=sa.text("0")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_index("ix_mfa_challenges_token_hash", "mfa_challenges", ["token_hash"], unique=True)
+    op.create_index("ix_mfa_challenges_expires_at", "mfa_challenges", ["expires_at"], unique=False)
+
+    op.create_table(
+        "password_reset_tokens",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("token_hash", sa.String(length=128), nullable=False),
+        sa.Column("user_agent", sa.Text(), nullable=True),
+        sa.Column("ip_address", sa.String(length=64), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_index("ix_password_reset_tokens_token_hash", "password_reset_tokens", ["token_hash"], unique=True)
+    op.create_index("ix_password_reset_tokens_user_id", "password_reset_tokens", ["user_id"], unique=False)
+    op.create_index("ix_password_reset_tokens_expires_at", "password_reset_tokens", ["expires_at"], unique=False)
+
+    op.create_table(
+        "user_invites",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("invited_by_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("token_hash", sa.String(length=128), nullable=False),
+        sa.Column("user_agent", sa.Text(), nullable=True),
+        sa.Column("ip_address", sa.String(length=64), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_index("ix_user_invites_token_hash", "user_invites", ["token_hash"], unique=True)
+    op.create_index("ix_user_invites_user_id", "user_invites", ["user_id"], unique=False)
+    op.create_index("ix_user_invites_expires_at", "user_invites", ["expires_at"], unique=False)
+
 
 def downgrade() -> None:
+    op.drop_index("ix_user_invites_expires_at", table_name="user_invites")
+    op.drop_index("ix_user_invites_user_id", table_name="user_invites")
+    op.drop_index("ix_user_invites_token_hash", table_name="user_invites")
+    op.drop_table("user_invites")
+    op.drop_index("ix_password_reset_tokens_expires_at", table_name="password_reset_tokens")
+    op.drop_index("ix_password_reset_tokens_user_id", table_name="password_reset_tokens")
+    op.drop_index("ix_password_reset_tokens_token_hash", table_name="password_reset_tokens")
+    op.drop_table("password_reset_tokens")
+    op.drop_index("ix_mfa_challenges_expires_at", table_name="mfa_challenges")
+    op.drop_index("ix_mfa_challenges_token_hash", table_name="mfa_challenges")
+    op.drop_table("mfa_challenges")
+    op.drop_index("ix_mfa_recovery_codes_code_hash", table_name="mfa_recovery_codes")
+    op.drop_index("ix_mfa_recovery_codes_user_id", table_name="mfa_recovery_codes")
+    op.drop_table("mfa_recovery_codes")
+    op.drop_table("user_mfa_totp")
+    op.drop_index("ix_corporate_actions_instrument", table_name="corporate_actions")
+    op.drop_index("ix_corporate_actions_book_effective", table_name="corporate_actions")
+    op.drop_table("corporate_actions")
+    op.drop_index("ix_cost_basis_profiles_book_id", table_name="cost_basis_profiles")
+    op.drop_table("cost_basis_profiles")
+    op.drop_index("ix_investment_instruments_symbol", table_name="investment_instruments")
+    op.drop_index("ix_investment_instruments_book_id", table_name="investment_instruments")
+    op.drop_table("investment_instruments")
+    op.drop_index("ix_loan_terms_loan", table_name="loan_terms")
+    op.drop_table("loan_terms")
+    op.drop_index("ix_loans_book", table_name="loans")
+    op.drop_table("loans")
+    op.drop_table("scheduled_transaction_occurrences")
+    op.drop_index("ix_scheduled_transaction_splits_schedule", table_name="scheduled_transaction_splits")
+    op.drop_table("scheduled_transaction_splits")
+    op.drop_index("ix_scheduled_transactions_book", table_name="scheduled_transactions")
+    op.drop_table("scheduled_transactions")
+    op.drop_index("ix_budget_targets_budget", table_name="budget_targets")
+    op.drop_table("budget_targets")
+    op.drop_index("ix_budgets_book_id", table_name="budgets")
+    op.drop_table("budgets")
     op.drop_index("ix_markdown_notes_transaction", table_name="markdown_notes")
     op.drop_index("ix_markdown_notes_account", table_name="markdown_notes")
     op.drop_table("markdown_notes")
