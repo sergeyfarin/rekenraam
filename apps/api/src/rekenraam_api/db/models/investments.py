@@ -22,6 +22,7 @@ from rekenraam_api.db.base import Base
 
 class Lot(Base):
     __tablename__ = "lots"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_lots_book_id", "book_id"),
         Index("ix_lots_account_commodity_opened", "account_id", "commodity_id", "opened_date"),
@@ -45,6 +46,7 @@ class Lot(Base):
 
 class InvestmentInstrument(Base):
     __tablename__ = "investment_instruments"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_investment_instruments_book_id", "book_id"),
         Index("ix_investment_instruments_symbol", "book_id", "symbol"),
@@ -100,6 +102,7 @@ class InvestmentInstrument(Base):
 
 class CostBasisProfile(Base):
     __tablename__ = "cost_basis_profiles"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_cost_basis_profiles_book_id", "book_id"),
         CheckConstraint(
@@ -126,6 +129,7 @@ class CostBasisProfile(Base):
 
 class CorporateAction(Base):
     __tablename__ = "corporate_actions"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_corporate_actions_book_effective", "book_id", "effective_date"),
         Index("ix_corporate_actions_instrument", "old_instrument_id", "new_instrument_id"),
@@ -164,9 +168,11 @@ class CorporateAction(Base):
 
 class SplitLotAllocation(Base):
     __tablename__ = "split_lot_allocations"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_split_lot_allocations_split_id", "split_id"),
         Index("ix_split_lot_allocations_lot_id", "lot_id"),
+        UniqueConstraint("split_id", "lot_id", name="uq_split_lot_allocations_split_lot"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -182,6 +188,7 @@ class SplitLotAllocation(Base):
 
 class PriceObservation(Base):
     __tablename__ = "price_observations"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_price_observations_book_id", "book_id"),
         Index(

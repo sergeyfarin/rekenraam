@@ -14,26 +14,40 @@ Last updated: 2026-05-12
 - [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) — schema direction
 - [docs/architecture/accounting-foundations.md](docs/architecture/accounting-foundations.md) — **pending decision**: proposed shift to small-business accounting + investments, with new Phase 1.5/1.6/1.7 inserted before remaining Phase 2 work
 
-## Pending decision (2026-05-12)
+## Decision 2026-05-12 — v1 stays personal-finance, v2 is small-business
 
-The product target is up for review: **personal-finance web app** (current
-[v1-scope.md](docs/product/v1-scope.md)) vs **small-business accounting
-with full investment support**
-([docs/architecture/accounting-foundations.md](docs/architecture/accounting-foundations.md)).
+The product target stays the **personal-finance web app** defined in
+[v1-scope.md](docs/product/v1-scope.md). Small-business accounting + full
+investment bookkeeping is **v2**; the architectural roadmap is at
+[docs/architecture/accounting-foundations.md](docs/architecture/accounting-foundations.md)
+and is not a v1 gate.
 
-Until decided, the plan below stands as written. If the accounting-
-foundations doc is adopted, the active focus changes to:
+Within v1 we still took the cheap, v2-aligned wins:
 
-1. Finish Phase 1 step 8 (Tauri removal) — unblocked either way.
-2. Start Phase 1.5: F1 (DB-enforced audit log + no hard deletes) → F3
-   (reconciled immutability + corrective entries) → F2 (master-data version
-   chains) → F4 (report input snapshots). ~3 weeks.
-3. Phase 1.6 (trial balance + balance sheet + income statement). ~1 week.
-4. Phase 1.7 (period close + year-end roll-forward). ~3–5 days.
-5. Slimmed Phase 2 (current steps 1, 3, 6, 7, 8, 11 remain; 2 and 12 are
-   subsumed; 5 simplifies).
+- Partial unique index + allow-list CHECK on `accounts.system_role`.
+- `price_sources` "Manual" row seeded.
+- `UNIQUE(split_id, lot_id)` on `split_lot_allocations`.
+- Generic `audit_log` table + SQLAlchemy `before_flush` listener with
+  before/after JSONB snapshots and request-context attribution on 21
+  business-table classes.
 
-See §9 of the foundations doc for the full merge.
+Detail in [v1-gap-plan.md §"v1 accounting-correctness fixes (2026-05-12)"](docs/product/v1-gap-plan.md).
+Tests: 197 passed / 2 skipped on real Postgres.
+
+**Remaining v1 work** (existing gap-plan, in priority order):
+
+1. Phase 1 step 8 — Tauri removal.
+2. Phase 2 step 11 — unauth `/api/v1/health`.
+3. Phase 2 step 5 — report cache invalidation on writes/currency-change.
+4. Phase 2 step 1 — reconciliation correctness (locks, constraints,
+   void-of-reconciled, race).
+5. Phase 2 step 3 — investments math test coverage.
+6. Phase 2 step 6 — budget/schedule/loan edge cases.
+7. Phase 2 step 7 — auth depth (deactivate-revokes-sessions, persistent
+   throttling, MFA paths).
+8. Phase 2 step 8 — CSV export escaping & locale.
+9. Phase 3 — frontend tests.
+10. Phase 4 — nice-to-haves.
 
 ## Active focus
 
@@ -90,7 +104,7 @@ Reference for full detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.m
 | 9 | Triage 8 pre-existing test failures | **DONE 2026-05-10** |
 | 10 | Rebuild `stage2_schema_contract.py` from metadata | **DONE 2026-05-11** |
 | 11 | Unauth `/api/v1/health` (remove transitive `require_request_context`) | not started |
-| 12 | Append-only audit trail for reference tables (payees, categories, commodities, price_observations, lots, corporate_actions) | partial — `import_rules` chain fixed 2026-05-12; splits versioning verified intact; remainder open |
+| 12 | Append-only audit trail for reference tables (payees, categories, commodities, price_observations, lots, corporate_actions) | **DONE 2026-05-12** via generic `audit_log` table + SQLAlchemy `before_flush` listener with JSONB before/after snapshots + request-context attribution; `import_rules` chain fixed earlier; splits versioning verified intact. Trigger-based DB-level enforcement deferred to v2 (see accounting-foundations.md). |
 
 ## Open findings (severity B/H, not yet in a phase)
 
@@ -131,6 +145,7 @@ Not all of [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md)'s "Rem
 - 2026-05-11 — Phase 1 step 6: shipped the reverse-proxy + TLS production example. `compose.prod.example.yaml` now includes Caddy with automatic HTTPS, persistent ACME state, public `80`/`443`, and local-only direct frontend binding by default ([v1-gap-plan.md §Phase 1 step 6](docs/product/v1-gap-plan.md)).
 - 2026-05-11 — Phase 2 step 10: rebuilt `apps/api/tests/stage2_schema_contract.py` from `Base.metadata`. Dropped the 800-line hand-written `STAGE2_SCHEMA_CONTRACT` (was missing 24 of 57 tables and silently drifting). Added `server_default` as a tracked dimension; fixed 32 ORM columns and 6 migration columns to use `sa.text(...)` for non-string defaults. Added 12-test self-test suite in [test_schema_contract.py](apps/api/tests/test_schema_contract.py) so the detector itself can't silently regress. Re-enabled the migration-vs-ORM drift test ([v1-gap-plan.md §Phase 2 step 10](docs/product/v1-gap-plan.md)).
 - 2026-05-12 — Phase 1 step 2: shipped admin-issued user invite flow. New `user_invites` table in the baseline schema, `UserInvite` ORM model, `ErgonomicsService.create_invite` (admin-only, idempotent for re-invites of pending users) and `AuthService.accept_invite` (public, single-use token, anti-enumeration error message), `POST /api/v1/admin/invites` and `POST /api/v1/auth/invite/accept` endpoints. 11 e2e tests cover the full lifecycle ([v1-gap-plan.md §Phase 1 step 2](docs/product/v1-gap-plan.md)).
+- 2026-05-12 — v1 accounting-correctness fixes: partial unique index + allow-list CHECK on `accounts.system_role`; seeded `price_sources` "Manual" row; `UNIQUE(split_id, lot_id)` on `split_lot_allocations`; new `audit_log` table + SQLAlchemy `before_flush` listener emitting JSONB before/after snapshots for every mutation on 21 business-table classes; full attribution from `RequestContext`. Schema-contract test green; full suite 197 passed / 2 skipped on Postgres. Resolves Phase 2 step 12. Detail: [v1-gap-plan.md §"v1 accounting-correctness fixes (2026-05-12)"](docs/product/v1-gap-plan.md). v2 will replace the listener with Postgres triggers (see [accounting-foundations.md](docs/architecture/accounting-foundations.md)).
 
 ## Decision 2026-05-09 — stabilize before features
 

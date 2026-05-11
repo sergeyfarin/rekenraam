@@ -22,6 +22,7 @@ from rekenraam_api.db.base import Base
 
 class PriceSource(Base):
     __tablename__ = "price_sources"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_price_sources_kind", "kind"),
         UniqueConstraint("name", name="uq_price_sources_name"),
@@ -39,6 +40,7 @@ class PriceSource(Base):
 
 class PricingPolicy(Base):
     __tablename__ = "pricing_policies"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_pricing_policies_book_id", "book_id"),
         UniqueConstraint("book_id", name="uq_pricing_policies_book_id"),
@@ -84,6 +86,7 @@ class PricingPolicy(Base):
 
 class PricingSourceAssignment(Base):
     __tablename__ = "pricing_source_assignments"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_pricing_source_assignments_book_id", "book_id"),
         CheckConstraint("priority >= 0", name="ck_pricing_source_assignments_priority"),

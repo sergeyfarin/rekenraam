@@ -18,6 +18,7 @@ from rekenraam_api.db.base import Base
 
 class Commodity(Base):
     __tablename__ = "commodities"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_commodities_book_id", "book_id"),
         CheckConstraint("scale >= 0 AND scale <= 12", name="ck_commodities_scale_range"),
@@ -56,6 +57,7 @@ class Country(Base):
 
 class Institution(Base):
     __tablename__ = "institutions"
+    __audit_logged__ = True
     __table_args__ = (Index("ix_institutions_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -76,6 +78,7 @@ class Institution(Base):
 
 class Category(Base):
     __tablename__ = "categories"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_categories_book_id", "book_id"),
         Index("ix_categories_parent_id", "parent_id"),
@@ -97,6 +100,7 @@ class Category(Base):
 
 class Payee(Base):
     __tablename__ = "payees"
+    __audit_logged__ = True
     __table_args__ = (Index("ix_payees_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -114,6 +118,7 @@ class Payee(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
+    __audit_logged__ = True
     __table_args__ = (Index("ix_tags_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -130,6 +135,7 @@ class Tag(Base):
 
 class Person(Base):
     __tablename__ = "people"
+    __audit_logged__ = True
     __table_args__ = (Index("ix_people_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -147,6 +153,7 @@ class Person(Base):
 
 class Project(Base):
     __tablename__ = "projects"
+    __audit_logged__ = True
     __table_args__ = (Index("ix_projects_book_id", "book_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

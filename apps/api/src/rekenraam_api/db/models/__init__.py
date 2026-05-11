@@ -20,6 +20,7 @@ from rekenraam_api.db.models.accounts import (
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.ergonomics import (
     AuditEvent,
+    AuditLogEntry,
     MarkdownNote,
     PayeeDefault,
     TransactionSavedView,
@@ -75,6 +76,7 @@ __all__ = [
     "Account",
     "AccountBalancing",
     "AuditEvent",
+    "AuditLogEntry",
     "AuthSession",
     "BalanceAdjustment",
     "BalanceCheck",

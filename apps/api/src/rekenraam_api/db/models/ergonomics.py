@@ -14,6 +14,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -61,6 +62,44 @@ class AuditEvent(Base):
     target_id: Mapped[int | None] = mapped_column(BigInteger)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AuditLogEntry(Base):
+    """Generic mutation snapshot for every audit-logged business table.
+
+    Sister to :class:`AuditEvent`. ``AuditEvent`` is a curated, service-emitted
+    event log ("transaction.created" with a human-readable summary).
+    ``AuditLogEntry`` is the raw per-mutation row capture: one row per insert,
+    update, or delete observed by the SQLAlchemy ``before_flush`` /
+    ``after_flush`` listener. Together they answer "who did what when, and
+    what changed exactly."
+    """
+
+    __tablename__ = "audit_log"
+    __table_args__ = (
+        Index("ix_audit_log_table_row", "table_name", "row_pk"),
+        Index("ix_audit_log_actor_created", "actor_user_id", "created_at"),
+        Index("ix_audit_log_created", "created_at"),
+        CheckConstraint("op IN ('insert', 'update', 'delete')", name="ck_audit_log_op"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    table_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    row_pk: Mapped[str] = mapped_column(String(64), nullable=False)
+    op: Mapped[str] = mapped_column(String(16), nullable=False)
+    before_state: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    after_state: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    actor_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth_sessions.id", ondelete="SET NULL")
+    )
+    actor_device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_devices.id", ondelete="SET NULL")
+    )
+    actor_request_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

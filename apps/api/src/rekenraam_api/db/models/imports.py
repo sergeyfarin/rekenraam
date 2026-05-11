@@ -20,6 +20,7 @@ from rekenraam_api.db.base import Base
 
 class ImportRule(Base):
     __tablename__ = "import_rules"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_import_rules_book_kind", "book_id", "rule_kind"),
         Index("ix_import_rules_priority", "priority", "id"),

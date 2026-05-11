@@ -91,7 +91,17 @@
       "Bash(/home/reken/Repos/rekenraam/.venv/bin/pyright)",
       "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest apps/api/tests/ -q --ignore=apps/api/tests/e2e)",
       "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/ -q --ignore=tests/e2e -k \"preserves_original_row_and_splits or rule_delete_preserves\")",
-      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/e2e/ --collect-only -q)"
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/e2e/ --collect-only -q)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/ruff format *)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/ -q --ignore=/home/reken/Repos/rekenraam/apps/api/tests/e2e)",
+      "Bash(psql -U postgres -h 127.0.0.1 -p 5432 -d postgres -c \"SELECT 1\")",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/test_accounting_invariants.py /home/reken/Repos/rekenraam/apps/api/tests/test_audit_log_listener.py -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/test_audit_log_listener.py::test_listener_stamps_request_context_attribution -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/ -q --ignore=/home/reken/Repos/rekenraam/apps/api/tests/e2e)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/test_migrations.py -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/e2e/ -q)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/ -q)",
+      "Bash(docker rm *)"
     ],
     "additionalDirectories": [
       "/tmp"

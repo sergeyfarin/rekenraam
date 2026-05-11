@@ -21,6 +21,7 @@ from rekenraam_api.db.base import Base
 
 class Account(Base):
     __tablename__ = "accounts"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_accounts_book_id", "book_id"),
         Index("ix_accounts_parent_id", "parent_id"),
@@ -42,6 +43,19 @@ class Account(Base):
         CheckConstraint(
             "(system_role IS NULL) OR is_system",
             name="ck_accounts_system_role_requires_system",
+        ),
+        CheckConstraint(
+            "system_role IS NULL OR system_role IN "
+            "('opening_balance', 'imbalance_import', 'income_summary', "
+            "'expense_summary', 'retained_earnings')",
+            name="ck_accounts_system_role_allowed",
+        ),
+        Index(
+            "uq_accounts_system_role_per_book",
+            "book_id",
+            "system_role",
+            unique=True,
+            postgresql_where=text("system_role IS NOT NULL"),
         ),
     )
 
@@ -78,6 +92,7 @@ class Account(Base):
 
 class AccountBalancing(Base):
     __tablename__ = "account_balancings"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_account_balancings_book_id", "book_id"),
         Index("ix_account_balancings_account_date", "account_id", "as_of_date"),
@@ -113,6 +128,7 @@ class AccountBalancing(Base):
 
 class BalanceCheck(Base):
     __tablename__ = "balance_checks"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_balance_checks_account_date", "account_id", "as_of_date"),
         CheckConstraint(
@@ -147,6 +163,7 @@ class BalanceCheck(Base):
 
 class BalanceAdjustment(Base):
     __tablename__ = "balance_adjustments"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_balance_adjustments_account_date", "account_id", "as_of_date"),
         Index("ix_balance_adjustments_check", "balance_check_id"),
@@ -191,6 +208,7 @@ class BalanceAdjustment(Base):
 
 class BalanceConstraint(Base):
     __tablename__ = "balance_constraints"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_balance_constraints_account", "account_id"),
         CheckConstraint(

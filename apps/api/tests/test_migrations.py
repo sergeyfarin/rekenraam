@@ -156,7 +156,8 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM books")) == 1
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM book_state")) == 1
         assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM commodities")) == 1
-        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM price_sources")) == 10
+        # 1 manual + 10 providers seeded by the baseline migration.
+        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM price_sources")) == 11
 
         _run_migrations(database_name, "base")
         assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) is None

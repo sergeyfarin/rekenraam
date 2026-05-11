@@ -19,6 +19,7 @@ from rekenraam_api.db.base import Base
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_transactions_book_occurred_date", "book_id", "occurred_date"),
         Index("ix_transactions_previous_tx_id", "previous_tx_id"),
@@ -67,6 +68,7 @@ class Transaction(Base):
 
 class Split(Base):
     __tablename__ = "splits"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_splits_tx_id", "tx_id"),
         Index("ix_splits_account_id", "account_id"),

@@ -8,6 +8,7 @@ Create Date: 2026-05-03 00:00:00
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -550,12 +551,25 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "(system_role IS NULL) OR is_system", name="ck_accounts_system_role_requires_system"
         ),
+        sa.CheckConstraint(
+            "system_role IS NULL OR system_role IN "
+            "('opening_balance', 'imbalance_import', 'income_summary', "
+            "'expense_summary', 'retained_earnings')",
+            name="ck_accounts_system_role_allowed",
+        ),
         sa.UniqueConstraint("previous_account_id", name="uq_accounts_previous_account_id"),
     )
     op.create_index("ix_accounts_book_id", "accounts", ["book_id"], unique=False)
     op.create_index("ix_accounts_parent_id", "accounts", ["parent_id"], unique=False)
     op.create_index(
         "ix_accounts_previous_account_id", "accounts", ["previous_account_id"], unique=False
+    )
+    op.create_index(
+        "uq_accounts_system_role_per_book",
+        "accounts",
+        ["book_id", "system_role"],
+        unique=True,
+        postgresql_where=sa.text("system_role IS NOT NULL"),
     )
 
     op.create_table(
@@ -1284,6 +1298,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
+        sa.UniqueConstraint("split_id", "lot_id", name="uq_split_lot_allocations_split_lot"),
     )
     op.create_index(
         "ix_split_lot_allocations_split_id", "split_lot_allocations", ["split_id"], unique=False
@@ -1721,6 +1736,50 @@ def upgrade() -> None:
     op.create_index("ix_audit_events_event_type", "audit_events", ["event_type"], unique=False)
 
     op.create_table(
+        "audit_log",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("table_name", sa.String(length=64), nullable=False),
+        sa.Column("row_pk", sa.String(length=64), nullable=False),
+        sa.Column("op", sa.String(length=16), nullable=False),
+        sa.Column("before_state", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("after_state", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "actor_user_id",
+            sa.BigInteger(),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "actor_session_id",
+            sa.BigInteger(),
+            sa.ForeignKey("auth_sessions.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "actor_device_id",
+            sa.BigInteger(),
+            sa.ForeignKey("user_devices.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("actor_request_id", sa.String(length=64), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint("op IN ('insert', 'update', 'delete')", name="ck_audit_log_op"),
+    )
+    op.create_index("ix_audit_log_table_row", "audit_log", ["table_name", "row_pk"], unique=False)
+    op.create_index(
+        "ix_audit_log_actor_created",
+        "audit_log",
+        ["actor_user_id", "created_at"],
+        unique=False,
+    )
+    op.create_index("ix_audit_log_created", "audit_log", ["created_at"], unique=False)
+
+    op.create_table(
         "transaction_saved_views",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column(
@@ -2035,6 +2094,7 @@ def upgrade() -> None:
             """
             INSERT INTO price_sources (id, name, kind, provider, base_url)
             VALUES
+                (1, 'Manual', 'manual', 'manual', NULL),
                 (1001, 'ECB', 'provider', 'ECB', 'https://www.ecb.europa.eu/stats/exchange/eurofxref/'),
                 (1002, 'IRS', 'provider', 'IRS', 'https://www.irs.gov/individuals/international-taxpayers/yearly-average-currency-exchange-rates'),
                 (1003, 'HMRC', 'provider', 'HMRC', 'https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat'),
@@ -2647,6 +2707,10 @@ def downgrade() -> None:
     op.drop_table("transaction_templates")
     op.drop_index("ix_transaction_saved_views_user_book", table_name="transaction_saved_views")
     op.drop_table("transaction_saved_views")
+    op.drop_index("ix_audit_log_created", table_name="audit_log")
+    op.drop_index("ix_audit_log_actor_created", table_name="audit_log")
+    op.drop_index("ix_audit_log_table_row", table_name="audit_log")
+    op.drop_table("audit_log")
     op.drop_index("ix_audit_events_event_type", table_name="audit_events")
     op.drop_index("ix_audit_events_actor_created", table_name="audit_events")
     op.drop_index("ix_audit_events_book_created", table_name="audit_events")
@@ -2729,6 +2793,7 @@ def downgrade() -> None:
     op.drop_index("ix_categories_parent_id", table_name="categories")
     op.drop_index("ix_categories_book_id", table_name="categories")
     op.drop_table("categories")
+    op.drop_index("uq_accounts_system_role_per_book", table_name="accounts")
     op.drop_index("ix_accounts_parent_id", table_name="accounts")
     op.drop_index("ix_accounts_previous_account_id", table_name="accounts")
     op.drop_index("ix_accounts_book_id", table_name="accounts")

@@ -19,6 +19,7 @@ from rekenraam_api.db.base import Base
 
 class ReportDefinition(Base):
     __tablename__ = "report_definitions"
+    __audit_logged__ = True
     __table_args__ = (
         Index("ix_report_definitions_book", "book_id"),
         Index("ix_report_definitions_kind", "book_id", "kind"),

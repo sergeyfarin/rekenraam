@@ -6,18 +6,13 @@ Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 comple
 
 For the day-to-day "what's next" view, see [TODO.md](../../TODO.md).
 
-> **⚠ Pending architectural decision (2026-05-12):** A separate document,
-> [docs/architecture/accounting-foundations.md](../architecture/accounting-foundations.md),
-> proposes shifting the product target from "personal finance web app" to
-> "small-business accounting + investments." If adopted, it inserts a new
-> **Phase 1.5 (Accounting Foundations)** between Phase 1 and Phase 2 — adding
-> ~3 weeks of work (database-enforced audit log, no hard deletes, reconciled
-> immutability + corrective-entry workflow, master-data version chains, report
-> input snapshots), plus a new Phase 1.6 (RP1–RP3 foundational reports) and
-> Phase 1.7 (period close). It also shrinks the current Phase 2 (steps 2 and
-> 12 get subsumed; step 5 gets simpler). **Until that decision is made, this
-> document remains the operational plan.** See §11 of the foundations doc for
-> the merge-if-adopted sequencing.
+> **Decision recorded 2026-05-12:** v1 ships as a **personal-finance web app**
+> per the existing `v1-scope.md`. Small-business accounting + full investment
+> bookkeeping is **v2** scope; the architectural roadmap lives in
+> [docs/architecture/accounting-foundations.md](../architecture/accounting-foundations.md)
+> and is not a v1 gate. Within v1, we still take the cheap audit/correctness
+> wins that align with v2 direction: see "v1 accounting-correctness fixes
+> (2026-05-12)" below for what shipped in that pass.
 
 Severity legend:
 - **B** — release blocker (gate per `v1-scope.md` "Release Gate" or scope `Must Have`)
@@ -74,6 +69,58 @@ These were found while building Phase 0 and are tracked here so they don't get l
 - **`scheduled_transactions.interval` column uses a Postgres reserved word.** Severity **N**. Works because SQLAlchemy quotes column names in its generated SQL, but a footgun for raw SQL elsewhere (`SELECT interval FROM scheduled_transactions` would fail). Worth renaming to `interval_count` before the baseline hardens further. Not in any phase.
 
 - **Pending-user state vs deactivated-user state are conflated.** Severity **N**. Surfaced building Phase 1 step 2: an invited-but-not-accepted user has `is_active=False` and `password_hash IS NULL`. An admin-deactivated existing user also has `is_active=False`. The invite-accept path activates whoever owns the token, which is correct for the pending case. Today this can't be exploited — `create_invite` rejects emails belonging to any user with `password_hash IS NOT NULL` — but the model is fragile. Cleaner long-term: add a discriminator (`status: 'pending' | 'active' | 'deactivated'`) so the three cases are distinct. The invite e2e test `test_accept_rejects_when_user_deactivated_between_issue_and_accept` is `@pytest.mark.skip`-ped pending this. Worth pulling into Phase 2 step 7 (auth depth).
+
+### v1 accounting-correctness fixes (2026-05-12)
+
+After the small-business-vs-personal-finance decision (v1 stays personal-finance;
+small-business is v2), the following H-severity correctness gaps were closed
+in v1 as the cheap, scope-aligned wins. Each landed with a focused regression
+test exercising real Postgres semantics.
+
+- [x] **Partial unique index on `accounts(book_id, system_role) WHERE system_role
+  IS NOT NULL`.** Eliminates the race window where two concurrent
+  `_ensure_system_account` calls could insert duplicate `income_summary` /
+  `expense_summary` / `retained_earnings` rows for a book. Index added in
+  baseline schema and ORM model. Regression test:
+  [test_system_role_per_book_is_unique](../../apps/api/tests/test_accounting_invariants.py).
+- [x] **`accounts.system_role` allow-list `CHECK`.** Restricts the column to
+  `{'opening_balance', 'imbalance_import', 'income_summary',
+  'expense_summary', 'retained_earnings'}` — the canonical set used by
+  `services/admin.py` and `repositories/imports.py`. CHECK added in baseline +
+  ORM model. Regression test:
+  [test_system_role_allow_list_rejects_bad_values](../../apps/api/tests/test_accounting_invariants.py).
+- [x] **`price_sources` "Manual" row seeded.** The 10 provider rows were
+  already seeded; the manual entry-point used by user-supplied prices was
+  missing. Seeded as `id=1` so application code that expects a stable manual
+  source id works.
+- [x] **`UNIQUE(split_id, lot_id)` on `split_lot_allocations`.** The legacy
+  SQLite schema enforced this via a composite primary key; the Postgres
+  baseline used a surrogate `id` PK and dropped the natural-key uniqueness.
+  Re-added as a UNIQUE constraint. Regression test:
+  [test_split_lot_allocation_rejects_duplicate_split_lot_pair](../../apps/api/tests/test_accounting_invariants.py).
+- [x] **Generic audit-log table + SQLAlchemy `before_flush` listener.** New
+  `audit_log` table (`table_name`, `row_pk`, `op`, `before_state JSONB`,
+  `after_state JSONB`, full attribution from `RequestContext`). New listener
+  in [audit_listener.py](../../apps/api/src/rekenraam_api/db/audit_listener.py)
+  observes every audit-logged ORM class via a marker (`__audit_logged__ = True`).
+  21 business-table classes marked: accounts, transactions, splits, payees,
+  categories, tags, people, projects, institutions, commodities,
+  account_balancings, balance_checks, balance_adjustments, balance_constraints,
+  lots, corporate_actions, split_lot_allocations, price_observations,
+  investment_instruments, cost_basis_profiles, price_sources, pricing_policies,
+  pricing_source_assignments, import_rules, report_definitions. Captures
+  insert/update/delete with full before/after JSON snapshots; coerces dates,
+  Decimals, and bytes for JSONB compatibility; stamps `actor_user_id`,
+  `actor_session_id`, `actor_device_id`, `actor_request_id` from the request
+  context. The listener is the v1 stand-in for the v2 trigger-based approach
+  in [`accounting-foundations.md`](../architecture/accounting-foundations.md)
+  §5 (F1); v2 will replace it with Postgres triggers for direct-SQL coverage.
+  Regression tests in
+  [test_audit_log_listener.py](../../apps/api/tests/test_audit_log_listener.py).
+  Test verdict on real Postgres: **197 passed, 2 skipped, 0 failed.**
+
+Schema-contract test (`test_alembic_head_matches_full_stage2_schema_contract`)
+passes against the updated baseline, so ORM and migration stayed in sync.
 
 ### Append-only / audit-trail enforcement (2026-05-12)
 
