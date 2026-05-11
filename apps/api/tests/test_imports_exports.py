@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
 from rekenraam_api.db.models.imports import (
+    ImportRule,
     ImportSession,
     ImportSessionTransaction,
     ImportTransactionKey,
@@ -382,3 +383,48 @@ async def test_import_commit_marks_session_abandoned_on_locked_account(
     )
     assert session is not None
     assert session.status == "abandoned"
+
+
+@pytest.mark.asyncio
+async def test_import_rule_delete_preserves_original_row_via_chain(
+    repository_session: AsyncSession,
+) -> None:
+    """Deleting an import rule must insert a tombstone row that points at the
+    original via ``previous_import_rule_id`` and leave the original row in
+    place. ``list_rules`` must exclude both the tombstone and the now-stale
+    original, but the original record must remain readable for audit."""
+    repository = ImportRepository(repository_session)
+    original = await repository.create_rule(
+        book_id=1,
+        rule_kind="payee",
+        match_type="contains",
+        match_text="Cafe",
+        priority=10,
+        target_category_id=None,
+    )
+
+    deleted = await repository.delete_rule(original.id)
+    await repository_session.commit()
+    assert deleted is True
+
+    refreshed_original = await repository_session.get(ImportRule, original.id)
+    assert refreshed_original is not None, "original row must remain for audit"
+    assert refreshed_original.deleted_at is None
+    assert refreshed_original.match_text == "Cafe"
+
+    tombstone = (
+        await repository_session.execute(
+            select(ImportRule).where(ImportRule.previous_import_rule_id == original.id)
+        )
+    ).scalar_one()
+    assert tombstone.deleted_at is not None
+    assert tombstone.match_text == "Cafe"
+    assert tombstone.book_id == original.book_id
+
+    listed = await repository.list_rules(original.book_id)
+    listed_ids = {rule.id for rule in listed}
+    assert original.id not in listed_ids
+    assert tombstone.id not in listed_ids
+
+    second_delete = await repository.delete_rule(original.id)
+    assert second_delete is False, "tombstoning an already-deleted rule must be a no-op"

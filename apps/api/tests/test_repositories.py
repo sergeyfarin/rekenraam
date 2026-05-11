@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import delete, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
@@ -520,6 +520,117 @@ async def test_transaction_repository_creates_updates_and_deletes_transaction(
     assert updated is not None
     assert updated.memo == "Updated transaction"
     assert deleted is True
+
+
+@pytest.mark.asyncio
+async def test_transaction_update_preserves_original_row_and_splits(
+    repository_session: AsyncSession,
+) -> None:
+    """An update must leave the original transaction row AND its splits in the
+    database so the audit trail can be reconstructed. The new transaction row
+    carries the new splits via ``previous_tx_id``; the old row stays intact."""
+    repository = TransactionRepository(repository_session)
+
+    original = await repository.create_transaction(
+        book_id=1,
+        txn_date=date(2026, 5, 3),
+        payee_id=None,
+        memo="Original memo",
+        status="uncleared",
+        reference=None,
+    )
+    await repository.replace_transaction_splits(
+        original.id,
+        [
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": "original-leg",
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ],
+    )
+    await repository_session.commit()
+
+    new_version = await repository.update_transaction(
+        transaction_id=original.id,
+        txn_date=date(2026, 5, 4),
+        payee_id=None,
+        memo="Updated memo",
+        status="cleared",
+        reference="ref-1",
+    )
+    await repository.replace_transaction_splits(
+        new_version.id if new_version is not None else original.id,
+        [
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 200,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": "updated-leg",
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -200,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ],
+    )
+    await repository_session.commit()
+
+    assert new_version is not None
+    assert new_version.id != original.id
+    assert new_version.previous_tx_id == original.id
+
+    refreshed_original = await repository_session.get(Transaction, original.id)
+    assert refreshed_original is not None, "original row must remain for audit"
+    assert refreshed_original.memo == "Original memo"
+    assert refreshed_original.status == "uncleared"
+
+    original_splits = (
+        (await repository_session.execute(select(Split).where(Split.tx_id == original.id)))
+        .scalars()
+        .all()
+    )
+    assert len(original_splits) == 2, "original splits must remain attached to original tx"
+    assert {split.amount_minor for split in original_splits} == {100, -100}
+    assert any(split.memo == "original-leg" for split in original_splits)
+
+    new_splits = (
+        (await repository_session.execute(select(Split).where(Split.tx_id == new_version.id)))
+        .scalars()
+        .all()
+    )
+    assert len(new_splits) == 2
+    assert {split.amount_minor for split in new_splits} == {200, -200}
+    assert any(split.memo == "updated-leg" for split in new_splits)
 
 
 @pytest.mark.asyncio

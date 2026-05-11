@@ -106,9 +106,17 @@ class ImportRepository:
         return int(match_id) if match_id is not None else None
 
     async def list_rules(self, book_id: int) -> list[ImportRule]:
+        newer = ImportRule.__table__.alias("newer_import_rules")
+        no_newer = ~exists(
+            select(literal(1)).where(newer.c.previous_import_rule_id == ImportRule.id)
+        )
         statement: Select[tuple[ImportRule]] = (
             select(ImportRule)
-            .where(ImportRule.book_id == book_id, ImportRule.deleted_at.is_(None))
+            .where(
+                ImportRule.book_id == book_id,
+                ImportRule.deleted_at.is_(None),
+                no_newer,
+            )
             .order_by(ImportRule.priority.asc(), ImportRule.id.asc())
         )
         result = await self._session.execute(statement)
@@ -124,11 +132,41 @@ class ImportRepository:
     async def get_rule(self, rule_id: int) -> ImportRule | None:
         return await self._session.get(ImportRule, rule_id)
 
-    async def delete_rule(self, rule_id: int) -> bool:
+    async def _get_rule_chain_head(self, rule_id: int) -> ImportRule | None:
         rule = await self._session.get(ImportRule, rule_id)
-        if rule is None or rule.deleted_at is not None:
+        if rule is None:
+            return None
+        while True:
+            statement = (
+                select(ImportRule).where(ImportRule.previous_import_rule_id == rule.id).limit(1)
+            )
+            newer = await self._session.scalar(statement)
+            if newer is None:
+                return rule
+            rule = newer
+
+    async def delete_rule(self, rule_id: int) -> bool:
+        head = await self._get_rule_chain_head(rule_id)
+        if head is None or head.deleted_at is not None:
             return False
-        rule.deleted_at = datetime.now(UTC)
+        tombstone = ImportRule(
+            previous_import_rule_id=head.id,
+            book_id=head.book_id,
+            rule_kind=head.rule_kind,
+            match_type=head.match_type,
+            match_text=head.match_text,
+            priority=head.priority,
+            amount_min_minor=head.amount_min_minor,
+            amount_max_minor=head.amount_max_minor,
+            date_from=head.date_from,
+            date_to=head.date_to,
+            match_account_id=head.match_account_id,
+            target_account_id=head.target_account_id,
+            target_category_id=head.target_category_id,
+            target_payee_id=head.target_payee_id,
+            deleted_at=datetime.now(UTC),
+        )
+        self._session.add(tombstone)
         await self._session.commit()
         return True
 

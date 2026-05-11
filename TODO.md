@@ -68,6 +68,7 @@ Reference for full detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.m
 | 9 | Triage 8 pre-existing test failures | **DONE 2026-05-10** |
 | 10 | Rebuild `stage2_schema_contract.py` from metadata | **DONE 2026-05-11** |
 | 11 | Unauth `/api/v1/health` (remove transitive `require_request_context`) | not started |
+| 12 | Append-only audit trail for reference tables (payees, categories, commodities, price_observations, lots, corporate_actions) | partial — `import_rules` chain fixed 2026-05-12; splits versioning verified intact; remainder open |
 
 ## Open findings (severity B/H, not yet in a phase)
 

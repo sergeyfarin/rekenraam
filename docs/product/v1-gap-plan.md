@@ -62,6 +62,46 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 - **Pending-user state vs deactivated-user state are conflated.** Severity **N**. Surfaced building Phase 1 step 2: an invited-but-not-accepted user has `is_active=False` and `password_hash IS NULL`. An admin-deactivated existing user also has `is_active=False`. The invite-accept path activates whoever owns the token, which is correct for the pending case. Today this can't be exploited — `create_invite` rejects emails belonging to any user with `password_hash IS NOT NULL` — but the model is fragile. Cleaner long-term: add a discriminator (`status: 'pending' | 'active' | 'deactivated'`) so the three cases are distinct. The invite e2e test `test_accept_rejects_when_user_deactivated_between_issue_and_accept` is `@pytest.mark.skip`-ped pending this. Worth pulling into Phase 2 step 7 (auth depth).
 
+### Append-only / audit-trail enforcement (2026-05-12)
+
+The legacy SQLite schema versioned 24 tables via `previous_X_id` chains protected by `RAISE`-on-UPDATE/DELETE triggers — every "edit" inserted a new row pointing at the superseded one. The Postgres baseline kept the chain column on five tables only and treats the rest as mutable. With no Postgres triggers, enforcement lives entirely in Python repository code.
+
+Audit verdict on the five chained tables:
+
+| Table | Chain enforced? | Notes |
+|---|---|---|
+| `transactions` | **YES** | Every edit/void/duplicate/import path inserts a new row with `previous_tx_id`. No `session.delete`, no `UPDATE`. |
+| `accounts` | **YES** | `update`, `delete`, and `set_booking_policy` all insert replacement rows; delete uses a hidden tombstone via `is_hidden=True, lifecycle_note="deleted"`. |
+| `account_balancings` | **YES** | Voiding inserts a new row with `voided_at` set; never flips it on the existing row. |
+| `report_definitions` | **YES** | Update + delete both insert new rows; delete marks `session_id="void:delete"`. |
+| `import_rules` | **YES — fixed 2026-05-12** | Originally broken: `delete_rule` mutated `rule.deleted_at` in place. Now writes a tombstone row with `previous_import_rule_id=head.id, deleted_at=now()`, mirroring the other four chains. `list_rules` filters to chain-head and non-tombstone. Regression test in [test_imports_exports.py](../../apps/api/tests/test_imports_exports.py). |
+
+Splits versioning specifically: the audit subagent flagged `replace_transaction_splits` as destroying old splits during update. After verification this is **not the case** — the service layer always calls `replace_transaction_splits(new_tx.id, …)` where `new_tx` is the new chain head; the existing-split delete loop runs against the new tx's empty split set. Old splits remain attached to the old `tx_id`. A regression test now locks in this invariant: [test_repositories.py::test_transaction_update_preserves_original_row_and_splits](../../apps/api/tests/test_repositories.py).
+
+Findings on the 19 tables that lost the chain (sampled: payees, categories, commodities, splits, price_observations):
+
+| Table | Edit behavior | Severity |
+|---|---|---|
+| `payees` | `update_payee` mutates in place; `delete_payee` is hard `session.delete`. No `audit_events` emitted from `repositories/metadata.py`. | **H** |
+| `categories` | Same pattern as payees. | **H** |
+| `commodities` | `update_commodity`, `update_currency`, `set_currency_active` all mutate in place. Currency edits may also mutate `Book.base_currency_code` in place. | **H** |
+| `splits` | Versioned via the transaction chain (verified above). | OK |
+| `price_observations` | `delete_market_price_observation`, `delete_fx_rate_daily_observation`, `delete_fx_rate_official_observation` are all hard deletes. No audit emissions from `repositories/pricing.py`. | **H** |
+| `lots` | Mutable. (Not sampled in detail.) | **H** |
+| `corporate_actions` | Mutable. (Not sampled.) | **H** |
+| `pricing_policies`, `pricing_source_assignments`, `price_sources`, `commodity_price_sources` (this one is missing entirely), `book_base_currency_history` (missing), `notes`, `tags`, `people`, `projects`, `institutions`, `countries`, `currencies` (missing) | Mutable or not present. Some are intentional design simplifications; others lose audit history that the desktop schema preserved. | **N–H** depending on table |
+
+The `audit_events` table exists but is only emitted from `services/transactions.py` and `services/imports.py`, and its payload (`summary: str + metadata_json: str | None`) is a free-text event log, not a before/after snapshot. It does not compensate for the lost chains.
+
+**Decision (2026-05-12):** prefer append-only where it's reasonable. v1 must restore the chain — or at minimum a structured `audit_events` before/after snapshot — for reference data that has a real edit history: payees, categories, commodities (incl. currency edits), price_observations, lots, corporate_actions. Mutable-by-design is acceptable only where the column itself is the audit (e.g., a denormalized counter). Schema-level shape changes (re-adding `previous_X_id` + UNIQUE) need a follow-up migration; the repository-layer behavior change can ship in advance via `audit_events` snapshots.
+
+Action items (Phase 2 step 12 — new):
+
+- [ ] **`metadata.py` reference tables** — payees, categories, commodities, tags, people, projects, institutions, currencies. Either (a) re-introduce `previous_X_id` + UNIQUE columns and switch updates/deletes to "insert new version" + chain-head filtering in `list_*`, or (b) emit a structured `audit_events` row carrying full before/after JSON snapshots on every edit/delete. Option (a) matches the desktop intent and is what we want for tables the user can edit freely. Option (b) is the bare-minimum compatibility path.
+- [ ] **`pricing.py` observations** — `delete_market_price_observation` and friends must either tombstone via a new column (`superseded_by_observation_id` or `voided_at` + replacement) or emit a structured `audit_events` snapshot. Price corrections are a real workflow; losing the history is worse than losing it for payees.
+- [ ] **Lots and corporate_actions** — these touch tax-basis math; an audit trail is a v1 release-gate concern, not "nice to have."
+- [ ] **`AuditEvent.metadata_json` shape** — define a canonical schema (`{"before": {...}, "after": {...}, "diff_keys": [...]}`) and document it so future readers can decode it without per-event_type spelunking.
+
 ### Findings from the Tauri parity audit (2026-05-12)
 
 These came out of the function-by-function and table-by-table audit of `src-tauri/` ahead of Phase 1 step 8 (Tauri removal). Items already fixed in this pass are checked off; the rest are logged here so they don't get lost.
@@ -409,6 +449,7 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
     - Removed the now-redundant `test_sqlalchemy_metadata_matches_stage2_schema_contract` from `test_orm_schema.py` (subsumed by the migration drift test). Kept `test_milestone7_planning_tables_are_registered` as a fast DB-free sanity check.
     - Re-enabled `test_alembic_head_matches_full_stage2_schema_contract`. CI now runs it as part of the standard suite.
 11. **Health endpoint deauth** (Phase 0 finding): remove the transitive `require_request_context` dependency from `/api/v1/health` so the deployment health probe works without a session cookie.
+12. **Append-only audit trail for reference data** (see "Append-only / audit-trail enforcement" finding above). Restore versioned writes (or at minimum structured `audit_events` before/after snapshots) for the mutable reference tables: payees, categories, commodities (incl. currency edits and `set_currency_active`), price_observations, lots, corporate_actions. Decide tombstone-via-chain vs. snapshot-via-audit_events per table; schema changes (re-adding `previous_X_id`) go in a follow-up migration. Acceptance: every edit/delete on these tables leaves the prior state recoverable from the database alone.
 
 Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded existing one) that exercises the seam from Phase 0 and covers the missing scenarios named in §2.
 

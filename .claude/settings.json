@@ -85,7 +85,13 @@
       "Bash(/home/reken/Repos/rekenraam/.venv/bin/python -c ' *)",
       "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest tests/e2e/test_user_invite.py -v)",
       "Bash(PATH=/home/reken/Repos/rekenraam/.venv/bin:__TRACKED_VAR__ TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam pytest apps/api/tests/e2e/ -q)",
-      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/ -q --ignore=tests/e2e)"
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/ -q --ignore=tests/e2e)",
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(.venv/bin/ruff format *)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pyright)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest apps/api/tests/ -q --ignore=apps/api/tests/e2e)",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/ -q --ignore=tests/e2e -k \"preserves_original_row_and_splits or rule_delete_preserves\")",
+      "Bash(/home/reken/Repos/rekenraam/.venv/bin/pytest tests/e2e/ --collect-only -q)"
     ],
     "additionalDirectories": [
       "/tmp"
