@@ -6,6 +6,19 @@ Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 comple
 
 For the day-to-day "what's next" view, see [TODO.md](../../TODO.md).
 
+> **⚠ Pending architectural decision (2026-05-12):** A separate document,
+> [docs/architecture/accounting-foundations.md](../architecture/accounting-foundations.md),
+> proposes shifting the product target from "personal finance web app" to
+> "small-business accounting + investments." If adopted, it inserts a new
+> **Phase 1.5 (Accounting Foundations)** between Phase 1 and Phase 2 — adding
+> ~3 weeks of work (database-enforced audit log, no hard deletes, reconciled
+> immutability + corrective-entry workflow, master-data version chains, report
+> input snapshots), plus a new Phase 1.6 (RP1–RP3 foundational reports) and
+> Phase 1.7 (period close). It also shrinks the current Phase 2 (steps 2 and
+> 12 get subsumed; step 5 gets simpler). **Until that decision is made, this
+> document remains the operational plan.** See §11 of the foundations doc for
+> the merge-if-adopted sequencing.
+
 Severity legend:
 - **B** — release blocker (gate per `v1-scope.md` "Release Gate" or scope `Must Have`)
 - **H** — hardening (correctness or operational risk; should ship at v1)

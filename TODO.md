@@ -12,6 +12,28 @@ Last updated: 2026-05-12
 - [docs/product/v1-gap-plan.md](docs/product/v1-gap-plan.md) — gap analysis, phase status, fix plan, test-coverage gaps
 - [docs/parity/desktop-to-python.md](docs/parity/desktop-to-python.md) — desktop-to-web parity matrix
 - [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) — schema direction
+- [docs/architecture/accounting-foundations.md](docs/architecture/accounting-foundations.md) — **pending decision**: proposed shift to small-business accounting + investments, with new Phase 1.5/1.6/1.7 inserted before remaining Phase 2 work
+
+## Pending decision (2026-05-12)
+
+The product target is up for review: **personal-finance web app** (current
+[v1-scope.md](docs/product/v1-scope.md)) vs **small-business accounting
+with full investment support**
+([docs/architecture/accounting-foundations.md](docs/architecture/accounting-foundations.md)).
+
+Until decided, the plan below stands as written. If the accounting-
+foundations doc is adopted, the active focus changes to:
+
+1. Finish Phase 1 step 8 (Tauri removal) — unblocked either way.
+2. Start Phase 1.5: F1 (DB-enforced audit log + no hard deletes) → F3
+   (reconciled immutability + corrective entries) → F2 (master-data version
+   chains) → F4 (report input snapshots). ~3 weeks.
+3. Phase 1.6 (trial balance + balance sheet + income statement). ~1 week.
+4. Phase 1.7 (period close + year-end roll-forward). ~3–5 days.
+5. Slimmed Phase 2 (current steps 1, 3, 6, 7, 8, 11 remain; 2 and 12 are
+   subsumed; 5 simplifies).
+
+See §9 of the foundations doc for the full merge.
 
 ## Active focus
 
