@@ -1,6 +1,7 @@
 DOCKER ?= docker compose
 DEV_DOCKER ?= docker compose -f compose.yaml -f compose.dev.yaml
 CONTAINER_RUNTIME ?= docker
+PROD_ENV_FILES ?= --env-file .env.production.example $(if $(wildcard .env),--env-file .env,)
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
@@ -79,7 +80,7 @@ web-dev-up:
 	$(DEV_DOCKER) up -d --build postgres api-dev frontend-dev
 
 prod-config-check:
-	$(DOCKER) -f compose.yaml -f compose.prod.example.yaml config >/dev/null
+	$(DOCKER) $(PROD_ENV_FILES) -f compose.yaml -f compose.prod.example.yaml config >/dev/null
 
 backup-now:
 	$(DOCKER) -f compose.yaml -f compose.prod.example.yaml --profile backup run --rm backup

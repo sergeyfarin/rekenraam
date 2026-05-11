@@ -2,8 +2,8 @@
 
 Rekenraam supports a single-server Docker Compose deployment for both home/LAN
 servers and small VPS installs. The app stack is PostgreSQL, FastAPI, and the
-nginx-served Svelte frontend. TLS termination is owned by your reverse proxy or
-hosting platform.
+nginx-served Svelte frontend. The production Compose example includes Caddy as
+the public reverse proxy and TLS terminator.
 
 ## Fresh Install
 
@@ -19,8 +19,8 @@ hosting platform.
    ```
 
 3. Put the final command output in `MFA_SECRET_KEY`, set
-   `FIRST_ADMIN_EMAIL`, and set `CORS_ALLOWED_ORIGINS` to the browser origin
-   users will visit.
+   `FIRST_ADMIN_EMAIL`, set `REKENRAAM_PUBLIC_HOST` to the public hostname, and
+   set `CORS_ALLOWED_ORIGINS` to `https://` plus that same hostname.
 4. Render-check the Compose files:
 
    ```bash
@@ -30,34 +30,53 @@ hosting platform.
 5. Start the stack:
 
    ```bash
-   docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build postgres api frontend
+   docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build
    ```
 
 6. Verify:
 
    ```bash
-   curl --fail http://localhost:${FRONTEND_PORT:-3000}/api/v1/health
+   curl --fail http://127.0.0.1:${FRONTEND_PORT:-3000}/api/v1/health
+   curl --fail https://${REKENRAAM_PUBLIC_HOST}/api/v1/health
    ```
 
 ## Home/LAN Server
 
 For trusted LAN use, `FRONTEND_PORT=3000` can be exposed directly and
 `SESSION_COOKIE_SECURE=false` may be used only while the site is served over
-plain HTTP. Do not expose that configuration to the public internet.
+plain HTTP. The production template binds that direct frontend port to
+`127.0.0.1` by default; set `FRONTEND_BIND=0.0.0.0` only for a trusted LAN.
+Do not expose that configuration to the public internet.
 
 ## VPS With HTTPS
 
-For public access, put Caddy, Traefik, nginx, or your platform proxy in front of
-the frontend container and serve the site over HTTPS. Use:
+For public access, point an `A` or `AAAA` record for `REKENRAAM_PUBLIC_HOST` at
+the server, and allow inbound TCP `80`, TCP `443`, and optionally UDP `443`.
+Caddy uses the HTTP-01 ACME challenge on port `80`, stores certificates in the
+`caddy_data` volume, redirects HTTP to HTTPS, and proxies HTTPS traffic to the
+frontend container.
+
+Use:
 
 ```env
+REKENRAAM_PUBLIC_HOST=finance.example.com
 SESSION_COOKIE_SECURE=true
 CORS_ALLOWED_ORIGINS=https://finance.example.com
 MFA_ENFORCED=true
+TRUSTED_PROXY_CIDRS=172.16.0.0/12
 ```
 
 Do not publish PostgreSQL on the host. The production override clears the base
 Postgres port mapping so only services inside the Compose network can reach it.
+The direct frontend check port is bound to `127.0.0.1` unless you explicitly
+change `FRONTEND_BIND`.
+
+To inspect the TLS proxy:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.example.yaml logs -f caddy
+docker compose -f compose.yaml -f compose.prod.example.yaml exec caddy caddy validate --config /etc/caddy/Caddyfile
+```
 
 ## Backups
 
@@ -110,7 +129,10 @@ runtime and integrity checks from Settings.
 - HTTPS is required for public access.
 - `SESSION_COOKIE_SECURE=true`.
 - `CORS_ALLOWED_ORIGINS` contains only the public origin.
+- `REKENRAAM_PUBLIC_HOST` resolves to the server before starting Caddy.
 - `MFA_ENFORCED=true` for public VPS installs.
 - Use file-backed secrets for database and first-admin passwords.
 - Keep PostgreSQL private to the Compose network.
+- Keep the direct frontend port bound to `127.0.0.1`, or block it at the host
+  firewall.
 - Schedule backups and perform restore drills.

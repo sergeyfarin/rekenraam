@@ -35,8 +35,25 @@ services:
 
   frontend:
     restart: unless-stopped
+    ports: !override
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-3000}:80"
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+    environment:
+      REKENRAAM_PUBLIC_HOST: ${REKENRAAM_PUBLIC_HOST:?set the public HTTPS host}
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+      - "${CADDY_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
   backup:
     image: postgres:16-alpine
@@ -64,3 +81,7 @@ secrets:
     file: ${POSTGRES_PASSWORD_FILE:-./secrets/postgres_password.txt}
   first_admin_password:
     file: ${FIRST_ADMIN_PASSWORD_FILE:-./secrets/first_admin_password.txt}
+
+volumes:
+  caddy_data:
+  caddy_config:

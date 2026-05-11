@@ -23,15 +23,17 @@ Last updated: 2026-05-12
 4. [x] **Phase 1 step 2** — User invite flow. Shipped 2026-05-12. Detail: [v1-gap-plan.md §Phase 1 step 2](docs/product/v1-gap-plan.md).
 5. [x] **Phase 1 step 3** — Cross-currency transfer endpoint. Shipped 2026-05-10. Detail: [v1-gap-plan.md §Phase 1 step 3](docs/product/v1-gap-plan.md).
 6. [x] **Phase 1 step 4** — Stock-split lot rewrite. Shipped 2026-05-10. Detail: [v1-gap-plan.md §Phase 1 step 4](docs/product/v1-gap-plan.md).
+7. [x] **Phase 1 step 5** — Cross-session OFX duplicate detection. Shipped 2026-05-11. Detail: [v1-gap-plan.md §Phase 1 step 5](docs/product/v1-gap-plan.md).
+8. [x] **Phase 1 step 6** — Reverse-proxy + TLS production example. Shipped 2026-05-11. Detail: [v1-gap-plan.md §Phase 1 step 6](docs/product/v1-gap-plan.md).
 
-Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md): OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
+Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md): Tauri removal (#8).
 
 ## Phase status
 
 | Phase | Status | Reference |
 |---|---|---|
 | Phase 0 — e2e test seam | **DONE** 2026-05-09 | [v1-gap-plan.md §Phase 0](docs/product/v1-gap-plan.md) |
-| Phase 1 — release-blocker scope items | 5/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
+| Phase 1 — release-blocker scope items | 7/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
 | Phase 2 — hardening of high-risk service code | not started | [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md) |
 | Phase 3 — frontend tests | not started | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
 | Phase 4 — nice-to-have scope items | not started | [v1-gap-plan.md §Phase 4](docs/product/v1-gap-plan.md) |
@@ -45,7 +47,7 @@ Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/
 | 3 | Cross-currency transfer endpoint | **DONE 2026-05-10** | gap-plan §1.2.2, §Phase 1 |
 | 4 | Stock-split lot rewrite | **DONE 2026-05-10** | gap-plan §1.6.1, §Phase 1 |
 | 5 | Cross-session OFX duplicate detection | **DONE 2026-05-11** | gap-plan §1.4.3, §Phase 1 |
-| 6 | Reverse-proxy + TLS production example | not started | gap-plan §1.7.1, §Phase 1 |
+| 6 | Reverse-proxy + TLS production example | **DONE 2026-05-11** | gap-plan §1.7.1, §Phase 1 |
 | 7 | CI API test job | **DONE 2026-05-09** | gap-plan §1.7.2, §Phase 1 |
 | 8 | Tauri removal | not started — requires Phase 0 e2e + parity sign-off | gap-plan §1.8, migration-plan Milestone 12 |
 
@@ -102,6 +104,8 @@ Not all of [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md)'s "Rem
 - 2026-05-10 — Phase 1 step 3: shipped cross-currency transfer endpoint. New `POST /api/v1/transactions/transfer` takes source/destination accounts, source/destination amounts, and an explicit FX rate; posts both currency legs, stamps the transfer-date manual FX observation, and writes an optional realized FX gain/loss split when the paid source amount differs from the rate-implied amount ([v1-gap-plan.md §Phase 1 step 3](docs/product/v1-gap-plan.md)).
 - 2026-05-10 — Phase 1 step 4: shipped stock-split lot rewrite. Split and reverse-split corporate actions now generate lot-closing/replacement transactions that preserve holding period and remaining cost basis; generated close allocations are excluded from realized gains ([v1-gap-plan.md §Phase 1 step 4](docs/product/v1-gap-plan.md)).
 - 2026-05-10 — Resolved the `ruff format` finding: ran a focused `ruff format apps/api` pass, added `make api-format-check`, and enabled the new check in API CI.
+- 2026-05-11 — Phase 1 step 5: shipped cross-session OFX duplicate detection. Import commits now consume account-scoped OFX `FITID`/CSV `import_id` keys in Postgres and validate re-imports against the existing transaction ([v1-gap-plan.md §Phase 1 step 5](docs/product/v1-gap-plan.md)).
+- 2026-05-11 — Phase 1 step 6: shipped the reverse-proxy + TLS production example. `compose.prod.example.yaml` now includes Caddy with automatic HTTPS, persistent ACME state, public `80`/`443`, and local-only direct frontend binding by default ([v1-gap-plan.md §Phase 1 step 6](docs/product/v1-gap-plan.md)).
 - 2026-05-11 — Phase 2 step 10: rebuilt `apps/api/tests/stage2_schema_contract.py` from `Base.metadata`. Dropped the 800-line hand-written `STAGE2_SCHEMA_CONTRACT` (was missing 24 of 57 tables and silently drifting). Added `server_default` as a tracked dimension; fixed 32 ORM columns and 6 migration columns to use `sa.text(...)` for non-string defaults. Added 12-test self-test suite in [test_schema_contract.py](apps/api/tests/test_schema_contract.py) so the detector itself can't silently regress. Re-enabled the migration-vs-ORM drift test ([v1-gap-plan.md §Phase 2 step 10](docs/product/v1-gap-plan.md)).
 - 2026-05-12 — Phase 1 step 2: shipped admin-issued user invite flow. New `user_invites` table in the baseline schema, `UserInvite` ORM model, `ErgonomicsService.create_invite` (admin-only, idempotent for re-invites of pending users) and `AuthService.accept_invite` (public, single-use token, anti-enumeration error message), `POST /api/v1/admin/invites` and `POST /api/v1/auth/invite/accept` endpoints. 11 e2e tests cover the full lifecycle ([v1-gap-plan.md §Phase 1 step 2](docs/product/v1-gap-plan.md)).
 

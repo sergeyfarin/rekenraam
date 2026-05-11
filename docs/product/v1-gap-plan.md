@@ -25,13 +25,13 @@ Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Tw
 ## Phase status
 
 - [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
-- [ ] **Phase 1** — release-blocker scope items (6/8 items done)
+- [ ] **Phase 1** — release-blocker scope items (7/8 items done)
   - [x] 1. Self-service password reset (completed 2026-05-09)
   - [x] 2. User invite flow (completed 2026-05-12)
   - [x] 3. Cross-currency transfer endpoint (completed 2026-05-10)
   - [x] 4. Stock-split lot rewrite (completed 2026-05-10)
   - [x] 5. Cross-session OFX duplicate detection (completed 2026-05-11)
-  - [ ] 6. Reverse-proxy + TLS production example
+  - [x] 6. Reverse-proxy + TLS production example (completed 2026-05-11)
   - [x] 7. CI API test job (completed 2026-05-09)
   - [ ] 8. Tauri removal
 - [ ] **Phase 2** — hardening of high-risk service code (2/11 items done)
@@ -128,7 +128,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 
 | # | Gap | Location | Sev |
 |---|---|---|---|
-| 1.7.1 | `compose.prod.example.yaml` does not include a **reverse proxy / TLS** example (Caddy or nginx with Let's Encrypt). Scope release gate explicitly requires "documented HTTPS … requirements". | [compose.prod.example.yaml](../../compose.prod.example.yaml), [docs/deployment/self-hosting.md](../../docs/deployment/self-hosting.md) | B |
+| 1.7.1 | **Reverse proxy / TLS production example** — **DONE 2026-05-11.** Production Compose now includes a Caddy service that terminates HTTPS with automatic ACME certificates, stores Caddy state in named volumes, exposes `80`/`443`, and proxies to the frontend container. The direct frontend port is overridden to bind to `127.0.0.1` by default for local health checks. Deployment docs cover DNS, firewall ports, Caddy logs/validation, secure cookies, CORS origin, MFA, private Postgres, and LAN-only HTTP caveats. | [compose.prod.example.yaml](../../compose.prod.example.yaml), [Caddyfile](../../docker/caddy/Caddyfile), [docs/deployment/self-hosting.md](../../docs/deployment/self-hosting.md) | B |
 | 1.7.2 | CI API test job — **DONE 2026-05-09.** [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) runs `ruff check`, `pyright` (strict), and `pytest` against a Postgres 16 service. Triggers on changes under `apps/api/**`, `pyproject.toml`, `uv.lock`, or `Makefile`. Uses `astral-sh/setup-uv` + `uv sync --frozen` so what runs in CI matches local `uv sync`. The 8 pre-existing failures are quarantined inline via `--deselect`; Phase 2 step 9 will convert each to an in-source skip and remove the corresponding deselect. `ruff format --check` is intentionally NOT yet a gate — see findings. | [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) | B |
 | 1.7.3 | **Backup smoke test** present (`scripts/restore_smoke.sh`) but not wired into CI on a schedule. | `.github/workflows/operational-self-hosting.yml` | H |
 | 1.7.4 | **Rate-limit / failed-login** state in Postgres or Redis instead of process memory (see 1.1.5). | `services/auth.py` | H |
@@ -325,7 +325,10 @@ In order:
    - New `import_transaction_keys` table with `UNIQUE (account_id, import_id)` to consume OFX `FITID`/CSV `import_id` values once per account without fighting the versioned transaction-row model.
    - Import preview and commit both consult the persistent key; commit records the key for created and enriched transactions, and treats key hits as validated matches even when the request mode is `always_create`.
    - Focused Postgres regression test re-imports the same OFX `FITID` across sessions and verifies only one transaction/key is created.
-6. **Reverse-proxy + TLS production example** (1.7.1): add Caddy service to `compose.prod.example.yaml` with auto-TLS; document Let's Encrypt setup in `docs/deployment/self-hosting.md`.
+6. **Reverse-proxy + TLS production example** (1.7.1) — **DONE 2026-05-11.** Delivered:
+   - Caddy service in [`compose.prod.example.yaml`](../../compose.prod.example.yaml) with public `80`/`443`, named ACME/config volumes, and reverse proxying to the frontend container.
+   - [`docker/caddy/Caddyfile`](../../docker/caddy/Caddyfile) using `REKENRAAM_PUBLIC_HOST` for automatic HTTPS.
+   - Production docs for DNS, firewall ports, secure-cookie/CORS/MFA settings, Caddy logs/validation, private Postgres, and keeping the direct frontend port local-only.
 7. **CI API test job** (1.7.2) — **DONE 2026-05-09.** Delivered:
    - [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) with a Postgres 16 service container, `astral-sh/setup-uv@v6`, `uv sync --frozen`, then `make api-lint` (ruff), `make api-format-check` (`ruff format --check`), `make api-typecheck` (pyright strict), and `pytest` with the 8 pre-existing failures quarantined via `--deselect`.
    - Triggers on push and pull_request when `apps/api/**`, `pyproject.toml`, `uv.lock`, `Makefile`, or the workflow itself changes.
@@ -399,9 +402,9 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (6 of 8 items shipped — items 1, 2, 3, 4, 5, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
+Phase 0 is **done**. Phase 1 is in flight (7 of 8 items shipped — items 1, 2, 3, 4, 5, 6, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
 
-- **Next:** reverse-proxy/TLS (#6), Tauri removal (#8).
+- **Next:** Tauri removal (#8).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
 Approximate remaining total: **8-13 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped).
