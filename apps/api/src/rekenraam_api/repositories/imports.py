@@ -15,6 +15,10 @@ from rekenraam_api.db.models.metadata import Commodity, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
 
 
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class ImportRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -78,9 +82,13 @@ class ImportRepository:
             .where(self._is_current_transaction_clause())
         )
         if payee_name:
-            statement = statement.where(Payee.name.ilike(f"%{payee_name}%"))
+            statement = statement.where(
+                Payee.name.ilike(f"%{_escape_like(payee_name)}%", escape="\\")
+            )
         elif memo:
-            statement = statement.where(Transaction.memo.ilike(f"%{memo}%"))
+            statement = statement.where(
+                Transaction.memo.ilike(f"%{_escape_like(memo)}%", escape="\\")
+            )
         statement = statement.order_by(Transaction.id.desc()).limit(1)
         match_id = await self._session.scalar(statement)
         return int(match_id) if match_id is not None else None

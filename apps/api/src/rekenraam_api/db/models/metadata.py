@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -8,7 +18,10 @@ from rekenraam_api.db.base import Base
 
 class Commodity(Base):
     __tablename__ = "commodities"
-    __table_args__ = (Index("ix_commodities_book_id", "book_id"),)
+    __table_args__ = (
+        Index("ix_commodities_book_id", "book_id"),
+        CheckConstraint("scale >= 0 AND scale <= 12", name="ck_commodities_scale_range"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)

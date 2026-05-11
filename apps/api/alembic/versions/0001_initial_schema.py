@@ -269,6 +269,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
+        sa.CheckConstraint("scale >= 0 AND scale <= 12", name="ck_commodities_scale_range"),
     )
     op.create_index("ix_commodities_book_id", "commodities", ["book_id"], unique=False)
 
@@ -1214,7 +1215,9 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "length(trim(import_id)) > 0", name="ck_import_transaction_keys_import_id"
         ),
-        sa.UniqueConstraint("account_id", "import_id", name="uq_import_transaction_keys_account_id"),
+        sa.UniqueConstraint(
+            "account_id", "import_id", name="uq_import_transaction_keys_account_id"
+        ),
     )
     op.create_index(
         "ix_import_transaction_keys_book", "import_transaction_keys", ["book_id"], unique=False
@@ -2320,6 +2323,14 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "instrument_type IN ('stock', 'etf', 'mutual_fund', 'private_fund', 'bond', 'option', 'future', 'crypto', 'private_investment', 'generic')",
             name="ck_investment_instruments_type",
+        ),
+        sa.CheckConstraint(
+            "quantity_scale >= 0 AND quantity_scale <= 12",
+            name="ck_investment_instruments_quantity_scale_range",
+        ),
+        sa.CheckConstraint(
+            "price_scale >= 0 AND price_scale <= 12",
+            name="ck_investment_instruments_price_scale_range",
         ),
         sa.UniqueConstraint(
             "book_id", "commodity_id", name="uq_investment_instruments_book_commodity"

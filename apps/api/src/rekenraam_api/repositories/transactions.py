@@ -16,6 +16,10 @@ from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.schemas.transactions import TransactionListFilters
 
 
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _encode_cursor(*, occurred_date: date, tx_id: int, split_id: int | None = None) -> str:
     payload: dict[str, Any] = {"occurred_date": occurred_date.isoformat(), "tx_id": tx_id}
     if split_id is not None:
@@ -104,12 +108,12 @@ class TransactionRepository:
             statement = statement.where(Transaction.occurred_date <= active_filters.occurred_to)
 
         if active_filters.search:
-            like_pattern = f"%{active_filters.search}%"
+            like_pattern = f"%{_escape_like(active_filters.search)}%"
             statement = statement.where(
                 or_(
-                    Transaction.memo.ilike(like_pattern),
-                    Transaction.reference.ilike(like_pattern),
-                    Payee.name.ilike(like_pattern),
+                    Transaction.memo.ilike(like_pattern, escape="\\"),
+                    Transaction.reference.ilike(like_pattern, escape="\\"),
+                    Payee.name.ilike(like_pattern, escape="\\"),
                 )
             )
 

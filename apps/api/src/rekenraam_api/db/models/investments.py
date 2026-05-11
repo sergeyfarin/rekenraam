@@ -52,6 +52,14 @@ class InvestmentInstrument(Base):
             "instrument_type IN ('stock', 'etf', 'mutual_fund', 'private_fund', 'bond', 'option', 'future', 'crypto', 'private_investment', 'generic')",
             name="ck_investment_instruments_type",
         ),
+        CheckConstraint(
+            "quantity_scale >= 0 AND quantity_scale <= 12",
+            name="ck_investment_instruments_quantity_scale_range",
+        ),
+        CheckConstraint(
+            "price_scale >= 0 AND price_scale <= 12",
+            name="ck_investment_instruments_price_scale_range",
+        ),
         UniqueConstraint(
             "book_id", "commodity_id", name="uq_investment_instruments_book_commodity"
         ),

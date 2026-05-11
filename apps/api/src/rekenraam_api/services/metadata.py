@@ -164,8 +164,8 @@ class MetadataService:
             raise ValueError("symbol is required")
         if not name:
             raise ValueError("name is required")
-        if input.scale < 0:
-            raise ValueError("scale must be non-negative")
+        if input.scale < 0 or input.scale > 12:
+            raise ValueError("scale must be between 0 and 12")
 
         row = await self._repository.create_currency(
             book_id=input.book_id,
@@ -188,8 +188,8 @@ class MetadataService:
             raise ValueError("symbol is required")
         if not name:
             raise ValueError("name is required")
-        if input.scale < 0:
-            raise ValueError("scale must be non-negative")
+        if input.scale < 0 or input.scale > 12:
+            raise ValueError("scale must be between 0 and 12")
 
         existing_rows, existing_base_currency_code = await self._repository.list_currencies(
             input.book_id

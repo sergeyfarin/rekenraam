@@ -5,7 +5,7 @@ import csv
 import io
 import re
 from collections.abc import Callable, Iterable, Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal, cast
 
@@ -654,11 +654,62 @@ class ImportService:
         return None
 
     def _parse_ofx_date(self, raw: str) -> date | None:
-        digits = "".join(char for char in raw if char.isdigit())
+        """Parse an OFX date or datetime, normalizing to UTC.
+
+        OFX format: ``YYYYMMDD[HHMMSS[.XXX]][[offset[:tz_name]]]``. The offset
+        in the bracket section is the local zone's offset from GMT (e.g.
+        ``[-5:EST]`` for EST, ``[5.5:IST]`` for India). When a timestamp and
+        offset are present, the wall-clock datetime is converted to UTC before
+        the date component is returned, so an OFX value like
+        ``20240315230000[-8:PST]`` (which is 2024-03-16 07:00 UTC) is dated
+        as 2024-03-16, matching the legacy desktop importer.
+        """
+        trimmed = raw.strip()
+        if not trimmed:
+            return None
+        bracket_index = trimmed.find("[")
+        date_part = trimmed[:bracket_index] if bracket_index != -1 else trimmed
+        digits = "".join(char for char in date_part if char.isdigit())
         if len(digits) < 8:
             return None
         try:
-            return date(int(digits[0:4]), int(digits[4:6]), int(digits[6:8]))
+            year, month, day = int(digits[0:4]), int(digits[4:6]), int(digits[6:8])
+        except ValueError:
+            return None
+
+        if bracket_index == -1 or len(digits) < 14:
+            try:
+                return date(year, month, day)
+            except ValueError:
+                return None
+
+        try:
+            hour, minute, second = int(digits[8:10]), int(digits[10:12]), int(digits[12:14])
+        except ValueError:
+            return None
+
+        offset_hours = self._parse_ofx_offset(trimmed[bracket_index + 1 :])
+        if offset_hours is None:
+            try:
+                return date(year, month, day)
+            except ValueError:
+                return None
+        try:
+            local = datetime(year, month, day, hour, minute, second)
+        except ValueError:
+            return None
+        utc = local - timedelta(hours=offset_hours)
+        return utc.replace(tzinfo=UTC).date()
+
+    @staticmethod
+    def _parse_ofx_offset(text: str) -> float | None:
+        end = text.find("]")
+        body = text[:end] if end != -1 else text
+        token = body.split(":", 1)[0].strip()
+        if not token:
+            return None
+        try:
+            return float(token)
         except ValueError:
             return None
 
