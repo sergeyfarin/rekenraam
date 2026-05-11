@@ -5,7 +5,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
-from rekenraam_api.db.models.imports import ImportRule, ImportSession, ImportSessionTransaction
+from rekenraam_api.db.models.imports import (
+    ImportRule,
+    ImportSession,
+    ImportSessionTransaction,
+    ImportTransactionKey,
+)
 from rekenraam_api.db.models.metadata import Commodity, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
 
@@ -55,6 +60,9 @@ class ImportRepository:
             match_id = await self._session.scalar(statement)
             if match_id is not None:
                 return int(match_id)
+            key_match_id = await self.find_import_key_transaction(account_id, import_id)
+            if key_match_id is not None:
+                return key_match_id
 
         if txn_date is None or amount_minor is None:
             return None
@@ -74,6 +82,18 @@ class ImportRepository:
         elif memo:
             statement = statement.where(Transaction.memo.ilike(f"%{memo}%"))
         statement = statement.order_by(Transaction.id.desc()).limit(1)
+        match_id = await self._session.scalar(statement)
+        return int(match_id) if match_id is not None else None
+
+    async def find_import_key_transaction(self, account_id: int, import_id: str) -> int | None:
+        statement = (
+            select(ImportTransactionKey.tx_id)
+            .where(
+                ImportTransactionKey.account_id == account_id,
+                ImportTransactionKey.import_id == import_id,
+            )
+            .limit(1)
+        )
         match_id = await self._session.scalar(statement)
         return int(match_id) if match_id is not None else None
 
@@ -147,6 +167,25 @@ class ImportRepository:
             .on_conflict_do_nothing(index_elements=["session_id", "tx_id", "action"])
         )
         await self._session.execute(statement)
+
+    async def record_import_key(
+        self, *, book_id: int, account_id: int, tx_id: int, import_id: str | None
+    ) -> bool:
+        if import_id is None or not import_id.strip():
+            return False
+        statement = (
+            pg_insert(ImportTransactionKey)
+            .values(
+                book_id=book_id,
+                account_id=account_id,
+                tx_id=tx_id,
+                import_id=import_id.strip(),
+            )
+            .on_conflict_do_nothing(index_elements=["account_id", "import_id"])
+            .returning(ImportTransactionKey.id)
+        )
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none() is not None
 
     async def list_session_transactions(self, session_id: int) -> list[ImportSessionTransaction]:
         statement = (

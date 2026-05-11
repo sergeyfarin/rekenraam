@@ -1184,6 +1184,46 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "import_transaction_keys",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "book_id",
+            sa.BigInteger(),
+            sa.ForeignKey("books.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "account_id",
+            sa.BigInteger(),
+            sa.ForeignKey("accounts.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "tx_id",
+            sa.BigInteger(),
+            sa.ForeignKey("transactions.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("import_id", sa.String(length=255), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint(
+            "length(trim(import_id)) > 0", name="ck_import_transaction_keys_import_id"
+        ),
+        sa.UniqueConstraint("account_id", "import_id", name="uq_import_transaction_keys_account_id"),
+    )
+    op.create_index(
+        "ix_import_transaction_keys_book", "import_transaction_keys", ["book_id"], unique=False
+    )
+    op.create_index(
+        "ix_import_transaction_keys_tx", "import_transaction_keys", ["tx_id"], unique=False
+    )
+
+    op.create_table(
         "lots",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column(
@@ -2652,6 +2692,9 @@ def downgrade() -> None:
         "ix_import_session_transactions_session", table_name="import_session_transactions"
     )
     op.drop_table("import_session_transactions")
+    op.drop_index("ix_import_transaction_keys_tx", table_name="import_transaction_keys")
+    op.drop_index("ix_import_transaction_keys_book", table_name="import_transaction_keys")
+    op.drop_table("import_transaction_keys")
     op.drop_index("ix_transactions_import_session_id", table_name="transactions")
     op.drop_index("ix_transactions_import_id", table_name="transactions")
     op.drop_index("ix_transactions_book_occurred_date", table_name="transactions")

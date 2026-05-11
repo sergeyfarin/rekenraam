@@ -25,12 +25,12 @@ Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Tw
 ## Phase status
 
 - [x] **Phase 0** — end-to-end test seam (completed 2026-05-09)
-- [ ] **Phase 1** — release-blocker scope items (5/8 items done)
+- [ ] **Phase 1** — release-blocker scope items (6/8 items done)
   - [x] 1. Self-service password reset (completed 2026-05-09)
   - [x] 2. User invite flow (completed 2026-05-12)
   - [x] 3. Cross-currency transfer endpoint (completed 2026-05-10)
   - [x] 4. Stock-split lot rewrite (completed 2026-05-10)
-  - [ ] 5. Cross-session OFX duplicate detection
+  - [x] 5. Cross-session OFX duplicate detection (completed 2026-05-11)
   - [ ] 6. Reverse-proxy + TLS production example
   - [x] 7. CI API test job (completed 2026-05-09)
   - [ ] 8. Tauri removal
@@ -101,7 +101,7 @@ These were found while building Phase 0 and are tracked here so they don't get l
 |---|---|---|---|
 | 1.4.1 | **Import mapping templates** export/import (scope `Should Have`). | `services/imports.py`, new `import_mapping_templates` table or JSON export | N |
 | 1.4.2 | **Persistent payee/category cleanup rules** beyond `ImportRule`: payee normalization (regex/canonical), category mapping by payee, duplicate-handling preferences. | `services/imports.py` extension | N |
-| 1.4.3 | **Cross-session duplicate detection** for OFX `FITID` and CSV `import_id` is not visibly enforced — a re-imported statement may duplicate. | `repositories/imports.py`, add unique partial index on `(account_id, fitid)` where fitid is set | B |
+| 1.4.3 | **Cross-session duplicate detection** — **DONE 2026-05-11.** Import commits now record consumed OFX `FITID`/CSV `import_id` values in an account-scoped `import_transaction_keys` table with a database unique constraint. Preview and commit consult that key before inserting, so even `always_create` re-imports validate against the existing transaction instead of posting a duplicate. | [models/imports.py](../../apps/api/src/rekenraam_api/db/models/imports.py), [repositories/imports.py](../../apps/api/src/rekenraam_api/repositories/imports.py), [services/imports.py](../../apps/api/src/rekenraam_api/services/imports.py), [baseline schema](../../apps/api/alembic/versions/0001_initial_schema.py) | B |
 | 1.4.4 | CSV export does not test/escape special characters (commas, quotes, newlines in payee/memo) or honor user `number_format`/`date_format` preferences. | `services/exports.py` | H |
 
 ### 1.5 Reports (Milestone 8)
@@ -321,7 +321,10 @@ In order:
    - [`InvestmentRepository.create_stock_split_corporate_action`](../../apps/api/src/rekenraam_api/repositories/investments.py) records the corporate action, creates a generated transaction, closes affected positive lots, creates replacement lots with preserved `opened_date` and remaining cost basis, and sets `generated_transaction_id`.
    - Realized-gains reporting ignores generated split/reverse-split close allocations so split mechanics are not treated as sales.
    - Focused Postgres tests cover full-sale after 2-for-1 split, partial-sale-before-split basis preservation, holding-period preservation, exact reverse split, fractional rollback, and generated-allocation exclusion.
-5. **Cross-session OFX duplicate detection** (1.4.3): unique partial index on `(account_id, fitid)` where fitid IS NOT NULL; service path checks before insert.
+5. **Cross-session OFX duplicate detection** (1.4.3) — **DONE 2026-05-11.** Delivered:
+   - New `import_transaction_keys` table with `UNIQUE (account_id, import_id)` to consume OFX `FITID`/CSV `import_id` values once per account without fighting the versioned transaction-row model.
+   - Import preview and commit both consult the persistent key; commit records the key for created and enriched transactions, and treats key hits as validated matches even when the request mode is `always_create`.
+   - Focused Postgres regression test re-imports the same OFX `FITID` across sessions and verifies only one transaction/key is created.
 6. **Reverse-proxy + TLS production example** (1.7.1): add Caddy service to `compose.prod.example.yaml` with auto-TLS; document Let's Encrypt setup in `docs/deployment/self-hosting.md`.
 7. **CI API test job** (1.7.2) — **DONE 2026-05-09.** Delivered:
    - [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) with a Postgres 16 service container, `astral-sh/setup-uv@v6`, `uv sync --frozen`, then `make api-lint` (ruff), `make api-format-check` (`ruff format --check`), `make api-typecheck` (pyright strict), and `pytest` with the 8 pre-existing failures quarantined via `--deselect`.
@@ -396,9 +399,9 @@ Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded 
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (5 of 8 items shipped — items 1, 2, 3, 4, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
+Phase 0 is **done**. Phase 1 is in flight (6 of 8 items shipped — items 1, 2, 3, 4, 5, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
 
-- **Next:** OFX duplicate detection (#5), reverse-proxy/TLS (#6), Tauri removal (#8).
+- **Next:** reverse-proxy/TLS (#6), Tauri removal (#8).
 - Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
 
 Approximate remaining total: **8-13 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped).

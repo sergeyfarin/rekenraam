@@ -4,11 +4,15 @@ import zipfile
 from datetime import date
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
-from rekenraam_api.db.models.imports import ImportSession, ImportSessionTransaction
+from rekenraam_api.db.models.imports import (
+    ImportSession,
+    ImportSessionTransaction,
+    ImportTransactionKey,
+)
 from rekenraam_api.db.models.transactions import Transaction
 from rekenraam_api.repositories.imports import ImportRepository
 from rekenraam_api.repositories.investments import InvestmentRepository
@@ -260,6 +264,61 @@ async def test_import_commit_creates_session_transaction_and_export(
     transactions_csv = await export_service.transactions_csv(1)
     assert "fit-2" in transactions_csv
     assert "Grocer" in transactions_csv
+
+
+@pytest.mark.asyncio
+async def test_import_commit_deduplicates_ofx_fitid_across_sessions(
+    repository_session: AsyncSession,
+) -> None:
+    service = ImportService(ImportRepository(repository_session))
+    content = (
+        "<OFX><CURDEF>USD"
+        "<STMTTRN><DTPOSTED>20260504120000<TRNAMT>-8.75"
+        "<NAME>Coffee Bar<FITID>ofx-cross-session-1</STMTTRN>"
+    )
+    preview = await service.preview(
+        ImportPreviewRequest(account_id=2, format="ofx", content=content, file_name="bank.ofx")
+    )
+    drafts = tuple(row.draft for row in preview.rows if row.draft is not None)
+
+    first = await service.commit(
+        ImportCommitRequest(
+            account_id=2,
+            drafts=drafts,
+            file_name="bank-1.ofx",
+            mode="always_create",
+        )
+    )
+    second_preview = await service.preview(
+        ImportPreviewRequest(account_id=2, format="ofx", content=content, file_name="bank.ofx")
+    )
+    second = await service.commit(
+        ImportCommitRequest(
+            account_id=2,
+            drafts=drafts,
+            file_name="bank-2.ofx",
+            mode="always_create",
+        )
+    )
+
+    assert len(first.batch.created_tx_ids) == 1
+    assert second_preview.rows[0].is_duplicate is True
+    assert second_preview.rows[0].matched_tx_id == first.batch.created_tx_ids[0]
+    assert second.batch.created_tx_ids == ()
+    assert second.batch.matched_tx_ids == first.batch.created_tx_ids
+
+    tx_count = await repository_session.scalar(
+        select(func.count())
+        .select_from(Transaction)
+        .where(Transaction.import_id == "ofx-cross-session-1")
+    )
+    key_count = await repository_session.scalar(
+        select(func.count())
+        .select_from(ImportTransactionKey)
+        .where(ImportTransactionKey.import_id == "ofx-cross-session-1")
+    )
+    assert tx_count == 1
+    assert key_count == 1
 
 
 @pytest.mark.skip(

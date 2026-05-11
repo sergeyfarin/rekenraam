@@ -44,7 +44,7 @@ Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/
 | 2 | User invite flow | **DONE 2026-05-12** | gap-plan §1.1.2, §Phase 1 |
 | 3 | Cross-currency transfer endpoint | **DONE 2026-05-10** | gap-plan §1.2.2, §Phase 1 |
 | 4 | Stock-split lot rewrite | **DONE 2026-05-10** | gap-plan §1.6.1, §Phase 1 |
-| 5 | Cross-session OFX duplicate detection | not started | gap-plan §1.4.3, §Phase 1 |
+| 5 | Cross-session OFX duplicate detection | **DONE 2026-05-11** | gap-plan §1.4.3, §Phase 1 |
 | 6 | Reverse-proxy + TLS production example | not started | gap-plan §1.7.1, §Phase 1 |
 | 7 | CI API test job | **DONE 2026-05-09** | gap-plan §1.7.2, §Phase 1 |
 | 8 | Tauri removal | not started — requires Phase 0 e2e + parity sign-off | gap-plan §1.8, migration-plan Milestone 12 |

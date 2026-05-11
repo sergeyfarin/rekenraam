@@ -132,3 +132,26 @@ class ImportSessionTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class ImportTransactionKey(Base):
+    __tablename__ = "import_transaction_keys"
+    __table_args__ = (
+        Index("ix_import_transaction_keys_book", "book_id"),
+        Index("ix_import_transaction_keys_tx", "tx_id"),
+        UniqueConstraint("account_id", "import_id", name="uq_import_transaction_keys_account_id"),
+        CheckConstraint("length(trim(import_id)) > 0", name="ck_import_transaction_keys_import_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    tx_id: Mapped[int] = mapped_column(
+        ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False
+    )
+    import_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

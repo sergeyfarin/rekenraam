@@ -27,7 +27,12 @@ from rekenraam_api.db.models.ergonomics import (
     TransactionTemplateSplit,
     UserPreference,
 )
-from rekenraam_api.db.models.imports import ImportRule, ImportSession, ImportSessionTransaction
+from rekenraam_api.db.models.imports import (
+    ImportRule,
+    ImportSession,
+    ImportSessionTransaction,
+    ImportTransactionKey,
+)
 from rekenraam_api.db.models.investments import (
     CorporateAction,
     CostBasisProfile,
@@ -87,6 +92,7 @@ __all__ = [
     "ImportRule",
     "ImportSession",
     "ImportSessionTransaction",
+    "ImportTransactionKey",
     "Institution",
     "InvestmentInstrument",
     "Loan",

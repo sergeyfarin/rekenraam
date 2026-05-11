@@ -222,6 +222,14 @@ class ImportService:
                     f"'{commodity.symbol}'"
                 )
 
+            persistent_match_id = await self._match_import_id(target_account_id, draft)
+            if persistent_match_id is not None:
+                matched.append(persistent_match_id)
+                await self._repository.record_session_transaction(
+                    session_id, persistent_match_id, "validated"
+                )
+                continue
+
             match_id = await self._match(target_account_id, draft)
             if match_id is not None:
                 matched.append(match_id)
@@ -252,6 +260,14 @@ class ImportService:
                     )
                     if replacement is not None:
                         updated.append(match_id)
+                        recorded = await self._repository.record_import_key(
+                            book_id=input.book_id,
+                            account_id=target_account_id,
+                            tx_id=replacement.id,
+                            import_id=draft.import_id,
+                        )
+                        if draft.import_id and not recorded:
+                            raise ValueError("duplicate import identifier for account")
                     continue
             elif input.mode == "update_only":
                 skipped += 1
@@ -277,6 +293,14 @@ class ImportService:
                 category_id=draft.category_id,
                 audit=audit,
             )
+            recorded = await self._repository.record_import_key(
+                book_id=input.book_id,
+                account_id=target_account_id,
+                tx_id=tx.id,
+                import_id=draft.import_id,
+            )
+            if draft.import_id and not recorded:
+                raise ValueError("duplicate import identifier for account")
             created.append(tx.id)
             await self._repository.record_session_transaction(session_id, tx.id, "created")
 
@@ -359,6 +383,13 @@ class ImportService:
             import_id=draft.import_id,
             payee_name=draft.payee_name,
             memo=draft.memo,
+        )
+
+    async def _match_import_id(self, account_id: int, draft: ImportDraft) -> int | None:
+        if draft.import_id is None or not draft.import_id.strip():
+            return None
+        return await self._repository.find_import_key_transaction(
+            account_id, draft.import_id.strip()
         )
 
     async def _resolve_payee_id(
