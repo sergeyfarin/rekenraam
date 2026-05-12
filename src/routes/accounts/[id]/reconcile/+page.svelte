@@ -13,6 +13,8 @@
   import type { TransactionWithSplits } from "$lib/api/transactions";
   import { Button } from "$lib/components/ui/button";
   import * as Alert from "$lib/components/ui/alert";
+  import { formatMinorWithScale } from "$lib/money";
+  import { deriveReconciliationState, sumCheckedAmounts } from "$lib/reconciliation/state";
 
   let accountId: number | null = null;
   let account: AccountSummary | null = null;
@@ -40,12 +42,18 @@
   $: factor = 10 ** commodityScale;
   $: statementBalanceMinor = parseAmount(statementBalanceInput);
   $: openingBalanceMinor = history?.balancings.find((row) => !row.voided_at)?.balance_minor ?? 0;
-  $: checkedAmountMinor = candidates
-    .filter((tx) => checkedIds.has(tx.transaction.id))
-    .reduce((sum, tx) => sum + splitAmount(tx), 0);
-  $: clearedBalanceMinor = openingBalanceMinor + checkedAmountMinor;
-  $: differenceMinor = statementBalanceMinor === null ? null : clearedBalanceMinor - statementBalanceMinor;
-  $: needsOffset = differenceMinor !== null && differenceMinor !== 0;
+  $: checkedAmountMinor = sumCheckedAmounts(
+    candidates.map((tx) => ({ id: tx.transaction.id, splitAmountMinor: splitAmount(tx) })),
+    checkedIds,
+  );
+  $: reconciliationState = deriveReconciliationState({
+    openingBalanceMinor,
+    checkedAmountMinor,
+    statementBalanceMinor,
+  });
+  $: clearedBalanceMinor = reconciliationState.clearedBalanceMinor;
+  $: differenceMinor = reconciliationState.differenceMinor;
+  $: needsOffset = reconciliationState.needsOffset;
   $: sorted = [...candidates].sort((a, b) => a.transaction.txn_date.localeCompare(b.transaction.txn_date) || a.transaction.id - b.transaction.id);
   $: offsetChoices = accounts.filter((entry) => account && entry.book_id === account.book_id && entry.commodity_id === account.commodity_id && !entry.is_closed && entry.id !== account.id);
 
@@ -137,6 +145,11 @@
   }
 
   function parseAmount(value: string): number | null {
+    // Reconcile-specific input policy (preserved from the original handler):
+    // strip thousand-separator commas, return null on empty (= "no statement
+    // balance entered yet"), and round float * factor instead of truncating
+    // so 1.999 at scale 2 becomes 200 rather than 199. Different from the
+    // canonical `parseAmountToMinor`, which truncates and returns 0 on empty.
     const raw = value.replace(/,/g, "").trim();
     if (!raw || Number.isNaN(Number(raw))) return null;
     return Math.round(Number(raw) * factor);
@@ -154,11 +167,8 @@
   }
 
   function formatMinor(minor: number): string {
-    const sign = minor < 0 ? "-" : "";
-    const abs = Math.abs(minor);
-    const whole = Math.floor(abs / factor);
-    const frac = String(abs % factor).padStart(commodityScale, "0");
-    return `${sign}${whole}.${frac} ${commoditySymbol || ""}`.trim();
+    const formatted = formatMinorWithScale(minor, commodityScale);
+    return `${formatted} ${commoditySymbol || ""}`.trim();
   }
 
   function payeeName(id: number | null): string {

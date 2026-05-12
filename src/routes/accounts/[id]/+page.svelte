@@ -54,6 +54,9 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import NotesPanel from "$lib/components/NotesPanel.svelte";
   import { formatError } from "$lib/utils";
+  import { formatMinorWithScale, parseAmountToMinor } from "$lib/money";
+  import { sumSplitsInMinor } from "$lib/transactions/split-balance";
+  import { exactMatchByName, fuzzyOptions } from "$lib/search/fuzzy";
 
   type SplitDraft = {
     account_id: number | null;
@@ -285,18 +288,6 @@
     return fetched;
   }
 
-  function formatMinorWithScale(amountMinor: number, scale: number): string {
-    const sign = amountMinor < 0 ? "-" : "";
-    const abs = Math.abs(amountMinor);
-    if (scale <= 0) {
-      return `${sign}${abs}`;
-    }
-    const factor = 10 ** scale;
-    const whole = Math.floor(abs / factor);
-    const fraction = String(abs % factor).padStart(scale, "0");
-    return `${sign}${whole}.${fraction}`;
-  }
-
   function formatMinor(amountMinor: number, commodityId: number) {
     const commodity = commodities.find((c) => c.id === commodityId);
     if (!commodity) return String(amountMinor);
@@ -396,19 +387,6 @@
     const commodity = commodities.find((c) => c.id === commodityId);
     if (!commodity) return String(amountMinor);
     return formatMinorWithScale(amountMinor, commodity.scale);
-  }
-
-  function parseAmountToMinor(value: string, scale: number): number | null {
-    if (!value) return 0;
-    const trimmed = value.trim();
-    if (!/^[-+]?\d*(\.\d*)?$/.test(trimmed)) return null;
-    const sign = trimmed.startsWith("-") ? -1 : 1;
-    const [wholePart, fracPartRaw] = trimmed.replace("+", "").replace("-", "").split(".");
-    const whole = wholePart ? parseInt(wholePart, 10) : 0;
-    const fracPart = (fracPartRaw ?? "").padEnd(scale, "0").slice(0, scale);
-    const fraction = fracPart ? parseInt(fracPart, 10) : 0;
-    const factor = 10 ** scale;
-    return sign * (whole * factor + fraction);
   }
 
   function statusBadgeClass(status: string) {
@@ -516,33 +494,6 @@
     return Number.isFinite(n) ? Math.trunc(n) : null;
   }
 
-  function normalizeName(value: string): string {
-    return value.trim().toLowerCase();
-  }
-
-  function fuzzyMatch(query: string, candidate: string): boolean {
-    const q = normalizeName(query);
-    if (!q) return true;
-    const c = normalizeName(candidate);
-    let cursor = 0;
-    for (const ch of c) {
-      if (ch === q[cursor]) {
-        cursor += 1;
-        if (cursor === q.length) return true;
-      }
-    }
-    return false;
-  }
-
-  function fuzzyOptions<T extends { id: number; name: string }>(items: T[], query: string): T[] {
-    return items.filter((item) => fuzzyMatch(query, item.name)).slice(0, 30);
-  }
-
-  function exactMatchByName<T extends { id: number; name: string }>(items: T[], query: string): T | undefined {
-    const needle = normalizeName(query);
-    if (!needle) return undefined;
-    return items.find((item) => normalizeName(item.name) === needle);
-  }
 
   function syncTopLevelInput(kind: "payee" | "category", value: string) {
     if (kind === "payee") {
@@ -633,18 +584,16 @@
   }
 
   function splitsTotalMinor(): number | null {
-    let total = 0;
+    const resolved: { amount: string; scale: number }[] = [];
     for (const split of formSplits) {
       if (!split.account_id) return null;
       const account = accounts.find((a) => a.id === split.account_id);
       if (!account) return null;
       const commodity = commodities.find((c) => c.id === account.commodity_id);
       if (!commodity) return null;
-      const minor = parseAmountToMinor(split.amount, commodity.scale);
-      if (minor === null) return null;
-      total += minor;
+      resolved.push({ amount: split.amount, scale: commodity.scale });
     }
-    return total;
+    return sumSplitsInMinor(resolved);
   }
 
   async function ensureCategoryAccount(kind: string | null, commodityId: number): Promise<number> {

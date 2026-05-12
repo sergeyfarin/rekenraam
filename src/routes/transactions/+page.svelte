@@ -48,6 +48,10 @@
   import { Badge } from "$lib/components/ui/badge";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { formatError } from "$lib/utils";
+  import { formatMinorWithScale, parseAmountToMinor } from "$lib/money";
+  import { parseSmartDate } from "$lib/dates";
+  import { sumSplitsInMinor } from "$lib/transactions/split-balance";
+  import { exactMatchByName, fuzzyOptions } from "$lib/search/fuzzy";
 
   type Account = {
     id: number;
@@ -394,18 +398,6 @@
     }
   }
 
-  function formatMinorWithScale(amountMinor: number, scale: number): string {
-    const sign = amountMinor < 0 ? "-" : "";
-    const abs = Math.abs(amountMinor);
-    if (scale <= 0) {
-      return `${sign}${abs}`;
-    }
-    const factor = 10 ** scale;
-    const whole = Math.floor(abs / factor);
-    const fraction = String(abs % factor).padStart(scale, "0");
-    return `${sign}${whole}.${fraction}`;
-  }
-
   function formatAmount(amountMinor: number, commodityId: number): string {
     const commodity = commodities.find((c) => c.id === commodityId);
     if (!commodity) return String(amountMinor);
@@ -417,19 +409,6 @@
     const commodity = commodities.find((c) => c.id === commodityId);
     if (!commodity) return String(amountMinor);
     return formatMinorWithScale(amountMinor, commodity.scale);
-  }
-
-  function parseAmountToMinor(value: string, scale: number): number | null {
-    if (!value) return 0;
-    const trimmed = value.trim();
-    if (!/^[-+]?\d*(\.\d*)?$/.test(trimmed)) return null;
-    const sign = trimmed.startsWith("-") ? -1 : 1;
-    const [wholePart, fracPartRaw] = trimmed.replace("+", "").replace("-", "").split(".");
-    const whole = wholePart ? parseInt(wholePart, 10) : 0;
-    const fracPart = (fracPartRaw ?? "").padEnd(scale, "0").slice(0, scale);
-    const fraction = fracPart ? parseInt(fracPart, 10) : 0;
-    const factor = 10 ** scale;
-    return sign * (whole * factor + fraction);
   }
 
   function amountToNumber(amountMinor: number, commodityId: number): number {
@@ -590,122 +569,6 @@
     return Number.isFinite(n) ? Math.trunc(n) : null;
   }
 
-  function normalizeName(value: string): string {
-    return value.trim().toLowerCase();
-  }
-
-  function fuzzyMatch(query: string, candidate: string): boolean {
-    const q = normalizeName(query);
-    if (!q) return true;
-    const c = normalizeName(candidate);
-    let cursor = 0;
-    for (const ch of c) {
-      if (ch === q[cursor]) {
-        cursor += 1;
-        if (cursor === q.length) return true;
-      }
-    }
-    return false;
-  }
-
-  function fuzzyOptions<T extends { id: number; name: string }>(items: T[], query: string): T[] {
-    return items.filter((item) => fuzzyMatch(query, item.name)).slice(0, 30);
-  }
-
-  function exactMatchByName<T extends { id: number; name: string }>(items: T[], query: string): T | undefined {
-    const needle = normalizeName(query);
-    if (!needle) return undefined;
-    return items.find((item) => normalizeName(item.name) === needle);
-  }
-
-  // ─── Smart date parsing ────────────────────────────────────────────────────
-
-  function parseSmartDate(raw: string, todayIso: string): string | null {
-    const s = raw.trim();
-    if (!s) return null;
-
-    // "t" or "today"
-    if (s.toLowerCase() === "t" || s.toLowerCase() === "today") return todayIso;
-
-    // Already ISO YYYY-MM-DD or YYYY-M-D
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
-      const [y, m, d] = s.split("-").map(Number);
-      return toIso(y, m, d);
-    }
-
-    const today = new Date(todayIso + "T12:00:00");
-
-    function toIso(y: number, m: number, d: number): string | null {
-      if (m < 1 || m > 12 || d < 1 || d > 31) return null;
-      const dt = new Date(y, m - 1, d);
-      if (dt.getMonth() !== m - 1) return null; // overflow (e.g. Feb 30)
-      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    }
-
-    function guessYear(m: number, d: number): number {
-      const y = today.getFullYear();
-      const candidate = new Date(y, m - 1, d);
-      const diffDays = (candidate.getTime() - today.getTime()) / 86400000;
-      return diffDays > 60 ? y - 1 : y;
-    }
-
-    function resolveMonthDay(a: number, b: number, year: number | null): string | null {
-      let month: number, day: number;
-      if (a > 12 && b <= 12) { day = a; month = b; }
-      else if (b > 12 && a <= 12) { day = b; month = a; }
-      else { month = a; day = b; } // ambiguous: MM/DD convention
-      const y = year ?? guessYear(month, day);
-      return toIso(y, month, day);
-    }
-
-    // Separator-delimited: A/B or A/B/C (also - and .)
-    const sepMatch = s.match(/^(\d{1,4})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?$/);
-    if (sepMatch) {
-      const [, a, b, c] = sepMatch;
-      const aNum = parseInt(a, 10), bNum = parseInt(b, 10);
-      if (c) {
-        const cNum = parseInt(c, 10);
-        if (aNum > 31) {
-          // YYYY/MM/DD
-          return toIso(aNum, bNum, cNum);
-        } else {
-          // DD/MM/YY or MM/DD/YY
-          const year = cNum < 100 ? 2000 + cNum : cNum;
-          return resolveMonthDay(aNum, bNum, year);
-        }
-      } else {
-        return resolveMonthDay(aNum, bNum, null);
-      }
-    }
-
-    // No separator: 1–4 digits
-    if (/^\d{1,4}$/.test(s)) {
-      const n = parseInt(s, 10);
-      if (s.length <= 2) {
-        // Day only: use current month, step back if more than 2 days in future
-        const d = n;
-        if (d < 1 || d > 31) return null;
-        let m = today.getMonth() + 1;
-        let y = today.getFullYear();
-        const candidate = new Date(y, m - 1, d);
-        if (isNaN(candidate.getTime()) || candidate.getMonth() !== m - 1) {
-          m -= 1; if (m === 0) { m = 12; y -= 1; }
-        } else {
-          const diff = (candidate.getTime() - today.getTime()) / 86400000;
-          if (diff > 2) { m -= 1; if (m === 0) { m = 12; y -= 1; } }
-        }
-        return toIso(y, m, d);
-      } else if (s.length === 3) {
-        // MDD: first digit = month, last two = day
-        return resolveMonthDay(parseInt(s[0], 10), parseInt(s.slice(1), 10), null);
-      } else {
-        // MMDD
-        return resolveMonthDay(parseInt(s.slice(0, 2), 10), parseInt(s.slice(2), 10), null);
-      }
-    }
-
-    return null;
-  }
 
   function onDateInput(value: string) {
     formDateRaw = value;
@@ -835,18 +698,16 @@
   }
 
   function splitsTotalMinor(): number | null {
-    let total = 0;
+    const resolved: { amount: string; scale: number }[] = [];
     for (const split of formSplits) {
       if (!split.account_id) return null;
       const account = accounts.find((a) => a.id === split.account_id);
       if (!account) return null;
       const commodity = commodities.find((c) => c.id === account.commodity_id);
       if (!commodity) return null;
-      const minor = parseAmountToMinor(split.amount, commodity.scale);
-      if (minor === null) return null;
-      total += minor;
+      resolved.push({ amount: split.amount, scale: commodity.scale });
     }
-    return total;
+    return sumSplitsInMinor(resolved);
   }
 
   async function ensureCategoryAccount(kind: string | null, commodityId: number): Promise<number> {

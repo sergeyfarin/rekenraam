@@ -7,6 +7,261 @@ Detailed execution plan for Phase 3 (frontend tests) from
 gap-plan summary into an executable plan with workstreams, file targets, and
 acceptance criteria.
 
+## Progress
+
+Living checklist. Updated after every shipped item.
+
+- [x] **F** — root-level Tauri cleanup (2026-05-12)
+- [x] **A1** — Vitest + jsdom + @testing-library/svelte infra (2026-05-12)
+- [x] **B1** — `src/lib/money.ts` (2026-05-12)
+- [x] **B2** — `src/lib/dates.ts` (2026-05-12)
+- [x] **B3** — `src/lib/transactions/split-balance.ts` (2026-05-12)
+- [x] **B4** — `src/lib/search/fuzzy.ts` (2026-05-12)
+- [x] **B5** — `src/lib/reconciliation/state.ts` (2026-05-12)
+- [ ] B6 — `src/lib/transactions/saved-views.ts`
+- [ ] B7 — `src/lib/forms/validators.ts`
+- [ ] D1 — transactions page split
+- [ ] D2 — account detail split
+- [ ] D3 — reports page split
+- [ ] C1 — login / bootstrap flow tests
+- [ ] C2 — reconciliation page tests
+- [ ] C3 — transaction split editor tests
+- [ ] C4 — planning forms tests
+- [ ] C5 — date picker tests
+- [ ] C6 — session-expired redirect test
+- [ ] A2 — Playwright harness
+- [ ] A3 — CI workflow `web-tests.yml`
+- [ ] E1–E6 — Playwright specs
+- [ ] G — docs (README, frontend-testing.md, v1-gap-plan.md sync)
+
+### Changelog
+
+**2026-05-12 — Workstream F (root-level Tauri cleanup) shipped.**
+
+- [package.json](../../package.json): removed `@tauri-apps/api`,
+  `@tauri-apps/plugin-opener`, `@tauri-apps/cli` and the `"tauri": "tauri"`
+  script. `dependencies` now empty (all production-runtime deps had been
+  Tauri-only).
+- [vite.config.js](../../vite.config.js): dropped `TAURI_DEV_HOST` block,
+  fixed-port `1420` / HMR `1421` server settings, `**/src-tauri/**`
+  watch-ignore, and `clearScreen: false`. Reduced to a 7-line plain
+  SvelteKit + Tailwind vite config.
+- `src-tauri/` kept untouched per scope decision (parity-lookup reference).
+- [TODO.md](../../TODO.md) Phase 1 #8 row updated to "partial" with deviation
+  note. Phase 1 #8 remains open for the eventual full removal.
+
+Verification: `npm run check` (0 errors / 0 warnings), `npm run build`
+(✓ built, adapter-static wrote site to `build`).
+
+**2026-05-12 — Workstream A1 (Vitest infra) shipped.**
+
+- DevDeps added: `vitest@^4.1.6`, `@vitest/ui@^4.1.6`,
+  `@testing-library/svelte@^5.2.4`, `@testing-library/jest-dom@^6.5.0`,
+  `@testing-library/user-event@^14.5.2`, `jsdom@^29.1.1`. **Note:** the plan
+  originally specified vitest v2; the project uses Vite 8, and vitest 2 ships
+  a bundled Vite 5 that crashes `@sveltejs/vite-plugin-svelte@7`'s
+  `configureServer` (`server.environments` undefined). Vitest 4 is the
+  matching major.
+- New [vitest.config.ts](../../vitest.config.ts): plugins `sveltekit()` +
+  `svelteTesting()`, jsdom env, `$app/state` / `$app/navigation` /
+  `$app/environment` aliased to local mocks via the `test.alias` block.
+- New `src/test/setup.ts`: imports `@testing-library/jest-dom/vitest`, calls
+  `cleanup()` and `vi.restoreAllMocks()` after each test.
+- New `src/test/mocks/app-state.ts`, `src/test/mocks/app-navigation.ts`,
+  `src/test/mocks/app-environment.ts`: hand-written stubs for SvelteKit's
+  `$app/*` modules. `goto` exposed as a `vi.fn()` so component tests can
+  assert navigation.
+- New scripts in [package.json](../../package.json): `npm test`,
+  `npm run test:watch`, `npm run test:ui`.
+- Sanity test [src/test/sanity.test.ts](../../src/test/sanity.test.ts):
+  asserts `1+1=2` and that jsdom DOM globals are available.
+
+Verification: `npm test` → 1 file, 2 tests passed in 1.4s.
+
+**2026-05-12 — Workstream B1 (money helpers) shipped.**
+
+- New [src/lib/money.ts](../../src/lib/money.ts): canonical
+  `formatMinorWithScale(amountMinor, scale)` and
+  `parseAmountToMinor(value, scale)` extracted verbatim from the duplicate
+  definitions in `transactions/+page.svelte` and `accounts/[id]/+page.svelte`.
+- New [src/lib/money.test.ts](../../src/lib/money.test.ts): 19 unit tests
+  covering positive/negative amounts at scales 0/2/4/8, scale-0 bare-integer
+  format, negative-scale clamping, fractional padding, explicit-plus sign,
+  whitespace trimming, fractional truncation past scale (no rounding),
+  trailing dot, rejection of letters / comma-as-thousands / multiple dots /
+  exponent / currency symbol, and round-trip with `formatMinorWithScale` at
+  scale 2 and 4. 21/21 green.
+- Migrated [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte)
+  and [src/routes/accounts/[id]/+page.svelte](../../src/routes/accounts/[id]/+page.svelte):
+  removed the two local copies, imported from `$lib/money` instead. The
+  per-commodity wrappers (`formatAmount`, `formatAmountInput`, `formatMinor`)
+  stay in the pages because they look up the commodity by id from a
+  page-local `commodities` array — that's view-state, not pure logic.
+- Migrated [src/routes/accounts/[id]/reconcile/+page.svelte](../../src/routes/accounts/[id]/reconcile/+page.svelte)'s
+  `formatMinor` to delegate to `formatMinorWithScale`. Reconcile's
+  `parseAmount` is **intentionally not** routed through `parseAmountToMinor`:
+  it has different semantics (strips comma thousand-separators, returns
+  `null` on empty rather than `0`, and rounds `Math.round(value * factor)`
+  instead of truncating). Those differences are now documented inline with a
+  comment explaining the divergence vs. the canonical helper.
+
+Verification: `npm test` → 2 files, 21 tests passed in 1.7s;
+`npm run check` → 0 errors / 0 warnings; `npm run build` → ✓ built.
+
+Behavior preservation: all three page-side wrappers produce byte-identical
+output for valid inputs vs. before. The only change in reconcile is that the
+helper comment now documents previously-undocumented divergent behavior.
+
+**2026-05-12 — Workstream B2 (smart-date parser) shipped.**
+
+- New [src/lib/dates.ts](../../src/lib/dates.ts): `parseSmartDate(raw, todayIso)`
+  extracted verbatim from [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte).
+  The function is already pure (takes `todayIso` as input) so no signature
+  changes were needed. Inner helpers (`toIso`, `guessYear`, `resolveMonthDay`)
+  travel with it.
+- New [src/lib/dates.test.ts](../../src/lib/dates.test.ts): 29 unit tests
+  (split into 6 describe blocks) covering empty / shorthand (`t` / `today`,
+  case-insensitive), ISO `YYYY-MM-DD` (zero-padding, leap-year accept /
+  reject for 2024-02-29 and 2025-02-29, invalid month / day / overflow
+  rejection), separator-delimited two-part (`5/12`, `13/5` swap, `5/13`
+  swap, `12/25` prior-year guess, `7/1` 60-day boundary stays in current
+  year, dash / dot separators, invalid combinations rejected),
+  separator-delimited three-part (2-digit and 4-digit year, `YYYY/MM/DD`
+  first-part>31 shape, leap-year propagation), bare-digit (1-2 digits day
+  with 2-day-future cutoff including January year-rollback, 3-digit `MDD`,
+  4-digit `MMDD`, malformed rejection), and junk input. 50/50 green across
+  the three test files.
+- Migrated [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte):
+  removed the local definition (~85 LoC), imported `parseSmartDate` from
+  `$lib/dates`. The page-local `onDateInput` / `onDateBlur` callers stay
+  unchanged.
+
+Verification: `npm test` → 3 files, 50 tests passed in 1.7s;
+`npm run check` → 0 errors / 0 warnings; `npm run build` → ✓ built in 9.6s.
+
+Discovered behavior worth flagging:
+
+- **60-day forward window is fairly aggressive**: from May 12, typing `8/1`
+  resolves to **2025-08-01**, not 2026-08-01 (~81 days forward → previous
+  year). The cutoff is exactly 60 days. Tests pin this behavior.
+- **2-day "near future" cutoff for bare-day input is anchored at noon**:
+  on May 12, typing `13` → May 13 (diff 0.5d from the `T12:00:00` anchor →
+  stays), but `15` → April 15 (diff 2.5d → steps back to prior month).
+- **Day 31 in current-month-30 silently fails**: from May 12, typing `31`
+  → step-back to April (since `Date(2026,4,31)` overflows), but
+  `toIso(2026, 4, 31)` re-checks and returns null. End-user behavior: the
+  date input clears. Not changed (this is current production behavior); a
+  follow-up could route to "next valid day-31" but that's out of scope.
+
+**2026-05-12 — Workstream B3 (split-balance) shipped.**
+
+- New [src/lib/transactions/split-balance.ts](../../src/lib/transactions/split-balance.ts):
+  pure helpers `sumSplitsInMinor(splits)` (returns total minor units or
+  `null` if any leg fails to parse) and `isSplitsBalanced(splits)`
+  (convenience that returns `true` iff sum is exactly 0). Input shape is
+  `{ amount: string; scale: number }[]` — the page is responsible for
+  resolving `account_id → account → commodity → scale` before calling.
+- New [src/lib/transactions/split-balance.test.ts](../../src/lib/transactions/split-balance.test.ts):
+  12 unit tests covering empty list, balanced two-leg, off-by-one cent,
+  balanced three-leg, mixed-scale raw-minor summing, null short-circuit on
+  unparseable amount, empty-amount-as-zero behavior, and the `isSplitsBalanced`
+  shape.
+- Migrated [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte)
+  and [src/routes/accounts/[id]/+page.svelte](../../src/routes/accounts/[id]/+page.svelte):
+  the duplicate `splitsTotalMinor()` page-helper now resolves the
+  account/commodity lookups locally and delegates the parse+sum work to
+  `sumSplitsInMinor`. The lookup chain stays page-side because it depends on
+  page state (`accounts`, `commodities`, `formSplits`).
+
+Verification: `npm test` → 4 files, 62 tests passed in 1.7s;
+`npm run check` → 0 errors / 0 warnings; `npm run build` → ✓ built.
+
+**Known limitation documented by the tests:** the helper sums raw minor
+units **without commodity awareness** (mirrors the existing single-total
+behavior). A balanced cross-currency transaction (USD legs sum to 0 AND
+EUR legs sum to 0) is not detected as balanced by this helper — it would
+need a per-commodity grouping. The backend already rejects mixed-commodity
+unbalanced transactions ([v1-gap-plan.md §1.2.2 Cross-currency transfer
+endpoint](v1-gap-plan.md) routes those through a dedicated endpoint), so
+the simple total is sufficient for the UI's pre-submit check. A future
+upgrade to a `{ [commodityId]: total }` map would unblock multi-currency
+manual transactions in the regular transaction form — out of scope for B3.
+
+**2026-05-12 — Workstream B4 (fuzzy search) shipped.**
+
+- New [src/lib/search/fuzzy.ts](../../src/lib/search/fuzzy.ts): four pure
+  helpers extracted verbatim — `normalizeName(value)` (trim + lowercase, no
+  accent stripping), `fuzzyMatch(query, candidate)` (subsequence match,
+  empty query → true), `fuzzyOptions(items, query)` (filter + cap at
+  `FUZZY_OPTIONS_LIMIT = 30`, exported as a named constant so future tests
+  / docs can reference it), and `exactMatchByName(items, query)`
+  (case-insensitive exact match, empty query → undefined).
+- New [src/lib/search/fuzzy.test.ts](../../src/lib/search/fuzzy.test.ts):
+  21 unit tests across 4 describe blocks covering normalization shape,
+  empty-query semantics, contiguous and non-contiguous subsequence
+  matching, order-sensitivity, non-ASCII passthrough, the 30-result cap,
+  duplicate-name first-match order, and whitespace-around-query handling.
+- Migrated [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte)
+  and [src/routes/accounts/[id]/+page.svelte](../../src/routes/accounts/[id]/+page.svelte):
+  removed the 4-function block from each page and imported from
+  `$lib/search/fuzzy`. `normalizeName` and `fuzzyMatch` are now only
+  exported from `$lib`; the pages use `exactMatchByName` and
+  `fuzzyOptions` only.
+
+Verification: `npm test` → 5 files, 83 tests passed in 1.9s;
+`npm run check` → 0 errors / 0 warnings; `npm run build` → ✓ built.
+
+**Pinned semantics worth flagging:**
+- `normalizeName` is intentionally simple — no NFC/NFD unicode normalization,
+  no accent stripping. `"Café"` and `"Cafe"` are **different** names. If
+  this becomes a UX complaint, the upgrade is `value.normalize("NFKD")
+  .replace(/\p{Diacritic}/gu, "")` inside `normalizeName`; that change would
+  flip several tests and should ship behind its own decision.
+- `fuzzyOptions` hard-caps at 30; users typing into autocomplete will never
+  see candidates 31+ in the dropdown. Acceptable for v1; flag for revisit
+  if the payee count per book grows past a few hundred.
+
+**2026-05-12 — Workstream B5 (reconciliation derived state) shipped.**
+
+- New [src/lib/reconciliation/state.ts](../../src/lib/reconciliation/state.ts):
+  two pure helpers extracted from the `$:` block at
+  [src/routes/accounts/[id]/reconcile/+page.svelte:41-49](../../src/routes/accounts/[id]/reconcile/+page.svelte).
+  - `deriveReconciliationState({openingBalanceMinor, checkedAmountMinor,
+    statementBalanceMinor})` returns `{clearedBalanceMinor, differenceMinor,
+    needsOffset}`. `statementBalanceMinor: null` propagates to
+    `differenceMinor: null` and `needsOffset: false` (i.e. "no statement
+    entered yet" is not a mismatch).
+  - `sumCheckedAmounts(candidates, checkedIds)` walks a `{id, splitAmountMinor}[]`
+    against a `Set<id>` and sums only the checked ones. Generic in `TxId` so
+    the page can pass `transaction.id` directly.
+- New [src/lib/reconciliation/state.test.ts](../../src/lib/reconciliation/state.test.ts):
+  13 unit tests covering balanced (zero difference), one-cent over,
+  one-cent under, unknown-statement (null) propagation, all-zeros baseline,
+  negative-opening (liability) case, empty checked set, empty candidates,
+  partial check, unknown-id-in-checked-set graceful handling, and
+  all-checked.
+- Migrated [src/routes/accounts/[id]/reconcile/+page.svelte](../../src/routes/accounts/[id]/reconcile/+page.svelte):
+  the four-line `$:` derivation block (`clearedBalanceMinor`,
+  `differenceMinor`, `needsOffset`, and `checkedAmountMinor`) now goes
+  through the pure helpers. The page maps `candidates: TransactionWithSplits[]`
+  to `{id, splitAmountMinor}` via the existing page-local `splitAmount` helper
+  before handing off to `sumCheckedAmounts`. Page-coupled lookups (`history`
+  → `openingBalanceMinor`, `splitAmount(tx)` per-account split lookup,
+  `parseAmount(statementBalanceInput)` reconcile-specific parser) stay on the
+  page; only the post-resolution arithmetic moves to `$lib`.
+
+Verification: `npm test` → 6 files, 96 tests passed in 2.1s;
+`npm run check` → 0 errors / 0 warnings; `npm run build` → ✓ built.
+
+Note on the signature: the original B5 sketch in the workstream B table
+proposed `deriveReconciliationState(openingMinor, candidates, checkedIds,
+statementBalanceMinor)`. The actual extraction uses an object-shape input
+with **already-summed** `checkedAmountMinor` because walking `candidates`
+requires `splitAmount(tx)`, which depends on the page's `accountId` state.
+That walk is split out as `sumCheckedAmounts` with a generic candidate
+shape so the page-coupled `splitAmount` lookup stays page-side. Same
+pattern as B3.
+
 ## Decisions (2026-05-12)
 
 - **Scope:** extended unit + Playwright e2e (broader than gap-plan minimum).
@@ -335,6 +590,11 @@ commit and walk the UI manually after each.
    a per-job Postgres volume?
 2. **Component test mocking:** OK with `vi.mock("$lib/api/*")` per spec, or
    want a single shared mock-API module that specs override entries on?
-3. **`fuzzyMatch` semantics:** accent stripping / unicode normalization
-   present today, or ASCII-only? (To be confirmed during B4 extraction; test
-   cases differ.)
+3. ~~**`fuzzyMatch` semantics:** accent stripping / unicode normalization
+   present today, or ASCII-only?~~ **Answered 2026-05-12 in B4:** the
+   current implementation is **case-only** (lowercase + trim). No accent
+   stripping, no unicode NFC/NFD normalization. `normalizeName("Café")` →
+   `"café"` (the accented `é` survives). Multi-byte code-point iteration in
+   `fuzzyMatch` means non-ASCII characters work as match targets, but they
+   must match exactly. Pinned by tests in
+   [src/lib/search/fuzzy.test.ts](../../src/lib/search/fuzzy.test.ts).

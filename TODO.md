@@ -51,7 +51,7 @@ Tests: 197 passed / 2 skipped on real Postgres.
 
 ## Active focus
 
-**Phase 1 feature work resumed.** Stabilization is done; invite flow shipped.
+**Phase 3 (frontend tests) in flight.** Detail plan: [docs/product/phase-3-plan.md](docs/product/phase-3-plan.md). Phase 1 #8 (Tauri removal) is partial; full removal stays open.
 
 1. [x] **Phase 1 step 7** — Add CI API test job. Shipped 2026-05-09.
 2. [x] **Phase 2 step 9** — Triage 8 pre-existing test failures. Shipped 2026-05-10.
@@ -61,8 +61,15 @@ Tests: 197 passed / 2 skipped on real Postgres.
 6. [x] **Phase 1 step 4** — Stock-split lot rewrite. Shipped 2026-05-10. Detail: [v1-gap-plan.md §Phase 1 step 4](docs/product/v1-gap-plan.md).
 7. [x] **Phase 1 step 5** — Cross-session OFX duplicate detection. Shipped 2026-05-11. Detail: [v1-gap-plan.md §Phase 1 step 5](docs/product/v1-gap-plan.md).
 8. [x] **Phase 1 step 6** — Reverse-proxy + TLS production example. Shipped 2026-05-11. Detail: [v1-gap-plan.md §Phase 1 step 6](docs/product/v1-gap-plan.md).
+9. [x] **Phase 3 workstream F** — Root-level Tauri cleanup. Shipped 2026-05-12. Dropped `@tauri-apps/*` deps and `"tauri"` script from package.json, removed Tauri-specific blocks from vite.config.js. `src-tauri/` kept as parity-lookup reference. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+10. [x] **Phase 3 workstream A1** — Vitest + jsdom + `@testing-library/svelte` infra. Shipped 2026-05-12. `npm test` green (1 file, 2 tests, 1.4s). Vitest pinned to v4 to match Vite 8. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+11. [x] **Phase 3 workstream B1** — `$lib/money.ts` extracted with 19 unit tests. Shipped 2026-05-12. Canonical `formatMinorWithScale` + `parseAmountToMinor` deduplicated from two route files; reconcile's bespoke `parseAmount` documented as a known divergence. 21/21 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+12. [x] **Phase 3 workstream B2** — `$lib/dates.ts` extracted with 29 unit tests. Shipped 2026-05-12. Smart-date parser (`t` / `today` / ISO / `M/D` / `M/D/YY` / `YYYY/M/D` / bare digits with day-of-month heuristics) moved to `$lib`. Tests pin previously-undocumented behaviors: 60-day prior-year guess cutoff, noon-anchored 2-day "near future" rule, day-31-in-30-day-month silently clears. 50/50 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+13. [x] **Phase 3 workstream B3** — `$lib/transactions/split-balance.ts` extracted with 12 unit tests. Shipped 2026-05-12. Pure `sumSplitsInMinor` + `isSplitsBalanced` deduplicated from two route files; the page-state lookups (`account_id → commodity → scale`) stay in the pages. Known limitation pinned: helper sums raw minor units without commodity grouping (matches existing UI behavior; cross-currency goes through its own backend endpoint). 62/62 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+14. [x] **Phase 3 workstream B4** — `$lib/search/fuzzy.ts` extracted with 21 unit tests. Shipped 2026-05-12. `normalizeName` / `fuzzyMatch` / `fuzzyOptions` / `exactMatchByName` deduplicated from two route files. Pinned semantics: normalization is case-only (no accent stripping); `fuzzyOptions` hard-caps at 30 results. 83/83 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+15. [x] **Phase 3 workstream B5** — `$lib/reconciliation/state.ts` extracted with 13 unit tests. Shipped 2026-05-12. Pure `deriveReconciliationState` + `sumCheckedAmounts` cover the cleared/difference/needsOffset derivation that the reconcile page's `$:` block was inlining. `null` statement-balance now propagates explicitly through the helper (matches existing semantics). 96/96 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
 
-Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md): Tauri removal (#8).
+Next: Phase 3 workstream B6 (`$lib/transactions/saved-views.ts` — saved-view filter serialization).
 
 ## Phase status
 
@@ -71,7 +78,7 @@ Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/
 | Phase 0 — e2e test seam | **DONE** 2026-05-09 | [v1-gap-plan.md §Phase 0](docs/product/v1-gap-plan.md) |
 | Phase 1 — release-blocker scope items | 7/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
 | Phase 2 — hardening of high-risk service code | not started | [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md) |
-| Phase 3 — frontend tests | in flight (2026-05-12) — Workstreams F+A1 shipped: root-level Tauri cleanup, Vitest + jsdom + @testing-library/svelte infra, sanity test green. Detail plan: [phase-3-plan.md](docs/product/phase-3-plan.md). | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
+| Phase 3 — frontend tests | in flight (2026-05-12) — Workstreams F + A1 + B1–B5 shipped: root-level Tauri cleanup, Vitest + jsdom + @testing-library/svelte infra, `$lib/money.ts` + `$lib/dates.ts` + `$lib/transactions/split-balance.ts` + `$lib/search/fuzzy.ts` + `$lib/reconciliation/state.ts` extracted with 94 unit tests. 96/96 tests green. Detail plan: [phase-3-plan.md](docs/product/phase-3-plan.md). | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
 | Phase 4 — nice-to-have scope items | not started | [v1-gap-plan.md §Phase 4](docs/product/v1-gap-plan.md) |
 
 ## Phase 1 — Release blockers

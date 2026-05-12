@@ -45,7 +45,7 @@ Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Tw
 - [ ] **Phase 2** — hardening of high-risk service code (2/11 items done)
   - [x] 9. Triage 8 pre-existing test failures (completed 2026-05-10)
   - [x] 10. Rebuild stage2_schema_contract.py from Base.metadata (completed 2026-05-11)
-- [ ] **Phase 3** — frontend tests
+- [ ] **Phase 3** — frontend tests (in flight 2026-05-12 — detail plan: [phase-3-plan.md](phase-3-plan.md). Workstreams F + A1 shipped: root-level Tauri cleanup, Vitest + jsdom + @testing-library/svelte infra, sanity test green.)
 - [ ] **Phase 4** — nice-to-have scope items
 
 ## Findings discovered while executing the plan
@@ -513,12 +513,80 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
 
 Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded existing one) that exercises the seam from Phase 0 and covers the missing scenarios named in §2.
 
-### Phase 3 — Frontend tests (3-4 d)
+### Phase 3 — Frontend tests (3-4 d minimum, 7.5-9.5 d for extended scope)
+
+Detailed plan: [phase-3-plan.md](phase-3-plan.md). Scope was extended on
+2026-05-12 to include Playwright e2e plus a targeted component-extraction
+refactor of the largest route files. Original four-item gap-plan minimum
+(below) is now a subset of phase-3-plan.md workstream C.
+
+Minimum scope (gap-plan baseline):
 
 1. Add Vitest + `@testing-library/svelte` config and one CI job.
 2. Form-validation tests for transaction split balance, budget amount sign, date-picker leap-year.
 3. Session-expired redirect smoke test.
 4. Component tests for the reconciliation page (the most error-prone UI).
+
+Progress (2026-05-12):
+
+- [x] **Workstream F** — root-level Tauri cleanup. Removed `@tauri-apps/*`
+  deps and `"tauri"` script from [package.json](../../package.json); dropped
+  Tauri-specific blocks from [vite.config.js](../../vite.config.js). Phase 1
+  #8 row in [TODO.md](../../TODO.md) updated to "partial"; full Tauri removal
+  remains open. `src-tauri/` directory kept as parity-lookup reference per
+  scope decision.
+- [x] **Workstream A1** — Vitest + jsdom + `@testing-library/svelte` infra.
+  New [vitest.config.ts](../../vitest.config.ts), `src/test/setup.ts`,
+  `$app/*` mock stubs, `src/test/sanity.test.ts`. `npm test` green
+  (1 file, 2 tests, 1.4s). Vitest pinned to v4 (matches Vite 8); vitest 2
+  was incompatible with `@sveltejs/vite-plugin-svelte@7`.
+- [x] **Workstream B1** — `$lib/money.ts` extracted. Canonical
+  `formatMinorWithScale` and `parseAmountToMinor` (the duplicates from
+  `transactions/+page.svelte` and `accounts/[id]/+page.svelte`) moved to
+  [src/lib/money.ts](../../src/lib/money.ts); 19 unit tests cover scales 0/2/4/8,
+  trim/padding/truncation, explicit plus, rejection cases (commas, letters,
+  exponent), and round-trip. Three pages migrated; reconcile's bespoke
+  `parseAmount` (comma-stripping, null-on-empty, float-rounding) stays
+  documented inline as a known divergence. 21/21 tests green, `npm run check`
+  clean, `npm run build` ✓.
+- [x] **Workstream B2** — `$lib/dates.ts` extracted. `parseSmartDate` moved
+  to [src/lib/dates.ts](../../src/lib/dates.ts); 29 unit tests cover empty /
+  `t` / `today` shorthand, ISO with leap-year semantics, separator-delimited
+  two-part (M/D auto-swap, 60-day prior-year guess), three-part (2- and 4-
+  digit year, `YYYY/MM/DD`), and bare digits (day-only with 2-day cutoff and
+  January year-rollback, 3-digit `MDD`, 4-digit `MMDD`). 50/50 tests green
+  across `$lib`, `npm run check` clean, `npm run build` ✓.
+- [x] **Workstream B3** — `$lib/transactions/split-balance.ts` extracted.
+  Pure `sumSplitsInMinor` + `isSplitsBalanced` moved to
+  [src/lib/transactions/split-balance.ts](../../src/lib/transactions/split-balance.ts);
+  12 unit tests cover empty / balanced / unbalanced / mixed-scale / null
+  short-circuit / empty-amount-as-zero. Both copies of `splitsTotalMinor()`
+  in `transactions/+page.svelte` and `accounts/[id]/+page.svelte` now resolve
+  the account/commodity lookups page-side and delegate the parse-and-sum to
+  the pure helper. 62/62 tests green, `npm run check` clean, `npm run build`
+  ✓. Limitation pinned by tests: the helper sums raw minor units without
+  commodity grouping, so a balanced cross-currency split is not detected —
+  acceptable because the backend routes cross-currency through its own
+  endpoint ([§1.2.2](v1-gap-plan.md)).
+- [x] **Workstream B4** — `$lib/search/fuzzy.ts` extracted. `normalizeName`
+  / `fuzzyMatch` / `fuzzyOptions` / `exactMatchByName` deduplicated from
+  both `transactions/+page.svelte` and `accounts/[id]/+page.svelte`; 21
+  unit tests cover normalization semantics (no accent stripping —
+  intentional), empty-query semantics, subsequence matching (in-order
+  required), the 30-result cap, and duplicate-name first-match order.
+  83/83 tests green, `npm run check` clean, `npm run build` ✓.
+- [x] **Workstream B5** — `$lib/reconciliation/state.ts` extracted. Pure
+  `deriveReconciliationState` (clearedBalance / difference / needsOffset
+  with `null` statement-balance propagation) and `sumCheckedAmounts`
+  (generic over txId, sums only checked candidates) moved to
+  [src/lib/reconciliation/state.ts](../../src/lib/reconciliation/state.ts);
+  13 unit tests cover balanced / one-cent-over / one-cent-under / null
+  statement / all-zeros / negative opening / partial check / unknown id /
+  all-checked. The reconcile page's `$:` derivation block now goes through
+  the pure helper; page-coupled lookups stay page-side. 96/96 tests green,
+  `npm run check` clean, `npm run build` ✓.
+- [ ] Workstreams B6 / B7 / C / D / E / A2 / A3 / G — see
+  [phase-3-plan.md §Progress](phase-3-plan.md).
 
 ### Phase 4 — Nice-to-have scope items (3-5 d, optional for v1)
 
