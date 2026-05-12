@@ -71,7 +71,7 @@ Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/
 | Phase 0 — e2e test seam | **DONE** 2026-05-09 | [v1-gap-plan.md §Phase 0](docs/product/v1-gap-plan.md) |
 | Phase 1 — release-blocker scope items | 7/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
 | Phase 2 — hardening of high-risk service code | not started | [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md) |
-| Phase 3 — frontend tests | not started | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
+| Phase 3 — frontend tests | in flight (2026-05-12) — Workstreams F+A1 shipped: root-level Tauri cleanup, Vitest + jsdom + @testing-library/svelte infra, sanity test green. Detail plan: [phase-3-plan.md](docs/product/phase-3-plan.md). | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
 | Phase 4 — nice-to-have scope items | not started | [v1-gap-plan.md §Phase 4](docs/product/v1-gap-plan.md) |
 
 ## Phase 1 — Release blockers
@@ -85,7 +85,7 @@ Next, return to the Phase 1 ordering in [v1-gap-plan.md §Phase 1](docs/product/
 | 5 | Cross-session OFX duplicate detection | **DONE 2026-05-11** | gap-plan §1.4.3, §Phase 1 |
 | 6 | Reverse-proxy + TLS production example | **DONE 2026-05-11** | gap-plan §1.7.1, §Phase 1 |
 | 7 | CI API test job | **DONE 2026-05-09** | gap-plan §1.7.2, §Phase 1 |
-| 8 | Tauri removal | not started — requires Phase 0 e2e + parity sign-off | gap-plan §1.8, migration-plan Milestone 12 |
+| 8 | Tauri removal | partial — root-level cleanup done 2026-05-12 (Phase 3 workstream F): dropped `@tauri-apps/*` deps, `"tauri"` script, and Tauri-specific blocks from [vite.config.js](vite.config.js). `src-tauri/` directory kept intentionally as parity-lookup reference; full removal remains open. | gap-plan §1.8, migration-plan Milestone 12 |
 
 ## Phase 2 — Hardening (high-risk correctness)
 
