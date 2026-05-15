@@ -55,24 +55,12 @@
   import NotesPanel from "$lib/components/NotesPanel.svelte";
   import { formatError } from "$lib/utils";
   import { formatMinorWithScale, parseAmountToMinor } from "$lib/money";
-  import { sumSplitsInMinor } from "$lib/transactions/split-balance";
   import { exactMatchByName, fuzzyOptions } from "$lib/search/fuzzy";
   import { validateIsoDate } from "$lib/forms/validators";
-
-  type SplitDraft = {
-    account_id: number | null;
-    category_id: number | null;
-    category_input: string;
-    tag_id: number | null;
-    tag_input: string;
-    person_id: number | null;
-    person_input: string;
-    project_id: number | null;
-    project_input: string;
-    share_bps: number | null;
-    amount: string;
-    memo: string;
-  };
+  import { emptySplitDraft, type SplitDraft } from "$lib/transactions/split-draft";
+  import TransactionSplitEditor from "$lib/components/TransactionSplitEditor.svelte";
+  import AccountHeader from "$lib/components/AccountHeader.svelte";
+  import AccountRegister from "$lib/components/AccountRegister.svelte";
 
   let accountId: number | null = null;
   let account: AccountSummary | null = null;
@@ -195,14 +183,6 @@
   function onUnlockConfirm() { unlockDialogOpen = false; unlockResolve?.(unlockReason); unlockResolve = null; }
   function onUnlockCancel() { unlockDialogOpen = false; unlockResolve?.(null); unlockResolve = null; }
 
-  let tableRef: HTMLDivElement | null = null;
-  let txColumnWidths = [12, 18, 22, 12, 16, 10, 10];
-  let resizingIndex: number | null = null;
-  let resizeStartX = 0;
-  let resizeStartWidths: number[] = [];
-
-  $: txGridTemplate = txColumnWidths.map((w) => `${w}%`).join(" ");
-
   onMount(async () => {
     const idParam = page.params.id;
     const parsed = Number(idParam);
@@ -289,18 +269,6 @@
     return fetched;
   }
 
-  function formatMinor(amountMinor: number, commodityId: number) {
-    const commodity = commodities.find((c) => c.id === commodityId);
-    if (!commodity) return String(amountMinor);
-    return `${formatMinorWithScale(amountMinor, commodity.scale)} ${commodity.symbol ?? commodity.name}`;
-  }
-
-  function findDirectiveDate(kind: string) {
-    const matches = directives.filter((d) => d.directive_type === kind);
-    if (matches.length === 0) return null;
-    return matches[matches.length - 1].directive_date;
-  }
-
   async function saveBookingPolicy() {
     if (!accountId) return;
     savingPolicy = true;
@@ -328,57 +296,6 @@
     return categories.find((c) => c.id === id)?.kind ?? null;
   }
 
-  function startResize(event: PointerEvent, index: number) {
-    if (!tableRef || index >= txColumnWidths.length - 1) return;
-    event.preventDefault();
-    resizingIndex = index;
-    resizeStartX = event.clientX;
-    resizeStartWidths = [...txColumnWidths];
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", handleResize);
-    window.addEventListener("pointerup", stopResize);
-  }
-
-  function handleResize(event: PointerEvent) {
-    if (resizingIndex === null || !tableRef) return;
-    const deltaX = event.clientX - resizeStartX;
-    const totalWidth = tableRef.clientWidth || 1;
-    const deltaPercent = (deltaX / totalWidth) * 100;
-    const minWidth = 6;
-    const nextIndex = resizingIndex + 1;
-    let newCurrent = resizeStartWidths[resizingIndex] + deltaPercent;
-    let newNext = resizeStartWidths[nextIndex] - deltaPercent;
-
-    if (newCurrent < minWidth) {
-      const adjust = minWidth - newCurrent;
-      newCurrent = minWidth;
-      newNext -= adjust;
-    }
-    if (newNext < minWidth) {
-      const adjust = minWidth - newNext;
-      newNext = minWidth;
-      newCurrent -= adjust;
-    }
-
-    const updated = [...resizeStartWidths];
-    updated[resizingIndex] = Number(newCurrent.toFixed(2));
-    updated[nextIndex] = Number(newNext.toFixed(2));
-    txColumnWidths = updated;
-  }
-
-  function stopResize() {
-    resizingIndex = null;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-    window.removeEventListener("pointermove", handleResize);
-    window.removeEventListener("pointerup", stopResize);
-  }
-
-  function accountName(id: number) {
-    return accounts.find((a) => a.id === id)?.name ?? "—";
-  }
-
   function accountSplit(tx: TransactionWithSplits) {
     if (!accountId) return tx.splits[0];
     return tx.splits.find((s) => s.account_id === accountId) ?? tx.splits[0];
@@ -388,22 +305,6 @@
     const commodity = commodities.find((c) => c.id === commodityId);
     if (!commodity) return String(amountMinor);
     return formatMinorWithScale(amountMinor, commodity.scale);
-  }
-
-  function statusBadgeClass(status: string) {
-    if (status === "reconciled") return "badge success";
-    if (status === "void") return "badge danger";
-    if (status === "cleared") return "badge warning";
-    return "badge";
-  }
-
-  function setSort(column: typeof sortBy) {
-    if (sortBy === column) {
-      sortDir = sortDir === "asc" ? "desc" : "asc";
-    } else {
-      sortBy = column;
-      sortDir = column === "date" ? "desc" : "asc";
-    }
   }
 
   function openCreateDialog() {
@@ -423,8 +324,8 @@
     splitMode = false;
     splitEditorOpen = false;
     formSplits = [
-      { account_id: accountId, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" },
-      { account_id: null, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" }
+      { ...emptySplitDraft(), account_id: accountId },
+      emptySplitDraft(),
     ];
     dialogOpen = true;
   }
@@ -474,19 +375,11 @@
     if (!splitMode) {
       splitMode = true;
       formSplits = [
-        { account_id: formAccountId, category_id: formCategoryId, category_input: formCategoryInput, tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: formAmount, memo: "" },
-        { account_id: formTransferAccountId, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: formAmount ? `-${formAmount}` : "", memo: "" }
+        { ...emptySplitDraft(), account_id: formAccountId, category_id: formCategoryId, category_input: formCategoryInput, amount: formAmount },
+        { ...emptySplitDraft(), account_id: formTransferAccountId, amount: formAmount ? `-${formAmount}` : "" },
       ];
     }
     splitEditorOpen = true;
-  }
-
-  function closeSplitEditor() {
-    splitEditorOpen = false;
-  }
-
-  function addSplitRow() {
-    formSplits = [...formSplits, { account_id: null, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" }];
   }
 
   function toNullableInt(value: number | string | null | undefined): number | null {
@@ -504,27 +397,6 @@
     }
     formCategoryInput = value;
     formCategoryId = exactMatchByName(categories, value)?.id ?? null;
-  }
-
-  function syncSplitInput(
-    split: SplitDraft,
-    field: "category" | "tag" | "person" | "project",
-    value: string
-  ) {
-    if (field === "category") {
-      split.category_input = value;
-      split.category_id = exactMatchByName(categories, value)?.id ?? null;
-    } else if (field === "tag") {
-      split.tag_input = value;
-      split.tag_id = exactMatchByName(tags, value)?.id ?? null;
-    } else if (field === "person") {
-      split.person_input = value;
-      split.person_id = exactMatchByName(people, value)?.id ?? null;
-    } else {
-      split.project_input = value;
-      split.project_id = exactMatchByName(projects, value)?.id ?? null;
-    }
-    formSplits = [...formSplits];
   }
 
   async function ensureEntityId(
@@ -577,24 +449,6 @@
     const created = await createProject({ book_id: 1, name: trimmed, status: "active", metadata: null });
     projects = [...projects, created];
     return created.id;
-  }
-
-  function removeSplitRow(index: number) {
-    if (formSplits.length <= 2) return;
-    formSplits = formSplits.filter((_, idx) => idx !== index);
-  }
-
-  function splitsTotalMinor(): number | null {
-    const resolved: { amount: string; scale: number }[] = [];
-    for (const split of formSplits) {
-      if (!split.account_id) return null;
-      const account = accounts.find((a) => a.id === split.account_id);
-      if (!account) return null;
-      const commodity = commodities.find((c) => c.id === account.commodity_id);
-      if (!commodity) return null;
-      resolved.push({ amount: split.amount, scale: commodity.scale });
-    }
-    return sumSplitsInMinor(resolved);
   }
 
   async function ensureCategoryAccount(kind: string | null, commodityId: number): Promise<number> {
@@ -851,42 +705,6 @@
     await removeTransaction(tx);
   }
 
-  $: filtered = registerEntries.filter((entry) => {
-    if (statusFilter && entry.status !== statusFilter) return false;
-    if (dateFrom && entry.txn_date < dateFrom) return false;
-    if (dateTo && entry.txn_date > dateTo) return false;
-    if (search) {
-      const term = search.toLowerCase();
-      const payee = payeeName(entry.payee_id).toLowerCase();
-      const memo = (entry.memo ?? "").toLowerCase();
-      const reference = (entry.reference ?? "").toLowerCase();
-      const accountText = accountName(entry.account_id).toLowerCase();
-      if (!payee.includes(term) && !memo.includes(term) && !reference.includes(term) && !accountText.includes(term)) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  $: sorted = [...filtered].sort((a, b) => {
-    const direction = sortDir === "asc" ? 1 : -1;
-    if (sortBy === "date") {
-      return direction * a.txn_date.localeCompare(b.txn_date);
-    }
-    if (sortBy === "payee") {
-      return direction * payeeName(a.payee_id).localeCompare(payeeName(b.payee_id));
-    }
-    if (sortBy === "memo") {
-      return direction * (a.memo ?? "").localeCompare(b.memo ?? "");
-    }
-    if (sortBy === "status") {
-      return direction * a.status.localeCompare(b.status);
-    }
-    if (sortBy === "amount") {
-      return direction * (a.amount_minor - b.amount_minor);
-    }
-    return 0;
-  });
 </script>
 
 <main class="page">
@@ -906,56 +724,16 @@
     {:else if account}
       <div class="page-row">
         <div class="page-col">
-          <div class="card account-summary">
-            <h1 class="page-title">{account.name}</h1>
-            <p class="page-subtitle">
-              {account.account_type}
-              {#if account.institution_name}
-                · {account.institution_name}
-              {/if}
-              {#if account.country_name}
-                · {account.country_name}
-              {/if}
-              {#if account.number_last4}
-                · ••••{account.number_last4}
-              {/if}
-              {#if account.is_closed}
-                · Closed
-              {/if}
-            </p>
-            <div class="account-meta">
-              <span>Balance: {formatMinor(balanceMinor, account.commodity_id)}</span>
-              {#if lastBalancing}
-                <span>
-                  Last reconciled: {lastBalancing.as_of_date}
-                  · {formatMinor(lastBalancing.balance_minor, account.commodity_id)}
-                </span>
-              {/if}
-              {#if findDirectiveDate("open")}
-                <span>Opened: {findDirectiveDate("open")}</span>
-              {/if}
-              {#if findDirectiveDate("close")}
-                <span>Closed: {findDirectiveDate("close")}</span>
-              {/if}
-            </div>
-            {#if account?.account_type === "investment"}
-              <div class="booking-policy">
-                <label class="label" for="booking-policy">Booking policy</label>
-                <select
-                  id="booking-policy"
-                  class="select"
-                  bind:value={bookingPolicy}
-                  onchange={saveBookingPolicy}
-                  disabled={savingPolicy}
-                >
-                  <option value="fifo">FIFO</option>
-                  <option value="lifo">LIFO</option>
-                  <option value="average">Average</option>
-                  <option value="strict">Strict</option>
-                </select>
-              </div>
-            {/if}
-          </div>
+          <AccountHeader
+            {account}
+            {balanceMinor}
+            {lastBalancing}
+            {directives}
+            {commodities}
+            bind:bookingPolicy
+            {savingPolicy}
+            onSaveBookingPolicy={saveBookingPolicy}
+          />
         </div>
       </div>
 
@@ -963,122 +741,31 @@
         <NotesPanel targetType="account" targetId={accountId} />
       {/if}
 
-      <div class="page-row">
-        <div class="page-col">
-          <div class="card">
-            <div class="page-row">
-              <div class="page-col">
-                <h2 class="section-title">Transactions</h2>
-              </div>
-              <div class="page-col page-col-actions">
-                <Button variant="secondary" href="/accounts/{accountId}/reconcile">Reconcile</Button>
-                <Button onclick={openCreateDialog}>New transaction</Button>
-              </div>
-            </div>
-
-            <div class="page-row">
-              <div class="page-col">
-                <div class="form-field">
-                  <label class="label" for="acct-tx-search">Search</label>
-                  <input id="acct-tx-search" class="input" placeholder="Search payee, memo, reference" bind:value={search} />
-                </div>
-              </div>
-              <div class="page-col">
-                <div class="form-field">
-                  <label class="label" for="acct-tx-status">Status</label>
-                  <select id="acct-tx-status" class="select" bind:value={statusFilter}>
-                    <option value="">Any status</option>
-                    <option value="uncleared">Uncleared</option>
-                    <option value="cleared">Cleared</option>
-                    <option value="reconciled">Reconciled</option>
-                    <option value="void">Void</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div class="page-row">
-              <div class="page-col">
-                <div class="form-field">
-                  <label class="label" for="acct-date-from">From</label>
-                  <input id="acct-date-from" class="input" type="date" bind:value={dateFrom} />
-                </div>
-              </div>
-              <div class="page-col">
-                <div class="form-field">
-                  <label class="label" for="acct-date-to">To</label>
-                  <input id="acct-date-to" class="input" type="date" bind:value={dateTo} />
-                </div>
-              </div>
-              <div class="page-col page-col-actions">
-                <Button variant="secondary" onclick={loadTransactions}>Apply filters</Button>
-              </div>
-            </div>
-
-            <div class="data-table striped compact transaction-table" bind:this={tableRef}>
-              <div class="data-row header" style={`grid-template-columns: ${txGridTemplate}`}>
-                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("date")}>
-                  Date
-                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 0)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("payee")}>
-                  Payee
-                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 1)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("memo")}>
-                  Memo
-                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 2)}></span>
-                </button>
-                <button class="data-cell heading sort-button col-header" type="button" onclick={() => setSort("status")}>
-                  Status
-                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 3)}></span>
-                </button>
-                <div class="data-cell heading">Category</div>
-                <button class="data-cell heading amount sort-button col-header" type="button" onclick={() => setSort("amount")}>
-                  Amount
-                  <span class="col-resizer" role="separator" onpointerdown={(event) => startResize(event, 5)}></span>
-                </button>
-                <div class="data-cell heading action">Actions</div>
-              </div>
-              {#if sorted.length === 0}
-                <div class="data-row" style={`grid-template-columns: ${txGridTemplate}`}>
-                  <div class="data-cell">No transactions yet.</div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                  <div class="data-cell"></div>
-                </div>
-              {:else}
-                {#each sorted as entry}
-                  {#key entry.split_id}
-                    <div class="data-row" style={`grid-template-columns: ${txGridTemplate}`}>
-                      <div class="data-cell">{entry.txn_date}</div>
-                      <div class="data-cell">{payeeName(entry.payee_id)}</div>
-                      <div class="data-cell">{entry.memo ?? "—"}</div>
-                      <div class="data-cell">
-                        <span class={statusBadgeClass(entry.status)}>{entry.status}</span>
-                      </div>
-                      <div class="data-cell">{categoryName(entry.category_id)}</div>
-                      <div class="data-cell amount">{formatMinor(entry.amount_minor, entry.commodity_id)}</div>
-                      <div class="data-cell action">
-                        <Button variant="ghost" size="sm" onclick={() => openEditDialog(entry.tx_id)}>Edit</Button>
-                        {#if entry.status === "cleared"}
-                          <Button variant="ghost" size="sm" onclick={() => updateRegisterEntryStatus(entry, "uncleared")}>Unflag</Button>
-                        {:else}
-                          <Button variant="ghost" size="sm" onclick={() => updateRegisterEntryStatus(entry, "cleared")}>Flag</Button>
-                        {/if}
-                        <Button variant="ghost" size="sm" onclick={() => updateRegisterEntryStatus(entry, "void")}>Void</Button>
-                        <Button variant="ghost" size="sm" onclick={() => removeRegisterEntry(entry)}>Delete</Button>
-                      </div>
-                    </div>
-                  {/key}
-                {/each}
-              {/if}
-            </div>
+      {#if accountId !== null}
+        <div class="page-row">
+          <div class="page-col">
+            <AccountRegister
+              entries={registerEntries}
+              accountId={accountId}
+              {accounts}
+              {payees}
+              {categories}
+              {commodities}
+              bind:search
+              bind:dateFrom
+              bind:dateTo
+              bind:statusFilter
+              bind:sortBy
+              bind:sortDir
+              onApplyFilters={loadTransactions}
+              onOpenCreate={openCreateDialog}
+              onOpenEdit={openEditDialog}
+              onUpdateStatus={updateRegisterEntryStatus}
+              onRemove={removeRegisterEntry}
+            />
           </div>
         </div>
-      </div>
+      {/if}
     {/if}
   </div>
 
@@ -1198,134 +885,17 @@
     </div>
   {/if}
 
-  {#if dialogOpen && splitEditorOpen}
-    <button class="dialog-backdrop" type="button" aria-label="Close split editor" onclick={closeSplitEditor}></button>
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Split editor">
-      <div class="dialog-header">
-        <h2 class="section-title">Split transaction</h2>
-      </div>
-      <div class="dialog-body">
-        <fieldset class="form-field">
-          <legend class="label">Splits</legend>
-          <div class="data-table compact">
-            <div class="data-row header">
-              <div class="data-cell heading">Account</div>
-              <div class="data-cell heading">Category</div>
-              <div class="data-cell heading">Tag</div>
-              <div class="data-cell heading">Person</div>
-              <div class="data-cell heading">Project</div>
-              <div class="data-cell heading">Share (bps)</div>
-              <div class="data-cell heading amount">Amount</div>
-              <div class="data-cell heading">Memo</div>
-              <div class="data-cell heading action">Action</div>
-            </div>
-            {#each formSplits as split, idx}
-              <div class="data-row">
-                <div class="data-cell">
-                  <select class="select" bind:value={split.account_id}>
-                    <option value="">Select account</option>
-                    {#each accounts as accountOption}
-                      <option value={accountOption.id}>{accountOption.name}</option>
-                    {/each}
-                  </select>
-                </div>
-                <div class="data-cell">
-                  <input
-                    class="input"
-                    list={`acct-split-category-options-${idx}`}
-                    placeholder="Search/enter category"
-                    value={split.category_input}
-                    oninput={(event) => syncSplitInput(split, "category", (event.currentTarget as HTMLInputElement).value)}
-                  />
-                  <datalist id={`acct-split-category-options-${idx}`}>
-                    {#each fuzzyOptions(categories, split.category_input) as category}
-                      <option value={category.name}></option>
-                    {/each}
-                  </datalist>
-                </div>
-                <div class="data-cell">
-                  <input
-                    class="input"
-                    list={`acct-split-tag-options-${idx}`}
-                    placeholder="Search/enter tag"
-                    value={split.tag_input}
-                    oninput={(event) => syncSplitInput(split, "tag", (event.currentTarget as HTMLInputElement).value)}
-                  />
-                  <datalist id={`acct-split-tag-options-${idx}`}>
-                    {#each fuzzyOptions(tags, split.tag_input) as tag}
-                      <option value={tag.name}></option>
-                    {/each}
-                  </datalist>
-                </div>
-                <div class="data-cell">
-                  <input
-                    class="input"
-                    list={`acct-split-person-options-${idx}`}
-                    placeholder="Search/enter person"
-                    value={split.person_input}
-                    oninput={(event) => syncSplitInput(split, "person", (event.currentTarget as HTMLInputElement).value)}
-                  />
-                  <datalist id={`acct-split-person-options-${idx}`}>
-                    {#each fuzzyOptions(people, split.person_input) as person}
-                      <option value={person.name}></option>
-                    {/each}
-                  </datalist>
-                </div>
-                <div class="data-cell">
-                  <input
-                    class="input"
-                    list={`acct-split-project-options-${idx}`}
-                    placeholder="Search/enter project"
-                    value={split.project_input}
-                    oninput={(event) => syncSplitInput(split, "project", (event.currentTarget as HTMLInputElement).value)}
-                  />
-                  <datalist id={`acct-split-project-options-${idx}`}>
-                    {#each fuzzyOptions(projects, split.project_input) as project}
-                      <option value={project.name}></option>
-                    {/each}
-                  </datalist>
-                </div>
-                <div class="data-cell">
-                  <input class="input" type="number" bind:value={split.share_bps} placeholder="e.g. 5000" />
-                </div>
-                <div class="data-cell amount">
-                  <input class="input" bind:value={split.amount} placeholder="0.00" />
-                </div>
-                <div class="data-cell">
-                  <input class="input" bind:value={split.memo} placeholder="Split memo" />
-                </div>
-                <div class="data-cell action">
-                  <Button variant="ghost" size="sm" onclick={() => removeSplitRow(idx)}>
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            {/each}
-          </div>
-          <Button variant="ghost" size="sm" onclick={addSplitRow}>Add split</Button>
-          {#if splitsTotalMinor() !== null}
-            {@const total = splitsTotalMinor()!}
-            {@const balanced = total === 0}
-            <div class="flex items-center gap-2 mt-2">
-              <span class="text-sm font-medium">Balance:</span>
-              <span class="text-sm font-mono {balanced ? 'text-money-positive' : 'text-money-negative'}">
-                {#if balanced}
-                  ✓ Balanced
-                {:else}
-                  {@const firstAcc = accounts.find((a) => a.id === formSplits[0]?.account_id)}
-                  {@const firstCom = commodities.find((c) => c.id === firstAcc?.commodity_id)}
-                  {@const scale = firstCom?.scale ?? 2}
-                  {total > 0 ? "+" : ""}{formatMinorWithScale(total, scale)} {firstCom?.symbol ?? ""} (unbalanced)
-                {/if}
-              </span>
-            </div>
-          {/if}
-        </fieldset>
-      </div>
-      <div class="dialog-footer">
-        <Button variant="secondary" onclick={closeSplitEditor}>Done</Button>
-      </div>
-    </div>
+  {#if dialogOpen}
+    <TransactionSplitEditor
+      bind:open={splitEditorOpen}
+      bind:splits={formSplits}
+      {accounts}
+      {categories}
+      {tags}
+      {people}
+      {projects}
+      {commodities}
+    />
   {/if}
 
   <!-- Generic confirm dialog -->
@@ -1384,60 +954,3 @@
   </Dialog.Root>
 </main>
 
-<style>
-  .account-summary {
-    margin-bottom: 1.5rem;
-  }
-
-  .account-meta {
-    margin-top: 0.5rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-  }
-
-  .booking-policy {
-    margin-top: 1rem;
-    max-width: 240px;
-  }
-
-  .heading {
-    font-weight: 600;
-  }
-
-  .amount {
-    text-align: right;
-  }
-
-  .sort-button {
-    background: none;
-    border: none;
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
-  }
-
-  .col-header {
-    position: relative;
-    padding-right: 0.75rem;
-  }
-
-  .col-resizer {
-    position: absolute;
-    right: -4px;
-    top: 0;
-    height: 100%;
-    width: 8px;
-    cursor: col-resize;
-    touch-action: none;
-  }
-
-  .sort-button:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
-</style>

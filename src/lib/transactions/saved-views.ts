@@ -3,6 +3,8 @@ import type { TransactionFilter } from "$lib/api/transactions";
 export type SortBy = "date" | "payee" | "status" | "amount";
 export type SortDir = "asc" | "desc";
 
+export type FilterColumn = "date" | "payee" | "status" | "account" | "amount";
+
 export type FilterFormState = {
   search: string;
   dateFrom: string;

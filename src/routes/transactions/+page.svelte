@@ -45,14 +45,17 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
   import * as Alert from "$lib/components/ui/alert";
-  import { Badge } from "$lib/components/ui/badge";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { formatError } from "$lib/utils";
   import { formatMinorWithScale, parseAmountToMinor } from "$lib/money";
   import { parseSmartDate } from "$lib/dates";
-  import { sumSplitsInMinor } from "$lib/transactions/split-balance";
   import { exactMatchByName, fuzzyOptions } from "$lib/search/fuzzy";
-  import { applyViewToState, buildFilterFromState, type FilterFormState } from "$lib/transactions/saved-views";
+  import { applyViewToState, buildFilterFromState, type FilterColumn, type FilterFormState } from "$lib/transactions/saved-views";
+  import { emptySplitDraft, type SplitDraft } from "$lib/transactions/split-draft";
+  import TransactionSplitEditor from "$lib/components/TransactionSplitEditor.svelte";
+  import TransactionFilters from "$lib/components/TransactionFilters.svelte";
+  import SavedViewsBar from "$lib/components/SavedViewsBar.svelte";
+  import TransactionRow from "$lib/components/TransactionRow.svelte";
   import { validateIsoDate } from "$lib/forms/validators";
 
   type Account = {
@@ -90,21 +93,6 @@
     splits: Split[];
   };
 
-  type SplitDraft = {
-    account_id: number | null;
-    category_id: number | null;
-    category_input: string;
-    tag_id: number | null;
-    tag_input: string;
-    person_id: number | null;
-    person_input: string;
-    project_id: number | null;
-    project_input: string;
-    share_bps: number | null;
-    amount: string;
-    memo: string;
-  };
-
   const bookId = 1;
 
   let transactions: TransactionWithSplits[] = [];
@@ -131,7 +119,6 @@
   let accountFilterId: number | null = null;
   let amountMin = "";
   let amountMax = "";
-  type FilterColumn = "date" | "payee" | "status" | "account" | "amount";
   let activeFilter: FilterColumn | null = null;
   let sortBy: "date" | "payee" | "status" | "amount" = "date";
   let sortDir: "asc" | "desc" = "desc";
@@ -466,15 +453,6 @@
     await loadTransactions(false);
   }
 
-  async function clearFilter(column: FilterColumn) {
-    if (column === "date") { dateFrom = ""; dateTo = ""; }
-    else if (column === "payee") { search = ""; }
-    else if (column === "status") { statusFilter = ""; }
-    else if (column === "account") { accountFilterId = null; }
-    else if (column === "amount") { amountMin = ""; amountMax = ""; }
-    await loadTransactions(false);
-  }
-
   async function openCreateDialog() {
     dialogMode = "create";
     formId = null;
@@ -494,8 +472,8 @@
     splitMode = false;
     splitEditorOpen = false;
     formSplits = [
-      { account_id: accountFilterId, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" },
-      { account_id: null, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" }
+      { ...emptySplitDraft(), account_id: accountFilterId },
+      emptySplitDraft(),
     ];
     dialogOpen = true;
   }
@@ -546,19 +524,11 @@
     if (!splitMode) {
       splitMode = true;
       formSplits = [
-        { account_id: formAccountId, category_id: formCategoryId, category_input: formCategoryInput, tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: formAmount, memo: "" },
-        { account_id: formTransferAccountId, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: formAmount ? `-${formAmount}` : "", memo: "" }
+        { ...emptySplitDraft(), account_id: formAccountId, category_id: formCategoryId, category_input: formCategoryInput, amount: formAmount },
+        { ...emptySplitDraft(), account_id: formTransferAccountId, amount: formAmount ? `-${formAmount}` : "" },
       ];
     }
     splitEditorOpen = true;
-  }
-
-  function closeSplitEditor() {
-    splitEditorOpen = false;
-  }
-
-  function addSplitRow() {
-    formSplits = [...formSplits, { account_id: null, category_id: null, category_input: "", tag_id: null, tag_input: "", person_id: null, person_input: "", project_id: null, project_input: "", share_bps: null, amount: "", memo: "" }];
   }
 
   function toNullableInt(value: number | string | null | undefined): number | null {
@@ -617,27 +587,6 @@
     formCategoryId = exactMatchByName(categories, value)?.id ?? null;
   }
 
-  function syncSplitInput(
-    split: SplitDraft,
-    field: "category" | "tag" | "person" | "project",
-    value: string
-  ) {
-    if (field === "category") {
-      split.category_input = value;
-      split.category_id = exactMatchByName(categories, value)?.id ?? null;
-    } else if (field === "tag") {
-      split.tag_input = value;
-      split.tag_id = exactMatchByName(tags, value)?.id ?? null;
-    } else if (field === "person") {
-      split.person_input = value;
-      split.person_id = exactMatchByName(people, value)?.id ?? null;
-    } else {
-      split.project_input = value;
-      split.project_id = exactMatchByName(projects, value)?.id ?? null;
-    }
-    formSplits = [...formSplits];
-  }
-
   async function ensureEntityId(
     kind: "payee" | "category" | "tag" | "person" | "project",
     value: string,
@@ -688,24 +637,6 @@
     const created = await createProject({ book_id: bookId, name: trimmed, status: "active", metadata: null });
     projects = [...projects, created];
     return created.id;
-  }
-
-  function removeSplitRow(index: number) {
-    if (formSplits.length <= 2) return;
-    formSplits = formSplits.filter((_, idx) => idx !== index);
-  }
-
-  function splitsTotalMinor(): number | null {
-    const resolved: { amount: string; scale: number }[] = [];
-    for (const split of formSplits) {
-      if (!split.account_id) return null;
-      const account = accounts.find((a) => a.id === split.account_id);
-      if (!account) return null;
-      const commodity = commodities.find((c) => c.id === account.commodity_id);
-      if (!commodity) return null;
-      resolved.push({ amount: split.amount, scale: commodity.scale });
-    }
-    return sumSplitsInMinor(resolved);
   }
 
   async function ensureCategoryAccount(kind: string | null, commodityId: number): Promise<number> {
@@ -1003,17 +934,20 @@
   // ─── Bulk operations ───────────────────────────────────────────────────────
 
   async function bulkVoid() {
-    if (selectedIds.size === 0) return;
-    const confirmed = await askConfirm(`Void ${selectedIds.size} selected transaction(s)?`, { label: "Void", destructive: true });
+    const requested = selectedIds.size;
+    if (requested === 0) return;
+    const confirmed = await askConfirm(`Void ${requested} selected transaction(s)?`, { label: "Void", destructive: true });
     if (!confirmed) return;
     bulkActionRunning = true;
     error = "";
     try {
-      const voided = await bulkVoidTransactions(Array.from(selectedIds));
+      const ids = Array.from(selectedIds);
+      const voided = await bulkVoidTransactions(ids);
       clearSelection();
       await loadTransactions();
-      if (voided < selectedIds.size) {
-        // Some were skipped (locked)
+      if (voided < requested) {
+        const skipped = requested - voided;
+        error = `${voided} voided, ${skipped} skipped (likely locked by reconciliation).`;
       }
     } catch (e) {
       error = `Bulk void failed: ${formatError(e)}`;
@@ -1023,15 +957,21 @@
   }
 
   async function bulkDelete() {
-    if (selectedIds.size === 0) return;
-    const confirmed = await askConfirm(`Permanently delete ${selectedIds.size} selected transaction(s)? This cannot be undone.`, { label: "Delete", destructive: true });
+    const requested = selectedIds.size;
+    if (requested === 0) return;
+    const confirmed = await askConfirm(`Permanently delete ${requested} selected transaction(s)? This cannot be undone.`, { label: "Delete", destructive: true });
     if (!confirmed) return;
     bulkActionRunning = true;
     error = "";
     try {
-      await bulkDeleteTransactions(Array.from(selectedIds));
+      const ids = Array.from(selectedIds);
+      const deleted = await bulkDeleteTransactions(ids);
       clearSelection();
       await loadTransactions();
+      if (deleted < requested) {
+        const skipped = requested - deleted;
+        error = `${deleted} deleted, ${skipped} skipped (likely locked by reconciliation).`;
+      }
     } catch (e) {
       error = `Bulk delete failed: ${formatError(e)}`;
     } finally {
@@ -1073,111 +1013,33 @@
           />
         </div>
 
-        <div class="mb-4 flex flex-wrap items-end gap-3 rounded-md border bg-muted/30 p-3">
-          <div class="space-y-1">
-            <Label for="saved-view-select">Saved view</Label>
-            <select id="saved-view-select" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={selectedSavedViewId}>
-              <option value={null}>Select view</option>
-              {#each savedViews as view}
-                <option value={view.id}>{view.name}</option>
-              {/each}
-            </select>
-          </div>
-          <Button variant="secondary" size="sm" onclick={applySavedView} disabled={!selectedSavedViewId}>Apply view</Button>
-          <div class="space-y-1">
-            <Label for="saved-view-name">Save current filters</Label>
-            <Input id="saved-view-name" bind:value={newSavedViewName} placeholder="View name" class="w-48" />
-          </div>
-          <Button variant="outline" size="sm" onclick={saveCurrentView} disabled={!newSavedViewName.trim()}>Save view</Button>
-          <div class="space-y-1">
-            <Label for="template-select">Template</Label>
-            <select id="template-select" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={selectedTemplateId}>
-              <option value={null}>Select template</option>
-              {#each templates as template}
-                <option value={template.id}>{template.name}</option>
-              {/each}
-            </select>
-          </div>
-          <Button variant="secondary" size="sm" onclick={postSelectedTemplate} disabled={!selectedTemplateId}>Post today</Button>
-        </div>
+        <SavedViewsBar
+          {savedViews}
+          {templates}
+          bind:selectedSavedViewId
+          bind:selectedTemplateId
+          bind:newSavedViewName
+          onApplyView={applySavedView}
+          onSaveView={saveCurrentView}
+          onPostTemplate={postSelectedTemplate}
+        />
 
         {#if loading}
           <p class="text-sm text-muted-foreground">Loading transactions…</p>
         {:else}
-          <!-- Column filter panels (date, status, account, amount) -->
-          {#if activeFilter}
-            <div class="mb-4 p-4 bg-muted/50 rounded-lg border">
-              {#if activeFilter === "date"}
-                <div class="flex flex-wrap items-end gap-4">
-                  <div class="space-y-1">
-                    <Label for="tx-date-from">From</Label>
-                    <Input id="tx-date-from" type="date" bind:value={dateFrom} class="w-40" />
-                  </div>
-                  <div class="space-y-1">
-                    <Label for="tx-date-to">To</Label>
-                    <Input id="tx-date-to" type="date" bind:value={dateTo} class="w-40" />
-                  </div>
-                  <div class="flex gap-2">
-                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
-                    <Button variant="ghost" size="sm" onclick={() => clearFilter("date")}>Clear</Button>
-                  </div>
-                </div>
-              {:else if activeFilter === "payee"}
-                <div class="flex flex-wrap items-end gap-4">
-                  <div class="space-y-1 flex-1 max-w-xs">
-                    <Label for="tx-payee-search">Search payee / memo</Label>
-                    <Input id="tx-payee-search" placeholder="Type to search…" bind:value={search} oninput={onSearchInput} />
-                  </div>
-                  <div class="flex gap-2">
-                    <Button variant="ghost" size="sm" onclick={() => clearFilter("payee")}>Clear</Button>
-                  </div>
-                </div>
-              {:else if activeFilter === "status"}
-                <div class="flex flex-wrap items-end gap-4">
-                  <div class="space-y-1">
-                    <Label for="tx-status-filter">Status</Label>
-                    <select id="tx-status-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={statusFilter} onchange={applyFilters}>
-                      <option value="">Active (non-void)</option>
-                      <option value="uncleared">Uncleared</option>
-                      <option value="cleared">Cleared</option>
-                      <option value="reconciled">Reconciled</option>
-                      <option value="void">Void only</option>
-                      <option value="all">All (including void)</option>
-                    </select>
-                  </div>
-                  <Button variant="ghost" size="sm" onclick={() => clearFilter("status")}>Clear</Button>
-                </div>
-              {:else if activeFilter === "account"}
-                <div class="flex flex-wrap items-end gap-4">
-                  <div class="space-y-1">
-                    <Label for="tx-account-filter">Account</Label>
-                    <select id="tx-account-filter" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={accountFilterId} onchange={applyFilters}>
-                      <option value={null}>All accounts</option>
-                      {#each accounts as account}
-                        <option value={account.id}>{account.name}</option>
-                      {/each}
-                    </select>
-                  </div>
-                  <Button variant="ghost" size="sm" onclick={() => clearFilter("account")}>Clear</Button>
-                </div>
-              {:else if activeFilter === "amount"}
-                <div class="flex flex-wrap items-end gap-4">
-                  <div class="space-y-1">
-                    <Label for="tx-amount-min">Min amount</Label>
-                    <Input id="tx-amount-min" type="number" step="0.01" placeholder="0.00" bind:value={amountMin} class="w-32" />
-                  </div>
-                  <div class="space-y-1">
-                    <Label for="tx-amount-max">Max amount</Label>
-                    <Input id="tx-amount-max" type="number" step="0.01" placeholder="0.00" bind:value={amountMax} class="w-32" />
-                  </div>
-                  <div class="flex gap-2">
-                    <Button variant="secondary" size="sm" onclick={applyFilters}>Apply</Button>
-                    <Button variant="ghost" size="sm" onclick={() => clearFilter("amount")}>Clear</Button>
-                  </div>
-                </div>
-              {/if}
-            </div>
-          {/if}
+          <TransactionFilters
+            {activeFilter}
+            {accounts}
+            bind:dateFrom
+            bind:dateTo
+            bind:statusFilter
+            bind:accountFilterId
+            bind:amountMin
+            bind:amountMax
+            bind:search
+            onApply={applyFilters}
+            {onSearchInput}
+          />
 
           <!-- Bulk action toolbar -->
           {#if selectedIds.size > 0}
@@ -1248,47 +1110,19 @@
                   </Table.Row>
                 {:else}
                   {#each displayedTx as tx (tx.transaction.id)}
-                    <Table.Row class="hover:bg-muted/50 {selectedIds.has(tx.transaction.id) ? 'bg-muted/30' : ''}">
-                      <Table.Cell class="w-8">
-                        <input
-                          type="checkbox"
-                          class="cursor-pointer"
-                          checked={selectedIds.has(tx.transaction.id)}
-                          onchange={() => toggleSelect(tx.transaction.id)}
-                        />
-                      </Table.Cell>
-                      <Table.Cell class="font-mono text-sm">{tx.transaction.txn_date}</Table.Cell>
-                      <Table.Cell>
-                        <div class="leading-snug">
-                          <span class="font-medium">{payeeName(tx.transaction.payee_id)}</span>
-                          {#if tx.transaction.memo}
-                            <span class="block text-xs text-muted-foreground">{tx.transaction.memo}</span>
-                          {/if}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge variant={tx.transaction.status === "reconciled" ? "default" : tx.transaction.status === "cleared" ? "secondary" : tx.transaction.status === "void" ? "destructive" : "outline"}>
-                          {tx.transaction.status}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell class="text-sm">{accountName(primarySplit(tx, accountFilterId).account_id)}</Table.Cell>
-                      <Table.Cell class="text-right font-mono {primarySplit(tx, accountFilterId).amount_minor < 0 ? 'text-money-negative' : 'text-money-positive'}">
-                        {formatAmount(primarySplit(tx, accountFilterId).amount_minor, primarySplit(tx, accountFilterId).commodity_id)}
-                      </Table.Cell>
-                      <Table.Cell class="text-right">
-                        <div class="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onclick={() => openEditDialog(tx)}>Edit</Button>
-                          <Button variant="ghost" size="sm" onclick={() => duplicateTransaction(tx)}>Dup</Button>
-                          {#if tx.transaction.status === "cleared"}
-                            <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "uncleared")}>Unflag</Button>
-                          {:else}
-                            <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "cleared")}>Flag</Button>
-                          {/if}
-                          <Button variant="ghost" size="sm" onclick={() => updateStatus(tx, "void")}>Void</Button>
-                          <Button variant="ghost" size="sm" class="text-destructive" onclick={() => removeTransaction(tx)}>Del</Button>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
+                    <TransactionRow
+                      {tx}
+                      {accountFilterId}
+                      selected={selectedIds.has(tx.transaction.id)}
+                      {accounts}
+                      {payees}
+                      {commodities}
+                      onToggleSelect={toggleSelect}
+                      onEdit={openEditDialog}
+                      onDuplicate={duplicateTransaction}
+                      onUpdateStatus={updateStatus}
+                      onRemove={removeTransaction}
+                    />
                   {/each}
                 {/if}
               </Table.Body>
@@ -1436,134 +1270,16 @@
     </Dialog.Content>
   </Dialog.Root>
 
-  <Dialog.Root bind:open={splitEditorOpen}>
-    <Dialog.Content class="max-w-4xl">
-      <Dialog.Header>
-        <Dialog.Title>Split transaction</Dialog.Title>
-      </Dialog.Header>
-      <div class="space-y-4 py-4">
-        <div class="space-y-2">
-          <Label>Splits</Label>
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Account</Table.Head>
-                <Table.Head>Category</Table.Head>
-                <Table.Head>Tag</Table.Head>
-                <Table.Head>Person</Table.Head>
-                <Table.Head>Project</Table.Head>
-                <Table.Head>Share (bps)</Table.Head>
-                <Table.Head class="text-right">Amount</Table.Head>
-                <Table.Head>Memo</Table.Head>
-                <Table.Head class="w-24">Action</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {#each formSplits as split, idx}
-                <Table.Row>
-                  <Table.Cell>
-                    <select class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" bind:value={split.account_id}>
-                      <option value="">Select account</option>
-                      {#each accounts as account}
-                        <option value={account.id}>{account.name}</option>
-                      {/each}
-                    </select>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Input
-                      list={`split-category-options-${idx}`}
-                      placeholder="Search/enter category"
-                      value={split.category_input}
-                      oninput={(event) => syncSplitInput(split, "category", (event.currentTarget as HTMLInputElement).value)}
-                    />
-                    <datalist id={`split-category-options-${idx}`}>
-                      {#each fuzzyOptions(categories, split.category_input) as category}
-                        <option value={category.name}></option>
-                      {/each}
-                    </datalist>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Input
-                      list={`split-tag-options-${idx}`}
-                      placeholder="Search/enter tag"
-                      value={split.tag_input}
-                      oninput={(event) => syncSplitInput(split, "tag", (event.currentTarget as HTMLInputElement).value)}
-                    />
-                    <datalist id={`split-tag-options-${idx}`}>
-                      {#each fuzzyOptions(tags, split.tag_input) as tag}
-                        <option value={tag.name}></option>
-                      {/each}
-                    </datalist>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Input
-                      list={`split-person-options-${idx}`}
-                      placeholder="Search/enter person"
-                      value={split.person_input}
-                      oninput={(event) => syncSplitInput(split, "person", (event.currentTarget as HTMLInputElement).value)}
-                    />
-                    <datalist id={`split-person-options-${idx}`}>
-                      {#each fuzzyOptions(people, split.person_input) as person}
-                        <option value={person.name}></option>
-                      {/each}
-                    </datalist>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Input
-                      list={`split-project-options-${idx}`}
-                      placeholder="Search/enter project"
-                      value={split.project_input}
-                      oninput={(event) => syncSplitInput(split, "project", (event.currentTarget as HTMLInputElement).value)}
-                    />
-                    <datalist id={`split-project-options-${idx}`}>
-                      {#each fuzzyOptions(projects, split.project_input) as project}
-                        <option value={project.name}></option>
-                      {/each}
-                    </datalist>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Input type="number" bind:value={split.share_bps} placeholder="e.g. 5000" class="w-28" />
-                  </Table.Cell>
-                  <Table.Cell class="text-right">
-                    <Input bind:value={split.amount} placeholder="0.00" class="w-28 text-right" />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Input bind:value={split.memo} placeholder="Split memo" />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Button variant="ghost" size="sm" onclick={() => removeSplitRow(idx)}>
-                      Remove
-                    </Button>
-                  </Table.Cell>
-                </Table.Row>
-              {/each}
-            </Table.Body>
-          </Table.Root>
-          <Button variant="outline" size="sm" onclick={addSplitRow}>Add split</Button>
-          {#if splitsTotalMinor() !== null}
-            {@const total = splitsTotalMinor()!}
-            {@const balanced = total === 0}
-            <div class="flex items-center gap-2 mt-2">
-              <span class="text-sm font-medium">Balance:</span>
-              <span class="text-sm font-mono {balanced ? 'text-money-positive' : 'text-money-negative'}">
-                {#if total === 0}
-                  ✓ Balanced
-                {:else}
-                  {@const firstAccount = accounts.find((a) => a.id === formSplits[0]?.account_id)}
-                  {@const firstCommodity = commodities.find((c) => c.id === firstAccount?.commodity_id)}
-                  {@const scale = firstCommodity?.scale ?? 2}
-                  {total > 0 ? "+" : ""}{formatMinorWithScale(total, scale)} {firstCommodity?.symbol ?? ""} (unbalanced)
-                {/if}
-              </span>
-            </div>
-          {/if}
-        </div>
-      </div>
-      <Dialog.Footer>
-        <Button variant="secondary" onclick={closeSplitEditor}>Done</Button>
-      </Dialog.Footer>
-    </Dialog.Content>
-  </Dialog.Root>
+  <TransactionSplitEditor
+    bind:open={splitEditorOpen}
+    bind:splits={formSplits}
+    {accounts}
+    {categories}
+    {tags}
+    {people}
+    {projects}
+    {commodities}
+  />
 
   <!-- Generic confirm dialog -->
   <ConfirmDialog

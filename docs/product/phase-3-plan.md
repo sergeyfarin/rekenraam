@@ -1,6 +1,6 @@
 # Phase 3 — Detailed Plan
 
-Last updated: 2026-05-15
+Last updated: 2026-05-15 (D1-D3 complete)
 
 Detailed execution plan for Phase 3 (frontend tests) from
 [v1-gap-plan.md §Phase 3](v1-gap-plan.md). This document expands the four-line
@@ -20,9 +20,9 @@ Living checklist. Updated after every shipped item.
 - [x] **B5** — `src/lib/reconciliation/state.ts` (2026-05-12)
 - [x] **B6** — `src/lib/transactions/saved-views.ts` (2026-05-15)
 - [x] **B7** — `src/lib/forms/validators.ts` (2026-05-15)
-- [ ] D1 — transactions page split
-- [ ] D2 — account detail split
-- [ ] D3 — reports page split
+- [x] **D1** — transactions page split (2026-05-15)
+- [x] **D2** — account detail split (2026-05-15)
+- [x] **D3** — reports page split (2026-05-15)
 - [ ] C1 — login / bootstrap flow tests
 - [ ] C2 — reconciliation page tests
 - [ ] C3 — transaction split editor tests
@@ -366,6 +366,130 @@ into three variants (positive / non-zero / scale-only) instead of one
 parameterized helper because all three are needed at different call
 sites and a single function with a `mode` flag would force every caller
 to import a constant. The trade-off is more exports for a flatter API.
+
+**2026-05-15 — Workstreams D1+D2+D3 (component extraction) shipped.**
+
+Carved the three giant route files into composable components per the
+"broader refactor" decision. Each parent page now orchestrates state and
+delegates rendering; each extracted component is testable in isolation
+under Vitest + `@testing-library/svelte`.
+
+**D1 — Transactions page** ([src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte):
+1622 → 1338 LoC, **-17%**):
+
+- [src/lib/transactions/split-draft.ts](../../src/lib/transactions/split-draft.ts):
+  hoisted the `SplitDraft` type (duplicated verbatim across transactions
+  and account-detail pages) plus an `emptySplitDraft()` factory so both
+  pages stop repeating the 12-field literal.
+- [src/lib/components/TransactionSplitEditor.svelte](../../src/lib/components/TransactionSplitEditor.svelte):
+  the split-editor dialog, including `splitsTotalMinor`, `syncSplitInput`,
+  `addSplitRow`, `removeSplitRow`. Props: `bind:open`, `bind:splits`,
+  plus lookup arrays. The accounts page's hand-rolled `dialog-backdrop`
+  + `data-table` markup is unified onto the shared shadcn `Dialog` +
+  `Table` — visual change, identical behavior. Small UX win baked in:
+  the **Remove** button is now disabled when only 2 splits remain
+  (previously it was always enabled and silently no-op'd, which is
+  confusing).
+- [src/lib/components/TransactionFilters.svelte](../../src/lib/components/TransactionFilters.svelte):
+  the per-column filter panel (date / payee / status / account / amount).
+  Owns the `clearFilter` logic that was duplicated 5× in the page. The
+  `FilterColumn` type moves to `$lib/transactions/saved-views` (lives
+  with the other filter-state types).
+- [src/lib/components/SavedViewsBar.svelte](../../src/lib/components/SavedViewsBar.svelte):
+  the saved-views + templates selector bar. Pure UI; all callbacks
+  passed in.
+- [src/lib/components/TransactionRow.svelte](../../src/lib/components/TransactionRow.svelte):
+  one `<Table.Row>` for one transaction. Carries its own `primarySplit`,
+  `payeeName`, `accountName`, `formatAmount`, and the status-badge variant
+  derivation. Page passes lookups + 5 callbacks.
+
+**D1 bug fixes** (caught during the refactor reading):
+
+- `bulkVoid`/`bulkDelete` race: both used `selectedIds.size` for the
+  partial-failure check *after* `clearSelection()` had already emptied
+  the set. The branch was dead code. Now both capture `const requested =
+  selectedIds.size` up front and surface `${voided} voided, ${skipped}
+  skipped (likely locked by reconciliation).` in the error channel.
+  Note: there's no info-level UI surface yet — this rides the existing
+  destructive Alert.
+
+**D2 — Account detail page** ([src/routes/accounts/[id]/+page.svelte](../../src/routes/accounts/[id]/+page.svelte):
+1443 → 956 LoC, **-34%**):
+
+- [src/lib/components/AccountHeader.svelte](../../src/lib/components/AccountHeader.svelte):
+  name, account-type chip, balance, last-reconciled hint, open/close
+  directives, and the investment-account booking-policy selector. Owns
+  `findDirectiveDate` and `formatMinor`. Component-scoped CSS moved
+  with it.
+- [src/lib/components/AccountRegister.svelte](../../src/lib/components/AccountRegister.svelte):
+  filter bar (search / status / date range / apply) + sortable +
+  column-resizable transaction table. The full column-resize state
+  machine (`tableRef`, `txColumnWidths`, `resizingIndex`, `resizeStartX`,
+  `resizeStartWidths`, `startResize`/`handleResize`/`stopResize`) is now
+  encapsulated. Filter and sort `$:` blocks moved to `$derived` inside
+  the component. The `{#each ... {#key X} ... {/key} ... {/each}`
+  pattern was tightened to `{#each ... as entry (entry.split_id)}` —
+  same keying, idiomatic.
+- The accounts page's hand-rolled split-editor markup (custom
+  `dialog-backdrop` pattern, raw `<input class="input">` / `<select
+  class="select">`) is **replaced** with the shared
+  `TransactionSplitEditor.svelte` from D1. **Visible change**: the
+  splits dialog now matches the shadcn dialog used on the transactions
+  page (consistent shell, accent colors, focus management). All
+  underlying behavior is identical.
+
+**D3 — Reports page** ([src/routes/reports/+page.svelte](../../src/routes/reports/+page.svelte):
+611 → 317 LoC, **-48%**):
+
+- [src/lib/reports/format.ts](../../src/lib/reports/format.ts): shared
+  `formatCurrencyMinor` / `formatDate` / `formatPeriod` (the latter now
+  takes `groupBy` as a parameter so it's pure — no closed-over state).
+- [src/lib/components/ReportFilters.svelte](../../src/lib/components/ReportFilters.svelte):
+  the date range + group-by + quote-currency filter card. `showGroupBy`
+  / `showQuoteCurrency` flags let the page hide controls per active
+  tab without the component knowing about tabs.
+- [src/lib/components/CashflowReport.svelte](../../src/lib/components/CashflowReport.svelte):
+  the cashflow tab (3-card totals hero + period table).
+- [src/lib/components/CategorySpendReport.svelte](../../src/lib/components/CategorySpendReport.svelte)
+  and [src/lib/components/PayeeTotalsReport.svelte](../../src/lib/components/PayeeTotalsReport.svelte):
+  near-identical "total + sorted bar table" views. **Intentionally
+  kept as two components** instead of unifying — the totals card
+  styling diverges (negative-tinted for category spending vs. neutral
+  for payee totals), and the empty-state copy is different. Unifying
+  with a `mode` flag would obscure those small differences without
+  saving meaningful LoC. Sort now happens inside via `$derived`
+  instead of being inlined in `{#each x.sort(…)}` — fewer
+  re-sorts on every render.
+- [src/lib/components/InvestmentGainsReport.svelte](../../src/lib/components/InvestmentGainsReport.svelte):
+  the two-section realized + unrealized gains view.
+
+**Verification:** `npm run check` → 0 errors / 0 warnings;
+`npm test` → 8 files, **160 tests passed** (unchanged — pure carve, no
+new tests added in this workstream, that's C1–C6's job); `npm run
+build` → ✓ built. Manual browser smoke walk through transactions,
+account detail, and reports pages confirms parity.
+
+**Tally:** parent pages 3676 LoC → 2611 LoC (**-29%**). 10 new
+components totaling ~1500 LoC. Each component now has a stable prop
+surface that C1–C6 can render against with mocks.
+
+**Scope notes / open items:**
+- The accounts-page split-editor visual unification is a real UX
+  change, not a pure refactor. If the prior bespoke styling was
+  intentional, it can be opted-out by re-introducing the page-local
+  markup behind a `variant` prop. Calling it out here so it isn't
+  lost.
+- `bulkVoid` / `bulkDelete` partial-failure messages still ride the
+  destructive `<Alert>` channel because there's no toast / info-level
+  notification system in `$lib/components` yet. Add a `Toast.svelte`
+  before C1–C6 if the test suite needs to assert on info-level
+  messages.
+- The transactions page still keeps page-local copies of `payeeName`,
+  `accountName`, `categoryName`, `categoryKind`, `formatAmount`,
+  `formatAmountInput`, `primarySplit` because they're also called from
+  `openEditDialog` / `openCreateDialog`. Future cleanup: move the
+  edit-dialog form itself into a `TransactionFormDialog.svelte` so
+  these helpers can move with it (out of D1 scope).
 
 ## Decisions (2026-05-12)
 
