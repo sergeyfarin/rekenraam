@@ -109,7 +109,16 @@ async def create_balance_constraint(
     try:
         result = await service.create_constraint(account_id, input)
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        message = str(error)
+        # 1.3.2 — "already exists" is a state conflict (409), not a request
+        # shape error. Other ValueErrors (sign_rule validation, min > max,
+        # cross-book) remain 400.
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if message.startswith("balance constraint already exists")
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=message) from error
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
     return result

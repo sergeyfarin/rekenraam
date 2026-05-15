@@ -221,9 +221,9 @@ Logged for later:
 
 | # | Gap | Location | Sev |
 |---|---|---|---|
-| 1.3.1 | **Void-with-audit on reconciled transactions**: `bulk-void` works on un-reconciled txns; voiding a reconciled txn must either be blocked or it must roll the reconciliation. Current behavior unclear from code. | `services/reconciliation.py`, `services/transactions.py` | H |
-| 1.3.2 | Balance-constraint **overlap detection** missing. Two constraints with overlapping date ranges silently coexist. | `services/reconciliation.py` | H |
-| 1.3.3 | No race protection on concurrent reconciliations of the same account (two browser tabs, two users). Should use `SELECT ... FOR UPDATE` or advisory lock. | `repositories/reconciliation.py` | H |
+| 1.3.1 | **Void-of-reconciled** — **DONE 2026-05-16.** Existing `_ensure_unlocked` already rejects writes (void, delete, status change) to a transaction whose date falls inside an active reconciliation lock. The 1.3.1 policy ("reject with 409 + require explicit unlock first") is therefore enforced implicitly through the locked-range check, since a reconciled transaction is necessarily inside its parent reconciliation's window. The user's recovery path is the existing `POST /api/v1/reconciliation/accounts/{id}/unlock` flow. Verified by `test_void_of_reconciled_transaction_is_rejected_until_unlock` in [test_reconciliation.py](../../apps/api/tests/e2e/test_reconciliation.py). | `services/reconciliation.py`, `services/transactions.py` | H |
+| 1.3.2 | **Balance-constraint singleton** — **DONE 2026-05-16.** `ReconciliationService.create_constraint` now queries `list_constraints(account_id)` and raises `ValueError("balance constraint already exists for this account; delete it first to replace")` if any exist; the router maps that specific message to 409. The schema has no date columns, so "overlap" reduces to "more than one constraint per account" — the strict invariant from the user's decision matrix. Verified by `test_second_balance_constraint_on_same_account_is_rejected`. | `services/reconciliation.py`, `api/v1/reconciliation.py` | H |
+| 1.3.3 | **Race protection on concurrent reconciliations** — **DONE 2026-05-16.** New `ReconciliationRepository.acquire_reconciliation_lock(account_id)` issues `pg_advisory_xact_lock(0x52454301, account_id)` keyed on the account. Called at the top of both `start` and `finish` before any reads. Released automatically at txn commit/rollback. Verified by `test_concurrent_finish_on_same_account_serializes` which fires two parallel finishes via `asyncio.gather` and asserts exactly one 200 + one 409. | `repositories/reconciliation.py`, `services/reconciliation.py` | H |
 
 ### 1.4 Imports & exports (Milestone 6)
 
@@ -290,17 +290,24 @@ Frontend has **zero tests** (no `*.test.ts`, `*.spec.ts`, no Vitest config).
 
 The biggest structural gap is the absence of an end-to-end seam. A single integration fixture that boots the FastAPI app against a real Postgres test database (via `testcontainers` or the existing compose dev DB) and exercises full flows would catch every category below.
 
-### 2.1 Reconciliation — high risk, thinly tested
+### 2.1 Reconciliation — high risk, thinly tested — **DONE 2026-05-16**
 
-Scope at [services/reconciliation.py](../../apps/api/src/rekenraam_api/services/reconciliation.py) is 522 LoC. Tests live in `test_api.py` (3 tests, against stubs) and indirectly in `test_repositories.py`. Missing:
+Scope at [services/reconciliation.py](../../apps/api/src/rekenraam_api/services/reconciliation.py) is now 538 LoC (was 522 — added the advisory-lock call sites + the constraint-singleton check). 9 e2e tests in [apps/api/tests/e2e/test_reconciliation.py](../../apps/api/tests/e2e/test_reconciliation.py) cover the original gap items end-to-end against real Postgres:
 
-- Locked-range write rejection: post txn dated inside a closed reconciliation window — should 409.
-- Concurrent `start` from two sessions on the same account.
-- Constraint violation surfaced at finish (account ends below `balance_min`).
-- Unlock that intersects with a locked txn — must clear locked state before writes.
-- Offset-account currency mismatch (auto-balance txn in wrong commodity).
-- Voiding a reconciled split rolls the reconciliation or 409s.
-- Reconciliation rollback when adjustment-txn write fails (partial state).
+- [x] **Locked-range write rejection** — `test_post_txn_dated_inside_locked_reconciliation_window_returns_409`
+- [x] **Concurrent finish (same account)** — `test_concurrent_finish_on_same_account_serializes` (2 parallel `asyncio.gather` calls, exactly one 200 + one 409)
+- [x] **Constraint validation surfaced** — `test_finish_with_balance_below_min_constraint_validates_and_warns` (covers both valid + violation cases via `validate_constraints` endpoint)
+- [x] **Unlock clears locked state** — `test_unlock_clears_locked_state_before_post` (post 409 before unlock, post 200 after unlock)
+- [x] **Offset-account currency mismatch** — `test_finish_with_offset_in_wrong_commodity_rejected` (rejected with `account and offset account must share the same commodity`)
+- [x] **Void of a reconciled split** — `test_void_of_reconciled_transaction_is_rejected_until_unlock` (bulk-void returns 0 for reconciled; succeeds after unlock)
+- [x] **Adjustment write failure rollback** — `test_unbalanced_finish_without_offset_account_is_rejected_cleanly` (no partial balance_check / balancing rows land)
+- [x] **Happy path still works** — `test_reconciliation_happy_path_still_works` (smoke after all the new invariants)
+
+Plus the deferred Phase 2 step 9 skip:
+
+- [x] **`test_import_commit_marks_session_abandoned_on_locked_account`** — un-skipped after fixing the underlying `MissingGreenlet` bug in [services/imports.py](../../apps/api/src/rekenraam_api/services/imports.py). Capture `session.id` to a local before the first `db_session.commit()` so the post-rollback abandonment path doesn't trigger a lazy attribute reload outside a greenlet-safe context. Now passes both as a service-level test and as a new e2e test in [tests/e2e/test_imports.py](../../apps/api/tests/e2e/test_imports.py).
+
+Test count: **233 passed / 1 skipped** (was 222/2 before this work). The remaining skip is the user-invite/deactivated-state test pending the pending-vs-deactivated user model cleanup (logged in §Findings).
 
 ### 2.2 Transactions — service tested with fakes only
 
@@ -470,11 +477,12 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
 
 ### Phase 2 — Hardening of high-risk service code (5-8 d)
 
-1. **Reconciliation correctness** (1.3.1, 1.3.2, 1.3.3, 2.1):
-   - Add `SELECT ... FOR UPDATE` around `start_reconciliation` per account.
-   - Reject overlapping `BalanceConstraint` rows.
-   - Define void-of-reconciled policy and enforce it.
-   - Add a real `test_reconciliation_service.py` against the Phase-0 e2e seam covering all scenarios in §2.1.
+1. **Reconciliation correctness** (1.3.1, 1.3.2, 1.3.3, 2.1) — **DONE 2026-05-16.** Delivered:
+   - 1.3.3 — `pg_advisory_xact_lock(0x52454301, account_id)` in `ReconciliationRepository.acquire_reconciliation_lock`, called at the top of both `start` and `finish`. Transaction-scoped so it releases automatically at commit/rollback. Chose advisory-lock over `SELECT ... FOR UPDATE` (the plan's literal suggestion) because it doesn't block unrelated account-table updates (rename, close, etc.) for the duration of a reconciliation.
+   - 1.3.2 — `ReconciliationService.create_constraint` rejects a second constraint per `(book_id, account_id)` with `ValueError("balance constraint already exists for this account; delete it first to replace")`. Router maps that specific message to 409 (other ValueErrors stay 400). The schema has no date columns, so "overlap" reduces to "more than one constraint per account"; the strict-singleton invariant is the right shape.
+   - 1.3.1 — verified: voiding a reconciled split is already rejected via the existing `_ensure_unlocked` check in `TransactionService`. The locked-range mechanism subsumes 1.3.1 because every reconciled txn is necessarily inside its parent reconciliation's window. No new code; documented by test.
+   - 9 new e2e tests in [test_reconciliation.py](../../apps/api/tests/e2e/test_reconciliation.py) covering §2.1 (see that section's checklist above).
+   - Side fix: the deferred `test_import_commit_marks_session_abandoned_on_locked_account` was un-skipped after fixing the root-cause `MissingGreenlet` bug in `services/imports.py` (lazy reload of `session.id` after `db_session.rollback()` — capture to a local before the first commit).
 2. **Transactions correctness** (1.2.4, 1.2.5, 2.2):
    - Add DB-level locked-range check (CHECK or partial index using `book_state.locked_through`).
    - All-or-nothing test for `bulk_void` and `bulk_delete`.
@@ -649,9 +657,9 @@ Parent route files: 3676 → 2611 LoC (-29%). 10 new components in
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (7 of 8 items shipped — items 1, 2, 3, 4, 5, 6, 7). Phase 2 steps 9, 10, 12 are **done**. Phase 3 is **DONE 2026-05-15** (full scope: 216 Vitest + 12 Playwright tests, parent pages -29% LoC, two CI workflows, frontend-testing.md docs). API CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
+Phase 0 is **done**. Phase 1 is in flight (7 of 8 items shipped — items 1, 2, 3, 4, 5, 6, 7). Phase 2 steps 1, 9, 10, 12 are **done**. Phase 3 is **DONE 2026-05-15** (full scope: 216 Vitest + 12 Playwright tests, parent pages -29% LoC, two CI workflows, frontend-testing.md docs). API CI verdict (post step 1): 233 passed / 1 skipped / 0 failed. Continue:
 
-- **Next:** Phase 2 step 1 (reconciliation correctness — the highest correctness risk left in v1) or Phase 1 #8 (full Tauri removal — cheap and unblocks the next round of FE work).
-- Phase 2 is where the bulk of correctness risk lives. Phase 3 (frontend tests) now unblocks confident UI changes. Phase 4 is optional for v1.
+- **Next:** Phase 2 step 2 (transactions correctness — DB-level locked-range check, bulk atomicity) or Phase 2 step 5 (report cache invalidation on writes — the next-highest correctness risk). Phase 1 #8 (full Tauri removal) is also still on the board, cheap, and unblocks the next round of FE work.
+- Phase 2 is where the bulk of correctness risk lives. Step 1 closure means the most-error-prone UI (reconciliation) now has both unit + e2e + frontend test coverage; Phase 3 frontend tests already unblocked confident UI changes. Phase 4 is optional for v1.
 
-Approximate remaining total: **5-10 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped; Phase 3 closure trimmed another 2-3 days).
+Approximate remaining total: **4-8 engineering days** to v1-ready (was 5-10 before Phase 2 step 1 shipped).

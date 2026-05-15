@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Select, exists, func, literal, select
+from sqlalchemy import Select, exists, func, literal, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -20,8 +20,28 @@ from rekenraam_api.db.models.transactions import Split, Transaction
 
 
 class ReconciliationRepository:
+    # Stable namespace for our advisory locks within Postgres's
+    # `pg_advisory_xact_lock(classid, objid)` space (both args are int32).
+    # Chosen so it doesn't collide with other namespaces if we add more
+    # advisory locks later;
+    # see https://www.postgresql.org/docs/16/explicit-locking.html#ADVISORY-LOCKS.
+    _RECONCILIATION_LOCK_NAMESPACE = 0x52454301  # "REC\x01"
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def acquire_reconciliation_lock(self, account_id: int) -> None:
+        """Take a transaction-scoped advisory lock keyed on the account.
+
+        Released automatically at commit/rollback. Concurrent callers
+        targeting the same account_id will block here until the holder's
+        transaction ends — which is exactly the serialization the gap plan
+        §1.3.3 requires.
+        """
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(:namespace, :account_id)"),
+            {"namespace": self._RECONCILIATION_LOCK_NAMESPACE, "account_id": account_id},
+        )
 
     async def get_account(self, account_id: int) -> Account | None:
         return await self._session.get(Account, account_id)

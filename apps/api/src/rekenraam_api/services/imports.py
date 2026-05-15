@@ -126,12 +126,19 @@ class ImportService:
             notes=input.notes,
             **audit,
         )
+        # Capture the session id and book_id locally before the first commit.
+        # After db_session.commit() / rollback() the ORM expires all loaded
+        # instances; subsequent attribute access on `session` triggers a lazy
+        # reload that requires a greenlet-safe context and is the root cause
+        # of the `MissingGreenlet` failure on the abandonment path under
+        # asyncpg (see [v1-gap-plan.md §Phase 2 step 9 skip list]).
+        session_id = session.id
         db_session = getattr(self._repository, "_session", None)
         if db_session is not None:
             await db_session.commit()
         try:
-            batch = await self._commit_with_session(input, session.id, audit)
-            committed = await self._repository.mark_session_committed(session.id)
+            batch = await self._commit_with_session(input, session_id, audit)
+            committed = await self._repository.mark_session_committed(session_id)
             await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
             session_obj = committed or session
             if db_session is not None:
@@ -146,8 +153,8 @@ class ImportService:
                         else None,
                         event_type="import.committed",
                         target_type="import_session",
-                        target_id=session.id,
-                        summary=f"Committed import session {session.id}",
+                        target_id=session_id,
+                        summary=f"Committed import session {session_id}",
                         metadata_json=None,
                     )
                 )
@@ -156,7 +163,7 @@ class ImportService:
         except Exception as error:
             if db_session is not None:
                 await db_session.rollback()
-            await self._repository.mark_session_abandoned(session.id, str(error))
+            await self._repository.mark_session_abandoned(session_id, str(error))
             if db_session is not None:
                 await db_session.commit()
             raise

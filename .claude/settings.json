@@ -107,7 +107,27 @@
       "Bash(node -e \"console.log\\(Math.round\\(Math.abs\\(Number\\('1.005'\\)\\) * 100\\)\\); console.log\\(Math.round\\(Math.abs\\(Number\\('9.999'\\)\\) * 100\\)\\);\")",
       "Bash(npx vitest *)",
       "Bash(npx playwright *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(timeout 60 uv run pytest tests/e2e/test_reconciliation.py -x --no-header)",
+      "Bash(netstat -lnt)",
+      "Bash(PGPASSWORD=rekenraam psql -h 127.0.0.1 -U rekenraam -d postgres -c \"SELECT 1\")",
+      "Bash(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -c \"\\\\du\")",
+      "Bash(PGPASSWORD=rekenraam psql -h 127.0.0.1 -p 15432 -U rekenraam -d rekenraam -c \"SELECT 1\")",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 300 uv run pytest tests/e2e/test_reconciliation.py --no-header)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/e2e/test_reconciliation.py::test_reconciliation_happy_path_still_works --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 120 uv run pytest tests/e2e/test_reconciliation.py::test_reconciliation_happy_path_still_works --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/e2e/test_reconciliation.py::test_finish_with_offset_in_wrong_commodity_rejected --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/e2e/test_reconciliation.py::test_second_balance_constraint_on_same_account_is_rejected --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/e2e/test_reconciliation.py::test_concurrent_finish_on_same_account_serializes --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 120 uv run pytest tests/e2e/test_imports.py --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/e2e/test_imports.py --no-header --tb=short)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/e2e/test_imports.py --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 60 uv run pytest tests/test_imports_exports.py::test_import_commit_marks_session_abandoned_on_locked_account --no-header -v)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 600 uv run pytest --no-header -q)",
+      "Bash(timeout 60 make api-format-check)",
+      "Bash(uv run *)",
+      "Bash(timeout 60 make api-format-check api-lint api-typecheck)",
+      "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=15432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam timeout 300 uv run pytest tests/e2e/ tests/test_imports_exports.py --no-header -q)"
     ],
     "additionalDirectories": [
       "/tmp"

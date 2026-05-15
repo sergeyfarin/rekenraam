@@ -46,6 +46,10 @@ class ReconciliationService:
             return None
         if self._access_policy is not None:
             await self._access_policy.require_book_read(account.book_id)
+        # 1.3.3 — serialize concurrent reconciliations on the same account.
+        # The advisory lock is transaction-scoped; the session commits at
+        # request boundary, releasing the lock for the next caller.
+        await self._repository.acquire_reconciliation_lock(account_id)
         commodity = await self._repository.get_commodity(account.commodity_id)
         if commodity is None:
             raise ValueError("account commodity not found")
@@ -95,6 +99,9 @@ class ReconciliationService:
             raise ValueError("account does not belong to book")
         if self._access_policy is not None:
             await self._access_policy.require_book_write(account.book_id)
+        # 1.3.3 — serialize concurrent finishes on the same account. Held
+        # for the duration of this transaction; released at commit/rollback.
+        await self._repository.acquire_reconciliation_lock(account_id)
         audit = self._access_policy.audit_stamp() if self._access_policy is not None else None
 
         last_balancing = await self._repository.get_last_active_balancing(account_id)
@@ -332,6 +339,15 @@ class ReconciliationService:
             and input.min_balance_minor > input.max_balance_minor
         ):
             raise ValueError("min_balance_minor must be <= max_balance_minor")
+        # 1.3.2 — at most one constraint per account. Reject silently-coexisting
+        # constraints that the v1-gap-plan flagged as a hardening issue. The
+        # client should DELETE the existing constraint before creating a new
+        # one if the rule needs to change.
+        existing = await self._repository.list_constraints(account_id)
+        if existing:
+            raise ValueError(
+                "balance constraint already exists for this account; delete it first to replace"
+            )
         constraint = await self._repository.create_constraint(
             book_id=input.book_id,
             account_id=account_id,

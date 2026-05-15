@@ -3,7 +3,7 @@
 Single dashboard for in-flight Rekenraam V1 work. Links back to the canonical
 specs — does **not** duplicate them. Update this file when items move state.
 
-Last updated: 2026-05-15
+Last updated: 2026-05-16
 
 ## Sources of truth
 
@@ -39,8 +39,7 @@ Tests: 197 passed / 2 skipped on real Postgres.
 1. Phase 1 step 8 — Tauri removal.
 2. Phase 2 step 11 — unauth `/api/v1/health`.
 3. Phase 2 step 5 — report cache invalidation on writes/currency-change.
-4. Phase 2 step 1 — reconciliation correctness (locks, constraints,
-   void-of-reconciled, race).
+4. ~~Phase 2 step 1 — reconciliation correctness.~~ **DONE 2026-05-16.**
 5. Phase 2 step 3 — investments math test coverage.
 6. Phase 2 step 6 — budget/schedule/loan edge cases.
 7. Phase 2 step 7 — auth depth (deactivate-revokes-sessions, persistent
@@ -51,7 +50,7 @@ Tests: 197 passed / 2 skipped on real Postgres.
 
 ## Active focus
 
-**Phase 3 (frontend tests) complete.** Detail plan: [docs/product/phase-3-plan.md](docs/product/phase-3-plan.md). 216 Vitest tests + 12 Playwright specs ship. Phase 1 #8 (Tauri removal) remains partial; full removal stays open.
+**Phase 3 (frontend tests) complete + Phase 2 step 1 (reconciliation correctness) complete.** Detail: [docs/product/phase-3-plan.md](docs/product/phase-3-plan.md), [docs/product/v1-gap-plan.md §Phase 2 step 1](docs/product/v1-gap-plan.md). 216 Vitest tests + 12 Playwright specs + 9 e2e reconciliation tests + 1 e2e imports test = 233 backend / 216 frontend, all green. Phase 1 #8 (Tauri removal) remains partial; full removal stays open.
 
 1. [x] **Phase 1 step 7** — Add CI API test job. Shipped 2026-05-09.
 2. [x] **Phase 2 step 9** — Triage 8 pre-existing test failures. Shipped 2026-05-10.
@@ -73,8 +72,9 @@ Tests: 197 passed / 2 skipped on real Postgres.
 18. [x] **Phase 3 workstreams C1–C6** — Shipped 2026-05-15. 56 component tests across 5 files: `TransactionSplitEditor.test.ts` (C3, 10), `planning/page.test.ts` (C4, 12), `TransactionFilters.test.ts` (C5, 12), `layout.test.ts` (C1+C6, 9), `reconcile/page.test.ts` (C2, 13). Per-spec `vi.mock("$lib/api/...")` mocking strategy adopted (resolves plan's Open Question 2). 216/216 tests, runtime 7.2s. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
 19. [x] **Phase 3 workstreams A2 + A3 + E1–E6** — Shipped 2026-05-15. Playwright harness in [e2e/](e2e/) with template-DB-based per-spec reset fixture; 12 specs across 7 files covering auth, transactions, reconcile, cross-currency transfer, OFX import, and reports. Two CI workflows: `web-unit.yml` (always-on, ~30s) and `web-e2e.yml` (label-gated via `run-e2e` label, ~5-10 min). Production-side additions to make E4/E5 drivable: minimal `CrossCurrencyTransferDialog.svelte` UI + canned `apps/api/tests/data/sample.ofx`. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
 20. [x] **Phase 3 workstream G** — Shipped 2026-05-15. New [docs/architecture/frontend-testing.md](docs/architecture/frontend-testing.md) (test pyramid, fixture conventions, common patterns, when-to-use-which guidance). README "Development" section now lists `npm test` / `npm run e2e` commands; cross-currency transfer + Phase 3 test infra added to "Working today".
+21. [x] **Phase 2 step 1 — Reconciliation correctness** — Shipped 2026-05-16. TDD-style: wrote 9 e2e tests in [apps/api/tests/e2e/test_reconciliation.py](apps/api/tests/e2e/test_reconciliation.py) covering §2.1 scenarios (locked-range writes, concurrent finishes, constraint validation, unlock-then-post, currency-mismatch offset, void-of-reconciled, partial-state rollback, happy path) plus the two new invariants (1.3.2 + 1.3.3). Fixes: **1.3.2** — `ReconciliationService.create_constraint` now rejects a second constraint per (book_id, account_id) with a 409 conflict (was silent coexistence). **1.3.3** — `pg_advisory_xact_lock` on (namespace, account_id) at the top of `start` and `finish` serializes concurrent reconciliations on the same account; released at txn commit/rollback. **1.3.1** — verified: existing `_ensure_unlocked` check already blocks void of a reconciled txn (the locked-range mechanism subsumes it; no policy change needed). Side fix: the deferred `test_import_commit_marks_session_abandoned_on_locked_account` un-skipped after fixing the underlying `MissingGreenlet` bug in `services/imports.py` — captured `session.id` to a local before the `db_session.commit()` so the post-rollback abandonment path no longer triggers a lazy reload. 233/1 passed/skipped (was 222/2 before). Detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md).
 
-Next: Phase 2 hardening — pick from the table below. The gap-plan recommends Phase 2 step 1 (reconciliation correctness) as the highest correctness risk.
+Next: Phase 2 step 2 (transactions correctness — DB-level locked-range + bulk atomicity), Phase 2 step 5 (report cache invalidation on writes), or Phase 1 #8 (full Tauri removal).
 
 ## Phase status
 
@@ -105,7 +105,7 @@ Reference for full detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.m
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Reconciliation correctness (locks, constraints, void-of-reconciled, race) | not started |
+| 1 | Reconciliation correctness (locks, constraints, void-of-reconciled, race) | **DONE 2026-05-16** — 1.3.2 (constraint singleton + 409), 1.3.3 (pg advisory lock per account), 1.3.1 verified (already enforced via `_ensure_unlocked`); 9 e2e tests in `test_reconciliation.py` covering §2.1; deferred `test_import_commit_marks_session_abandoned_on_locked_account` un-skipped after fixing the underlying `MissingGreenlet` bug in `services/imports.py`. |
 | 2 | Transactions correctness (DB-level locked-range, bulk atomicity) | not started |
 | 3 | Investments math (cost-basis, splits, DRIP, short cover, multi-currency) | not started |
 | 4 | Pricing supersession & cross-rate triangulation | not started |

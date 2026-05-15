@@ -322,16 +322,6 @@ async def test_import_commit_deduplicates_ofx_fitid_across_sessions(
     assert key_count == 1
 
 
-@pytest.mark.skip(
-    reason=(
-        "Service-level test fails with sqlalchemy.exc.MissingGreenlet during the "
-        "post-error abandonment path. The flow itself works under HTTP "
-        "(verified manually), so the right fix is to rewrite this test against "
-        "the e2e seam (apps/api/tests/e2e/) covering full HTTP commit flow with "
-        "a locked account. Tracked alongside Phase 2 step 1 (reconciliation/"
-        "locked-range correctness) in docs/product/v1-gap-plan.md."
-    )
-)
 @pytest.mark.asyncio
 async def test_import_commit_marks_session_abandoned_on_locked_account(
     repository_session: AsyncSession,
