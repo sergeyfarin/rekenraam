@@ -513,7 +513,7 @@ Acceptance: every release-gate clause in `v1-scope.md` is satisfied or has a doc
 
 Acceptance: each module listed has a dedicated `test_*_service.py` (or expanded existing one) that exercises the seam from Phase 0 and covers the missing scenarios named in §2.
 
-### Phase 3 — Frontend tests (3-4 d minimum, 7.5-9.5 d for extended scope)
+### Phase 3 — Frontend tests — **DONE 2026-05-15**
 
 Detailed plan: [phase-3-plan.md](phase-3-plan.md). Scope was extended on
 2026-05-12 to include Playwright e2e plus a targeted component-extraction
@@ -585,8 +585,56 @@ Progress (2026-05-12):
   all-checked. The reconcile page's `$:` derivation block now goes through
   the pure helper; page-coupled lookups stay page-side. 96/96 tests green,
   `npm run check` clean, `npm run build` ✓.
-- [ ] Workstreams B6 / B7 / C / D / E / A2 / A3 / G — see
-  [phase-3-plan.md §Progress](phase-3-plan.md).
+- [x] **Workstreams B6 + B7** (shipped 2026-05-15) — saved-view filter
+  serialization + form-validators module. `$lib/transactions/saved-views.ts`
+  with `FilterFormState` ↔ `TransactionFilter` round-trip (18 tests);
+  `$lib/forms/validators.ts` with result-typed `validateIsoDate`,
+  `validatePositiveAmountMinor`, `validateIntegerInRange`, `combine`, etc.
+  (46 tests). Validators wired into the transaction-form and planning-page
+  submit paths (previously planning had zero client-side validation).
+  160/160 tests, `npm run check` clean, `npm run build` ✓.
+- [x] **Workstreams D1 + D2 + D3** (shipped 2026-05-15) — component
+  extraction. 10 components carved out of the three largest route files,
+  collapsing parent pages 3676 → 2611 LoC (**-29%**): `TransactionRow`,
+  `TransactionFilters`, `SavedViewsBar`, `TransactionSplitEditor`,
+  `AccountHeader`, `AccountRegister`, `ReportFilters`, `CashflowReport`,
+  `CategorySpendReport`, `PayeeTotalsReport`, `InvestmentGainsReport`.
+  Side fix: `bulkVoid` / `bulkDelete` race condition where
+  `selectedIds.size` was read after `clearSelection()`. Accounts-page split
+  editor visually unified onto the shared `<Dialog>` shell (was bespoke
+  `dialog-backdrop` markup).
+- [x] **Workstreams C1–C6** (shipped 2026-05-15) — 56 component tests
+  across 5 files: `TransactionSplitEditor.test.ts` (C3, 10),
+  `planning/page.test.ts` (C4, 12), `TransactionFilters.test.ts` (C5, 12),
+  `layout.test.ts` (C1+C6, 9), `reconcile/page.test.ts` (C2, 13). Per-spec
+  `vi.mock("$lib/api/*")` mocking strategy adopted (resolves the plan's
+  Open Question 2). 216/216 tests green, runtime 7.2s.
+- [x] **Workstreams A2 + A3 + E1–E6** (shipped 2026-05-15) — Playwright
+  harness + CI + 12 e2e specs across 7 files. DB reset via Postgres
+  template-DB (not the plan's `/api/v1/test/reset` endpoint — the user
+  explicitly chose the snapshot approach to keep test code out of the
+  production image). CI split into `web-unit.yml` (always-on,
+  ~30s) and `web-e2e.yml` (label-gated, ~5-10 min). Two production-side
+  additions to make E4/E5 drivable: a minimal `CrossCurrencyTransferDialog`
+  UI for E4, and a canned `apps/api/tests/data/sample.ofx` for E5.
+- [x] **Workstream G** (shipped 2026-05-15) — docs.
+  [docs/architecture/frontend-testing.md](../architecture/frontend-testing.md)
+  added with test pyramid, fixture conventions, common patterns, and the
+  per-feature checklist for new components. README "Development" section
+  lists `npm test` / `npm run e2e` commands.
+
+**Phase 3 DONE 2026-05-15.** Tally:
+
+| Layer | Files | Tests | Runtime |
+|---|---:|---:|---:|
+| Vitest unit | 8 | 144 | ~3s |
+| Vitest component | 5 | 56 | ~5s |
+| Playwright e2e | 7 | 12 | ~3 min on CI |
+
+Parent route files: 3676 → 2611 LoC (-29%). 10 new components in
+`$lib/components/`, 5 in `$lib/<feature>/`. Two CI workflows
+([web-unit.yml](../../.github/workflows/web-unit.yml),
+[web-e2e.yml](../../.github/workflows/web-e2e.yml)).
 
 ### Phase 4 — Nice-to-have scope items (3-5 d, optional for v1)
 
@@ -601,9 +649,9 @@ Progress (2026-05-12):
 
 ## 4. Suggested ordering
 
-Phase 0 is **done**. Phase 1 is in flight (7 of 8 items shipped — items 1, 2, 3, 4, 5, 6, 7). Phase 2 step 9 and step 10 are **done**. CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
+Phase 0 is **done**. Phase 1 is in flight (7 of 8 items shipped — items 1, 2, 3, 4, 5, 6, 7). Phase 2 steps 9, 10, 12 are **done**. Phase 3 is **DONE 2026-05-15** (full scope: 216 Vitest + 12 Playwright tests, parent pages -29% LoC, two CI workflows, frontend-testing.md docs). API CI verdict: 171 passed / 2 skipped / 0 failed. Continue:
 
-- **Next:** Tauri removal (#8).
-- Phase 2 is where the bulk of correctness risk lives and where the original request "really test logic, edge cases, interfaces" gets satisfied. Phase 3 unblocks confident UI changes. Phase 4 is optional for v1.
+- **Next:** Phase 2 step 1 (reconciliation correctness — the highest correctness risk left in v1) or Phase 1 #8 (full Tauri removal — cheap and unblocks the next round of FE work).
+- Phase 2 is where the bulk of correctness risk lives. Phase 3 (frontend tests) now unblocks confident UI changes. Phase 4 is optional for v1.
 
-Approximate remaining total: **8-13 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped).
+Approximate remaining total: **5-10 engineering days** to v1-ready (was 10-15 before Phase 1 step 2 shipped; Phase 3 closure trimmed another 2-3 days).

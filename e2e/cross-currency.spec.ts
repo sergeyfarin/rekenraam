@@ -44,9 +44,10 @@ test.describe("E4 — Cross-currency transfer", () => {
     await page.getByRole("button", { name: "Cross-currency transfer…" }).click();
     await expect(page.getByRole("heading", { name: "Cross-currency transfer" })).toBeVisible();
 
-    // Source = Cash (USD, seeded $5000); Destination = EUR Wallet
-    await page.locator("#xfer-source").selectOption({ label: /Cash/ });
-    await page.locator("#xfer-destination").selectOption({ label: /EUR Wallet/ });
+    // Source = Cash (USD, seeded $5000, account_id=2); Destination = EUR Wallet
+    // The seeded USD has symbol "USD", so the option label is e.g. "Cash (USD)".
+    await page.locator("#xfer-source").selectOption({ value: "2" });
+    await page.locator("#xfer-destination").selectOption({ value: String(eurAccountId) });
 
     // Transfer $100 → €90 at rate 0.90
     await page.locator("#xfer-source-amount").fill("100.00");
@@ -87,8 +88,8 @@ test.describe("E4 — Cross-currency transfer", () => {
     await page.goto("/transactions");
     await page.getByRole("button", { name: "Cross-currency transfer…" }).click();
 
-    await page.locator("#xfer-source").selectOption({ label: /Cash/ });
-    await page.locator("#xfer-destination").selectOption({ label: /Cash/ });
+    await page.locator("#xfer-source").selectOption({ value: "2" });
+    await page.locator("#xfer-destination").selectOption({ value: "2" });
     await page.locator("#xfer-source-amount").fill("10.00");
     await page.locator("#xfer-destination-amount").fill("10.00");
     await page.locator("#xfer-rate").fill("1.0");

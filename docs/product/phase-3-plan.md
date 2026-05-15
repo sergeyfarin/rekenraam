@@ -1,6 +1,6 @@
 # Phase 3 — Detailed Plan
 
-Last updated: 2026-05-15 (D1-D3 + C1-C6 complete)
+Last updated: 2026-05-15 (Phase 3 DONE — all workstreams shipped)
 
 Detailed execution plan for Phase 3 (frontend tests) from
 [v1-gap-plan.md §Phase 3](v1-gap-plan.md). This document expands the four-line
@@ -29,10 +29,10 @@ Living checklist. Updated after every shipped item.
 - [x] **C4** — planning forms tests (2026-05-15)
 - [x] **C5** — date picker / filter tests (2026-05-15)
 - [x] **C6** — session-expired redirect test (2026-05-15)
-- [ ] A2 — Playwright harness
-- [ ] A3 — CI workflow `web-tests.yml`
-- [ ] E1–E6 — Playwright specs
-- [ ] G — docs (README, frontend-testing.md, v1-gap-plan.md sync)
+- [x] **A2** — Playwright harness (2026-05-15)
+- [x] **A3** — CI workflows `web-unit.yml` + `web-e2e.yml` (2026-05-15)
+- [x] **E1–E6** — Playwright specs (2026-05-15)
+- [x] **G** — docs (README, frontend-testing.md, v1-gap-plan.md sync) (2026-05-15)
 
 ### Changelog
 
@@ -594,6 +594,109 @@ or e2e):
 - Column-resize handlers in `AccountRegister` — jsdom doesn't dispatch
   real pointer events through the layout engine, so a meaningful test
   would need Playwright.
+
+**2026-05-15 — Workstreams A2 + A3 + E1–E6 (Playwright harness, CI, e2e specs) shipped.**
+
+**12 Playwright e2e tests across 7 spec files**, plus two GitHub Actions
+workflows and the supporting harness. `npm run check` 0/0/0,
+`npm test` 216/216, `npm run build` ✓, `npx playwright test --list`
+enumerates all 12 specs.
+
+**Decisions taken (deviating from the plan):**
+
+- **DB reset via Postgres template DB**, not the plan's
+  `/api/v1/test/reset` endpoint. The user explicitly chose this
+  approach to avoid shipping test code in the production image. First
+  call to `resetDatabase()` snapshots the post-migration `rekenraam`
+  database as `rekenraam_baseline` (a Postgres template DB); each
+  subsequent call drops `rekenraam`, recreates it from the template,
+  and restarts the API container so its connection pool reconnects.
+  Net per-spec overhead: ~3s (template restore + API restart). Code in
+  [e2e/fixtures.ts](../../e2e/fixtures.ts).
+- **CI split** into `web-unit.yml` (every PR, ~30s) and `web-e2e.yml`
+  (label-gated on PRs via `run-e2e` label; always-on for pushes to
+  main). The plan's single `web-tests.yml` would have run the
+  full ~10-minute compose stack on every FE PR; the split saves CI
+  budget on the common case.
+- **Workers: 1** in [playwright.config.ts](../../playwright.config.ts).
+  All specs share the single compose-deployed Postgres; without
+  serial execution the per-spec reset fixture would race. The
+  resulting wall time is acceptable (~2-3 min for 12 specs).
+- **All six E specs ship**, including building missing pieces:
+  - New [src/lib/components/CrossCurrencyTransferDialog.svelte](../../src/lib/components/CrossCurrencyTransferDialog.svelte)
+    + a "Cross-currency transfer…" button on the transactions page +
+    a `createCrossCurrencyTransfer` API client method, all minimal
+    plumbing to make E4 drivable through the UI.
+  - New [apps/api/tests/data/sample.ofx](../../apps/api/tests/data/sample.ofx):
+    a canned OFX 1.0.2 statement with three transactions for E5.
+
+**Components shipped:**
+
+- [playwright.config.ts](../../playwright.config.ts): single `chromium`
+  project, `baseURL` from `PLAYWRIGHT_BASE_URL` env (defaults to
+  `http://localhost:3000`), `webServer` intentionally absent (CI
+  brings up the compose stack itself; local dev is
+  `docker compose up -d --wait && npm run e2e`).
+- [e2e/fixtures.ts](../../e2e/fixtures.ts): three fixtures —
+  `cleanDatabase` (auto-fires before each spec; template-restore
+  reset), `authedApi` (bootstraps the admin and returns an
+  `APIRequestContext` holding the session cookie), `loggedIn` (a
+  `Page` already navigated to `/` as an authenticated user, via
+  shared `storageState`).
+- [e2e/tsconfig.json](../../e2e/tsconfig.json): standalone TS config so
+  the e2e tree compiles with strict + Node types without polluting
+  the SvelteKit `tsconfig.json`.
+- npm scripts: `e2e`, `e2e:ui`, `e2e:install`.
+
+**Specs (all in [e2e/](../../e2e/)):**
+
+| Spec | Tests | Coverage |
+|---|---:|---|
+| `smoke.spec.ts` | 2 | A2 acceptance — login form on fresh stack; `loggedIn` fixture lands authenticated |
+| `auth.spec.ts` (E1) | 2 | bootstrap → logout → re-login → session-clear; wrong password error |
+| `transactions.spec.ts` (E2) | 1 | New transaction dialog → list row → balance reflects on `/accounts/{id}` |
+| `reconcile.spec.ts` (E3) | 2 | matched-balance finish (no offset); mismatched balance requires offset |
+| `cross-currency.spec.ts` (E4) | 2 | USD→EUR transfer via new dialog, both balances reflect; same-account validation |
+| `import-ofx.spec.ts` (E5) | 1 | preview → commit → re-upload flags duplicates; rows visible in register |
+| `reports.spec.ts` (E6) | 2 | Cashflow auto-loads with totals; Spending-by-Category tab loads on click |
+
+**CI workflows:**
+
+- [.github/workflows/web-unit.yml](../../.github/workflows/web-unit.yml):
+  always-on. Node 22, `npm ci`, `npm run check`, `npm test`. Paths
+  include `src/**`, configs, lockfiles.
+- [.github/workflows/web-e2e.yml](../../.github/workflows/web-e2e.yml):
+  label-gated on PRs (`run-e2e` label), always-on for pushes to main.
+  `npm ci`, `npm run e2e:install`, `docker compose up -d --wait`,
+  `npm run e2e`. Uploads `playwright-report/` artifact on failure;
+  dumps compose logs on failure; tears down with `docker compose
+  down -v`.
+
+**Verification:** `npm run check` 0/0/0, `npm test` 216/216,
+`npx playwright test --list` enumerates 12 specs, `npm run build` ✓.
+
+The e2e specs themselves are NOT runnable in this sandbox (no Docker);
+their first real run will be on the next PR that lands these changes
+with the `run-e2e` label applied. Treat that first CI run as the
+acceptance check.
+
+**Scope notes / known limitations:**
+
+- The cross-currency transfer dialog is a minimum-viable UI for E4
+  coverage. It doesn't yet have payee autofill, a destination
+  preview from FX-rate APIs, or the gain/loss-account selector. The
+  backend supports those (`fx_gain_loss_account_id` optional in
+  `CrossCurrencyTransferInput`); leaving as a follow-up.
+- The OFX import spec re-uses the same fixture file twice and asserts
+  on the duplicate count. The dedup invariant the gap-plan §1.4.3
+  cares about is exercised but the spec doesn't dig into the
+  `import_transaction_keys` table — the count check is sufficient for
+  smoke coverage.
+- `workers: 1` means specs run serially. If the suite grows past ~30
+  tests, parallelizing will require either (a) one DB-per-worker
+  (Postgres allows multiple template-restored DBs simultaneously) or
+  (b) Playwright's `test.describe.serial` only on specs that touch
+  the same DB rows.
 
 ## Decisions (2026-05-12)
 

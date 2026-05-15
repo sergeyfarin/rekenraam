@@ -26,6 +26,10 @@ Working today:
 - PostgreSQL Alembic baseline with auth/session, reconciliation, import,
   report state/cache, investment, and pricing foundations
 - shared frontend API seam under `src/lib/api`
+- cross-currency transfer endpoint and matching `CrossCurrencyTransferDialog`
+  UI under `/transactions`
+- Vitest unit + component tests (`npm test`) and Playwright e2e specs
+  (`npm run e2e`) backed by `web-unit.yml` + `web-e2e.yml` workflows
 
 Still in migration:
 
@@ -33,10 +37,8 @@ Still in migration:
 - loans, mortgages, amortization, and liability workflow helpers
 - richer daily-use polish for transaction search, saved views, templates,
   memorized splits, and payee defaults
-- explicit multi-currency transfer workflows
 - broader reports, tax, investment, pricing, and valuation depth
 - attachment/document uploads and email-based invites/password reset
-- final CI hardening beyond the operational deployment and backup smoke path
 - final Tauri dependency and `src-tauri/` deletion
 
 Deferred after b1/v1:
@@ -92,6 +94,20 @@ Run the hot-reload Docker development stack:
 ```bash
 make web-dev-up
 ```
+
+Frontend tests:
+
+```bash
+npm run check                   # svelte-check + tsc
+npm test                        # vitest (unit + component, jsdom)
+npm run test:watch              # vitest TDD loop
+npm run e2e:install             # install Playwright chromium (one-off)
+docker compose up -d --wait     # bring up the stack e2e tests run against
+npm run e2e                     # Playwright specs (compose stack must be up)
+```
+
+Test layer guidance and conventions live in
+[docs/architecture/frontend-testing.md](docs/architecture/frontend-testing.md).
 
 Common backend tasks:
 
@@ -201,6 +217,7 @@ secrets, keep PostgreSQL private to the Compose network, and enable MFA.
 | [docs/product/v1-gap-plan.md](docs/product/v1-gap-plan.md) | Active V1 gap analysis, phase status, and fix plan |
 | [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) | PostgreSQL schema direction |
 | [docs/architecture/post-b1-extensibility.md](docs/architecture/post-b1-extensibility.md) | Future plugin and theme architecture guardrails |
+| [docs/architecture/frontend-testing.md](docs/architecture/frontend-testing.md) | Frontend test pyramid, Vitest + Playwright conventions |
 | [docs/deployment/self-hosting.md](docs/deployment/self-hosting.md) | VPS/home server deployment, backup, restore, and security guide |
 | [docs/parity/desktop-to-python.md](docs/parity/desktop-to-python.md) | Desktop-to-web parity matrix |
 

@@ -3,7 +3,7 @@
 Single dashboard for in-flight Rekenraam V1 work. Links back to the canonical
 specs — does **not** duplicate them. Update this file when items move state.
 
-Last updated: 2026-05-12
+Last updated: 2026-05-15
 
 ## Sources of truth
 
@@ -46,12 +46,12 @@ Tests: 197 passed / 2 skipped on real Postgres.
 7. Phase 2 step 7 — auth depth (deactivate-revokes-sessions, persistent
    throttling, MFA paths).
 8. Phase 2 step 8 — CSV export escaping & locale.
-9. Phase 3 — frontend tests.
+9. ~~Phase 3 — frontend tests.~~ **DONE 2026-05-15.**
 10. Phase 4 — nice-to-haves.
 
 ## Active focus
 
-**Phase 3 (frontend tests) in flight.** Detail plan: [docs/product/phase-3-plan.md](docs/product/phase-3-plan.md). Phase 1 #8 (Tauri removal) is partial; full removal stays open.
+**Phase 3 (frontend tests) complete.** Detail plan: [docs/product/phase-3-plan.md](docs/product/phase-3-plan.md). 216 Vitest tests + 12 Playwright specs ship. Phase 1 #8 (Tauri removal) remains partial; full removal stays open.
 
 1. [x] **Phase 1 step 7** — Add CI API test job. Shipped 2026-05-09.
 2. [x] **Phase 2 step 9** — Triage 8 pre-existing test failures. Shipped 2026-05-10.
@@ -68,8 +68,13 @@ Tests: 197 passed / 2 skipped on real Postgres.
 13. [x] **Phase 3 workstream B3** — `$lib/transactions/split-balance.ts` extracted with 12 unit tests. Shipped 2026-05-12. Pure `sumSplitsInMinor` + `isSplitsBalanced` deduplicated from two route files; the page-state lookups (`account_id → commodity → scale`) stay in the pages. Known limitation pinned: helper sums raw minor units without commodity grouping (matches existing UI behavior; cross-currency goes through its own backend endpoint). 62/62 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
 14. [x] **Phase 3 workstream B4** — `$lib/search/fuzzy.ts` extracted with 21 unit tests. Shipped 2026-05-12. `normalizeName` / `fuzzyMatch` / `fuzzyOptions` / `exactMatchByName` deduplicated from two route files. Pinned semantics: normalization is case-only (no accent stripping); `fuzzyOptions` hard-caps at 30 results. 83/83 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
 15. [x] **Phase 3 workstream B5** — `$lib/reconciliation/state.ts` extracted with 13 unit tests. Shipped 2026-05-12. Pure `deriveReconciliationState` + `sumCheckedAmounts` cover the cleared/difference/needsOffset derivation that the reconcile page's `$:` block was inlining. `null` statement-balance now propagates explicitly through the helper (matches existing semantics). 96/96 tests green, `npm run check` clean, `npm run build` ✓. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+16. [x] **Phase 3 workstreams B6 + B7** — Shipped 2026-05-15. `$lib/transactions/saved-views.ts` (18 tests) — round-trippable `FilterFormState` ↔ `TransactionFilter`; `$lib/forms/validators.ts` (46 tests) — result-typed validators (`validateIsoDate`, `validatePositiveAmountMinor`, `validateIntegerInRange`, `combine`, etc.) wired into `transactions/+page.svelte`, `accounts/[id]/+page.svelte`, and `planning/+page.svelte`. 160/160 tests. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+17. [x] **Phase 3 workstreams D1–D3** — Shipped 2026-05-15. Carved 10 components out of the three largest route files (parent pages 3676 → 2611 LoC, **-29%**): `TransactionSplitEditor`, `TransactionFilters`, `SavedViewsBar`, `TransactionRow`, `AccountHeader`, `AccountRegister`, `ReportFilters`, `CashflowReport`, `CategorySpendReport`, `PayeeTotalsReport`, `InvestmentGainsReport`. Side fix: `bulkVoid` / `bulkDelete` race where `selectedIds.size` was read after `clearSelection()`. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+18. [x] **Phase 3 workstreams C1–C6** — Shipped 2026-05-15. 56 component tests across 5 files: `TransactionSplitEditor.test.ts` (C3, 10), `planning/page.test.ts` (C4, 12), `TransactionFilters.test.ts` (C5, 12), `layout.test.ts` (C1+C6, 9), `reconcile/page.test.ts` (C2, 13). Per-spec `vi.mock("$lib/api/...")` mocking strategy adopted (resolves plan's Open Question 2). 216/216 tests, runtime 7.2s. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+19. [x] **Phase 3 workstreams A2 + A3 + E1–E6** — Shipped 2026-05-15. Playwright harness in [e2e/](e2e/) with template-DB-based per-spec reset fixture; 12 specs across 7 files covering auth, transactions, reconcile, cross-currency transfer, OFX import, and reports. Two CI workflows: `web-unit.yml` (always-on, ~30s) and `web-e2e.yml` (label-gated via `run-e2e` label, ~5-10 min). Production-side additions to make E4/E5 drivable: minimal `CrossCurrencyTransferDialog.svelte` UI + canned `apps/api/tests/data/sample.ofx`. Detail: [phase-3-plan.md §Changelog](docs/product/phase-3-plan.md).
+20. [x] **Phase 3 workstream G** — Shipped 2026-05-15. New [docs/architecture/frontend-testing.md](docs/architecture/frontend-testing.md) (test pyramid, fixture conventions, common patterns, when-to-use-which guidance). README "Development" section now lists `npm test` / `npm run e2e` commands; cross-currency transfer + Phase 3 test infra added to "Working today".
 
-Next: Phase 3 workstream B6 (`$lib/transactions/saved-views.ts` — saved-view filter serialization).
+Next: Phase 2 hardening — pick from the table below. The gap-plan recommends Phase 2 step 1 (reconciliation correctness) as the highest correctness risk.
 
 ## Phase status
 
@@ -78,7 +83,7 @@ Next: Phase 3 workstream B6 (`$lib/transactions/saved-views.ts` — saved-view f
 | Phase 0 — e2e test seam | **DONE** 2026-05-09 | [v1-gap-plan.md §Phase 0](docs/product/v1-gap-plan.md) |
 | Phase 1 — release-blocker scope items | 7/8 done | [v1-gap-plan.md §Phase 1](docs/product/v1-gap-plan.md) |
 | Phase 2 — hardening of high-risk service code | not started | [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md) |
-| Phase 3 — frontend tests | in flight (2026-05-12) — Workstreams F + A1 + B1–B5 shipped: root-level Tauri cleanup, Vitest + jsdom + @testing-library/svelte infra, `$lib/money.ts` + `$lib/dates.ts` + `$lib/transactions/split-balance.ts` + `$lib/search/fuzzy.ts` + `$lib/reconciliation/state.ts` extracted with 94 unit tests. 96/96 tests green. Detail plan: [phase-3-plan.md](docs/product/phase-3-plan.md). | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
+| Phase 3 — frontend tests | **DONE** 2026-05-15 — all workstreams (F + A1 + B1–B7 + C1–C6 + D1–D3 + A2 + A3 + E1–E6 + G) shipped. 216 Vitest tests + 12 Playwright specs; parent pages -29% LoC; 10 carved components in `$lib/components/`; `web-unit.yml` + `web-e2e.yml` workflows. Detail: [phase-3-plan.md](docs/product/phase-3-plan.md). | [v1-gap-plan.md §Phase 3](docs/product/v1-gap-plan.md) |
 | Phase 4 — nice-to-have scope items | not started | [v1-gap-plan.md §Phase 4](docs/product/v1-gap-plan.md) |
 
 ## Phase 1 — Release blockers
