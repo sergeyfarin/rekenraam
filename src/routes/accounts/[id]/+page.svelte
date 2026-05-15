@@ -57,6 +57,7 @@
   import { formatMinorWithScale, parseAmountToMinor } from "$lib/money";
   import { sumSplitsInMinor } from "$lib/transactions/split-balance";
   import { exactMatchByName, fuzzyOptions } from "$lib/search/fuzzy";
+  import { validateIsoDate } from "$lib/forms/validators";
 
   type SplitDraft = {
     account_id: number | null;
@@ -737,6 +738,8 @@
     submitting = true;
     error = "";
     try {
+      const dateResult = validateIsoDate(formDate, "Date");
+      if (!dateResult.ok) throw new Error(dateResult.error);
       const payeeId = await ensureEntityId("payee", formPayeeInput, formPayeeId);
       formPayeeId = payeeId;
       const splits = await buildSplitsForSubmit();

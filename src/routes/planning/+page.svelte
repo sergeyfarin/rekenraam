@@ -28,6 +28,11 @@
     type Schedule,
     type ScheduleOccurrence
   } from "$lib/api/planning";
+  import {
+    validateIntegerInRange,
+    validateIsoDate,
+    validateNonEmptyString,
+  } from "$lib/forms/validators";
 
   const today = new Date().toISOString().slice(0, 10);
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
@@ -118,15 +123,20 @@
 
   async function submitBudget() {
     if (!budgetCategoryId) return;
+    const nameResult = validateNonEmptyString(budgetName, "Budget name");
+    if (!nameResult.ok) { error = nameResult.error; return; }
+    const amountResult = validateIntegerInRange(budgetAmount, { min: 1, fieldName: "Target amount" });
+    if (!amountResult.ok) { error = amountResult.error; return; }
+    error = "";
     const created = await createBudget({
       book_id: 1,
-      name: budgetName,
+      name: nameResult.value,
       period: "monthly",
       starts_on: today.slice(0, 8) + "01",
       ends_on: null,
       commodity_id: 1,
       is_active: true,
-      targets: [{ category_id: budgetCategoryId, amount_minor: budgetAmount, rollover_enabled: true }]
+      targets: [{ category_id: budgetCategoryId, amount_minor: amountResult.value, rollover_enabled: true }]
     });
     budgets = [...budgets, created];
     selectedBudgetId = created.id;
@@ -134,22 +144,29 @@
   }
 
   async function submitSchedule() {
+    const nameResult = validateNonEmptyString(scheduleName, "Schedule name");
+    if (!nameResult.ok) { error = nameResult.error; return; }
+    const startResult = validateIsoDate(scheduleStart, "Start date");
+    if (!startResult.ok) { error = startResult.error; return; }
+    const amountResult = validateIntegerInRange(scheduleAmount, { min: 1, fieldName: "Schedule amount" });
+    if (!amountResult.ok) { error = amountResult.error; return; }
+    error = "";
     const created = await createSchedule({
       book_id: 1,
-      name: scheduleName,
+      name: nameResult.value,
       payee_id: null,
-      memo: scheduleName,
+      memo: nameResult.value,
       status: "uncleared",
       reference: null,
       frequency: scheduleFrequency,
       interval: 1,
-      start_date: scheduleStart,
+      start_date: startResult.value,
       end_date: null,
       reminder_days: 3,
       enabled: true,
       splits: [
-        { account_id: scheduleFromAccountId, commodity_id: 1, amount_minor: -scheduleAmount, category_id: null, memo: "Source" },
-        { account_id: scheduleToAccountId, commodity_id: 1, amount_minor: scheduleAmount, category_id: null, memo: "Destination" }
+        { account_id: scheduleFromAccountId, commodity_id: 1, amount_minor: -amountResult.value, category_id: null, memo: "Source" },
+        { account_id: scheduleToAccountId, commodity_id: 1, amount_minor: amountResult.value, category_id: null, memo: "Destination" }
       ]
     });
     schedules = [...schedules, created];
@@ -167,13 +184,22 @@
   }
 
   async function submitLoan() {
+    const nameResult = validateNonEmptyString(loanName, "Loan name");
+    if (!nameResult.ok) { error = nameResult.error; return; }
+    const principalResult = validateIntegerInRange(principal, { min: 1, fieldName: "Principal" });
+    if (!principalResult.ok) { error = principalResult.error; return; }
+    const rateResult = validateIntegerInRange(rateBps, { min: 0, max: 100000, fieldName: "Rate (bps)" });
+    if (!rateResult.ok) { error = rateResult.error; return; }
+    const termResult = validateIntegerInRange(termMonths, { min: 1, max: 600, fieldName: "Term (months)" });
+    if (!termResult.ok) { error = termResult.error; return; }
+    error = "";
     const created = await createLoan({
       book_id: 1,
       account_id: loanAccountId,
-      name: loanName,
-      principal_minor: principal,
-      annual_rate_bps: rateBps,
-      term_months: termMonths,
+      name: nameResult.value,
+      principal_minor: principalResult.value,
+      annual_rate_bps: rateResult.value,
+      term_months: termResult.value,
       payment_frequency: "monthly",
       start_date: today,
       payment_account_id: paymentAccountId,

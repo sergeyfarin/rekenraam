@@ -52,6 +52,8 @@
   import { parseSmartDate } from "$lib/dates";
   import { sumSplitsInMinor } from "$lib/transactions/split-balance";
   import { exactMatchByName, fuzzyOptions } from "$lib/search/fuzzy";
+  import { applyViewToState, buildFilterFromState, type FilterFormState } from "$lib/transactions/saved-views";
+  import { validateIsoDate } from "$lib/forms/validators";
 
   type Account = {
     id: number;
@@ -289,27 +291,22 @@
     }
   }
 
-  function buildFilter(offset: number) {
-    // Amount range: convert decimal input to minor units (scale 2 = cents, good for single currency)
-    const amountMinMinor = amountMin && Number.isFinite(Number(amountMin))
-      ? Math.round(Math.abs(Number(amountMin)) * 100) : undefined;
-    const amountMaxMinor = amountMax && Number.isFinite(Number(amountMax))
-      ? Math.round(Math.abs(Number(amountMax)) * 100) : undefined;
-
+  function currentFilterState(): FilterFormState {
     return {
-      book_id: bookId,
-      account_id: accountFilterId ?? undefined,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined,
-      search: search || undefined,
-      status: statusFilter || undefined,
-      amount_min: amountMinMinor,
-      amount_max: amountMaxMinor,
-      sort_by: sortBy,
-      sort_dir: sortDir,
-      limit: BATCH_SIZE,
-      offset,
+      search,
+      dateFrom,
+      dateTo,
+      statusFilter,
+      accountFilterId,
+      amountMin,
+      amountMax,
+      sortBy,
+      sortDir,
     };
+  }
+
+  function buildFilter(offset: number) {
+    return buildFilterFromState(currentFilterState(), { bookId, limit: BATCH_SIZE, offset });
   }
 
   async function loadTransactions(append = false) {
@@ -376,15 +373,16 @@
   async function applySavedView() {
     const view = savedViews.find((item) => item.id === selectedSavedViewId);
     if (!view) return;
-    search = view.filters.search ?? "";
-    dateFrom = view.filters.date_from ?? "";
-    dateTo = view.filters.date_to ?? "";
-    statusFilter = view.filters.status ?? "";
-    accountFilterId = view.filters.account_id ?? null;
-    amountMin = view.filters.amount_min !== undefined ? String(view.filters.amount_min / 100) : "";
-    amountMax = view.filters.amount_max !== undefined ? String(view.filters.amount_max / 100) : "";
-    sortBy = view.filters.sort_by ?? "date";
-    sortDir = view.filters.sort_dir ?? "desc";
+    const next = applyViewToState(view.filters);
+    search = next.search;
+    dateFrom = next.dateFrom;
+    dateTo = next.dateTo;
+    statusFilter = next.statusFilter;
+    accountFilterId = next.accountFilterId;
+    amountMin = next.amountMin;
+    amountMax = next.amountMax;
+    sortBy = next.sortBy;
+    sortDir = next.sortDir;
     await loadTransactions(false);
   }
 
@@ -850,9 +848,8 @@
     submitting = true;
     error = "";
     try {
-      if (!formDate) {
-        throw new Error("Date is required and must be a valid date");
-      }
+      const dateResult = validateIsoDate(formDate, "Date");
+      if (!dateResult.ok) throw new Error(dateResult.error);
       const payeeId = await ensureEntityId("payee", formPayeeInput, formPayeeId);
       formPayeeId = payeeId;
       const splits = await buildSplitsForSubmit();

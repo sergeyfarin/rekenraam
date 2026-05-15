@@ -103,7 +103,8 @@
       "Bash(TEST_POSTGRES_HOST=127.0.0.1 TEST_POSTGRES_PORT=55432 TEST_POSTGRES_USER=rekenraam TEST_POSTGRES_PASSWORD=rekenraam TEST_POSTGRES_ADMIN_DB=rekenraam /home/reken/Repos/rekenraam/.venv/bin/pytest /home/reken/Repos/rekenraam/apps/api/tests/ -q)",
       "Bash(docker rm *)",
       "Bash(grep -nE \"\\(function|let |\\\\\\\\$:|onMount\\)\" /home/reken/Repos/rekenraam/src/routes/planning/+page.svelte)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(node -e \"console.log\\(Math.round\\(Math.abs\\(Number\\('1.005'\\)\\) * 100\\)\\); console.log\\(Math.round\\(Math.abs\\(Number\\('9.999'\\)\\) * 100\\)\\);\")"
     ],
     "additionalDirectories": [
       "/tmp"

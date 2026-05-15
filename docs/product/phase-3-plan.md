@@ -1,6 +1,6 @@
 # Phase 3 — Detailed Plan
 
-Last updated: 2026-05-12
+Last updated: 2026-05-15
 
 Detailed execution plan for Phase 3 (frontend tests) from
 [v1-gap-plan.md §Phase 3](v1-gap-plan.md). This document expands the four-line
@@ -18,8 +18,8 @@ Living checklist. Updated after every shipped item.
 - [x] **B3** — `src/lib/transactions/split-balance.ts` (2026-05-12)
 - [x] **B4** — `src/lib/search/fuzzy.ts` (2026-05-12)
 - [x] **B5** — `src/lib/reconciliation/state.ts` (2026-05-12)
-- [ ] B6 — `src/lib/transactions/saved-views.ts`
-- [ ] B7 — `src/lib/forms/validators.ts`
+- [x] **B6** — `src/lib/transactions/saved-views.ts` (2026-05-15)
+- [x] **B7** — `src/lib/forms/validators.ts` (2026-05-15)
 - [ ] D1 — transactions page split
 - [ ] D2 — account detail split
 - [ ] D3 — reports page split
@@ -261,6 +261,111 @@ requires `splitAmount(tx)`, which depends on the page's `accountId` state.
 That walk is split out as `sumCheckedAmounts` with a generic candidate
 shape so the page-coupled `splitAmount` lookup stays page-side. Same
 pattern as B3.
+
+**2026-05-15 — Workstream B6 (saved-views helpers) shipped.**
+
+- New [src/lib/transactions/saved-views.ts](../../src/lib/transactions/saved-views.ts):
+  - `FilterFormState` shape captures every page-local filter field
+    (`search`, `dateFrom`, `dateTo`, `statusFilter`, `accountFilterId`,
+    `amountMin`, `amountMax`, `sortBy`, `sortDir`) so the round-trip can
+    be tested without involving Svelte reactivity.
+  - `DEFAULT_FILTER_STATE` exported as the single source of truth for
+    initial values (empty strings, null account, `sortBy: "date"`,
+    `sortDir: "desc"`).
+  - `buildFilterFromState(state, { bookId, limit, offset })` produces a
+    `TransactionFilter` ready for `fetchTransactions` / `createTransactionView`.
+    Amount conversion preserves the existing
+    `Math.round(Math.abs(Number(x)) * 100)` pipeline; tests pin the
+    IEEE-754 quirk where `1.005` rounds to `100` not `101`.
+  - `applyViewToState(filters)` is the inverse: maps a stored
+    `TransactionFilter` back to form-state defaults, defaulting
+    `sortBy → "date"` / `sortDir → "desc"` when absent.
+- New [src/lib/transactions/saved-views.test.ts](../../src/lib/transactions/saved-views.test.ts):
+  18 tests across `buildFilterFromState`, `applyViewToState`, and
+  `round-trip` describe blocks. Covers empty-state baseline, populated
+  passthrough, amount minor-unit conversion (positive / negative / float-quirk),
+  unparseable amount → `undefined`, offset propagation, default-fill on
+  partial filters, the `account_id === 0` `??` quirk, and lossy
+  trailing-zero behavior in `state → filter → state`.
+- Migrated [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte):
+  the 18-LoC `buildFilter()` body and the 10-LoC `applySavedView()` body
+  now go through the helpers via a tiny `currentFilterState()` adapter.
+  All page-local `let` bindings stay so Svelte reactivity is preserved
+  (the helpers operate on a snapshot per call).
+
+Verification: `npm test` → 7 files, 114 tests passed; `npm run check`
+→ 0 errors / 0 warnings; `npm run build` → ✓ built.
+
+**Pinned behavior worth flagging:**
+- The amount round-trip `"25.50"` → `2550` → `"25.5"` is lossy on trailing
+  zeros (covered by a dedicated test). Users editing a saved view's
+  amount range will see the canonical form after applying — acceptable
+  because the underlying filter is identical.
+- The amount conversion uses `Math.round` over a float multiply, so
+  `1.005` → `100` (not `101`). Documented in the tests; safe for v1
+  because filter ranges are advisory, not balance-affecting.
+- `account_id === 0` survives the `?? null` mapping because nullish
+  coalescing only catches `null` / `undefined`. Test pins this; if any
+  future code paths emit `0` as "no account", swap to `?? null || null`
+  or change the seed value.
+
+**2026-05-15 — Workstream B7 (form validators) shipped.**
+
+- New [src/lib/forms/validators.ts](../../src/lib/forms/validators.ts):
+  result-type module exporting `ValidationResult<T> = { ok: true, value }
+  | { ok: false, error }` plus `ok` / `err` constructors. Validators:
+  - `validateNonEmptyString(value, fieldName?)` — null/undefined-safe,
+    trims, rejects whitespace-only.
+  - `validatePositiveAmountMinor(value, scale, fieldName?)` — delegates
+    parsing to `parseAmountToMinor` from `$lib/money`, rejects `<= 0`.
+  - `validateNonZeroAmountMinor(value, scale, fieldName?)` — same parser,
+    rejects exactly `0` (negatives OK; for transfer/credit amounts).
+  - `validateScaleAwareAmountMinor(value, scale, fieldName?)` — accepts
+    any parseable amount including zero; the scale-only gate.
+  - `isValidIsoDate(value)` — strict `YYYY-MM-DD`, validates via
+    `Date.UTC` round-trip so leap-day correctness (`2024-02-29` ✓,
+    `2025-02-29` ✗, `1900-02-29` ✗, `2000-02-29` ✓) is exact.
+  - `validateIsoDate(value, fieldName?)` — wraps the predicate with the
+    standard required/invalid messages.
+  - `validateIntegerInRange(value, { min?, max?, fieldName? })` — for
+    numeric form fields bound with `type="number"` (basis points, term
+    months, amount-as-number-input). Rejects `NaN`, `Infinity`, and
+    floats.
+  - `combine(record)` — collapses a `Record<string, ValidationResult>`
+    into a single result; collects every error rather than short-circuiting,
+    so the UI can surface all bad fields at once.
+- New [src/lib/forms/validators.test.ts](../../src/lib/forms/validators.test.ts):
+  46 tests across 8 describe blocks. Notable coverage: leap-day
+  acceptance / rejection across century boundaries, `parseAmountToMinor`'s
+  empty-string-equals-zero edge case caught by the positive / non-zero
+  variants, scale 0 / 2 / 4 / 8 acceptance, `NaN` / `Infinity` rejection
+  for integer ranges, and the `combine` "collect all errors" contract.
+- Wired into 3 routes (modest, behavior-preserving):
+  - [src/routes/transactions/+page.svelte](../../src/routes/transactions/+page.svelte):
+    `submitTransaction` replaces the ad-hoc `if (!formDate)` check with
+    `validateIsoDate(formDate, "Date")`. Net upgrade: malformed dates
+    (e.g. `Feb 29 2025` typed into a non-date `<input>`) now fail
+    client-side before the API call.
+  - [src/routes/accounts/[id]/+page.svelte](../../src/routes/accounts/[id]/+page.svelte):
+    `submitTransaction` previously had **no** `formDate` check at all
+    (the API rejected bad dates with a generic message). Now validated
+    up-front with the same helper.
+  - [src/routes/planning/+page.svelte](../../src/routes/planning/+page.svelte):
+    `submitBudget` / `submitSchedule` / `submitLoan` previously had **no**
+    client-side validation — submit blasted the API with whatever was in
+    the number inputs. Now each form validates its name, date (where
+    applicable), and integer amounts (`min: 1` for principals and
+    targets, `0..100000` bps for the loan rate, `1..600` months for the
+    loan term). Errors surface in the existing `{error}` block.
+
+Verification: `npm test` → 8 files, 160 tests passed; `npm run check`
+→ 0 errors / 0 warnings; `npm run build` → ✓ built.
+
+**Scope note:** the `currency-scale-aware decimal` validator was split
+into three variants (positive / non-zero / scale-only) instead of one
+parameterized helper because all three are needed at different call
+sites and a single function with a `mode` flag would force every caller
+to import a constant. The trade-off is more exports for a flatter API.
 
 ## Decisions (2026-05-12)
 
