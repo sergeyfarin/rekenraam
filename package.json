@@ -11,13 +11,16 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "license": "MIT",
-  "dependencies": {},
   "devDependencies": {
     "@internationalized/date": "^3.12.1",
     "@lucide/svelte": "^1.14.0",
+    "@playwright/test": "^1.60.0",
     "@sveltejs/adapter-static": "^3.0",
     "@sveltejs/kit": "^2.59.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

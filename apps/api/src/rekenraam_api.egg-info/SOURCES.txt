@@ -26,6 +26,7 @@ src/rekenraam_api/api/v1/search.py
 src/rekenraam_api/api/v1/templates.py
 src/rekenraam_api/api/v1/transactions.py
 src/rekenraam_api/config/settings.py
+src/rekenraam_api/db/audit_listener.py
 src/rekenraam_api/db/base.py
 src/rekenraam_api/db/session.py
 src/rekenraam_api/db/models/__init__.py
@@ -88,9 +89,13 @@ src/rekenraam_api/services/reports.py
 src/rekenraam_api/services/request_context.py
 src/rekenraam_api/services/transactions.py
 src/rekenraam_api/workers/pricing.py
+tests/test_accounting_invariants.py
 tests/test_admin_api.py
 tests/test_api.py
+tests/test_audit_log_listener.py
 tests/test_auth_api.py
+tests/test_auth_security.py
+tests/test_deployment_config.py
 tests/test_fx_manual_api.py
 tests/test_imports_exports.py
 tests/test_investments_api.py
@@ -111,5 +116,7 @@ tests/test_reports_api.py
 tests/test_reports_repository.py
 tests/test_reports_service.py
 tests/test_repositories.py
+tests/test_schema_contract.py
+tests/test_schema_edge_cases.py
 tests/test_services.py
 tests/test_settings.py

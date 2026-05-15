@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/api-tests.yml"
       - "apps/api/**"
+      - "compose.test.yaml"
       - "pyproject.toml"
       - "uv.lock"
       - "Makefile"
@@ -12,6 +13,7 @@ on:
     paths:
       - ".github/workflows/api-tests.yml"
       - "apps/api/**"
+      - "compose.test.yaml"
       - "pyproject.toml"
       - "uv.lock"
       - "Makefile"
@@ -21,7 +23,7 @@ on:
 
 jobs:
   api-tests:
-    name: lint, typecheck, pytest
+    name: compile, lint, typecheck, pytest coverage
     runs-on: ubuntu-latest
 
     services:
@@ -63,6 +65,9 @@ jobs:
       - name: Expose venv on PATH
         run: echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
+      - name: Compile check
+        run: make api-check
+
       - name: Ruff check
         run: make api-lint
 
@@ -76,6 +81,15 @@ jobs:
       # fixed, 2 were marked @pytest.mark.skip(reason=...) in source with a
       # forward-pointer to where the work resumes. CI now runs the full suite
       # with no quarantine flags. Any new failure is a real regression.
-      - name: Pytest
-        working-directory: apps/api
-        run: pytest -q
+      - name: Pytest with coverage
+        run: make api-test-coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: |
+            apps/api/coverage.xml
+            apps/api/.coverage_html/
+          retention-days: 14

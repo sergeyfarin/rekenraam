@@ -15,6 +15,10 @@ __pycache__/
 /apps/api/.ruff_cache
 /apps/api/.mypy_cache
 /apps/api/.pyright
+/apps/api/.coverage
+/apps/api/.coverage.*
+/apps/api/.coverage_html
+/apps/api/coverage.xml
 /apps/api/alembic/versions/*.pyc
 /apps/api/src/**/*.pyc
 /apps/api/__pycache__

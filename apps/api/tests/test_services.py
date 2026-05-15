@@ -575,6 +575,61 @@ class StubTransactionRepository:
         return None, None
 
 
+class LockedTransactionRepository(StubTransactionRepository):
+    create_called = False
+
+    async def get_locked_account_ids(
+        self, account_ids: set[int], occurred_date: datetime.date
+    ) -> list[tuple[int, datetime.date]]:
+        return [(2, datetime(2026, 5, 2, tzinfo=UTC).date())]
+
+    async def create_transaction(
+        self,
+        *,
+        book_id: int,
+        txn_date: datetime.date,
+        payee_id: int | None,
+        memo: str | None,
+        status: str,
+        reference: str | None,
+        import_id: str | None = None,
+        previous_tx_id: int | None = None,
+        created_by_user_id: int | None = None,
+        created_session_id: int | None = None,
+        created_device_id: int | None = None,
+        created_request_id: str | None = None,
+    ) -> Transaction:
+        self.create_called = True
+        return await super().create_transaction(
+            book_id=book_id,
+            txn_date=txn_date,
+            payee_id=payee_id,
+            memo=memo,
+            status=status,
+            reference=reference,
+            import_id=import_id,
+            previous_tx_id=previous_tx_id,
+            created_by_user_id=created_by_user_id,
+            created_session_id=created_session_id,
+            created_device_id=created_device_id,
+            created_request_id=created_request_id,
+        )
+
+
+class CrossBookTransactionRepository(StubTransactionRepository):
+    async def list_accounts_by_ids(self, account_ids: set[int]) -> list[Account]:
+        accounts = await super().list_accounts_by_ids(account_ids)
+        accounts[-1].book_id = 2
+        return accounts
+
+
+class ClosedAccountTransactionRepository(StubTransactionRepository):
+    async def list_accounts_by_ids(self, account_ids: set[int]) -> list[Account]:
+        accounts = await super().list_accounts_by_ids(account_ids)
+        accounts[0].is_closed = True
+        return accounts
+
+
 @pytest.mark.asyncio
 async def test_book_service_maps_books_to_frozen_summaries() -> None:
     service = BookService(StubBookRepository())
@@ -898,6 +953,133 @@ async def test_transaction_service_creates_updates_and_deletes_transactions() ->
     assert updated is not None
     assert updated.id == 1
     assert deleted is True
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_rejects_unbalanced_splits_before_writing() -> None:
+    repository = StubTransactionRepository()
+    service = TransactionService(repository)
+
+    input = TransactionMutationInput(
+        book_id=1,
+        txn_date=datetime(2026, 5, 3, tzinfo=UTC).date(),
+        payee_id=None,
+        memo="Unbalanced",
+        status="uncleared",
+        reference=None,
+        splits=(
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -99,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ),
+    )
+
+    with pytest.raises(ValueError, match="transaction splits must balance to zero"):
+        await service.create_transaction(input)
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_rejects_locked_accounts_before_writing() -> None:
+    repository = LockedTransactionRepository()
+    service = TransactionService(repository)
+    input = TransactionMutationInput(
+        book_id=1,
+        txn_date=datetime(2026, 5, 1, tzinfo=UTC).date(),
+        payee_id=None,
+        memo="Locked",
+        status="uncleared",
+        reference=None,
+        splits=(
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ),
+    )
+
+    with pytest.raises(ValueError, match="cannot post transaction dated"):
+        await service.create_transaction(input)
+
+    assert repository.create_called is False
+
+
+@pytest.mark.asyncio
+async def test_transaction_service_rejects_cross_book_and_closed_account_splits() -> None:
+    input = TransactionMutationInput(
+        book_id=1,
+        txn_date=datetime(2026, 5, 3, tzinfo=UTC).date(),
+        payee_id=None,
+        memo="Bad refs",
+        status="uncleared",
+        reference=None,
+        splits=(
+            {
+                "account_id": 2,
+                "commodity_id": 1,
+                "amount_minor": 100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+            {
+                "account_id": 3,
+                "commodity_id": 1,
+                "amount_minor": -100,
+                "category_id": None,
+                "tag_id": None,
+                "person_id": None,
+                "project_id": None,
+                "share_bps": None,
+                "memo": None,
+            },
+        ),
+    )
+
+    with pytest.raises(ValueError, match="does not belong to book"):
+        await TransactionService(CrossBookTransactionRepository()).create_transaction(input)
+
+    with pytest.raises(ValueError, match="cannot use closed accounts"):
+        await TransactionService(ClosedAccountTransactionRepository()).create_transaction(input)
 
 
 @pytest.mark.asyncio

@@ -104,7 +104,10 @@
       "Bash(docker rm *)",
       "Bash(grep -nE \"\\(function|let |\\\\\\\\$:|onMount\\)\" /home/reken/Repos/rekenraam/src/routes/planning/+page.svelte)",
       "Bash(npm test *)",
-      "Bash(node -e \"console.log\\(Math.round\\(Math.abs\\(Number\\('1.005'\\)\\) * 100\\)\\); console.log\\(Math.round\\(Math.abs\\(Number\\('9.999'\\)\\) * 100\\)\\);\")"
+      "Bash(node -e \"console.log\\(Math.round\\(Math.abs\\(Number\\('1.005'\\)\\) * 100\\)\\); console.log\\(Math.round\\(Math.abs\\(Number\\('9.999'\\)\\) * 100\\)\\);\")",
+      "Bash(npx vitest *)",
+      "Bash(npx playwright *)",
+      "Bash(npx tsc *)"
     ],
     "additionalDirectories": [
       "/tmp"

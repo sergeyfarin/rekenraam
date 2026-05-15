@@ -1,0 +1,103 @@
+name: Web E2E Tests
+
+# E2E runs the full Playwright suite against a real docker-compose stack
+# (postgres + api + frontend). It's the expensive job (~5-10 min including
+# image builds), so we gate it:
+#   - on `push` to main (post-merge regression check)
+#   - on `pull_request` with the `run-e2e` label applied
+#
+# To trigger from a PR: apply the `run-e2e` label. The workflow listens to the
+# `labeled` event, so re-running is a label-toggle away.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/web-e2e.yml"
+      - "src/**"
+      - "apps/api/**"
+      - "docker/**"
+      - "e2e/**"
+      - "Dockerfile.frontend"
+      - "compose.yaml"
+      - "playwright.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "pyproject.toml"
+      - "uv.lock"
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
+    paths:
+      - ".github/workflows/web-e2e.yml"
+      - "src/**"
+      - "apps/api/**"
+      - "docker/**"
+      - "e2e/**"
+      - "Dockerfile.frontend"
+      - "compose.yaml"
+      - "playwright.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "pyproject.toml"
+      - "uv.lock"
+
+jobs:
+  web-e2e:
+    name: playwright (compose stack)
+    runs-on: ubuntu-latest
+    # PRs only run e2e when the `run-e2e` label is present. Pushes to main
+    # always run.
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npm run e2e:install
+
+      - name: Bring up compose stack
+        # `--wait` blocks until all services pass their healthchecks (api and
+        # postgres both have healthcheck blocks in compose.yaml). The frontend
+        # service is a static nginx and is ready as soon as it starts.
+        run: docker compose up -d --wait
+        env:
+          # Pin the container name format so e2e/fixtures.ts can `docker exec`
+          # into postgres deterministically.
+          COMPOSE_PROJECT_NAME: rekenraam
+
+      - name: Show compose status
+        if: always()
+        run: docker compose ps
+
+      - name: Run Playwright specs
+        run: npm run e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          PLAYWRIGHT_POSTGRES_CONTAINER: rekenraam-postgres-1
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Tear down compose stack
+        if: always()
+        run: docker compose down -v

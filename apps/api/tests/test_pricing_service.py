@@ -300,3 +300,35 @@ async def test_pricing_service_updates_policy_and_validates_assignment_dates() -
                 effective_to=date(2026, 5, 1),
             )
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("refresh_hour_utc", 24, "refresh hour must be between 0 and 23"),
+        ("refresh_minute_utc", 60, "refresh minute must be between 0 and 59"),
+        ("max_backfill_days", 0, "max backfill days must be at least 1"),
+        ("weekend_policy", "invent", "weekend policy must be skip, fill_previous, or download"),
+    ],
+)
+async def test_pricing_service_rejects_policy_boundary_values(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    service = PricingService(StubPricingRepository())
+    values = {
+        "book_id": 1,
+        "base_currency_id": 2,
+        "default_source_id": 1001,
+        "refresh_enabled": True,
+        "refresh_hour_utc": 6,
+        "refresh_minute_utc": 15,
+        "max_backfill_days": 60,
+        "weekend_policy": "fill_previous",
+    }
+    values[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        await service.update_pricing_policy(PricingPolicyUpdateInput(**values))

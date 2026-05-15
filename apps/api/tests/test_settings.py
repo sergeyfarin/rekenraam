@@ -40,3 +40,28 @@ def test_file_backed_secret_conflict_fails(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
         _ = settings.resolved_postgres_password
+
+
+def test_file_backed_first_admin_password(tmp_path) -> None:
+    password_file = tmp_path / "first_admin_password.txt"
+    password_file.write_text("admin-from-file\n", encoding="utf-8")
+
+    settings = Settings(
+        first_admin_email="admin@example.test",
+        first_admin_password_file=str(password_file),
+    )
+
+    assert settings.resolved_first_admin_password == "admin-from-file"
+
+
+def test_cors_and_trusted_proxy_lists_trim_empty_values() -> None:
+    settings = Settings(
+        cors_allowed_origins=" https://finance.example.test, ,http://localhost:3000 ",
+        trusted_proxy_cidrs=" 10.0.0.0/8,,172.16.0.0/12 ",
+    )
+
+    assert settings.cors_allowed_origins_list == [
+        "https://finance.example.test",
+        "http://localhost:3000",
+    ]
+    assert settings.trusted_proxy_cidrs_list == ["10.0.0.0/8", "172.16.0.0/12"]

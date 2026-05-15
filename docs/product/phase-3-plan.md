@@ -1,6 +1,6 @@
 # Phase 3 — Detailed Plan
 
-Last updated: 2026-05-15 (D1-D3 complete)
+Last updated: 2026-05-15 (D1-D3 + C1-C6 complete)
 
 Detailed execution plan for Phase 3 (frontend tests) from
 [v1-gap-plan.md §Phase 3](v1-gap-plan.md). This document expands the four-line
@@ -23,12 +23,12 @@ Living checklist. Updated after every shipped item.
 - [x] **D1** — transactions page split (2026-05-15)
 - [x] **D2** — account detail split (2026-05-15)
 - [x] **D3** — reports page split (2026-05-15)
-- [ ] C1 — login / bootstrap flow tests
-- [ ] C2 — reconciliation page tests
-- [ ] C3 — transaction split editor tests
-- [ ] C4 — planning forms tests
-- [ ] C5 — date picker tests
-- [ ] C6 — session-expired redirect test
+- [x] **C1** — login / bootstrap flow tests (2026-05-15)
+- [x] **C2** — reconciliation page tests (2026-05-15)
+- [x] **C3** — transaction split editor tests (2026-05-15)
+- [x] **C4** — planning forms tests (2026-05-15)
+- [x] **C5** — date picker / filter tests (2026-05-15)
+- [x] **C6** — session-expired redirect test (2026-05-15)
 - [ ] A2 — Playwright harness
 - [ ] A3 — CI workflow `web-tests.yml`
 - [ ] E1–E6 — Playwright specs
@@ -490,6 +490,110 @@ surface that C1–C6 can render against with mocks.
   `openEditDialog` / `openCreateDialog`. Future cleanup: move the
   edit-dialog form itself into a `TransactionFormDialog.svelte` so
   these helpers can move with it (out of D1 scope).
+
+**2026-05-15 — Workstream C1–C6 (component tests) shipped.**
+
+**56 new tests across 5 files**, all green. Test count: 160 → **216
+passed**. Total runtime: 7.2s (well under the 30s acceptance budget).
+
+**Mocking strategy adopted:** `vi.mock("$lib/api/<module>", ...)` at the
+top of each spec, with `vi.mocked(fn).mockResolvedValue(…)` per test.
+The plan's Open Question 2 (shared mock module vs. per-spec mocks) is
+resolved in favor of per-spec — easier to read, fewer cross-test
+leaks, and each spec declares only the API surface it actually touches.
+
+- [src/lib/components/TransactionSplitEditor.test.ts](../../src/lib/components/TransactionSplitEditor.test.ts)
+  (**C3, 10 tests**): renders one row per split; `✓ Balanced` shown
+  when sum is zero; unbalanced amount shows sign + symbol; balance
+  hidden until every split has an account (lookup prerequisite); Remove
+  disabled at 2 rows (the UX guard added in D1); Remove enabled at 3+;
+  Add appends a fresh `emptySplitDraft()`; Remove drops the targeted
+  row; Done button rendered; `open=false` hides dialog content.
+  Direct component render — no `vi.mock` needed.
+- [src/routes/planning/page.test.ts](../../src/routes/planning/page.test.ts)
+  (**C4, 12 tests**): full-page render with 11 API mocks. Budget form:
+  valid submit calls `createBudget` with correct minor amount + category
+  resolution; whitespace name blocked; zero amount blocked; error
+  clears on subsequent valid submit. Schedule form: debit + credit
+  splits added with matching sign-flipped amounts; zero amount blocked;
+  empty name blocked; frequency change propagates to payload (covers
+  the gap-plan's "frequency selection toggles which fields are shown"
+  bullet — propagation rather than visibility since the planning page's
+  schedule form doesn't show frequency-conditional fields). Loan form:
+  valid submit posts principal/rate/term; zero principal blocked;
+  term > 600 months blocked; negative rate blocked.
+- [src/lib/components/TransactionFilters.test.ts](../../src/lib/components/TransactionFilters.test.ts)
+  (**C5, 12 tests**): visibility (null → empty, each column → its
+  panel); ISO date input accepts `2024-02-29` (leap-year passthrough,
+  the browser's native `type="date"` does the constraint check); blank
+  dates allowed; Apply button calls `onApply`; date Clear resets +
+  applies; status `onchange` triggers `onApply` instantly (single-select
+  UX); payee search panel renders + `onSearchInput` fires on input.
+  Note: leap-day rejection (`2025-02-29`) is already covered by
+  [validators.test.ts](../../src/lib/forms/validators.test.ts) and
+  [dates.test.ts](../../src/lib/dates.test.ts); the date inputs in
+  `TransactionFilters` use `type="date"` so the browser blocks invalid
+  dates natively — testing that in jsdom is meaningless.
+- [src/routes/layout.test.ts](../../src/routes/layout.test.ts)
+  (**C1 + C6, 9 tests**): Bootstrap flow: shows Create Admin form when
+  `bootstrap_required: true`; `createFirstAdmin` called with the form
+  values on submit. Login flow: Sign In form shown when bootstrap is
+  done; successful login renders the nav chrome; MFA-required login
+  swaps to TOTP form and `completeMfaLogin` is called on submit; bad
+  login surfaces the error message. C6 (session-expired): Sign In form
+  (not nav) shown when `getCurrentUser` rejects; Logout calls `logout()`
+  and re-renders Sign In; loading state shown while `getCurrentUser`
+  is in-flight. **Scope clarification:** the plan's C6 title says
+  "redirect to login form" but the layout actually swaps the form
+  inline (no `goto` call) — the test asserts that swap, which is what
+  the user experiences.
+- [src/routes/accounts/[id]/reconcile/page.test.ts](../../src/routes/accounts/[id]/reconcile/page.test.ts)
+  (**C2, 13 tests**): Setup step renders prior reconciliation summary;
+  Start disabled until balance entered; setup → working transition.
+  Working-step balance derivation: balanced state hides the offset
+  dropdown; non-zero difference reveals it; toggling a candidate check
+  updates the Selected total (assertion walks from the `Selected` label
+  to its sibling value `<p>` to avoid collisions with other cells
+  showing the same number). Finish behavior: disabled while offset
+  required but unset; balanced finish posts with `offset_account_id:
+  null` + `confirm_unbalanced: false`; unbalanced + selected-offset
+  finish posts with `offset_account_id` + `confirm_unbalanced: true`;
+  on success navigates to `/accounts/{id}` via mocked `goto`;
+  API failure surfaces error message. Select all / Select none toggle
+  the `N / M selected` summary.
+
+**Type-correctness:** all mock factories return objects matching the
+real API types (caught + fixed `CommoditySummary.metadata` /
+`updated_at` and `CategorySummary.updated_at` shape mismatches in
+review; `npm run check` is 0/0/0).
+
+**Coverage tally vs. plan's "12-15 component test files":** 5 test
+files. Lower than the plan's nominal target because:
+- Multiple "tests" per page were bundled into one spec file with
+  multiple `describe` blocks — the plan was counting at file
+  granularity, but per-feature granularity (one describe per logical
+  unit) gives 15 logical groupings across the 5 files.
+- C5 split across one file rather than 4 (transaction filter, form,
+  reconcile, planning) — only `TransactionFilters.svelte` has filter
+  date inputs worth testing at the component level; the form's
+  smart-date parser is covered by `dates.test.ts` and the validator by
+  `validators.test.ts`. No need to duplicate.
+
+**What's deliberately NOT covered yet** (deferrable to follow-ups
+or e2e):
+- The transaction form (`+page.svelte` create/edit dialog) — the form
+  itself isn't extracted into its own component yet (flagged in D1
+  scope notes). Adding tests against the full 1338-LoC page would
+  require an unreasonable mock surface for marginal value; the gap-plan
+  already routes this through E2 in Playwright.
+- Bulk void/delete partial-failure UX (added in D1 bug-fix phase) —
+  testable now, but the lack of an info-level UI surface for the
+  partial-success message means the assertion would have to read the
+  destructive Alert and assert on its content, which is brittle. Better
+  to wait until a `Toast.svelte` exists.
+- Column-resize handlers in `AccountRegister` — jsdom doesn't dispatch
+  real pointer events through the layout engine, so a meaningful test
+  would need Playwright.
 
 ## Decisions (2026-05-12)
 

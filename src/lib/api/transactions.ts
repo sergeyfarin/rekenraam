@@ -288,6 +288,28 @@ export async function createTransaction(input: TransactionMutationInput): Promis
   await apiPost<unknown, TransactionMutationInput>("/transactions", input);
 }
 
+export type CrossCurrencyTransferInput = {
+  book_id: number;
+  txn_date: string;
+  source_account_id: number;
+  destination_account_id: number;
+  source_amount_minor: number;
+  destination_amount_minor: number;
+  fx_rate: number;
+  fx_gain_loss_account_id: number | null;
+  payee_id: number | null;
+  memo: string | null;
+  status: string;
+  reference: string | null;
+  source_memo: string | null;
+  destination_memo: string | null;
+  fx_gain_loss_memo: string | null;
+};
+
+export async function createCrossCurrencyTransfer(input: CrossCurrencyTransferInput): Promise<void> {
+  await apiPost<unknown, CrossCurrencyTransferInput>("/transactions/transfer", input);
+}
+
 export async function updateTransaction(input: TransactionMutationInput): Promise<void> {
   if (input.id === undefined) {
     throw new Error("Transaction id is required for updates");

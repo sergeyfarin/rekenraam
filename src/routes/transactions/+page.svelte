@@ -56,6 +56,7 @@
   import TransactionFilters from "$lib/components/TransactionFilters.svelte";
   import SavedViewsBar from "$lib/components/SavedViewsBar.svelte";
   import TransactionRow from "$lib/components/TransactionRow.svelte";
+  import CrossCurrencyTransferDialog from "$lib/components/CrossCurrencyTransferDialog.svelte";
   import { validateIsoDate } from "$lib/forms/validators";
 
   type Account = {
@@ -135,6 +136,7 @@
   let searchTimeout: ReturnType<typeof setTimeout>;
 
   let dialogOpen = false;
+  let crossCurrencyDialogOpen = false;
   let dialogMode: "create" | "edit" = "create";
   let submitting = false;
   let formId: number | null = null;
@@ -990,7 +992,10 @@
         <h1 class="text-3xl font-bold tracking-tight">Transactions</h1>
         <p class="text-muted-foreground">Review and enter transactions.</p>
       </div>
-      <Button onclick={openCreateDialog}>New transaction</Button>
+      <div class="flex gap-2">
+        <Button variant="outline" onclick={() => (crossCurrencyDialogOpen = true)}>Cross-currency transfer…</Button>
+        <Button onclick={openCreateDialog}>New transaction</Button>
+      </div>
     </div>
 
     {#if error}
@@ -1279,6 +1284,14 @@
     {people}
     {projects}
     {commodities}
+  />
+
+  <CrossCurrencyTransferDialog
+    bind:open={crossCurrencyDialogOpen}
+    {bookId}
+    {accounts}
+    {commodities}
+    onPosted={() => loadTransactions(false)}
   />
 
   <!-- Generic confirm dialog -->
