@@ -53,31 +53,39 @@ Deferred after b1/v1:
 
 ## Run The Self-Hosted Stack
 
-PostgreSQL default:
+SQLite local network, simplest option:
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose -f compose.sqlite.yaml up --build
 ```
 
-SQLite low-memory option:
+This starts one container, one volume, and one port. It is intended for trusted
+local networks only. Create the first owner in the browser when the setup screen
+appears; do not expose this basic setup directly to the public internet.
+
+PostgreSQL option:
 
 ```bash
 cp .env.example .env
-docker compose -f compose.yaml -f compose.sqlite.yaml up --build
+docker compose -f compose.postgres.yaml up --build
 ```
 
 For faster local testing, `.env` may include `FIRST_ADMIN_EMAIL`,
 `FIRST_ADMIN_PASSWORD`, and `FIRST_ADMIN_DISPLAY_NAME`; the API seeds that admin
-only when no users exist.
+only when no users exist. Public deployments should use HTTPS through
+`compose.proxy.yaml`, secure cookies, strong secrets, and preferably an
+environment-seeded first admin or a one-time setup procedure. For public SQLite,
+add `compose.sqlite.public.yaml`; for public PostgreSQL, add
+`compose.prod.example.yaml`.
 
 Default services:
 
-- frontend: <http://localhost:3000>
-- API: <http://localhost:8080/api/v1>
-- API health: <http://localhost:8080/api/v1/health>
-- PostgreSQL: `localhost:5432`
-- SQLite: stored in the `sqlite_data` volume when `compose.sqlite.yaml` is used
+- SQLite app: <http://localhost:8080>
+- SQLite API health: <http://localhost:8080/api/v1/health>
+- PostgreSQL frontend: <http://localhost:3000>
+- PostgreSQL API: internal service `api:8080`
+- SQLite data: stored in the `rekenraam_data` volume
 
 Expected health response:
 
@@ -149,7 +157,7 @@ If Docker needs elevation on your host:
 ```bash
 make DOCKER="sudo docker compose" api-up
 make CONTAINER_RUNTIME="sudo docker" api-test-docker
-make DEV_DOCKER="sudo docker compose -f compose.yaml -f compose.dev.yaml" api-dev-up
+make DEV_DOCKER="sudo docker compose -f compose.dev.yaml" api-dev-up
 ```
 
 ## Architecture
@@ -200,13 +208,12 @@ curl -X POST http://localhost:8080/api/v1/pricing/refresh/run \
 
 ## Data And Backups
 
-The default self-hosted runtime uses PostgreSQL. Backups should use
-Postgres-native operations such as `pg_dump`, `pg_restore`, and volume
-snapshots.
-
-The SQLite low-memory runtime stores its database under `/data` in the
-`sqlite_data` Docker volume. Stop the API or use SQLite's online backup API
+The simplest self-hosted runtime uses SQLite and stores its database under
+`/data` in the `rekenraam_data` Docker volume. Stop the app or use SQLite's online backup API
 before copying the database, and keep the database, WAL, and SHM files together.
+
+The PostgreSQL runtime should use Postgres-native operations such as `pg_dump`,
+`pg_restore`, and volume snapshots.
 Bidirectional PostgreSQL/SQLite migration tooling is deferred until after V1.
 Desktop-style database folder selection and file-picker storage management are
 not part of the target web product.

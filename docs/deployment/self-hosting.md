@@ -1,16 +1,25 @@
 # Self-Hosting Rekenraam
 
 Rekenraam supports a single-server Docker Compose deployment for both home/LAN
-servers and small VPS installs. The app stack is FastAPI, the nginx-served
-Svelte frontend, and either PostgreSQL or SQLite. PostgreSQL remains the default
-server database; SQLite is available as an explicit low-memory overlay for
-small machines such as Raspberry Pi-class hosts. The production Compose example
-includes Caddy as the public reverse proxy and TLS terminator.
+servers and small VPS installs. The simplest SQLite path is one FastAPI
+container that serves both the API and the built frontend. PostgreSQL deployments
+use three containers: API, frontend, and PostgreSQL. Public HTTPS is a separate
+Caddy proxy overlay.
 
 ## Fresh Install
 
 1. Install Docker Engine and the Docker Compose plugin.
-2. Copy the production environment template:
+2. For the simplest trusted LAN install, start SQLite:
+
+   ```bash
+   docker compose -f compose.sqlite.yaml up -d --build
+   ```
+
+   Open `http://localhost:8080`, create the first owner account, and keep this
+   basic setup on a trusted local network only. Do not expose it directly to the
+   public internet before adding HTTPS and stronger setup controls.
+
+3. For public or PostgreSQL installs, copy the production environment template:
 
    ```bash
    cp .env.production.example .env
@@ -20,59 +29,60 @@ includes Caddy as the public reverse proxy and TLS terminator.
    openssl rand -hex 32
    ```
 
-3. Put the final command output in `MFA_SECRET_KEY`, set
+4. Put the final command output in `MFA_SECRET_KEY`, set
    `FIRST_ADMIN_EMAIL`, set `REKENRAAM_PUBLIC_HOST` to the public hostname, and
    set `CORS_ALLOWED_ORIGINS` to `https://` plus that same hostname.
-4. Render-check the Compose files:
+5. Render-check the Compose files:
 
    ```bash
    make prod-config-check
-   make prod-sqlite-config-check # only if using compose.sqlite.yaml
+   make prod-sqlite-config-check
    ```
 
-5. Start the PostgreSQL stack:
+6. Start the public PostgreSQL stack:
 
    ```bash
-   docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build
+   docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f compose.proxy.yaml up -d --build
    ```
 
-   Or start the SQLite low-memory stack:
+   Or start the public SQLite stack:
 
    ```bash
-   docker compose -f compose.yaml -f compose.prod.example.yaml -f compose.sqlite.yaml up -d --build
+   docker compose -f compose.sqlite.yaml -f compose.sqlite.public.yaml -f compose.proxy.yaml up -d --build
    ```
 
-6. Verify:
+7. Verify:
 
    ```bash
-   curl --fail http://127.0.0.1:${FRONTEND_PORT:-3000}/api/v1/health
+   curl --fail http://127.0.0.1:8080/api/v1/health
    curl --fail https://${REKENRAAM_PUBLIC_HOST}/api/v1/health
    ```
 
 ## Home/LAN Server
 
-For trusted LAN use, `FRONTEND_PORT=3000` can be exposed directly and
-`SESSION_COOKIE_SECURE=false` may be used only while the site is served over
-plain HTTP. The production template binds that direct frontend port to
-`127.0.0.1` by default; set `FRONTEND_BIND=0.0.0.0` only for a trusted LAN.
-Do not expose that configuration to the public internet.
-
-For low-memory LAN installs, prefer the SQLite overlay:
+For trusted LAN use, prefer SQLite:
 
 ```bash
-docker compose -f compose.yaml -f compose.sqlite.yaml up -d --build
+docker compose -f compose.sqlite.yaml up -d --build
 ```
 
-This keeps the API and frontend deployment shape the same, but stores the
-database in the `sqlite_data` volume instead of starting PostgreSQL.
+This runs one container, stores the database in the `rekenraam_data` volume, and
+serves the app at `http://localhost:8080`. `SESSION_COOKIE_SECURE=false` is
+acceptable only while the site is served over plain HTTP on a trusted LAN. Do
+not expose this basic setup to the public internet.
+
+The first-run owner setup screen is designed for this trusted local-network
+case. For public deployments, seed the first admin from environment/secrets or
+use a one-time setup-token flow before exposing the site.
 
 ## VPS With HTTPS
 
 For public access, point an `A` or `AAAA` record for `REKENRAAM_PUBLIC_HOST` at
 the server, and allow inbound TCP `80`, TCP `443`, and optionally UDP `443`.
 Caddy uses the HTTP-01 ACME challenge on port `80`, stores certificates in the
-`caddy_data` volume, redirects HTTP to HTTPS, and proxies HTTPS traffic to the
-frontend container.
+`caddy_data` volume, redirects HTTP to HTTPS, and proxies HTTPS traffic to
+`app:8080`. In the SQLite stack, `app` is the FastAPI container. In the
+PostgreSQL stack, the frontend container has the `app` network alias.
 
 Use:
 
@@ -84,17 +94,15 @@ MFA_ENFORCED=true
 TRUSTED_PROXY_CIDRS=172.16.0.0/12
 ```
 
-Do not publish PostgreSQL on the host. The production override clears the base
+Do not publish PostgreSQL on the host. The production override clears the
 Postgres port mapping so only services inside the Compose network can reach it.
-When using SQLite, keep the `sqlite_data` volume private to the host. The direct
-frontend check port is bound to `127.0.0.1` unless you explicitly change
-`FRONTEND_BIND`.
+When using SQLite, keep the `rekenraam_data` volume private to the host.
 
 To inspect the TLS proxy:
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.example.yaml logs -f caddy
-docker compose -f compose.yaml -f compose.prod.example.yaml exec caddy caddy validate --config /etc/caddy/Caddyfile
+docker compose -f compose.sqlite.yaml -f compose.proxy.yaml logs -f caddy
+docker compose -f compose.sqlite.yaml -f compose.proxy.yaml exec caddy caddy validate --config /etc/caddy/Caddyfile
 ```
 
 ## Backups
@@ -110,7 +118,7 @@ This runs `pg_dump -Fc` through the `backup` Compose profile and writes
 from the app:
 
 ```cron
-15 2 * * * cd /srv/rekenraam && docker compose -f compose.yaml -f compose.prod.example.yaml --profile backup run --rm backup
+15 2 * * * cd /srv/rekenraam && docker compose -f compose.postgres.yaml -f compose.prod.example.yaml --profile backup run --rm backup
 ```
 
 A systemd timer can run the same command from the repository directory. Keep at
@@ -147,8 +155,11 @@ runtime and integrity checks from Settings.
 2. Pull or deploy the new code.
 3. Run `make prod-config-check`.
 4. Start with the same database engine already in use:
-   `docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build`
-   for PostgreSQL, or add `-f compose.sqlite.yaml` for SQLite.
+   `docker compose -f compose.sqlite.yaml up -d --build` for trusted LAN
+   SQLite, `docker compose -f compose.sqlite.yaml -f compose.sqlite.public.yaml -f compose.proxy.yaml up -d --build`
+   for public SQLite, or
+   `docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f compose.proxy.yaml up -d --build`
+   for public PostgreSQL.
 5. Check `/api/v1/health`, Settings -> Runtime, and the integrity check.
 
 ## Public Security Checklist
@@ -162,6 +173,5 @@ runtime and integrity checks from Settings.
   PostgreSQL.
 - Keep PostgreSQL private to the Compose network, or keep the SQLite volume
   private to the host.
-- Keep the direct frontend port bound to `127.0.0.1`, or block it at the host
-  firewall.
+- Do not expose the basic first-run SQLite setup directly to the internet.
 - Schedule backups and perform restore drills.

@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from rekenraam_api.api.router import api_router
 from rekenraam_api.config.settings import get_settings
@@ -60,3 +62,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router, prefix="/api/v1")
+
+
+def mount_frontend_static(app: FastAPI) -> None:
+    static_dir = Path(settings.frontend_static_dir)
+    index_file = static_dir / "index.html"
+    if not index_file.is_file():
+        return
+
+    assets_dir = static_dir / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    static_root = static_dir.resolve()
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str = "") -> FileResponse:  # pyright: ignore[reportUnusedFunction]
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+        requested = (static_dir / full_path).resolve()
+        if requested.is_relative_to(static_root) and requested.is_file():
+            return FileResponse(requested)
+        if "." in Path(full_path).name:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        return FileResponse(index_file)
+
+
+mount_frontend_static(app)

@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     postgres_password_file: str | None = None
     postgres_host: str = "postgres"
     postgres_port: int = 5432
+    database_kind: str | None = None
     database_url_override: str | None = Field(default=None, validation_alias="DATABASE_URL")
+    sqlite_path: str = "/data/rekenraam.sqlite3"
+    frontend_static_dir: str = "/app/static"
     cors_allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:4173,http://127.0.0.1:4173,"
@@ -67,6 +70,11 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         if self.database_url_override:
             return self.database_url_override
+        database_kind = (self.database_kind or "sqlite").lower()
+        if database_kind in {"sqlite", "sqlite3"}:
+            return f"sqlite+aiosqlite:///{Path(self.sqlite_path)}"
+        if database_kind not in {"postgres", "postgresql"}:
+            raise ValueError("DATABASE_KIND must be sqlite or postgresql")
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.resolved_postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

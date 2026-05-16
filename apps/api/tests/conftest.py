@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 
+os.environ.setdefault("SQLITE_PATH", "/tmp/rekenraam-api-test.sqlite3")
+
 import pytest
 import pytest_asyncio
 from _postgres import temporary_database as temporary_postgres_database

@@ -10,15 +10,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
-    ports:
-      - "5432:5432"
     volumes:
-      - postgres_data_dev:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
-  api-dev:
+  api:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile.dev
+      dockerfile: apps/api/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,30 +29,31 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rekenraam}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
+      FIRST_ADMIN_DISPLAY_NAME: ${FIRST_ADMIN_DISPLAY_NAME:-Admin}
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v1/health"]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 5s
-    ports:
-      - "${API_PORT:-8080}:8080"
-    volumes:
-      - ./apps/api:/app
 
-  frontend-dev:
-    image: node:22-alpine
-    working_dir: /workspace
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        PUBLIC_API_BASE_URL: ${FRONTEND_PUBLIC_API_BASE_URL:-/api/v1}
     depends_on:
-      api-dev:
+      api:
         condition: service_healthy
-    environment:
-      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8080/api/v1}
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 4173"
     ports:
-      - "${FRONTEND_PORT:-3000}:4173"
-    volumes:
-      - ./:/workspace
+      - "${FRONTEND_PORT:-3000}:8080"
+    networks:
+      default:
+        aliases:
+          - app
 
 volumes:
-  postgres_data_dev:
+  postgres_data:

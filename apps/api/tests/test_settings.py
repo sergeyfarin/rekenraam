@@ -5,6 +5,7 @@ from rekenraam_api.config.settings import Settings
 
 def test_settings_build_database_url_from_fields() -> None:
     settings = Settings(
+        database_kind="postgresql",
         postgres_user="finance",
         postgres_password="secret",
         postgres_host="db",
@@ -13,6 +14,13 @@ def test_settings_build_database_url_from_fields() -> None:
     )
 
     assert settings.database_url == "postgresql+asyncpg://finance:secret@db:6543/ledger"
+
+
+def test_settings_default_to_sqlite_data_volume(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SQLITE_PATH", raising=False)
+    settings = Settings()
+
+    assert settings.database_url == "sqlite+aiosqlite:////data/rekenraam.sqlite3"
 
 
 def test_database_url_override_takes_precedence() -> None:
@@ -33,7 +41,7 @@ def test_file_backed_postgres_password(tmp_path) -> None:
     password_file = tmp_path / "postgres_password.txt"
     password_file.write_text("from-file\n", encoding="utf-8")
 
-    settings = Settings(postgres_password_file=str(password_file))
+    settings = Settings(database_kind="postgresql", postgres_password_file=str(password_file))
 
     assert settings.resolved_postgres_password == "from-file"
     assert "from-file" in settings.database_url

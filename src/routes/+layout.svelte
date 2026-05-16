@@ -158,8 +158,12 @@
   <main class="grid min-h-screen place-items-center bg-background px-6">
     <form class="w-full max-w-sm space-y-4" on:submit|preventDefault={mfaChallengeToken ? submitMfa : submitAuth}>
       <div class="space-y-1">
-        <h1 class="text-2xl font-semibold">{mfaChallengeToken ? "Two-factor code" : bootstrapRequired ? "Create Admin" : "Sign In"}</h1>
-        <p class="text-sm text-muted-foreground">Rekenraam</p>
+        <h1 class="text-2xl font-semibold">{mfaChallengeToken ? "Two-factor code" : bootstrapRequired ? "Create Owner" : "Sign In"}</h1>
+        <p class="text-sm text-muted-foreground">
+          {bootstrapRequired
+            ? "Trusted local network setup only. Use HTTPS and seeded setup for public deployments."
+            : "Rekenraam"}
+        </p>
       </div>
       {#if mfaChallengeToken}
         <Input bind:value={mfaCode} placeholder="Authenticator or recovery code" autocomplete="one-time-code" required />
@@ -181,7 +185,7 @@
         <p class="text-sm text-destructive">{authError}</p>
       {/if}
       <Button type="submit" class="w-full" disabled={authSubmitting}>
-        {authSubmitting ? "Please wait" : mfaChallengeToken ? "Verify" : bootstrapRequired ? "Create Admin" : "Sign In"}
+        {authSubmitting ? "Please wait" : mfaChallengeToken ? "Verify" : bootstrapRequired ? "Create Owner" : "Sign In"}
       </Button>
     </form>
   </main>

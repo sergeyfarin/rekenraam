@@ -49,14 +49,15 @@ afterEach(() => {
 // ─── C1: Bootstrap flow ────────────────────────────────────────────────────
 
 describe("Layout — bootstrap flow (C1)", () => {
-  it("shows Create Admin form when bootstrap_required is true", async () => {
+  it("shows Create Owner form when bootstrap_required is true", async () => {
     vi.mocked(getCurrentUser).mockRejectedValue(new Error("unauthenticated"));
     vi.mocked(getBootstrapStatus).mockResolvedValue({ bootstrap_required: true });
 
     render(Layout);
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Create Admin" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Create Owner" })).toBeInTheDocument();
     });
+    expect(screen.getByText(/Trusted local network setup only/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Display name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
@@ -69,7 +70,7 @@ describe("Layout — bootstrap flow (C1)", () => {
 
     render(Layout);
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Create Admin" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Create Owner" })).toBeInTheDocument();
     });
 
     await fireEvent.input(screen.getByPlaceholderText("Display name"), {
@@ -81,7 +82,7 @@ describe("Layout — bootstrap flow (C1)", () => {
     await fireEvent.input(screen.getByPlaceholderText("Password"), {
       target: { value: "supersecretpw1234" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Create Admin" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Create Owner" }));
 
     await waitFor(() => expect(vi.mocked(createFirstAdmin)).toHaveBeenCalledOnce());
     expect(vi.mocked(createFirstAdmin).mock.calls[0][0]).toEqual({
