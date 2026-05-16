@@ -20,6 +20,7 @@ on:
       - "e2e/**"
       - "Dockerfile.frontend"
       - "compose.yaml"
+      - "compose.postgres.yaml"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -35,6 +36,7 @@ on:
       - "e2e/**"
       - "Dockerfile.frontend"
       - "compose.yaml"
+      - "compose.postgres.yaml"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -68,9 +70,9 @@ jobs:
 
       - name: Bring up compose stack
         # `--wait` blocks until all services pass their healthchecks (api and
-        # postgres both have healthcheck blocks in compose.yaml). The frontend
+        # postgres both have healthcheck blocks in compose.postgres.yaml). The frontend
         # service is a static nginx and is ready as soon as it starts.
-        run: docker compose up -d --wait
+        run: docker compose -f compose.postgres.yaml up -d --wait
         env:
           # Pin the container name format so e2e/fixtures.ts can `docker exec`
           # into postgres deterministically.
@@ -78,7 +80,7 @@ jobs:
 
       - name: Show compose status
         if: always()
-        run: docker compose ps
+        run: docker compose -f compose.postgres.yaml ps
 
       - name: Run Playwright specs
         run: npm run e2e
@@ -96,8 +98,8 @@ jobs:
 
       - name: Dump compose logs on failure
         if: failure()
-        run: docker compose logs --tail=200
+        run: docker compose -f compose.postgres.yaml logs --tail=200
 
       - name: Tear down compose stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f compose.postgres.yaml down -v

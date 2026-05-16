@@ -9,6 +9,7 @@ on:
       - "docker/**"
       - "scripts/**"
       - "compose.yaml"
+      - "compose.postgres.yaml"
       - "compose.prod.example.yaml"
       - "Dockerfile.frontend"
       - "Makefile"
@@ -21,6 +22,7 @@ on:
       - "docker/**"
       - "scripts/**"
       - "compose.yaml"
+      - "compose.postgres.yaml"
       - "compose.prod.example.yaml"
       - "Dockerfile.frontend"
       - "Makefile"
@@ -59,12 +61,18 @@ jobs:
 
       - name: Docker build and health
         run: |
-          docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build postgres api frontend
+          cat > /tmp/rekenraam-ci-ports.yaml <<'YAML'
+          services:
+            frontend:
+              ports:
+                - "3000:8080"
+          YAML
+          docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f /tmp/rekenraam-ci-ports.yaml up -d --build postgres api frontend
           for i in $(seq 1 60); do
             curl --fail http://localhost:3000/api/v1/health && exit 0
             sleep 2
           done
-          docker compose logs
+          docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f /tmp/rekenraam-ci-ports.yaml logs
           exit 1
 
       - name: Backup and restore smoke
