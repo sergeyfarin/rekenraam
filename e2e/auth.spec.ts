@@ -4,15 +4,15 @@ import { test, expect, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_DISPLAY_NAME } from ".
 // then prove the protected page is gated when the session cookie is cleared.
 test.describe("E1 — Auth round-trip", () => {
   test("bootstrap → logout → re-login → session-clear gates protected pages", async ({ page, context }) => {
-    // Fresh DB (auto-fixture); page lands on Create Admin form.
+    // Fresh DB (auto-fixture); page lands on Create Owner form.
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Create Admin" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create Owner" })).toBeVisible();
 
     // Bootstrap the admin
     await page.getByPlaceholder("Display name").fill(ADMIN_DISPLAY_NAME);
     await page.getByPlaceholder("Email").fill(ADMIN_EMAIL);
     await page.getByPlaceholder("Password").fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "Create Admin" }).click();
+    await page.getByRole("button", { name: "Create Owner" }).click();
 
     // Bootstrap auto-authenticates → nav chrome visible
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();

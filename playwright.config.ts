@@ -4,6 +4,7 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  timeout: 90_000,
   fullyParallel: false, // Specs share a single Postgres; per-spec snapshot fixture serializes them.
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -27,5 +28,5 @@ export default defineConfig({
   ],
 
   // No `webServer` — CI brings up the compose stack before invoking `npm run e2e`.
-  // Local: `docker compose up -d --wait && npm run e2e`.
+  // Local: `docker compose -f compose.postgres.yaml up -d --wait && npm run e2e`.
 });
