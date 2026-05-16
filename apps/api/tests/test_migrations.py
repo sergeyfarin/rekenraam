@@ -78,6 +78,7 @@ def _run_migrations(database_name: str, revision: str) -> None:
     config.set_main_option("script_location", str(root_dir / "alembic"))
 
     original_env = {
+        "DATABASE_URL": os.environ.get("DATABASE_URL"),
         "POSTGRES_DB": os.environ.get("POSTGRES_DB"),
         "POSTGRES_USER": os.environ.get("POSTGRES_USER"),
         "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
@@ -85,6 +86,11 @@ def _run_migrations(database_name: str, revision: str) -> None:
         "POSTGRES_PORT": os.environ.get("POSTGRES_PORT"),
     }
     admin_connection = _admin_connection_kwargs()
+    os.environ["DATABASE_URL"] = (
+        "postgresql+asyncpg://"
+        f"{admin_connection['user']}:{admin_connection['password']}"
+        f"@{admin_connection['host']}:{admin_connection['port']}/{database_name}"
+    )
     os.environ["POSTGRES_DB"] = database_name
     os.environ["POSTGRES_USER"] = str(admin_connection["user"])
     os.environ["POSTGRES_PASSWORD"] = str(admin_connection["password"])

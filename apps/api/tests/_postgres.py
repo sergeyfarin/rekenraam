@@ -77,6 +77,7 @@ def _run_migrations(database_name: str) -> None:
     config.set_main_option("script_location", str(root / "alembic"))
 
     original_env = {
+        "DATABASE_URL": os.environ.get("DATABASE_URL"),
         "POSTGRES_DB": os.environ.get("POSTGRES_DB"),
         "POSTGRES_USER": os.environ.get("POSTGRES_USER"),
         "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
@@ -84,6 +85,7 @@ def _run_migrations(database_name: str) -> None:
         "POSTGRES_PORT": os.environ.get("POSTGRES_PORT"),
     }
     admin = admin_connection_kwargs()
+    os.environ["DATABASE_URL"] = database_url_for(database_name)
     os.environ["POSTGRES_DB"] = database_name
     os.environ["POSTGRES_USER"] = str(admin["user"])
     os.environ["POSTGRES_PASSWORD"] = str(admin["password"])
