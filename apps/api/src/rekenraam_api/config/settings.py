@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     postgres_password_file: str | None = None
     postgres_host: str = "postgres"
     postgres_port: int = 5432
+    database_url_override: str | None = Field(default=None, validation_alias="DATABASE_URL")
     cors_allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:4173,http://127.0.0.1:4173,"
@@ -63,6 +65,8 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        if self.database_url_override:
+            return self.database_url_override
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.resolved_postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

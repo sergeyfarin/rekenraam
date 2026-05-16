@@ -14,7 +14,7 @@ services:
     ports: !reset []
     environment: !override
       APP_HOST: 0.0.0.0
-      APP_PORT: ${API_PORT:-8080}
+      APP_PORT: 8080
       POSTGRES_DB: ${POSTGRES_DB:-rekenraam}
       POSTGRES_USER: ${POSTGRES_USER:-rekenraam}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password

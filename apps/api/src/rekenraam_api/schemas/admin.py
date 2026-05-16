@@ -18,6 +18,7 @@ class AdminRuntimeStatusSummary(BaseModel):
     database_name: str
     database_host: str | None
     database_user: str | None = None
+    database_version: str | None = None
     postgres_version: str | None = None
     display_path: str
     size_bytes: int | None

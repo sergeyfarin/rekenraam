@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rekenraam_api.db.dialect import session_dialect_name
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
 from rekenraam_api.db.models.metadata import Category, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
@@ -261,13 +262,14 @@ async def test_account_repository_unlocks_active_balancings_from_date(
         ]
     )
     await repository_session.commit()
-    await repository_session.execute(
-        text(
-            "SELECT setval(pg_get_serial_sequence('account_balancings', 'id'), "
-            "(SELECT COALESCE(MAX(id), 1) FROM account_balancings))"
+    if session_dialect_name(repository_session) == "postgresql":
+        await repository_session.execute(
+            text(
+                "SELECT setval(pg_get_serial_sequence('account_balancings', 'id'), "
+                "(SELECT COALESCE(MAX(id), 1) FROM account_balancings))"
+            )
         )
-    )
-    await repository_session.commit()
+        await repository_session.commit()
 
     unlocked = await AccountRepository(repository_session).unlock_account_balancings(
         12, date(2026, 5, 2), "retry"

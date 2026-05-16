@@ -70,6 +70,7 @@ from rekenraam_api.db.models.pricing import (
 )
 from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
 from rekenraam_api.db.models.report_state import BookState, ReportCache
+from rekenraam_api.db.models.runtime import DatabaseLock
 from rekenraam_api.db.models.transactions import Split, Transaction
 
 __all__ = [
@@ -91,6 +92,7 @@ __all__ = [
     "CorporateAction",
     "CostBasisProfile",
     "Country",
+    "DatabaseLock",
     "ImportRule",
     "ImportSession",
     "ImportSessionTransaction",

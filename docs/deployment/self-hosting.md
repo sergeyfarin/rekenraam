@@ -1,9 +1,11 @@
 # Self-Hosting Rekenraam
 
 Rekenraam supports a single-server Docker Compose deployment for both home/LAN
-servers and small VPS installs. The app stack is PostgreSQL, FastAPI, and the
-nginx-served Svelte frontend. The production Compose example includes Caddy as
-the public reverse proxy and TLS terminator.
+servers and small VPS installs. The app stack is FastAPI, the nginx-served
+Svelte frontend, and either PostgreSQL or SQLite. PostgreSQL remains the default
+server database; SQLite is available as an explicit low-memory overlay for
+small machines such as Raspberry Pi-class hosts. The production Compose example
+includes Caddy as the public reverse proxy and TLS terminator.
 
 ## Fresh Install
 
@@ -25,12 +27,19 @@ the public reverse proxy and TLS terminator.
 
    ```bash
    make prod-config-check
+   make prod-sqlite-config-check # only if using compose.sqlite.yaml
    ```
 
-5. Start the stack:
+5. Start the PostgreSQL stack:
 
    ```bash
    docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build
+   ```
+
+   Or start the SQLite low-memory stack:
+
+   ```bash
+   docker compose -f compose.yaml -f compose.prod.example.yaml -f compose.sqlite.yaml up -d --build
    ```
 
 6. Verify:
@@ -47,6 +56,15 @@ For trusted LAN use, `FRONTEND_PORT=3000` can be exposed directly and
 plain HTTP. The production template binds that direct frontend port to
 `127.0.0.1` by default; set `FRONTEND_BIND=0.0.0.0` only for a trusted LAN.
 Do not expose that configuration to the public internet.
+
+For low-memory LAN installs, prefer the SQLite overlay:
+
+```bash
+docker compose -f compose.yaml -f compose.sqlite.yaml up -d --build
+```
+
+This keeps the API and frontend deployment shape the same, but stores the
+database in the `sqlite_data` volume instead of starting PostgreSQL.
 
 ## VPS With HTTPS
 
@@ -68,8 +86,9 @@ TRUSTED_PROXY_CIDRS=172.16.0.0/12
 
 Do not publish PostgreSQL on the host. The production override clears the base
 Postgres port mapping so only services inside the Compose network can reach it.
-The direct frontend check port is bound to `127.0.0.1` unless you explicitly
-change `FRONTEND_BIND`.
+When using SQLite, keep the `sqlite_data` volume private to the host. The direct
+frontend check port is bound to `127.0.0.1` unless you explicitly change
+`FRONTEND_BIND`.
 
 To inspect the TLS proxy:
 
@@ -80,7 +99,7 @@ docker compose -f compose.yaml -f compose.prod.example.yaml exec caddy caddy val
 
 ## Backups
 
-The supported logical backup is PostgreSQL custom format:
+For PostgreSQL, the supported logical backup is PostgreSQL custom format:
 
 ```bash
 make backup-now
@@ -98,6 +117,12 @@ A systemd timer can run the same command from the repository directory. Keep at
 least one copy off the server. Volume snapshots are useful as a supplement only
 when the storage layer guarantees a consistent snapshot or PostgreSQL is
 stopped before the snapshot.
+
+For SQLite, stop the API before copying the database files, or use SQLite's
+online backup API from an operator script. Keep the main database file and any
+`-wal` and `-shm` files together. Bidirectional PostgreSQL/SQLite migration
+tooling is intentionally deferred until after V1; do not switch database engines
+for an existing deployment without a tested export/import procedure.
 
 ## Restore Drill
 
@@ -121,7 +146,9 @@ runtime and integrity checks from Settings.
 1. Run `make backup-now`.
 2. Pull or deploy the new code.
 3. Run `make prod-config-check`.
-4. Start with `docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build`.
+4. Start with the same database engine already in use:
+   `docker compose -f compose.yaml -f compose.prod.example.yaml up -d --build`
+   for PostgreSQL, or add `-f compose.sqlite.yaml` for SQLite.
 5. Check `/api/v1/health`, Settings -> Runtime, and the integrity check.
 
 ## Public Security Checklist
@@ -131,8 +158,10 @@ runtime and integrity checks from Settings.
 - `CORS_ALLOWED_ORIGINS` contains only the public origin.
 - `REKENRAAM_PUBLIC_HOST` resolves to the server before starting Caddy.
 - `MFA_ENFORCED=true` for public VPS installs.
-- Use file-backed secrets for database and first-admin passwords.
-- Keep PostgreSQL private to the Compose network.
+- Use file-backed secrets for database and first-admin passwords when running
+  PostgreSQL.
+- Keep PostgreSQL private to the Compose network, or keep the SQLite volume
+  private to the host.
 - Keep the direct frontend port bound to `127.0.0.1`, or block it at the host
   firewall.
 - Schedule backups and perform restore drills.

@@ -1,7 +1,6 @@
 from datetime import UTC, date, datetime
 
 from sqlalchemy import Select, exists, literal, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account, AccountBalancing
@@ -13,6 +12,7 @@ from rekenraam_api.db.models.imports import (
 )
 from rekenraam_api.db.models.metadata import Commodity, Payee
 from rekenraam_api.db.models.transactions import Split, Transaction
+from rekenraam_api.db.sql import dialect_insert
 
 
 def _escape_like(value: str) -> str:
@@ -208,7 +208,7 @@ class ImportRepository:
 
     async def record_session_transaction(self, session_id: int, tx_id: int, action: str) -> None:
         statement = (
-            pg_insert(ImportSessionTransaction)
+            dialect_insert(self._session, ImportSessionTransaction)
             .values(session_id=session_id, tx_id=tx_id, action=action)
             .on_conflict_do_nothing(index_elements=["session_id", "tx_id", "action"])
         )
@@ -220,7 +220,7 @@ class ImportRepository:
         if import_id is None or not import_id.strip():
             return False
         statement = (
-            pg_insert(ImportTransactionKey)
+            dialect_insert(self._session, ImportTransactionKey)
             .values(
                 book_id=book_id,
                 account_id=account_id,

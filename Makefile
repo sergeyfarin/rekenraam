@@ -8,7 +8,7 @@ PROD_ENV_FILES ?= --env-file .env.production.example $(if $(wildcard .env),--env
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-fast api-test-coverage api-test-docker api-test-postgres api-test-postgres-coverage api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up prod-config-check backup-now backup-smoke restore-smoke
+.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-fast api-test-coverage api-test-docker api-test-sqlite api-test-db api-test-postgres api-test-postgres-coverage api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs web-up web-dev-up prod-config-check prod-sqlite-config-check backup-now backup-smoke restore-smoke
 
 api-check:
 	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run python -m py_compile $$(find src -name '*.py')
@@ -34,16 +34,21 @@ api-test-coverage:
 api-test-docker:
 	$(CONTAINER_RUNTIME) run --rm -v "$$(pwd)/$(API_DIR)":/workspace -w /workspace python:3.14-slim-bookworm sh -lc "python -m pip install --upgrade pip >/dev/null && pip install --quiet -e .[dev] && pytest -q"
 
+api-test-sqlite:
+	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite $(UV) run pytest -q tests/test_repositories.py tests/test_migrations.py tests/test_admin_api.py tests/test_reports_repository.py tests/test_pricing_repository.py tests/test_imports_exports.py tests/test_sqlite_parity.py
+
+api-test-db: api-test-sqlite api-test-postgres
+
 api-test-postgres:
 	$(TEST_DOCKER) down -v
 	$(TEST_DOCKER) up -d postgres
-	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres api-dev pytest -q tests/test_repositories.py
+	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres -e REPOSITORY_DB_BACKENDS=postgresql api-dev pytest -q tests/test_repositories.py
 	$(TEST_DOCKER) down -v
 
 api-test-postgres-coverage:
 	$(TEST_DOCKER) down -v
 	$(TEST_DOCKER) up -d postgres
-	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres api-dev pytest -q tests/test_repositories.py tests/test_migrations.py --cov=rekenraam_api --cov-report=term-missing
+	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres -e REPOSITORY_DB_BACKENDS=postgresql api-dev pytest -q tests/test_repositories.py tests/test_migrations.py --cov=rekenraam_api --cov-report=term-missing
 	$(TEST_DOCKER) down -v
 
 api-up:
@@ -97,6 +102,9 @@ web-dev-up:
 prod-config-check:
 	$(DOCKER) $(PROD_ENV_FILES) -f compose.yaml -f compose.prod.example.yaml config >/dev/null
 
+prod-sqlite-config-check:
+	$(DOCKER) $(PROD_ENV_FILES) -f compose.yaml -f compose.prod.example.yaml -f compose.sqlite.yaml config >/dev/null
+
 backup-now:
 	$(DOCKER) -f compose.yaml -f compose.prod.example.yaml --profile backup run --rm backup
 
@@ -128,5 +136,5 @@ api-migrate-current:
 api-migrate-smoke:
 	$(TEST_DOCKER) down -v
 	$(TEST_DOCKER) up -d postgres
-	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres api-dev pytest -q tests/test_migrations.py
+	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres -e REPOSITORY_DB_BACKENDS=postgresql -e SKIP_SQLITE_MIGRATION_TEST=1 api-dev pytest -q tests/test_migrations.py
 	$(TEST_DOCKER) down -v

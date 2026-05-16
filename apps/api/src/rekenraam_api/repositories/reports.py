@@ -8,6 +8,7 @@ from rekenraam_api.db.models.metadata import Category, Payee
 from rekenraam_api.db.models.report_metadata import ReportDefinition, ReportRun
 from rekenraam_api.db.models.report_state import BookState, ReportCache
 from rekenraam_api.db.models.transactions import Split, Transaction
+from rekenraam_api.db.sql import period_start_expr
 from rekenraam_api.services.request_context import get_request_context
 
 
@@ -278,20 +279,7 @@ class ReportRepository:
         date_to: date | None,
         group_by: str,
     ) -> list[tuple[str, int, int, int]]:
-        if group_by == "year":
-            period_expr = func.to_char(
-                func.date_trunc("year", Transaction.occurred_date), "YYYY-MM-DD"
-            )
-        elif group_by == "quarter":
-            period_expr = func.to_char(
-                func.date_trunc("quarter", Transaction.occurred_date), "YYYY-MM-DD"
-            )
-        elif group_by == "day":
-            period_expr = func.to_char(Transaction.occurred_date, "YYYY-MM-DD")
-        else:
-            period_expr = func.to_char(
-                func.date_trunc("month", Transaction.occurred_date), "YYYY-MM-DD"
-            )
+        period_expr = period_start_expr(self._session, Transaction.occurred_date, group_by)
 
         statement: Select[tuple[str, int, int, int]] = (
             select(
@@ -328,7 +316,7 @@ class ReportRepository:
         date_to: date | None,
         group_by: str,
     ) -> list[tuple[str, int, int, int]]:
-        period_expr = self._period_expr(group_by)
+        period_expr = period_start_expr(self._session, Transaction.occurred_date, group_by)
         assets_expr = func.coalesce(
             func.sum(case((Account.account_type == "asset", Split.amount_minor), else_=0)), 0
         )
@@ -365,7 +353,7 @@ class ReportRepository:
         date_to: date | None,
         group_by: str,
     ) -> list[tuple[str, int, str, int]]:
-        period_expr = self._period_expr(group_by)
+        period_expr = period_start_expr(self._session, Transaction.occurred_date, group_by)
         statement = (
             select(
                 period_expr.label("period_start"),
@@ -454,13 +442,3 @@ class ReportRepository:
 
         result = await self._session.execute(statement)
         return list(result.tuples().all())
-
-    @staticmethod
-    def _period_expr(group_by: str):
-        if group_by == "year":
-            return func.to_char(func.date_trunc("year", Transaction.occurred_date), "YYYY-MM-DD")
-        if group_by == "quarter":
-            return func.to_char(func.date_trunc("quarter", Transaction.occurred_date), "YYYY-MM-DD")
-        if group_by == "day":
-            return func.to_char(Transaction.occurred_date, "YYYY-MM-DD")
-        return func.to_char(func.date_trunc("month", Transaction.occurred_date), "YYYY-MM-DD")

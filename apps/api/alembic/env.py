@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from rekenraam_api.config.settings import get_settings
 from rekenraam_api.db import models  # noqa: F401
 from rekenraam_api.db.base import Base
+from rekenraam_api.db.dialect import create_database_engine
 
 config = context.config
 
@@ -42,11 +41,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_database_engine(settings.database_url)
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

@@ -8,14 +8,64 @@ Create Date: 2026-05-03 00:00:00
 from __future__ import annotations
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from alembic import op
+from rekenraam_api.db import sqlite_types as sqlite_types
 
 revision = "0001_initial_schema"
 down_revision = None
 branch_labels = None
 depends_on = None
+
+
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _install_sqlite_parity_triggers() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name != "sqlite":
+        return
+
+    inspector = sa.inspect(bind)
+    for table_name in inspector.get_table_names():
+        if table_name == "alembic_version":
+            continue
+        quoted_table = _quote_identifier(table_name)
+        for column in inspector.get_columns(table_name):
+            column_name = str(column["name"])
+            quoted_column = _quote_identifier(column_name)
+            column_type = column["type"]
+            type_name = column_type.__class__.__name__.lower()
+            length = getattr(column_type, "length", None)
+            if isinstance(length, int) and length > 0:
+                condition = (
+                    f"NEW.{quoted_column} IS NOT NULL AND length(NEW.{quoted_column}) > {length}"
+                )
+                message = f"{table_name}.{column_name} exceeds max length {length}"
+            elif type_name == "boolean":
+                condition = f"NEW.{quoted_column} IS NOT NULL AND NEW.{quoted_column} NOT IN (0, 1)"
+                message = f"{table_name}.{column_name} must be boolean"
+            else:
+                continue
+
+            for operation in ("INSERT", "UPDATE"):
+                trigger_name = _quote_identifier(
+                    f"trg_{table_name}_{column_name}_{operation.lower()}_sqlite_parity"
+                )
+                op.execute(
+                    sa.text(
+                        f"""
+                        CREATE TRIGGER {trigger_name}
+                        BEFORE {operation} ON {quoted_table}
+                        FOR EACH ROW
+                        WHEN {condition}
+                        BEGIN
+                            SELECT RAISE(ABORT, '{message}');
+                        END
+                        """
+                    )
+                )
 
 
 def upgrade() -> None:
@@ -32,16 +82,27 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_users_email", "users", ["email"], unique=True)
+
+    op.create_table(
+        "database_locks",
+        sa.Column("lock_key", sa.String(length=120), primary_key=True, nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
 
     op.create_table(
         "user_devices",
@@ -59,13 +120,13 @@ def upgrade() -> None:
             "first_seen_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "last_seen_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "user_id", "device_fingerprint", name="uq_user_devices_user_fingerprint"
@@ -95,13 +156,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "last_seen_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
@@ -120,13 +181,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_books_slug", "books", ["slug"], unique=True)
@@ -144,7 +205,7 @@ def upgrade() -> None:
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
 
@@ -166,7 +227,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "book_id", "report_type", "params_hash", "as_of_seq", name="uq_report_cache_entry"
@@ -206,7 +267,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -262,13 +323,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint("scale >= 0 AND scale <= 12", name="ck_commodities_scale_range"),
     )
@@ -289,13 +350,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_countries_book_id", "countries", ["book_id"], unique=False)
@@ -324,13 +385,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_institutions_book_id", "institutions", ["book_id"], unique=False)
@@ -357,13 +418,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_categories_book_id", "categories", ["book_id"], unique=False)
@@ -385,13 +446,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_payees_book_id", "payees", ["book_id"], unique=False)
@@ -411,13 +472,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_tags_book_id", "tags", ["book_id"], unique=False)
@@ -438,13 +499,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_people_book_id", "people", ["book_id"], unique=False)
@@ -465,13 +526,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_projects_book_id", "projects", ["book_id"], unique=False)
@@ -528,13 +589,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "account_type IN ('cash', 'checking', 'savings', 'credit', 'loan', 'investment', 'asset', 'liability', 'income', 'expense', 'equity')",
@@ -570,6 +631,7 @@ def upgrade() -> None:
         ["book_id", "system_role"],
         unique=True,
         postgresql_where=sa.text("system_role IS NOT NULL"),
+        sqlite_where=sa.text("system_role IS NOT NULL"),
     )
 
     op.create_table(
@@ -600,7 +662,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -659,7 +721,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -716,13 +778,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "sign_rule IN ('any', 'nonnegative', 'nonpositive')",
@@ -764,13 +826,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "user_id", "account_id", name="uq_reconciliation_preferences_user_account"
@@ -803,7 +865,7 @@ def upgrade() -> None:
             "started_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column("committed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
@@ -889,7 +951,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -970,7 +1032,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -1052,7 +1114,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -1133,7 +1195,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -1178,7 +1240,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "action IN ('created', 'updated', 'validated')",
@@ -1224,7 +1286,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "length(trim(import_id)) > 0", name="ck_import_transaction_keys_import_id"
@@ -1268,7 +1330,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index("ix_lots_book_id", "lots", ["book_id"], unique=False)
@@ -1296,7 +1358,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint("split_id", "lot_id", name="uq_split_lot_allocations_split_lot"),
     )
@@ -1341,7 +1403,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "observation_kind IN ('commodity_market', 'fx_daily', 'fx_manual', 'valuation_override')",
@@ -1371,7 +1433,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint("name", name="uq_price_sources_name"),
     )
@@ -1409,13 +1471,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "refresh_hour_utc BETWEEN 0 AND 23", name="ck_pricing_policies_refresh_hour"
@@ -1466,13 +1528,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint("priority >= 0", name="ck_pricing_source_assignments_priority"),
     )
@@ -1517,13 +1579,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "book_id",
@@ -1559,7 +1621,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index(
@@ -1606,7 +1668,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -1673,13 +1735,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint("user_id", name="uq_user_preferences_user_id"),
     )
@@ -1721,7 +1783,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
     )
     op.create_index(
@@ -1741,8 +1803,8 @@ def upgrade() -> None:
         sa.Column("table_name", sa.String(length=64), nullable=False),
         sa.Column("row_pk", sa.String(length=64), nullable=False),
         sa.Column("op", sa.String(length=16), nullable=False),
-        sa.Column("before_state", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("after_state", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("before_state", sa.JSON(), nullable=True),
+        sa.Column("after_state", sa.JSON(), nullable=True),
         sa.Column(
             "actor_user_id",
             sa.BigInteger(),
@@ -1766,7 +1828,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint("op IN ('insert', 'update', 'delete')", name="ck_audit_log_op"),
     )
@@ -1801,13 +1863,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "user_id", "book_id", "name", name="uq_transaction_saved_views_user_book_name"
@@ -1852,13 +1914,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "user_id", "book_id", "name", name="uq_transaction_templates_user_book_name"
@@ -1963,13 +2025,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint(
             "user_id", "book_id", "payee_id", "account_id", name="uq_payee_defaults_scope"
@@ -2008,13 +2070,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "created_by_user_id",
@@ -2070,7 +2132,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "role IN ('owner', 'editor', 'viewer')", name="ck_book_memberships_role"
@@ -2123,7 +2185,7 @@ def upgrade() -> None:
         sa.text(
             """
                         INSERT INTO transactions (book_id, occurred_date, posted_date, payee_id, memo, status, reference)
-                        VALUES (1, DATE '2026-05-01', DATE '2026-05-01', NULL, 'Initial opening balance', 'cleared', NULL)
+                        VALUES (1, '2026-05-01', '2026-05-01', NULL, 'Initial opening balance', 'cleared', NULL)
             """
         )
     )
@@ -2372,13 +2434,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "instrument_type IN ('stock', 'etf', 'mutual_fund', 'private_fund', 'bond', 'option', 'future', 'crypto', 'private_investment', 'generic')",
@@ -2424,13 +2486,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')",
@@ -2487,7 +2549,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
             "action_type IN ('split', 'reverse_split', 'spin_off', 'merger', 'acquisition', 'conversion', 'return_of_capital', 'delisting', 'write_off', 'derivative_lifecycle', 'private_investment_event')",
@@ -2532,13 +2594,13 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint("user_id", name="uq_user_mfa_totp_user_id"),
     )
@@ -2556,7 +2618,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
     )
@@ -2584,7 +2646,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
@@ -2608,7 +2670,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
@@ -2645,7 +2707,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
@@ -2653,6 +2715,7 @@ def upgrade() -> None:
     op.create_index("ix_user_invites_token_hash", "user_invites", ["token_hash"], unique=True)
     op.create_index("ix_user_invites_user_id", "user_invites", ["user_id"], unique=False)
     op.create_index("ix_user_invites_expires_at", "user_invites", ["expires_at"], unique=False)
+    _install_sqlite_parity_triggers()
 
 
 def downgrade() -> None:
@@ -2814,4 +2877,5 @@ def downgrade() -> None:
     op.drop_index("ix_user_devices_user_id", table_name="user_devices")
     op.drop_table("user_devices")
     op.drop_index("ix_users_email", table_name="users")
+    op.drop_table("database_locks")
     op.drop_table("users")

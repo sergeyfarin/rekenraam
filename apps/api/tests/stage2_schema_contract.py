@@ -105,7 +105,7 @@ def _normalize_check_sql(sqltext: str | None) -> str:
     return " ".join(sqltext.replace('"', "").split()).lower()
 
 
-def _normalize_orm_server_default(default: object | None) -> str:
+def _normalize_orm_server_default(default: object | None, dialect: Dialect) -> str:
     """Render an ORM `Column.server_default` to a comparable SQL fragment.
 
     `Column.server_default` is a `DefaultClause` whose `.arg` is either:
@@ -123,7 +123,7 @@ def _normalize_orm_server_default(default: object | None) -> str:
     if isinstance(arg, str):
         rendered = f"'{arg}'"
     elif hasattr(arg, "compile"):
-        rendered = str(arg.compile(dialect=postgresql.dialect()))
+        rendered = str(arg.compile(dialect=dialect))
     else:
         rendered = str(arg)
     return _strip_default_artifacts(rendered)
@@ -154,7 +154,9 @@ def _strip_default_artifacts(rendered: str) -> str:
 # ---------- Contract builders ----------
 
 
-def contract_from_metadata(metadata: MetaData) -> dict[str, TableContract]:
+def contract_from_metadata(
+    metadata: MetaData, dialect: Dialect | None = None
+) -> dict[str, TableContract]:
     """Derive the schema contract from SQLAlchemy ORM models.
 
     Returns one `TableContract` per `metadata.tables` entry. Skips the
@@ -162,7 +164,7 @@ def contract_from_metadata(metadata: MetaData) -> dict[str, TableContract]:
     contract.
     """
 
-    dialect = postgresql.dialect()
+    dialect = dialect or postgresql.dialect()
     return {
         table_name: _table_contract_from_metadata(table, dialect)
         for table_name, table in metadata.tables.items()
@@ -226,7 +228,7 @@ def _table_contract_from_metadata(table: Table, dialect: Dialect) -> TableContra
                 name=column.name,
                 type_sql=_normalize_type(column.type, dialect),
                 nullable=bool(column.nullable),
-                server_default=_normalize_orm_server_default(column.server_default),
+                server_default=_normalize_orm_server_default(column.server_default, dialect),
             )
             for column in table.columns
         )

@@ -28,7 +28,10 @@ src/rekenraam_api/api/v1/transactions.py
 src/rekenraam_api/config/settings.py
 src/rekenraam_api/db/audit_listener.py
 src/rekenraam_api/db/base.py
+src/rekenraam_api/db/dialect.py
 src/rekenraam_api/db/session.py
+src/rekenraam_api/db/sql.py
+src/rekenraam_api/db/sqlite_types.py
 src/rekenraam_api/db/models/__init__.py
 src/rekenraam_api/db/models/access.py
 src/rekenraam_api/db/models/accounts.py
@@ -41,6 +44,7 @@ src/rekenraam_api/db/models/planning.py
 src/rekenraam_api/db/models/pricing.py
 src/rekenraam_api/db/models/report_metadata.py
 src/rekenraam_api/db/models/report_state.py
+src/rekenraam_api/db/models/runtime.py
 src/rekenraam_api/db/models/transactions.py
 src/rekenraam_api/repositories/access.py
 src/rekenraam_api/repositories/accounts.py
@@ -120,3 +124,4 @@ tests/test_schema_contract.py
 tests/test_schema_edge_cases.py
 tests/test_services.py
 tests/test_settings.py
+tests/test_sqlite_parity.py

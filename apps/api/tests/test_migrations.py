@@ -7,9 +7,9 @@ from pathlib import Path
 
 import asyncpg
 import pytest
+from _sqlite import database_url_for as sqlite_database_url_for
 from alembic.config import Config
 from sqlalchemy import inspect
-from sqlalchemy.ext.asyncio import create_async_engine
 from stage2_schema_contract import (
     TAURI_RUNTIME_TABLES,
     contract_from_database,
@@ -21,6 +21,7 @@ import rekenraam_api.db.models  # noqa: F401  -- registers all ORM tables on Bas
 from alembic import command
 from rekenraam_api.config.settings import get_settings
 from rekenraam_api.db.base import Base
+from rekenraam_api.db.dialect import create_database_engine
 
 
 def _admin_connection_kwargs() -> dict[str, str | int]:
@@ -179,6 +180,47 @@ def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
         asyncio.run(_drop_database(database_name))
 
 
+def test_sqlite_alembic_can_upgrade_downgrade_and_reupgrade_clean_database(tmp_path: Path) -> None:
+    if os.environ.get("SKIP_SQLITE_MIGRATION_TEST") == "1":
+        pytest.skip("SQLite migration smoke is covered by api-test-sqlite")
+
+    database_url = sqlite_database_url_for(tmp_path / "migration.sqlite3")
+    root_dir = Path(__file__).resolve().parents[1]
+    config = Config(str(root_dir / "alembic.ini"))
+    config.set_main_option("script_location", str(root_dir / "alembic"))
+
+    original_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = database_url
+    get_settings.cache_clear()
+    try:
+        command.upgrade(config, "head")
+
+        async def table_names() -> set[str]:
+            engine = create_database_engine(database_url)
+            try:
+                async with engine.connect() as connection:
+                    return await connection.run_sync(
+                        lambda sync_connection: set(inspect(sync_connection).get_table_names())
+                    )
+            finally:
+                await engine.dispose()
+
+        names = asyncio.run(table_names())
+        assert {"users", "database_locks", "books", "book_state"} <= names
+
+        command.downgrade(config, "base")
+        assert "users" not in asyncio.run(table_names())
+
+        command.upgrade(config, "head")
+        assert "users" in asyncio.run(table_names())
+    finally:
+        if original_database_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = original_database_url
+        get_settings.cache_clear()
+
+
 @pytest.mark.asyncio
 async def test_alembic_head_matches_full_stage2_schema_contract(
     repository_database_url: str,
@@ -191,18 +233,17 @@ async def test_alembic_head_matches_full_stage2_schema_contract(
     no hand-maintained dictionary to keep in sync.
     """
 
-    expected = contract_from_metadata(Base.metadata)
-    # Sanity: forgetting to import the model modules before reading
-    # `Base.metadata` would yield an empty contract that silently equals an
-    # empty actual, masking real drift. Guard against that.
-    assert len(expected) > 10, (
-        "Base.metadata has fewer tables than expected. Did the model "
-        "modules get imported before this test ran?"
-    )
-
-    engine = create_async_engine(repository_database_url, future=True)
+    engine = create_database_engine(repository_database_url)
     try:
         async with engine.connect() as connection:
+            expected = contract_from_metadata(Base.metadata, connection.dialect)
+            # Sanity: forgetting to import the model modules before reading
+            # `Base.metadata` would yield an empty contract that silently equals an
+            # empty actual, masking real drift. Guard against that.
+            assert len(expected) > 10, (
+                "Base.metadata has fewer tables than expected. Did the model "
+                "modules get imported before this test ran?"
+            )
             actual = await connection.run_sync(contract_from_database)
 
             assert set(actual) == set(expected), (

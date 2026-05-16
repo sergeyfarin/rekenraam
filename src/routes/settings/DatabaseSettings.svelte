@@ -165,7 +165,7 @@
     </div>
     {#if runtimeStatus}
       <p class="mt-4 text-sm text-muted-foreground">{runtimeStatus.backup_guidance}</p>
-      <p class="mt-1 text-xs text-muted-foreground">PostgreSQL: {runtimeStatus.postgres_version ?? "—"}</p>
+      <p class="mt-1 text-xs text-muted-foreground">Database version: {runtimeStatus.database_version ?? "—"}</p>
     {/if}
 
     <div class="flex flex-wrap gap-2 mt-4">

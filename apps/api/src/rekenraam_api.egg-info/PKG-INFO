@@ -4,6 +4,7 @@ Version: 0.1.0
 Summary: Rekenraam self-hosted API
 Requires-Python: >=3.14
 Requires-Dist: alembic==1.18.4
+Requires-Dist: aiosqlite==0.22.1
 Requires-Dist: argon2-cffi==25.1.0
 Requires-Dist: asyncpg==0.31.0
 Requires-Dist: fastapi==0.136.1

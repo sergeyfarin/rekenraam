@@ -1,7 +1,7 @@
 # Rekenraam
 
 Self-hosted personal finance app in active migration to a FastAPI,
-PostgreSQL, SvelteKit, and Docker web stack.
+PostgreSQL-or-SQLite, SvelteKit, and Docker web stack.
 
 Tauri/Rust/SQLite code remains in the repository only as temporary migration and
 parity reference. It is not the target product architecture.
@@ -10,8 +10,8 @@ parity reference. It is not the target product architecture.
 
 Working today:
 
-- Docker Compose stack with PostgreSQL, FastAPI, and a separately served Svelte
-  frontend
+- Docker Compose stack with PostgreSQL by default, plus an explicit SQLite
+  low-memory overlay, FastAPI, and a separately served Svelte frontend
 - same-origin `/api/v1` frontend-to-backend proxying in the containerized web
   stack
 - first-admin bootstrap, login/logout, sessions, device attribution, request
@@ -23,7 +23,7 @@ Working today:
 - local user administration, book roles, preferences, saved transaction views,
   transaction templates, markdown notes, and audit-event visibility
 - backend-owned pricing refresh worker
-- PostgreSQL Alembic baseline with auth/session, reconciliation, import,
+- PostgreSQL/SQLite Alembic baseline with auth/session, reconciliation, import,
   report state/cache, investment, and pricing foundations
 - shared frontend API seam under `src/lib/api`
 - cross-currency transfer endpoint and matching `CrossCurrencyTransferDialog`
@@ -53,9 +53,18 @@ Deferred after b1/v1:
 
 ## Run The Self-Hosted Stack
 
+PostgreSQL default:
+
 ```bash
 cp .env.example .env
 docker compose up --build
+```
+
+SQLite low-memory option:
+
+```bash
+cp .env.example .env
+docker compose -f compose.yaml -f compose.sqlite.yaml up --build
 ```
 
 For faster local testing, `.env` may include `FIRST_ADMIN_EMAIL`,
@@ -68,6 +77,7 @@ Default services:
 - API: <http://localhost:8080/api/v1>
 - API health: <http://localhost:8080/api/v1/health>
 - PostgreSQL: `localhost:5432`
+- SQLite: stored in the `sqlite_data` volume when `compose.sqlite.yaml` is used
 
 Expected health response:
 
@@ -116,7 +126,9 @@ make api-check
 make api-lint
 make api-typecheck
 make api-test
+make api-test-sqlite
 make api-test-postgres
+make api-test-db
 make api-migrate-smoke
 ```
 
@@ -147,7 +159,7 @@ make DEV_DOCKER="sudo docker compose -f compose.yaml -f compose.dev.yaml" api-de
 | Frontend | SvelteKit 2, Svelte 5, TypeScript |
 | Frontend UI | shadcn-svelte, Bits UI, Tailwind 4 |
 | Backend | FastAPI, SQLAlchemy, Pydantic |
-| Database | PostgreSQL 16+ |
+| Database | PostgreSQL 16+ or SQLite 3 via `aiosqlite` |
 | Deployment | Docker Compose, nginx frontend proxy |
 | Migration reference | Tauri/Rust/SQLite |
 
@@ -188,10 +200,16 @@ curl -X POST http://localhost:8080/api/v1/pricing/refresh/run \
 
 ## Data And Backups
 
-The self-hosted runtime uses PostgreSQL. Backups should use Postgres-native
-operations such as `pg_dump`, `pg_restore`, and volume snapshots. Desktop-style
-database folder selection and file-picker storage management are not part of the
-target web product.
+The default self-hosted runtime uses PostgreSQL. Backups should use
+Postgres-native operations such as `pg_dump`, `pg_restore`, and volume
+snapshots.
+
+The SQLite low-memory runtime stores its database under `/data` in the
+`sqlite_data` Docker volume. Stop the API or use SQLite's online backup API
+before copying the database, and keep the database, WAL, and SHM files together.
+Bidirectional PostgreSQL/SQLite migration tooling is deferred until after V1.
+Desktop-style database folder selection and file-picker storage management are
+not part of the target web product.
 
 Production self-hosting guidance lives in
 [`docs/deployment/self-hosting.md`](docs/deployment/self-hosting.md).

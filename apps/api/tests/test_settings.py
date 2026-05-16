@@ -15,6 +15,12 @@ def test_settings_build_database_url_from_fields() -> None:
     assert settings.database_url == "postgresql+asyncpg://finance:secret@db:6543/ledger"
 
 
+def test_database_url_override_takes_precedence() -> None:
+    settings = Settings(DATABASE_URL="sqlite+aiosqlite:////data/rekenraam.sqlite3")
+
+    assert settings.database_url == "sqlite+aiosqlite:////data/rekenraam.sqlite3"
+
+
 def test_first_admin_seed_settings_are_optional() -> None:
     settings = Settings()
 

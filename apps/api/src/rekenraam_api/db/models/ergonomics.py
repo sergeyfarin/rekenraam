@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -14,7 +15,6 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rekenraam_api.db.base import Base
@@ -90,8 +90,8 @@ class AuditLogEntry(Base):
     table_name: Mapped[str] = mapped_column(String(64), nullable=False)
     row_pk: Mapped[str] = mapped_column(String(64), nullable=False)
     op: Mapped[str] = mapped_column(String(16), nullable=False)
-    before_state: Mapped[dict[str, object] | None] = mapped_column(JSONB)
-    after_state: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    before_state: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    after_state: Mapped[dict[str, object] | None] = mapped_column(JSON)
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     actor_session_id: Mapped[int | None] = mapped_column(
         ForeignKey("auth_sessions.id", ondelete="SET NULL")

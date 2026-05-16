@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.api.dependencies import get_db_session
 from rekenraam_api.app import app
+from rekenraam_api.db.dialect import session_dialect_name
 from rekenraam_api.db.models.metadata import Commodity
 
 
@@ -42,17 +43,23 @@ async def _bootstrap_admin(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_runtime_status_exposes_web_runtime(client: AsyncClient) -> None:
+async def test_runtime_status_exposes_web_runtime(
+    client: AsyncClient, repository_session: AsyncSession
+) -> None:
     await _bootstrap_admin(client)
     response = await client.get("/api/v1/admin/runtime")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["database_kind"] == "postgresql"
+    expected_kind = (
+        "sqlite" if session_dialect_name(repository_session) == "sqlite" else "postgresql"
+    )
+    assert payload["database_kind"] == expected_kind
+    assert payload["database_version"]
     assert payload["latest_version"] == "0001_initial_schema"
     assert payload["pending_migration_count"] == 0
     assert payload["writable"] is True
-    assert "server-managed PostgreSQL" in payload["note"]
+    assert expected_kind in payload["note"].lower()
 
 
 @pytest.mark.asyncio

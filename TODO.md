@@ -138,6 +138,10 @@ These came out of Phase 0 / Phase 1 step 1 / Phase 1 step 7 / Phase 2 step 9 / P
 
 Not all of [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md)'s "Remaining hardening" entries are tracked in the gap plan. Pulling them through here so they aren't dropped:
 
+- [ ] **Post-V1 database engine migration tooling** — build and test
+  bidirectional PostgreSQL ↔ SQLite export/import for existing deployments.
+  V1 supports fresh SQLite deployments and continued PostgreSQL deployments,
+  but not switching live data between engines.
 - [ ] **Milestone 4** — broaden parity fixtures for balances, splits, voided, revisions, locked ranges, high-volume registers; document append-only/versioned accounting model; advanced register search/saved views; memorized splits/templates UX. (Some overlap with Phase 2 step 2.)
 - [ ] **Milestone 5** — broader statement fixtures and account-type coverage in reconciliation; expand unlock/void policy tests. (Overlaps Phase 2 step 1.)
 - [ ] **Milestone 7** — recurrence coverage for end-of-month, yearly, edited future occurrences; richer non-USD commodity support in planning; loan workflows beyond fixed-rate monthly. (Overlaps Phase 2 step 6.)

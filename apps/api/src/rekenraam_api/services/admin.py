@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -7,9 +8,11 @@ from pathlib import Path
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import Select, func, select, text
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.config.settings import Settings
+from rekenraam_api.db.dialect import database_kind_from_url, sqlite_path_from_url
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.metadata import Commodity
@@ -23,7 +26,27 @@ from rekenraam_api.schemas.admin import (
 )
 from rekenraam_api.services.report_invalidation import bump_report_state
 
-API_ROOT = Path(__file__).resolve().parents[3]
+SOURCE_API_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _api_root() -> Path:
+    for candidate in (Path.cwd(), SOURCE_API_ROOT):
+        if (candidate / "alembic.ini").exists() and (candidate / "alembic").exists():
+            return candidate
+    return SOURCE_API_ROOT
+
+
+def _database_url_from_bind(bind: Engine | Connection) -> str:
+    if isinstance(bind, Engine):
+        return str(bind.url)
+    return str(bind.engine.url)
+
+
+def _file_size(path: str | None) -> int | None:
+    if not path:
+        return None
+    file_path = Path(path)
+    return file_path.stat().st_size if file_path.exists() else None
 
 
 @dataclass(frozen=True)
@@ -40,6 +63,10 @@ class AdminService:
         self._settings = settings
 
     async def get_runtime_status(self) -> AdminRuntimeStatusSummary:
+        bind_url = _database_url_from_bind(self._session.get_bind())
+        if database_kind_from_url(bind_url) == "sqlite":
+            return await self._get_sqlite_runtime_status(bind_url)
+
         database_name = await self._session.scalar(select(func.current_database()))
         database_user = await self._session.scalar(select(func.current_user()))
         postgres_version = await self._session.scalar(select(func.version()))
@@ -60,6 +87,7 @@ class AdminService:
             database_name=database_name or self._settings.postgres_db,
             database_host=self._settings.postgres_host,
             database_user=database_user,
+            database_version=postgres_version,
             postgres_version=postgres_version,
             display_path=display_path,
             size_bytes=size_bytes,
@@ -73,6 +101,48 @@ class AdminService:
             note=(
                 "The web runtime uses a server-managed PostgreSQL database. Desktop file pickers,"
                 " path switching, and local backup folder selection do not apply in this deployment."
+            ),
+        )
+
+    async def _get_sqlite_runtime_status(self, database_url: str) -> AdminRuntimeStatusSummary:
+        path = sqlite_path_from_url(database_url)
+        display_path = path or database_url
+        database_name = Path(path).name if path else "sqlite"
+        sqlite_version = await self._session.scalar(text("SELECT sqlite_version()"))
+        foreign_keys_enabled = bool(await self._session.scalar(text("PRAGMA foreign_keys")))
+        size_bytes = await asyncio.to_thread(_file_size, path)
+
+        current_version = await self._current_migration_version()
+        latest_version = self._latest_migration_version()
+        pending_versions: tuple[str, ...] = (
+            () if current_version == latest_version else (latest_version,)
+        )
+        writable = await self._probe_writable()
+
+        return AdminRuntimeStatusSummary(
+            database_kind="sqlite",
+            database_name=database_name,
+            database_host=None,
+            database_user=None,
+            database_version=sqlite_version,
+            postgres_version=None,
+            display_path=display_path,
+            size_bytes=size_bytes,
+            writable=writable,
+            foreign_keys=foreign_keys_enabled,
+            current_version=current_version,
+            latest_version=latest_version,
+            pending_versions=pending_versions,
+            pending_migration_count=len(pending_versions),
+            health_status=(
+                "ok" if writable and foreign_keys_enabled and not pending_versions else "warning"
+            ),
+            backup_guidance=(
+                "Stop the API or use the SQLite online backup API before copying the database file."
+            ),
+            note=(
+                "The web runtime uses a server-local SQLite database file. Keep the /data volume"
+                " private and include the database file, WAL, and SHM files in backups."
             ),
         )
 
@@ -170,21 +240,20 @@ class AdminService:
 
     @staticmethod
     def _latest_migration_version() -> str:
-        config = Config(str(API_ROOT / "alembic.ini"))
-        config.set_main_option("script_location", str(API_ROOT / "alembic"))
+        api_root = _api_root()
+        config = Config(str(api_root / "alembic.ini"))
+        config.set_main_option("script_location", str(api_root / "alembic"))
         return str(ScriptDirectory.from_config(config).get_current_head())
 
     async def _probe_writable(self) -> bool:
         try:
             await self._session.execute(
-                text(
-                    "CREATE TEMP TABLE IF NOT EXISTS rekenraam_writable_probe (id integer) ON COMMIT DROP"
-                )
+                text("CREATE TEMP TABLE IF NOT EXISTS rekenraam_writable_probe (id integer)")
             )
             await self._session.execute(
                 text("INSERT INTO rekenraam_writable_probe (id) VALUES (1)")
             )
-            await self._session.execute(text("TRUNCATE rekenraam_writable_probe"))
+            await self._session.execute(text("DELETE FROM rekenraam_writable_probe"))
             return True
         except Exception:
             await self._session.rollback()

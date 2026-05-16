@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 from sqlalchemy import Select, exists, func, literal, select, text
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from rekenraam_api.db.dialect import is_sqlite_session
 from rekenraam_api.db.models.accounts import (
     Account,
     AccountBalancing,
@@ -16,7 +16,9 @@ from rekenraam_api.db.models.accounts import (
     ReconciliationPreference,
 )
 from rekenraam_api.db.models.metadata import Commodity
+from rekenraam_api.db.models.runtime import DatabaseLock
 from rekenraam_api.db.models.transactions import Split, Transaction
+from rekenraam_api.db.sql import dialect_insert
 
 
 class ReconciliationRepository:
@@ -38,6 +40,18 @@ class ReconciliationRepository:
         transaction ends — which is exactly the serialization the gap plan
         §1.3.3 requires.
         """
+        if is_sqlite_session(self._session):
+            statement = (
+                dialect_insert(self._session, DatabaseLock)
+                .values(lock_key=f"reconciliation:{account_id}", updated_at=datetime.now(UTC))
+                .on_conflict_do_update(
+                    index_elements=["lock_key"],
+                    set_={"updated_at": datetime.now(UTC)},
+                )
+            )
+            await self._session.execute(statement)
+            return
+
         await self._session.execute(
             text("SELECT pg_advisory_xact_lock(:namespace, :account_id)"),
             {"namespace": self._RECONCILIATION_LOCK_NAMESPACE, "account_id": account_id},
@@ -145,7 +159,7 @@ class ReconciliationRepository:
         self, *, user_id: int, book_id: int, account_id: int, offset_account_id: int
     ) -> None:
         statement = (
-            insert(ReconciliationPreference)
+            dialect_insert(self._session, ReconciliationPreference)
             .values(
                 user_id=user_id,
                 book_id=book_id,
@@ -154,7 +168,7 @@ class ReconciliationRepository:
                 updated_at=datetime.now(UTC),
             )
             .on_conflict_do_update(
-                constraint="uq_reconciliation_preferences_user_account",
+                index_elements=["user_id", "account_id"],
                 set_={
                     "book_id": book_id,
                     "offset_account_id": offset_account_id,

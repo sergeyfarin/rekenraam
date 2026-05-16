@@ -6,7 +6,6 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import cast
 
 from sqlalchemy import Select, or_, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -20,6 +19,7 @@ from rekenraam_api.db.models.pricing import (
     PricingRefreshState,
     PricingSourceAssignment,
 )
+from rekenraam_api.db.sql import dialect_insert
 
 
 class PricingRepository:
@@ -362,7 +362,7 @@ class PricingRepository:
     ) -> None:
         if observations:
             self._session.add_all(observations)
-        statement = pg_insert(PricingRefreshState).values(
+        statement = dialect_insert(self._session, PricingRefreshState).values(
             book_id=book_id,
             commodity_id=commodity_id,
             quote_commodity_id=quote_commodity_id,
@@ -374,7 +374,7 @@ class PricingRepository:
             updated_at=attempted_at,
         )
         statement = statement.on_conflict_do_update(
-            constraint="uq_pricing_refresh_state_pair_source",
+            index_elements=["book_id", "commodity_id", "quote_commodity_id", "source_id"],
             set_={
                 "last_success_date": statement.excluded.last_success_date,
                 "last_attempt_at": statement.excluded.last_attempt_at,
@@ -395,7 +395,7 @@ class PricingRepository:
         attempted_at: datetime,
         error: str,
     ) -> None:
-        statement = pg_insert(PricingRefreshState).values(
+        statement = dialect_insert(self._session, PricingRefreshState).values(
             book_id=book_id,
             commodity_id=commodity_id,
             quote_commodity_id=quote_commodity_id,
@@ -407,7 +407,7 @@ class PricingRepository:
             updated_at=attempted_at,
         )
         statement = statement.on_conflict_do_update(
-            constraint="uq_pricing_refresh_state_pair_source",
+            index_elements=["book_id", "commodity_id", "quote_commodity_id", "source_id"],
             set_={
                 "last_attempt_at": statement.excluded.last_attempt_at,
                 "last_error": statement.excluded.last_error,
