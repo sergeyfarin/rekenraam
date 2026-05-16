@@ -113,11 +113,12 @@ Configured in [playwright.config.ts](../../playwright.config.ts):
   testing is out of v1 scope.
 - **No `webServer`.** CI brings up the compose stack itself
   ([.github/workflows/web-e2e.yml](../../.github/workflows/web-e2e.yml));
-  local dev is `docker compose up -d --wait && npm run e2e`.
+  local dev is `docker compose -f compose.postgres.yaml up -d --wait && npm run e2e`.
 - **`workers: 1`.** All specs share the single compose-deployed Postgres;
   serial execution is required by the per-spec reset fixture (below).
-- **`PLAYWRIGHT_BASE_URL`** defaults to `http://localhost:3000` and can be
-  overridden in CI.
+- **`PLAYWRIGHT_BASE_URL`** defaults to `http://localhost:3000`;
+  **`PLAYWRIGHT_COMPOSE_FILES`** defaults to `compose.postgres.yaml`. Both can
+  be overridden in CI.
 
 Run with `npm run e2e` (one-shot) or `npm run e2e:ui` (the Playwright UI
 runner). First-time setup: `npm run e2e:install` to grab the chromium
@@ -144,13 +145,13 @@ do the form-filling explicitly.
 call to `resetDatabase()` snapshots the post-migration `rekenraam` database
 as `rekenraam_baseline` (a Postgres template DB). Each subsequent call:
 
-1. `docker compose stop api` (releases the connection pool — `DROP
+1. `docker compose -f compose.postgres.yaml stop api` (releases the connection pool — `DROP
    DATABASE` requires no open connections).
 2. `pg_terminate_backend` any stragglers.
 3. `DROP DATABASE rekenraam`, then `CREATE DATABASE rekenraam WITH TEMPLATE
    rekenraam_baseline`. Postgres copies at the page level so this is
    effectively block-copy and finishes in ~1s.
-4. `docker compose start api` and poll
+4. `docker compose -f compose.postgres.yaml start api` and poll
    `/api/v1/health` until ready.
 
 Net per-spec overhead: ~3s. The seeded `personal` book (book_id=1), USD

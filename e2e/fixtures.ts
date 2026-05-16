@@ -11,6 +11,13 @@ const POSTGRES_DB = process.env.PLAYWRIGHT_POSTGRES_DB ?? "rekenraam";
 
 const BASELINE_DB = `${POSTGRES_DB}_baseline`;
 const API_SERVICE = process.env.PLAYWRIGHT_API_SERVICE ?? "api";
+const COMPOSE_FILES = process.env.PLAYWRIGHT_COMPOSE_FILES ?? "compose.postgres.yaml";
+const COMPOSE_ARGS = COMPOSE_FILES.split(",")
+  .map((file) => file.trim())
+  .filter(Boolean)
+  .map((file) => `-f ${file}`)
+  .join(" ");
+const COMPOSE = `docker compose ${COMPOSE_ARGS}`.trim();
 
 /**
  * Snapshot/restore-based DB reset. Strategy:
@@ -65,7 +72,7 @@ function ensureBaseline(): void {
 
   // CREATE DATABASE ... TEMPLATE requires no other connections to the source.
   // Stop the API container to release its connection pool, snapshot, restart.
-  execSync(`docker compose stop ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
+  execSync(`${COMPOSE} stop ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
   try {
     pgExec(
       `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB}' AND pid <> pg_backend_pid();`,
@@ -76,7 +83,7 @@ function ensureBaseline(): void {
     });
     baselineCreated = true;
   } finally {
-    execSync(`docker compose start ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
+    execSync(`${COMPOSE} start ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
     // Wait for healthcheck before returning so the first spec doesn't race the API.
     waitForApiHealthy();
   }
@@ -87,7 +94,7 @@ function waitForApiHealthy(timeoutMs = 30_000): void {
   while (Date.now() - start < timeoutMs) {
     try {
       const status = execSync(
-        `docker compose ps --format json ${API_SERVICE}`,
+        `${COMPOSE} ps --format json ${API_SERVICE}`,
         { encoding: "utf-8" },
       );
       if (status.includes('"Health":"healthy"') || status.includes('"State":"running"')) {
@@ -119,7 +126,7 @@ export function resetDatabase(): void {
   ensureBaseline();
 
   // Stop API to release connections, drop+recreate from template, restart.
-  execSync(`docker compose stop ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
+  execSync(`${COMPOSE} stop ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
   try {
     pgExec(
       `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('${POSTGRES_DB}', '${BASELINE_DB}') AND pid <> pg_backend_pid();`,
@@ -130,7 +137,7 @@ export function resetDatabase(): void {
       db: "postgres",
     });
   } finally {
-    execSync(`docker compose start ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
+    execSync(`${COMPOSE} start ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
     waitForApiHealthy();
   }
 }

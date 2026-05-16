@@ -85,7 +85,9 @@ jobs:
       - name: Run Playwright specs
         run: npm run e2e
         env:
+          COMPOSE_PROJECT_NAME: rekenraam
           PLAYWRIGHT_BASE_URL: http://localhost:3000
+          PLAYWRIGHT_COMPOSE_FILES: compose.postgres.yaml
           PLAYWRIGHT_POSTGRES_CONTAINER: rekenraam-postgres-1
 
       - name: Upload Playwright report on failure
