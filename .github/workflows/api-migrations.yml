@@ -5,18 +5,19 @@ on:
     paths:
       - ".github/workflows/api-migrations.yml"
       - "apps/api/**"
-      - "compose.yaml"
-      - "compose.dev.yaml"
-      - "compose.test.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
       - "Makefile"
   pull_request:
     paths:
       - ".github/workflows/api-migrations.yml"
       - "apps/api/**"
-      - "compose.yaml"
-      - "compose.dev.yaml"
-      - "compose.test.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
       - "Makefile"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   migration-smoke:
@@ -25,6 +26,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python and project dependencies
+        run: uv sync --frozen
 
       - name: Run SQLite migration smoke
         run: make api-migrate-smoke
