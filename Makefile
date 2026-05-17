@@ -9,7 +9,7 @@ PROD_ENV_FILES ?= --env-file .env.production.example $(if $(wildcard .env),--env
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-fast api-test-coverage api-test-docker api-test-sqlite api-test-db api-test-postgres api-test-postgres-coverage api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-dev-up api-dev-down api-dev-logs sqlite-up sqlite-down sqlite-logs web-up web-dev-up prod-config-check prod-sqlite-config-check backup-now backup-smoke restore-smoke
+.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-fast api-test-coverage api-test-docker api-test-sqlite api-test-db api-test-postgres api-test-postgres-coverage api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke api-migrate-smoke-postgres api-dev-up api-dev-down api-dev-logs sqlite-up sqlite-down sqlite-logs web-up web-dev-up prod-config-check prod-sqlite-config-check backup-now backup-smoke restore-smoke
 
 api-check:
 	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run python -m py_compile $$(find src -name '*.py')
@@ -24,19 +24,19 @@ api-typecheck:
 	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run pyright
 
 api-test:
-	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run pytest -q
+	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite API_E2E_DB_BACKEND=sqlite $(UV) run pytest -q -m "not postgres_compat"
 
 api-test-fast:
-	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run pytest -q --ignore=tests/e2e
+	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite $(UV) run pytest -q -m "not postgres_compat" --ignore=tests/e2e
 
 api-test-coverage:
-	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run pytest -q --cov=rekenraam_api --cov-report=term-missing --cov-report=xml --cov-report=html
+	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite API_E2E_DB_BACKEND=sqlite $(UV) run pytest -q -m "not postgres_compat" --cov=rekenraam_api --cov-report=term-missing --cov-report=xml --cov-report=html
 
 api-test-docker:
 	$(CONTAINER_RUNTIME) run --rm -v "$$(pwd)/$(API_DIR)":/workspace -w /workspace python:3.14-slim-bookworm sh -lc "python -m pip install --upgrade pip >/dev/null && pip install --quiet -e .[dev] && pytest -q"
 
 api-test-sqlite:
-	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite $(UV) run pytest -q tests/test_repositories.py tests/test_migrations.py tests/test_admin_api.py tests/test_reports_repository.py tests/test_pricing_repository.py tests/test_imports_exports.py tests/test_sqlite_parity.py
+	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite API_E2E_DB_BACKEND=sqlite $(UV) run pytest -q -m "not postgres_compat"
 
 api-test-db: api-test-sqlite api-test-postgres
 
@@ -144,7 +144,10 @@ api-migrate-current:
 	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run alembic current
 
 api-migrate-smoke:
+	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) REPOSITORY_DB_BACKENDS=sqlite SKIP_SQLITE_MIGRATION_TEST=0 $(UV) run pytest -q -m "not postgres_compat" tests/test_migrations.py
+
+api-migrate-smoke-postgres:
 	$(TEST_DOCKER) down -v
 	$(TEST_DOCKER) up -d postgres
-	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres -e REPOSITORY_DB_BACKENDS=postgresql -e SKIP_SQLITE_MIGRATION_TEST=1 api-dev pytest -q tests/test_migrations.py
+	$(TEST_DOCKER) run --rm -e TEST_POSTGRES_HOST=postgres -e REPOSITORY_DB_BACKENDS=postgresql -e SKIP_SQLITE_MIGRATION_TEST=1 api-dev pytest -q -m "postgres_compat" tests/test_migrations.py
 	$(TEST_DOCKER) down -v

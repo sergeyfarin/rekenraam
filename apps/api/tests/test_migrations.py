@@ -111,7 +111,8 @@ def _run_migrations(database_name: str, revision: str) -> None:
         get_settings.cache_clear()
 
 
-def test_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
+@pytest.mark.postgres_compat
+def test_postgres_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
     database_name = f"rekenraam_migration_test_{uuid.uuid4().hex}"
     try:
         asyncio.run(_create_database(database_name))

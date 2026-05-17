@@ -1,9 +1,9 @@
-"""End-to-end fixtures: real FastAPI app, real services, real Postgres.
+"""End-to-end fixtures: real FastAPI app, real services, real database.
 
 Unlike `test_api.py` (stub services) and `test_services.py` (fake repos),
-these fixtures wire the full router -> service -> repository -> Postgres
+these fixtures wire the full router -> service -> repository -> SQLite
 stack and expose it through an `httpx.AsyncClient` so tests exercise the
-same code path that production hits.
+same code path that the v1 single-container runtime hits.
 
 Lifespan is intentionally NOT executed:
 - the bootstrap-admin seed in lifespan reads `FIRST_ADMIN_EMAIL`/`FIRST_ADMIN_PASSWORD`
@@ -13,12 +13,14 @@ Lifespan is intentionally NOT executed:
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 
 import pytest
 import pytest_asyncio
-from _postgres import temporary_database
+from _postgres import temporary_database as temporary_postgres_database
+from _sqlite import temporary_database as temporary_sqlite_database
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -45,8 +47,17 @@ class E2EApp:
 
 @pytest.fixture()
 def e2e_database_url() -> Iterator[str]:
+    backend = os.environ.get("API_E2E_DB_BACKEND", "sqlite").strip().lower()
+    if backend in {"sqlite", "sqlite3"}:
+        with temporary_sqlite_database() as url:
+            yield url
+        return
+
+    if backend not in {"postgres", "postgresql"}:
+        raise ValueError("API_E2E_DB_BACKEND must be sqlite or postgresql")
+
     try:
-        with temporary_database() as url:
+        with temporary_postgres_database() as url:
             yield url
     except Exception as exc:  # pragma: no cover
         pytest.skip(f"postgres not available for e2e tests: {exc}")

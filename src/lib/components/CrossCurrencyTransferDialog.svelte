@@ -194,7 +194,7 @@
         </div>
 
         <div class="space-y-2">
-          <Label for="xfer-rate">FX rate (destination per source)</Label>
+          <Label for="xfer-rate">FX rate (source per destination)</Label>
           <Input id="xfer-rate" type="number" step="0.000001" placeholder="1.000000" bind:value={fxRate} required />
           {#if impliedRate()}
             <p class="text-xs text-muted-foreground">Implied from amounts: {impliedRate()}</p>

@@ -7,6 +7,21 @@ test.describe("E6 — Reports smoke", () => {
     // Seed an expense account + post two transactions against Cash so the
     // cashflow report has rows to compute.
     await page.evaluate(async () => {
+      const catRes = await fetch("/api/v1/categories", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          book_id: 1, parent_id: null, name: "Groceries", kind: "expense", color: null,
+        }),
+      });
+      if (!catRes.ok && catRes.status !== 409) {
+        throw new Error(`category create failed: ${catRes.status}`);
+      }
+      const categories = await fetch("/api/v1/categories?book_id=1", { credentials: "include" }).then(r => r.json());
+      const groceriesCategory = categories.find((c: { name: string }) => c.name === "Groceries");
+      if (!groceriesCategory) throw new Error("Groceries category missing");
+
       const acctRes = await fetch("/api/v1/accounts", {
         method: "POST",
         credentials: "include",
@@ -36,7 +51,7 @@ test.describe("E6 — Reports smoke", () => {
             status: "cleared", reference: null, import_id: null,
             splits: [
               { account_id: 2, commodity_id: 1, amount_minor: -amount, category_id: null, tag_id: null, person_id: null, project_id: null, share_bps: null, memo: null },
-              { account_id: groceries.id, commodity_id: 1, amount_minor: amount, category_id: null, tag_id: null, person_id: null, project_id: null, share_bps: null, memo: null },
+              { account_id: groceries.id, commodity_id: 1, amount_minor: amount, category_id: groceriesCategory.id, tag_id: null, person_id: null, project_id: null, share_bps: null, memo: null },
             ],
           }),
         });

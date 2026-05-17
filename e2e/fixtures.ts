@@ -8,10 +8,16 @@ const ADMIN_DISPLAY_NAME = "E2E Admin";
 const POSTGRES_CONTAINER = process.env.PLAYWRIGHT_POSTGRES_CONTAINER ?? "rekenraam-postgres-1";
 const POSTGRES_USER = process.env.PLAYWRIGHT_POSTGRES_USER ?? "rekenraam";
 const POSTGRES_DB = process.env.PLAYWRIGHT_POSTGRES_DB ?? "rekenraam";
+const DB_BACKEND = (process.env.PLAYWRIGHT_DB_BACKEND ?? "sqlite").toLowerCase();
+const SQLITE_DB_PATH = process.env.PLAYWRIGHT_SQLITE_PATH ?? "/data/rekenraam.sqlite3";
+const SQLITE_BASELINE_PATH =
+  process.env.PLAYWRIGHT_SQLITE_BASELINE_PATH ?? "/data/rekenraam.e2e-baseline.sqlite3";
 
 const BASELINE_DB = `${POSTGRES_DB}_baseline`;
-const API_SERVICE = process.env.PLAYWRIGHT_API_SERVICE ?? "api";
-const COMPOSE_FILES = process.env.PLAYWRIGHT_COMPOSE_FILES ?? "compose.postgres.yaml";
+const API_SERVICE = process.env.PLAYWRIGHT_API_SERVICE ?? (DB_BACKEND === "sqlite" ? "app" : "api");
+const COMPOSE_FILES = process.env.PLAYWRIGHT_COMPOSE_FILES ?? (
+  DB_BACKEND === "sqlite" ? "compose.sqlite.yaml" : "compose.postgres.yaml"
+);
 const COMPOSE_ARGS = COMPOSE_FILES.split(",")
   .map((file) => file.trim())
   .filter(Boolean)
@@ -46,6 +52,63 @@ const COMPOSE = `docker compose ${COMPOSE_ARGS}`.trim();
  */
 let baselineCreated = false;
 
+function isSqliteBackend(): boolean {
+  return DB_BACKEND === "sqlite" || DB_BACKEND === "sqlite3";
+}
+
+function composeExec(command: string): void {
+  execSync(command, { stdio: ["ignore", "ignore", "pipe"] });
+}
+
+function runInAppVolume(shellCommand: string): void {
+  execSync(
+    `${COMPOSE} run --rm --no-deps --entrypoint sh ${API_SERVICE} -c ${JSON.stringify(shellCommand)}`,
+    { stdio: ["ignore", "ignore", "pipe"] },
+  );
+}
+
+function sqliteSiblingGlob(path: string): string {
+  return `${path} ${path}-wal ${path}-shm ${path}-journal`;
+}
+
+function ensureSqliteBaseline(): void {
+  if (baselineCreated) return;
+
+  composeExec(`${COMPOSE} stop ${API_SERVICE}`);
+  try {
+    runInAppVolume(
+      [
+        "set -eu",
+        `test -f ${JSON.stringify(SQLITE_DB_PATH)}`,
+        `if [ ! -f ${JSON.stringify(SQLITE_BASELINE_PATH)} ]; then cp ${JSON.stringify(SQLITE_DB_PATH)} ${JSON.stringify(SQLITE_BASELINE_PATH)}; fi`,
+        `rm -f ${SQLITE_BASELINE_PATH}-wal ${SQLITE_BASELINE_PATH}-shm ${SQLITE_BASELINE_PATH}-journal`,
+      ].join("; "),
+    );
+    baselineCreated = true;
+  } finally {
+    composeExec(`${COMPOSE} start ${API_SERVICE}`);
+    waitForApiHealthy();
+  }
+}
+
+function resetSqliteDatabase(): void {
+  ensureSqliteBaseline();
+
+  composeExec(`${COMPOSE} stop ${API_SERVICE}`);
+  try {
+    runInAppVolume(
+      [
+        "set -eu",
+        `rm -f ${sqliteSiblingGlob(SQLITE_DB_PATH)}`,
+        `cp ${JSON.stringify(SQLITE_BASELINE_PATH)} ${JSON.stringify(SQLITE_DB_PATH)}`,
+      ].join("; "),
+    );
+  } finally {
+    composeExec(`${COMPOSE} start ${API_SERVICE}`);
+    waitForApiHealthy();
+  }
+}
+
 function pgExec(sql: string, opts: { db?: string } = {}): void {
   const db = opts.db ?? POSTGRES_DB;
   // -v ON_ERROR_STOP=1 turns any SQL error into a non-zero exit so execSync throws.
@@ -56,6 +119,11 @@ function pgExec(sql: string, opts: { db?: string } = {}): void {
 }
 
 function ensureBaseline(): void {
+  if (isSqliteBackend()) {
+    ensureSqliteBaseline();
+    return;
+  }
+
   if (baselineCreated) return;
 
   // Idempotency: check if the baseline already exists from a prior run on the
@@ -123,6 +191,11 @@ function waitForApiHealthy(timeoutMs = 30_000): void {
  * `bootstrap_required: true` again with the seeded `personal` book intact.
  */
 export function resetDatabase(): void {
+  if (isSqliteBackend()) {
+    resetSqliteDatabase();
+    return;
+  }
+
   ensureBaseline();
 
   // Stop API to release connections, drop+recreate from template, restart.

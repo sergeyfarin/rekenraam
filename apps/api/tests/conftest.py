@@ -15,9 +15,9 @@ from rekenraam_api.db.dialect import create_database_engine
 
 
 def _repository_backends() -> tuple[str, ...]:
-    configured = os.environ.get("REPOSITORY_DB_BACKENDS", "postgresql")
+    configured = os.environ.get("REPOSITORY_DB_BACKENDS", "sqlite")
     backends = tuple(backend.strip() for backend in configured.split(",") if backend.strip())
-    return backends or ("postgresql",)
+    return backends or ("sqlite",)
 
 
 @pytest.fixture(params=_repository_backends())

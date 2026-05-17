@@ -1,10 +1,10 @@
 # Self-Hosting Rekenraam
 
-Rekenraam supports a single-server Docker Compose deployment for both home/LAN
-servers and small VPS installs. The simplest SQLite path is one FastAPI
-container that serves both the API and the built frontend. PostgreSQL deployments
-use three containers: API, frontend, and PostgreSQL. Public HTTPS is a separate
-Caddy proxy overlay.
+Rekenraam v1 supports a single-server Docker Compose deployment for both
+home/LAN servers and small VPS installs. The supported v1 runtime is the SQLite
+path: one FastAPI container serves both the API and the built frontend.
+PostgreSQL deployments remain available as a post-v1 compatibility target, but
+are not the v1 release gate. Public HTTPS is a separate Caddy proxy overlay.
 
 ## Fresh Install
 
@@ -19,12 +19,11 @@ Caddy proxy overlay.
    basic setup on a trusted local network only. Do not expose it directly to the
    public internet before adding HTTPS and stronger setup controls.
 
-3. For public or PostgreSQL installs, copy the production environment template:
+3. For public SQLite installs, copy the production environment template:
 
    ```bash
    cp .env.production.example .env
    mkdir -p secrets backups
-   openssl rand -base64 36 > secrets/postgres_password.txt
    openssl rand -base64 36 > secrets/first_admin_password.txt
    openssl rand -hex 32
    ```
@@ -39,13 +38,7 @@ Caddy proxy overlay.
    make prod-sqlite-config-check
    ```
 
-6. Start the public PostgreSQL stack:
-
-   ```bash
-   docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f compose.proxy.yaml up -d --build
-   ```
-
-   Or start the public SQLite stack:
+6. Start the public SQLite stack:
 
    ```bash
    docker compose -f compose.sqlite.yaml -f compose.sqlite.public.yaml -f compose.proxy.yaml up -d --build
@@ -81,8 +74,7 @@ For public access, point an `A` or `AAAA` record for `REKENRAAM_PUBLIC_HOST` at
 the server, and allow inbound TCP `80`, TCP `443`, and optionally UDP `443`.
 Caddy uses the HTTP-01 ACME challenge on port `80`, stores certificates in the
 `caddy_data` volume, redirects HTTP to HTTPS, and proxies HTTPS traffic to
-`app:8080`. In the SQLite stack, `app` is the FastAPI container. In the
-PostgreSQL stack, the frontend container has the `app` network alias.
+`app:8080`. In the v1 SQLite stack, `app` is the FastAPI container.
 
 Use:
 
@@ -94,9 +86,9 @@ MFA_ENFORCED=true
 TRUSTED_PROXY_CIDRS=172.16.0.0/12
 ```
 
-Do not publish PostgreSQL on the host. The production override clears the
-Postgres port mapping so only services inside the Compose network can reach it.
-When using SQLite, keep the `rekenraam_data` volume private to the host.
+Keep the `rekenraam_data` volume private to the host. PostgreSQL is a post-v1
+compatibility target; if you run it for development, do not publish it on the
+host.
 
 To inspect the TLS proxy:
 
@@ -107,7 +99,12 @@ docker compose -f compose.sqlite.yaml -f compose.proxy.yaml exec caddy caddy val
 
 ## Backups
 
-For PostgreSQL, the supported logical backup is PostgreSQL custom format:
+For SQLite, stop the app before copying the database files, or use SQLite's
+online backup API from an operator script. Keep the main database file and any
+`-wal` and `-shm` files together.
+
+PostgreSQL backup/restore is post-v1 compatibility work. If you run the
+compatibility stack, its logical backup uses PostgreSQL custom format:
 
 ```bash
 make backup-now
@@ -126,15 +123,17 @@ least one copy off the server. Volume snapshots are useful as a supplement only
 when the storage layer guarantees a consistent snapshot or PostgreSQL is
 stopped before the snapshot.
 
-For SQLite, stop the API before copying the database files, or use SQLite's
-online backup API from an operator script. Keep the main database file and any
-`-wal` and `-shm` files together. Bidirectional PostgreSQL/SQLite migration
-tooling is intentionally deferred until after V1; do not switch database engines
-for an existing deployment without a tested export/import procedure.
+Bidirectional PostgreSQL/SQLite migration tooling is intentionally deferred
+until after V1; do not switch database engines for an existing deployment
+without a tested export/import procedure.
 
 ## Restore Drill
 
-Always restore into a clean database first:
+For SQLite, restore into a clean volume or a temporary host directory first,
+then start the app and verify `/api/v1/health`, Settings -> Runtime, and the
+integrity check.
+
+For PostgreSQL compatibility work, restore into a clean database first:
 
 ```bash
 make restore-smoke BACKUP=backups/rekenraam-YYYYmmdd-HHMMSS.dump
@@ -157,9 +156,9 @@ runtime and integrity checks from Settings.
 4. Start with the same database engine already in use:
    `docker compose -f compose.sqlite.yaml up -d --build` for trusted LAN
    SQLite, `docker compose -f compose.sqlite.yaml -f compose.sqlite.public.yaml -f compose.proxy.yaml up -d --build`
-   for public SQLite, or
+   for public SQLite, or, for post-v1 compatibility work,
    `docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f compose.proxy.yaml up -d --build`
-   for public PostgreSQL.
+   for PostgreSQL.
 5. Check `/api/v1/health`, Settings -> Runtime, and the integrity check.
 
 ## Public Security Checklist
@@ -169,9 +168,7 @@ runtime and integrity checks from Settings.
 - `CORS_ALLOWED_ORIGINS` contains only the public origin.
 - `REKENRAAM_PUBLIC_HOST` resolves to the server before starting Caddy.
 - `MFA_ENFORCED=true` for public VPS installs.
-- Use file-backed secrets for database and first-admin passwords when running
-  PostgreSQL.
-- Keep PostgreSQL private to the Compose network, or keep the SQLite volume
-  private to the host.
+- Use file-backed secrets for first-admin passwords in public installs.
+- Keep the SQLite volume private to the host.
 - Do not expose the basic first-run SQLite setup directly to the internet.
 - Schedule backups and perform restore drills.

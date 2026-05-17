@@ -1,6 +1,6 @@
 # V1 Gap Analysis & Fix Plan
 
-Last updated: 2026-05-12
+Last updated: 2026-05-17
 
 Audits the repo against [v1-scope.md](v1-scope.md) and the milestone-1-11 completion claims in [SELF_HOSTED_MIGRATION_PLAN.md](../../SELF_HOSTED_MIGRATION_PLAN.md). Scope-coverage gaps are listed first; test-depth gaps follow. Each item names what is missing, where it lives, and severity. Items marked **DONE** have shipped; the relevant section retains the original gap description for historical context.
 
@@ -14,21 +14,30 @@ For the day-to-day "what's next" view, see [TODO.md](../../TODO.md).
 > wins that align with v2 direction: see "v1 accounting-correctness fixes
 > (2026-05-12)" below for what shipped in that pass.
 
+> **Decision recorded 2026-05-17:** v1 ships and gates on the
+> **single-container SQLite runtime**. PostgreSQL remains in the repository as
+> a post-v1 compatibility target, but CI coverage must not shrink: repository,
+> API e2e, migration, and browser e2e tests now run against SQLite by default.
+> Explicit Postgres make targets remain for later hardening.
+
 Severity legend:
 - **B** — release blocker (gate per `v1-scope.md` "Release Gate" or scope `Must Have`)
 - **H** — hardening (correctness or operational risk; should ship at v1)
 - **N** — nice-to-have (scope `Should Have`, can defer if time-boxed)
 
-## Test status snapshot (2026-05-12, after Phase 1 step 2)
+## Test status snapshot (2026-05-17, SQLite-first pivot)
 
 Backend in [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml):
 
-- **CI verdict: 171 passed, 2 skipped, 0 failed.** No `--deselect` flags; CI runs the full suite.
+- CI sets `REPOSITORY_DB_BACKENDS=sqlite` and `API_E2E_DB_BACKEND=sqlite`.
+  `make api-test-coverage` runs the full API suite on SQLite; Postgres skips
+  are no longer treated as the default confidence signal.
 - Pyright (strict): clean.
 - Ruff check: clean.
 - Ruff format check: enforced and clean.
 
-Net change since Phase 2 step 10: **+11 e2e tests** for the user-invite flow. Two intentional skips: the `MissingGreenlet` import test (Phase 2 step 1 will rewrite it as e2e) and an invite/deactivate-state test deferred until the pending-vs-deactivated user model is cleaned up (logged in §Findings).
+Postgres compatibility is explicit via `make api-test-postgres`,
+`make api-test-postgres-coverage`, and `make api-migrate-smoke-postgres`.
 
 ## Phase status
 
@@ -258,8 +267,8 @@ Logged for later:
 
 | # | Gap | Location | Sev |
 |---|---|---|---|
-| 1.7.1 | **Reverse proxy / TLS production example** — **DONE 2026-05-11.** Production Compose now includes a Caddy service that terminates HTTPS with automatic ACME certificates, stores Caddy state in named volumes, exposes `80`/`443`, and proxies to the frontend container. The direct frontend port is overridden to bind to `127.0.0.1` by default for local health checks. Deployment docs cover DNS, firewall ports, Caddy logs/validation, secure cookies, CORS origin, MFA, private Postgres, and LAN-only HTTP caveats. | [compose.prod.example.yaml](../../compose.prod.example.yaml), [Caddyfile](../../docker/caddy/Caddyfile), [docs/deployment/self-hosting.md](../../docs/deployment/self-hosting.md) | B |
-| 1.7.2 | CI API test job — **DONE 2026-05-09.** [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) runs `ruff check`, `pyright` (strict), and `pytest` against a Postgres 16 service. Triggers on changes under `apps/api/**`, `pyproject.toml`, `uv.lock`, or `Makefile`. Uses `astral-sh/setup-uv` + `uv sync --frozen` so what runs in CI matches local `uv sync`. The 8 pre-existing failures are quarantined inline via `--deselect`; Phase 2 step 9 will convert each to an in-source skip and remove the corresponding deselect. `ruff format --check` is intentionally NOT yet a gate — see findings. | [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) | B |
+| 1.7.1 | **Reverse proxy / TLS production example** — **DONE 2026-05-11; SQLite-first updated 2026-05-17.** Production Compose includes a Caddy service that terminates HTTPS with automatic ACME certificates, stores Caddy state in named volumes, exposes `80`/`443`, and proxies to the SQLite `app` container for v1. Deployment docs cover DNS, firewall ports, Caddy logs/validation, secure cookies, CORS origin, MFA, private SQLite volume, and LAN-only HTTP caveats. | [compose.sqlite.public.yaml](../../compose.sqlite.public.yaml), [Caddyfile](../../docker/caddy/Caddyfile), [docs/deployment/self-hosting.md](../../docs/deployment/self-hosting.md) | B |
+| 1.7.2 | CI API test job — **DONE 2026-05-09; SQLite-first updated 2026-05-17.** [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) runs `ruff check`, `ruff format --check`, `pyright` (strict), and `make api-test-coverage` with SQLite as the backend. Triggers on changes under `apps/api/**`, `pyproject.toml`, `uv.lock`, or `Makefile`. Uses `astral-sh/setup-uv` + `uv sync --frozen` so what runs in CI matches local `uv sync`. Explicit Postgres targets remain post-v1. | [.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml) | B |
 | 1.7.3 | **Backup smoke test** present (`scripts/restore_smoke.sh`) but not wired into CI on a schedule. | `.github/workflows/operational-self-hosting.yml` | H |
 | 1.7.4 | **Rate-limit / failed-login** state in Postgres or Redis instead of process memory (see 1.1.5). | `services/auth.py` | H |
 

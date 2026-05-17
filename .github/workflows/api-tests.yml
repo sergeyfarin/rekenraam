@@ -26,30 +26,11 @@ jobs:
     name: compile, lint, typecheck, pytest coverage
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: rekenraam
-          POSTGRES_USER: rekenraam
-          POSTGRES_PASSWORD: rekenraam
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U rekenraam -d rekenraam"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-
     env:
-      # The repository tests + e2e tests pick up Postgres credentials from
-      # these TEST_POSTGRES_* env vars; the existing `make api-test-postgres`
-      # uses the same convention.
-      TEST_POSTGRES_HOST: 127.0.0.1
-      TEST_POSTGRES_PORT: 5432
-      TEST_POSTGRES_USER: rekenraam
-      TEST_POSTGRES_PASSWORD: rekenraam
-      TEST_POSTGRES_ADMIN_DB: rekenraam
+      # V1 ships and gates on the single-container SQLite path. Postgres
+      # remains available behind explicit post-v1 compatibility targets.
+      REPOSITORY_DB_BACKENDS: sqlite
+      API_E2E_DB_BACKEND: sqlite
 
     steps:
       - uses: actions/checkout@v4

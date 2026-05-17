@@ -49,10 +49,10 @@ test.describe("E4 — Cross-currency transfer", () => {
     await page.locator("#xfer-source").selectOption({ value: "2" });
     await page.locator("#xfer-destination").selectOption({ value: String(eurAccountId) });
 
-    // Transfer $100 → €90 at rate 0.90
+    // Transfer $100 → €90 at 1.111111 source units per destination unit.
     await page.locator("#xfer-source-amount").fill("100.00");
     await page.locator("#xfer-destination-amount").fill("90.00");
-    await page.locator("#xfer-rate").fill("0.90");
+    await page.locator("#xfer-rate").fill("1.111111");
 
     await page.getByRole("button", { name: "Post transfer" }).click();
 

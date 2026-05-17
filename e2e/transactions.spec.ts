@@ -50,7 +50,7 @@ test.describe("E2 — Post a transaction", () => {
     await page.locator("#tx-payee").fill("Test Grocer");
     await page.locator("#tx-amount").fill("-42.50");
 
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
 
     // The "create payee" confirm dialog opens (the payee doesn't exist yet)
     await expect(page.getByText(/Create new payee "Test Grocer"/)).toBeVisible();

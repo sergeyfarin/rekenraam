@@ -1,7 +1,7 @@
 name: Web E2E Tests
 
-# E2E runs the full Playwright suite against a real docker-compose stack
-# (postgres + api + frontend). It's the expensive job (~5-10 min including
+# E2E runs the full Playwright suite against the v1 docker-compose stack
+# (single SQLite-backed app container). It's the expensive job (~5-10 min including
 # image builds), so we gate it:
 #   - on `push` to main (post-merge regression check)
 #   - on `pull_request` with the `run-e2e` label applied
@@ -18,9 +18,8 @@ on:
       - "apps/api/**"
       - "docker/**"
       - "e2e/**"
-      - "Dockerfile.frontend"
-      - "compose.yaml"
-      - "compose.postgres.yaml"
+      - "Dockerfile.app"
+      - "compose.sqlite.yaml"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -34,9 +33,8 @@ on:
       - "apps/api/**"
       - "docker/**"
       - "e2e/**"
-      - "Dockerfile.frontend"
-      - "compose.yaml"
-      - "compose.postgres.yaml"
+      - "Dockerfile.app"
+      - "compose.sqlite.yaml"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -45,7 +43,7 @@ on:
 
 jobs:
   web-e2e:
-    name: playwright (compose stack)
+    name: playwright (sqlite compose stack)
     runs-on: ubuntu-latest
     # PRs only run e2e when the `run-e2e` label is present. Pushes to main
     # always run.
@@ -69,26 +67,25 @@ jobs:
         run: npm run e2e:install
 
       - name: Bring up compose stack
-        # `--wait` blocks until all services pass their healthchecks (api and
-        # postgres both have healthcheck blocks in compose.postgres.yaml). The frontend
-        # service is a static nginx and is ready as soon as it starts.
-        run: docker compose -f compose.postgres.yaml up -d --wait
+        # `--wait` blocks until the single app container passes its healthcheck.
+        run: docker compose -f compose.sqlite.yaml up -d --wait
         env:
-          # Pin the container name format so e2e/fixtures.ts can `docker exec`
-          # into postgres deterministically.
+          # Pin the project name so e2e/fixtures.ts can address the same stack
+          # while resetting the SQLite volume between specs.
           COMPOSE_PROJECT_NAME: rekenraam
 
       - name: Show compose status
         if: always()
-        run: docker compose -f compose.postgres.yaml ps
+        run: docker compose -f compose.sqlite.yaml ps
 
       - name: Run Playwright specs
         run: npm run e2e
         env:
           COMPOSE_PROJECT_NAME: rekenraam
-          PLAYWRIGHT_BASE_URL: http://localhost:3000
-          PLAYWRIGHT_COMPOSE_FILES: compose.postgres.yaml
-          PLAYWRIGHT_POSTGRES_CONTAINER: rekenraam-postgres-1
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
+          PLAYWRIGHT_DB_BACKEND: sqlite
+          PLAYWRIGHT_COMPOSE_FILES: compose.sqlite.yaml
+          PLAYWRIGHT_API_SERVICE: app
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -100,8 +97,8 @@ jobs:
 
       - name: Dump compose logs on failure
         if: failure()
-        run: docker compose -f compose.postgres.yaml logs --tail=200
+        run: docker compose -f compose.sqlite.yaml logs --tail=200
 
       - name: Tear down compose stack
         if: always()
-        run: docker compose -f compose.postgres.yaml down -v
+        run: docker compose -f compose.sqlite.yaml down -v

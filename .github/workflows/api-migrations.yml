@@ -26,5 +26,5 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run migration smoke
+      - name: Run SQLite migration smoke
         run: make api-migrate-smoke

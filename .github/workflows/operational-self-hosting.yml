@@ -8,10 +8,9 @@ on:
       - "src/**"
       - "docker/**"
       - "scripts/**"
-      - "compose.yaml"
-      - "compose.postgres.yaml"
-      - "compose.prod.example.yaml"
-      - "Dockerfile.frontend"
+      - "compose.sqlite.yaml"
+      - "compose.sqlite.public.yaml"
+      - "Dockerfile.app"
       - "Makefile"
       - "package*.json"
   pull_request:
@@ -21,10 +20,9 @@ on:
       - "src/**"
       - "docker/**"
       - "scripts/**"
-      - "compose.yaml"
-      - "compose.postgres.yaml"
-      - "compose.prod.example.yaml"
-      - "Dockerfile.frontend"
+      - "compose.sqlite.yaml"
+      - "compose.sqlite.public.yaml"
+      - "Dockerfile.app"
       - "Makefile"
       - "package*.json"
 
@@ -37,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Frontend check and build
@@ -49,34 +47,26 @@ jobs:
       - name: Prepare production secrets
         run: |
           mkdir -p secrets backups
-          printf 'ci-postgres-password\n' > secrets/postgres_password.txt
           printf 'ci-first-admin-password\n' > secrets/first_admin_password.txt
           cp .env.production.example .env
-          sed -i 's#https://finance.example.com#http://localhost:3000#' .env
+          sed -i 's#https://finance.example.com#http://localhost:8080#' .env
           sed -i 's#replace-with-a-long-random-string#ci-mfa-secret-key-ci-mfa-secret-key#' .env
           sed -i 's#SESSION_COOKIE_SECURE=true#SESSION_COOKIE_SECURE=false#' .env
 
       - name: Compose config
-        run: make prod-config-check
+        run: make prod-sqlite-config-check
 
       - name: Docker build and health
         run: |
-          cat > /tmp/rekenraam-ci-ports.yaml <<'YAML'
-          services:
-            frontend:
-              ports:
-                - "3000:8080"
-          YAML
-          docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f /tmp/rekenraam-ci-ports.yaml up -d --build postgres api frontend
+          docker compose -f compose.sqlite.yaml up -d --build --wait
           for i in $(seq 1 60); do
-            curl --fail http://localhost:3000/api/v1/health && exit 0
+            curl --fail http://localhost:8080/api/v1/health && exit 0
             sleep 2
           done
-          docker compose -f compose.postgres.yaml -f compose.prod.example.yaml -f /tmp/rekenraam-ci-ports.yaml logs
+          docker compose -f compose.sqlite.yaml logs
           exit 1
 
-      - name: Backup and restore smoke
+      - name: SQLite data volume smoke
         run: |
-          make backup-smoke
-          latest="$(ls -t backups/rekenraam-*.dump | head -n 1)"
-          make restore-smoke BACKUP="$latest"
+          docker compose -f compose.sqlite.yaml exec -T app test -f /data/rekenraam.sqlite3
+          docker compose -f compose.sqlite.yaml down -v

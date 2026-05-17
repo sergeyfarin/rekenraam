@@ -1,6 +1,11 @@
 # PostgreSQL Schema Direction
 
-Last updated: 2026-05-06
+Last updated: 2026-05-17
+
+PostgreSQL is a post-v1 compatibility and hardening target. The v1 runtime and
+CI release gate are SQLite-first; keep this document as the design map for
+reintroducing PostgreSQL production support after v1 without weakening the
+shared SQLAlchemy/Alembic model.
 
 ## Source Of Truth
 
@@ -8,12 +13,13 @@ The active schema source of truth is the Alembic baseline under
 `apps/api/alembic/versions/0001_initial_schema.py`, plus the SQLAlchemy models
 under `apps/api/src/rekenraam_api/db/models`.
 
-The old SQLite schema remains a parity reference only. Do not add new product
-work to the SQLite/Tauri migration path.
+The old Tauri SQLite schema remains a parity reference only. The active v1
+runtime is the Docker SQLite app container backed by the SQLAlchemy/Alembic
+schema in this repository.
 
 ## Core Decisions
 
-- PostgreSQL is the only target runtime database.
+- SQLite is the v1 target runtime database; PostgreSQL remains a post-v1 target.
 - Currencies are modeled as commodity rows with `kind='currency'`; do not
   reintroduce a separate canonical `currencies` table.
 - Immutable accounting history should be preserved with append-only/versioned
@@ -77,12 +83,14 @@ Future reserved schema families:
 Replace:
 
 - OS-login audit identity with authenticated user/session/device context.
-- desktop database folder selection with Docker/Postgres configuration and
+- desktop database folder selection with Docker SQLite configuration and
   server admin status.
-- desktop backup scheduling with Postgres backups using `pg_dump`,
-  `pg_restore`, and volume snapshots.
-- SQLite import/export needs with the web import/export pipeline. SQLite
-  desktop-to-Postgres import is deferred after v1 rather than a v1 release gate.
+- desktop backup scheduling with SQLite volume/database backup guidance for v1;
+  Postgres backups using `pg_dump`, `pg_restore`, and volume snapshots return
+  with the post-v1 PostgreSQL runtime.
+- desktop import/export needs with the web import/export pipeline.
+  SQLite-to-PostgreSQL migration is deferred after v1 rather than a v1 release
+  gate.
 
 Drop as direct table ports:
 
@@ -97,8 +105,9 @@ Undo/redo can return later only as a server-safe mutation-history design.
 
 Prefer this split:
 
-- PostgreSQL constraints for simple durable facts such as enum-like values,
+- Database constraints for simple durable facts such as enum-like values,
   precision ranges, required relationships, uniqueness, and ownership links.
+  Prefer portable SQLAlchemy/Alembic constructs while v1 gates on SQLite.
 - Service validation for cross-row checks that need helpful API errors or depend
   on richer domain rules.
 - Repository transactions for operations that must update multiple table

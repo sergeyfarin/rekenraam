@@ -1,7 +1,7 @@
 # Rekenraam
 
-Self-hosted personal finance app in active migration to a FastAPI,
-PostgreSQL-or-SQLite, SvelteKit, and Docker web stack.
+Self-hosted personal finance app in active migration to a FastAPI, SQLite,
+SvelteKit, and Docker web stack.
 
 Tauri/Rust/SQLite code remains in the repository only as temporary migration and
 parity reference. It is not the target product architecture.
@@ -10,8 +10,8 @@ parity reference. It is not the target product architecture.
 
 Working today:
 
-- Docker Compose stack with PostgreSQL by default, plus an explicit SQLite
-  low-memory overlay, FastAPI, and a separately served Svelte frontend
+- Docker Compose stack with SQLite by default: one container serves FastAPI and
+  the built Svelte frontend from the same origin
 - same-origin `/api/v1` frontend-to-backend proxying in the containerized web
   stack
 - first-admin bootstrap, login/logout, sessions, device attribution, request
@@ -23,7 +23,7 @@ Working today:
 - local user administration, book roles, preferences, saved transaction views,
   transaction templates, markdown notes, and audit-event visibility
 - backend-owned pricing refresh worker
-- PostgreSQL/SQLite Alembic baseline with auth/session, reconciliation, import,
+- SQLite/PostgreSQL-capable Alembic baseline with auth/session, reconciliation, import,
   report state/cache, investment, and pricing foundations
 - shared frontend API seam under `src/lib/api`
 - cross-currency transfer endpoint and matching `CrossCurrencyTransferDialog`
@@ -43,6 +43,10 @@ Still in migration:
 
 Deferred after b1/v1:
 
+- PostgreSQL production runtime, Postgres-native backup/restore, and
+  bidirectional SQLite/PostgreSQL migration tooling. The code keeps explicit
+  Postgres targets for post-v1 compatibility work, but v1 release coverage
+  gates on SQLite.
 - plugin execution, frontend plugin slots, granular permissions,
   GitHub-sourced manifests, and WebAssembly/WASI or Extism-style runtime
   evaluation
@@ -64,27 +68,27 @@ This starts one container, one volume, and one port. It is intended for trusted
 local networks only. Create the first owner in the browser when the setup screen
 appears; do not expose this basic setup directly to the public internet.
 
-PostgreSQL option:
+PostgreSQL post-v1 compatibility option:
 
 ```bash
 cp .env.example .env
 docker compose -f compose.postgres.yaml up --build
 ```
 
-For faster local testing, `.env` may include `FIRST_ADMIN_EMAIL`,
-`FIRST_ADMIN_PASSWORD`, and `FIRST_ADMIN_DISPLAY_NAME`; the API seeds that admin
-only when no users exist. Public deployments should use HTTPS through
-`compose.proxy.yaml`, secure cookies, strong secrets, and preferably an
-environment-seeded first admin or a one-time setup procedure. For public SQLite,
-add `compose.sqlite.public.yaml`; for public PostgreSQL, add
-`compose.prod.example.yaml`.
+This path is retained for development and post-v1 hardening, not as the v1
+release target. For faster local testing, `.env` may include
+`FIRST_ADMIN_EMAIL`, `FIRST_ADMIN_PASSWORD`, and `FIRST_ADMIN_DISPLAY_NAME`; the
+API seeds that admin only when no users exist. Public deployments should use
+HTTPS through `compose.proxy.yaml`, secure cookies, strong secrets, and
+preferably an environment-seeded first admin or a one-time setup procedure. For
+public SQLite, add `compose.sqlite.public.yaml`.
 
 Default services:
 
 - SQLite app: <http://localhost:8080>
 - SQLite API health: <http://localhost:8080/api/v1/health>
-- PostgreSQL frontend: <http://localhost:3000>
-- PostgreSQL API: internal service `api:8080`
+- PostgreSQL compatibility frontend: <http://localhost:3000>
+- PostgreSQL compatibility API: internal service `api:8080`
 - SQLite data: stored in the `rekenraam_data` volume
 
 Expected health response:
@@ -120,7 +124,7 @@ npm run check                   # svelte-check + tsc
 npm test                        # vitest (unit + component, jsdom)
 npm run test:watch              # vitest TDD loop
 npm run e2e:install             # install Playwright chromium (one-off)
-docker compose up -d --wait     # bring up the stack e2e tests run against
+docker compose -f compose.sqlite.yaml up -d --wait
 npm run e2e                     # Playwright specs (compose stack must be up)
 ```
 
@@ -133,11 +137,12 @@ Common backend tasks:
 make api-check
 make api-lint
 make api-typecheck
-make api-test
+make api-test                   # full SQLite API suite
 make api-test-sqlite
-make api-test-postgres
-make api-test-db
-make api-migrate-smoke
+make api-test-postgres          # explicit post-v1 compatibility lane
+make api-test-db                # SQLite + explicit Postgres compatibility
+make api-migrate-smoke          # SQLite migration smoke
+make api-migrate-smoke-postgres # explicit post-v1 compatibility lane
 ```
 
 Common Docker smoke checks:
@@ -167,8 +172,8 @@ make DEV_DOCKER="sudo docker compose -f compose.dev.yaml" api-dev-up
 | Frontend | SvelteKit 2, Svelte 5, TypeScript |
 | Frontend UI | shadcn-svelte, Bits UI, Tailwind 4 |
 | Backend | FastAPI, SQLAlchemy, Pydantic |
-| Database | PostgreSQL 16+ or SQLite 3 via `aiosqlite` |
-| Deployment | Docker Compose, nginx frontend proxy |
+| Database | SQLite 3 via `aiosqlite` for v1; PostgreSQL retained as post-v1 target |
+| Deployment | Docker Compose, FastAPI static frontend serving, optional Caddy proxy |
 | Migration reference | Tauri/Rust/SQLite |
 
 Current layout:
@@ -212,9 +217,10 @@ The simplest self-hosted runtime uses SQLite and stores its database under
 `/data` in the `rekenraam_data` Docker volume. Stop the app or use SQLite's online backup API
 before copying the database, and keep the database, WAL, and SHM files together.
 
-The PostgreSQL runtime should use Postgres-native operations such as `pg_dump`,
-`pg_restore`, and volume snapshots.
-Bidirectional PostgreSQL/SQLite migration tooling is deferred until after V1.
+The PostgreSQL compatibility runtime should use Postgres-native operations such
+as `pg_dump`, `pg_restore`, and volume snapshots.
+PostgreSQL production support and bidirectional PostgreSQL/SQLite migration
+tooling are deferred until after V1.
 Desktop-style database folder selection and file-picker storage management are
 not part of the target web product.
 
@@ -230,7 +236,7 @@ make restore-smoke BACKUP=backups/rekenraam-YYYYmmdd-HHMMSS.dump
 ```
 
 Public VPS deployments should serve Rekenraam over HTTPS, use file-backed
-secrets, keep PostgreSQL private to the Compose network, and enable MFA.
+secrets, keep the SQLite volume private to the host, and enable MFA.
 
 ## Active Documents
 
@@ -248,7 +254,7 @@ secrets, keep PostgreSQL private to the Compose network, and enable MFA.
 
 ## Contribution Notes
 
-- Prefer Python/FastAPI/PostgreSQL/Svelte web implementations for new work.
+- Prefer Python/FastAPI/SQLite/Svelte web implementations for v1 work.
 - Do not add new Tauri-dependent product features.
 - Keep API behavior under `/api/v1`.
 - Use typed Pydantic request/response schemas.

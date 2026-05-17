@@ -7,7 +7,7 @@ def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_production_compose_keeps_database_private_and_uses_proxy_overlay() -> None:
+def test_postgres_compat_compose_keeps_database_private_and_uses_proxy_overlay() -> None:
     compose = _read("compose.prod.example.yaml")
     proxy = _read("compose.proxy.yaml")
 
@@ -46,6 +46,7 @@ def test_sqlite_compose_uses_private_data_volume_and_no_postgres_dependency() ->
     assert "DATABASE_URL" not in compose
     assert "rekenraam_data:/data" in compose
     assert "${APP_PORT:-8080}:8080" in compose
+    assert "healthcheck:" in compose
     assert "SESSION_COOKIE_SECURE" in public
     assert "FIRST_ADMIN_PASSWORD_FILE" in public
 
@@ -69,8 +70,9 @@ def test_self_hosting_docs_cover_lan_and_public_vps_security_modes() -> None:
     assert "VPS With HTTPS" in docs
     assert "SESSION_COOKIE_SECURE=true" in docs
     assert "MFA_ENFORCED=true" in docs
-    assert "Do not publish PostgreSQL" in docs
+    assert "Keep the `rekenraam_data` volume private" in docs
     assert "trusted LAN" in docs
     assert "one container" in docs
-    assert "tooling is intentionally deferred until after V1" in docs
-    assert "restore-smoke" in docs
+    assert "tooling is intentionally deferred" in docs
+    assert "until after V1" in docs
+    assert "post-v1 compatibility" in docs

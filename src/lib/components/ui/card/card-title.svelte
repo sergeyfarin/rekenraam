@@ -12,6 +12,8 @@
 
 <div
 	bind:this={ref}
+	role="heading"
+	aria-level="2"
 	data-slot="card-title"
 	class={cn("leading-none font-semibold", className)}
 	{...restProps}

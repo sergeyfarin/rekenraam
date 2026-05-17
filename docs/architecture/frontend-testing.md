@@ -1,6 +1,6 @@
 # Frontend Testing
 
-Last updated: 2026-05-15
+Last updated: 2026-05-17
 
 How tests are structured in the Svelte frontend: what runs where, which tool
 to reach for, and the conventions that keep the suite fast and stable. The
@@ -28,7 +28,7 @@ Rule of thumb for "where does this test live":
 |---|---|
 | Does it depend on a Svelte component rendering? | Vitest component (or Playwright if it needs real CSS/layout) |
 | Is it pure logic on data? | Vitest unit (`src/lib/**/*.test.ts`) |
-| Does it touch the FastAPI service, Postgres, or auth cookies? | Playwright (`e2e/*.spec.ts`) |
+| Does it touch the FastAPI service, SQLite app container, or auth cookies? | Playwright (`e2e/*.spec.ts`) |
 | Does it require a real browser layout engine (drag, scroll, pointer events)? | Playwright |
 
 Tests at the lowest level that can prove the property. A pure parser doesn't
@@ -113,12 +113,14 @@ Configured in [playwright.config.ts](../../playwright.config.ts):
   testing is out of v1 scope.
 - **No `webServer`.** CI brings up the compose stack itself
   ([.github/workflows/web-e2e.yml](../../.github/workflows/web-e2e.yml));
-  local dev is `docker compose -f compose.postgres.yaml up -d --wait && npm run e2e`.
-- **`workers: 1`.** All specs share the single compose-deployed Postgres;
+  local dev is `docker compose -f compose.sqlite.yaml up -d --wait && npm run e2e`.
+- **`workers: 1`.** All specs share the single compose-deployed SQLite volume;
   serial execution is required by the per-spec reset fixture (below).
-- **`PLAYWRIGHT_BASE_URL`** defaults to `http://localhost:3000`;
-  **`PLAYWRIGHT_COMPOSE_FILES`** defaults to `compose.postgres.yaml`. Both can
-  be overridden in CI.
+- **`PLAYWRIGHT_BASE_URL`** defaults to `http://localhost:3000`, but the v1 CI
+  job sets it to the SQLite app at `http://localhost:8080`.
+- **`PLAYWRIGHT_DB_BACKEND`** defaults to `sqlite`;
+  **`PLAYWRIGHT_COMPOSE_FILES`** defaults to `compose.sqlite.yaml`. Both can be
+  overridden for post-v1 Postgres compatibility work.
 
 Run with `npm run e2e` (one-shot) or `npm run e2e:ui` (the Playwright UI
 runner). First-time setup: `npm run e2e:install` to grab the chromium
@@ -141,26 +143,26 @@ do the form-filling explicitly.
 
 ### DB reset strategy
 
-**Postgres template database**, not a `/api/v1/test/reset` endpoint. First
-call to `resetDatabase()` snapshots the post-migration `rekenraam` database
-as `rekenraam_baseline` (a Postgres template DB). Each subsequent call:
+**SQLite baseline copy**, not a `/api/v1/test/reset` endpoint. First call to
+`resetDatabase()` stops the app container and snapshots the post-migration
+`/data/rekenraam.sqlite3` file as `/data/rekenraam.e2e-baseline.sqlite3`.
+Each subsequent call:
 
-1. `docker compose -f compose.postgres.yaml stop api` (releases the connection pool — `DROP
-   DATABASE` requires no open connections).
-2. `pg_terminate_backend` any stragglers.
-3. `DROP DATABASE rekenraam`, then `CREATE DATABASE rekenraam WITH TEMPLATE
-   rekenraam_baseline`. Postgres copies at the page level so this is
-   effectively block-copy and finishes in ~1s.
-4. `docker compose -f compose.postgres.yaml start api` and poll
+1. `docker compose -f compose.sqlite.yaml stop app` to release SQLite file
+   handles.
+2. Run a one-off app container against the same volume to delete
+   `rekenraam.sqlite3` plus any `-wal`, `-shm`, or `-journal` sidecars.
+3. Copy `rekenraam.e2e-baseline.sqlite3` back to `rekenraam.sqlite3`.
+4. `docker compose -f compose.sqlite.yaml start app` and poll
    `/api/v1/health` until ready.
 
-Net per-spec overhead: ~3s. The seeded `personal` book (book_id=1), USD
-commodity (commodity_id=1), Cash account (account_id=2), and the $5,000.00
-opening balance are all preserved exactly as the migrations left them.
+The seeded `personal` book (book_id=1), USD commodity (commodity_id=1), Cash
+account (account_id=2), and the $5,000.00 opening balance are all preserved
+exactly as the migrations left them.
 
 **Why not the plan's `/api/v1/test/reset` endpoint?** It would ship test
 code in the production image, gated by `REKENRAAM_E2E_RESET=1`. The
-template-DB approach avoids that surface entirely. Documented in
+volume-copy approach avoids that surface entirely. Documented in
 [phase-3-plan.md §A2 decision record](../product/phase-3-plan.md).
 
 ### Specs

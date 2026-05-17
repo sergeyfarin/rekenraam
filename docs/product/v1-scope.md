@@ -1,6 +1,6 @@
 # Rekenraam V1 Product Scope
 
-Last updated: 2026-05-06
+Last updated: 2026-05-17
 
 ## Product Target
 
@@ -12,7 +12,8 @@ Small-business support is an architectural future option, not a v1 release gate.
 
 ## V1 Must Have
 
-- Docker deployment with PostgreSQL, API, and frontend
+- Docker deployment with a SQLite-backed single app container serving both API
+  and frontend
 - first-admin bootstrap, login/logout, sessions, device attribution, request
   context, book authorization, and write attribution
 - user/admin management beyond bootstrap: create/invite/deactivate users,
@@ -55,8 +56,8 @@ Small-business support is an architectural future option, not a v1 release gate.
   and theme
 - admin operational status views for database health, integrity checks,
   migration/schema version, backup guidance, and audit/import history
-- documented backup/restore with Postgres-native operations
-- public VPS hardening with HTTPS-oriented cookie settings, private Postgres,
+- documented SQLite backup/restore guidance
+- public VPS hardening with HTTPS-oriented cookie settings, private data volume,
   failed-login throttling, and TOTP MFA support
 
 ## V1 Should Have
@@ -81,6 +82,8 @@ Small-business support is an architectural future option, not a v1 release gate.
 
 - invoices, customers, vendors, VAT workflows, and small-business AR/AP
 - SQLite desktop-to-Postgres import
+- PostgreSQL production runtime, Postgres-native backup/restore, and
+  bidirectional SQLite/PostgreSQL migration tooling
 - PDF statement parsing
 - attachments OCR
 - advanced forecasting / projected cashflow using machine learning

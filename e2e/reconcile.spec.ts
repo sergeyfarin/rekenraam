@@ -72,13 +72,15 @@ test.describe("E3 — Reconcile", () => {
     await page.getByRole("button", { name: "Start" }).click();
 
     // Working step: shows Opening / Selected / Cleared / Difference
-    await expect(page.getByText("Opening")).toBeVisible();
+    await expect(page.getByText("Opening", { exact: true }).first()).toBeVisible();
 
-    // The seeded opening transaction shouldn't be a candidate (it was already
-    // cleared by the seed). The freshly-posted Test Grocer 1 expense is the
-    // only candidate. Check it.
-    const checkboxes = page.getByLabel("Mark as reconciled");
-    await checkboxes.first().check();
+    // The seeded opening transaction is preselected; select the freshly-posted
+    // expense too so cleared balance matches the statement.
+    await page
+      .locator("label")
+      .filter({ hasText: "Test Grocer 1" })
+      .getByLabel("Mark as reconciled")
+      .check();
 
     // Balanced: no offset dropdown
     await expect(page.getByLabel("Offset account")).not.toBeVisible();
@@ -111,17 +113,17 @@ test.describe("E3 — Reconcile", () => {
     await page.goto("/accounts/2/reconcile");
     await page.getByLabel("Statement ending balance").fill("4910.00");
     await page.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByText("Opening")).toBeVisible();
+    await expect(page.getByText("Opening", { exact: true }).first()).toBeVisible();
 
-    // Don't check anything: opening balance ($5,000) - 0 cleared = $5,000.
+    // Don't check anything: opening balance ($5,000) is preselected.
     // Statement says $4,910 → diff = -$90 → offset required.
-    await expect(page.getByLabel("Offset account")).toBeVisible();
+    await expect(page.getByLabel("Offset account", { exact: true })).toBeVisible();
 
     // Finish disabled until offset selected
     const finishBtn = page.getByRole("button", { name: "Finish reconciliation" });
     await expect(finishBtn).toBeDisabled();
 
-    await page.getByLabel("Offset account").selectOption({ label: "Offset Account" });
+    await page.getByLabel("Offset account", { exact: true }).selectOption({ label: "Offset Account" });
     await expect(finishBtn).toBeEnabled();
     await finishBtn.click();
 
