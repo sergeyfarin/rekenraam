@@ -143,7 +143,7 @@ are not direct one-for-one Python ports.
   supersession, tombstone deletes, nullable provider/plugin audit columns, and
   `POST /pricing/market-prices/from-transaction/{transaction_id}` for
   idempotent implicit market price extraction.
-- Rust pricing policy and FX observations carried richer fields:
+- [Completed] Rust pricing policy and FX observations carried richer fields:
   `staleness_max_days`, `triangulation_max_hops`, `rounding_mode`,
   `prefer_official_fx`, `mode`, `is_derived`, `derived_via_commodity_id`,
   `triangulation_path_json`, `supersedes_observation_id`, `ingest_run_id`,
