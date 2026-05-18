@@ -56,6 +56,17 @@ async def list_commodities(
     return await metadata_service.list_commodities(book_id)
 
 
+@router.get("/commodities/{commodity_id}", response_model=CommoditySummary)
+async def get_commodity(
+    commodity_id: int,
+    metadata_service: MetadataService = Depends(get_metadata_service),
+) -> CommoditySummary:
+    commodity = await metadata_service.get_commodity(commodity_id)
+    if commodity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="commodity not found")
+    return commodity
+
+
 @router.put("/commodities/{commodity_id}", response_model=CommoditySummary)
 async def update_commodity(
     commodity_id: int,

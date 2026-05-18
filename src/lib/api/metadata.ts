@@ -142,6 +142,10 @@ export async function listCommodities(bookId: number): Promise<CommoditySummary[
   return apiGet<CommoditySummary[]>(`/commodities?book_id=${bookId}`);
 }
 
+export async function getCommodity(commodityId: number): Promise<CommoditySummary> {
+  return apiGet<CommoditySummary>(`/commodities/${commodityId}`);
+}
+
 export async function listCountries(_bookId?: number): Promise<CountrySummary[]> {
   return apiGet<CountrySummary[]>(`/countries`);
 }

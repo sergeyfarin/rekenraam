@@ -132,12 +132,11 @@ are not direct one-for-one Python ports.
   source-specific display names, primary flags, and append-only supersession.
   Python has general pricing source assignments, but no equivalent table/API
   for commodity/source ticker overrides such as exchange-specific symbols.
-- Rust `dividend_income_categories` mapped commodity/category defaults with
+- [Completed] Rust `dividend_income_categories` mapped commodity/category defaults with
   tax-withheld metadata and notes. Python dividend endpoints require explicit
   income accounts and do not expose this default mapping CRUD.
-- Rust exposed `get_commodity` as a command. Python has commodity list,
-  autocomplete, and update routes, plus repository-level lookups, but no public
-  `GET /commodities/{id}` endpoint.
+- [Completed] Rust exposed `get_commodity` as a command. Python now exposes
+  `GET /commodities/{id}` with row-scoped read authorization.
 - Rust commodity price commands included implicit price extraction from a
   transaction and append-only price observation supersession. Python supports
   manual market prices and FX observations, but the richer supersession/audit

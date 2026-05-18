@@ -39,6 +39,9 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    async def get_commodity(self, commodity_id: int) -> Commodity | None:
+        return await self._session.get(Commodity, commodity_id)
+
     async def update_commodity(
         self,
         *,

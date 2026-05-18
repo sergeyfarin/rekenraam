@@ -12,9 +12,12 @@ async def test_metadata_repository_lists_seeded_commodities(
     repository = MetadataRepository(repository_session)
 
     commodities = await repository.list_commodities(1)
+    commodity = await repository.get_commodity(commodities[0].id)
 
     assert [commodity.name for commodity in commodities] == ["US Dollar"]
     assert commodities[0].symbol == "USD"
+    assert commodity is not None
+    assert commodity.name == "US Dollar"
 
 
 @pytest.mark.asyncio

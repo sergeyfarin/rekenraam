@@ -126,20 +126,14 @@ class MetadataService:
     async def list_commodities(self, book_id: int) -> list[CommoditySummary]:
         await self._require_book_read(book_id)
         rows = await self._repository.list_commodities(book_id)
-        return [
-            CommoditySummary(
-                id=row.id,
-                book_id=row.book_id,
-                kind=row.kind,
-                symbol=row.symbol,
-                name=row.name,
-                scale=row.scale,
-                metadata=row.metadata_text,
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
-            for row in rows
-        ]
+        return [self._to_commodity_summary(row) for row in rows]
+
+    async def get_commodity(self, commodity_id: int) -> CommoditySummary | None:
+        row = await self._repository.get_commodity(commodity_id)
+        if row is None:
+            return None
+        await self._require_book_read(row.book_id)
+        return self._to_commodity_summary(row)
 
     async def update_commodity(
         self, commodity_id: int, input: CommodityUpdateInput
@@ -158,17 +152,7 @@ class MetadataService:
         if row is None:
             return None
         await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
-        return CommoditySummary(
-            id=row.id,
-            book_id=row.book_id,
-            kind=row.kind,
-            symbol=row.symbol or "",
-            name=row.name,
-            scale=row.scale,
-            metadata=row.metadata_text,
-            created_at=row.created_at,
-            updated_at=row.updated_at,
-        )
+        return self._to_commodity_summary(row)
 
     async def list_currencies(self, book_id: int) -> list[CurrencySummary]:
         await self._require_book_read(book_id)
@@ -673,6 +657,20 @@ class MetadataService:
             scale=row.scale,
             is_active=cls._currency_is_active(row, base_currency_code),
             is_default=base_currency_code is not None and row.symbol == base_currency_code,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    @staticmethod
+    def _to_commodity_summary(row: Commodity) -> CommoditySummary:
+        return CommoditySummary(
+            id=row.id,
+            book_id=row.book_id,
+            kind=row.kind,
+            symbol=row.symbol,
+            name=row.name,
+            scale=row.scale,
+            metadata=row.metadata_text,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )

@@ -641,6 +641,21 @@ class StubMetadataService:
             )
         ]
 
+    async def get_commodity(self, commodity_id: int) -> CommoditySummary | None:
+        if commodity_id != 1:
+            return None
+        return CommoditySummary(
+            id=1,
+            book_id=1,
+            kind="currency",
+            symbol="USD",
+            name="US Dollar",
+            scale=2,
+            metadata=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
     async def update_commodity(self, commodity_id: int, input: object) -> CommoditySummary | None:
         if commodity_id != 1:
             return None
@@ -1385,6 +1400,7 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
     app.dependency_overrides[get_metadata_service] = StubMetadataService
 
     commodities_response = await client.get("/api/v1/commodities")
+    commodity_response = await client.get("/api/v1/commodities/1")
     currencies_response = await client.get("/api/v1/currencies")
     countries_response = await client.get("/api/v1/countries")
     institutions_response = await client.get("/api/v1/institutions")
@@ -1396,6 +1412,8 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
 
     assert commodities_response.status_code == 200
     assert commodities_response.json()[0]["name"] == "US Dollar"
+    assert commodity_response.status_code == 200
+    assert commodity_response.json()["name"] == "US Dollar"
     assert currencies_response.status_code == 200
     assert currencies_response.json()[0]["is_default"] is True
     assert countries_response.status_code == 200

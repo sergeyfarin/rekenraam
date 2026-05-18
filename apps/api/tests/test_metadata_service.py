@@ -44,6 +44,21 @@ class StubMetadataRepository:
             )
         ]
 
+    async def get_commodity(self, commodity_id: int) -> Commodity | None:
+        if commodity_id != 1:
+            return None
+        return Commodity(
+            id=1,
+            book_id=1,
+            kind="currency",
+            symbol="USD",
+            name="US Dollar",
+            scale=2,
+            metadata_text=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
     async def list_countries(self) -> list[Country]:
         return []
 
@@ -353,6 +368,7 @@ async def test_metadata_service_maps_reference_data() -> None:
     service = MetadataService(StubMetadataRepository())
 
     commodities = await service.list_commodities(1)
+    commodity = await service.get_commodity(1)
     currencies = await service.list_currencies(1)
     countries = await service.list_countries()
     institutions = await service.list_institutions(1)
@@ -364,6 +380,9 @@ async def test_metadata_service_maps_reference_data() -> None:
 
     assert commodities[0].name == "US Dollar"
     assert commodities[0].symbol == "USD"
+    assert commodity is not None
+    assert commodity.id == 1
+    assert await service.get_commodity(999) is None
     assert currencies[0].is_default is True
     assert currencies[0].is_active is True
     assert currencies[1].is_active is False
