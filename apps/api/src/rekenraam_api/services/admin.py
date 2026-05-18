@@ -24,6 +24,7 @@ from rekenraam_api.schemas.admin import (
     IntegrityCheckSummary,
     RuntimeCheckSummary,
 )
+from rekenraam_api.services.access import SUPPORTED_V1_BOOK_ID
 from rekenraam_api.services.report_invalidation import bump_report_state
 
 SOURCE_API_ROOT = Path(__file__).resolve().parents[3]
@@ -264,7 +265,7 @@ class AdminService:
         if input.close_date > today:
             raise ValueError("close_date cannot be in the future")
 
-        book_id = 1
+        book_id = SUPPORTED_V1_BOOK_ID
         reference = f"year-close:{input.close_date.isoformat()}"
         existing_close_id = await self._session.scalar(
             select(Transaction.id)

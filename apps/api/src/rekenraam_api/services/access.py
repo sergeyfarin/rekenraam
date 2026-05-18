@@ -6,6 +6,9 @@ from rekenraam_api.repositories.access import AccessRepository
 from rekenraam_api.services.request_context import RequestContext
 
 
+SUPPORTED_V1_BOOK_ID = 1
+
+
 class AuthorizationError(Exception):
     """Raised when an authenticated request lacks the role to perform an action.
 
@@ -23,7 +26,7 @@ class SingleBookNotImplementedError(Exception):
 
     def __init__(
         self,
-        message: str = "Multi-book support is not implemented in this v1 API yet. Use book_id=1.",
+        message: str = f"Multi-book support is not implemented in this v1 API yet. Use book_id={SUPPORTED_V1_BOOK_ID}.",
     ) -> None:
         super().__init__(message)
 
@@ -62,10 +65,8 @@ class AccessPolicy:
 
     @staticmethod
     def require_supported_book(book_id: int) -> None:
-        if book_id != 1:
-            raise SingleBookNotImplementedError(
-                "Multi-book support is not implemented in this v1 API yet. Use book_id=1."
-            )
+        if book_id != SUPPORTED_V1_BOOK_ID:
+            raise SingleBookNotImplementedError()
 
     async def require_book_role(self, book_id: int, allowed_roles: set[str]) -> str:
         self.require_supported_book(book_id)

@@ -83,6 +83,11 @@ Still transitional:
 - frontend source remains in root `src`
 - `src-tauri` remains as parity reference
 - Tauri dependencies remain until the final deletion gate is met
+- temporary v1 single-book mode is enforced in the backend policy layer;
+  the only supported web-runtime book id is centralized in
+  `apps/api/src/rekenraam_api/services/access.py` as `SUPPORTED_V1_BOOK_ID`,
+  so migration work should not reintroduce scattered `book_id = 1` literals in
+  Python/HTTP code
 - milestones 1-7 are baseline complete but still need broader v1 hardening,
   fixtures, and UX depth
 - multi-currency transfers, tax-country modules, attachment/document uploads, backup/restore
