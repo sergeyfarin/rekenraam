@@ -15,6 +15,7 @@ services:
       MFA_SECRET_KEY: ${MFA_SECRET_KEY:-dev-only-change-me}
       FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-}
       FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
+      FIRST_ADMIN_PASSWORD_FILE: ${FIRST_ADMIN_PASSWORD_FILE:+/app-secrets/first_admin_password.txt}
       FIRST_ADMIN_DISPLAY_NAME: ${FIRST_ADMIN_DISPLAY_NAME:-Admin}
     ports:
       - "${APP_PORT:-16888}:16888"
@@ -27,6 +28,7 @@ services:
     volumes:
       - rekenraam_data:/data
       - ./backups:/backups
+      - ./secrets:/app-secrets:ro
     restart: unless-stopped
 
 volumes:

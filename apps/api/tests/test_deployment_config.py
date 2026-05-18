@@ -18,6 +18,11 @@ def test_canonical_compose_is_single_sqlite_app_container() -> None:
     assert "SQLITE_PATH: /data/rekenraam.sqlite3" in compose
     assert "rekenraam_data:/data" in compose
     assert "./backups:/backups" in compose
+    assert (
+        "FIRST_ADMIN_PASSWORD_FILE: ${FIRST_ADMIN_PASSWORD_FILE:+/app-secrets/first_admin_password.txt}"
+        in compose
+    )
+    assert "./secrets:/app-secrets:ro" in compose
     assert "http://localhost:16888/api/v1/health" in compose
 
 

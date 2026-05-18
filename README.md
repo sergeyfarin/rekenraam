@@ -84,12 +84,17 @@ See [docs/deployment/self-hosting.md](docs/deployment/self-hosting.md).
 
 ```bash
 uv lock
-make api-check
-make api-lint
-make api-format-check
-make api-typecheck
+make ci
+```
+
+`make ci` runs the always-on GitHub checks locally: Python compile/lint/format/
+typecheck/coverage, Svelte typecheck, Vitest, frontend build, and the
+self-hosting Docker smoke test.
+
+For narrower loops during development:
+
+```bash
 make api-test-fast
-make api-test
 make api-migrate-smoke
 npm run check
 npm test

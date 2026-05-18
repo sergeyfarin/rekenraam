@@ -1,0 +1,521 @@
+cd apps/api && UV_CACHE_DIR=/tmp/rekenraam-uv-cache uv run python -m py_compile $(find src -name '*.py')
+cd apps/api && UV_CACHE_DIR=/tmp/rekenraam-uv-cache uv run ruff check .
+All checks passed!
+cd apps/api && UV_CACHE_DIR=/tmp/rekenraam-uv-cache uv run ruff format --check .
+138 files already formatted
+cd apps/api && UV_CACHE_DIR=/tmp/rekenraam-uv-cache uv run pyright
+0 errors, 0 warnings, 0 informations
+cd apps/api && UV_CACHE_DIR=/tmp/rekenraam-uv-cache uv run pytest -q --cov=rekenraam_api --cov-report=term-missing --cov-report=xml --cov-report=html
+...............................s........................................ [ 28%]
+........................................................................ [ 56%]
+........................................................................ [ 85%]
+.....................................                                    [100%]
+=============================== warnings summary ===============================
+tests/e2e/test_password_reset.py::test_expired_token_is_rejected
+tests/e2e/test_user_invite.py::test_accept_rejects_expired_token
+  /home/reken/Repos/rekenraam/.venv/lib/python3.14/site-packages/aiosqlite/core.py:63: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    result = function()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.14.4-final-0 ________________
+
+Name                                                Stmts   Miss Branch BrPart  Cover   Missing
+-----------------------------------------------------------------------------------------------
+src/rekenraam_api/api/dependencies.py                 108     12      4      0    89%   103-104, 154-155, 166-167, 179, 186-187, 202-204
+src/rekenraam_api/api/router.py                        42      0      0      0   100%
+src/rekenraam_api/api/v1/accounts.py                  117     22     26     11    77%   39-40, 51-58, 61, 72-73, 76, 94, 105, 110-116, 119, 131, 153, 164, 179, 195, 199
+src/rekenraam_api/api/v1/admin.py                      80     19      2      1    76%   58->60, 67, 77-78, 117-123, 134-140, 150-151, 160, 171-177, 186-189
+src/rekenraam_api/api/v1/auth.py                      129     31      2      1    76%   56, 134, 149-159, 245-246, 259-263, 272-277, 286-289, 298-301, 314-315, 325-326
+src/rekenraam_api/api/v1/books.py                      14      1      2      1    88%   20
+src/rekenraam_api/api/v1/exports.py                    27     11      0      0    59%   14, 25, 32, 37-44, 53-58
+src/rekenraam_api/api/v1/health.py                      6      0      0      0   100%
+src/rekenraam_api/api/v1/imports.py                    53     22      6      0    53%   28-31, 38, 45, 52-55, 60-62, 85, 92-97, 107-112
+src/rekenraam_api/api/v1/investments.py               135     57      8      2    56%   46, 54-57, 66-72, 80, 88-91, 100-108, 127-128, 144-145, 147, 164, 175, 222, 240, 256, 286-287, 297-298, 308-309, 317-320, 328-332, 340-343, 351-354
+src/rekenraam_api/api/v1/metadata.py                  187     59     26     13    66%   66, 78-79, 82, 101-102, 113-114, 117, 131-132, 135, 147-148, 151, 177-178, 189-190, 193, 204-205, 208, 226-227, 238-239, 242, 253-254, 257, 273-276, 287-288, 291, 302-303, 306, 322-325, 336-337, 340, 351-352, 355, 371-374, 390-393
+src/rekenraam_api/api/v1/notes.py                      55     33      4      0    37%   18-21, 32-35, 43-48, 57-62, 71-77, 85-90
+src/rekenraam_api/api/v1/planning.py                  143     69     20      0    45%   32, 40, 48-51, 61-62, 71-77, 85-87, 98-102, 110, 120-121, 142-143, 154-155, 173-176, 185-191, 199-201, 209, 219-220, 228-231, 240-246, 254-256, 266-267, 278-279, 288-291
+src/rekenraam_api/api/v1/preferences.py                15      2      0      0    87%   25-26
+src/rekenraam_api/api/v1/pricing.py                   157     49     28      9    64%   48-49, 59, 78-79, 89, 102, 115-118, 134-135, 146-148, 179-180, 194-195, 197, 213, 225, 238-239, 241, 262-263, 274-275, 277, 290, 308, 318-322, 324, 337-341, 352-356
+src/rekenraam_api/api/v1/reconciliation.py             74     13     18      9    76%   32-33, 35, 60, 71, 83-84, 86, 99, 123, 137, 139, 151
+src/rekenraam_api/api/v1/reports.py                    93     27     10      4    68%   56, 69-70, 80, 85-86, 88, 101, 122-126, 136-137, 145-148, 156-159, 222, 240, 256, 266
+src/rekenraam_api/api/v1/search.py                     35     17      4      0    46%   18-19, 29-30, 39-45, 53-58
+src/rekenraam_api/api/v1/templates.py                  50     26      6      1    45%   22-25, 35-41, 50-61, 69-74, 89, 91-94
+src/rekenraam_api/api/v1/transactions.py               89     21     12      4    73%   96-103, 112-117, 149-150, 161-162, 165, 176-177, 179, 190
+src/rekenraam_api/app.py                               64     32     16      1    41%   19-30, 39-45, 83-100
+src/rekenraam_api/config/settings.py                   58      2     12      2    94%   40, 48
+src/rekenraam_api/db/audit_listener.py                123     20     56      9    80%   54, 57-65, 83, 93-94, 103, 112-113, 120->124, 126, 132, 179, 191
+src/rekenraam_api/db/base.py                            4      0      0      0   100%
+src/rekenraam_api/db/dialect.py                        63     18     14      6    66%   14, 23, 28, 33-37, 43, 46->48, 60-68, 85
+src/rekenraam_api/db/models/__init__.py                14      0      0      0   100%
+src/rekenraam_api/db/models/access.py                  99      0      0      0   100%
+src/rekenraam_api/db/models/accounts.py               104      0      0      0   100%
+src/rekenraam_api/db/models/books.py                   13      0      0      0   100%
+src/rekenraam_api/db/models/ergonomics.py             112      0      0      0   100%
+src/rekenraam_api/db/models/imports.py                 63      0      0      0   100%
+src/rekenraam_api/db/models/investments.py            127      0      0      0   100%
+src/rekenraam_api/db/models/metadata.py                95      0      0      0   100%
+src/rekenraam_api/db/models/planning.py                94      0      0      0   100%
+src/rekenraam_api/db/models/pricing.py                 93      0      0      0   100%
+src/rekenraam_api/db/models/report_metadata.py         41      0      0      0   100%
+src/rekenraam_api/db/models/report_state.py            20      0      0      0   100%
+src/rekenraam_api/db/models/runtime.py                  8      0      0      0   100%
+src/rekenraam_api/db/models/transactions.py            48      0      0      0   100%
+src/rekenraam_api/db/session.py                         8      0      0      0   100%
+src/rekenraam_api/db/sql.py                            19      6      6      2    60%   19, 22-27
+src/rekenraam_api/db/sqlite_types.py                    6      0      0      0   100%
+src/rekenraam_api/repositories/access.py              153     39     10      0    72%   101-106, 109-112, 117-128, 131-135, 138-143, 146-158, 161-169, 180-189, 192-199, 202-203, 206-207
+src/rekenraam_api/repositories/accounts.py            197     39     80     27    75%   29, 50, 55, 57, 90, 107, 110->118, 113, 117, 122, 124, 126, 128, 157, 180-182, 210, 245, 250, 257, 262, 264, 291-292, 294-295, 303, 309-333, 356, 394, 396, 400
+src/rekenraam_api/repositories/books.py                18      1      4      1    91%   15
+src/rekenraam_api/repositories/ergonomics.py          196     58     30      6    70%   39-40, 79, 101->105, 103, 125-131, 140, 186, 205-210, 213-214, 217-227, 234, 293-301, 304-305, 310-322, 334-346, 352, 359, 396-402, 405-406, 447
+src/rekenraam_api/repositories/imports.py             176     37     38      9    75%   69, 72, 88-89, 133, 138, 182, 191, 198-204, 207, 221, 237-243, 292, 304->303, 374-425, 428-429
+src/rekenraam_api/repositories/investments.py         586    212    220     51    59%   29-34, 37-42, 47-56, 59-69, 80-91, 94-100, 105-115, 122-125, 186->189, 187->186, 209, 228, 233, 258-263, 266-271, 277, 285, 309->378, 400, 488, 492, 494, 496, 498, 500, 587, 599, 602, 638, 645, 721-803, 838->841, 875->880, 894->897, 945-947, 955-962, 1017->1019, 1019->1022, 1085->1087, 1087->1090, 1140->1145, 1152-1154, 1218-1245, 1265-1308, 1316-1332, 1356->1359, 1370-1375, 1378-1388, 1398, 1401-1403, 1409->1419, 1420, 1426->1430, 1429, 1433, 1436, 1440, 1443, 1452-1453, 1462, 1529->1531, 1545-1555, 1572-1592, 1600-1613, 1617, 1626->1622, 1631-1639
+src/rekenraam_api/repositories/metadata.py            253     57     38     18    74%   55, 88, 108, 110, 121, 131-134, 143, 145, 149, 162, 188, 228, 244, 249-251, 264, 292, 306, 311-313, 324, 329-333, 340, 353, 358-360, 371, 374-378, 383, 395, 400-402, 417-421, 435-439
+src/rekenraam_api/repositories/planning.py            127     40     26      5    63%   31-34, 50-59, 62-67, 81, 118, 128-133, 147, 166, 195-198, 201-204, 215->223, 228-233
+src/rekenraam_api/repositories/pricing.py             409     79    116     43    74%   76-103, 119, 128, 130->135, 133, 145->148, 156, 172, 191, 192->194, 214, 269, 290, 328, 385-408, 458, 479, 506-517, 559->564, 597-617, 703->705, 705->707, 724, 726, 758, 766, 779, 789, 804-809, 821, 826, 877, 907, 950, 980, 984, 992, 1006, 1008, 1010, 1016->1028, 1029, 1034->1044, 1045, 1066, 1073, 1107, 1109, 1130-1133, 1137-1153
+src/rekenraam_api/repositories/reconciliation.py      140     22     22      5    83%   63-64, 66-67, 110, 145-163, 196-197, 291-331, 351-370, 422, 430
+src/rekenraam_api/repositories/reports.py             161     52     48     14    62%   24, 37-43, 48-49, 60-69, 81-101, 142-143, 194, 213, 237->239, 304, 306, 319-345, 356-377, 402, 406, 410, 437, 439, 441
+src/rekenraam_api/repositories/transactions.py        261     58     96     27    74%   24-28, 34-43, 48, 80, 82-84, 90, 97, 102, 127-130, 135, 138-146, 162-164, 234, 262, 291, 310, 383-384, 386-387, 416-438, 450-456, 477->481, 487, 502, 543->542, 572, 577, 599, 619, 658-666
+src/rekenraam_api/schemas/accounts.py                  99      0      0      0   100%
+src/rekenraam_api/schemas/admin.py                     23      0      0      0   100%
+src/rekenraam_api/schemas/auth.py                      40      0      0      0   100%
+src/rekenraam_api/schemas/books.py                      3      0      0      0   100%
+src/rekenraam_api/schemas/ergonomics.py                84      0      0      0   100%
+src/rekenraam_api/schemas/exports.py                   12      0      0      0   100%
+src/rekenraam_api/schemas/health.py                     3      0      0      0   100%
+src/rekenraam_api/schemas/imports.py                  127      1      6      1    98%   104
+src/rekenraam_api/schemas/investments.py              164      0      0      0   100%
+src/rekenraam_api/schemas/metadata.py                  61      0      0      0   100%
+src/rekenraam_api/schemas/planning.py                 157      2      4      2    98%   99, 101
+src/rekenraam_api/schemas/pricing.py                   95      0      0      0   100%
+src/rekenraam_api/schemas/reconciliation.py           107      0      0      0   100%
+src/rekenraam_api/schemas/register.py                   6      0      0      0   100%
+src/rekenraam_api/schemas/reports.py                   59      0      0      0   100%
+src/rekenraam_api/schemas/transactions.py             109      0     10      0   100%
+src/rekenraam_api/services/access.py                   47      4     10      4    86%   52, 62, 68, 73
+src/rekenraam_api/services/accounts.py                179     34     82     31    74%   38, 59, 73, 74->76, 96, 110, 114, 116-118, 120, 122-124, 138, 145, 147, 149, 152-153, 154->156, 170, 222, 234, 236, 238, 241, 252, 254->256, 263, 265, 269, 273, 275->278, 299, 302, 316, 332
+src/rekenraam_api/services/admin.py                   174     19     40     16    84%   35->34, 37, 43, 48, 200-201, 220-222, 227, 248, 255, 272-273, 275->277, 278, 279->284, 285, 303, 364, 373, 392
+src/rekenraam_api/services/auth.py                    314    111     76     13    61%   69, 108-116, 137-138, 140, 143-161, 183-208, 219, 227->237, 243, 247-249, 254-265, 268-294, 297-310, 313-323, 381, 392, 456, 463, 470, 491-500, 524, 527-536, 539-542, 545-547, 551-558, 562-563, 599->601, 606-607, 611-616
+src/rekenraam_api/services/books.py                    18      3      4      1    73%   38-41
+src/rekenraam_api/services/ergonomics.py              347    110     64     16    64%   82, 86-92, 98, 133, 198->200, 248-259, 281->283, 307, 310-311, 313, 344-355, 358-364, 367-370, 395-414, 417-423, 430, 447-455, 458-469, 482-484, 512-525, 530-543, 546-552, 569, 575, 579-582, 587, 592, 594, 601-608, 611-615, 619, 621, 752
+src/rekenraam_api/services/exports.py                  76     39     24      1    38%   39-43, 116-140, 143-182, 195
+src/rekenraam_api/services/imports.py                 616    163    258     63    69%   56-57, 60-67, 70-80, 87-88, 93-97, 102-107, 137->139, 144->162, 164->166, 167->169, 176-187, 201, 204, 218, 221, 227, 242-278, 280-281, 284-285, 310, 338, 346-348, 356-357, 363, 369, 409, 411, 414, 416, 421, 446-457, 458->437, 460, 461->463, 464, 476-485, 488, 491-493, 502, 508->505, 512-513, 523, 531->528, 539-540, 559->555, 568, 585->587, 597, 599, 683->685, 709-710, 732, 768, 773-774, 782->777, 789, 790->792, 865->860, 876, 880, 885, 901->900, 905, 947, 952-953, 958, 962, 969, 984, 989, 992-993, 998-1017, 1021-1029, 1032, 1043, 1048->1046, 1054, 1090
+src/rekenraam_api/services/investments.py             174     68     56     15    57%   44-45, 52-56, 61-67, 70-71, 76-78, 83-87, 110-117, 124->126, 129-130, 187-188, 208-224, 227-248, 298-304, 309-315, 318-321, 326, 330-342, 346-347, 354, 360-361, 365-366, 384, 387, 389, 391, 397, 402, 403->413, 412, 414, 416
+src/rekenraam_api/services/metadata.py                392     93    132     48    69%   54, 84, 90, 92, 95-100, 144, 153, 171, 173, 175, 196, 198, 200, 209, 223, 229, 237, 259, 276, 318, 350, 362, 380->382, 393-394, 395->397, 409, 411, 429, 431, 441, 447->449, 455-456, 457->459, 467-481, 488, 490, 499, 505->507, 511-512, 513->515, 523-529, 535, 539, 545->547, 551-552, 554, 563-577, 585-599, 650, 697, 705-706, 708, 724, 731, 738, 741, 743
+src/rekenraam_api/services/planning.py                313    116    116     32    58%   47, 63-65, 68-72, 101-124, 127-131, 136, 153-162, 176-178, 181-185, 200-213, 216-220, 237, 257, 263, 273, 279, 281, 333, 337, 352-353, 356-360, 369-378, 381-385, 390, 399, 403, 413, 462-464, 467-470, 547->551, 552, 554, 558, 566->585, 589, 592, 599-601, 605, 607, 611, 613, 617, 619, 621, 623, 626->exit, 630->exit
+src/rekenraam_api/services/pricing.py                 244     70     74     19    64%   103-122, 127->129, 134, 152, 183-196, 199-205, 215-239, 249-255, 261-277, 282-292, 295-301, 312, 326, 332->336, 353, 357, 359-360, 363, 367, 370, 385, 391->395, 426, 435, 555, 627, 629-630, 632->637
+src/rekenraam_api/services/pricing_execution.py       409    207    156     22    42%   62-94, 115-157, 165-206, 214-249, 257-327, 360, 362->358, 364, 379-380, 388, 392, 395, 407, 420, 444-448, 486-487, 499-511, 536-537, 555, 564, 594, 605, 620, 631, 651, 658-660, 662-664, 680, 707, 709, 716-739, 750, 762
+src/rekenraam_api/services/reconciliation.py          221     37    114     43    74%   46, 47->52, 55, 66, 77->82, 97, 99, 100->104, 118, 122, 130, 148, 153, 155, 158-159, 174-183, 200-232, 252->254, 258, 274, 275->277, 296, 299, 300->302, 304->306, 306->308, 315, 316->318, 328, 330, 331->333, 335, 341, 359->361, 367, 368->370, 372->374, 374->376, 381, 382->384, 388, 392, 394, 472
+src/rekenraam_api/services/report_invalidation.py       7      0      2      0   100%
+src/rekenraam_api/services/reports.py                 160     60     56     12    56%   51, 56-61, 68, 82-99, 102-105, 110-113, 119, 122, 139, 142, 167-189, 192-215, 221, 224, 243, 246, 263, 310, 314-317
+src/rekenraam_api/services/request_context.py          16      0      0      0   100%
+src/rekenraam_api/services/transactions.py            237     35    114     32    79%   36-38, 106, 113, 114->117, 125, 129, 142, 147, 150, 161, 232->259, 262, 271-273, 274->282, 296, 307-321, 328, 330, 343->347, 354, 355->358, 368, 416-417, 425-426, 480, 482, 489, 496, 500, 514, 519, 521, 523
+src/rekenraam_api/workers/pricing.py                   73     48     10      0    30%   25-29, 32-39, 44-55, 58-63, 75-77, 80-95
+-----------------------------------------------------------------------------------------------
+TOTAL                                               10728   2483   2418    653    72%
+Coverage HTML written to dir .coverage_html
+Coverage XML written to file coverage.xml
+252 passed, 1 skipped, 2 warnings in 83.50s (0:01:23)
+npm ci
+
+added 176 packages, and audited 177 packages in 7s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+6 low severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm run check
+
+> rekenraam@0.1.0 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /home/reken/Repos/rekenraam
+Getting Svelte diagnostics...
+
+svelte-check found 0 errors and 0 warnings
+npm test
+
+> rekenraam@0.1.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90m/home/reken/Repos/rekenraam[39m
+
+ [32m✓[39m src/lib/dates.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/transactions/saved-views.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/forms/validators.test.ts [2m([22m[2m46 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/routes/accounts/[id]/reconcile/page.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 702[2mms[22m[39m
+ [32m✓[39m src/lib/components/TransactionFilters.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 264[2mms[22m[39m
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mrenders one row per split
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+ [32m✓[39m src/routes/layout.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 381[2mms[22m[39m
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mshows ✓ Balanced when splits sum to zero
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mshows unbalanced amount with sign when splits do not sum to zero
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mrenders no balance indicator when a split has no account selected
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mdisables the Remove button when only 2 splits remain (UX guard)
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2menables the Remove button when 3+ splits exist
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mAdd split appends a fresh empty draft to the splits array
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+ [32m✓[39m src/routes/settings/CommoditySettings.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 490[2mms[22m[39m
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mRemove on a 3-row split drops the targeted row
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts[2m > [22m[2mTransactionSplitEditor[2m > [22m[2mDone button is rendered (toggles open via bindable)
+[22m[39m[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.account_id}` (src/lib/components/TransactionSplitEditor.svelte:113:114) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.share_bps}` (src/lib/components/TransactionSplitEditor.svelte:173:39) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.amount}` (src/lib/components/TransactionSplitEditor.svelte:176:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+[svelte] binding_property_non_reactive
+`bind:value={split.memo}` (src/lib/components/TransactionSplitEditor.svelte:179:25) is binding to a non-reactive property
+https://svelte.dev/e/binding_property_non_reactive
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/routes/investments/page.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/routes/investments/page.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+[90mstderr[2m | src/lib/components/TransactionSplitEditor.test.ts
+[22m[39m[svelte] derived_inert
+Reading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert
+
+ [32m✓[39m src/lib/components/TransactionSplitEditor.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 816[2mms[22m[39m
+ [32m✓[39m src/routes/investments/page.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 701[2mms[22m[39m
+     [33m[2m✓[22m[39m opens the buy dialog with the focused trade fields [33m 301[2mms[22m[39m
+ [32m✓[39m src/routes/planning/page.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1081[2mms[22m[39m
+ [32m✓[39m src/lib/search/fuzzy.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/lib/money.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/routes/reports/page.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1067[2mms[22m[39m
+     [33m[2m✓[22m[39m loads net worth with the typed report client when its tab opens [33m 329[2mms[22m[39m
+ [32m✓[39m src/lib/reconciliation/state.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/transactions/split-balance.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/api/reports.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/api/investments.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/book-context.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/routes/investments/forms.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/routes/reports/export.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/api/client.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/api/commodities.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/test/sanity.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/routes/accept-invite/page.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 258[2mms[22m[39m
+ [32m✓[39m src/routes/reset-password/page.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 329[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Errors [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+[31m[1m
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+
+[31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mReferenceError[22m: document is not defined[39m
+[36m [2m❯[22m Proxy.resetBodyStyle node_modules/bits-ui/dist/internal/body-scroll-lock.svelte.js:[2m34:9[22m[39m
+    [90m 32|[39m         [35mif[39m ([33m![39m[33mBROWSER[39m)
+    [90m 33|[39m             [35mreturn[39m[33m;[39m
+    [90m 34|[39m         document[33m.[39mbody[33m.[39m[34msetAttribute[39m([32m"style"[39m[33m,[39m initialBodyStyle [33m??[39m [32m""[39m)[33m;[39m
+    [90m   |[39m         [31m^[39m
+    [90m 35|[39m         document[33m.[39mbody[33m.[39mstyle[33m.[39m[34mremoveProperty[39m([32m"--scrollbar-width"[39m)[33m;[39m
+    [90m 36|[39m         isIOS [33m&&[39m [34mstopTouchMoveListener[39m[33m?.[39m()[33m;[39m
+[90m [2m❯[22m node_modules/bits-ui/dist/internal/body-scroll-lock.svelte.js:[2m185:34[22m[39m
+[90m [2m❯[22m Timeout.cleanupFn [as _onTimeout] node_modules/bits-ui/dist/internal/body-scroll-lock.svelte.js:[2m69:17[22m[39m
+[90m [2m❯[22m listOnTimeout node:internal/timers:[2m608:17[22m[39m
+[90m [2m❯[22m processTimers node:internal/timers:[2m543:7[22m[39m
+
+[31mThis error originated in "[1msrc/lib/components/TransactionSplitEditor.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+
+[2m Test Files [22m [1m[32m25 passed[39m[22m[90m (25)[39m
+[2m      Tests [22m [1m[32m253 passed[39m[22m[90m (253)[39m
+[2m     Errors [22m [1m[31m1 error[39m[22m
+[2m   Start at [22m 18:21:10
+[2m   Duration [22m 11.41s[2m (transform 34.61s, setup 11.15s, import 35.79s, tests 6.22s, environment 18.01s)[22m
+
+make: *** [Makefile:81: web-test] Error 1

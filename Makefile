@@ -6,7 +6,7 @@ PROD_ENV_FILES ?= --env-file .env.production.example $(if $(wildcard .env),--env
 API_DIR := apps/api
 MIGRATIONS_DIR := apps/api/alembic/versions
 
-.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-fast api-test-coverage api-test-docker api-test-sqlite api-test-db api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke web-up prod-config-check backup-now backup-smoke restore-smoke
+.PHONY: api-check api-lint api-format-check api-typecheck api-test api-test-fast api-test-coverage api-test-docker api-test-sqlite api-test-db api-ci api-up api-down api-logs api-health api-books api-accounts api-accounts-tree api-account-register api-transactions api-smoke api-reset-db api-migrate-new api-migrate-up api-migrate-down api-migrate-current api-migrate-smoke web-install web-check web-test web-build web-ci web-up prod-config-check operational-self-hosting-smoke ci backup-now backup-smoke restore-smoke
 
 api-check:
 	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run python -m py_compile $$(find src -name '*.py')
@@ -28,6 +28,8 @@ api-test-fast:
 
 api-test-coverage:
 	cd $(API_DIR) && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run pytest -q --cov=rekenraam_api --cov-report=term-missing --cov-report=xml --cov-report=html
+
+api-ci: api-check api-lint api-format-check api-typecheck api-test-coverage
 
 api-test-docker:
 	$(CONTAINER_RUNTIME) run --rm -v "$$(pwd)/$(API_DIR)":/workspace -w /workspace python:3.14-slim-bookworm sh -lc "python -m pip install --upgrade pip >/dev/null && pip install --quiet -e .[dev] && pytest -q"
@@ -69,10 +71,29 @@ api-transactions:
 api-smoke:
 	DOCKER='$(DOCKER)' ./scripts/test_api_smoke.sh
 
+web-install:
+	npm ci
+
+web-check:
+	npm run check
+
+web-test:
+	npm test
+
+web-build:
+	npm run build
+
+web-ci: web-install web-check web-test
+
 web-up: api-up
 
 prod-config-check:
 	$(DOCKER) $(PROD_ENV_FILES) -f compose.yaml -f compose.public.yaml -f compose.proxy.yaml config >/dev/null
+
+operational-self-hosting-smoke:
+	bash ./scripts/operational_self_hosting_smoke.sh
+
+ci: api-ci web-ci web-build operational-self-hosting-smoke
 
 backup-now:
 	@mkdir -p backups

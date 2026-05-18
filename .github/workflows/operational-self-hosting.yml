@@ -40,36 +40,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Frontend check and build
-        run: |
-          npm ci
-          npm run check
-          npm run build
+      - name: Frontend install
+        run: make web-install
 
-      - name: Prepare production secrets
-        run: |
-          mkdir -p secrets backups
-          printf 'ci-first-admin-password\n' > secrets/first_admin_password.txt
-          cp .env.production.example .env
-          sed -i 's#https://finance.example.com#http://localhost:16888#' .env
-          sed -i 's#replace-with-a-long-random-string#ci-mfa-secret-key-ci-mfa-secret-key#' .env
-          sed -i 's#SESSION_COOKIE_SECURE=true#SESSION_COOKIE_SECURE=false#' .env
+      - name: Frontend check
+        run: make web-check
 
-      - name: Compose config
-        run: make prod-config-check
+      - name: Frontend build
+        run: make web-build
 
-      - name: Docker build and health
-        run: |
-          docker compose up -d --build --wait
-          for i in $(seq 1 60); do
-            curl --fail http://localhost:16888/api/v1/health && exit 0
-            sleep 2
-          done
-          docker compose logs
-          exit 1
-
-      - name: SQLite data volume smoke
-        run: |
-          docker compose exec -T app test -f /data/rekenraam.sqlite3
-          make backup-smoke
-          docker compose down -v
+      - name: Operational smoke
+        run: make operational-self-hosting-smoke
