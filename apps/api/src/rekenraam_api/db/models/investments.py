@@ -261,6 +261,22 @@ class PriceObservation(Base):
             "observation_kind IN ('commodity_market', 'fx_daily', 'fx_manual', 'valuation_override')",
             name="ck_price_observations_observation_kind",
         ),
+        CheckConstraint(
+            "mode IN ('market', 'daily', 'official', 'transaction_implied')",
+            name="ck_price_observations_mode",
+        ),
+        CheckConstraint(
+            "period_type IS NULL OR period_type IN ('daily', 'monthly', 'yearly')",
+            name="ck_price_observations_period_type",
+        ),
+        CheckConstraint(
+            "period_month IS NULL OR (period_month >= 1 AND period_month <= 12)",
+            name="ck_price_observations_period_month",
+        ),
+        CheckConstraint(
+            "period_type IS NOT NULL OR (period_year IS NULL AND period_month IS NULL)",
+            name="ck_price_observations_period_requires_type",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -276,6 +292,7 @@ class PriceObservation(Base):
     )
     price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     price_date: Mapped[date] = mapped_column(Date, nullable=False)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False, server_default="market")
     source: Mapped[str | None] = mapped_column(String(128))
     source_id: Mapped[int | None] = mapped_column(BigInteger)
     is_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
@@ -288,6 +305,9 @@ class PriceObservation(Base):
         ForeignKey("price_observations.id", ondelete="SET NULL")
     )
     ingest_run_id: Mapped[int | None] = mapped_column(BigInteger)
+    period_type: Mapped[str | None] = mapped_column(String(16))
+    period_year: Mapped[int | None] = mapped_column(Integer)
+    period_month: Mapped[int | None] = mapped_column(Integer)
     voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     void_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(

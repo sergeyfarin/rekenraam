@@ -3,7 +3,18 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 
 
-class FxRateDailySummary(BaseModel):
+class PricingObservationAuditMixin(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    mode: str
+    is_derived: bool = False
+    derived_via_commodity_id: int | None = None
+    triangulation_path_commodity_ids: list[int] | None = None
+    supersedes_observation_id: int | None = None
+    ingest_run_id: int | None = None
+
+
+class FxRateDailySummary(PricingObservationAuditMixin):
     model_config = ConfigDict(frozen=True)
 
     id: int
@@ -17,9 +28,6 @@ class FxRateDailySummary(BaseModel):
     source: str | None
     source_id: int | None = None
     is_manual: bool = False
-    is_derived: bool = False
-    derived_via_currency_id: int | None = None
-    supersedes_observation_id: int | None = None
     created_at: datetime
 
 
@@ -32,10 +40,11 @@ class FxRateDailyCreateInput(BaseModel):
     rate_date: date
     rate: float
     source: str | None = None
+    source_id: int | None = None
     supersedes_observation_id: int | None = None
 
 
-class FxRateOfficialSummary(BaseModel):
+class FxRateOfficialSummary(PricingObservationAuditMixin):
     model_config = ConfigDict(frozen=True)
 
     id: int
@@ -51,8 +60,6 @@ class FxRateOfficialSummary(BaseModel):
     source_name: str
     source_id: int | None = None
     is_manual: bool = False
-    is_derived: bool = False
-    supersedes_observation_id: int | None = None
     source_url: str | None = None
     source_date: date | None = None
     notes: str | None = None
@@ -71,13 +78,14 @@ class FxRateOfficialCreateInput(BaseModel):
     period_month: int | None = None
     rate: float
     source_name: str
+    source_id: int | None = None
     source_url: str | None = None
     source_date: date | None = None
     notes: str | None = None
     supersedes_observation_id: int | None = None
 
 
-class MarketPriceSummary(BaseModel):
+class MarketPriceSummary(PricingObservationAuditMixin):
     model_config = ConfigDict(frozen=True)
 
     id: int
@@ -92,8 +100,6 @@ class MarketPriceSummary(BaseModel):
     source: str | None
     source_id: int | None = None
     is_manual: bool = False
-    is_derived: bool = False
-    supersedes_observation_id: int | None = None
     created_at: datetime
 
 
@@ -106,6 +112,7 @@ class MarketPriceCreateInput(BaseModel):
     price_date: date
     price_minor: int
     source: str | None = None
+    source_id: int | None = None
     supersedes_observation_id: int | None = None
 
 
@@ -208,6 +215,10 @@ class PricingPolicySummary(BaseModel):
     refresh_hour_utc: int
     refresh_minute_utc: int
     max_backfill_days: int
+    staleness_max_days: int
+    triangulation_max_hops: int
+    rounding_mode: str
+    prefer_official_fx: bool
     weekend_policy: str
     created_at: datetime
     updated_at: datetime
@@ -223,6 +234,10 @@ class PricingPolicyUpdateInput(BaseModel):
     refresh_hour_utc: int
     refresh_minute_utc: int
     max_backfill_days: int
+    staleness_max_days: int
+    triangulation_max_hops: int
+    rounding_mode: str
+    prefer_official_fx: bool
     weekend_policy: str
 
 
@@ -286,6 +301,7 @@ class PricingRefreshStateSummary(BaseModel):
 class PricingRefreshRunSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    id: int | None = None
     book_id: int
     trigger: str
     started_at: datetime

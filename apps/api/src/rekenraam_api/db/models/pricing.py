@@ -92,9 +92,18 @@ class PricingPolicy(Base):
             "refresh_minute_utc BETWEEN 0 AND 59", name="ck_pricing_policies_refresh_minute"
         ),
         CheckConstraint("max_backfill_days >= 1", name="ck_pricing_policies_backfill_days"),
+        CheckConstraint("staleness_max_days >= 1", name="ck_pricing_policies_staleness_days"),
+        CheckConstraint(
+            "triangulation_max_hops >= 0 AND triangulation_max_hops <= 4",
+            name="ck_pricing_policies_triangulation_hops",
+        ),
         CheckConstraint(
             "weekend_policy IN ('skip', 'fill_previous', 'download')",
             name="ck_pricing_policies_weekend_policy",
+        ),
+        CheckConstraint(
+            "rounding_mode IN ('half_up', 'half_even', 'down', 'up')",
+            name="ck_pricing_policies_rounding_mode",
         ),
     )
 
@@ -112,6 +121,16 @@ class PricingPolicy(Base):
     )
     max_backfill_days: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("370")
+    )
+    staleness_max_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("3")
+    )
+    triangulation_max_hops: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("1")
+    )
+    rounding_mode: Mapped[str] = mapped_column(String(32), nullable=False, server_default="half_up")
+    prefer_official_fx: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
     )
     weekend_policy: Mapped[str] = mapped_column(String(32), nullable=False, server_default="skip")
     default_source_id: Mapped[int | None] = mapped_column(

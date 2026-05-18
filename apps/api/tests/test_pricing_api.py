@@ -138,8 +138,13 @@ class StubPricingService:
             price_date=date(2026, 5, 4),
             price_minor=25_000,
             source="implicit",
+            mode="transaction_implied",
             is_manual=False,
             is_derived=True,
+            derived_via_commodity_id=None,
+            triangulation_path_commodity_ids=[1, 2],
+            supersedes_observation_id=None,
+            ingest_run_id=None,
             created_at=self._created_at,
         )
 
@@ -156,6 +161,10 @@ class StubPricingService:
             refresh_hour_utc=4,
             refresh_minute_utc=0,
             max_backfill_days=30,
+            staleness_max_days=3,
+            triangulation_max_hops=1,
+            rounding_mode="half_up",
+            prefer_official_fx=True,
             weekend_policy="skip",
             created_at=self._created_at,
             updated_at=self._created_at,
@@ -172,6 +181,10 @@ class StubPricingService:
             refresh_hour_utc=6,
             refresh_minute_utc=30,
             max_backfill_days=45,
+            staleness_max_days=2,
+            triangulation_max_hops=1,
+            rounding_mode="half_even",
+            prefer_official_fx=False,
             weekend_policy="fill_previous",
             created_at=self._created_at,
             updated_at=self._created_at,
@@ -267,6 +280,7 @@ class StubPricingWorker:
         if book_id != 1:
             raise ValueError("pricing policy not found")
         return PricingRefreshRunSummary(
+            id=1,
             book_id=1,
             trigger=trigger,
             started_at=self._created_at,
@@ -291,6 +305,7 @@ class StubPricingWorker:
             active_book_ids=[],
             next_scheduled_at=datetime(2026, 5, 4, 4, 0, tzinfo=UTC),
             last_run=PricingRefreshRunSummary(
+                id=1,
                 book_id=1,
                 trigger="scheduled",
                 started_at=self._created_at,
@@ -311,6 +326,7 @@ class StubPricingWorker:
             raise ValueError("pricing policy not found")
         return [
             PricingRefreshRunSummary(
+                id=1,
                 book_id=1,
                 trigger="manual",
                 started_at=self._created_at,
@@ -368,6 +384,10 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
             "refresh_hour_utc": 6,
             "refresh_minute_utc": 30,
             "max_backfill_days": 45,
+            "staleness_max_days": 2,
+            "triangulation_max_hops": 1,
+            "rounding_mode": "half_even",
+            "prefer_official_fx": False,
             "weekend_policy": "fill_previous",
         },
     )
@@ -438,8 +458,10 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     assert sources_response.json()[0]["name"] == "ECB"
     assert policy_response.status_code == 200
     assert policy_response.json()["base_currency_symbol"] == "USD"
+    assert policy_response.json()["rounding_mode"] == "half_up"
     assert update_policy_response.status_code == 200
     assert update_policy_response.json()["base_currency_symbol"] == "EUR"
+    assert update_policy_response.json()["prefer_official_fx"] is False
     assert assignments_response.status_code == 200
     assert assignments_response.json()[0]["from_currency_symbol"] == "EUR"
     assert commodity_sources_response.status_code == 200
@@ -452,6 +474,7 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     assert implicit_price_response.status_code == 200
     assert implicit_price_response.json()["source"] == "implicit"
     assert implicit_price_response.json()["is_derived"] is True
+    assert implicit_price_response.json()["mode"] == "transaction_implied"
     assert no_implicit_price_response.status_code == 204
     assert create_assignment_response.status_code == 200
     assert create_assignment_response.json()["id"] == 11

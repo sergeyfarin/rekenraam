@@ -1,7 +1,8 @@
 import json
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_EVEN, ROUND_HALF_UP, ROUND_UP, Decimal
+from typing import cast
 
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
@@ -146,6 +147,10 @@ class PricingService:
             refresh_hour_utc=input.refresh_hour_utc,
             refresh_minute_utc=input.refresh_minute_utc,
             max_backfill_days=input.max_backfill_days,
+            staleness_max_days=input.staleness_max_days,
+            triangulation_max_hops=input.triangulation_max_hops,
+            rounding_mode=input.rounding_mode,
+            prefer_official_fx=input.prefer_official_fx,
             weekend_policy=input.weekend_policy,
         )
         if policy is None:
@@ -267,6 +272,7 @@ class PricingService:
             price_date=input.price_date,
             price_minor=input.price_minor,
             source=self._clean_optional_text(input.source),
+            source_id=input.source_id,
             supersedes_observation_id=input.supersedes_observation_id,
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
@@ -317,6 +323,10 @@ class PricingService:
             rate_date=input.rate_date,
             rate=Decimal(str(input.rate)),
             source=self._clean_optional_text(input.source),
+            source_id=input.source_id,
+            rounding=self._rounding_for_policy(
+                await self._repository.get_pricing_policy(input.book_id)
+            ),
             supersedes_observation_id=input.supersedes_observation_id,
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
@@ -376,6 +386,13 @@ class PricingService:
             price_date=price_date,
             rate=Decimal(str(input.rate)),
             source_name=source_name,
+            source_id=input.source_id,
+            rounding=self._rounding_for_policy(
+                await self._repository.get_pricing_policy(input.book_id)
+            ),
+            period_type=input.period_type,
+            period_year=input.period_year,
+            period_month=period_month,
             supersedes_observation_id=input.supersedes_observation_id,
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
@@ -411,6 +428,10 @@ class PricingService:
             refresh_hour_utc=policy.refresh_hour_utc,
             refresh_minute_utc=policy.refresh_minute_utc,
             max_backfill_days=policy.max_backfill_days,
+            staleness_max_days=policy.staleness_max_days,
+            triangulation_max_hops=policy.triangulation_max_hops,
+            rounding_mode=policy.rounding_mode,
+            prefer_official_fx=policy.prefer_official_fx,
             weekend_policy=policy.weekend_policy,
             created_at=policy.created_at,
             updated_at=policy.updated_at,
@@ -539,10 +560,15 @@ class PricingService:
             rate=observation.price_minor / scale_factor,
             source=observation.source,
             source_id=observation.source_id,
+            mode=observation.mode,
             is_manual=observation.is_manual,
             is_derived=observation.is_derived,
-            derived_via_currency_id=observation.derived_via_commodity_id,
+            derived_via_commodity_id=observation.derived_via_commodity_id,
+            triangulation_path_commodity_ids=PricingService._parse_triangulation_path(
+                observation.triangulation_path_json
+            ),
             supersedes_observation_id=observation.supersedes_observation_id,
+            ingest_run_id=observation.ingest_run_id,
             created_at=observation.created_at,
         )
 
@@ -564,9 +590,15 @@ class PricingService:
             price_minor=observation.price_minor,
             source=observation.source,
             source_id=observation.source_id,
+            mode=observation.mode,
             is_manual=observation.is_manual,
             is_derived=observation.is_derived,
+            derived_via_commodity_id=observation.derived_via_commodity_id,
+            triangulation_path_commodity_ids=PricingService._parse_triangulation_path(
+                observation.triangulation_path_json
+            ),
             supersedes_observation_id=observation.supersedes_observation_id,
+            ingest_run_id=observation.ingest_run_id,
             created_at=observation.created_at,
         )
 
@@ -577,8 +609,6 @@ class PricingService:
         to_currency: Commodity,
     ) -> FxRateOfficialSummary:
         scale_factor = 10**from_currency.scale
-        period_month = observation.price_date.month if observation.price_date.month != 1 else None
-        period_type = "monthly" if period_month is not None else "yearly"
         return FxRateOfficialSummary(
             id=observation.id,
             book_id=observation.book_id,
@@ -586,15 +616,21 @@ class PricingService:
             from_currency_symbol=from_currency.symbol,
             to_currency_id=observation.quote_commodity_id,
             to_currency_symbol=to_currency.symbol,
-            period_type=period_type,
-            period_year=observation.price_date.year,
-            period_month=period_month,
+            period_type=observation.period_type or "yearly",
+            period_year=observation.period_year or observation.price_date.year,
+            period_month=observation.period_month,
             rate=observation.price_minor / scale_factor,
             source_name=observation.source or "Manual",
             source_id=observation.source_id,
+            mode=observation.mode,
             is_manual=observation.is_manual,
             is_derived=observation.is_derived,
+            derived_via_commodity_id=observation.derived_via_commodity_id,
+            triangulation_path_commodity_ids=PricingService._parse_triangulation_path(
+                observation.triangulation_path_json
+            ),
             supersedes_observation_id=observation.supersedes_observation_id,
+            ingest_run_id=observation.ingest_run_id,
             source_url=None,
             source_date=observation.price_date,
             notes=None,
@@ -610,8 +646,42 @@ class PricingService:
             raise ValueError("refresh minute must be between 0 and 59")
         if input.max_backfill_days < 1:
             raise ValueError("max backfill days must be at least 1")
+        if input.staleness_max_days < 1:
+            raise ValueError("staleness max days must be at least 1")
+        if input.triangulation_max_hops < 0 or input.triangulation_max_hops > 4:
+            raise ValueError("triangulation max hops must be between 0 and 4")
+        if input.rounding_mode not in {"half_up", "half_even", "down", "up"}:
+            raise ValueError("rounding mode must be half_up, half_even, down, or up")
         if input.weekend_policy not in {"skip", "fill_previous", "download"}:
             raise ValueError("weekend policy must be skip, fill_previous, or download")
+
+    @staticmethod
+    def _parse_triangulation_path(value: str | None) -> list[int] | None:
+        if value is None:
+            return None
+        try:
+            parsed: object = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, list):
+            return None
+        parsed_list = cast(list[object], parsed)
+        path: list[int] = []
+        for item in parsed_list:
+            if isinstance(item, int):
+                path.append(item)
+        return path or None
+
+    @staticmethod
+    def _rounding_for_policy(policy: PricingPolicy | None) -> str:
+        mode = policy.rounding_mode if policy is not None else "half_up"
+        mapping = {
+            "half_up": ROUND_HALF_UP,
+            "half_even": ROUND_HALF_EVEN,
+            "down": ROUND_DOWN,
+            "up": ROUND_UP,
+        }
+        return mapping.get(mode, ROUND_HALF_UP)
 
     @staticmethod
     def _validate_assignment_dates(effective_from: date, effective_to: date | None) -> None:

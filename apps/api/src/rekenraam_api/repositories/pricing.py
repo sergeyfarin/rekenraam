@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import cast
 
 from sqlalchemy import Select, exists, func, or_, select
@@ -94,6 +94,10 @@ class PricingRepository:
             refresh_hour_utc=4,
             refresh_minute_utc=0,
             max_backfill_days=370,
+            staleness_max_days=3,
+            triangulation_max_hops=1,
+            rounding_mode="half_up",
+            prefer_official_fx=True,
             weekend_policy="skip",
             default_source_id=None,
         )
@@ -112,6 +116,10 @@ class PricingRepository:
         refresh_hour_utc: int,
         refresh_minute_utc: int,
         max_backfill_days: int,
+        staleness_max_days: int,
+        triangulation_max_hops: int,
+        rounding_mode: str,
+        prefer_official_fx: bool,
         weekend_policy: str,
     ) -> PricingPolicy | None:
         policy = await self.get_pricing_policy(book_id)
@@ -138,6 +146,10 @@ class PricingRepository:
         policy.refresh_hour_utc = refresh_hour_utc
         policy.refresh_minute_utc = refresh_minute_utc
         policy.max_backfill_days = max_backfill_days
+        policy.staleness_max_days = staleness_max_days
+        policy.triangulation_max_hops = triangulation_max_hops
+        policy.rounding_mode = rounding_mode
+        policy.prefer_official_fx = prefer_official_fx
         policy.weekend_policy = weekend_policy
         policy.updated_at = datetime.now(UTC)
 
@@ -548,6 +560,7 @@ class PricingRepository:
     async def record_pricing_refresh_success(
         self,
         *,
+        ingest_run_id: int | None,
         book_id: int,
         commodity_id: int,
         quote_commodity_id: int,
@@ -560,6 +573,7 @@ class PricingRepository:
             for observation in observations:
                 observation.source_id = source_id
                 observation.is_manual = False
+                observation.ingest_run_id = ingest_run_id
             self._session.add_all(observations)
         statement = dialect_insert(self._session, PricingRefreshState).values(
             book_id=book_id,
@@ -619,6 +633,7 @@ class PricingRepository:
     async def record_pricing_refresh_run(
         self,
         *,
+        run_id: int | None = None,
         book_id: int,
         trigger: str,
         started_at: datetime,
@@ -630,6 +645,23 @@ class PricingRepository:
         derived_inserted: int,
         last_error: str | None,
     ) -> PricingRefreshRun:
+        if run_id is not None:
+            row = await self._session.get(PricingRefreshRun, run_id)
+            if row is None:
+                raise ValueError("pricing refresh run not found")
+            row.book_id = book_id
+            row.trigger = trigger
+            row.started_at = started_at
+            row.finished_at = finished_at
+            row.pairs_total = pairs_total
+            row.pairs_success = pairs_success
+            row.pairs_failed = pairs_failed
+            row.rates_inserted = rates_inserted
+            row.derived_inserted = derived_inserted
+            row.last_error = last_error
+            await self._session.commit()
+            await self._session.refresh(row)
+            return row
         row = PricingRefreshRun(
             book_id=book_id,
             trigger=trigger,
@@ -716,6 +748,7 @@ class PricingRepository:
         price_date: date,
         price_minor: int,
         source: str | None,
+        source_id: int | None = None,
         supersedes_observation_id: int | None = None,
     ) -> PriceObservation:
         commodity = await self._session.get(Commodity, commodity_id)
@@ -739,7 +772,9 @@ class PricingRepository:
             observation_kind="commodity_market",
             price_minor=price_minor,
             price_date=price_date,
+            mode="market",
             source=source,
+            source_id=source_id,
             is_manual=True,
             supersedes_observation_id=supersedes_observation_id,
             created_at=datetime.now(UTC),
@@ -850,9 +885,14 @@ class PricingRepository:
             observation_kind="commodity_market",
             price_minor=price_minor,
             price_date=transaction.occurred_date,
+            mode="transaction_implied",
             source="implicit",
             is_manual=False,
             is_derived=True,
+            triangulation_path_json=json.dumps([quote_commodity_id, commodity_id]),
+            period_type="daily",
+            period_year=transaction.occurred_date.year,
+            period_month=transaction.occurred_date.month,
             created_at=datetime.now(UTC),
         )
         self._session.add(observation)
@@ -869,6 +909,8 @@ class PricingRepository:
         rate_date: date,
         rate: Decimal,
         source: str | None,
+        source_id: int | None,
+        rounding: str,
         supersedes_observation_id: int | None = None,
     ) -> PriceObservation:
         from_currency = await self._require_currency(book_id, from_currency_id)
@@ -883,7 +925,7 @@ class PricingRepository:
             )
 
         scale_factor = Decimal(10) ** from_currency.scale
-        price_minor = int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
+        price_minor = int((rate * scale_factor).to_integral_value(rounding=rounding))
         observation = PriceObservation(
             book_id=book_id,
             commodity_id=from_currency_id,
@@ -891,9 +933,14 @@ class PricingRepository:
             observation_kind="fx_daily",
             price_minor=price_minor,
             price_date=rate_date,
+            mode="daily",
             source=source,
+            source_id=source_id,
             is_manual=True,
             supersedes_observation_id=supersedes_observation_id,
+            period_type="daily",
+            period_year=rate_date.year,
+            period_month=rate_date.month,
             created_at=datetime.now(UTC),
         )
         self._session.add(observation)
@@ -942,6 +989,11 @@ class PricingRepository:
         price_date: date,
         rate: Decimal,
         source_name: str,
+        source_id: int | None,
+        rounding: str,
+        period_type: str,
+        period_year: int,
+        period_month: int | None,
         supersedes_observation_id: int | None = None,
     ) -> PriceObservation:
         from_currency = await self._require_currency(book_id, from_currency_id)
@@ -956,7 +1008,7 @@ class PricingRepository:
             )
 
         scale_factor = Decimal(10) ** from_currency.scale
-        price_minor = int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
+        price_minor = int((rate * scale_factor).to_integral_value(rounding=rounding))
         observation = PriceObservation(
             book_id=book_id,
             commodity_id=from_currency_id,
@@ -964,9 +1016,14 @@ class PricingRepository:
             observation_kind="fx_manual",
             price_minor=price_minor,
             price_date=price_date,
+            mode="official",
             source=source_name,
+            source_id=source_id,
             is_manual=True,
             supersedes_observation_id=supersedes_observation_id,
+            period_type=period_type,
+            period_year=period_year,
+            period_month=period_month,
             created_at=datetime.now(UTC),
         )
         self._session.add(observation)
@@ -1083,6 +1140,7 @@ class PricingRepository:
             observation_kind=observation.observation_kind,
             price_minor=observation.price_minor,
             price_date=observation.price_date,
+            mode=observation.mode,
             source=observation.source,
             source_id=observation.source_id,
             is_manual=observation.is_manual,
@@ -1091,6 +1149,9 @@ class PricingRepository:
             triangulation_path_json=observation.triangulation_path_json,
             supersedes_observation_id=observation.id,
             ingest_run_id=observation.ingest_run_id,
+            period_type=observation.period_type,
+            period_year=observation.period_year,
+            period_month=observation.period_month,
             voided_at=datetime.now(UTC),
             void_reason=reason,
         )

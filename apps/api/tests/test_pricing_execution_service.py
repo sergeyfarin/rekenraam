@@ -61,6 +61,10 @@ class StubPricingRepository:
             refresh_hour_utc=4,
             refresh_minute_utc=0,
             max_backfill_days=30,
+            staleness_max_days=3,
+            triangulation_max_hops=1,
+            rounding_mode="half_up",
+            prefer_official_fx=True,
             weekend_policy="fill_previous",
             default_source_id=1001,
             created_at=self._created_at,
@@ -147,7 +151,8 @@ class StubPricingRepository:
 
     async def record_pricing_refresh_run(self, **kwargs: object) -> PricingRefreshRun:
         self.run_calls.append(kwargs)
-        return PricingRefreshRun(id=1, created_at=self._created_at, **kwargs)
+        row_kwargs = {key: value for key, value in kwargs.items() if key != "run_id"}
+        return PricingRefreshRun(id=1, created_at=self._created_at, **row_kwargs)
 
     async def list_pricing_refresh_run_history(
         self, book_id: int, limit: int = 10
@@ -213,6 +218,9 @@ async def test_pricing_execution_service_runs_manual_refresh() -> None:
     observations = repository.success_calls[0]["observations"]
     assert len(observations) == 1
     assert observations[0].observation_kind == "fx_daily"
+    assert observations[0].mode == "daily"
+    assert observations[0].period_type == "daily"
+    assert repository.success_calls[0]["ingest_run_id"] == 1
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_EVEN, ROUND_HALF_UP, ROUND_UP, Decimal
 from typing import ClassVar, cast
 
 import httpx
@@ -406,6 +407,19 @@ class PricingExecutionService:
         ):
             return None
 
+        run = await self._repository.record_pricing_refresh_run(
+            book_id=book_id,
+            trigger=trigger,
+            started_at=started_at,
+            finished_at=started_at,
+            pairs_total=0,
+            pairs_success=0,
+            pairs_failed=0,
+            rates_inserted=0,
+            derived_inserted=0,
+            last_error=None,
+        )
+
         pairs_success = 0
         pairs_failed = 0
         rates_inserted = 0
@@ -419,6 +433,8 @@ class PricingExecutionService:
                 if provider is None:
                     raise ValueError(f"No provider implementation for source '{task.source.name}'")
                 direct_points, derived_points = await self._fetch_task_points(provider, task)
+                if policy.triangulation_max_hops < 1:
+                    derived_points = []
                 (
                     direct_inserted,
                     derived_inserted_for_task,
@@ -428,8 +444,10 @@ class PricingExecutionService:
                     direct_points=direct_points,
                     derived_points=derived_points,
                     base_currency=base_currency,
+                    rounding_mode=policy.rounding_mode,
                 )
                 await self._repository.record_pricing_refresh_success(
+                    ingest_run_id=run.id,
                     book_id=book_id,
                     commodity_id=task.from_currency.id,
                     quote_commodity_id=task.to_currency.id,
@@ -455,6 +473,7 @@ class PricingExecutionService:
                 )
 
         summary = PricingRefreshRunSummary(
+            id=run.id,
             book_id=book_id,
             trigger=trigger,
             started_at=started_at,
@@ -467,6 +486,7 @@ class PricingExecutionService:
             last_error=last_error,
         )
         await self._repository.record_pricing_refresh_run(
+            run_id=run.id,
             book_id=summary.book_id,
             trigger=summary.trigger,
             started_at=summary.started_at,
@@ -585,6 +605,7 @@ class PricingExecutionService:
         direct_points: list[FxRatePoint],
         derived_points: list[FxRatePoint],
         base_currency: Commodity,
+        rounding_mode: str,
     ) -> tuple[int, int, list[PriceObservation]]:
         currencies, _ = await self._repository.list_book_currencies(book_id)
         symbol_map = {
@@ -599,11 +620,11 @@ class PricingExecutionService:
         derived_inserted = 0
         for point in direct_points:
             direct_inserted += await self._append_observation(
-                book_id, point, symbol_map, observations
+                book_id, point, symbol_map, observations, rounding_mode
             )
         for point in derived_points:
             derived_inserted += await self._append_observation(
-                book_id, point, symbol_map, observations
+                book_id, point, symbol_map, observations, rounding_mode
             )
         return direct_inserted, derived_inserted, observations
 
@@ -613,6 +634,7 @@ class PricingExecutionService:
         point: FxRatePoint,
         symbol_map: dict[str, Commodity],
         observations: list[PriceObservation],
+        rounding_mode: str,
     ) -> int:
         from_currency = symbol_map.get(point.base)
         to_currency = symbol_map.get(point.quote)
@@ -630,7 +652,20 @@ class PricingExecutionService:
         if point.date in existing_dates:
             return 0
         scale_factor = Decimal(10) ** from_currency.scale
-        price_minor = int((point.rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
+        price_minor = int(
+            (point.rate * scale_factor).to_integral_value(
+                rounding=self._decimal_rounding(rounding_mode)
+            )
+        )
+        triangulation_path_json = None
+        derived_via_commodity_id = None
+        if point.is_derived and point.derived_via is not None:
+            via_currency = symbol_map.get(point.derived_via)
+            if via_currency is not None:
+                derived_via_commodity_id = via_currency.id
+                triangulation_path_json = json.dumps(
+                    [from_currency.id, via_currency.id, to_currency.id]
+                )
         observations.append(
             PriceObservation(
                 book_id=book_id,
@@ -639,7 +674,14 @@ class PricingExecutionService:
                 observation_kind="fx_daily",
                 price_minor=price_minor,
                 price_date=point.date,
+                mode="daily",
                 source=point.source_name,
+                is_derived=point.is_derived,
+                derived_via_commodity_id=derived_via_commodity_id,
+                triangulation_path_json=triangulation_path_json,
+                period_type="daily",
+                period_year=point.date.year,
+                period_month=point.date.month,
             )
         )
         return 1
@@ -690,7 +732,7 @@ class PricingExecutionService:
         ]
         derived_points = (
             self._derive_from_via(normalized_direct, derived_via, base_symbol, quote_symbol)
-            if derived_via is not None
+            if derived_via is not None and task.from_currency.id != task.to_currency.id
             else []
         )
         return normalized_direct, derived_points
@@ -739,6 +781,15 @@ class PricingExecutionService:
         return derived
 
     @staticmethod
+    def _decimal_rounding(mode: str) -> str:
+        return {
+            "half_up": ROUND_HALF_UP,
+            "half_even": ROUND_HALF_EVEN,
+            "down": ROUND_DOWN,
+            "up": ROUND_UP,
+        }.get(mode, ROUND_HALF_UP)
+
+    @staticmethod
     def _scheduled_at(policy: PricingPolicy, target_date: date) -> datetime:
         return datetime.combine(
             target_date, time(policy.refresh_hour_utc, policy.refresh_minute_utc, tzinfo=UTC)
@@ -760,6 +811,7 @@ class PricingExecutionService:
     @staticmethod
     def _to_refresh_run_summary(row: PricingRefreshRun) -> PricingRefreshRunSummary:
         return PricingRefreshRunSummary(
+            id=row.id,
             book_id=row.book_id,
             trigger=row.trigger,
             started_at=row.started_at,

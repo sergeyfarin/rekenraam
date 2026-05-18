@@ -45,11 +45,16 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
         refresh_hour_utc=6,
         refresh_minute_utc=30,
         max_backfill_days=45,
+        staleness_max_days=2,
+        triangulation_max_hops=1,
+        rounding_mode="half_even",
+        prefer_official_fx=True,
         weekend_policy="fill_previous",
     )
     assert updated_policy is not None
     assert updated_policy.base_commodity_id == eur.id
     assert updated_policy.default_source_id == 1001
+    assert updated_policy.rounding_mode == "half_even"
 
     book = await repository_session.get(Book, 1)
     assert book is not None
@@ -107,6 +112,7 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
     assert {currency.symbol for currency in currencies} >= {"USD", "EUR"}
 
     await repository.record_pricing_refresh_success(
+        ingest_run_id=999,
         book_id=1,
         commodity_id=eur.id,
         quote_commodity_id=1,
@@ -121,7 +127,11 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
                 observation_kind="fx_daily",
                 price_minor=12_500,
                 price_date=date(2026, 5, 21),
+                mode="daily",
                 source="ECB",
+                period_type="daily",
+                period_year=2026,
+                period_month=5,
             )
         ],
     )
@@ -136,6 +146,11 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
         end_date=date(2026, 5, 21),
     )
     assert existing_dates == {date(2026, 5, 21)}
+    persisted = await repository_session.scalar(
+        select(PriceObservation).where(PriceObservation.ingest_run_id == 999)
+    )
+    assert persisted is not None
+    assert persisted.mode == "daily"
 
     recorded_run = await repository.record_pricing_refresh_run(
         book_id=1,
@@ -281,6 +296,7 @@ async def test_pricing_repository_supersedes_price_observations_append_only(
     assert current_from_original.id == corrected.id
     assert corrected.supersedes_observation_id == created.id
     assert corrected.is_manual is True
+    assert corrected.mode == "market"
 
     assert await repository.delete_market_price_observation(created.id) is True
     assert (
