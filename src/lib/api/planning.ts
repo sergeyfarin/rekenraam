@@ -155,7 +155,7 @@ export type LoanPaymentDraft = {
   transaction: TransactionMutationInput;
 };
 
-export async function listBudgets(bookId = 1): Promise<Budget[]> {
+export async function listBudgets(bookId: number): Promise<Budget[]> {
   return apiGet<Budget[]>(`/budgets${query({ book_id: bookId })}`);
 }
 
@@ -175,7 +175,7 @@ export async function budgetVariance(id: number, periodStart: string): Promise<B
   return apiGet<BudgetVarianceRow[]>(`/budgets/${id}/variance${query({ period_start: periodStart })}`);
 }
 
-export async function listSchedules(bookId = 1): Promise<Schedule[]> {
+export async function listSchedules(bookId: number): Promise<Schedule[]> {
   return apiGet<Schedule[]>(`/schedules${query({ book_id: bookId })}`);
 }
 
@@ -207,7 +207,7 @@ export async function projectedCash(bookId: number, start: string, end: string):
   return apiGet<ProjectedCashRow[]>(`/schedules/projected-cash${query({ book_id: bookId, start, end })}`);
 }
 
-export async function listLoans(bookId = 1): Promise<Loan[]> {
+export async function listLoans(bookId: number): Promise<Loan[]> {
   return apiGet<Loan[]>(`/loans${query({ book_id: bookId })}`);
 }
 

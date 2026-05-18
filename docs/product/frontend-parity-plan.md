@@ -13,9 +13,10 @@ when touching the listed area.
   `ApiError` now carries `status`, `detail`, FastAPI validation errors,
   request id, and raw response text. `formatApiError` standardizes common
   401/403/409/422/5xx/frontend-network messages.
-- Added `src/lib/book-context.ts` for active-book initialization from user
-  preferences, fallback to the first readable book, and persisted book
-  switching.
+- Added `src/lib/book-context.ts` for active-book initialization that now
+  prefers book `1`, falls back to the preferred/default readable book when
+  needed, and still preserves the underlying persisted-book mechanism for a
+  later multi-book rollout.
 - Added browser flows for self-service password reset and invite acceptance:
   `/reset-password` and `/accept-invite`.
 - Added auth API clients for password reset, invite acceptance, profile update,
@@ -41,15 +42,17 @@ when touching the listed area.
   account valuation, currency exposure, and saved definitions/runs surfaces;
   added CSV export and print controls for active report output; and added
   Vitest coverage for the route and reports API seam.
+- Removed the visible frontend book selector for the temporary v1 single-book
+  UX; live routes now resolve the active book through `bookContext`; remaining
+  frontend API helpers no longer default `bookId` to `1`; and the Python API
+  now accepts explicit `book_id` query parameters on accounts/metadata list
+  endpoints while returning HTTP 501 with a clear message for non-`1` book
+  requests.
 - Added Vitest coverage for API error parsing, book context, password reset,
   and invite acceptance.
 
 ## Deferred Findings
 
-- Hard-coded fallback `book_id: 1` still exists in pages and API helpers not
-  touched in this pass. Risk: multi-book users can write/read the wrong book.
-  Recommended fix: migrate route-by-route to `bookContext` and make client
-  functions require explicit book ids where possible.
 - Many mutating flows still lack consistent confirmation/success/error states.
   Recommended fix: adopt a shared action-state helper and standardized
   destructive confirmation component when each page is refactored.
@@ -57,8 +60,8 @@ when touching the listed area.
 ## Completion Criteria
 
 - No loose generic API clients for backend-owned schemas.
-- No route-level `book_id: 1` except documented test fixtures or fallback
-  bootstrap paths.
+- No route-level `book_id: 1` except documented test fixtures or temporary
+  migration-only code outside the web runtime.
 - No `String(e)` or raw `error.message` user-facing API errors in touched code.
 - Each new backend workflow has a browser path and at least one Vitest or
   Playwright regression test.

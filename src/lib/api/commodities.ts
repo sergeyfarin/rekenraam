@@ -44,7 +44,7 @@ export async function autocompleteCommodities(
 	return apiGet<CommodityAutocompleteOption[]>(`/commodities/autocomplete?${searchParams.toString()}`);
 }
 
-export async function listCurrencies<T>(bookId = 1): Promise<T> {
+export async function listCurrencies<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/currencies?book_id=${bookId}`);
 }
 
@@ -78,19 +78,19 @@ export async function saveCurrency(currency: Record<string, unknown>, isUpdate: 
 	await apiPost("/currencies", currency);
 }
 
-export async function listFxRatesDaily<T>(bookId = 1, limit = 100): Promise<T> {
+export async function listFxRatesDaily<T>(bookId: number, limit = 100): Promise<T> {
 	return apiGet<T>(`/pricing/rates/daily?book_id=${bookId}&limit=${limit}`);
 }
 
-export async function listFxRatesOfficial<T>(bookId = 1): Promise<T> {
+export async function listFxRatesOfficial<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/pricing/rates/official?book_id=${bookId}`);
 }
 
-export async function listFxRateSources<T>(bookId = 1): Promise<T> {
+export async function listFxRateSources<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/pricing/sources?book_id=${bookId}`);
 }
 
-export async function getFxRateSettings<T>(bookId = 1): Promise<T> {
+export async function getFxRateSettings<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/pricing/policy?book_id=${bookId}`);
 }
 
@@ -105,7 +105,7 @@ export async function restartFxRateScheduler(): Promise<void> {
 	throw new Error("Client-side FX scheduler restarts are not supported in this build.");
 }
 
-export async function listFxRateSourceAssignments<T>(bookId = 1): Promise<T> {
+export async function listFxRateSourceAssignments<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/pricing/source-assignments?book_id=${bookId}`);
 }
 
@@ -125,11 +125,11 @@ export async function deleteFxRateSourceAssignment(id: number): Promise<void> {
 	await apiDelete(`/pricing/source-assignments/${id}`);
 }
 
-export async function listFxRateRefreshState<T>(bookId = 1): Promise<T> {
+export async function listFxRateRefreshState<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/pricing/refresh-state?book_id=${bookId}`);
 }
 
-export async function getFxRefreshExecutionStatus<T>(bookId = 1): Promise<T> {
+export async function getFxRefreshExecutionStatus<T>(bookId: number): Promise<T> {
 	if (hasApiBaseUrl()) {
 		return apiGet<T>(`/pricing/refresh/execution-status?book_id=${bookId}`);
 	}
@@ -137,7 +137,7 @@ export async function getFxRefreshExecutionStatus<T>(bookId = 1): Promise<T> {
 	throw new Error("Backend-owned FX execution status is not supported in this build.");
 }
 
-export async function listFxRefreshRunHistory<T>(bookId = 1, limit = 10): Promise<T> {
+export async function listFxRefreshRunHistory<T>(bookId: number, limit = 10): Promise<T> {
 	if (hasApiBaseUrl()) {
 		return apiGet<T>(`/pricing/refresh/history?book_id=${bookId}&limit=${limit}`);
 	}
@@ -145,7 +145,7 @@ export async function listFxRefreshRunHistory<T>(bookId = 1, limit = 10): Promis
 	throw new Error("Backend-owned FX refresh history is not supported in this build.");
 }
 
-export async function refreshFxRatesNow<T>(bookId = 1): Promise<T> {
+export async function refreshFxRatesNow<T>(bookId: number): Promise<T> {
 	if (hasApiBaseUrl()) {
 		return apiPost<T, { book_id: number }>("/pricing/refresh/run", { book_id: bookId });
 	}
@@ -169,7 +169,7 @@ export async function deleteFxRateOfficial(id: number): Promise<void> {
 	await apiDelete(`/pricing/rates/official/${id}`);
 }
 
-export async function listMarketPrices<T>(bookId = 1, limit = 100): Promise<T> {
+export async function listMarketPrices<T>(bookId: number, limit = 100): Promise<T> {
 	return apiGet<T>(`/pricing/market-prices?book_id=${bookId}&limit=${limit}`);
 }
 
@@ -181,6 +181,6 @@ export async function deleteMarketPrice(id: number): Promise<void> {
 	await apiDelete(`/pricing/market-prices/${id}`);
 }
 
-export async function listPricingSourceHealth<T>(bookId = 1): Promise<T> {
+export async function listPricingSourceHealth<T>(bookId: number): Promise<T> {
 	return apiGet<T>(`/pricing/source-health?book_id=${bookId}`);
 }

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
+    import { requireActiveBookId } from "$lib/book-context";
   import { listAccounts, type AccountSummary } from "$lib/api/accounts";
   import { listPayees, type PayeeSummary } from "$lib/api/metadata";
   import {
@@ -72,9 +73,10 @@
     loading = true;
     error = "";
     try {
+      const bookId = requireActiveBookId();
       const [accountRows, payeeRows, historyRows] = await Promise.all([
-        listAccounts(),
-        listPayees(1),
+        listAccounts(bookId),
+        listPayees(bookId),
         getReconciliationHistory(accountId),
       ]);
       accounts = accountRows;

@@ -21,9 +21,11 @@ class MetadataRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_commodities(self) -> list[Commodity]:
-        statement: Select[tuple[Commodity]] = select(Commodity).order_by(
-            Commodity.name.asc(), Commodity.id.asc()
+    async def list_commodities(self, book_id: int) -> list[Commodity]:
+        statement: Select[tuple[Commodity]] = (
+            select(Commodity)
+            .where(Commodity.book_id == book_id)
+            .order_by(Commodity.name.asc(), Commodity.id.asc())
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
@@ -169,10 +171,11 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def list_institutions(self) -> list[tuple[Institution, Country | None]]:
+    async def list_institutions(self, book_id: int) -> list[tuple[Institution, Country | None]]:
         statement = (
             select(Institution, Country)
             .outerjoin(Country, Country.id == Institution.country_id)
+            .where(Institution.book_id == book_id)
             .order_by(Institution.name.asc(), Institution.id.asc())
         )
         result = await self._session.execute(statement)
@@ -242,8 +245,8 @@ class MetadataRepository:
             raise
         return True
 
-    async def list_categories(self) -> list[Category]:
-        statement: Select[tuple[Category]] = select(Category).order_by(
+    async def list_categories(self, book_id: int) -> list[Category]:
+        statement: Select[tuple[Category]] = select(Category).where(Category.book_id == book_id).order_by(
             Category.name.asc(), Category.id.asc()
         )
         result = await self._session.execute(statement)
@@ -299,8 +302,8 @@ class MetadataRepository:
             raise
         return True
 
-    async def list_payees(self) -> list[Payee]:
-        statement: Select[tuple[Payee]] = select(Payee).order_by(Payee.name.asc(), Payee.id.asc())
+    async def list_payees(self, book_id: int) -> list[Payee]:
+        statement: Select[tuple[Payee]] = select(Payee).where(Payee.book_id == book_id).order_by(Payee.name.asc(), Payee.id.asc())
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -341,8 +344,8 @@ class MetadataRepository:
             raise
         return True
 
-    async def list_tags(self) -> list[Tag]:
-        statement: Select[tuple[Tag]] = select(Tag).order_by(Tag.name.asc(), Tag.id.asc())
+    async def list_tags(self, book_id: int) -> list[Tag]:
+        statement: Select[tuple[Tag]] = select(Tag).where(Tag.book_id == book_id).order_by(Tag.name.asc(), Tag.id.asc())
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
@@ -378,8 +381,8 @@ class MetadataRepository:
             raise
         return True
 
-    async def list_people(self) -> list[Person]:
-        statement: Select[tuple[Person]] = select(Person).order_by(
+    async def list_people(self, book_id: int) -> list[Person]:
+        statement: Select[tuple[Person]] = select(Person).where(Person.book_id == book_id).order_by(
             Person.name.asc(), Person.id.asc()
         )
         result = await self._session.execute(statement)
@@ -394,8 +397,8 @@ class MetadataRepository:
         await self._session.refresh(person)
         return person
 
-    async def list_projects(self) -> list[Project]:
-        statement: Select[tuple[Project]] = select(Project).order_by(
+    async def list_projects(self, book_id: int) -> list[Project]:
+        statement: Select[tuple[Project]] = select(Project).where(Project.book_id == book_id).order_by(
             Project.name.asc(), Project.id.asc()
         )
         result = await self._session.execute(statement)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import get_account_service, get_transaction_service
 from rekenraam_api.schemas.accounts import (
@@ -23,9 +23,10 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 @router.get("", response_model=list[AccountSummary])
 async def list_accounts(
+    book_id: int | None = Query(default=None),
     account_service: AccountService = Depends(get_account_service),
 ) -> list[AccountSummary]:
-    return await account_service.list_accounts()
+    return await account_service.list_accounts(book_id)
 
 
 @router.post("", response_model=AccountSummary)
@@ -77,9 +78,10 @@ async def delete_account(
 
 @router.get("/balances", response_model=list[AccountBalanceSummary])
 async def list_account_balances(
+    book_id: int | None = Query(default=None),
     account_service: AccountService = Depends(get_account_service),
 ) -> list[AccountBalanceSummary]:
-    return await account_service.list_account_balances()
+    return await account_service.list_account_balances(book_id)
 
 
 @router.get("/{account_id}/balancings", response_model=list[AccountBalancingSummary])
@@ -200,9 +202,10 @@ async def set_account_booking_policy(
 
 @router.get("/tree", response_model=list[AccountTreeNode])
 async def list_account_tree(
+    book_id: int | None = Query(default=None),
     account_service: AccountService = Depends(get_account_service),
 ) -> list[AccountTreeNode]:
-    return await account_service.list_account_tree()
+    return await account_service.list_account_tree(book_id)
 
 
 @router.get("/{account_id}", response_model=AccountSummary)

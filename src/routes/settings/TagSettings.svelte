@@ -1,11 +1,13 @@
 <script lang="ts">
   import { createTag, deleteTag as deleteTagCommand, listTags, type TagSummary, updateTag } from "$lib/api/metadata";
+  import { requireActiveBookId } from "$lib/book-context";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
+  import { formatApiError } from "$lib/utils";
 
   export let tags: TagSummary[] = [];
   export let busy = false;
@@ -16,11 +18,15 @@
   let newTag = { name: "", color: "" };
   let showTagDialog = false;
 
+  function getBookId() {
+    return requireActiveBookId();
+  }
+
   export async function loadTags() {
     try {
-      tags = await listTags(1);
+      tags = await listTags(getBookId());
     } catch (e) {
-      tagError = `Failed to load tags: ${String(e)}`;
+      tagError = `Failed to load tags: ${formatApiError(e)}`;
     }
   }
 
@@ -49,14 +55,14 @@
       if (editingTag) {
         await updateTag({
           id: editingTag.id,
-          book_id: 1,
+          book_id: getBookId(),
           name: newTag.name,
           color: newTag.color || null,
         });
         tagStatus = "Tag updated.";
       } else {
         await createTag({
-          book_id: 1,
+          book_id: getBookId(),
           name: newTag.name,
           color: newTag.color || null,
         });
@@ -65,7 +71,7 @@
       closeTagDialog();
       await loadTags();
     } catch (e) {
-      tagError = `Failed to save tag: ${String(e)}`;
+      tagError = `Failed to save tag: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }
@@ -77,11 +83,11 @@
     tagStatus = "";
     busy = true;
     try {
-      await deleteTagCommand(t.id, 1);
+      await deleteTagCommand(t.id);
       tagStatus = "Tag deleted.";
       await loadTags();
     } catch (e) {
-      tagError = `Failed to delete tag: ${String(e)}`;
+      tagError = `Failed to delete tag: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }

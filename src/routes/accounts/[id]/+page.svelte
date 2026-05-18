@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
+  import { requireActiveBookId } from "$lib/book-context";
   import {
     createAccount,
     getAccountBookingPolicy,
@@ -146,11 +147,14 @@
     createCategoryDialogOpen = true;
     return new Promise<number | null>((resolve) => { createCategoryResolve = resolve; });
   }
+  function getBookId(): number {
+    return requireActiveBookId();
+  }
   async function onCreateCategoryConfirm() {
     createCategoryDialogOpen = false;
     try {
       const created = await createCategory({
-        book_id: 1,
+        book_id: getBookId(),
         parent_id: null,
         name: createCategoryName,
         kind: createCategoryKind,
@@ -209,7 +213,7 @@
       account = fetched;
 
       const [balanceRows, balancings] = await Promise.all([
-        listAccountBalances(1),
+        listAccountBalances(getBookId()),
         listAccountBalancings(accountId),
       ]);
       const balanceMap = new Map(balanceRows.map((row) => [row.account_id, row.balance_minor] as const));
@@ -231,13 +235,13 @@
 
   async function loadLookups() {
     const [accountList, categoryList, payeeList, tagList, peopleList, projectList, commodityList] = await Promise.all([
-      listAccounts(1),
-      listCategories(1),
-      listPayees(1),
-      listTags(1),
-      listPeople(1),
-      listProjects(1),
-      listCommodities(1)
+      listAccounts(getBookId()),
+      listCategories(getBookId()),
+      listPayees(getBookId()),
+      listTags(getBookId()),
+      listPeople(getBookId()),
+      listProjects(getBookId()),
+      listCommodities(getBookId())
     ]);
     accounts = accountList;
     categories = categoryList;
@@ -412,7 +416,7 @@
       const existing = exactMatchByName(payees, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new payee "${trimmed}"?`, { label: "Create" })) throw new Error("Payee creation cancelled");
-      const created = await createPayee({ book_id: 1, name: trimmed, kind: "person", metadata: null });
+      const created = await createPayee({ book_id: getBookId(), name: trimmed, kind: "person", metadata: null });
       payees = [...payees, created];
       return created.id;
     }
@@ -429,7 +433,7 @@
       const existing = exactMatchByName(tags, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new tag "${trimmed}"?`, { label: "Create" })) throw new Error("Tag creation cancelled");
-      const created = await createTag({ book_id: 1, name: trimmed, color: null });
+      const created = await createTag({ book_id: getBookId(), name: trimmed, color: null });
       tags = [...tags, created];
       return created.id;
     }
@@ -438,7 +442,7 @@
       const existing = exactMatchByName(people, trimmed);
       if (existing) return existing.id;
       if (!await askConfirm(`Create new person "${trimmed}"?`, { label: "Create" })) throw new Error("Person creation cancelled");
-      const created = await createPerson({ book_id: 1, name: trimmed, role: "member", metadata: null });
+      const created = await createPerson({ book_id: getBookId(), name: trimmed, role: "member", metadata: null });
       people = [...people, created];
       return created.id;
     }
@@ -446,7 +450,7 @@
     const existing = exactMatchByName(projects, trimmed);
     if (existing) return existing.id;
     if (!await askConfirm(`Create new project "${trimmed}"?`, { label: "Create" })) throw new Error("Project creation cancelled");
-    const created = await createProject({ book_id: 1, name: trimmed, status: "active", metadata: null });
+    const created = await createProject({ book_id: getBookId(), name: trimmed, status: "active", metadata: null });
     projects = [...projects, created];
     return created.id;
   }
@@ -463,7 +467,7 @@
     if (existing) return existing.id;
 
     const created = await createAccount({
-      book_id: 1,
+      book_id: getBookId(),
       parent_id: null,
       account_type: targetKind,
       name: targetName,
@@ -605,7 +609,7 @@
 
       const input: TransactionMutationInput = {
         ...(dialogMode === "edit" && formId ? { id: formId } : {}),
-        book_id: 1,
+        book_id: getBookId(),
         txn_date: formDate,
         payee_id: payeeId,
         memo: formMemo || null,
@@ -634,7 +638,7 @@
     const action = async () => {
       await updateTransaction({
         id: tx.transaction.id,
-        book_id: 1,
+        book_id: getBookId(),
         txn_date: tx.transaction.txn_date,
         payee_id: tx.transaction.payee_id,
         memo: tx.transaction.memo,

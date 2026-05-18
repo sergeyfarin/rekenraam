@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createPayee, deletePayee as deletePayeeCommand, listPayees, type PayeeSummary, updatePayee } from "$lib/api/metadata";
+  import { requireActiveBookId } from "$lib/book-context";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -7,6 +8,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
+  import { formatApiError } from "$lib/utils";
 
   export let payees: PayeeSummary[] = [];
   export let busy = false;
@@ -17,11 +19,15 @@
   let newPayee = { name: "", kind: "person", metadata: "" };
   let showPayeeDialog = false;
 
+  function getBookId() {
+    return requireActiveBookId();
+  }
+
   export async function loadPayees() {
     try {
-      payees = await listPayees(1);
+      payees = await listPayees(getBookId());
     } catch (e) {
-      payeeError = `Failed to load payees: ${String(e)}`;
+      payeeError = `Failed to load payees: ${formatApiError(e)}`;
     }
   }
 
@@ -50,7 +56,7 @@
       if (editingPayee) {
         await updatePayee({
           id: editingPayee.id,
-          book_id: 1,
+          book_id: getBookId(),
           name: newPayee.name,
           kind: newPayee.kind,
           metadata: newPayee.metadata || null,
@@ -58,7 +64,7 @@
         payeeStatus = "Payee updated.";
       } else {
         await createPayee({
-          book_id: 1,
+          book_id: getBookId(),
           name: newPayee.name,
           kind: newPayee.kind,
           metadata: newPayee.metadata || null,
@@ -68,7 +74,7 @@
       closePayeeDialog();
       await loadPayees();
     } catch (e) {
-      payeeError = `Failed to save payee: ${String(e)}`;
+      payeeError = `Failed to save payee: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }
@@ -80,11 +86,11 @@
     payeeStatus = "";
     busy = true;
     try {
-      await deletePayeeCommand(p.id, 1);
+      await deletePayeeCommand(p.id);
       payeeStatus = "Payee deleted.";
       await loadPayees();
     } catch (e) {
-      payeeError = `Failed to delete payee: ${String(e)}`;
+      payeeError = `Failed to delete payee: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }

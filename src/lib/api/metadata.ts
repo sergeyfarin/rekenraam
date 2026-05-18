@@ -138,24 +138,20 @@ export type InstitutionSettingsInput = {
   country_id?: number | null;
 };
 
-export async function listCommodities(bookId = 1): Promise<CommoditySummary[]> {
-  void bookId;
-  return apiGet<CommoditySummary[]>(`/commodities`);
+export async function listCommodities(bookId: number): Promise<CommoditySummary[]> {
+  return apiGet<CommoditySummary[]>(`/commodities?book_id=${bookId}`);
 }
 
-export async function listCountries(bookId = 1): Promise<CountrySummary[]> {
-  void bookId;
+export async function listCountries(_bookId?: number): Promise<CountrySummary[]> {
   return apiGet<CountrySummary[]>(`/countries`);
 }
 
-export async function listInstitutions(bookId = 1): Promise<InstitutionSummary[]> {
-  void bookId;
-  return apiGet<InstitutionSummary[]>(`/institutions`);
+export async function listInstitutions(bookId: number): Promise<InstitutionSummary[]> {
+  return apiGet<InstitutionSummary[]>(`/institutions?book_id=${bookId}`);
 }
 
-export async function listCategories(bookId = 1): Promise<CategorySummary[]> {
-  void bookId;
-  return apiGet<CategorySummary[]>(`/categories`);
+export async function listCategories(bookId: number): Promise<CategorySummary[]> {
+  return apiGet<CategorySummary[]>(`/categories?book_id=${bookId}`);
 }
 
 export async function createCategory(input: CategoryCreateInput): Promise<CategorySummary> {
@@ -166,14 +162,12 @@ export async function updateCategory(category: CategoryCreateInput & { id: numbe
   await apiPut<CategorySummary, CategoryCreateInput>(`/categories/${category.id}`, category);
 }
 
-export async function deleteCategory(categoryId: number, bookId = 1): Promise<void> {
-  void bookId;
+export async function deleteCategory(categoryId: number): Promise<void> {
   await apiDelete<void>(`/categories/${categoryId}`);
 }
 
-export async function listPayees(bookId = 1): Promise<PayeeSummary[]> {
-  void bookId;
-  return apiGet<PayeeSummary[]>(`/payees`);
+export async function listPayees(bookId: number): Promise<PayeeSummary[]> {
+  return apiGet<PayeeSummary[]>(`/payees?book_id=${bookId}`);
 }
 
 export async function createPayee(input: PayeeCreateInput): Promise<PayeeSummary> {
@@ -184,14 +178,12 @@ export async function updatePayee(payee: PayeeCreateInput & { id: number }): Pro
   await apiPut<PayeeSummary, PayeeCreateInput>(`/payees/${payee.id}`, payee);
 }
 
-export async function deletePayee(payeeId: number, bookId = 1): Promise<void> {
-  void bookId;
+export async function deletePayee(payeeId: number): Promise<void> {
   await apiDelete<void>(`/payees/${payeeId}`);
 }
 
-export async function listTags(bookId = 1): Promise<TagSummary[]> {
-  void bookId;
-  return apiGet<TagSummary[]>(`/tags`);
+export async function listTags(bookId: number): Promise<TagSummary[]> {
+  return apiGet<TagSummary[]>(`/tags?book_id=${bookId}`);
 }
 
 export async function createTag(input: TagCreateInput): Promise<TagSummary> {
@@ -202,23 +194,20 @@ export async function updateTag(tag: TagCreateInput & { id: number }): Promise<v
   await apiPut<TagSummary, TagCreateInput>(`/tags/${tag.id}`, tag);
 }
 
-export async function deleteTag(tagId: number, bookId = 1): Promise<void> {
-  void bookId;
+export async function deleteTag(tagId: number): Promise<void> {
   await apiDelete<void>(`/tags/${tagId}`);
 }
 
-export async function listPeople(bookId = 1): Promise<PersonSummary[]> {
-  void bookId;
-  return apiGet<PersonSummary[]>(`/people`);
+export async function listPeople(bookId: number): Promise<PersonSummary[]> {
+  return apiGet<PersonSummary[]>(`/people?book_id=${bookId}`);
 }
 
 export async function createPerson(input: PersonCreateInput): Promise<PersonSummary> {
   return apiPost<PersonSummary, PersonCreateInput>("/people", input);
 }
 
-export async function listProjects(bookId = 1): Promise<ProjectSummary[]> {
-  void bookId;
-  return apiGet<ProjectSummary[]>(`/projects`);
+export async function listProjects(bookId: number): Promise<ProjectSummary[]> {
+  return apiGet<ProjectSummary[]>(`/projects?book_id=${bookId}`);
 }
 
 export async function createProject(input: ProjectCreateInput): Promise<ProjectSummary> {
@@ -238,7 +227,6 @@ export async function saveInstitutionSettings(institution: InstitutionSettingsIn
   await apiPost<InstitutionSummary, InstitutionSettingsInput>("/institutions", institution);
 }
 
-export async function deleteInstitution(institutionId: number, bookId = 1): Promise<void> {
-  void bookId;
+export async function deleteInstitution(institutionId: number): Promise<void> {
   await apiDelete<void>(`/institutions/${institutionId}`);
 }

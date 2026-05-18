@@ -33,8 +33,10 @@ class AccountService:
         self._repository = repository
         self._access_policy = access_policy
 
-    async def list_accounts(self) -> list[AccountSummary]:
-        book_ids = (
+    async def list_accounts(self, book_id: int | None = None) -> list[AccountSummary]:
+        if book_id is not None and self._access_policy is not None:
+            await self._access_policy.require_book_read(book_id)
+        book_ids = [book_id] if book_id is not None else (
             await self._access_policy.list_readable_book_ids()
             if self._access_policy is not None
             else None
@@ -157,8 +159,10 @@ class AccountService:
             await self._access_policy.require_book_read(account.book_id)
         return self._to_summary(account)
 
-    async def list_account_balances(self) -> list[AccountBalanceSummary]:
-        book_ids = (
+    async def list_account_balances(self, book_id: int | None = None) -> list[AccountBalanceSummary]:
+        if book_id is not None and self._access_policy is not None:
+            await self._access_policy.require_book_read(book_id)
+        book_ids = [book_id] if book_id is not None else (
             await self._access_policy.list_readable_book_ids()
             if self._access_policy is not None
             else None
@@ -297,8 +301,10 @@ class AccountService:
             memo=balancing.memo,
         )
 
-    async def list_account_tree(self) -> list[AccountTreeNode]:
-        book_ids = (
+    async def list_account_tree(self, book_id: int | None = None) -> list[AccountTreeNode]:
+        if book_id is not None and self._access_policy is not None:
+            await self._access_policy.require_book_read(book_id)
+        book_ids = [book_id] if book_id is not None else (
             await self._access_policy.list_readable_book_ids()
             if self._access_policy is not None
             else None
@@ -313,7 +319,7 @@ class AccountService:
 
         base_currency_code = await self._repository.get_book_base_currency_code(accounts[0].book_id)
         commodity_name = base_currency_code or "USD"
-        balances = await self._repository.get_account_balances()
+        balances = await self._repository.get_account_balances(book_ids)
 
         state_by_id = {account.id: _TreeState(account=account) for account in accounts}
         root_ids: list[int] = []

@@ -85,7 +85,7 @@ export async function commitImport(input: Record<string, unknown>): Promise<Impo
   return apiPost<ImportCommitResult, Record<string, unknown>>("/imports/commit", input);
 }
 
-export async function listImportRules(bookId = 1): Promise<ImportRule[]> {
+export async function listImportRules(bookId: number): Promise<ImportRule[]> {
   return apiGet<ImportRule[]>(`/imports/rules?book_id=${bookId}`);
 }
 

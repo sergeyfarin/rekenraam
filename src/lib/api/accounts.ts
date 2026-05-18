@@ -76,9 +76,8 @@ export type AccountClosingValidationResult = {
   issues: string[];
 };
 
-export async function listAccounts(bookId = 1): Promise<AccountSummary[]> {
-  void bookId;
-  return apiGet<AccountSummary[]>(`/accounts`);
+export async function listAccounts(bookId: number): Promise<AccountSummary[]> {
+  return apiGet<AccountSummary[]>(`/accounts?book_id=${bookId}`);
 }
 
 export async function createAccount(input: AccountCreateInput): Promise<AccountSummary> {
@@ -89,24 +88,20 @@ export async function updateAccount(input: AccountCreateInput & { id: number }):
   return apiPut<AccountSummary, AccountCreateInput>(`/accounts/${input.id}`, input);
 }
 
-export async function deleteAccount(accountId: number, bookId = 1): Promise<void> {
-  void bookId;
+export async function deleteAccount(accountId: number): Promise<void> {
   await apiDelete<void>(`/accounts/${accountId}`);
 }
 
-export async function validateAccountClosing(accountId: number, bookId = 1): Promise<AccountClosingValidationResult> {
-  void bookId;
+export async function validateAccountClosing(accountId: number): Promise<AccountClosingValidationResult> {
   return apiGet<AccountClosingValidationResult>(`/accounts/${accountId}/closing-validation`);
 }
 
-export async function listAccountTree(bookId = 1): Promise<AccountTreeNode[]> {
-  void bookId;
-  return apiGet<AccountTreeNode[]>(`/accounts/tree`);
+export async function listAccountTree(bookId: number): Promise<AccountTreeNode[]> {
+  return apiGet<AccountTreeNode[]>(`/accounts/tree?book_id=${bookId}`);
 }
 
-export async function listAccountBalances(bookId = 1): Promise<AccountBalanceSummary[]> {
-  void bookId;
-  return apiGet<AccountBalanceSummary[]>(`/accounts/balances`);
+export async function listAccountBalances(bookId: number): Promise<AccountBalanceSummary[]> {
+  return apiGet<AccountBalanceSummary[]>(`/accounts/balances?book_id=${bookId}`);
 }
 
 export async function getAccountById(accountId: number): Promise<AccountSummary | null> {

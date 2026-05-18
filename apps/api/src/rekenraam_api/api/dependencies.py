@@ -142,9 +142,12 @@ def get_planning_service(
     return PlanningService(repository, transaction_service, access_policy)
 
 
-def get_metadata_service(session: AsyncSession = Depends(get_db_session)) -> MetadataService:
+def get_metadata_service(
+    session: AsyncSession = Depends(get_db_session),
+    access_policy: AccessPolicy = Depends(get_access_policy),
+) -> MetadataService:
     repository = MetadataRepository(session)
-    return MetadataService(repository)
+    return MetadataService(repository, access_policy)
 
 
 def get_investment_service(session: AsyncSession = Depends(get_db_session)) -> InvestmentService:

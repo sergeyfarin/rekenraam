@@ -10,7 +10,7 @@ from rekenraam_api.api.router import api_router
 from rekenraam_api.config.settings import get_settings
 from rekenraam_api.db.session import session_factory
 from rekenraam_api.repositories.access import AccessRepository
-from rekenraam_api.services.access import AuthorizationError
+from rekenraam_api.services.access import AuthorizationError, SingleBookNotImplementedError
 from rekenraam_api.services.auth import AuthService
 from rekenraam_api.workers.pricing import pricing_refresh_worker
 
@@ -51,6 +51,16 @@ app = FastAPI(title="Rekenraam API", version="0.1.0", lifespan=lifespan)
 @app.exception_handler(AuthorizationError)
 async def authorization_error_handler(_request: Request, exc: AuthorizationError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
+
+
+@app.exception_handler(SingleBookNotImplementedError)
+async def single_book_not_implemented_error_handler(
+    _request: Request, exc: SingleBookNotImplementedError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        content={"detail": str(exc)},
+    )
 
 
 settings = get_settings()

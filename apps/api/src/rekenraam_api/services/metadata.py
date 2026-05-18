@@ -3,7 +3,7 @@ from typing import cast
 
 from sqlalchemy.exc import IntegrityError
 
-from rekenraam_api.db.models.metadata import Category, Commodity, Payee, Person, Project, Tag
+from rekenraam_api.db.models.metadata import Category, Commodity, Institution, Payee, Person, Project, Tag
 from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
@@ -31,12 +31,22 @@ from rekenraam_api.schemas.metadata import (
     TagSummary,
     TagUpdateInput,
 )
+from rekenraam_api.services.access import AccessPolicy
 from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 class MetadataService:
-    def __init__(self, repository: MetadataRepository) -> None:
+    def __init__(self, repository: MetadataRepository, access_policy: AccessPolicy | None = None) -> None:
         self._repository = repository
+        self._access_policy = access_policy
+
+    async def _require_book_read(self, book_id: int) -> None:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_read(book_id)
+
+    async def _require_book_write(self, book_id: int) -> None:
+        if self._access_policy is not None:
+            await self._access_policy.require_book_write(book_id)
 
     async def autocomplete_commodities(
         self,
@@ -104,8 +114,9 @@ class MetadataService:
         )
         return options[: max(1, min(limit, 50))]
 
-    async def list_commodities(self) -> list[CommoditySummary]:
-        rows = await self._repository.list_commodities()
+    async def list_commodities(self, book_id: int) -> list[CommoditySummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_commodities(book_id)
         return [
             CommoditySummary(
                 id=row.id,
@@ -124,6 +135,7 @@ class MetadataService:
     async def update_commodity(
         self, commodity_id: int, input: CommodityUpdateInput
     ) -> CommoditySummary | None:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -150,6 +162,7 @@ class MetadataService:
         )
 
     async def list_currencies(self, book_id: int) -> list[CurrencySummary]:
+        await self._require_book_read(book_id)
         rows, base_currency_code = await self._repository.list_currencies(book_id)
         return [
             self._to_currency_summary(row, base_currency_code)
@@ -158,6 +171,7 @@ class MetadataService:
         ]
 
     async def create_currency(self, input: CurrencyCreateInput) -> CurrencySummary:
+        await self._require_book_write(input.book_id)
         symbol = input.symbol.strip().upper()
         name = input.name.strip()
         if not symbol:
@@ -182,6 +196,7 @@ class MetadataService:
     async def update_currency(
         self, currency_id: int, input: CurrencyUpdateInput
     ) -> CurrencySummary | None:
+        await self._require_book_write(input.book_id)
         symbol = input.symbol.strip().upper()
         name = input.name.strip()
         if not symbol:
@@ -223,6 +238,7 @@ class MetadataService:
     async def set_default_currency(
         self, *, book_id: int, currency_id: int
     ) -> CurrencySummary | None:
+        await self._require_book_write(book_id)
         row = await self._repository.set_default_currency(book_id=book_id, currency_id=currency_id)
         if row is None:
             return None
@@ -243,6 +259,7 @@ class MetadataService:
     async def set_currency_active(
         self, *, currency_id: int, input: CurrencyActivationInput
     ) -> CurrencySummary | None:
+        await self._require_book_write(input.book_id)
         rows, base_currency_code = await self._repository.list_currencies(input.book_id)
         existing_row = next((existing for existing in rows if existing.id == currency_id), None)
         if existing_row is None or existing_row.symbol is None:
@@ -281,8 +298,9 @@ class MetadataService:
             for row in rows
         ]
 
-    async def list_institutions(self) -> list[InstitutionSummary]:
-        rows = await self._repository.list_institutions()
+    async def list_institutions(self, book_id: int) -> list[InstitutionSummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_institutions(book_id)
         return [
             InstitutionSummary(
                 id=institution.id,
@@ -301,6 +319,7 @@ class MetadataService:
         ]
 
     async def create_institution(self, input: InstitutionCreateInput) -> InstitutionSummary:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -332,6 +351,7 @@ class MetadataService:
     async def update_institution(
         self, institution_id: int, input: InstitutionUpdateInput
     ) -> InstitutionSummary | None:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -363,7 +383,10 @@ class MetadataService:
         )
 
     async def delete_institution(self, institution_id: int) -> bool:
-        institutions = await self._repository.list_institutions()
+        existing = await self._repository._session.get(Institution, institution_id)
+        if existing is not None:
+            await self._require_book_write(existing.book_id)
+        institutions = await self._repository.list_institutions(existing.book_id) if existing is not None else []
         existing = next(
             (institution for institution, _ in institutions if institution.id == institution_id),
             None,
@@ -376,11 +399,13 @@ class MetadataService:
             await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
         return deleted
 
-    async def list_categories(self) -> list[CategorySummary]:
-        rows = await self._repository.list_categories()
+    async def list_categories(self, book_id: int) -> list[CategorySummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_categories(book_id)
         return [self._to_category_summary(row) for row in rows]
 
     async def create_category(self, input: CategoryCreateInput) -> CategorySummary:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         kind = input.kind.strip().lower()
         if not name:
@@ -400,6 +425,7 @@ class MetadataService:
     async def update_category(
         self, category_id: int, input: CategoryUpdateInput
     ) -> CategorySummary | None:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         kind = input.kind.strip().lower()
         if not name:
@@ -420,7 +446,10 @@ class MetadataService:
         return self._to_category_summary(row)
 
     async def delete_category(self, category_id: int) -> bool:
-        rows = await self._repository.list_categories()
+        existing = await self._repository._session.get(Category, category_id)
+        if existing is not None:
+            await self._require_book_write(existing.book_id)
+        rows = await self._repository.list_categories(existing.book_id) if existing is not None else []
         existing = next((row for row in rows if row.id == category_id), None)
         try:
             deleted = await self._repository.delete_category(category_id)
@@ -430,11 +459,13 @@ class MetadataService:
             await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
         return deleted
 
-    async def list_payees(self) -> list[PayeeSummary]:
-        rows = await self._repository.list_payees()
+    async def list_payees(self, book_id: int) -> list[PayeeSummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_payees(book_id)
         return [self._to_payee_summary(row) for row in rows]
 
     async def create_payee(self, input: PayeeCreateInput) -> PayeeSummary:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         kind = input.kind.strip().lower()
         if not name:
@@ -451,6 +482,7 @@ class MetadataService:
         return self._to_payee_summary(row)
 
     async def update_payee(self, payee_id: int, input: PayeeUpdateInput) -> PayeeSummary | None:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         kind = input.kind.strip().lower()
         if not name:
@@ -470,7 +502,10 @@ class MetadataService:
         return self._to_payee_summary(row)
 
     async def delete_payee(self, payee_id: int) -> bool:
-        rows = await self._repository.list_payees()
+        existing = await self._repository._session.get(Payee, payee_id)
+        if existing is not None:
+            await self._require_book_write(existing.book_id)
+        rows = await self._repository.list_payees(existing.book_id) if existing is not None else []
         existing = next((row for row in rows if row.id == payee_id), None)
         try:
             deleted = await self._repository.delete_payee(payee_id)
@@ -480,11 +515,13 @@ class MetadataService:
             await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
         return deleted
 
-    async def list_tags(self) -> list[TagSummary]:
-        rows = await self._repository.list_tags()
+    async def list_tags(self, book_id: int) -> list[TagSummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_tags(book_id)
         return [self._to_tag_summary(row) for row in rows]
 
     async def create_tag(self, input: TagCreateInput) -> TagSummary:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -493,6 +530,7 @@ class MetadataService:
         return self._to_tag_summary(row)
 
     async def update_tag(self, tag_id: int, input: TagUpdateInput) -> TagSummary | None:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         if not name:
             raise ValueError("name is required")
@@ -504,7 +542,10 @@ class MetadataService:
         return self._to_tag_summary(row)
 
     async def delete_tag(self, tag_id: int) -> bool:
-        rows = await self._repository.list_tags()
+        existing = await self._repository._session.get(Tag, tag_id)
+        if existing is not None:
+            await self._require_book_write(existing.book_id)
+        rows = await self._repository.list_tags(existing.book_id) if existing is not None else []
         existing = next((row for row in rows if row.id == tag_id), None)
         try:
             deleted = await self._repository.delete_tag(tag_id)
@@ -514,11 +555,13 @@ class MetadataService:
             await bump_report_state(getattr(self._repository, "_session", None), existing.book_id)
         return deleted
 
-    async def list_people(self) -> list[PersonSummary]:
-        rows = await self._repository.list_people()
+    async def list_people(self, book_id: int) -> list[PersonSummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_people(book_id)
         return [self._to_person_summary(row) for row in rows]
 
     async def create_person(self, input: PersonCreateInput) -> PersonSummary:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         role = input.role.strip().lower()
         if not name:
@@ -534,11 +577,13 @@ class MetadataService:
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         return self._to_person_summary(row)
 
-    async def list_projects(self) -> list[ProjectSummary]:
-        rows = await self._repository.list_projects()
+    async def list_projects(self, book_id: int) -> list[ProjectSummary]:
+        await self._require_book_read(book_id)
+        rows = await self._repository.list_projects(book_id)
         return [self._to_project_summary(row) for row in rows]
 
     async def create_project(self, input: ProjectCreateInput) -> ProjectSummary:
+        await self._require_book_write(input.book_id)
         name = input.name.strip()
         status = input.status.strip().lower()
         if not name:

@@ -1,10 +1,10 @@
 import { apiText } from "$lib/api/client";
 
-export async function exportAccountsCsv(bookId = 1): Promise<string> {
+export async function exportAccountsCsv(bookId: number): Promise<string> {
   return apiText(`/exports/accounts.csv?book_id=${bookId}`);
 }
 
-export async function exportTransactionsCsv(bookId = 1): Promise<string> {
+export async function exportTransactionsCsv(bookId: number): Promise<string> {
   return apiText(`/exports/transactions.csv?book_id=${bookId}`);
 }
 

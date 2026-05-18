@@ -1,5 +1,6 @@
 <script lang="ts">
   import { deleteInstitution as deleteInstitutionCommand, listInstitutions, saveInstitutionSettings, type InstitutionSummary } from "$lib/api/metadata";
+  import { requireActiveBookId } from "$lib/book-context";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -7,6 +8,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
+  import { formatApiError } from "$lib/utils";
 
   type Institution = {
     id: number;
@@ -29,9 +31,13 @@
   let newInstitution = { name: "", kind: "", routing: "", website: "", metadata: "" };
   let showInstitutionDialog = false;
 
+  function getBookId() {
+    return requireActiveBookId();
+  }
+
   export async function loadInstitutions() {
     try {
-      const summaries = await listInstitutions(1);
+      const summaries = await listInstitutions(getBookId());
       institutions = summaries.map((institution: InstitutionSummary) => ({
         id: institution.id,
         book_id: institution.book_id,
@@ -44,7 +50,7 @@
         updated_at: institution.updated_at,
       }));
     } catch (e) {
-      institutionError = `Failed to load institutions: ${String(e)}`;
+      institutionError = `Failed to load institutions: ${formatApiError(e)}`;
     }
   }
 
@@ -79,7 +85,7 @@
       if (editingInstitution) {
         await saveInstitutionSettings({
           id: editingInstitution.id,
-          book_id: 1,
+          book_id: getBookId(),
           name: newInstitution.name,
           kind: newInstitution.kind || null,
           routing: newInstitution.routing || null,
@@ -89,7 +95,7 @@
         institutionStatus = "Institution updated.";
       } else {
         await saveInstitutionSettings({
-          book_id: 1,
+          book_id: getBookId(),
           name: newInstitution.name,
           kind: newInstitution.kind || null,
           routing: newInstitution.routing || null,
@@ -101,7 +107,7 @@
       closeInstitutionDialog();
       await loadInstitutions();
     } catch (e) {
-      institutionError = `Failed to save institution: ${String(e)}`;
+      institutionError = `Failed to save institution: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }
@@ -113,11 +119,11 @@
     institutionStatus = "";
     busy = true;
     try {
-      await deleteInstitutionCommand(inst.id, 1);
+      await deleteInstitutionCommand(inst.id);
       institutionStatus = "Institution deleted.";
       await loadInstitutions();
     } catch (e) {
-      institutionError = `Failed to delete institution: ${String(e)}`;
+      institutionError = `Failed to delete institution: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }

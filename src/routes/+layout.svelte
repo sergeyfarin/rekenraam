@@ -15,7 +15,7 @@
     logout,
     type AuthMe
   } from "$lib/api/auth";
-  import { bookContext, initializeBookContext, setActiveBook } from "$lib/book-context";
+  import { initializeBookContext } from "$lib/book-context";
   import { formatApiError } from "$lib/utils";
 
   type Tab = { label: string; href: string };
@@ -57,7 +57,7 @@
     try {
       authUser = await getCurrentUser();
       bootstrapRequired = false;
-      void initializeBookContext();
+      await initializeBookContext();
     } catch {
       authUser = null;
       try {
@@ -91,7 +91,7 @@
       }
       bootstrapRequired = false;
       password = "";
-      void initializeBookContext();
+      await initializeBookContext();
     } catch (error) {
       authError = formatApiError(error);
     } finally {
@@ -121,19 +121,6 @@
     } finally {
       authUser = null;
       await refreshAuth();
-    }
-  }
-
-  async function changeBook(event: Event) {
-    const target = event.currentTarget as HTMLSelectElement;
-    const bookId = Number(target.value);
-    if (!Number.isFinite(bookId)) return;
-    authError = "";
-    try {
-      await setActiveBook(bookId);
-      await goto(page.url.pathname);
-    } catch (error) {
-      authError = formatApiError(error);
     }
   }
 
@@ -229,18 +216,6 @@
       {/each}
     </nav>
     <div class="flex items-center gap-2 text-sm">
-      {#if $bookContext.books.length > 1}
-        <select
-          aria-label="Active book"
-          class="h-9 max-w-40 rounded-md border border-input bg-background px-2 text-sm"
-          value={$bookContext.activeBook?.id ?? ""}
-          on:change={changeBook}
-        >
-          {#each $bookContext.books as book}
-            <option value={book.id}>{book.name}</option>
-          {/each}
-        </select>
-      {/if}
       <span class="max-w-40 truncate text-muted-foreground">{authUser.user.display_name}</span>
       <Button variant="outline" size="sm" onclick={handleLogout}>Logout</Button>
     </div>

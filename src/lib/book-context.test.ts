@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { activeBookId, bookContext, initializeBookContext, setActiveBook } from "$lib/book-context";
+import { activeBookId, bookContext, initializeBookContext, requireActiveBookId, setActiveBook } from "$lib/book-context";
 import { listBooks } from "$lib/api/books";
 import { getPreferences, updatePreferences } from "$lib/api/preferences";
 
@@ -19,6 +19,8 @@ const books = [
 ];
 
 beforeEach(() => {
+  bookContext.set({ books: [], activeBook: null, loading: false, error: null });
+  activeBookId.set(null);
   vi.mocked(listBooks).mockResolvedValue(books);
   vi.mocked(getPreferences).mockResolvedValue({
     default_book_id: null,
@@ -55,6 +57,21 @@ describe("book context", () => {
 
     await initializeBookContext();
 
+    expect(get(activeBookId)).toBe(1);
+  });
+
+  it("uses the preferred default when book 1 is not readable", async () => {
+    vi.mocked(listBooks).mockResolvedValueOnce([books[1]]);
+    vi.mocked(getPreferences).mockResolvedValueOnce({
+      default_book_id: 2,
+      locale: "en-US",
+      date_format: "iso",
+      number_format: "system",
+      theme: "system",
+    });
+
+    await initializeBookContext();
+
     expect(get(activeBookId)).toBe(2);
   });
 
@@ -64,5 +81,9 @@ describe("book context", () => {
 
     expect(get(activeBookId)).toBe(2);
     expect(vi.mocked(updatePreferences)).toHaveBeenCalledWith({ default_book_id: 2 });
+  });
+
+  it("throws when no active book has been initialized", () => {
+    expect(() => requireActiveBookId()).toThrow("Active book is not initialized.");
   });
 });

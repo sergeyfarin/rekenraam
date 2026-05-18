@@ -27,7 +27,11 @@ export async function initializeBookContext(): Promise<BookContextState> {
   try {
     const [books, preferences] = await Promise.all([listBooks(), getPreferences()]);
     const preferredId = preferences.default_book_id;
-    const activeBook = books.find((book) => book.id === preferredId) ?? books[0] ?? null;
+    const activeBook =
+      books.find((book) => book.id === 1) ??
+      books.find((book) => book.id === preferredId) ??
+      books[0] ??
+      null;
     const next = { books, activeBook, loading: false, error: null };
     if (seq === requestSeq) {
       bookContext.set(next);
@@ -56,6 +60,10 @@ export async function setActiveBook(bookId: number): Promise<void> {
   await updatePreferences({ default_book_id: activeBook.id });
 }
 
-export function requireActiveBookId(fallback = 1): number {
-  return get(activeBookId) ?? fallback;
+export function requireActiveBookId(): number {
+  const bookId = get(activeBookId);
+  if (bookId === null) {
+    throw new Error("Active book is not initialized.");
+  }
+  return bookId;
 }

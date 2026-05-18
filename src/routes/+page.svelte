@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { listAccountBalances, listAccounts, type AccountSummary, type AccountBalanceSummary } from "$lib/api/accounts";
   import { getHealthStatus, listBooks } from "$lib/api/books";
+  import { requireActiveBookId } from "$lib/book-context";
   import { listPayees, type PayeeSummary } from "$lib/api/metadata";
   import { listTransactions, type TransactionWithSplits } from "$lib/api/transactions";
   import { formatError } from "$lib/utils";
@@ -44,6 +45,10 @@
     await checkDatabase();
   });
 
+  function getBookId() {
+    return requireActiveBookId();
+  }
+
   async function checkDatabase() {
     busy = true;
     error = "";
@@ -66,10 +71,11 @@
     error = "";
 
     try {
+      const bookId = getBookId();
       // Load accounts, balances, recent transactions, and native currency in parallel
       const nativeCurrencyPromise = listBooks()
         .then((books) => {
-          const primaryBook = books[0] ?? null;
+          const primaryBook = books.find((book) => book.id === bookId) ?? books[0] ?? null;
           if (primaryBook === null) {
             return null;
           }
@@ -83,14 +89,14 @@
         .catch(() => null);
 
       const [accountsResult, balancesResult, transactionsResult, payeesResult, nativeCurrencyResult] = await Promise.all([
-        listAccounts(1),
-        listAccountBalances(1),
+        listAccounts(bookId),
+        listAccountBalances(bookId),
         listTransactions({
-          book_id: 1,
+          book_id: bookId,
           limit: 10,
           offset: 0,
         }),
-        listPayees(1),
+        listPayees(bookId),
         nativeCurrencyPromise,
       ]);
 

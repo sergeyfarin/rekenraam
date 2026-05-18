@@ -18,6 +18,16 @@ class AuthorizationError(Exception):
     pass
 
 
+class SingleBookNotImplementedError(Exception):
+    """Raised when a request targets a non-primary book in the temporary v1 build."""
+
+    def __init__(
+        self,
+        message: str = "Multi-book support is not implemented in this v1 API yet. Use book_id=1.",
+    ) -> None:
+        super().__init__(message)
+
+
 @dataclass(frozen=True)
 class AuditStamp:
     created_by_user_id: int | None
@@ -50,7 +60,15 @@ class AccessPolicy:
             return []
         return await self._repository.list_user_book_ids(self._context.user_id)
 
+    @staticmethod
+    def require_supported_book(book_id: int) -> None:
+        if book_id != 1:
+            raise SingleBookNotImplementedError(
+                "Multi-book support is not implemented in this v1 API yet. Use book_id=1."
+            )
+
     async def require_book_role(self, book_id: int, allowed_roles: set[str]) -> str:
+        self.require_supported_book(book_id)
         if self._context is None:
             raise AuthorizationError("authentication required")
         role = await self._repository.get_book_role(self._context.user_id, book_id)

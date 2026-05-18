@@ -50,9 +50,10 @@ async def autocomplete_commodities(
 
 @router.get("/commodities", response_model=list[CommoditySummary])
 async def list_commodities(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[CommoditySummary]:
-    return await metadata_service.list_commodities()
+    return await metadata_service.list_commodities(book_id)
 
 
 @router.put("/commodities/{commodity_id}", response_model=CommoditySummary)
@@ -149,9 +150,10 @@ async def list_countries(
 
 @router.get("/institutions", response_model=list[InstitutionSummary])
 async def list_institutions(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[InstitutionSummary]:
-    return await metadata_service.list_institutions()
+    return await metadata_service.list_institutions(book_id)
 
 
 @router.post("/institutions", response_model=InstitutionSummary)
@@ -197,9 +199,10 @@ async def delete_institution(
 
 @router.get("/categories", response_model=list[CategorySummary])
 async def list_categories(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[CategorySummary]:
-    return await metadata_service.list_categories()
+    return await metadata_service.list_categories(book_id)
 
 
 @router.post("/categories", response_model=CategorySummary)
@@ -245,9 +248,10 @@ async def delete_category(
 
 @router.get("/payees", response_model=list[PayeeSummary])
 async def list_payees(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[PayeeSummary]:
-    return await metadata_service.list_payees()
+    return await metadata_service.list_payees(book_id)
 
 
 @router.post("/payees", response_model=PayeeSummary)
@@ -293,9 +297,10 @@ async def delete_payee(
 
 @router.get("/tags", response_model=list[TagSummary])
 async def list_tags(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[TagSummary]:
-    return await metadata_service.list_tags()
+    return await metadata_service.list_tags(book_id)
 
 
 @router.post("/tags", response_model=TagSummary)
@@ -341,9 +346,10 @@ async def delete_tag(
 
 @router.get("/people", response_model=list[PersonSummary])
 async def list_people(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[PersonSummary]:
-    return await metadata_service.list_people()
+    return await metadata_service.list_people(book_id)
 
 
 @router.post("/people", response_model=PersonSummary)
@@ -359,9 +365,10 @@ async def create_person(
 
 @router.get("/projects", response_model=list[ProjectSummary])
 async def list_projects(
+    book_id: int = Query(default=1),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ) -> list[ProjectSummary]:
-    return await metadata_service.list_projects()
+    return await metadata_service.list_projects(book_id)
 
 
 @router.post("/projects", response_model=ProjectSummary)

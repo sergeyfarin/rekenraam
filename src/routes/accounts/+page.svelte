@@ -315,7 +315,7 @@
     loading = true;
 
     try {
-      await deleteAccountCommand(account.id, bookId);
+      await deleteAccountCommand(account.id);
       await loadAccounts();
     } catch (e) {
       error = `Failed to delete account: ${String(e)}`;
@@ -327,7 +327,7 @@
   async function validateClosing(account: Account) {
     error = "";
     try {
-      const result = await validateAccountClosing(account.id, bookId);
+      const result = await validateAccountClosing(account.id);
 
       if (result.valid) {
         alert(`Account "${account.name}" can be safely closed. No issues found.`);

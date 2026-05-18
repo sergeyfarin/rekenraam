@@ -58,6 +58,7 @@ from rekenraam_api.schemas.transactions import (
     TransactionPage,
     TransactionSummary,
 )
+from rekenraam_api.services.access import SingleBookNotImplementedError
 from rekenraam_api.services.request_context import RequestContext
 
 
@@ -85,8 +86,12 @@ class StubBookService:
 
 class StubAccountService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
+    last_list_book_id: int | None = None
+    last_balance_book_id: int | None = None
+    last_tree_book_id: int | None = None
 
-    async def list_accounts(self) -> list[AccountSummary]:
+    async def list_accounts(self, book_id: int | None = None) -> list[AccountSummary]:
+        type(self).last_list_book_id = book_id
         return [
             AccountSummary(
                 id=1,
@@ -179,7 +184,8 @@ class StubAccountService:
     async def delete_account(self, account_id: int) -> bool:
         return account_id == 1
 
-    async def list_account_tree(self) -> list[AccountTreeNode]:
+    async def list_account_tree(self, book_id: int | None = None) -> list[AccountTreeNode]:
+        type(self).last_tree_book_id = book_id
         return [
             AccountTreeNode(
                 id=1,
@@ -226,7 +232,8 @@ class StubAccountService:
             ),
         ]
 
-    async def list_account_balances(self) -> list[AccountBalanceSummary]:
+    async def list_account_balances(self, book_id: int | None = None) -> list[AccountBalanceSummary]:
+        type(self).last_balance_book_id = book_id
         return [
             AccountBalanceSummary(account_id=2, balance_minor=500000),
             AccountBalanceSummary(account_id=3, balance_minor=-500000),
@@ -613,8 +620,10 @@ class StubTransactionService:
 
 class StubMetadataService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
+    last_book_id_by_method: dict[str, int] = {}
 
-    async def list_commodities(self) -> list[CommoditySummary]:
+    async def list_commodities(self, book_id: int) -> list[CommoditySummary]:
+        type(self).last_book_id_by_method["commodities"] = book_id
         return [
             CommoditySummary(
                 id=1,
@@ -729,7 +738,8 @@ class StubMetadataService:
     async def list_countries(self) -> list[CountrySummary]:
         return []
 
-    async def list_institutions(self) -> list[InstitutionSummary]:
+    async def list_institutions(self, book_id: int) -> list[InstitutionSummary]:
+        type(self).last_book_id_by_method["institutions"] = book_id
         return [
             InstitutionSummary(
                 id=1,
@@ -783,7 +793,8 @@ class StubMetadataService:
     async def delete_institution(self, institution_id: int) -> bool:
         return institution_id == 1
 
-    async def list_categories(self) -> list[CategorySummary]:
+    async def list_categories(self, book_id: int) -> list[CategorySummary]:
+        type(self).last_book_id_by_method["categories"] = book_id
         return [
             CategorySummary(
                 id=1,
@@ -797,7 +808,8 @@ class StubMetadataService:
             )
         ]
 
-    async def list_payees(self) -> list[PayeeSummary]:
+    async def list_payees(self, book_id: int) -> list[PayeeSummary]:
+        type(self).last_book_id_by_method["payees"] = book_id
         return [
             PayeeSummary(
                 id=1,
@@ -810,13 +822,16 @@ class StubMetadataService:
             )
         ]
 
-    async def list_tags(self) -> list[TagSummary]:
+    async def list_tags(self, book_id: int) -> list[TagSummary]:
+        type(self).last_book_id_by_method["tags"] = book_id
         return []
 
-    async def list_people(self) -> list[PersonSummary]:
+    async def list_people(self, book_id: int) -> list[PersonSummary]:
+        type(self).last_book_id_by_method["people"] = book_id
         return []
 
-    async def list_projects(self) -> list[ProjectSummary]:
+    async def list_projects(self, book_id: int) -> list[ProjectSummary]:
+        type(self).last_book_id_by_method["projects"] = book_id
         return []
 
     async def update_category(self, category_id: int, input: object) -> CategorySummary | None:
@@ -1127,6 +1142,25 @@ async def test_list_accounts_returns_flat_account_collection(client: AsyncClient
 
 
 @pytest.mark.asyncio
+async def test_account_list_routes_forward_explicit_book_id(client: AsyncClient) -> None:
+    StubAccountService.last_list_book_id = None
+    StubAccountService.last_balance_book_id = None
+    StubAccountService.last_tree_book_id = None
+    app.dependency_overrides[get_account_service] = StubAccountService
+
+    accounts_response = await client.get("/api/v1/accounts?book_id=2")
+    balances_response = await client.get("/api/v1/accounts/balances?book_id=2")
+    tree_response = await client.get("/api/v1/accounts/tree?book_id=2")
+
+    assert accounts_response.status_code == 200
+    assert balances_response.status_code == 200
+    assert tree_response.status_code == 200
+    assert StubAccountService.last_list_book_id == 2
+    assert StubAccountService.last_balance_book_id == 2
+    assert StubAccountService.last_tree_book_id == 2
+
+
+@pytest.mark.asyncio
 async def test_get_account_returns_404_for_missing_id(client: AsyncClient) -> None:
     app.dependency_overrides[get_account_service] = StubAccountService
 
@@ -1344,6 +1378,7 @@ async def test_list_transactions_returns_nested_splits(client: AsyncClient) -> N
 
 @pytest.mark.asyncio
 async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -> None:
+    StubMetadataService.last_book_id_by_method = {}
     app.dependency_overrides[get_metadata_service] = StubMetadataService
 
     commodities_response = await client.get("/api/v1/commodities")
@@ -1375,6 +1410,42 @@ async def test_metadata_endpoints_return_reference_shapes(client: AsyncClient) -
     assert people_response.json() == []
     assert projects_response.status_code == 200
     assert projects_response.json() == []
+    assert StubMetadataService.last_book_id_by_method == {
+        "commodities": 1,
+        "institutions": 1,
+        "categories": 1,
+        "payees": 1,
+        "tags": 1,
+        "people": 1,
+        "projects": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_metadata_routes_forward_explicit_book_id(client: AsyncClient) -> None:
+    StubMetadataService.last_book_id_by_method = {}
+    app.dependency_overrides[get_metadata_service] = StubMetadataService
+
+    response = await client.get("/api/v1/categories?book_id=2")
+
+    assert response.status_code == 200
+    assert StubMetadataService.last_book_id_by_method["categories"] == 2
+
+
+@pytest.mark.asyncio
+async def test_single_book_error_returns_501_with_v1_message(client: AsyncClient) -> None:
+    class RejectingAccountService:
+        async def list_accounts(self, book_id: int | None = None) -> list[AccountSummary]:
+            raise SingleBookNotImplementedError()
+
+    app.dependency_overrides[get_account_service] = RejectingAccountService
+
+    response = await client.get("/api/v1/accounts?book_id=2")
+
+    assert response.status_code == 501
+    assert response.json() == {
+        "detail": "Multi-book support is not implemented in this v1 API yet. Use book_id=1."
+    }
 
 
 @pytest.mark.asyncio

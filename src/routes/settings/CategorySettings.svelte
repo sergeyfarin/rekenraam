@@ -1,5 +1,7 @@
 <script lang="ts">
   import { createCategory, deleteCategory as deleteCategoryCommand, listCategories, type CategorySummary, updateCategory } from "$lib/api/metadata";
+  import { requireActiveBookId } from "$lib/book-context";
+  import { formatApiError } from "$lib/utils";
   import * as Card from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -17,11 +19,15 @@
   let newCategory = { name: "", kind: "expense", color: "", parent_id: null as number | null };
   let showCategoryDialog = false;
 
+  function getBookId() {
+    return requireActiveBookId();
+  }
+
   export async function loadCategories() {
     try {
-      categories = await listCategories(1);
+      categories = await listCategories(getBookId());
     } catch (e) {
-      categoryError = `Failed to load categories: ${String(e)}`;
+      categoryError = `Failed to load categories: ${formatApiError(e)}`;
     }
   }
 
@@ -50,7 +56,7 @@
       if (editingCategory) {
         await updateCategory({
           id: editingCategory.id,
-          book_id: 1,
+          book_id: getBookId(),
           parent_id: newCategory.parent_id || null,
           name: newCategory.name,
           kind: newCategory.kind,
@@ -59,7 +65,7 @@
         categoryStatus = "Category updated.";
       } else {
         await createCategory({
-          book_id: 1,
+          book_id: getBookId(),
           parent_id: newCategory.parent_id || null,
           name: newCategory.name,
           kind: newCategory.kind,
@@ -70,7 +76,7 @@
       closeCategoryDialog();
       await loadCategories();
     } catch (e) {
-      categoryError = `Failed to save category: ${String(e)}`;
+      categoryError = `Failed to save category: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }
@@ -82,11 +88,11 @@
     categoryStatus = "";
     busy = true;
     try {
-      await deleteCategoryCommand(cat.id, 1);
+      await deleteCategoryCommand(cat.id);
       categoryStatus = "Category deleted.";
       await loadCategories();
     } catch (e) {
-      categoryError = `Failed to delete category: ${String(e)}`;
+      categoryError = `Failed to delete category: ${formatApiError(e)}`;
     } finally {
       busy = false;
     }
