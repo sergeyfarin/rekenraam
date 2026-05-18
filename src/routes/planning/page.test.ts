@@ -41,6 +41,7 @@ import {
   projectedCash,
   projectedInstances,
 } from "$lib/api/planning";
+import { activeBookId, bookContext } from "$lib/book-context";
 import PlanningPage from "./+page.svelte";
 
 function mockAccount(id: number, name: string, accountType = "asset") {
@@ -79,6 +80,13 @@ function mockCategory(id: number, name: string) {
 }
 
 beforeEach(() => {
+  bookContext.set({
+    books: [{ id: 1, slug: "personal", name: "Personal", base_currency_code: "USD" }],
+    activeBook: { id: 1, slug: "personal", name: "Personal", base_currency_code: "USD" },
+    loading: false,
+    error: null,
+  });
+  activeBookId.set(1);
   vi.mocked(listAccounts).mockResolvedValue([
     mockAccount(2, "Checking"),
     mockAccount(3, "Savings"),
@@ -124,6 +132,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  bookContext.set({ books: [], activeBook: null, loading: false, error: null });
+  activeBookId.set(null);
   vi.resetAllMocks();
 });
 

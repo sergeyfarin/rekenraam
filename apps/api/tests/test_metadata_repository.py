@@ -11,7 +11,7 @@ async def test_metadata_repository_lists_seeded_commodities(
 ) -> None:
     repository = MetadataRepository(repository_session)
 
-    commodities = await repository.list_commodities()
+    commodities = await repository.list_commodities(1)
 
     assert [commodity.name for commodity in commodities] == ["US Dollar"]
     assert commodities[0].symbol == "USD"
@@ -21,7 +21,7 @@ async def test_metadata_repository_lists_seeded_commodities(
 async def test_metadata_repository_updates_commodity(repository_session: AsyncSession) -> None:
     repository = MetadataRepository(repository_session)
 
-    commodities = await repository.list_commodities()
+    commodities = await repository.list_commodities(1)
     updated = await repository.update_commodity(
         commodity_id=commodities[0].id,
         symbol="USDX",
@@ -82,7 +82,7 @@ async def test_metadata_repository_lists_empty_countries_and_institutions(
     repository = MetadataRepository(repository_session)
 
     countries = await repository.list_countries()
-    institutions = await repository.list_institutions()
+    institutions = await repository.list_institutions(1)
 
     assert countries == []
     assert institutions == []
@@ -125,11 +125,11 @@ async def test_metadata_repository_creates_updates_and_deletes_institution(
     assert updated.website == "https://credit.test"
     assert updated.metadata_text == "Updated"
 
-    institutions = await repository.list_institutions()
+    institutions = await repository.list_institutions(1)
     assert len(institutions) == 1
     assert institutions[0][0].name == "Example Credit Union"
     assert await repository.delete_institution(created.id) is True
-    assert await repository.list_institutions() == []
+    assert await repository.list_institutions(1) == []
 
 
 @pytest.mark.asyncio
@@ -148,11 +148,11 @@ async def test_metadata_repository_lists_reference_data_by_name(
     )
     await repository_session.commit()
 
-    categories = await repository.list_categories()
-    payees = await repository.list_payees()
-    tags = await repository.list_tags()
-    people = await repository.list_people()
-    projects = await repository.list_projects()
+    categories = await repository.list_categories(1)
+    payees = await repository.list_payees(1)
+    tags = await repository.list_tags(1)
+    people = await repository.list_people(1)
+    projects = await repository.list_projects(1)
 
     assert [category.name for category in categories] == ["Groceries"]
     assert [payee.name for payee in payees] == ["Local Market"]
@@ -200,6 +200,6 @@ async def test_metadata_repository_updates_and_deletes_category_payee_and_tag(
     assert await repository.delete_category(category.id) is True
     assert await repository.delete_payee(payee.id) is True
     assert await repository.delete_tag(tag.id) is True
-    assert await repository.list_categories() == []
-    assert await repository.list_payees() == []
-    assert await repository.list_tags() == []
+    assert await repository.list_categories(1) == []
+    assert await repository.list_payees(1) == []
+    assert await repository.list_tags(1) == []

@@ -36,7 +36,7 @@ async def test_import_commit_marks_session_abandoned_on_locked_account(
     `sqlalchemy.exc.MissingGreenlet` because the abandonment path needs to
     read back the session row through an async-capable connection that the
     in-memory fake didn't provide. The e2e seam runs against a real
-    Postgres connection so the path works end-to-end.
+    SQLite connection so the path works end-to-end.
     """
     await bootstrap_admin(e2e_app.client)
 

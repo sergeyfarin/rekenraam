@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
+from typing import ClassVar
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -232,7 +233,9 @@ class StubAccountService:
             ),
         ]
 
-    async def list_account_balances(self, book_id: int | None = None) -> list[AccountBalanceSummary]:
+    async def list_account_balances(
+        self, book_id: int | None = None
+    ) -> list[AccountBalanceSummary]:
         type(self).last_balance_book_id = book_id
         return [
             AccountBalanceSummary(account_id=2, balance_minor=500000),
@@ -620,7 +623,7 @@ class StubTransactionService:
 
 class StubMetadataService:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
-    last_book_id_by_method: dict[str, int] = {}
+    last_book_id_by_method: ClassVar[dict[str, int]] = {}
 
     async def list_commodities(self, book_id: int) -> list[CommoditySummary]:
         type(self).last_book_id_by_method["commodities"] = book_id

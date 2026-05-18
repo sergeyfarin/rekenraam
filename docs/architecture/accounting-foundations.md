@@ -129,9 +129,8 @@ in historical reporting.
 Application-layer enforcement is necessary but insufficient. Migrations,
 ad-hoc fix-up scripts, future careless code, or direct-SQL emergency
 edits — anything bypassing the service layer can corrupt the books.
-Triggers (or constraints, or both) close that hole. The legacy SQLite
-schema enforced append-only at the DB layer via triggers; the current
-Postgres baseline does not.
+Triggers (or constraints, or both) close that hole. The SQLite baseline keeps
+database-side parity triggers where they are needed for V1 invariants.
 
 ### R7. Report reproducibility
 
@@ -245,15 +244,11 @@ target; without them, every other feature builds on shifting sand.
 **Scope:** ~1 week.
 
 - Add a generic `audit_log` table with `(table_name, entity_id,
-  before_state JSONB, after_state JSONB, op, changed_by_user_id,
+  before_state JSON, after_state JSON, op, changed_by_user_id,
   changed_at, change_request_id, change_reason)`.
-- Add a generic Postgres trigger function `audit_log_writer()` that
-  captures `OLD` and `NEW` row state via `to_jsonb(...)` and inserts an
-  `audit_log` row on every mutation.
-- Apply the trigger to every business table.
-- The trigger validates `changed_by_user_id` and `change_reason` are
-  non-NULL; raises if they aren't. Application code must stamp these via
-  request-context.
+- Keep the SQLAlchemy audit listener that captures old/new row state and inserts
+  an `audit_log` row on every mutation.
+- Application code must stamp request-context attribution.
 - Replace all 17 `session.delete(...)` calls with `state` transitions to
   `voided` / `archived`. Add `state` column to each affected table.
 - Replace `list_*` filters that currently check `deleted_at IS NULL` with

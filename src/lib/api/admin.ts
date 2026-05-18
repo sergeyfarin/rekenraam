@@ -6,7 +6,6 @@ export type AdminRuntimeStatus = {
   database_host: string | null;
   database_user: string | null;
   database_version: string | null;
-  postgres_version: string | null;
   display_path: string;
   size_bytes: number | null;
   writable: boolean;

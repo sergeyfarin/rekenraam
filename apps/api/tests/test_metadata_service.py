@@ -29,11 +29,11 @@ from rekenraam_api.services.metadata import MetadataService
 class StubMetadataRepository:
     _created_at = datetime(2026, 5, 3, tzinfo=UTC)
 
-    async def list_commodities(self) -> list[Commodity]:
+    async def list_commodities(self, book_id: int) -> list[Commodity]:
         return [
             Commodity(
                 id=1,
-                book_id=1,
+                book_id=book_id,
                 kind="currency",
                 symbol="USD",
                 name="US Dollar",
@@ -157,12 +157,12 @@ class StubMetadataRepository:
             updated_at=self._created_at,
         )
 
-    async def list_institutions(self) -> list[tuple[Institution, Country | None]]:
+    async def list_institutions(self, book_id: int) -> list[tuple[Institution, Country | None]]:
         return [
             (
                 Institution(
                     id=1,
-                    book_id=1,
+                    book_id=book_id,
                     name="Example Bank",
                     kind="bank",
                     routing="123456789",
@@ -175,6 +175,11 @@ class StubMetadataRepository:
                 None,
             )
         ]
+
+    async def get_institution(self, institution_id: int) -> Institution | None:
+        if institution_id != 1:
+            return None
+        return (await self.list_institutions(1))[0][0]
 
     async def create_institution(self, **kwargs: object) -> Institution:
         return Institution(
@@ -211,11 +216,11 @@ class StubMetadataRepository:
     async def delete_institution(self, institution_id: int) -> bool:
         return institution_id == 1
 
-    async def list_categories(self) -> list[Category]:
+    async def list_categories(self, book_id: int) -> list[Category]:
         return [
             Category(
                 id=1,
-                book_id=1,
+                book_id=book_id,
                 parent_id=None,
                 name="Groceries",
                 kind="expense",
@@ -225,11 +230,16 @@ class StubMetadataRepository:
             )
         ]
 
-    async def list_payees(self) -> list[Payee]:
+    async def get_category(self, category_id: int) -> Category | None:
+        if category_id != 1:
+            return None
+        return (await self.list_categories(1))[0]
+
+    async def list_payees(self, book_id: int) -> list[Payee]:
         return [
             Payee(
                 id=1,
-                book_id=1,
+                book_id=book_id,
                 name="Local Market",
                 kind="business",
                 metadata_text=None,
@@ -238,14 +248,32 @@ class StubMetadataRepository:
             )
         ]
 
-    async def list_tags(self) -> list[Tag]:
+    async def get_payee(self, payee_id: int) -> Payee | None:
+        if payee_id != 1:
+            return None
+        return (await self.list_payees(1))[0]
+
+    async def list_tags(self, book_id: int) -> list[Tag]:
+        _ = book_id
         return []
 
-    async def list_people(self) -> list[Person]:
+    async def get_tag(self, tag_id: int) -> Tag | None:
+        if tag_id != 1:
+            return None
+        return Tag(
+            id=tag_id,
+            book_id=1,
+            name="Shared",
+            color="#222222",
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+
+    async def list_people(self, book_id: int) -> list[Person]:
         return [
             Person(
                 id=1,
-                book_id=1,
+                book_id=book_id,
                 name="Alex",
                 role="household",
                 metadata_text=None,
@@ -254,11 +282,11 @@ class StubMetadataRepository:
             )
         ]
 
-    async def list_projects(self) -> list[Project]:
+    async def list_projects(self, book_id: int) -> list[Project]:
         return [
             Project(
                 id=1,
-                book_id=1,
+                book_id=book_id,
                 name="Kitchen Remodel",
                 status="active",
                 metadata_text=None,
@@ -324,15 +352,15 @@ class StubMetadataRepository:
 async def test_metadata_service_maps_reference_data() -> None:
     service = MetadataService(StubMetadataRepository())
 
-    commodities = await service.list_commodities()
+    commodities = await service.list_commodities(1)
     currencies = await service.list_currencies(1)
     countries = await service.list_countries()
-    institutions = await service.list_institutions()
-    categories = await service.list_categories()
-    payees = await service.list_payees()
-    tags = await service.list_tags()
-    people = await service.list_people()
-    projects = await service.list_projects()
+    institutions = await service.list_institutions(1)
+    categories = await service.list_categories(1)
+    payees = await service.list_payees(1)
+    tags = await service.list_tags(1)
+    people = await service.list_people(1)
+    projects = await service.list_projects(1)
 
     assert commodities[0].name == "US Dollar"
     assert commodities[0].symbol == "USD"

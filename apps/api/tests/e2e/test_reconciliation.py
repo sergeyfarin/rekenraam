@@ -18,7 +18,7 @@ Plus the two new invariants from Phase 2 step 1:
   concurrent start/finish on the same account
 
 All tests use the e2e seam at [conftest.py](conftest.py): real FastAPI app
-+ real services + real Postgres + per-test database.
++ real services + real SQLite + per-test database.
 """
 
 from __future__ import annotations

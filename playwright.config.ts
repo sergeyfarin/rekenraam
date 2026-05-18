@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:16888";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -28,5 +28,5 @@ export default defineConfig({
   ],
 
   // No `webServer` — CI brings up the compose stack before invoking `npm run e2e`.
-  // Local: `docker compose -f compose.sqlite.yaml up -d --wait && npm run e2e`.
+  // Local: `docker compose up -d --wait && npm run e2e`.
 });

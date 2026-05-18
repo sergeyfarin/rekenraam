@@ -3,7 +3,14 @@ from typing import cast
 
 from sqlalchemy.exc import IntegrityError
 
-from rekenraam_api.db.models.metadata import Category, Commodity, Institution, Payee, Person, Project, Tag
+from rekenraam_api.db.models.metadata import (
+    Category,
+    Commodity,
+    Payee,
+    Person,
+    Project,
+    Tag,
+)
 from rekenraam_api.repositories.metadata import MetadataRepository
 from rekenraam_api.schemas.metadata import (
     CategoryCreateInput,
@@ -36,7 +43,9 @@ from rekenraam_api.services.report_invalidation import bump_report_state
 
 
 class MetadataService:
-    def __init__(self, repository: MetadataRepository, access_policy: AccessPolicy | None = None) -> None:
+    def __init__(
+        self, repository: MetadataRepository, access_policy: AccessPolicy | None = None
+    ) -> None:
         self._repository = repository
         self._access_policy = access_policy
 
@@ -383,10 +392,14 @@ class MetadataService:
         )
 
     async def delete_institution(self, institution_id: int) -> bool:
-        existing = await self._repository._session.get(Institution, institution_id)
+        existing = await self._repository.get_institution(institution_id)
         if existing is not None:
             await self._require_book_write(existing.book_id)
-        institutions = await self._repository.list_institutions(existing.book_id) if existing is not None else []
+        institutions = (
+            await self._repository.list_institutions(existing.book_id)
+            if existing is not None
+            else []
+        )
         existing = next(
             (institution for institution, _ in institutions if institution.id == institution_id),
             None,
@@ -446,10 +459,12 @@ class MetadataService:
         return self._to_category_summary(row)
 
     async def delete_category(self, category_id: int) -> bool:
-        existing = await self._repository._session.get(Category, category_id)
+        existing = await self._repository.get_category(category_id)
         if existing is not None:
             await self._require_book_write(existing.book_id)
-        rows = await self._repository.list_categories(existing.book_id) if existing is not None else []
+        rows = (
+            await self._repository.list_categories(existing.book_id) if existing is not None else []
+        )
         existing = next((row for row in rows if row.id == category_id), None)
         try:
             deleted = await self._repository.delete_category(category_id)
@@ -502,7 +517,7 @@ class MetadataService:
         return self._to_payee_summary(row)
 
     async def delete_payee(self, payee_id: int) -> bool:
-        existing = await self._repository._session.get(Payee, payee_id)
+        existing = await self._repository.get_payee(payee_id)
         if existing is not None:
             await self._require_book_write(existing.book_id)
         rows = await self._repository.list_payees(existing.book_id) if existing is not None else []
@@ -542,7 +557,7 @@ class MetadataService:
         return self._to_tag_summary(row)
 
     async def delete_tag(self, tag_id: int) -> bool:
-        existing = await self._repository._session.get(Tag, tag_id)
+        existing = await self._repository.get_tag(tag_id)
         if existing is not None:
             await self._require_book_write(existing.book_id)
         rows = await self._repository.list_tags(existing.book_id) if existing is not None else []

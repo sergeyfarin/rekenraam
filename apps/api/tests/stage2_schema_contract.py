@@ -5,14 +5,14 @@ Two callers can produce a `dict[str, TableContract]`:
 - `contract_from_metadata(Base.metadata)` — derived from the SQLAlchemy ORM
   models. This is the canonical specification of what the schema *should* be.
 - `contract_from_database(connection)` — derived by reflecting a live
-  Postgres database that has been migrated to head.
+  SQLite database that has been migrated to head.
 
 The schema-drift test compares the two. Any difference is real drift and
 must be resolved by either a migration or an ORM change. There is no
 hand-maintained dictionary to keep in sync.
 
 `TAURI_RUNTIME_TABLES` are tables the legacy desktop app used that are
-intentionally not present in the Postgres baseline. The drift test asserts
+intentionally not present in the Python API baseline. The drift test asserts
 they don't reappear by accident.
 """
 
@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, replace
 
 from sqlalchemy import CheckConstraint, MetaData, Table, UniqueConstraint, inspect
-from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects import sqlite
 from sqlalchemy.engine import Connection, Dialect
 
 
@@ -72,7 +72,7 @@ class TableContract:
 
 
 # Tables the legacy Tauri/SQLite runtime used. These must not be created by
-# any migration in the Postgres baseline. Asserted by the schema-drift test.
+# any migration in the Python API baseline. Asserted by the schema-drift test.
 TAURI_RUNTIME_TABLES = (
     "app_runtime_session",
     "session_undo_stack",
@@ -95,9 +95,9 @@ def _normalize_type(type_sql: object, dialect: Dialect) -> str:
 def _normalize_check_sql(sqltext: str | None) -> str:
     """Reduce a CHECK constraint's SQL text to a comparable form.
 
-    Used only for human-readable diff output — the test asserts on names plus
-    `sqltext != ""`, not on textual equality, because Postgres reflection and
-    SQLAlchemy's render emit slightly different formatting.
+    Used only for human-readable diff output. The test asserts on names plus
+    `sqltext != ""`, not textual equality, because reflection and SQLAlchemy's
+    render can emit slightly different formatting.
     """
 
     if not sqltext:
@@ -113,8 +113,7 @@ def _normalize_orm_server_default(default: object | None, dialect: Dialect) -> s
     - a raw `str` — SQLAlchemy auto-quotes this as a SQL literal at DDL time,
       so we mirror that and emit `'value'`.
     - a SQL element such as `func.now()` or `sa.text("'fifo'")` — render via
-      the Postgres dialect to match the form Postgres reports back through
-      reflection.
+      the SQLite dialect to match the form SQLite reports back through reflection.
     """
 
     if default is None:
@@ -130,12 +129,12 @@ def _normalize_orm_server_default(default: object | None, dialect: Dialect) -> s
 
 
 def _normalize_db_server_default(default: str | None) -> str:
-    """Reduce a Postgres-reflected default fragment to its comparable form.
+    """Reduce a reflected default fragment to its comparable form.
 
-    Reflection returns the SQL that appears after `DEFAULT` in `pg_attrdef`
-    (e.g. ``'fifo'``, ``false``, ``now()``, ``nextval('foo_id_seq'::regclass)``).
+    Reflection returns the SQL that appears after `DEFAULT`
+    (e.g. ``'fifo'``, ``false``, ``now()``).
     Drop autoincrement sequence defaults — the ORM doesn't model them
-    explicitly — and strip Postgres' `::type` casts.
+    explicitly — and strip dialect casts.
     """
 
     if default is None:
@@ -164,7 +163,7 @@ def contract_from_metadata(
     contract.
     """
 
-    dialect = dialect or postgresql.dialect()
+    dialect = dialect or sqlite.dialect()
     return {
         table_name: _table_contract_from_metadata(table, dialect)
         for table_name, table in metadata.tables.items()
@@ -173,7 +172,7 @@ def contract_from_metadata(
 
 
 def contract_from_database(connection: Connection) -> dict[str, TableContract]:
-    """Reflect the schema contract from a live Postgres connection.
+    """Reflect the schema contract from a live SQLite connection.
 
     Returns one `TableContract` per user table (excluding `alembic_version`).
     Tables that exist only in the database, but not in `Base.metadata`, will
@@ -191,15 +190,14 @@ def contract_from_database(connection: Connection) -> dict[str, TableContract]:
 def normalize_for_comparison(
     schema: dict[str, TableContract],
 ) -> dict[str, TableContract]:
-    """Strip fields that legitimately differ between ORM and Postgres reflection.
+    """Strip fields that legitimately differ between ORM and database reflection.
 
     Specifically:
-    - CHECK constraint `sqltext` is replaced with the empty string. Postgres
-      stores constraint expressions in canonical form (e.g. parens,
-      requalified column refs) that SQLAlchemy's `str(constraint.sqltext)`
-      doesn't reproduce. The constraint *names* are still compared, and the
-      drift test separately asserts that every CHECK has a non-empty
-      `sqltext` on the database side.
+    - CHECK constraint `sqltext` is replaced with the empty string. Databases
+      can store constraint expressions in canonical forms that SQLAlchemy's
+      `str(constraint.sqltext)` doesn't reproduce. The constraint names are
+      still compared, and the drift test separately asserts that every CHECK
+      has a non-empty `sqltext` on the database side.
 
     Apply this to *both* sides before equality-checking.
     """

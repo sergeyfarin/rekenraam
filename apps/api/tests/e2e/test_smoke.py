@@ -1,6 +1,6 @@
 """End-to-end smoke test.
 
-Exercises the full router -> service -> repository -> Postgres path against a
+Exercises the full router -> service -> repository -> SQLite path against a
 freshly-migrated database. This is the canonical example for the e2e seam: if
 this test passes, the seam is wired correctly and other tests can build on the
 same fixtures.

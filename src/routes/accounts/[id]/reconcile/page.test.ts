@@ -22,6 +22,7 @@ import {
 } from "$lib/api/reconciliation";
 import { goto } from "$app/navigation";
 import { page as pageState } from "$app/state";
+import { activeBookId, bookContext } from "$lib/book-context";
 import ReconcilePage from "./+page.svelte";
 
 function mockAccount(id: number, name: string, commodity_id = 1) {
@@ -75,6 +76,13 @@ function mockTx(id: number, accountId: number, amountMinor: number, status = "un
 }
 
 beforeEach(() => {
+  bookContext.set({
+    books: [{ id: 1, slug: "personal", name: "Personal", base_currency_code: "USD" }],
+    activeBook: { id: 1, slug: "personal", name: "Personal", base_currency_code: "USD" },
+    loading: false,
+    error: null,
+  });
+  activeBookId.set(1);
   pageState.params = { id: "100" };
   vi.mocked(goto).mockClear();
 
@@ -104,6 +112,8 @@ beforeEach(() => {
 
 afterEach(() => {
   pageState.params = {};
+  bookContext.set({ books: [], activeBook: null, loading: false, error: null });
+  activeBookId.set(null);
   vi.resetAllMocks();
 });
 

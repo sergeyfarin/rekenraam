@@ -16,7 +16,7 @@
       </Card.Header>
       <Card.Content class="space-y-4">
         <p class="text-sm text-muted-foreground">
-          A personal finance application built for a self-hosted SvelteKit, FastAPI, and PostgreSQL stack.
+          A personal finance application built for a self-hosted SvelteKit, FastAPI, and SQLite stack.
         </p>
         <ul class="list-disc list-inside text-sm text-muted-foreground space-y-1">
           <li>Self-hosted: Run the web app and database in Docker</li>

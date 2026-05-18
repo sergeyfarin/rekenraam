@@ -3,17 +3,10 @@ import pytest
 from rekenraam_api.config.settings import Settings
 
 
-def test_settings_build_database_url_from_fields() -> None:
-    settings = Settings(
-        database_kind="postgresql",
-        postgres_user="finance",
-        postgres_password="secret",
-        postgres_host="db",
-        postgres_port=6543,
-        postgres_db="ledger",
-    )
+def test_settings_build_sqlite_url_from_path() -> None:
+    settings = Settings(sqlite_path="/tmp/ledger.sqlite3")
 
-    assert settings.database_url == "postgresql+asyncpg://finance:secret@db:6543/ledger"
+    assert settings.database_url == "sqlite+aiosqlite:////tmp/ledger.sqlite3"
 
 
 def test_settings_default_to_sqlite_data_volume(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29,6 +22,20 @@ def test_database_url_override_takes_precedence() -> None:
     assert settings.database_url == "sqlite+aiosqlite:////data/rekenraam.sqlite3"
 
 
+def test_non_sqlite_database_kind_is_rejected() -> None:
+    settings = Settings(database_kind="mysql")
+
+    with pytest.raises(ValueError, match="DATABASE_KIND must be sqlite"):
+        _ = settings.database_url
+
+
+def test_non_sqlite_database_url_override_is_rejected() -> None:
+    settings = Settings(DATABASE_URL="mysql://example")
+
+    with pytest.raises(ValueError, match="DATABASE_URL must use sqlite"):
+        _ = settings.database_url
+
+
 def test_first_admin_seed_settings_are_optional() -> None:
     settings = Settings()
 
@@ -37,23 +44,16 @@ def test_first_admin_seed_settings_are_optional() -> None:
     assert settings.first_admin_display_name == "Admin"
 
 
-def test_file_backed_postgres_password(tmp_path) -> None:
-    password_file = tmp_path / "postgres_password.txt"
-    password_file.write_text("from-file\n", encoding="utf-8")
-
-    settings = Settings(database_kind="postgresql", postgres_password_file=str(password_file))
-
-    assert settings.resolved_postgres_password == "from-file"
-    assert "from-file" in settings.database_url
-
-
 def test_file_backed_secret_conflict_fails(tmp_path) -> None:
-    password_file = tmp_path / "postgres_password.txt"
+    password_file = tmp_path / "first_admin_password.txt"
     password_file.write_text("from-file\n", encoding="utf-8")
-    settings = Settings(postgres_password="different", postgres_password_file=str(password_file))
+    settings = Settings(
+        first_admin_password="different",
+        first_admin_password_file=str(password_file),
+    )
 
-    with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
-        _ = settings.resolved_postgres_password
+    with pytest.raises(ValueError, match="FIRST_ADMIN_PASSWORD"):
+        _ = settings.resolved_first_admin_password
 
 
 def test_file_backed_first_admin_password(tmp_path) -> None:

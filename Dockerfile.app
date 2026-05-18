@@ -22,7 +22,7 @@ FROM python:3.14-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_HOST=0.0.0.0
-ENV APP_PORT=8080
+ENV APP_PORT=16888
 ENV FRONTEND_STATIC_DIR=/app/static
 
 WORKDIR /app
@@ -40,6 +40,6 @@ COPY --from=frontend-build /web/build /app/static
 
 RUN pip install --no-cache-dir .
 
-EXPOSE 8080
+EXPOSE 16888
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn rekenraam_api.app:app --host ${APP_HOST} --port ${APP_PORT}"]

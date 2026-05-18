@@ -92,6 +92,9 @@ src/rekenraam_api/services/report_invalidation.py
 src/rekenraam_api/services/reports.py
 src/rekenraam_api/services/request_context.py
 src/rekenraam_api/services/transactions.py
+src/rekenraam_api/tools/__init__.py
+src/rekenraam_api/tools/sqlite_backup.py
+src/rekenraam_api/tools/sqlite_restore_smoke.py
 src/rekenraam_api/workers/pricing.py
 tests/test_accounting_invariants.py
 tests/test_admin_api.py

@@ -36,10 +36,14 @@ class AccountService:
     async def list_accounts(self, book_id: int | None = None) -> list[AccountSummary]:
         if book_id is not None and self._access_policy is not None:
             await self._access_policy.require_book_read(book_id)
-        book_ids = [book_id] if book_id is not None else (
-            await self._access_policy.list_readable_book_ids()
-            if self._access_policy is not None
-            else None
+        book_ids = (
+            [book_id]
+            if book_id is not None
+            else (
+                await self._access_policy.list_readable_book_ids()
+                if self._access_policy is not None
+                else None
+            )
         )
         accounts = (
             await self._repository.list_accounts(book_ids)
@@ -159,13 +163,19 @@ class AccountService:
             await self._access_policy.require_book_read(account.book_id)
         return self._to_summary(account)
 
-    async def list_account_balances(self, book_id: int | None = None) -> list[AccountBalanceSummary]:
+    async def list_account_balances(
+        self, book_id: int | None = None
+    ) -> list[AccountBalanceSummary]:
         if book_id is not None and self._access_policy is not None:
             await self._access_policy.require_book_read(book_id)
-        book_ids = [book_id] if book_id is not None else (
-            await self._access_policy.list_readable_book_ids()
-            if self._access_policy is not None
-            else None
+        book_ids = (
+            [book_id]
+            if book_id is not None
+            else (
+                await self._access_policy.list_readable_book_ids()
+                if self._access_policy is not None
+                else None
+            )
         )
         balances = (
             await self._repository.get_account_balances(book_ids)
@@ -304,10 +314,14 @@ class AccountService:
     async def list_account_tree(self, book_id: int | None = None) -> list[AccountTreeNode]:
         if book_id is not None and self._access_policy is not None:
             await self._access_policy.require_book_read(book_id)
-        book_ids = [book_id] if book_id is not None else (
-            await self._access_policy.list_readable_book_ids()
-            if self._access_policy is not None
-            else None
+        book_ids = (
+            [book_id]
+            if book_id is not None
+            else (
+                await self._access_policy.list_readable_book_ids()
+                if self._access_policy is not None
+                else None
+            )
         )
         accounts = (
             await self._repository.list_accounts(book_ids)

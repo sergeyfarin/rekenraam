@@ -12,7 +12,7 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.config.settings import Settings
-from rekenraam_api.db.dialect import database_kind_from_url, sqlite_path_from_url
+from rekenraam_api.db.dialect import sqlite_path_from_url
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.metadata import Commodity
@@ -65,45 +65,7 @@ class AdminService:
 
     async def get_runtime_status(self) -> AdminRuntimeStatusSummary:
         bind_url = _database_url_from_bind(self._session.get_bind())
-        if database_kind_from_url(bind_url) == "sqlite":
-            return await self._get_sqlite_runtime_status(bind_url)
-
-        database_name = await self._session.scalar(select(func.current_database()))
-        database_user = await self._session.scalar(select(func.current_user()))
-        postgres_version = await self._session.scalar(select(func.version()))
-        size_bytes = await self._session.scalar(
-            select(func.pg_database_size(func.current_database()))
-        )
-
-        current_version = await self._current_migration_version()
-        latest_version = self._latest_migration_version()
-        pending_versions: tuple[str, ...] = (
-            () if current_version == latest_version else (latest_version,)
-        )
-        writable = await self._probe_writable()
-
-        display_path = f"{self._settings.postgres_host}:{self._settings.postgres_port}/{database_name or self._settings.postgres_db}"
-        return AdminRuntimeStatusSummary(
-            database_kind="postgresql",
-            database_name=database_name or self._settings.postgres_db,
-            database_host=self._settings.postgres_host,
-            database_user=database_user,
-            database_version=postgres_version,
-            postgres_version=postgres_version,
-            display_path=display_path,
-            size_bytes=size_bytes,
-            writable=writable,
-            foreign_keys=True,
-            current_version=current_version,
-            latest_version=latest_version,
-            pending_versions=pending_versions,
-            pending_migration_count=len(pending_versions),
-            health_status="ok" if writable and not pending_versions else "warning",
-            note=(
-                "The web runtime uses a server-managed PostgreSQL database. Desktop file pickers,"
-                " path switching, and local backup folder selection do not apply in this deployment."
-            ),
-        )
+        return await self._get_sqlite_runtime_status(bind_url)
 
     async def _get_sqlite_runtime_status(self, database_url: str) -> AdminRuntimeStatusSummary:
         path = sqlite_path_from_url(database_url)
@@ -126,7 +88,6 @@ class AdminService:
             database_host=None,
             database_user=None,
             database_version=sqlite_version,
-            postgres_version=None,
             display_path=display_path,
             size_bytes=size_bytes,
             writable=writable,
@@ -139,11 +100,11 @@ class AdminService:
                 "ok" if writable and foreign_keys_enabled and not pending_versions else "warning"
             ),
             backup_guidance=(
-                "Stop the API or use the SQLite online backup API before copying the database file."
+                "Use the documented SQLite online backup command before copying database files."
             ),
             note=(
                 "The web runtime uses a server-local SQLite database file. Keep the /data volume"
-                " private and include the database file, WAL, and SHM files in backups."
+                " private and rely on the online backup command for consistent snapshots."
             ),
         )
 

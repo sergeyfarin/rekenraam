@@ -57,13 +57,12 @@ def test_contract_round_trips_for_a_minimal_metadata() -> None:
     assert table.primary_key == ("id",)
 
     columns_by_name = {column.name: column for column in table.columns}
-    assert columns_by_name["id"].type_sql == "bigint"
-    # Autoincrement PK sequence default is normalized away — ORM doesn't model
-    # the implicit sequence and Postgres reports `nextval(...)` only when
-    # actually reflected, so we suppress on both sides.
+    assert columns_by_name["id"].type_sql == "integer"
+    # Autoincrement PK defaults are normalized away because the ORM does not
+    # model the generated storage detail explicitly.
     assert columns_by_name["id"].server_default == ""
     assert columns_by_name["flag"].server_default == "false"
-    assert columns_by_name["created_at"].server_default == "now()"
+    assert columns_by_name["created_at"].server_default == "current_timestamp"
 
 
 def test_drift_detected_when_column_added() -> None:
@@ -115,7 +114,7 @@ def test_drift_detected_when_index_added() -> None:
         # sa.text("true") -- boolean default; remains unquoted.
         (text("true"), "true"),
         # func.now() -- expression default.
-        (func.now(), "now()"),
+        (func.now(), "current_timestamp"),
         # No default at all.
         (None, ""),
     ],

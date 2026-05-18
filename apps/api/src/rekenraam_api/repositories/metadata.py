@@ -181,6 +181,9 @@ class MetadataRepository:
         result = await self._session.execute(statement)
         return list(result.tuples().all())
 
+    async def get_institution(self, institution_id: int) -> Institution | None:
+        return await self._session.get(Institution, institution_id)
+
     async def create_institution(
         self,
         *,
@@ -246,11 +249,16 @@ class MetadataRepository:
         return True
 
     async def list_categories(self, book_id: int) -> list[Category]:
-        statement: Select[tuple[Category]] = select(Category).where(Category.book_id == book_id).order_by(
-            Category.name.asc(), Category.id.asc()
+        statement: Select[tuple[Category]] = (
+            select(Category)
+            .where(Category.book_id == book_id)
+            .order_by(Category.name.asc(), Category.id.asc())
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
+
+    async def get_category(self, category_id: int) -> Category | None:
+        return await self._session.get(Category, category_id)
 
     async def create_category(
         self,
@@ -303,9 +311,14 @@ class MetadataRepository:
         return True
 
     async def list_payees(self, book_id: int) -> list[Payee]:
-        statement: Select[tuple[Payee]] = select(Payee).where(Payee.book_id == book_id).order_by(Payee.name.asc(), Payee.id.asc())
+        statement: Select[tuple[Payee]] = (
+            select(Payee).where(Payee.book_id == book_id).order_by(Payee.name.asc(), Payee.id.asc())
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
+
+    async def get_payee(self, payee_id: int) -> Payee | None:
+        return await self._session.get(Payee, payee_id)
 
     async def create_payee(
         self, *, book_id: int, name: str, kind: str, metadata: str | None
@@ -345,9 +358,14 @@ class MetadataRepository:
         return True
 
     async def list_tags(self, book_id: int) -> list[Tag]:
-        statement: Select[tuple[Tag]] = select(Tag).where(Tag.book_id == book_id).order_by(Tag.name.asc(), Tag.id.asc())
+        statement: Select[tuple[Tag]] = (
+            select(Tag).where(Tag.book_id == book_id).order_by(Tag.name.asc(), Tag.id.asc())
+        )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
+
+    async def get_tag(self, tag_id: int) -> Tag | None:
+        return await self._session.get(Tag, tag_id)
 
     async def create_tag(self, *, book_id: int, name: str, color: str | None) -> Tag:
         tag = Tag(book_id=book_id, name=name, color=color)
@@ -382,8 +400,10 @@ class MetadataRepository:
         return True
 
     async def list_people(self, book_id: int) -> list[Person]:
-        statement: Select[tuple[Person]] = select(Person).where(Person.book_id == book_id).order_by(
-            Person.name.asc(), Person.id.asc()
+        statement: Select[tuple[Person]] = (
+            select(Person)
+            .where(Person.book_id == book_id)
+            .order_by(Person.name.asc(), Person.id.asc())
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
@@ -398,8 +418,10 @@ class MetadataRepository:
         return person
 
     async def list_projects(self, book_id: int) -> list[Project]:
-        statement: Select[tuple[Project]] = select(Project).where(Project.book_id == book_id).order_by(
-            Project.name.asc(), Project.id.asc()
+        statement: Select[tuple[Project]] = (
+            select(Project)
+            .where(Project.book_id == book_id)
+            .order_by(Project.name.asc(), Project.id.asc())
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())

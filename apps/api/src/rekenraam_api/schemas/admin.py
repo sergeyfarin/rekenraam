@@ -19,7 +19,6 @@ class AdminRuntimeStatusSummary(BaseModel):
     database_host: str | None
     database_user: str | None = None
     database_version: str | None = None
-    postgres_version: str | None = None
     display_path: str
     size_bytes: int | None
     writable: bool
@@ -30,7 +29,7 @@ class AdminRuntimeStatusSummary(BaseModel):
     pending_migration_count: int = 0
     health_status: str = "ok"
     backup_status: str = "operator-managed"
-    backup_guidance: str = "Use pg_dump -Fc through the documented Compose backup profile."
+    backup_guidance: str = "Use the documented SQLite online backup command."
     last_integrity_status: str | None = None
     last_integrity_checked_at: str | None = None
     note: str

@@ -134,7 +134,7 @@ def test_docs_keep_plugin_theme_execution_deferred_and_permissioned() -> None:
             (REPO_ROOT / "SELF_HOSTED_MIGRATION_PLAN.md").read_text(),
             (REPO_ROOT / "README.md").read_text(),
             (REPO_ROOT / "docs/product/v1-scope.md").read_text(),
-            (REPO_ROOT / "docs/architecture/postgres-schema.md").read_text(),
+            (REPO_ROOT / "docs/architecture/sqlite-schema.md").read_text(),
             (REPO_ROOT / "docs/architecture/post-b1-extensibility.md").read_text(),
             (REPO_ROOT / "docs/parity/desktop-to-python.md").read_text(),
         ]

@@ -131,7 +131,7 @@ class ImportService:
         # instances; subsequent attribute access on `session` triggers a lazy
         # reload that requires a greenlet-safe context and is the root cause
         # of the `MissingGreenlet` failure on the abandonment path under
-        # asyncpg (see [v1-gap-plan.md §Phase 2 step 9 skip list]).
+        # SQLAlchemy may expire rolled-back instances, so keep primitive ids nearby.
         session_id = session.id
         db_session = getattr(self._repository, "_session", None)
         if db_session is not None:

@@ -5,19 +5,12 @@ const ADMIN_EMAIL = "e2e-admin@example.com";
 const ADMIN_PASSWORD = "e2e-admin-password-1234";
 const ADMIN_DISPLAY_NAME = "E2E Admin";
 
-const POSTGRES_CONTAINER = process.env.PLAYWRIGHT_POSTGRES_CONTAINER ?? "rekenraam-postgres-1";
-const POSTGRES_USER = process.env.PLAYWRIGHT_POSTGRES_USER ?? "rekenraam";
-const POSTGRES_DB = process.env.PLAYWRIGHT_POSTGRES_DB ?? "rekenraam";
-const DB_BACKEND = (process.env.PLAYWRIGHT_DB_BACKEND ?? "sqlite").toLowerCase();
 const SQLITE_DB_PATH = process.env.PLAYWRIGHT_SQLITE_PATH ?? "/data/rekenraam.sqlite3";
 const SQLITE_BASELINE_PATH =
   process.env.PLAYWRIGHT_SQLITE_BASELINE_PATH ?? "/data/rekenraam.e2e-baseline.sqlite3";
 
-const BASELINE_DB = `${POSTGRES_DB}_baseline`;
-const API_SERVICE = process.env.PLAYWRIGHT_API_SERVICE ?? (DB_BACKEND === "sqlite" ? "app" : "api");
-const COMPOSE_FILES = process.env.PLAYWRIGHT_COMPOSE_FILES ?? (
-  DB_BACKEND === "sqlite" ? "compose.sqlite.yaml" : "compose.postgres.yaml"
-);
+const API_SERVICE = process.env.PLAYWRIGHT_API_SERVICE ?? "app";
+const COMPOSE_FILES = process.env.PLAYWRIGHT_COMPOSE_FILES ?? "compose.yaml";
 const COMPOSE_ARGS = COMPOSE_FILES.split(",")
   .map((file) => file.trim())
   .filter(Boolean)
@@ -29,13 +22,12 @@ const COMPOSE = `docker compose ${COMPOSE_ARGS}`.trim();
  * Snapshot/restore-based DB reset. Strategy:
  *
  *   1. First call: capture the post-migration state of `rekenraam` as a
- *      template DB `rekenraam_baseline`. The baseline includes all migration
+ *      baseline SQLite file. The baseline includes all migration
  *      seeds (the `personal` book, USD commodity, Cash account, $5000 opening
  *      balance — see [apps/api/alembic/versions/0001_initial_schema.py]).
  *
- *   2. Each subsequent call: drop `rekenraam`, recreate it from the baseline
- *      template. Postgres copies the template at the page level so this is
- *      effectively a constant-time block-copy regardless of size.
+ *   2. Each subsequent call: stop the app, replace the working database with
+ *      the baseline, and restart.
  *
  * Why not TRUNCATE? Migration 0001 seeds rows the UI relies on (book_id=1,
  * commodity_id=1, Cash account at id=2). Truncating wipes those, leaving the
@@ -46,15 +38,9 @@ const COMPOSE = `docker compose ${COMPOSE_ARGS}`.trim();
  * chose the snapshot approach to avoid shipping test code in the production
  * image; see [docs/product/phase-3-plan.md] §A2 decision record.
  *
- * Cost: we must stop the API container before dropping its database (Postgres
- * refuses `DROP DATABASE` with open connections). Restart adds ~2s per spec.
- * Net per-spec overhead: ~3s, vs. ~30s for a full compose reset.
+ * Cost: restart adds ~2s per spec, vs. ~30s for a full compose reset.
  */
 let baselineCreated = false;
-
-function isSqliteBackend(): boolean {
-  return DB_BACKEND === "sqlite" || DB_BACKEND === "sqlite3";
-}
 
 function composeExec(command: string): void {
   execSync(command, { stdio: ["ignore", "ignore", "pipe"] });
@@ -109,52 +95,8 @@ function resetSqliteDatabase(): void {
   }
 }
 
-function pgExec(sql: string, opts: { db?: string } = {}): void {
-  const db = opts.db ?? POSTGRES_DB;
-  // -v ON_ERROR_STOP=1 turns any SQL error into a non-zero exit so execSync throws.
-  execSync(
-    `docker exec -i ${POSTGRES_CONTAINER} psql -U ${POSTGRES_USER} -d ${db} -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
-    { stdio: ["ignore", "ignore", "pipe"] },
-  );
-}
-
 function ensureBaseline(): void {
-  if (isSqliteBackend()) {
-    ensureSqliteBaseline();
-    return;
-  }
-
-  if (baselineCreated) return;
-
-  // Idempotency: check if the baseline already exists from a prior run on the
-  // same compose stack (developer running `npm run e2e` repeatedly).
-  const existsOutput = execSync(
-    `docker exec -i ${POSTGRES_CONTAINER} psql -U ${POSTGRES_USER} -d postgres -tA -c "SELECT 1 FROM pg_database WHERE datname='${BASELINE_DB}'"`,
-    { encoding: "utf-8" },
-  ).trim();
-
-  if (existsOutput === "1") {
-    baselineCreated = true;
-    return;
-  }
-
-  // CREATE DATABASE ... TEMPLATE requires no other connections to the source.
-  // Stop the API container to release its connection pool, snapshot, restart.
-  execSync(`${COMPOSE} stop ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
-  try {
-    pgExec(
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB}' AND pid <> pg_backend_pid();`,
-      { db: "postgres" },
-    );
-    pgExec(`CREATE DATABASE "${BASELINE_DB}" WITH TEMPLATE "${POSTGRES_DB}" OWNER "${POSTGRES_USER}";`, {
-      db: "postgres",
-    });
-    baselineCreated = true;
-  } finally {
-    execSync(`${COMPOSE} start ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
-    // Wait for healthcheck before returning so the first spec doesn't race the API.
-    waitForApiHealthy();
-  }
+  ensureSqliteBaseline();
 }
 
 function waitForApiHealthy(timeoutMs = 30_000): void {
@@ -168,7 +110,7 @@ function waitForApiHealthy(timeoutMs = 30_000): void {
       if (status.includes('"Health":"healthy"') || status.includes('"State":"running"')) {
         // Once healthy, also poll the public health endpoint to be sure.
         try {
-          execSync(`curl -fsS ${process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000"}/api/v1/health`, {
+          execSync(`curl -fsS ${process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:16888"}/api/v1/health`, {
             stdio: ["ignore", "ignore", "pipe"],
           });
           return;
@@ -186,33 +128,12 @@ function waitForApiHealthy(timeoutMs = 30_000): void {
 }
 
 /**
- * Reset the e2e database by dropping it and restoring from the baseline
- * template captured on first call. After this returns, the API reports
+ * Reset the e2e database by restoring the baseline captured on first call.
+ * After this returns, the API reports
  * `bootstrap_required: true` again with the seeded `personal` book intact.
  */
 export function resetDatabase(): void {
-  if (isSqliteBackend()) {
-    resetSqliteDatabase();
-    return;
-  }
-
-  ensureBaseline();
-
-  // Stop API to release connections, drop+recreate from template, restart.
-  execSync(`${COMPOSE} stop ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
-  try {
-    pgExec(
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('${POSTGRES_DB}', '${BASELINE_DB}') AND pid <> pg_backend_pid();`,
-      { db: "postgres" },
-    );
-    pgExec(`DROP DATABASE IF EXISTS "${POSTGRES_DB}";`, { db: "postgres" });
-    pgExec(`CREATE DATABASE "${POSTGRES_DB}" WITH TEMPLATE "${BASELINE_DB}" OWNER "${POSTGRES_USER}";`, {
-      db: "postgres",
-    });
-  } finally {
-    execSync(`${COMPOSE} start ${API_SERVICE}`, { stdio: ["ignore", "ignore", "pipe"] });
-    waitForApiHealthy();
-  }
+  resetSqliteDatabase();
 }
 
 /**

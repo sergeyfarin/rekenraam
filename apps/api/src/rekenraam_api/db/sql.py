@@ -3,28 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import Integer, case, cast, func, literal
-from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rekenraam_api.db.dialect import is_sqlite_session
-
 
 def dialect_insert(session: AsyncSession, table: Any):
-    if is_sqlite_session(session):
-        return sqlite_insert(table)
-    return postgres_insert(table)
+    _ = session
+    return sqlite_insert(table)
 
 
 def period_start_expr(session: AsyncSession, date_column: object, group_by: str):
-    if not is_sqlite_session(session):
-        if group_by == "year":
-            return func.to_char(func.date_trunc("year", date_column), "YYYY-MM-DD")
-        if group_by == "quarter":
-            return func.to_char(func.date_trunc("quarter", date_column), "YYYY-MM-DD")
-        if group_by == "day":
-            return func.to_char(date_column, "YYYY-MM-DD")
-        return func.to_char(func.date_trunc("month", date_column), "YYYY-MM-DD")
+    _ = session
 
     if group_by == "year":
         return func.strftime("%Y-01-01", date_column)

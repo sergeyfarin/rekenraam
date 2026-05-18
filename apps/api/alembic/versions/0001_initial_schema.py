@@ -630,7 +630,6 @@ def upgrade() -> None:
         "accounts",
         ["book_id", "system_role"],
         unique=True,
-        postgresql_where=sa.text("system_role IS NOT NULL"),
         sqlite_where=sa.text("system_role IS NOT NULL"),
     )
 

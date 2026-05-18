@@ -3,9 +3,9 @@ set -euo pipefail
 
 : "${DOCKER:=docker compose}"
 
-sh -c "$DOCKER up -d --build postgres api frontend"
+sh -c "$DOCKER up -d --build app"
 
-BASE_URL="http://localhost:${FRONTEND_PORT:-3000}/api/v1"
+BASE_URL="http://localhost:${APP_PORT:-16888}/api/v1"
 
 for _ in $(seq 1 30); do
   if curl --silent --fail "$BASE_URL/health" >/dev/null; then

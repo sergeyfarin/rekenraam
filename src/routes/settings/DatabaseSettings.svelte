@@ -111,8 +111,8 @@
     <Alert.Root>
       <Alert.Title>Server-managed operations</Alert.Title>
       <Alert.Description>
-        Database file switching, restore-from-file, and backup-folder selection were desktop-only flows.
-        In the web deployment, storage and backup policy must be managed on the server or platform level.
+        Use the server backup command for consistent SQLite snapshots. File switching and
+        restore-from-file remain desktop-only flows.
       </Alert.Description>
     </Alert.Root>
   </Card.Content>
@@ -152,7 +152,7 @@
       </div>
       <div>
         <p class="text-sm text-muted-foreground">Host</p>
-        <p>{runtimeStatus?.database_host || "—"}</p>
+        <p>{runtimeStatus?.database_host || "local file"}</p>
       </div>
       <div>
         <p class="text-sm text-muted-foreground">Health</p>

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Select, exists, func, literal, select, text
+from sqlalchemy import Select, exists, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from rekenraam_api.db.dialect import is_sqlite_session
 from rekenraam_api.db.models.accounts import (
     Account,
     AccountBalancing,
@@ -22,40 +21,25 @@ from rekenraam_api.db.sql import dialect_insert
 
 
 class ReconciliationRepository:
-    # Stable namespace for our advisory locks within Postgres's
-    # `pg_advisory_xact_lock(classid, objid)` space (both args are int32).
-    # Chosen so it doesn't collide with other namespaces if we add more
-    # advisory locks later;
-    # see https://www.postgresql.org/docs/16/explicit-locking.html#ADVISORY-LOCKS.
-    _RECONCILIATION_LOCK_NAMESPACE = 0x52454301  # "REC\x01"
-
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def acquire_reconciliation_lock(self, account_id: int) -> None:
-        """Take a transaction-scoped advisory lock keyed on the account.
+        """Serialize concurrent reconciliation work by touching a unique SQLite lock row.
 
-        Released automatically at commit/rollback. Concurrent callers
-        targeting the same account_id will block here until the holder's
-        transaction ends — which is exactly the serialization the gap plan
-        §1.3.3 requires.
+        The write lock is held until transaction commit/rollback. Concurrent
+        callers targeting the same account will block on SQLite's writer lock
+        and then update the same row when they continue.
         """
-        if is_sqlite_session(self._session):
-            statement = (
-                dialect_insert(self._session, DatabaseLock)
-                .values(lock_key=f"reconciliation:{account_id}", updated_at=datetime.now(UTC))
-                .on_conflict_do_update(
-                    index_elements=["lock_key"],
-                    set_={"updated_at": datetime.now(UTC)},
-                )
+        statement = (
+            dialect_insert(self._session, DatabaseLock)
+            .values(lock_key=f"reconciliation:{account_id}", updated_at=datetime.now(UTC))
+            .on_conflict_do_update(
+                index_elements=["lock_key"],
+                set_={"updated_at": datetime.now(UTC)},
             )
-            await self._session.execute(statement)
-            return
-
-        await self._session.execute(
-            text("SELECT pg_advisory_xact_lock(:namespace, :account_id)"),
-            {"namespace": self._RECONCILIATION_LOCK_NAMESPACE, "account_id": account_id},
         )
+        await self._session.execute(statement)
 
     async def get_account(self, account_id: int) -> Account | None:
         return await self._session.get(Account, account_id)

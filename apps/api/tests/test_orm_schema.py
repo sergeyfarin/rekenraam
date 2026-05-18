@@ -2,7 +2,7 @@
 
 The fuller schema contract is asserted by
 `test_alembic_head_matches_full_stage2_schema_contract` in `test_migrations.py`,
-which compares `Base.metadata` to a freshly-migrated Postgres. This file
+which compares `Base.metadata` to a freshly-migrated SQLite database. This file
 keeps a small set of column-presence assertions per milestone so that a
 removed-by-accident column shows up in a fast, DB-free unit test before the
 heavier migration test runs in CI.

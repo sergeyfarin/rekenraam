@@ -55,7 +55,6 @@ class Account(Base):
             "book_id",
             "system_role",
             unique=True,
-            postgresql_where=text("system_role IS NOT NULL"),
             sqlite_where=text("system_role IS NOT NULL"),
         ),
     )

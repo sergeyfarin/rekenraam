@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from rekenraam_api.repositories.access import AccessRepository
 from rekenraam_api.services.request_context import RequestContext
 
-
 SUPPORTED_V1_BOOK_ID = 1
 
 

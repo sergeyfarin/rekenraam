@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-import uuid
 from pathlib import Path
 
-import asyncpg
 import pytest
 from _sqlite import database_url_for as sqlite_database_url_for
 from alembic.config import Config
@@ -24,78 +22,14 @@ from rekenraam_api.db.base import Base
 from rekenraam_api.db.dialect import create_database_engine
 
 
-def _admin_connection_kwargs() -> dict[str, str | int]:
-    return {
-        "user": os.environ.get("TEST_POSTGRES_USER", os.environ.get("POSTGRES_USER", "rekenraam")),
-        "password": os.environ.get(
-            "TEST_POSTGRES_PASSWORD",
-            os.environ.get("POSTGRES_PASSWORD", "rekenraam"),
-        ),
-        "host": os.environ.get("TEST_POSTGRES_HOST", "127.0.0.1"),
-        "port": int(os.environ.get("TEST_POSTGRES_PORT", os.environ.get("POSTGRES_PORT", "5432"))),
-        "database": os.environ.get("TEST_POSTGRES_ADMIN_DB", "postgres"),
-    }
-
-
-async def _create_database(database_name: str) -> None:
-    connection = await asyncpg.connect(**_admin_connection_kwargs())
-    try:
-        await connection.execute(f'CREATE DATABASE "{database_name}"')
-    finally:
-        await connection.close()
-
-
-async def _drop_database(database_name: str) -> None:
-    connection = await asyncpg.connect(**_admin_connection_kwargs())
-    try:
-        await connection.execute(
-            """
-            SELECT pg_terminate_backend(pid)
-            FROM pg_stat_activity
-            WHERE datname = $1 AND pid <> pg_backend_pid()
-            """,
-            database_name,
-        )
-        await connection.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
-    finally:
-        await connection.close()
-
-
-async def _fetchval(database_name: str, query: str) -> object:
-    connection_kwargs = dict(_admin_connection_kwargs())
-    connection_kwargs["database"] = database_name
-    connection = await asyncpg.connect(**connection_kwargs)
-    try:
-        return await connection.fetchval(query)
-    finally:
-        await connection.close()
-
-
-def _run_migrations(database_name: str, revision: str) -> None:
+def _run_migrations(database_url: str, revision: str) -> None:
     root_dir = Path(__file__).resolve().parents[1]
     config = Config(str(root_dir / "alembic.ini"))
     # Resolve script_location explicitly so the test passes regardless of pytest cwd.
     config.set_main_option("script_location", str(root_dir / "alembic"))
 
-    original_env = {
-        "DATABASE_URL": os.environ.get("DATABASE_URL"),
-        "POSTGRES_DB": os.environ.get("POSTGRES_DB"),
-        "POSTGRES_USER": os.environ.get("POSTGRES_USER"),
-        "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
-        "POSTGRES_HOST": os.environ.get("POSTGRES_HOST"),
-        "POSTGRES_PORT": os.environ.get("POSTGRES_PORT"),
-    }
-    admin_connection = _admin_connection_kwargs()
-    os.environ["DATABASE_URL"] = (
-        "postgresql+asyncpg://"
-        f"{admin_connection['user']}:{admin_connection['password']}"
-        f"@{admin_connection['host']}:{admin_connection['port']}/{database_name}"
-    )
-    os.environ["POSTGRES_DB"] = database_name
-    os.environ["POSTGRES_USER"] = str(admin_connection["user"])
-    os.environ["POSTGRES_PASSWORD"] = str(admin_connection["password"])
-    os.environ["POSTGRES_HOST"] = str(admin_connection["host"])
-    os.environ["POSTGRES_PORT"] = str(admin_connection["port"])
+    original_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = database_url
     get_settings.cache_clear()
     try:
         if revision == "base":
@@ -103,129 +37,36 @@ def _run_migrations(database_name: str, revision: str) -> None:
         else:
             command.upgrade(config, revision)
     finally:
-        for key, value in original_env.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-        get_settings.cache_clear()
-
-
-@pytest.mark.postgres_compat
-def test_postgres_alembic_can_upgrade_downgrade_and_reupgrade_clean_database() -> None:
-    database_name = f"rekenraam_migration_test_{uuid.uuid4().hex}"
-    try:
-        asyncio.run(_create_database(database_name))
-    except Exception as exc:  # pragma: no cover
-        pytest.skip(f"postgres not available for migration tests: {exc}")
-
-    try:
-        _run_migrations(database_name, "head")
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.user_devices')"))
-            == "user_devices"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')"))
-            == "auth_sessions"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')"))
-            == "book_memberships"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.books')")) == "books"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_state')"))
-            == "book_state"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_cache')"))
-            == "report_cache"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_definitions')"))
-            == "report_definitions"
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.report_runs')"))
-            == "report_runs"
-        )
-        assert (
-            asyncio.run(
-                _fetchval(database_name, "SELECT to_regclass('public.pricing_refresh_runs')")
-            )
-            == "pricing_refresh_runs"
-        )
-        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM books")) == 1
-        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM book_state")) == 1
-        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM commodities")) == 1
-        # 1 manual + 10 providers seeded by the baseline migration.
-        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM price_sources")) == 11
-
-        _run_migrations(database_name, "base")
-        assert asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) is None
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.auth_sessions')"))
-            is None
-        )
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.book_memberships')"))
-            is None
-        )
-
-        _run_migrations(database_name, "head")
-        assert (
-            asyncio.run(_fetchval(database_name, "SELECT to_regclass('public.users')")) == "users"
-        )
-        assert asyncio.run(_fetchval(database_name, "SELECT COUNT(*) FROM books")) == 1
-    finally:
-        asyncio.run(_drop_database(database_name))
-
-
-def test_sqlite_alembic_can_upgrade_downgrade_and_reupgrade_clean_database(tmp_path: Path) -> None:
-    if os.environ.get("SKIP_SQLITE_MIGRATION_TEST") == "1":
-        pytest.skip("SQLite migration smoke is covered by api-test-sqlite")
-
-    database_url = sqlite_database_url_for(tmp_path / "migration.sqlite3")
-    root_dir = Path(__file__).resolve().parents[1]
-    config = Config(str(root_dir / "alembic.ini"))
-    config.set_main_option("script_location", str(root_dir / "alembic"))
-
-    original_database_url = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = database_url
-    get_settings.cache_clear()
-    try:
-        command.upgrade(config, "head")
-
-        async def table_names() -> set[str]:
-            engine = create_database_engine(database_url)
-            try:
-                async with engine.connect() as connection:
-                    return await connection.run_sync(
-                        lambda sync_connection: set(inspect(sync_connection).get_table_names())
-                    )
-            finally:
-                await engine.dispose()
-
-        names = asyncio.run(table_names())
-        assert {"users", "database_locks", "books", "book_state"} <= names
-
-        command.downgrade(config, "base")
-        assert "users" not in asyncio.run(table_names())
-
-        command.upgrade(config, "head")
-        assert "users" in asyncio.run(table_names())
-    finally:
         if original_database_url is None:
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = original_database_url
         get_settings.cache_clear()
+
+
+def test_sqlite_alembic_can_upgrade_downgrade_and_reupgrade_clean_database(tmp_path: Path) -> None:
+    database_url = sqlite_database_url_for(tmp_path / "migration.sqlite3")
+
+    _run_migrations(database_url, "head")
+
+    async def table_names() -> set[str]:
+        engine = create_database_engine(database_url)
+        try:
+            async with engine.connect() as connection:
+                return await connection.run_sync(
+                    lambda sync_connection: set(inspect(sync_connection).get_table_names())
+                )
+        finally:
+            await engine.dispose()
+
+    names = asyncio.run(table_names())
+    assert {"users", "database_locks", "books", "book_state"} <= names
+
+    _run_migrations(database_url, "base")
+    assert "users" not in asyncio.run(table_names())
+
+    _run_migrations(database_url, "head")
+    assert "users" in asyncio.run(table_names())
 
 
 @pytest.mark.asyncio
@@ -263,9 +104,7 @@ async def test_alembic_head_matches_full_stage2_schema_contract(
                 "Column/index/FK/unique drift between Base.metadata and the migrated DB."
             )
 
-            # CHECK constraint names must match across both sides; their
-            # sqltext is normalized away above (Postgres canonicalizes the
-            # expression, which the ORM doesn't reproduce verbatim). Asserting
+            # CHECK constraint names must match across both sides. Asserting
             # the DB has a non-empty sqltext for every CHECK keeps the
             # constraints meaningful.
             assert all(

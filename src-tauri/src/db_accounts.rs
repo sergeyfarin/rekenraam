@@ -8,7 +8,7 @@ use tauri::{command, State};
 use crate::error::AppError;
 use crate::session::{current_session_id, clear_redo_stack, record_insert_change};
 use crate::state::DbState;
-use crate::validation::{validate_account_type, validate_name, validate_memo};
+use crate::validation::{validate_account_type, validate_name};
 
 const SINGLE_BOOK_ID: i64 = 1;
 const BALANCING_TX_MARK: &str = "balance_adjustment";

@@ -13,24 +13,28 @@ Lifespan is intentionally NOT executed:
 
 from __future__ import annotations
 
+import asyncio
 import os
-from collections.abc import AsyncIterator, Iterator
+import sys
+import tempfile
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from pathlib import Path
 
-import pytest
 import pytest_asyncio
-from _postgres import temporary_database as temporary_postgres_database
-from _sqlite import temporary_database as temporary_sqlite_database
+from _sqlite import database_url_for
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
-    create_async_engine,
 )
 
 from rekenraam_api.api.dependencies import get_db_session
 from rekenraam_api.app import app
+from rekenraam_api.db.dialect import create_database_engine
+
+E2E_API_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass
@@ -45,27 +49,39 @@ class E2EApp:
     sessionmaker: async_sessionmaker[AsyncSession]
 
 
-@pytest.fixture()
-def e2e_database_url() -> Iterator[str]:
-    backend = os.environ.get("API_E2E_DB_BACKEND", "sqlite").strip().lower()
-    if backend in {"sqlite", "sqlite3"}:
-        with temporary_sqlite_database() as url:
-            yield url
-        return
+@pytest_asyncio.fixture()
+async def e2e_database_url() -> AsyncIterator[str]:
+    _ = os.environ.get("API_E2E_DB_BACKEND")
+    with tempfile.TemporaryDirectory(prefix="rekenraam_sqlite_e2e_") as directory:
+        database_url = database_url_for(Path(directory) / "rekenraam.sqlite3")
+        await _run_sqlite_migrations_subprocess(database_url)
+        yield database_url
 
-    if backend not in {"postgres", "postgresql"}:
-        raise ValueError("API_E2E_DB_BACKEND must be sqlite or postgresql")
 
-    try:
-        with temporary_postgres_database() as url:
-            yield url
-    except Exception as exc:  # pragma: no cover
-        pytest.skip(f"postgres not available for e2e tests: {exc}")
+async def _run_sqlite_migrations_subprocess(database_url: str) -> None:
+    env = os.environ.copy()
+    env["DATABASE_URL"] = database_url
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "alembic",
+        "upgrade",
+        "head",
+        cwd=E2E_API_ROOT,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"SQLite e2e migration failed\nstdout:\n{stdout.decode()}\nstderr:\n{stderr.decode()}"
+        )
 
 
 @pytest_asyncio.fixture()
 async def e2e_app(e2e_database_url: str) -> AsyncIterator[E2EApp]:
-    engine = create_async_engine(e2e_database_url, future=True)
+    engine = create_database_engine(e2e_database_url)
     sessionmaker = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
     async def override_get_db_session() -> AsyncIterator[AsyncSession]:

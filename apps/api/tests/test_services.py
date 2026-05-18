@@ -160,7 +160,8 @@ class StubAccountRepository:
             return "USD"
         return None
 
-    async def get_account_balances(self) -> dict[int, int]:
+    async def get_account_balances(self, book_ids: list[int] | None = None) -> dict[int, int]:
+        _ = book_ids
         return {2: 500000, 3: -500000}
 
     async def list_account_balancings(self, account_id: int) -> list[AccountBalancing]:

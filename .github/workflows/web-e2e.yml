@@ -19,7 +19,7 @@ on:
       - "docker/**"
       - "e2e/**"
       - "Dockerfile.app"
-      - "compose.sqlite.yaml"
+      - "compose.yaml"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -34,7 +34,7 @@ on:
       - "docker/**"
       - "e2e/**"
       - "Dockerfile.app"
-      - "compose.sqlite.yaml"
+      - "compose.yaml"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -68,7 +68,7 @@ jobs:
 
       - name: Bring up compose stack
         # `--wait` blocks until the single app container passes its healthcheck.
-        run: docker compose -f compose.sqlite.yaml up -d --wait
+        run: docker compose up -d --build --wait
         env:
           # Pin the project name so e2e/fixtures.ts can address the same stack
           # while resetting the SQLite volume between specs.
@@ -76,15 +76,14 @@ jobs:
 
       - name: Show compose status
         if: always()
-        run: docker compose -f compose.sqlite.yaml ps
+        run: docker compose ps
 
       - name: Run Playwright specs
         run: npm run e2e
         env:
           COMPOSE_PROJECT_NAME: rekenraam
-          PLAYWRIGHT_BASE_URL: http://localhost:8080
-          PLAYWRIGHT_DB_BACKEND: sqlite
-          PLAYWRIGHT_COMPOSE_FILES: compose.sqlite.yaml
+          PLAYWRIGHT_BASE_URL: http://localhost:16888
+          PLAYWRIGHT_COMPOSE_FILES: compose.yaml
           PLAYWRIGHT_API_SERVICE: app
 
       - name: Upload Playwright report on failure
@@ -97,8 +96,8 @@ jobs:
 
       - name: Dump compose logs on failure
         if: failure()
-        run: docker compose -f compose.sqlite.yaml logs --tail=200
+        run: docker compose logs --tail=200
 
       - name: Tear down compose stack
         if: always()
-        run: docker compose -f compose.sqlite.yaml down -v
+        run: docker compose down -v

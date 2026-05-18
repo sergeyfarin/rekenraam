@@ -128,14 +128,11 @@ Configured in [playwright.config.ts](../../playwright.config.ts):
   testing is out of v1 scope.
 - **No `webServer`.** CI brings up the compose stack itself
   ([.github/workflows/web-e2e.yml](../../.github/workflows/web-e2e.yml));
-  local dev is `docker compose -f compose.sqlite.yaml up -d --wait && npm run e2e`.
+  local dev is `docker compose up -d --wait && npm run e2e`.
 - **`workers: 1`.** All specs share the single compose-deployed SQLite volume;
   serial execution is required by the per-spec reset fixture (below).
-- **`PLAYWRIGHT_BASE_URL`** defaults to `http://localhost:3000`, but the v1 CI
-  job sets it to the SQLite app at `http://localhost:8080`.
-- **`PLAYWRIGHT_DB_BACKEND`** defaults to `sqlite`;
-  **`PLAYWRIGHT_COMPOSE_FILES`** defaults to `compose.sqlite.yaml`. Both can be
-  overridden for post-v1 Postgres compatibility work.
+- **`PLAYWRIGHT_BASE_URL`** defaults to `http://localhost:16888`.
+- **`PLAYWRIGHT_COMPOSE_FILES`** defaults to `compose.yaml`.
 
 Run with `npm run e2e` (one-shot) or `npm run e2e:ui` (the Playwright UI
 runner). First-time setup: `npm run e2e:install` to grab the chromium
@@ -163,12 +160,12 @@ do the form-filling explicitly.
 `/data/rekenraam.sqlite3` file as `/data/rekenraam.e2e-baseline.sqlite3`.
 Each subsequent call:
 
-1. `docker compose -f compose.sqlite.yaml stop app` to release SQLite file
+1. `docker compose stop app` to release SQLite file
    handles.
 2. Run a one-off app container against the same volume to delete
    `rekenraam.sqlite3` plus any `-wal`, `-shm`, or `-journal` sidecars.
 3. Copy `rekenraam.e2e-baseline.sqlite3` back to `rekenraam.sqlite3`.
-4. `docker compose -f compose.sqlite.yaml start app` and poll
+4. `docker compose start app` and poll
    `/api/v1/health` until ready.
 
 The seeded `personal` book (book_id=1), USD commodity (commodity_id=1), Cash

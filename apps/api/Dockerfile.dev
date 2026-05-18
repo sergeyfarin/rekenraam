@@ -17,6 +17,9 @@ COPY apps/api/tests /app/tests
 
 RUN pip install --no-cache-dir -e .[dev]
 
-EXPOSE 8080
+ENV APP_HOST=0.0.0.0
+ENV APP_PORT=16888
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn rekenraam_api.app:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8080} --reload --reload-dir /app/src --reload-dir /app/tests"]
+EXPOSE 16888
+
+CMD ["sh", "-c", "alembic upgrade head && uvicorn rekenraam_api.app:app --host ${APP_HOST} --port ${APP_PORT} --reload --reload-dir /app/src --reload-dir /app/tests"]

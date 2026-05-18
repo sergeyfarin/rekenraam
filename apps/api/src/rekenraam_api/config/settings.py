@@ -9,18 +9,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", frozen=True, extra="ignore")
 
     app_host: str = "0.0.0.0"
-    app_port: int = 8080
-    postgres_db: str = "rekenraam"
-    postgres_user: str = "rekenraam"
-    postgres_password: str = "change-me"
-    postgres_password_file: str | None = None
-    postgres_host: str = "postgres"
-    postgres_port: int = 5432
+    app_port: int = 16888
     database_kind: str | None = None
     database_url_override: str | None = Field(default=None, validation_alias="DATABASE_URL")
     sqlite_path: str = "/data/rekenraam.sqlite3"
     frontend_static_dir: str = "/app/static"
     cors_allowed_origins: str = (
+        "http://localhost:16888,http://127.0.0.1:16888,"
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:4173,http://127.0.0.1:4173,"
         "http://localhost:5173,http://127.0.0.1:5173"
@@ -38,12 +33,6 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = 300
     mfa_enforced: bool = False
     mfa_secret_key: str = "dev-only-change-me"
-
-    @property
-    def resolved_postgres_password(self) -> str:
-        return self._resolve_secret(
-            "POSTGRES_PASSWORD", self.postgres_password, self.postgres_password_file
-        )
 
     @property
     def resolved_first_admin_password(self) -> str | None:
@@ -69,16 +58,13 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         if self.database_url_override:
+            if not self.database_url_override.startswith("sqlite+aiosqlite:///"):
+                raise ValueError("DATABASE_URL must use sqlite+aiosqlite:/// for SQLite-only v1")
             return self.database_url_override
         database_kind = (self.database_kind or "sqlite").lower()
         if database_kind in {"sqlite", "sqlite3"}:
             return f"sqlite+aiosqlite:///{Path(self.sqlite_path)}"
-        if database_kind not in {"postgres", "postgresql"}:
-            raise ValueError("DATABASE_KIND must be sqlite or postgresql")
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.resolved_postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+        raise ValueError("DATABASE_KIND must be sqlite")
 
     @property
     def cors_allowed_origins_list(self) -> list[str]:
