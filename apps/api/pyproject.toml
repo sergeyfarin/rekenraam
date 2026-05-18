@@ -13,20 +13,20 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "fastapi==0.136.1",
   "httpx==0.28.1",
-  "pydantic==2.13.3",
-  "pydantic-settings==2.14.0",
+  "pydantic==2.13.4",
+  "pydantic-settings==2.14.1",
   "python-calamine>=0.6.2",
-  "sqlalchemy[asyncio]==2.0.49",
+  "sqlalchemy[asyncio]==2.1.0",
   "uvicorn[standard]==0.47.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest-cov==7.0.0",
+  "pytest-cov==7.1.0",
   "pyright==1.1.409",
   "pytest==9.0.3",
-  "pytest-asyncio==1.3.0",
-  "ruff==0.15.12",
+  "pytest-asyncio==1.4.0",
+  "ruff==0.15.13",
 ]
 
 [tool.setuptools]
