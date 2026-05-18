@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import cast
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -13,6 +13,7 @@ from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.pricing import (
+    CommodityPriceSource,
     PriceSource,
     PricingPolicy,
     PricingRefreshRun,
@@ -151,6 +152,197 @@ class PricingRepository:
 
     async def get_price_source(self, source_id: int) -> PriceSource | None:
         return await self._session.get(PriceSource, source_id)
+
+    async def list_commodity_price_sources(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None = None,
+        source_id: int | None = None,
+        as_of: datetime | None = None,
+    ) -> list[tuple[CommodityPriceSource, Commodity, PriceSource]]:
+        commodity = aliased(Commodity)
+        newer = aliased(CommodityPriceSource)
+        newer_conditions = [
+            newer.previous_commodity_price_source_id == CommodityPriceSource.id,
+        ]
+        if as_of is not None:
+            newer_conditions.append(newer.created_at <= as_of)
+        current_filter = ~exists(select(newer.id).where(*newer_conditions))
+        statement = (
+            select(CommodityPriceSource, commodity, PriceSource)
+            .join(commodity, CommodityPriceSource.commodity_id == commodity.id)
+            .join(PriceSource, CommodityPriceSource.source_id == PriceSource.id)
+            .where(
+                CommodityPriceSource.book_id == book_id,
+                CommodityPriceSource.voided_at.is_(None),
+                current_filter,
+            )
+            .order_by(
+                commodity.symbol.asc(),
+                CommodityPriceSource.is_primary.desc(),
+                CommodityPriceSource.symbol.asc(),
+                CommodityPriceSource.id.asc(),
+            )
+        )
+        if as_of is not None:
+            statement = statement.where(CommodityPriceSource.created_at <= as_of)
+        if commodity_id is not None:
+            statement = statement.where(CommodityPriceSource.commodity_id == commodity_id)
+        if source_id is not None:
+            statement = statement.where(CommodityPriceSource.source_id == source_id)
+        result = await self._session.execute(statement)
+        return list(result.tuples().all())
+
+    async def resolve_commodity_price_source(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        source_id: int,
+        as_of: datetime | None = None,
+    ) -> CommodityPriceSource | None:
+        rows = await self.list_commodity_price_sources(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+            as_of=as_of,
+        )
+        if not rows:
+            return None
+        primary_rows = [row for row, _, _ in rows if row.is_primary]
+        return primary_rows[0] if primary_rows else rows[0][0]
+
+    async def create_commodity_price_source(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        source_id: int,
+        symbol: str,
+        provider_instrument_id: str | None,
+        exchange_code: str | None,
+        mic: str | None,
+        name_override: str | None,
+        is_primary: bool,
+        metadata_json: str | None,
+        effective_from: date | None,
+        effective_to: date | None,
+    ) -> CommodityPriceSource:
+        await self._validate_commodity_price_source_refs(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+        )
+        await self._validate_commodity_price_source_uniqueness(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+            symbol=symbol,
+            is_primary=is_primary,
+            current_id=None,
+        )
+        row = CommodityPriceSource(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+            symbol=symbol,
+            provider_instrument_id=provider_instrument_id,
+            exchange_code=exchange_code,
+            mic=mic,
+            name_override=name_override,
+            is_primary=is_primary,
+            metadata_json=metadata_json,
+            effective_from=effective_from,
+            effective_to=effective_to,
+        )
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def get_commodity_price_source(
+        self, commodity_price_source_id: int
+    ) -> CommodityPriceSource | None:
+        return await self._current_commodity_price_source(commodity_price_source_id)
+
+    async def update_commodity_price_source(
+        self,
+        *,
+        commodity_price_source_id: int,
+        book_id: int,
+        commodity_id: int,
+        source_id: int,
+        symbol: str,
+        provider_instrument_id: str | None,
+        exchange_code: str | None,
+        mic: str | None,
+        name_override: str | None,
+        is_primary: bool,
+        metadata_json: str | None,
+        effective_from: date | None,
+        effective_to: date | None,
+    ) -> CommodityPriceSource | None:
+        current = await self._current_commodity_price_source(commodity_price_source_id)
+        if current is None or current.book_id != book_id:
+            return None
+
+        await self._validate_commodity_price_source_refs(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+        )
+        await self._validate_commodity_price_source_uniqueness(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+            symbol=symbol,
+            is_primary=is_primary,
+            current_id=current.id,
+        )
+        row = CommodityPriceSource(
+            previous_commodity_price_source_id=current.id,
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+            symbol=symbol,
+            provider_instrument_id=provider_instrument_id,
+            exchange_code=exchange_code,
+            mic=mic,
+            name_override=name_override,
+            is_primary=is_primary,
+            metadata_json=metadata_json,
+            effective_from=effective_from,
+            effective_to=effective_to,
+        )
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def delete_commodity_price_source(self, commodity_price_source_id: int) -> bool:
+        current = await self._current_commodity_price_source(commodity_price_source_id)
+        if current is None:
+            return False
+        row = CommodityPriceSource(
+            previous_commodity_price_source_id=current.id,
+            book_id=current.book_id,
+            commodity_id=current.commodity_id,
+            source_id=current.source_id,
+            symbol=current.symbol,
+            provider_instrument_id=current.provider_instrument_id,
+            exchange_code=current.exchange_code,
+            mic=current.mic,
+            name_override=current.name_override,
+            is_primary=current.is_primary,
+            metadata_json=current.metadata_json,
+            effective_from=current.effective_from,
+            effective_to=current.effective_to,
+            voided_at=datetime.now(UTC),
+        )
+        self._session.add(row)
+        await self._session.commit()
+        return True
 
     async def list_book_currencies(self, book_id: int) -> tuple[list[Commodity], str | None]:
         statement: Select[tuple[Commodity]] = (
@@ -674,6 +866,60 @@ class PricingRepository:
             raise ValueError("to currency not found")
         if source is None:
             raise ValueError("source not found")
+
+    async def _current_commodity_price_source(
+        self, commodity_price_source_id: int
+    ) -> CommodityPriceSource | None:
+        current = await self._session.get(CommodityPriceSource, commodity_price_source_id)
+        while current is not None:
+            child = await self._session.scalar(
+                select(CommodityPriceSource)
+                .where(
+                    CommodityPriceSource.previous_commodity_price_source_id == current.id,
+                )
+                .order_by(CommodityPriceSource.id.desc())
+                .limit(1)
+            )
+            if child is None:
+                break
+            current = child
+        if current is None or current.voided_at is not None:
+            return None
+        return current
+
+    async def _validate_commodity_price_source_refs(
+        self, *, book_id: int, commodity_id: int, source_id: int
+    ) -> None:
+        commodity = await self._session.get(Commodity, commodity_id)
+        source = await self._session.get(PriceSource, source_id)
+        if commodity is None or commodity.book_id != book_id:
+            raise ValueError("commodity not found")
+        if source is None:
+            raise ValueError("source not found")
+
+    async def _validate_commodity_price_source_uniqueness(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int,
+        source_id: int,
+        symbol: str,
+        is_primary: bool,
+        current_id: int | None,
+    ) -> None:
+        rows = await self.list_commodity_price_sources(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+        )
+        normalized_symbol = symbol.casefold()
+        for row, _, _ in rows:
+            if current_id is not None and row.id == current_id:
+                continue
+            if row.symbol.casefold() == normalized_symbol:
+                raise ValueError("commodity price source mapping already exists")
+            if is_primary and row.is_primary:
+                raise ValueError("primary commodity price source mapping already exists")
 
     @staticmethod
     def currency_is_active(row: Commodity, base_currency_code: str | None) -> bool:

@@ -32,7 +32,48 @@ class PriceSource(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, server_default="provider")
     provider: Mapped[str | None] = mapped_column(String(100))
+    provider_key: Mapped[str | None] = mapped_column(String(100))
+    plugin_id: Mapped[str | None] = mapped_column(String(100))
     base_url: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CommodityPriceSource(Base):
+    __tablename__ = "commodity_price_sources"
+    __audit_logged__ = True
+    __table_args__ = (
+        Index("ix_commodity_price_sources_book", "book_id"),
+        Index("ix_commodity_price_sources_commodity_source", "commodity_id", "source_id"),
+        Index("ix_commodity_price_sources_previous", "previous_commodity_price_source_id"),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from",
+            name="ck_commodity_price_sources_effective_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    previous_commodity_price_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commodity_price_sources.id", ondelete="SET NULL")
+    )
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    commodity_id: Mapped[int] = mapped_column(
+        ForeignKey("commodities.id", ondelete="CASCADE"), nullable=False
+    )
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("price_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    symbol: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_instrument_id: Mapped[str | None] = mapped_column(String(200))
+    exchange_code: Mapped[str | None] = mapped_column(String(32))
+    mic: Mapped[str | None] = mapped_column(String(16))
+    name_override: Mapped[str | None] = mapped_column(String(200))
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    metadata_json: Mapped[str | None] = mapped_column(Text)
+    effective_from: Mapped[date | None] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

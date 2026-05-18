@@ -10,6 +10,9 @@ from rekenraam_api.schemas.investments import (
     CostBasisProfileSummary,
     CostBasisProfileUpdateInput,
     CurrencyExposureRow,
+    DividendIncomeCategoryCreateInput,
+    DividendIncomeCategorySummary,
+    DividendIncomeCategoryUpdateInput,
     DividendInput,
     DividendResult,
     InvestmentEventInput,
@@ -83,6 +86,45 @@ class InvestmentService:
             return None
         return CostBasisProfileSummary.model_validate(row, from_attributes=True)
 
+    async def list_dividend_income_categories(
+        self, book_id: int, commodity_id: int | None = None
+    ) -> list[DividendIncomeCategorySummary]:
+        rows = await self._repository.list_dividend_income_categories(
+            book_id=book_id, commodity_id=commodity_id
+        )
+        return [
+            DividendIncomeCategorySummary.model_validate(row, from_attributes=True) for row in rows
+        ]
+
+    async def create_dividend_income_category(
+        self, input: DividendIncomeCategoryCreateInput
+    ) -> DividendIncomeCategorySummary:
+        self._validate_dividend_income_category(input)
+        row = await self._repository.create_dividend_income_category(**input.model_dump())
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        return DividendIncomeCategorySummary.model_validate(row, from_attributes=True)
+
+    async def update_dividend_income_category(
+        self, dividend_income_category_id: int, input: DividendIncomeCategoryUpdateInput
+    ) -> DividendIncomeCategorySummary | None:
+        self._validate_dividend_income_category(input)
+        row = await self._repository.update_dividend_income_category(
+            dividend_income_category_id, **input.model_dump()
+        )
+        if row is None:
+            return None
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        return DividendIncomeCategorySummary.model_validate(row, from_attributes=True)
+
+    async def delete_dividend_income_category(self, dividend_income_category_id: int) -> bool:
+        row = await self._repository.get_dividend_income_category(dividend_income_category_id)
+        deleted = await self._repository.delete_dividend_income_category(
+            dividend_income_category_id
+        )
+        if deleted and row is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
+        return deleted
+
     async def list_corporate_actions(self, book_id: int) -> list[CorporateActionSummary]:
         rows = await self._repository.list_corporate_actions(book_id)
         return [CorporateActionSummary.model_validate(row, from_attributes=True) for row in rows]
@@ -141,12 +183,20 @@ class InvestmentService:
 
     async def create_dividend(self, input: DividendInput) -> DividendResult:
         self._validate_positive(input.amount_minor, "dividend amount")
+        if input.tax_withheld_minor is not None:
+            if input.tax_withheld_minor < 0:
+                raise ValueError("tax withheld must not be negative")
         row = await self._repository.create_dividend(
             book_id=input.book_id,
             txn_date=input.txn_date,
+            commodity_id=input.commodity_id,
             cash_account_id=input.cash_account_id,
             income_account_id=input.income_account_id,
             amount_minor=input.amount_minor,
+            category_id=input.category_id,
+            tax_withheld_minor=input.tax_withheld_minor,
+            tax_withheld_account_id=input.tax_withheld_account_id,
+            tax_withheld_category_id=input.tax_withheld_category_id,
             memo=input.memo,
             payee_id=input.payee_id,
             status=input.status or "uncleared",
@@ -165,6 +215,7 @@ class InvestmentService:
             income_account_id=input.income_account_id,
             quantity_minor=input.quantity_minor,
             amount_minor=input.amount_minor,
+            category_id=input.category_id,
             memo=input.memo,
             payee_id=input.payee_id,
             status=input.status or "uncleared",
@@ -294,6 +345,20 @@ class InvestmentService:
     def _validate_cost_basis_method(value: str) -> None:
         if value not in {"fifo", "lifo", "average_cost", "specific_lot"}:
             raise ValueError("cost basis method must be fifo, lifo, average_cost, or specific_lot")
+
+    @staticmethod
+    def _validate_dividend_income_category(
+        input: DividendIncomeCategoryCreateInput | DividendIncomeCategoryUpdateInput,
+    ) -> None:
+        if input.default_tax_withheld_minor is not None and input.default_tax_withheld_minor < 0:
+            raise ValueError("default tax withheld must not be negative")
+        if input.withholding_rate_bps is not None and (
+            input.withholding_rate_bps < 0 or input.withholding_rate_bps > 10000
+        ):
+            raise ValueError("withholding rate must be between 0 and 10000 bps")
+        if input.effective_to is not None and input.effective_from is not None:
+            if input.effective_to < input.effective_from:
+                raise ValueError("effective_to must be on or after effective_from")
 
     @staticmethod
     def _validate_scale(value: int, label: str) -> None:

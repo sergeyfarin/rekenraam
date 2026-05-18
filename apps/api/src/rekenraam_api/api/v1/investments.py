@@ -14,6 +14,9 @@ from rekenraam_api.schemas.investments import (
     CostBasisProfileSummary,
     CostBasisProfileUpdateInput,
     CurrencyExposureRow,
+    DividendIncomeCategoryCreateInput,
+    DividendIncomeCategorySummary,
+    DividendIncomeCategoryUpdateInput,
     DividendInput,
     DividendResult,
     InvestmentEventInput,
@@ -103,6 +106,65 @@ async def update_cost_basis_profile(
             status_code=status.HTTP_404_NOT_FOUND, detail="cost basis profile not found"
         )
     return row
+
+
+@router.get("/dividend-income-categories", response_model=list[DividendIncomeCategorySummary])
+async def list_dividend_income_categories(
+    book_id: int = Query(default=1),
+    commodity_id: int | None = Query(default=None),
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> list[DividendIncomeCategorySummary]:
+    return await investment_service.list_dividend_income_categories(book_id, commodity_id)
+
+
+@router.post("/dividend-income-categories", response_model=DividendIncomeCategorySummary)
+async def create_dividend_income_category(
+    input: DividendIncomeCategoryCreateInput,
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> DividendIncomeCategorySummary:
+    try:
+        return await investment_service.create_dividend_income_category(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put(
+    "/dividend-income-categories/{dividend_income_category_id}",
+    response_model=DividendIncomeCategorySummary,
+)
+async def update_dividend_income_category(
+    dividend_income_category_id: int,
+    input: DividendIncomeCategoryUpdateInput,
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> DividendIncomeCategorySummary:
+    try:
+        row = await investment_service.update_dividend_income_category(
+            dividend_income_category_id, input
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="dividend income category not found",
+        )
+    return row
+
+
+@router.delete(
+    "/dividend-income-categories/{dividend_income_category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_dividend_income_category(
+    dividend_income_category_id: int,
+    investment_service: InvestmentService = Depends(get_investment_service),
+) -> None:
+    deleted = await investment_service.delete_dividend_income_category(dividend_income_category_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="dividend income category not found",
+        )
 
 
 @router.get("/corporate-actions", response_model=list[CorporateActionSummary])

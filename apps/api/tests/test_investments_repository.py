@@ -7,12 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.investments import (
     CorporateAction,
+    DividendIncomeCategory,
     InvestmentInstrument,
     Lot,
     PriceObservation,
     SplitLotAllocation,
 )
-from rekenraam_api.db.models.metadata import Commodity
+from rekenraam_api.db.models.metadata import Category, Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.investments import InvestmentRepository
 
@@ -284,9 +285,14 @@ async def test_investment_repository_creates_buy_sell_and_dividend_transactions(
     dividend_result = await repository.create_dividend(
         book_id=1,
         txn_date=date(2026, 7, 3),
+        commodity_id=None,
         cash_account_id=2,
         income_account_id=3,
         amount_minor=5000,
+        category_id=None,
+        tax_withheld_minor=None,
+        tax_withheld_account_id=None,
+        tax_withheld_category_id=None,
         memo="Dividend",
         payee_id=None,
         status="cleared",
@@ -349,6 +355,152 @@ async def test_investment_repository_creates_buy_sell_and_dividend_transactions(
     assert buy_lot is not None
     assert buy_lot.cost_basis_minor == 70000
     assert sell_allocations[0].quantity_minor == -30000
+
+
+@pytest.mark.asyncio
+async def test_investment_repository_manages_dividend_income_defaults_and_withholding(
+    repository_session: AsyncSession,
+) -> None:
+    _, security_id = await _seed_investment_data(repository_session)
+    income_account = Account(
+        book_id=1,
+        parent_id=None,
+        previous_account_id=None,
+        account_type="income",
+        name="Dividend Income",
+        commodity_id=1,
+        booking_policy="fifo",
+        number_last4=None,
+        is_closed=False,
+        is_hidden=False,
+        is_system=False,
+        system_role=None,
+        effective_at=date(2026, 5, 1),
+        lifecycle_event="open",
+        lifecycle_note=None,
+        lifecycle_metadata=None,
+    )
+    tax_account = Account(
+        book_id=1,
+        parent_id=None,
+        previous_account_id=None,
+        account_type="asset",
+        name="Foreign Tax Credit",
+        commodity_id=1,
+        booking_policy="fifo",
+        number_last4=None,
+        is_closed=False,
+        is_hidden=False,
+        is_system=False,
+        system_role=None,
+        effective_at=date(2026, 5, 1),
+        lifecycle_event="open",
+        lifecycle_note=None,
+        lifecycle_metadata=None,
+    )
+    dividend_category = Category(book_id=1, parent_id=None, name="Dividends", kind="income")
+    tax_category = Category(book_id=1, parent_id=None, name="Foreign Tax", kind="expense")
+    repository_session.add_all([income_account, tax_account, dividend_category, tax_category])
+    await repository_session.commit()
+    await repository_session.refresh(income_account)
+    await repository_session.refresh(tax_account)
+    await repository_session.refresh(dividend_category)
+    await repository_session.refresh(tax_category)
+
+    repository = InvestmentRepository(repository_session)
+    created = await repository.create_dividend_income_category(
+        book_id=1,
+        commodity_id=security_id,
+        income_account_id=income_account.id,
+        category_id=dividend_category.id,
+        tax_withheld_account_id=tax_account.id,
+        tax_withheld_category_id=tax_category.id,
+        default_tax_withheld_minor=150,
+        withholding_rate_bps=1500,
+        tax_country_code="USA",
+        tax_treatment="foreign_tax_credit_candidate",
+        notes="US treaty withholding",
+        metadata_json='{"form":"1042-S"}',
+        effective_from=None,
+        effective_to=None,
+    )
+    listed = await repository.list_dividend_income_categories(book_id=1, commodity_id=security_id)
+    resolved = await repository.resolve_dividend_income_category(
+        book_id=1, commodity_id=security_id, as_of_date=date(2026, 7, 4)
+    )
+
+    assert listed[0].id == created.id
+    assert resolved is not None
+    assert resolved.income_account_id == income_account.id
+
+    dividend = await repository.create_dividend(
+        book_id=1,
+        txn_date=date(2026, 7, 4),
+        commodity_id=security_id,
+        cash_account_id=2,
+        income_account_id=None,
+        amount_minor=850,
+        category_id=None,
+        tax_withheld_minor=None,
+        tax_withheld_account_id=None,
+        tax_withheld_category_id=None,
+        memo="Defaulted dividend",
+        payee_id=None,
+        status="cleared",
+    )
+    splits = (
+        (
+            await repository_session.execute(
+                select(Split).where(Split.tx_id == dividend["transaction_id"]).order_by(Split.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert sum(split.amount_minor for split in splits) == 0
+    assert [split.amount_minor for split in splits] == [850, -1000, 150]
+    assert splits[1].account_id == income_account.id
+    assert splits[1].category_id == dividend_category.id
+    assert splits[2].account_id == tax_account.id
+    assert splits[2].category_id == tax_category.id
+
+    updated = await repository.update_dividend_income_category(
+        created.id,
+        book_id=1,
+        commodity_id=security_id,
+        income_account_id=income_account.id,
+        category_id=dividend_category.id,
+        tax_withheld_account_id=tax_account.id,
+        tax_withheld_category_id=tax_category.id,
+        default_tax_withheld_minor=None,
+        withholding_rate_bps=None,
+        tax_country_code=None,
+        tax_treatment=None,
+        notes="Updated",
+        metadata_json=None,
+        effective_from=None,
+        effective_to=None,
+    )
+    assert updated is not None
+    assert updated.previous_dividend_income_category_id == created.id
+    assert updated.notes == "Updated"
+    assert await repository.delete_dividend_income_category(created.id) is True
+    assert (
+        await repository.list_dividend_income_categories(book_id=1, commodity_id=security_id) == []
+    )
+
+    all_rows = (
+        (
+            await repository_session.execute(
+                select(DividendIncomeCategory).where(
+                    DividendIncomeCategory.commodity_id == security_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(all_rows) == 3
 
 
 @pytest.mark.asyncio

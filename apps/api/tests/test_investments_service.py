@@ -7,6 +7,7 @@ from rekenraam_api.schemas.investments import (
     BuyCommodityInput,
     ConvertedPositionsQuery,
     CorporateActionCreateInput,
+    DividendIncomeCategoryCreateInput,
     DividendInput,
     LotsHoldingQuery,
     PositionsQuery,
@@ -56,6 +57,64 @@ class StubInvestmentRepository:
 
     async def create_dividend(self, **_: object) -> dict[str, object]:
         return {"transaction_id": 12}
+
+    async def list_dividend_income_categories(
+        self, *, book_id: int, commodity_id: int | None = None
+    ) -> list[SimpleNamespace]:
+        return [
+            SimpleNamespace(
+                id=31,
+                previous_dividend_income_category_id=None,
+                book_id=book_id,
+                commodity_id=commodity_id,
+                income_account_id=5,
+                category_id=7,
+                tax_withheld_account_id=6,
+                tax_withheld_category_id=8,
+                default_tax_withheld_minor=150,
+                withholding_rate_bps=1500,
+                tax_country_code="USA",
+                tax_treatment="foreign_tax_credit_candidate",
+                notes="Treaty withholding",
+                metadata_json=None,
+                effective_from=None,
+                effective_to=None,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        ]
+
+    async def create_dividend_income_category(self, **values: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=32,
+            previous_dividend_income_category_id=None,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            **values,
+        )
+
+    async def update_dividend_income_category(
+        self, dividend_income_category_id: int, **values: object
+    ) -> SimpleNamespace | None:
+        if dividend_income_category_id != 31:
+            return None
+        return SimpleNamespace(
+            id=33,
+            previous_dividend_income_category_id=31,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            **values,
+        )
+
+    async def get_dividend_income_category(
+        self, dividend_income_category_id: int
+    ) -> SimpleNamespace | None:
+        if dividend_income_category_id != 31:
+            return None
+        return SimpleNamespace(id=31, book_id=1)
+
+    async def delete_dividend_income_category(self, dividend_income_category_id: int) -> bool:
+        return dividend_income_category_id == 31
 
     async def list_positions(
         self, *, book_id: int, as_of_date: date | None
@@ -239,6 +298,42 @@ async def test_investment_service_maps_positions_lots_and_gains() -> None:
     assert lots[0].is_long_term is True
     assert realized[0].gain_loss_minor == 20000
     assert unrealized[0].unrealized_gain_minor == 30000
+
+
+@pytest.mark.asyncio
+async def test_investment_service_manages_dividend_income_categories() -> None:
+    service = InvestmentService(StubInvestmentRepository())
+
+    rows = await service.list_dividend_income_categories(1, commodity_id=2)
+    created = await service.create_dividend_income_category(
+        DividendIncomeCategoryCreateInput(
+            book_id=1,
+            commodity_id=2,
+            income_account_id=5,
+            category_id=7,
+            tax_withheld_account_id=6,
+            tax_withheld_category_id=8,
+            default_tax_withheld_minor=150,
+            withholding_rate_bps=1500,
+            tax_country_code="USA",
+            tax_treatment="foreign_tax_credit_candidate",
+        )
+    )
+    deleted = await service.delete_dividend_income_category(31)
+
+    assert rows[0].category_id == 7
+    assert created.id == 32
+    assert deleted is True
+
+    with pytest.raises(ValueError, match="withholding rate must be between 0 and 10000 bps"):
+        await service.create_dividend_income_category(
+            DividendIncomeCategoryCreateInput(
+                book_id=1,
+                income_account_id=5,
+                category_id=7,
+                withholding_rate_bps=10001,
+            )
+        )
 
 
 @pytest.mark.asyncio

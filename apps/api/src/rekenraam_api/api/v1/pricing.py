@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from rekenraam_api.api.dependencies import get_pricing_service, get_pricing_worker
 from rekenraam_api.schemas.pricing import (
+    CommodityPriceSourceCreateInput,
+    CommodityPriceSourceSummary,
+    CommodityPriceSourceUpdateInput,
     FxRateDailyCreateInput,
     FxRateDailySummary,
     FxRateOfficialCreateInput,
@@ -130,6 +133,66 @@ async def list_price_sources(
     pricing_service: PricingService = Depends(get_pricing_service),
 ) -> list[PriceSourceSummary]:
     return await pricing_service.list_price_sources()
+
+
+@router.get("/commodity-price-sources", response_model=list[CommodityPriceSourceSummary])
+async def list_commodity_price_sources(
+    book_id: int = Query(default=1),
+    commodity_id: int | None = Query(default=None),
+    source_id: int | None = Query(default=None),
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> list[CommodityPriceSourceSummary]:
+    return await pricing_service.list_commodity_price_sources(
+        book_id=book_id,
+        commodity_id=commodity_id,
+        source_id=source_id,
+    )
+
+
+@router.post("/commodity-price-sources", response_model=CommodityPriceSourceSummary)
+async def create_commodity_price_source(
+    input: CommodityPriceSourceCreateInput,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> CommodityPriceSourceSummary:
+    try:
+        return await pricing_service.create_commodity_price_source(input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.put(
+    "/commodity-price-sources/{commodity_price_source_id}",
+    response_model=CommodityPriceSourceSummary,
+)
+async def update_commodity_price_source(
+    commodity_price_source_id: int,
+    input: CommodityPriceSourceUpdateInput,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> CommodityPriceSourceSummary:
+    try:
+        row = await pricing_service.update_commodity_price_source(commodity_price_source_id, input)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="commodity price source not found"
+        )
+    return row
+
+
+@router.delete(
+    "/commodity-price-sources/{commodity_price_source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_commodity_price_source(
+    commodity_price_source_id: int,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> None:
+    deleted = await pricing_service.delete_commodity_price_source(commodity_price_source_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="commodity price source not found"
+        )
 
 
 @router.get("/policy", response_model=PricingPolicySummary)

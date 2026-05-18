@@ -9,6 +9,7 @@ from rekenraam_api.app import app
 from rekenraam_api.schemas.investments import (
     ConvertedPosition,
     CorporateActionSummary,
+    DividendIncomeCategorySummary,
     DividendResult,
     LotHoldingPeriod,
     Position,
@@ -59,6 +60,83 @@ class StubInvestmentService:
 
     async def create_dividend(self, input: object) -> DividendResult:
         return DividendResult(transaction_id=12)
+
+    async def list_dividend_income_categories(
+        self, book_id: int, commodity_id: int | None = None
+    ) -> list[DividendIncomeCategorySummary]:
+        return [
+            DividendIncomeCategorySummary(
+                id=31,
+                previous_dividend_income_category_id=None,
+                book_id=book_id,
+                commodity_id=commodity_id,
+                income_account_id=5,
+                category_id=7,
+                tax_withheld_account_id=6,
+                tax_withheld_category_id=8,
+                default_tax_withheld_minor=150,
+                withholding_rate_bps=1500,
+                tax_country_code="USA",
+                tax_treatment="foreign_tax_credit_candidate",
+                notes="Treaty withholding",
+                metadata_json=None,
+                effective_from=None,
+                effective_to=None,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        ]
+
+    async def create_dividend_income_category(self, input: object) -> DividendIncomeCategorySummary:
+        return DividendIncomeCategorySummary(
+            id=32,
+            previous_dividend_income_category_id=None,
+            book_id=1,
+            commodity_id=2,
+            income_account_id=5,
+            category_id=7,
+            tax_withheld_account_id=6,
+            tax_withheld_category_id=8,
+            default_tax_withheld_minor=150,
+            withholding_rate_bps=1500,
+            tax_country_code="USA",
+            tax_treatment="foreign_tax_credit_candidate",
+            notes=None,
+            metadata_json=None,
+            effective_from=None,
+            effective_to=None,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+
+    async def update_dividend_income_category(
+        self, dividend_income_category_id: int, input: object
+    ) -> DividendIncomeCategorySummary | None:
+        if dividend_income_category_id != 31:
+            return None
+        return DividendIncomeCategorySummary(
+            id=33,
+            previous_dividend_income_category_id=31,
+            book_id=1,
+            commodity_id=2,
+            income_account_id=5,
+            category_id=7,
+            tax_withheld_account_id=None,
+            tax_withheld_category_id=None,
+            default_tax_withheld_minor=None,
+            withholding_rate_bps=None,
+            tax_country_code=None,
+            tax_treatment=None,
+            notes="Updated",
+            metadata_json=None,
+            effective_from=None,
+            effective_to=None,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+
+    async def delete_dividend_income_category(self, dividend_income_category_id: int) -> bool:
+        return dividend_income_category_id == 31
 
     async def list_positions(self, input: object) -> list[Position]:
         return [
@@ -217,6 +295,37 @@ async def test_investment_endpoints_return_positions_lots_and_gains(client: Asyn
             "amount_minor": 5000,
         },
     )
+    dividend_defaults_response = await client.get(
+        "/api/v1/investments/dividend-income-categories?commodity_id=2"
+    )
+    create_dividend_default_response = await client.post(
+        "/api/v1/investments/dividend-income-categories",
+        json={
+            "book_id": 1,
+            "commodity_id": 2,
+            "income_account_id": 5,
+            "category_id": 7,
+            "tax_withheld_account_id": 6,
+            "tax_withheld_category_id": 8,
+            "default_tax_withheld_minor": 150,
+            "withholding_rate_bps": 1500,
+            "tax_country_code": "USA",
+            "tax_treatment": "foreign_tax_credit_candidate",
+        },
+    )
+    update_dividend_default_response = await client.put(
+        "/api/v1/investments/dividend-income-categories/31",
+        json={
+            "book_id": 1,
+            "commodity_id": 2,
+            "income_account_id": 5,
+            "category_id": 7,
+            "notes": "Updated",
+        },
+    )
+    delete_dividend_default_response = await client.delete(
+        "/api/v1/investments/dividend-income-categories/31"
+    )
     positions_response = await client.get("/api/v1/investments/positions")
     converted_response = await client.get(
         "/api/v1/investments/positions/converted?base_commodity_id=1"
@@ -231,6 +340,13 @@ async def test_investment_endpoints_return_positions_lots_and_gains(client: Asyn
     assert sell_response.json()["allocations"][0]["lot_id"] == 1
     assert dividend_response.status_code == 200
     assert dividend_response.json()["transaction_id"] == 12
+    assert dividend_defaults_response.status_code == 200
+    assert dividend_defaults_response.json()[0]["category_id"] == 7
+    assert create_dividend_default_response.status_code == 200
+    assert create_dividend_default_response.json()["id"] == 32
+    assert update_dividend_default_response.status_code == 200
+    assert update_dividend_default_response.json()["previous_dividend_income_category_id"] == 31
+    assert delete_dividend_default_response.status_code == 204
     assert positions_response.status_code == 200
     assert positions_response.json()[0]["commodity_name"] == "Acme Corp"
     assert converted_response.status_code == 200

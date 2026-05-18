@@ -127,6 +127,64 @@ class CostBasisProfile(Base):
     )
 
 
+class DividendIncomeCategory(Base):
+    __tablename__ = "dividend_income_categories"
+    __audit_logged__ = True
+    __table_args__ = (
+        Index("ix_dividend_income_categories_book", "book_id"),
+        Index("ix_dividend_income_categories_commodity", "commodity_id"),
+        Index("ix_dividend_income_categories_previous", "previous_dividend_income_category_id"),
+        CheckConstraint(
+            "default_tax_withheld_minor IS NULL OR default_tax_withheld_minor >= 0",
+            name="ck_dividend_income_categories_tax_withheld_nonnegative",
+        ),
+        CheckConstraint(
+            "withholding_rate_bps IS NULL OR (withholding_rate_bps >= 0 AND withholding_rate_bps <= 10000)",
+            name="ck_dividend_income_categories_withholding_rate",
+        ),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from",
+            name="ck_dividend_income_categories_effective_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    previous_dividend_income_category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dividend_income_categories.id", ondelete="SET NULL")
+    )
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    commodity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commodities.id", ondelete="SET NULL")
+    )
+    income_account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
+    )
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("categories.id", ondelete="RESTRICT"), nullable=False
+    )
+    tax_withheld_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL")
+    )
+    tax_withheld_category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL")
+    )
+    default_tax_withheld_minor: Mapped[int | None] = mapped_column(BigInteger)
+    withholding_rate_bps: Mapped[int | None] = mapped_column(Integer)
+    tax_country_code: Mapped[str | None] = mapped_column(String(3))
+    tax_treatment: Mapped[str | None] = mapped_column(String(64))
+    notes: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[str | None] = mapped_column(Text)
+    effective_from: Mapped[date | None] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class CorporateAction(Base):
     __tablename__ = "corporate_actions"
     __audit_logged__ = True

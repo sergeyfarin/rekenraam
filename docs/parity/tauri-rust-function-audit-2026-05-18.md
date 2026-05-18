@@ -128,7 +128,7 @@ are not direct one-for-one Python ports.
 
 ### Pricing, FX, And Commodities
 
-- Rust `commodity_price_sources` supported per-source ticker overrides,
+- [Completed] Rust `commodity_price_sources` supported per-source ticker overrides,
   source-specific display names, primary flags, and append-only supersession.
   Python has general pricing source assignments, but no equivalent table/API
   for commodity/source ticker overrides such as exchange-specific symbols.

@@ -4,12 +4,14 @@ import pytest
 
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.pricing import (
+    CommodityPriceSource,
     PriceSource,
     PricingPolicy,
     PricingRefreshState,
     PricingSourceAssignment,
 )
 from rekenraam_api.schemas.pricing import (
+    CommodityPriceSourceCreateInput,
     PricingPolicyUpdateInput,
     PricingSourceAssignmentCreateInput,
 )
@@ -38,6 +40,80 @@ class StubPricingRepository:
                 created_at=self._created_at,
             ),
         ]
+
+    async def list_commodity_price_sources(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None = None,
+        source_id: int | None = None,
+    ) -> list[tuple[CommodityPriceSource, Commodity, PriceSource]]:
+        if book_id != 1:
+            return []
+        row = CommodityPriceSource(
+            id=20,
+            book_id=1,
+            commodity_id=2,
+            source_id=1001,
+            symbol="VWRL.AS",
+            exchange_code="AS",
+            mic="XAMS",
+            is_primary=True,
+            created_at=self._created_at,
+        )
+        commodity = Commodity(
+            id=2,
+            book_id=1,
+            kind="security",
+            symbol="VWRL",
+            name="Vanguard FTSE All-World",
+            scale=4,
+            metadata_text=None,
+            created_at=self._created_at,
+            updated_at=self._created_at,
+        )
+        source = await self.get_price_source(1001)
+        assert source is not None
+        return [(row, commodity, source)]
+
+    async def create_commodity_price_source(self, **kwargs: object) -> CommodityPriceSource:
+        return CommodityPriceSource(
+            id=21,
+            book_id=int(kwargs["book_id"]),
+            commodity_id=int(kwargs["commodity_id"]),
+            source_id=int(kwargs["source_id"]),
+            symbol=str(kwargs["symbol"]),
+            provider_instrument_id=kwargs["provider_instrument_id"],
+            exchange_code=kwargs["exchange_code"],
+            mic=kwargs["mic"],
+            name_override=kwargs["name_override"],
+            is_primary=bool(kwargs["is_primary"]),
+            metadata_json=kwargs["metadata_json"],
+            effective_from=kwargs["effective_from"],
+            effective_to=kwargs["effective_to"],
+            created_at=self._created_at,
+        )
+
+    async def update_commodity_price_source(self, **kwargs: object) -> CommodityPriceSource | None:
+        return await self.create_commodity_price_source(**kwargs)
+
+    async def get_commodity_price_source(
+        self, commodity_price_source_id: int
+    ) -> CommodityPriceSource | None:
+        if commodity_price_source_id != 20:
+            return None
+        return CommodityPriceSource(
+            id=20,
+            book_id=1,
+            commodity_id=2,
+            source_id=1001,
+            symbol="VWRL.AS",
+            is_primary=True,
+            created_at=self._created_at,
+        )
+
+    async def delete_commodity_price_source(self, commodity_price_source_id: int) -> bool:
+        return commodity_price_source_id == 20
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicy | None:
         if book_id != 1:
@@ -249,12 +325,15 @@ async def test_pricing_service_maps_policy_sources_assignments_and_refresh_state
     sources = await service.list_price_sources()
     policy = await service.get_pricing_policy(1)
     assignments = await service.list_pricing_source_assignments(1)
+    commodity_sources = await service.list_commodity_price_sources(book_id=1)
     refresh_state = await service.list_pricing_refresh_state(1)
 
     assert sources[0].name == "ECB"
     assert policy is not None
     assert policy.base_currency_symbol == "USD"
     assert assignments[0].from_currency_symbol == "EUR"
+    assert commodity_sources[0].symbol == "VWRL.AS"
+    assert commodity_sources[0].is_primary is True
     assert refresh_state[0].source_name == "ECB"
 
 
@@ -298,6 +377,40 @@ async def test_pricing_service_updates_policy_and_validates_assignment_dates() -
                 source_id=1001,
                 effective_from=date(2026, 5, 2),
                 effective_to=date(2026, 5, 1),
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_pricing_service_manages_commodity_price_source_inputs() -> None:
+    service = PricingService(StubPricingRepository())
+
+    created = await service.create_commodity_price_source(
+        CommodityPriceSourceCreateInput(
+            book_id=1,
+            commodity_id=2,
+            source_id=1001,
+            symbol=" VWRL.AS ",
+            exchange_code=" AS ",
+            mic="XAMS",
+            is_primary=True,
+            metadata_json='{"assetClass":"equity"}',
+        )
+    )
+    deleted = await service.delete_commodity_price_source(20)
+
+    assert created.symbol == "VWRL.AS"
+    assert created.exchange_code == "AS"
+    assert deleted is True
+
+    with pytest.raises(ValueError, match="metadata_json must be valid JSON"):
+        await service.create_commodity_price_source(
+            CommodityPriceSourceCreateInput(
+                book_id=1,
+                commodity_id=2,
+                source_id=1001,
+                symbol="VWRL.AS",
+                metadata_json="{not-json}",
             )
         )
 

@@ -118,10 +118,69 @@ class PriceSourceSummary(BaseModel):
     id: int
     name: str
     kind: str
+    provider_key: str | None = None
+    plugin_id: str | None = None
     country_code: str | None = None
     website_url: str | None = None
     notes: str | None = None
     created_at: datetime
+
+
+class CommodityPriceSourceSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    previous_commodity_price_source_id: int | None
+    book_id: int
+    commodity_id: int
+    commodity_symbol: str | None
+    commodity_name: str
+    source_id: int
+    source_name: str | None
+    symbol: str
+    provider_instrument_id: str | None
+    exchange_code: str | None
+    mic: str | None
+    name_override: str | None
+    is_primary: bool
+    metadata_json: str | None
+    effective_from: date | None
+    effective_to: date | None
+    created_at: datetime
+
+
+class CommodityPriceSourceCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
+    commodity_id: int
+    source_id: int
+    symbol: str
+    provider_instrument_id: str | None = None
+    exchange_code: str | None = None
+    mic: str | None = None
+    name_override: str | None = None
+    is_primary: bool = False
+    metadata_json: str | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
+
+
+class CommodityPriceSourceUpdateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
+    commodity_id: int
+    source_id: int
+    symbol: str
+    provider_instrument_id: str | None = None
+    exchange_code: str | None = None
+    mic: str | None = None
+    name_override: str | None = None
+    is_primary: bool = False
+    metadata_json: str | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
 
 
 class PricingPolicySummary(BaseModel):

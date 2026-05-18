@@ -37,6 +37,7 @@ from rekenraam_api.db.models.imports import (
 from rekenraam_api.db.models.investments import (
     CorporateAction,
     CostBasisProfile,
+    DividendIncomeCategory,
     InvestmentInstrument,
     Lot,
     PriceObservation,
@@ -62,6 +63,7 @@ from rekenraam_api.db.models.planning import (
     ScheduledTransactionSplit,
 )
 from rekenraam_api.db.models.pricing import (
+    CommodityPriceSource,
     PriceSource,
     PricingPolicy,
     PricingRefreshRun,
@@ -89,10 +91,12 @@ __all__ = [
     "BudgetTarget",
     "Category",
     "Commodity",
+    "CommodityPriceSource",
     "CorporateAction",
     "CostBasisProfile",
     "Country",
     "DatabaseLock",
+    "DividendIncomeCategory",
     "ImportRule",
     "ImportSession",
     "ImportSessionTransaction",

@@ -1,9 +1,12 @@
+import json
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.pricing import (
+    CommodityPriceSource,
     PriceSource,
     PricingPolicy,
     PricingRefreshState,
@@ -11,6 +14,9 @@ from rekenraam_api.db.models.pricing import (
 )
 from rekenraam_api.repositories.pricing import PricingRepository
 from rekenraam_api.schemas.pricing import (
+    CommodityPriceSourceCreateInput,
+    CommodityPriceSourceSummary,
+    CommodityPriceSourceUpdateInput,
     FxRateDailyCreateInput,
     FxRateDailySummary,
     FxRateOfficialCreateInput,
@@ -29,6 +35,22 @@ from rekenraam_api.schemas.pricing import (
 from rekenraam_api.services.report_invalidation import bump_report_state
 
 
+@dataclass(frozen=True)
+class _CommodityPriceSourceValues:
+    book_id: int
+    commodity_id: int
+    source_id: int
+    symbol: str
+    provider_instrument_id: str | None
+    exchange_code: str | None
+    mic: str | None
+    name_override: str | None
+    is_primary: bool
+    metadata_json: str | None
+    effective_from: date | None
+    effective_to: date | None
+
+
 class PricingService:
     def __init__(self, repository: PricingRepository) -> None:
         self._repository = repository
@@ -36,6 +58,75 @@ class PricingService:
     async def list_price_sources(self) -> list[PriceSourceSummary]:
         rows = await self._repository.list_price_sources()
         return [self._to_price_source_summary(row) for row in rows]
+
+    async def list_commodity_price_sources(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None = None,
+        source_id: int | None = None,
+    ) -> list[CommodityPriceSourceSummary]:
+        rows = await self._repository.list_commodity_price_sources(
+            book_id=book_id,
+            commodity_id=commodity_id,
+            source_id=source_id,
+        )
+        return [
+            self._to_commodity_price_source_summary(row, commodity, source)
+            for row, commodity, source in rows
+        ]
+
+    async def create_commodity_price_source(
+        self, input: CommodityPriceSourceCreateInput
+    ) -> CommodityPriceSourceSummary:
+        values = self._clean_commodity_price_source_input(input)
+        row = await self._repository.create_commodity_price_source(
+            book_id=values.book_id,
+            commodity_id=values.commodity_id,
+            source_id=values.source_id,
+            symbol=values.symbol,
+            provider_instrument_id=values.provider_instrument_id,
+            exchange_code=values.exchange_code,
+            mic=values.mic,
+            name_override=values.name_override,
+            is_primary=values.is_primary,
+            metadata_json=values.metadata_json,
+            effective_from=values.effective_from,
+            effective_to=values.effective_to,
+        )
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        return await self._build_commodity_price_source_summary(row)
+
+    async def update_commodity_price_source(
+        self, commodity_price_source_id: int, input: CommodityPriceSourceUpdateInput
+    ) -> CommodityPriceSourceSummary | None:
+        values = self._clean_commodity_price_source_input(input)
+        row = await self._repository.update_commodity_price_source(
+            commodity_price_source_id=commodity_price_source_id,
+            book_id=values.book_id,
+            commodity_id=values.commodity_id,
+            source_id=values.source_id,
+            symbol=values.symbol,
+            provider_instrument_id=values.provider_instrument_id,
+            exchange_code=values.exchange_code,
+            mic=values.mic,
+            name_override=values.name_override,
+            is_primary=values.is_primary,
+            metadata_json=values.metadata_json,
+            effective_from=values.effective_from,
+            effective_to=values.effective_to,
+        )
+        if row is None:
+            return None
+        await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        return await self._build_commodity_price_source_summary(row)
+
+    async def delete_commodity_price_source(self, commodity_price_source_id: int) -> bool:
+        row = await self._repository.get_commodity_price_source(commodity_price_source_id)
+        deleted = await self._repository.delete_commodity_price_source(commodity_price_source_id)
+        if deleted and row is not None:
+            await bump_report_state(getattr(self._repository, "_session", None), row.book_id)
+        return deleted
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicySummary | None:
         policy = await self._repository.get_pricing_policy(book_id)
@@ -317,15 +408,53 @@ class PricingService:
             raise ValueError("pricing source assignment references missing entities")
         return self._to_assignment_summary(assignment, from_currency, to_currency, source)
 
+    async def _build_commodity_price_source_summary(
+        self, row: CommodityPriceSource
+    ) -> CommodityPriceSourceSummary:
+        commodity = await self._repository.get_commodity(row.commodity_id)
+        source = await self._repository.get_price_source(row.source_id)
+        if commodity is None or source is None:
+            raise ValueError("commodity price source references missing entities")
+        return self._to_commodity_price_source_summary(row, commodity, source)
+
     @staticmethod
     def _to_price_source_summary(row: PriceSource) -> PriceSourceSummary:
         return PriceSourceSummary(
             id=row.id,
             name=row.name,
             kind=row.kind,
+            provider_key=row.provider_key,
+            plugin_id=row.plugin_id,
             country_code=None,
             website_url=row.base_url,
             notes=row.provider,
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    def _to_commodity_price_source_summary(
+        row: CommodityPriceSource,
+        commodity: Commodity,
+        source: PriceSource,
+    ) -> CommodityPriceSourceSummary:
+        return CommodityPriceSourceSummary(
+            id=row.id,
+            previous_commodity_price_source_id=row.previous_commodity_price_source_id,
+            book_id=row.book_id,
+            commodity_id=row.commodity_id,
+            commodity_symbol=commodity.symbol,
+            commodity_name=commodity.name,
+            source_id=row.source_id,
+            source_name=source.name,
+            symbol=row.symbol,
+            provider_instrument_id=row.provider_instrument_id,
+            exchange_code=row.exchange_code,
+            mic=row.mic,
+            name_override=row.name_override,
+            is_primary=row.is_primary,
+            metadata_json=row.metadata_json,
+            effective_from=row.effective_from,
+            effective_to=row.effective_to,
             created_at=row.created_at,
         )
 
@@ -457,6 +586,37 @@ class PricingService:
     def _validate_assignment_dates(effective_from: date, effective_to: date | None) -> None:
         if effective_to is not None and effective_to < effective_from:
             raise ValueError("effective_to must be on or after effective_from")
+
+    @classmethod
+    def _clean_commodity_price_source_input(
+        cls, input: CommodityPriceSourceCreateInput | CommodityPriceSourceUpdateInput
+    ) -> _CommodityPriceSourceValues:
+        symbol = input.symbol.strip()
+        if not symbol:
+            raise ValueError("symbol is required")
+        if input.effective_to is not None and input.effective_from is not None:
+            if input.effective_to < input.effective_from:
+                raise ValueError("effective_to must be on or after effective_from")
+        metadata_json = cls._clean_optional_text(input.metadata_json)
+        if metadata_json is not None:
+            try:
+                json.loads(metadata_json)
+            except json.JSONDecodeError as error:
+                raise ValueError("metadata_json must be valid JSON") from error
+        return _CommodityPriceSourceValues(
+            book_id=input.book_id,
+            commodity_id=input.commodity_id,
+            source_id=input.source_id,
+            symbol=symbol,
+            provider_instrument_id=cls._clean_optional_text(input.provider_instrument_id),
+            exchange_code=cls._clean_optional_text(input.exchange_code),
+            mic=cls._clean_optional_text(input.mic),
+            name_override=cls._clean_optional_text(input.name_override),
+            is_primary=input.is_primary,
+            metadata_json=metadata_json,
+            effective_from=input.effective_from,
+            effective_to=input.effective_to,
+        )
 
     @staticmethod
     def _clean_optional_text(value: str | None) -> str | None:

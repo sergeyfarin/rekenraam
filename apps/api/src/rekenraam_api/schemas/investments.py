@@ -103,6 +103,52 @@ class CostBasisProfileSummary(CostBasisProfileCreateInput):
     updated_at: datetime
 
 
+class DividendIncomeCategorySummary(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: int
+    previous_dividend_income_category_id: int | None
+    book_id: int
+    commodity_id: int | None
+    income_account_id: int
+    category_id: int
+    tax_withheld_account_id: int | None
+    tax_withheld_category_id: int | None
+    default_tax_withheld_minor: int | None
+    withholding_rate_bps: int | None
+    tax_country_code: str | None
+    tax_treatment: str | None
+    notes: str | None
+    metadata_json: str | None
+    effective_from: date | None
+    effective_to: date | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DividendIncomeCategoryCreateInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    book_id: int = 1
+    commodity_id: int | None = None
+    income_account_id: int
+    category_id: int
+    tax_withheld_account_id: int | None = None
+    tax_withheld_category_id: int | None = None
+    default_tax_withheld_minor: int | None = None
+    withholding_rate_bps: int | None = None
+    tax_country_code: str | None = None
+    tax_treatment: str | None = None
+    notes: str | None = None
+    metadata_json: str | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
+
+
+class DividendIncomeCategoryUpdateInput(DividendIncomeCategoryCreateInput):
+    model_config = ConfigDict(frozen=True)
+
+
 class CorporateActionCreateInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -173,9 +219,14 @@ class DividendInput(BaseModel):
 
     book_id: int = 1
     txn_date: date
+    commodity_id: int | None = None
     cash_account_id: int
-    income_account_id: int
+    income_account_id: int | None = None
     amount_minor: int
+    category_id: int | None = None
+    tax_withheld_minor: int | None = None
+    tax_withheld_account_id: int | None = None
+    tax_withheld_category_id: int | None = None
     memo: str | None = None
     payee_id: int | None = None
     status: str | None = None
@@ -188,9 +239,10 @@ class ReinvestedDividendInput(BaseModel):
     txn_date: date
     commodity_id: int
     investment_account_id: int
-    income_account_id: int
+    income_account_id: int | None = None
     quantity_minor: int
     amount_minor: int
+    category_id: int | None = None
     memo: str | None = None
     payee_id: int | None = None
     status: str | None = None

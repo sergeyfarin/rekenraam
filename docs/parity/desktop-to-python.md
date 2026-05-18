@@ -91,5 +91,4 @@ audit is in
 Plugin/theme runtime deferred: no `/api/v1/plugins/*` or
 `/api/v1/themes/*` endpoints in b1. Any future extension system needs semantic
 CSS tokens, WebAssembly or sidecar isolation, manifest-declared capabilities,
-admin review, disabled/failed-plugin isolation, deterministic fallback, and no
-arbitrary remote CSS loading.
+admin review, disabled/failed-plugin isolation, deterministic fallback, and no arbitrary remote CSS loading.

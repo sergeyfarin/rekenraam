@@ -133,6 +133,9 @@ class StubPricingRepository:
             )
         ]
 
+    async def resolve_commodity_price_source(self, **kwargs: object) -> None:
+        return None
+
     async def list_existing_price_observation_dates(self, **kwargs: object) -> set[date]:
         return set()
 

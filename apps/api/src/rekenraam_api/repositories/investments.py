@@ -4,19 +4,20 @@ from collections import defaultdict
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import Select, case, func, or_, select
+from sqlalchemy import Select, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.investments import (
     CorporateAction,
     CostBasisProfile,
+    DividendIncomeCategory,
     InvestmentInstrument,
     Lot,
     PriceObservation,
     SplitLotAllocation,
 )
-from rekenraam_api.db.models.metadata import Commodity
+from rekenraam_api.db.models.metadata import Category, Commodity
 from rekenraam_api.db.models.transactions import Split, Transaction
 
 
@@ -122,6 +123,136 @@ class InvestmentRepository:
         if row is None or row.book_id != book_id:
             raise ValueError("cost basis profile not found")
         return row
+
+    async def list_dividend_income_categories(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None = None,
+        as_of_date: date | None = None,
+    ) -> list[DividendIncomeCategory]:
+        newer = DividendIncomeCategory.__table__.alias("newer_dividend_income_category")
+        newer_filter = ~exists(
+            select(newer.c.id).where(
+                newer.c.previous_dividend_income_category_id == DividendIncomeCategory.id
+            )
+        )
+        statement = (
+            select(DividendIncomeCategory)
+            .where(
+                DividendIncomeCategory.book_id == book_id,
+                DividendIncomeCategory.voided_at.is_(None),
+                newer_filter,
+            )
+            .order_by(
+                DividendIncomeCategory.commodity_id.is_(None).asc(),
+                DividendIncomeCategory.commodity_id.asc(),
+                DividendIncomeCategory.effective_from.desc(),
+                DividendIncomeCategory.id.asc(),
+            )
+        )
+        if commodity_id is not None:
+            statement = statement.where(
+                or_(
+                    DividendIncomeCategory.commodity_id == commodity_id,
+                    DividendIncomeCategory.commodity_id.is_(None),
+                )
+            )
+        if as_of_date is not None:
+            statement = statement.where(
+                or_(
+                    DividendIncomeCategory.effective_from.is_(None),
+                    DividendIncomeCategory.effective_from <= as_of_date,
+                ),
+                or_(
+                    DividendIncomeCategory.effective_to.is_(None),
+                    DividendIncomeCategory.effective_to >= as_of_date,
+                ),
+            )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def resolve_dividend_income_category(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None,
+        as_of_date: date | None,
+    ) -> DividendIncomeCategory | None:
+        rows = await self.list_dividend_income_categories(
+            book_id=book_id, commodity_id=commodity_id, as_of_date=as_of_date
+        )
+        if commodity_id is not None:
+            for row in rows:
+                if row.commodity_id == commodity_id:
+                    return row
+        return next((row for row in rows if row.commodity_id is None), None)
+
+    async def create_dividend_income_category(self, **values: Any) -> DividendIncomeCategory:
+        await self._validate_dividend_income_category_refs(values)
+        await self._validate_dividend_income_category_uniqueness(
+            book_id=int(values["book_id"]),
+            commodity_id=values.get("commodity_id"),
+            current_id=None,
+        )
+        row = DividendIncomeCategory(**values)
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def update_dividend_income_category(
+        self, dividend_income_category_id: int, **values: Any
+    ) -> DividendIncomeCategory | None:
+        current = await self._current_dividend_income_category(dividend_income_category_id)
+        if current is None or current.book_id != values["book_id"]:
+            return None
+        await self._validate_dividend_income_category_refs(values)
+        await self._validate_dividend_income_category_uniqueness(
+            book_id=int(values["book_id"]),
+            commodity_id=values.get("commodity_id"),
+            current_id=current.id,
+        )
+        row = DividendIncomeCategory(
+            previous_dividend_income_category_id=current.id,
+            **values,
+        )
+        self._session.add(row)
+        await self._session.commit()
+        await self._session.refresh(row)
+        return row
+
+    async def get_dividend_income_category(
+        self, dividend_income_category_id: int
+    ) -> DividendIncomeCategory | None:
+        return await self._current_dividend_income_category(dividend_income_category_id)
+
+    async def delete_dividend_income_category(self, dividend_income_category_id: int) -> bool:
+        current = await self._current_dividend_income_category(dividend_income_category_id)
+        if current is None:
+            return False
+        row = DividendIncomeCategory(
+            previous_dividend_income_category_id=current.id,
+            book_id=current.book_id,
+            commodity_id=current.commodity_id,
+            income_account_id=current.income_account_id,
+            category_id=current.category_id,
+            tax_withheld_account_id=current.tax_withheld_account_id,
+            tax_withheld_category_id=current.tax_withheld_category_id,
+            default_tax_withheld_minor=current.default_tax_withheld_minor,
+            withholding_rate_bps=current.withholding_rate_bps,
+            tax_country_code=current.tax_country_code,
+            tax_treatment=current.tax_treatment,
+            notes=current.notes,
+            metadata_json=current.metadata_json,
+            effective_from=current.effective_from,
+            effective_to=current.effective_to,
+            voided_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        self._session.add(row)
+        await self._session.commit()
+        return True
 
     async def list_corporate_actions(self, book_id: int) -> list[CorporateAction]:
         result = await self._session.execute(
@@ -439,17 +570,79 @@ class InvestmentRepository:
         *,
         book_id: int,
         txn_date: date,
+        commodity_id: int | None,
         cash_account_id: int,
-        income_account_id: int,
+        income_account_id: int | None,
         amount_minor: int,
+        category_id: int | None,
+        tax_withheld_minor: int | None,
+        tax_withheld_account_id: int | None,
+        tax_withheld_category_id: int | None,
         memo: str | None,
         payee_id: int | None,
         status: str,
     ) -> dict[str, Any]:
         cash_account = await self._get_account(cash_account_id)
-        income_account = await self._get_account(income_account_id)
-        if cash_account is None or income_account is None:
+        if cash_account is None or cash_account.book_id != book_id:
             raise ValueError("account not found")
+        default = await self.resolve_dividend_income_category(
+            book_id=book_id, commodity_id=commodity_id, as_of_date=txn_date
+        )
+        resolved_income_account_id = (
+            income_account_id
+            if income_account_id is not None
+            else default.income_account_id
+            if default is not None
+            else None
+        )
+        if resolved_income_account_id is None:
+            raise ValueError("income account is required")
+        income_account = await self._get_account(resolved_income_account_id)
+        if income_account is None or income_account.book_id != book_id:
+            raise ValueError("income account not found")
+
+        resolved_category_id = (
+            category_id
+            if category_id is not None
+            else default.category_id
+            if default is not None
+            else None
+        )
+        await self._validate_optional_category(book_id, resolved_category_id, "category")
+        resolved_tax_withheld_minor = (
+            tax_withheld_minor
+            if tax_withheld_minor is not None
+            else default.default_tax_withheld_minor
+            if default is not None
+            else None
+        )
+        resolved_tax_withheld_minor = resolved_tax_withheld_minor or 0
+        resolved_tax_account_id = (
+            tax_withheld_account_id
+            if tax_withheld_account_id is not None
+            else default.tax_withheld_account_id
+            if default is not None
+            else None
+        )
+        resolved_tax_category_id = (
+            tax_withheld_category_id
+            if tax_withheld_category_id is not None
+            else default.tax_withheld_category_id
+            if default is not None
+            else None
+        )
+        await self._validate_optional_category(
+            book_id, resolved_tax_category_id, "tax withheld category"
+        )
+        if resolved_tax_withheld_minor > 0 and resolved_tax_account_id is None:
+            raise ValueError("tax withheld account is required when tax is withheld")
+        tax_account = (
+            await self._get_account(resolved_tax_account_id)
+            if resolved_tax_account_id is not None
+            else None
+        )
+        if tax_account is not None and tax_account.book_id != book_id:
+            raise ValueError("tax withheld account not found")
 
         transaction = Transaction(
             book_id=book_id,
@@ -463,34 +656,49 @@ class InvestmentRepository:
         self._session.add(transaction)
         await self._session.flush()
 
-        self._session.add_all(
-            [
+        gross_income_minor = amount_minor + resolved_tax_withheld_minor
+        splits = [
+            Split(
+                tx_id=transaction.id,
+                account_id=cash_account_id,
+                commodity_id=cash_account.commodity_id,
+                amount_minor=amount_minor,
+                category_id=None,
+                tag_id=None,
+                person_id=None,
+                project_id=None,
+                share_bps=None,
+                memo=None,
+            ),
+            Split(
+                tx_id=transaction.id,
+                account_id=resolved_income_account_id,
+                commodity_id=income_account.commodity_id,
+                amount_minor=-gross_income_minor,
+                category_id=resolved_category_id,
+                tag_id=None,
+                person_id=None,
+                project_id=None,
+                share_bps=None,
+                memo=None,
+            ),
+        ]
+        if tax_account is not None and resolved_tax_withheld_minor > 0:
+            splits.append(
                 Split(
                     tx_id=transaction.id,
-                    account_id=cash_account_id,
-                    commodity_id=cash_account.commodity_id,
-                    amount_minor=amount_minor,
-                    category_id=None,
+                    account_id=tax_account.id,
+                    commodity_id=tax_account.commodity_id,
+                    amount_minor=resolved_tax_withheld_minor,
+                    category_id=resolved_tax_category_id,
                     tag_id=None,
                     person_id=None,
                     project_id=None,
                     share_bps=None,
-                    memo=None,
-                ),
-                Split(
-                    tx_id=transaction.id,
-                    account_id=income_account_id,
-                    commodity_id=income_account.commodity_id,
-                    amount_minor=-amount_minor,
-                    category_id=None,
-                    tag_id=None,
-                    person_id=None,
-                    project_id=None,
-                    share_bps=None,
-                    memo=None,
-                ),
-            ]
-        )
+                    memo="Tax withheld",
+                )
+            )
+        self._session.add_all(splits)
 
         await self._session.commit()
         return {"transaction_id": transaction.id}
@@ -502,19 +710,40 @@ class InvestmentRepository:
         txn_date: date,
         commodity_id: int,
         investment_account_id: int,
-        income_account_id: int,
+        income_account_id: int | None,
         quantity_minor: int,
         amount_minor: int,
+        category_id: int | None,
         memo: str | None,
         payee_id: int | None,
         status: str,
     ) -> dict[str, Any]:
         investment_account = await self._get_account(investment_account_id)
-        income_account = await self._get_account(income_account_id)
+        default = await self.resolve_dividend_income_category(
+            book_id=book_id, commodity_id=commodity_id, as_of_date=txn_date
+        )
+        resolved_income_account_id = (
+            income_account_id
+            if income_account_id is not None
+            else default.income_account_id
+            if default is not None
+            else None
+        )
+        if resolved_income_account_id is None:
+            raise ValueError("income account is required")
+        income_account = await self._get_account(resolved_income_account_id)
         if investment_account is None or income_account is None:
             raise ValueError("account not found")
         if investment_account.book_id != book_id or income_account.book_id != book_id:
             raise ValueError("accounts must belong to the book")
+        resolved_category_id = (
+            category_id
+            if category_id is not None
+            else default.category_id
+            if default is not None
+            else None
+        )
+        await self._validate_optional_category(book_id, resolved_category_id, "category")
 
         transaction = Transaction(
             book_id=book_id,
@@ -542,10 +771,10 @@ class InvestmentRepository:
         )
         income_split = Split(
             tx_id=transaction.id,
-            account_id=income_account_id,
+            account_id=resolved_income_account_id,
             commodity_id=income_account.commodity_id,
             amount_minor=-amount_minor,
-            category_id=None,
+            category_id=resolved_category_id,
             tag_id=None,
             person_id=None,
             project_id=None,
@@ -1172,6 +1401,65 @@ class InvestmentRepository:
             row = await self._session.get(Commodity, cash_commodity_id)
             if row is None or row.book_id != book_id:
                 raise ValueError("cash commodity not found")
+
+    async def _current_dividend_income_category(
+        self, dividend_income_category_id: int
+    ) -> DividendIncomeCategory | None:
+        current = await self._session.get(DividendIncomeCategory, dividend_income_category_id)
+        while current is not None:
+            child = await self._session.scalar(
+                select(DividendIncomeCategory)
+                .where(DividendIncomeCategory.previous_dividend_income_category_id == current.id)
+                .order_by(DividendIncomeCategory.id.desc())
+                .limit(1)
+            )
+            if child is None:
+                break
+            current = child
+        if current is None or current.voided_at is not None:
+            return None
+        return current
+
+    async def _validate_dividend_income_category_refs(self, values: dict[str, Any]) -> None:
+        book_id = int(values["book_id"])
+        commodity_id = values.get("commodity_id")
+        if commodity_id is not None:
+            commodity = await self._session.get(Commodity, commodity_id)
+            if commodity is None or commodity.book_id != book_id:
+                raise ValueError("commodity not found")
+        for key in ("income_account_id", "tax_withheld_account_id"):
+            account_id = values.get(key)
+            if account_id is None:
+                continue
+            account = await self._session.get(Account, account_id)
+            if account is None or account.book_id != book_id:
+                raise ValueError(f"{key} not found")
+        for key in ("category_id", "tax_withheld_category_id"):
+            category_id = values.get(key)
+            if category_id is None:
+                continue
+            category = await self._session.get(Category, category_id)
+            if category is None or category.book_id != book_id:
+                raise ValueError(f"{key} not found")
+
+    async def _validate_dividend_income_category_uniqueness(
+        self, *, book_id: int, commodity_id: object, current_id: int | None
+    ) -> None:
+        rows = await self.list_dividend_income_categories(book_id=book_id)
+        for row in rows:
+            if current_id is not None and row.id == current_id:
+                continue
+            if row.commodity_id == commodity_id:
+                raise ValueError("dividend income category default already exists")
+
+    async def _validate_optional_category(
+        self, book_id: int, category_id: int | None, label: str
+    ) -> None:
+        if category_id is None:
+            return
+        category = await self._session.get(Category, category_id)
+        if category is None or category.book_id != book_id:
+            raise ValueError(f"{label} not found")
 
     async def _get_account(self, account_id: int) -> Account | None:
         result = await self._session.execute(select(Account).where(Account.id == account_id))

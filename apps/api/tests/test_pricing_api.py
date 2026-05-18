@@ -11,6 +11,7 @@ from rekenraam_api.api.dependencies import (
 )
 from rekenraam_api.app import app
 from rekenraam_api.schemas.pricing import (
+    CommodityPriceSourceSummary,
     PriceSourceSummary,
     PricingExecutionStatusSummary,
     PricingPolicySummary,
@@ -36,6 +37,87 @@ class StubPricingService:
                 created_at=self._created_at,
             )
         ]
+
+    async def list_commodity_price_sources(
+        self,
+        *,
+        book_id: int,
+        commodity_id: int | None = None,
+        source_id: int | None = None,
+    ) -> list[CommodityPriceSourceSummary]:
+        return [
+            CommodityPriceSourceSummary(
+                id=20,
+                previous_commodity_price_source_id=None,
+                book_id=book_id,
+                commodity_id=2,
+                commodity_symbol="VWRL",
+                commodity_name="Vanguard FTSE All-World",
+                source_id=1001,
+                source_name="ECB",
+                symbol="VWRL.AS",
+                provider_instrument_id=None,
+                exchange_code="AS",
+                mic="XAMS",
+                name_override=None,
+                is_primary=True,
+                metadata_json=None,
+                effective_from=None,
+                effective_to=None,
+                created_at=self._created_at,
+            )
+        ]
+
+    async def create_commodity_price_source(self, input: object) -> CommodityPriceSourceSummary:
+        return CommodityPriceSourceSummary(
+            id=21,
+            previous_commodity_price_source_id=None,
+            book_id=1,
+            commodity_id=2,
+            commodity_symbol="VWRL",
+            commodity_name="Vanguard FTSE All-World",
+            source_id=1001,
+            source_name="ECB",
+            symbol="VWRL.AS",
+            provider_instrument_id=None,
+            exchange_code="AS",
+            mic="XAMS",
+            name_override=None,
+            is_primary=True,
+            metadata_json=None,
+            effective_from=None,
+            effective_to=None,
+            created_at=self._created_at,
+        )
+
+    async def update_commodity_price_source(
+        self, commodity_price_source_id: int, input: object
+    ) -> CommodityPriceSourceSummary | None:
+        if commodity_price_source_id != 20:
+            return None
+        return CommodityPriceSourceSummary(
+            id=22,
+            previous_commodity_price_source_id=20,
+            book_id=1,
+            commodity_id=2,
+            commodity_symbol="VWRL",
+            commodity_name="Vanguard FTSE All-World",
+            source_id=1001,
+            source_name="ECB",
+            symbol="VWCE.DE",
+            provider_instrument_id=None,
+            exchange_code="DE",
+            mic="XETR",
+            name_override=None,
+            is_primary=True,
+            metadata_json=None,
+            effective_from=None,
+            effective_to=None,
+            created_at=self._created_at,
+        )
+
+    async def delete_commodity_price_source(self, commodity_price_source_id: int) -> bool:
+        return commodity_price_source_id == 20
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicySummary | None:
         if book_id != 1:
@@ -266,6 +348,34 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
         },
     )
     assignments_response = await client.get("/api/v1/pricing/source-assignments")
+    commodity_sources_response = await client.get("/api/v1/pricing/commodity-price-sources")
+    create_commodity_source_response = await client.post(
+        "/api/v1/pricing/commodity-price-sources",
+        json={
+            "book_id": 1,
+            "commodity_id": 2,
+            "source_id": 1001,
+            "symbol": "VWRL.AS",
+            "exchange_code": "AS",
+            "mic": "XAMS",
+            "is_primary": True,
+        },
+    )
+    update_commodity_source_response = await client.put(
+        "/api/v1/pricing/commodity-price-sources/20",
+        json={
+            "book_id": 1,
+            "commodity_id": 2,
+            "source_id": 1001,
+            "symbol": "VWCE.DE",
+            "exchange_code": "DE",
+            "mic": "XETR",
+            "is_primary": True,
+        },
+    )
+    delete_commodity_source_response = await client.delete(
+        "/api/v1/pricing/commodity-price-sources/20"
+    )
     create_assignment_response = await client.post(
         "/api/v1/pricing/source-assignments",
         json={
@@ -302,6 +412,13 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     assert update_policy_response.json()["base_currency_symbol"] == "EUR"
     assert assignments_response.status_code == 200
     assert assignments_response.json()[0]["from_currency_symbol"] == "EUR"
+    assert commodity_sources_response.status_code == 200
+    assert commodity_sources_response.json()[0]["symbol"] == "VWRL.AS"
+    assert create_commodity_source_response.status_code == 200
+    assert create_commodity_source_response.json()["id"] == 21
+    assert update_commodity_source_response.status_code == 200
+    assert update_commodity_source_response.json()["previous_commodity_price_source_id"] == 20
+    assert delete_commodity_source_response.status_code == 204
     assert create_assignment_response.status_code == 200
     assert create_assignment_response.json()["id"] == 11
     assert update_assignment_response.status_code == 200

@@ -39,6 +39,8 @@ class PricingRefreshTask:
     from_currency: Commodity
     to_currency: Commodity
     source: PriceSource
+    provider_from_symbol: str
+    provider_to_symbol: str
     start_date: date
     end_date: date
     last_attempt_at: datetime | None
@@ -560,11 +562,15 @@ class PricingExecutionService:
             )
             if start_date > refresh_date:
                 continue
+            provider_from_symbol = await self._provider_symbol(policy.book_id, currency, source)
+            provider_to_symbol = await self._provider_symbol(policy.book_id, base_currency, source)
             tasks.append(
                 PricingRefreshTask(
                     from_currency=currency,
                     to_currency=base_currency,
                     source=source,
+                    provider_from_symbol=provider_from_symbol,
+                    provider_to_symbol=provider_to_symbol,
                     start_date=start_date,
                     end_date=refresh_date,
                     last_attempt_at=state.last_attempt_at if state is not None else None,
@@ -645,16 +651,16 @@ class PricingExecutionService:
             raise ValueError("currency symbol is required for pricing refresh")
         base_symbol = task.to_currency.symbol
         quote_symbol = task.from_currency.symbol
-        request_base = base_symbol
-        request_symbols: tuple[str, ...] = (quote_symbol,)
+        request_base = task.provider_to_symbol
+        request_symbols: tuple[str, ...] = (task.provider_from_symbol,)
         derived_via: str | None = None
         if provider.name == "Federal Reserve" and base_symbol != "USD":
             request_base = "USD"
-            request_symbols = (base_symbol, quote_symbol)
+            request_symbols = (task.provider_to_symbol, task.provider_from_symbol)
             derived_via = "USD"
         elif provider.name == "Bank of Canada" and base_symbol != "CAD":
             request_base = "CAD"
-            request_symbols = (base_symbol, quote_symbol)
+            request_symbols = (task.provider_to_symbol, task.provider_from_symbol)
             derived_via = "CAD"
 
         direct_points = await provider.fetch_daily_rates(
@@ -665,11 +671,18 @@ class PricingExecutionService:
                 end_date=task.end_date,
             )
         )
+        provider_symbol_map = {
+            request_base: derived_via or base_symbol,
+            task.provider_to_symbol: base_symbol,
+            task.provider_from_symbol: quote_symbol,
+        }
+        if derived_via is not None:
+            provider_symbol_map[derived_via] = derived_via
         normalized_direct = [
             FxRatePoint(
                 date=point.date,
-                base=point.base,
-                quote=point.quote,
+                base=provider_symbol_map.get(point.base, point.base),
+                quote=provider_symbol_map.get(point.quote, point.quote),
                 rate=point.rate,
                 source_name=task.source.name,
             )
@@ -681,6 +694,20 @@ class PricingExecutionService:
             else []
         )
         return normalized_direct, derived_points
+
+    async def _provider_symbol(
+        self, book_id: int, commodity: Commodity, source: PriceSource
+    ) -> str:
+        mapping = await self._repository.resolve_commodity_price_source(
+            book_id=book_id,
+            commodity_id=commodity.id,
+            source_id=source.id,
+        )
+        if mapping is not None:
+            return mapping.symbol
+        if commodity.symbol is None:
+            raise ValueError("commodity symbol is required for pricing refresh")
+        return commodity.symbol
 
     @staticmethod
     def _derive_from_via(

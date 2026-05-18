@@ -1427,6 +1427,8 @@ def upgrade() -> None:
             "kind", sa.String(length=32), nullable=False, server_default=sa.text("'provider'")
         ),
         sa.Column("provider", sa.String(length=100), nullable=True),
+        sa.Column("provider_key", sa.String(length=100), nullable=True),
+        sa.Column("plugin_id", sa.String(length=100), nullable=True),
         sa.Column("base_url", sa.String(length=255), nullable=True),
         sa.Column(
             "created_at",
@@ -1437,6 +1439,70 @@ def upgrade() -> None:
         sa.UniqueConstraint("name", name="uq_price_sources_name"),
     )
     op.create_index("ix_price_sources_kind", "price_sources", ["kind"], unique=False)
+
+    op.create_table(
+        "commodity_price_sources",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "previous_commodity_price_source_id",
+            sa.BigInteger(),
+            sa.ForeignKey("commodity_price_sources.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "book_id",
+            sa.BigInteger(),
+            sa.ForeignKey("books.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "commodity_id",
+            sa.BigInteger(),
+            sa.ForeignKey("commodities.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "source_id",
+            sa.BigInteger(),
+            sa.ForeignKey("price_sources.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("symbol", sa.String(length=100), nullable=False),
+        sa.Column("provider_instrument_id", sa.String(length=200), nullable=True),
+        sa.Column("exchange_code", sa.String(length=32), nullable=True),
+        sa.Column("mic", sa.String(length=16), nullable=True),
+        sa.Column("name_override", sa.String(length=200), nullable=True),
+        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("effective_from", sa.Date(), nullable=True),
+        sa.Column("effective_to", sa.Date(), nullable=True),
+        sa.Column("voided_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.CheckConstraint(
+            "effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from",
+            name="ck_commodity_price_sources_effective_range",
+        ),
+    )
+    op.create_index(
+        "ix_commodity_price_sources_book", "commodity_price_sources", ["book_id"], unique=False
+    )
+    op.create_index(
+        "ix_commodity_price_sources_commodity_source",
+        "commodity_price_sources",
+        ["commodity_id", "source_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_commodity_price_sources_previous",
+        "commodity_price_sources",
+        ["previous_commodity_price_source_id"],
+        unique=False,
+    )
 
     op.create_table(
         "pricing_policies",
@@ -2504,6 +2570,104 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "dividend_income_categories",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "previous_dividend_income_category_id",
+            sa.BigInteger(),
+            sa.ForeignKey("dividend_income_categories.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "book_id",
+            sa.BigInteger(),
+            sa.ForeignKey("books.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "commodity_id",
+            sa.BigInteger(),
+            sa.ForeignKey("commodities.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "income_account_id",
+            sa.BigInteger(),
+            sa.ForeignKey("accounts.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
+        sa.Column(
+            "category_id",
+            sa.BigInteger(),
+            sa.ForeignKey("categories.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
+        sa.Column(
+            "tax_withheld_account_id",
+            sa.BigInteger(),
+            sa.ForeignKey("accounts.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "tax_withheld_category_id",
+            sa.BigInteger(),
+            sa.ForeignKey("categories.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("default_tax_withheld_minor", sa.BigInteger(), nullable=True),
+        sa.Column("withholding_rate_bps", sa.Integer(), nullable=True),
+        sa.Column("tax_country_code", sa.String(length=3), nullable=True),
+        sa.Column("tax_treatment", sa.String(length=64), nullable=True),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("effective_from", sa.Date(), nullable=True),
+        sa.Column("effective_to", sa.Date(), nullable=True),
+        sa.Column("voided_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.CheckConstraint(
+            "default_tax_withheld_minor IS NULL OR default_tax_withheld_minor >= 0",
+            name="ck_dividend_income_categories_tax_withheld_nonnegative",
+        ),
+        sa.CheckConstraint(
+            "withholding_rate_bps IS NULL OR (withholding_rate_bps >= 0 AND withholding_rate_bps <= 10000)",
+            name="ck_dividend_income_categories_withholding_rate",
+        ),
+        sa.CheckConstraint(
+            "effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from",
+            name="ck_dividend_income_categories_effective_range",
+        ),
+    )
+    op.create_index(
+        "ix_dividend_income_categories_book",
+        "dividend_income_categories",
+        ["book_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_dividend_income_categories_commodity",
+        "dividend_income_categories",
+        ["commodity_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_dividend_income_categories_previous",
+        "dividend_income_categories",
+        ["previous_dividend_income_category_id"],
+        unique=False,
+    )
+
+    op.create_table(
         "corporate_actions",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column(
@@ -2736,6 +2900,12 @@ def downgrade() -> None:
     op.drop_index("ix_corporate_actions_instrument", table_name="corporate_actions")
     op.drop_index("ix_corporate_actions_book_effective", table_name="corporate_actions")
     op.drop_table("corporate_actions")
+    op.drop_index("ix_dividend_income_categories_previous", table_name="dividend_income_categories")
+    op.drop_index(
+        "ix_dividend_income_categories_commodity", table_name="dividend_income_categories"
+    )
+    op.drop_index("ix_dividend_income_categories_book", table_name="dividend_income_categories")
+    op.drop_table("dividend_income_categories")
     op.drop_index("ix_cost_basis_profiles_book_id", table_name="cost_basis_profiles")
     op.drop_table("cost_basis_profiles")
     op.drop_index("ix_investment_instruments_symbol", table_name="investment_instruments")
@@ -2807,6 +2977,12 @@ def downgrade() -> None:
     op.drop_table("pricing_source_assignments")
     op.drop_index("ix_pricing_policies_book_id", table_name="pricing_policies")
     op.drop_table("pricing_policies")
+    op.drop_index("ix_commodity_price_sources_previous", table_name="commodity_price_sources")
+    op.drop_index(
+        "ix_commodity_price_sources_commodity_source", table_name="commodity_price_sources"
+    )
+    op.drop_index("ix_commodity_price_sources_book", table_name="commodity_price_sources")
+    op.drop_table("commodity_price_sources")
     op.drop_index("ix_price_sources_kind", table_name="price_sources")
     op.drop_table("price_sources")
     op.drop_index("ix_price_observations_lookup", table_name="price_observations")

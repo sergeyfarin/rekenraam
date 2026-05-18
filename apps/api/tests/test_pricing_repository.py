@@ -1,12 +1,13 @@
 from datetime import UTC, date, datetime
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
-from rekenraam_api.db.models.pricing import PricingRefreshState
+from rekenraam_api.db.models.pricing import CommodityPriceSource, PricingRefreshState
 from rekenraam_api.repositories.pricing import PricingRepository
 
 
@@ -155,3 +156,85 @@ async def test_pricing_repository_lists_sources_updates_policy_and_manages_assig
 
     assert await repository.delete_pricing_source_assignment(assignment.id) is True
     assert await repository.list_pricing_source_assignments(1) == []
+
+
+@pytest.mark.asyncio
+async def test_pricing_repository_manages_append_only_commodity_price_sources(
+    repository_session: AsyncSession,
+) -> None:
+    repository = PricingRepository(repository_session)
+    security = await repository_session.merge(
+        Commodity(
+            book_id=1,
+            kind="security",
+            symbol="VWRL",
+            name="Vanguard FTSE All-World",
+            scale=4,
+        )
+    )
+    await repository_session.commit()
+    await repository_session.refresh(security)
+
+    created = await repository.create_commodity_price_source(
+        book_id=1,
+        commodity_id=security.id,
+        source_id=1010,
+        symbol="VWRL.AS",
+        provider_instrument_id=None,
+        exchange_code="AS",
+        mic="XAMS",
+        name_override="VWRL Amsterdam",
+        is_primary=True,
+        metadata_json='{"assetClass":"equity"}',
+        effective_from=None,
+        effective_to=None,
+    )
+    listed = await repository.list_commodity_price_sources(book_id=1, commodity_id=security.id)
+    resolved = await repository.resolve_commodity_price_source(
+        book_id=1, commodity_id=security.id, source_id=1010
+    )
+
+    assert listed[0][0].id == created.id
+    assert listed[0][0].symbol == "VWRL.AS"
+    assert listed[0][1].name == "Vanguard FTSE All-World"
+    assert listed[0][2].name == "Yahoo Finance"
+    assert resolved is not None
+    assert resolved.symbol == "VWRL.AS"
+
+    updated = await repository.update_commodity_price_source(
+        commodity_price_source_id=created.id,
+        book_id=1,
+        commodity_id=security.id,
+        source_id=1010,
+        symbol="VWCE.DE",
+        provider_instrument_id=None,
+        exchange_code="DE",
+        mic="XETR",
+        name_override=None,
+        is_primary=True,
+        metadata_json=None,
+        effective_from=None,
+        effective_to=None,
+    )
+    assert updated is not None
+    assert updated.previous_commodity_price_source_id == created.id
+    assert updated.symbol == "VWCE.DE"
+
+    listed_after_update = await repository.list_commodity_price_sources(
+        book_id=1, commodity_id=security.id
+    )
+    assert [row[0].id for row in listed_after_update] == [updated.id]
+
+    assert await repository.delete_commodity_price_source(created.id) is True
+    assert await repository.list_commodity_price_sources(book_id=1, commodity_id=security.id) == []
+
+    all_rows = (
+        (
+            await repository_session.execute(
+                select(CommodityPriceSource).where(CommodityPriceSource.commodity_id == security.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(all_rows) == 3
