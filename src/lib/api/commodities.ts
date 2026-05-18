@@ -145,9 +145,9 @@ export async function listFxRefreshRunHistory<T>(bookId = 1, limit = 10): Promis
 	throw new Error("Backend-owned FX refresh history is not supported in this build.");
 }
 
-export async function refreshFxRatesNow<T>(): Promise<T> {
+export async function refreshFxRatesNow<T>(bookId = 1): Promise<T> {
 	if (hasApiBaseUrl()) {
-		return apiPost<T, { book_id: number }>("/pricing/refresh/run", { book_id: 1 });
+		return apiPost<T, { book_id: number }>("/pricing/refresh/run", { book_id: bookId });
 	}
 	requireDesktopPricingAutomation("Manual FX refresh");
 	throw new Error("Manual FX refresh is not supported in this build.");
