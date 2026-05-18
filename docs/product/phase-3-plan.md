@@ -732,11 +732,9 @@ State of frontend (verified 2026-05-12 against [src/](../../src/)):
   - [accounts/[id]/reconcile/+page.svelte](../../src/routes/accounts/[id]/reconcile/+page.svelte) —
     **364 LoC, the page the gap plan flags as "most error-prone"**
   - [planning/+page.svelte](../../src/routes/planning/+page.svelte) — 321 LoC
-- No Tauri imports in `src/` (verified `grep`). Tauri lives in
-  [package.json](../../package.json) (`@tauri-apps/api`,
-  `@tauri-apps/plugin-opener`, `@tauri-apps/cli`, `"tauri"` script) and in
-  [vite.config.js](../../vite.config.js) (`TAURI_DEV_HOST`, fixed port `1420`,
-  src-tauri watch ignore).
+- No Tauri imports in `src/` (verified `grep`). This was later cleaned further
+  by Workstream F: package-level Tauri dependencies/scripts and Tauri-specific
+  Vite config are gone; `src-tauri/` remains only as parity reference.
 
 Backend CI baseline ([.github/workflows/api-tests.yml](../../.github/workflows/api-tests.yml)):
 171 passed / 2 skipped on Postgres 16. Pattern to mirror for the frontend job:

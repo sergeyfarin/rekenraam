@@ -183,6 +183,38 @@ Fixed during the audit pass:
 
 Logged for later:
 
+- **Detailed Rust function/helper audit added.** The second-pass deletion
+  review is now documented in
+  [tauri-rust-function-audit-2026-05-18.md](../parity/tauri-rust-function-audit-2026-05-18.md).
+  It covers private Rust helpers and tests, not only registered Tauri command
+  names.
+- **HBCI/MT940 import parser — DONE 2026-05-18.** Rust had
+  `parse_hbci_mt940`, `parse_mt940_date`, `.hbci`/`.mt940` detection, and a
+  parser test. Python now accepts first-class `hbci` and `mt940` import formats
+  and improves the legacy behavior with MT940 field continuation handling,
+  structured `:86:` payee/memo/reference extraction, debit/credit signs,
+  locale-aware amounts, opening/closing-balance currency extraction, and stable
+  fallback import IDs. Covered by parser and auto-detection tests in
+  [test_imports_exports.py](../../apps/api/tests/test_imports_exports.py).
+- **Transaction time-of-day/timezone fields are not exposed.** Severity **N**.
+  Rust transaction create/update/list shapes exposed `occurred_at_utc`,
+  `occurred_tz`, `posted_at_utc`, and `posted_tz`, normalized UTC timestamps,
+  and required timezone co-presence. Python models have the columns but public
+  schemas are date-only. Decide whether date-only is the v1 contract or expose
+  these fields.
+- **`bulk-delete` semantic change.** Severity **N/H depending on expected UX**.
+  Rust `bulk_delete_transactions` physically deleted eligible transactions and
+  splits. Python `bulk_delete_transactions` delegates to bulk void, preserving
+  history. The safer behavior may be intentional, but the endpoint name now
+  promises more destructive semantics than it performs.
+- **Import reverse lookup missing.** Severity **N**. Rust
+  `list_transaction_import_sessions(tx_id)` exposed transaction-to-import
+  session provenance. Python exposes session-to-transactions only.
+- **Commodity detail/default helpers missing.** Severity **N**. Rust had public
+  `get_commodity`, `commodity_price_sources` CRUD for source-specific ticker
+  overrides, and `dividend_income_categories` CRUD for commodity/category
+  dividend defaults. Python has commodity list/autocomplete/update, pricing
+  source assignments, and explicit dividend input, but no exact equivalents.
 - **Import amount-rounding policy is per-account, not a global constant.** Severity **N**. Today `_parse_amount` in [services/imports.py](../../apps/api/src/rekenraam_api/services/imports.py) implicitly uses `Decimal.quantize(Decimal("1"))` (default `ROUND_HALF_EVEN`, banker's). Rust's `import.rs:280-289` truncated extra fractional cents. Real-world need is more nuanced than either: some accounts must carry fractional cents, some allow fractional minor units in transactions but round for balance, some need fractional intermediate currency. Plan: add an account/institution-level rounding policy (`half_even` | `half_up` | `truncate` | `keep_fractional`) with `half_even` as the default. Defer to post-v1.
 - **Backend length/value guards lean on DB column limits.** Severity **N**. Rust enforced `MAX_NAME_LEN=512`, `MAX_MEMO_LEN=4096`, `MAX_AMOUNT_MINOR=10^13` in validation.rs. Python relies on SQLAlchemy column types (200/4096) and unbounded `int`. Acceptable for v1 — the frontend must reject overlong/over-magnitude inputs before they hit the API and produce a DB error. Action: add frontend-side validators to match the column constraints; document the API-error contract for boundary cases. No backend change needed.
 - **Reports: category-spend zero-balance behavior flipped vs. legacy.** Severity **H**. Rust `report_category_spend` (db_reports.rs:1067) excluded categories with zero matching splits in the date range (because the LEFT JOIN's NULL t.occurred_date fails the `>= date_from` comparison). Python [repositories/reports.py:399-425](../../apps/api/src/rekenraam_api/repositories/reports.py) explicitly `OR`s in `Transaction.id.is_(None)` so categories with no splits in the window appear with `total_minor=0`. The Python output is arguably more useful for budgeting UIs but it does change report contents. Decide and lock the contract before users start saving definitions against the current shape. If we keep Python's behavior, add a test naming it; if we revert, remove the `is_(None)` clause. Phase 2 step 5 (report cache invalidation) is the natural home for this.
@@ -277,10 +309,30 @@ Logged for later:
 | # | Gap | Location | Sev |
 |---|---|---|---|
 | 1.8.1 | `src-tauri/` still exists. | repo root | B |
-| 1.8.2 | `package.json` still has `@tauri-apps/api`, `@tauri-apps/plugin-opener`, `@tauri-apps/cli`, and `"tauri": "tauri"` script. | [package.json](../../package.json) | B |
-| 1.8.3 | Vite/Svelte config for Tauri may still be present; not yet verified. | `vite.config.js`, `svelte.config.js` | B |
+| 1.8.2 | **DONE 2026-05-12; reverified 2026-05-18.** `package.json` and `package-lock.json` no longer contain `@tauri-apps/*` packages or a `tauri` script. | [package.json](../../package.json), [package-lock.json](../../package-lock.json) | B |
+| 1.8.3 | **DONE 2026-05-12; reverified 2026-05-18.** Vite/Svelte config is plain web config; no Tauri fixed-port/HMR/watch-ignore block remains. | [vite.config.js](../../vite.config.js), [svelte.config.js](../../svelte.config.js) | B |
+| 1.8.4 | Stale non-runtime references remain after full deletion: `.vscode/extensions.json` still recommends `tauri-apps.tauri-vscode`, `.dockerignore` still ignores `src-tauri/target`, and unreferenced `static/tauri.svg` remains. | [.vscode/extensions.json](../../.vscode/extensions.json), [.dockerignore](../../.dockerignore), [static/tauri.svg](../../static/tauri.svg) | N |
 
-The migration plan exit criteria for v1 release require Tauri to be gone. Until 1.8.1–1.8.3 are done, v1 cannot ship.
+Fresh deletion audit (2026-05-18):
+
+- Active runtime is clean: no frontend `@tauri`, `invoke`, `__TAURI__`, or
+  Tauri API imports outside docs/TODO and `src-tauri`; Docker and API entry
+  points use `/api/v1`.
+- Rust desktop surface still registers 209 commands: 182 through
+  `commands::*`, 25 through `db_currencies::*`, and 2 through `fx_refresh::*`.
+- Remaining unported or intentionally non-direct ports are desktop-only storage
+  and file-picker commands, desktop undo/redo, event/document CRUD, country
+  create/update/delete, transaction timestamp/timezone API fields,
+  generic/custom `run_report`, `prune_report_runs`, commodity price-source
+  override CRUD, dividend income category defaults, and legacy path-based import
+  helpers.
+  These are either dropped/deferred in the parity matrix or represented by web
+  replacements rather than direct ports.
+
+The migration plan exit criteria for v1 release require Tauri to be gone. As
+of this pass, the physical `src-tauri/` tree and tiny non-runtime references
+are the remaining Tauri-removal tasks; product parity sign-off still depends on
+accepting the deferred/dropped command families above.
 
 ---
 

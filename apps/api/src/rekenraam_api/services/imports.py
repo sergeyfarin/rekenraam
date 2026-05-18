@@ -330,6 +330,9 @@ class ImportService:
             if detected in {"ofx", "qfx"}:
                 drafts = self._parse_ofx(input.content or "", input.locale)
                 return self._drafts_preview(detected, drafts)
+            if detected in {"hbci", "mt940"}:
+                drafts = self._parse_mt940(input.content or "", input.locale)
+                return self._drafts_preview(detected, drafts)
             if detected in {"xls", "xlsx"}:
                 if input.content_base64 is None:
                     return ImportPreviewResult(
@@ -463,20 +466,26 @@ class ImportService:
         return results
 
     def _detect_format(self, requested: str, file_name: str | None, content: str | None) -> str:
+        requested = requested.lower()
         if requested != "auto":
             return requested
         if file_name and "." in file_name:
             ext = file_name.rsplit(".", 1)[-1].lower()
-            if ext in {"csv", "qif", "ofx", "qfx", "xls", "xlsx"}:
+            if ext in {"csv", "qif", "ofx", "qfx", "hbci", "mt940", "xls", "xlsx"}:
                 return ext
         text = content or ""
         if "<OFX" in text.upper():
             return "ofx"
         if "!Type:" in text:
             return "qif"
+        if self._looks_like_mt940(text):
+            return "mt940"
         if self._looks_like_csv(text):
             return "csv"
         raise ValueError("unable to detect import format")
+
+    def _looks_like_mt940(self, content: str) -> bool:
+        return bool(re.search(r"(?m)^:61:\d{6}", content))
 
     def _looks_like_csv(self, content: str) -> bool:
         first = next((line for line in content.splitlines() if line.strip()), "")
@@ -616,6 +625,305 @@ class ImportService:
     def _extract_ofx_tag(self, content: str, tag: str) -> str | None:
         match = re.search(rf"<{tag}>([^\r\n<]+)", content, flags=re.IGNORECASE)
         return match.group(1).strip() if match else None
+
+    def _parse_mt940(self, content: str, locale: ImportLocaleOptions | None) -> list[ImportDraft]:
+        fields = self._mt940_fields(content)
+        statement_ref = next((value.strip() for tag, value in fields if tag == "20"), None)
+        statement_seq = next((value.strip() for tag, value in fields if tag == "28C"), None)
+        currency_code = self._mt940_currency(fields)
+
+        drafts: list[ImportDraft] = []
+        current: ImportDraft | None = None
+        current_raw_61: str | None = None
+        transaction_index = 0
+
+        for tag, value in fields:
+            if tag == "61":
+                if current is not None:
+                    drafts.append(current)
+                transaction_index += 1
+                current_raw_61 = value.strip()
+                current = self._parse_mt940_statement_line(
+                    value,
+                    locale,
+                    currency_code=currency_code,
+                    statement_ref=statement_ref,
+                    statement_seq=statement_seq,
+                    transaction_index=transaction_index,
+                )
+                continue
+            if tag == "86" and current is not None:
+                details = self._parse_mt940_details(value)
+                payload = current.model_dump()
+                payee = self._first_non_empty(
+                    details.get("payee_name"),
+                    details.get("originator_name"),
+                    details.get("counterparty_name"),
+                )
+                memo = self._first_non_empty(details.get("memo"), self._clean_mt940_text(value))
+                reference = self._first_non_empty(details.get("reference"), current.reference)
+                import_id = self._first_non_empty(
+                    details.get("import_id"),
+                    current.import_id,
+                    self._mt940_import_id(
+                        statement_ref,
+                        statement_seq,
+                        current_raw_61,
+                        transaction_index,
+                    ),
+                )
+                payload.update(
+                    payee_name=payee,
+                    memo=memo,
+                    reference=reference,
+                    import_id=import_id,
+                )
+                current = ImportDraft(**payload)
+
+        if current is not None:
+            drafts.append(current)
+        return drafts
+
+    def _mt940_fields(self, content: str) -> list[tuple[str, str]]:
+        fields: list[tuple[str, str]] = []
+        current_tag: str | None = None
+        current_lines: list[str] = []
+
+        def flush() -> None:
+            nonlocal current_tag, current_lines
+            if current_tag is not None:
+                fields.append((current_tag, "\n".join(current_lines).strip()))
+            current_tag = None
+            current_lines = []
+
+        for raw_line in content.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            line = raw_line.strip()
+            if not line or line in {"-", "-}"}:
+                continue
+            match = re.match(r"^:([0-9]{2}[A-Z]?):(.*)$", line)
+            if match:
+                flush()
+                current_tag = match.group(1)
+                current_lines = [match.group(2)]
+                continue
+            if current_tag is not None:
+                current_lines.append(line)
+        flush()
+        return fields
+
+    def _parse_mt940_statement_line(
+        self,
+        value: str,
+        locale: ImportLocaleOptions | None,
+        *,
+        currency_code: str | None,
+        statement_ref: str | None,
+        statement_seq: str | None,
+        transaction_index: int,
+    ) -> ImportDraft:
+        body = value.strip().replace("\n", "")
+        match = re.match(
+            r"^(?P<value_date>\d{6})(?P<entry_date>\d{4})?"
+            r"(?P<funds_code>[A-Z])?(?P<dc_mark>R?[CD])"
+            r"(?P<amount>[\d.,]+)(?P<rest>.*)$",
+            body,
+        )
+        if match is None:
+            return ImportDraft(
+                currency_code=currency_code,
+                import_id=self._mt940_import_id(
+                    statement_ref, statement_seq, body, transaction_index
+                ),
+            )
+
+        amount_minor = self._parse_mt940_amount(
+            match.group("amount"), match.group("dc_mark"), locale
+        )
+        rest = match.group("rest").strip()
+        reference = self._mt940_reference(rest)
+        return ImportDraft(
+            txn_date=self._parse_mt940_date(match.group("value_date")),
+            amount_minor=amount_minor,
+            reference=reference,
+            import_id=self._mt940_import_id(statement_ref, statement_seq, body, transaction_index),
+            currency_code=currency_code,
+        )
+
+    def _parse_mt940_amount(
+        self, raw_amount: str, dc_mark: str, locale: ImportLocaleOptions | None
+    ) -> int:
+        mt940_locale = locale
+        if mt940_locale is None or mt940_locale.decimal_separator is None:
+            mt940_locale = ImportLocaleOptions(
+                decimal_separator=",",
+                thousands_separator=locale.thousands_separator if locale else None,
+                date_format=locale.date_format if locale else None,
+                csv_delimiter=locale.csv_delimiter if locale else None,
+            )
+        amount = self._parse_amount(raw_amount, mt940_locale)
+        return -abs(amount) if dc_mark.endswith("D") else abs(amount)
+
+    def _parse_mt940_date(self, raw: str) -> date | None:
+        if len(raw) < 6 or not raw[:6].isdigit():
+            return None
+        year = int(raw[:2])
+        full_year = 2000 + year if year < 70 else 1900 + year
+        try:
+            return date(full_year, int(raw[2:4]), int(raw[4:6]))
+        except ValueError:
+            return None
+
+    def _mt940_currency(self, fields: list[tuple[str, str]]) -> str | None:
+        for tag, value in fields:
+            if tag not in {"60F", "60M", "62F", "62M", "64"}:
+                continue
+            body = value.strip()
+            match = re.match(r"^[CD]\d{6}([A-Z]{3})", body)
+            if match:
+                return match.group(1)
+        return None
+
+    def _mt940_reference(self, rest: str) -> str | None:
+        cleaned = rest.strip()
+        if not cleaned:
+            return None
+        if cleaned.startswith("N") and len(cleaned) > 4:
+            cleaned = cleaned[4:]
+        reference = cleaned.split("//", 1)[0].strip()
+        return reference or None
+
+    def _parse_mt940_details(self, value: str) -> dict[str, str]:
+        fields = self._mt940_structured_86(value)
+        if fields:
+            payee = self._join_non_empty(
+                fields.get("32"),
+                fields.get("33"),
+                fields.get("34"),
+            )
+            memo = self._join_non_empty(
+                fields.get("20"),
+                fields.get("21"),
+                fields.get("22"),
+                fields.get("23"),
+                fields.get("24"),
+                fields.get("25"),
+                fields.get("26"),
+                fields.get("27"),
+                fields.get("60"),
+                fields.get("61"),
+                fields.get("62"),
+                fields.get("63"),
+            )
+            structured_reference = self._mt940_find_any_structured_token(
+                fields.values(), "EREF", "KREF", "MREF", "CRED"
+            )
+            reference = self._first_non_empty(
+                structured_reference,
+                fields.get("20"),
+            )
+            import_id = self._first_non_empty(
+                structured_reference,
+            )
+            return {
+                key: val
+                for key, val in {
+                    "payee_name": payee,
+                    "memo": memo,
+                    "reference": reference,
+                    "import_id": import_id,
+                }.items()
+                if val
+            }
+
+        cleaned = self._clean_mt940_text(value)
+        return {
+            key: val
+            for key, val in {
+                "memo": cleaned,
+                "reference": self._mt940_find_reference(cleaned),
+                "import_id": self._first_non_empty(
+                    self._mt940_find_structured_token(cleaned, "EREF"),
+                    self._mt940_find_structured_token(cleaned, "KREF"),
+                    self._mt940_find_structured_token(cleaned, "MREF"),
+                    self._mt940_find_structured_token(cleaned, "CRED"),
+                ),
+            }.items()
+            if val
+        }
+
+    def _mt940_structured_86(self, value: str) -> dict[str, str]:
+        text = value.replace("\n", "")
+        matches = list(re.finditer(r"\?(\d{2})", text))
+        if not matches:
+            return {}
+        result: dict[str, str] = {}
+        for index, match in enumerate(matches):
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+            key = match.group(1)
+            piece = self._clean_mt940_text(text[start:end])
+            if piece:
+                result[key] = self._join_non_empty(result.get(key), piece) or piece
+        return result
+
+    def _clean_mt940_text(self, value: str) -> str | None:
+        text = re.sub(r"\?([0-9]{2})", " ", value.replace("\n", " "))
+        text = re.sub(r"\s+", " ", text).strip(" /")
+        return text or None
+
+    def _mt940_find_reference(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        for token in ("EREF", "KREF", "MREF", "CRED", "SVWZ"):
+            found = self._mt940_find_structured_token(value, token)
+            if found:
+                return found
+        return None
+
+    def _mt940_find_structured_token(self, value: str | None, token: str) -> str | None:
+        if not value:
+            return None
+        match = re.search(
+            rf"(?:^|[ +?/]){re.escape(token)}[+: ]([^+?/]+)",
+            value,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+        token_boundary = r"\s+(?:EREF|KREF|MREF|CRED|SVWZ|ABWA|ABWE|IBAN|BIC|NAME)[+: ]"
+        raw_value = re.split(token_boundary, match.group(1), maxsplit=1, flags=re.IGNORECASE)[0]
+        cleaned = self._clean_mt940_text(raw_value)
+        return cleaned
+
+    def _mt940_find_any_structured_token(self, values: Iterable[str], *tokens: str) -> str | None:
+        values = tuple(values)
+        for token in tokens:
+            for value in values:
+                found = self._mt940_find_structured_token(value, token)
+                if found:
+                    return found
+        return None
+
+    def _mt940_import_id(
+        self,
+        statement_ref: str | None,
+        statement_seq: str | None,
+        raw_61: str | None,
+        transaction_index: int,
+    ) -> str:
+        parts = [
+            part.strip()
+            for part in (statement_ref, statement_seq, raw_61, str(transaction_index))
+            if part and part.strip()
+        ]
+        return "mt940:" + ":".join(parts)
+
+    def _first_non_empty(self, *values: str | None) -> str | None:
+        return next((value.strip() for value in values if value and value.strip()), None)
+
+    def _join_non_empty(self, *values: str | None) -> str | None:
+        parts = [value.strip() for value in values if value and value.strip()]
+        return " ".join(parts) if parts else None
 
     def _drafts_preview(self, fmt: str, drafts: list[ImportDraft]) -> ImportPreviewResult:
         return ImportPreviewResult(

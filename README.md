@@ -39,7 +39,7 @@ Still in migration:
   memorized splits, and payee defaults
 - broader reports, tax, investment, pricing, and valuation depth
 - attachment/document uploads and email-based invites/password reset
-- final Tauri dependency and `src-tauri/` deletion
+- final `src-tauri/` deletion and tiny editor/build-ignore cleanup
 
 Deferred after b1/v1:
 

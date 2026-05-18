@@ -21,6 +21,7 @@ from rekenraam_api.repositories.reports import ReportRepository
 from rekenraam_api.schemas.imports import (
     ImportCommitRequest,
     ImportDraft,
+    ImportLocaleOptions,
     ImportPreviewRequest,
     ImportRulesApplyRequest,
 )
@@ -178,6 +179,74 @@ async def test_import_preview_parses_qif_ofx_and_xlsx_without_database() -> None
     assert xlsx.file_error is None
     assert xlsx.rows[0].draft is not None
     assert xlsx.rows[0].draft.payee_name == "Bakery"
+
+
+@pytest.mark.asyncio
+async def test_import_preview_parses_hbci_mt940_without_database() -> None:
+    service = ImportService(_FakeImportRepository())  # type: ignore[arg-type]
+    content = """\
+:20:STATEMENT-42
+:25:NL00BANK0123456789
+:28C:00001/001
+:60F:C260501USD1000,00
+:61:2605020502D12,34NTRFNONREF//BANKREF
+:86:?20SEPA UEBERWEISUNG?21EREF+INV-42?32ACME BV?33AMSTERDAM?60Invoice 42
+:61:260503C1.234,56NMSCNONREF
+:86:Plain memo text
+:62F:C260503USD2222,22
+"""
+
+    preview = await service.preview(
+        ImportPreviewRequest(
+            account_id=2,
+            format="mt940",
+            content=content,
+            file_name="statement.mt940",
+            locale=ImportLocaleOptions(decimal_separator=",", thousands_separator="."),
+        )
+    )
+
+    assert preview.file_error is None
+    assert preview.format == "mt940"
+    assert len(preview.rows) == 2
+
+    first = preview.rows[0].draft
+    second = preview.rows[1].draft
+    assert first is not None
+    assert first.txn_date == date(2026, 5, 2)
+    assert first.amount_minor == -1234
+    assert first.currency_code == "USD"
+    assert first.payee_name == "ACME BV AMSTERDAM"
+    assert first.memo == "SEPA UEBERWEISUNG EREF+INV-42 Invoice 42"
+    assert first.reference == "INV-42"
+    assert first.import_id == "INV-42"
+
+    assert second is not None
+    assert second.txn_date == date(2026, 5, 3)
+    assert second.amount_minor == 123456
+    assert second.memo == "Plain memo text"
+    assert second.import_id is not None
+    assert second.import_id.startswith("mt940:STATEMENT-42:00001/001:")
+
+
+@pytest.mark.asyncio
+async def test_import_preview_auto_detects_hbci_mt940_without_database() -> None:
+    service = ImportService(_FakeImportRepository())  # type: ignore[arg-type]
+
+    preview = await service.preview(
+        ImportPreviewRequest(
+            account_id=2,
+            format="auto",
+            content=":61:260102C12,34NTRFNONREF\n:86:HB memo",
+            file_name="download.hbci",
+        )
+    )
+
+    assert preview.file_error is None
+    assert preview.format == "hbci"
+    assert preview.rows[0].draft is not None
+    assert preview.rows[0].draft.amount_minor == 1234
+    assert preview.rows[0].draft.memo == "HB memo"
 
 
 @pytest.mark.asyncio

@@ -82,7 +82,9 @@ Still transitional:
 
 - frontend source remains in root `src`
 - `src-tauri` remains as parity reference
-- Tauri dependencies remain until the final deletion gate is met
+- root-level Tauri package/script/Vite config has already been removed; only the
+  old Rust desktop tree and small editor/build-ignore references remain until
+  the final deletion gate is met
 - temporary v1 single-book mode is enforced in the backend policy layer;
   the only supported web-runtime book id is centralized in
   `apps/api/src/rekenraam_api/services/access.py` as `SUPPORTED_V1_BOOK_ID`,
@@ -544,9 +546,15 @@ Deletion gate:
 Deletion tasks:
 
 1. Delete `src-tauri/`.
-2. Remove `@tauri-apps/*` dependencies and `tauri` scripts from `package.json`.
-3. Remove Tauri-specific Vite/Svelte config.
-4. Remove desktop-only README/contributing instructions.
+2. Remove stale editor/build-ignore references such as the Tauri VS Code
+   recommendation and `src-tauri/target` ignore entry.
+3. Remove desktop-only README/contributing instructions.
+
+Already completed:
+
+- `@tauri-apps/*` dependencies and `tauri` scripts were removed from
+  `package.json`.
+- Tauri-specific Vite/Svelte config was removed.
 
 Exit criteria:
 

@@ -24,7 +24,7 @@ slices move, each row can be expanded into per-command or per-use-case entries.
 | transactions and splits | `src-tauri/src/db_transactions.rs` | `apps/api/src/rekenraam_api/repositories/transactions.py`, `apps/api/src/rekenraam_api/services/transactions.py`, `apps/api/src/rekenraam_api/api/v1/transactions.py` | `/api/v1/transactions`, `/api/v1/transactions/{id}`, `/api/v1/accounts/{id}/register`, `/api/v1/transactions/bulk-void`, `/api/v1/transactions/bulk-delete`, `/api/v1/transactions/{id}/duplicate`, `/api/v1/transactions/payee-defaults` | baseline complete | Read/write list/detail/register flows, duplicate/bulk actions, locked-range checks, split support, cursor pagination, payee-default helpers, zero-sum validation, and account/commodity matching are on Python endpoints. Remaining work is deeper correctness parity, search/saved views, templates, memorized splits, and explicit cross-currency transfer workflows. |
 | reconciliation | `src-tauri/src/db_transactions.rs`, `src-tauri/src/db_accounts.rs` | `apps/api/src/rekenraam_api/repositories/reconciliation.py`, `apps/api/src/rekenraam_api/services/reconciliation.py`, `apps/api/src/rekenraam_api/api/v1/reconciliation.py` | `/api/v1/reconciliation/accounts/{id}/start`, `/api/v1/reconciliation/accounts/{id}/finish`, `/api/v1/reconciliation/accounts/{id}/history`, `/api/v1/reconciliation/accounts/{id}/unlock` | baseline complete | Reconciliation start/finish/history/unlock flows exist and the account reconciliation page uses HTTP. Remaining work is broader statement fixtures, account-type coverage, and audit review depth. |
 | balance checks and adjustments | `src-tauri/src/db_accounts.rs`, `src-tauri/migrations/V1__init.sql` | `apps/api/src/rekenraam_api/db/models/accounts.py`, `apps/api/src/rekenraam_api/repositories/reconciliation.py`, `apps/api/src/rekenraam_api/services/reconciliation.py` | `/api/v1/reconciliation/accounts/{id}/constraints`, `/api/v1/reconciliation/accounts/{id}/constraints/validation` | baseline complete | `balance_checks`, `balance_adjustments`, `balance_constraints`, and reconciliation preferences are in the Postgres baseline and Python reconciliation slice. Remaining work is policy edge-case coverage. |
-| imports | `src-tauri/src/import.rs` | `apps/api/src/rekenraam_api/repositories/imports.py`, `apps/api/src/rekenraam_api/services/imports.py`, `apps/api/src/rekenraam_api/api/v1/imports.py` | `/api/v1/imports*` | baseline complete | CSV, XLS, XLSX, QIF, and OFX/QFX preview, validation, matching, import sessions, rules, audit trail, and commit workflow are Python-backed. Legacy desktop database import is deferred after v1. Remaining work is broader real-bank fixture coverage and import mapping template portability. |
+| imports | `src-tauri/src/import.rs` | `apps/api/src/rekenraam_api/repositories/imports.py`, `apps/api/src/rekenraam_api/services/imports.py`, `apps/api/src/rekenraam_api/api/v1/imports.py` | `/api/v1/imports*` | baseline complete | CSV, XLS, XLSX, QIF, OFX/QFX, and HBCI/MT940 preview, validation, matching, import sessions, rules, audit trail, and commit workflow are Python-backed. Legacy desktop database import is deferred after v1. Remaining work is broader real-bank fixture coverage and import mapping template portability. |
 | exports | `src-tauri/src/import.rs`, report/export helpers | `apps/api/src/rekenraam_api/services/exports.py`, `apps/api/src/rekenraam_api/api/v1/exports.py` | `/api/v1/exports/accounts.csv`, `/api/v1/exports/transactions.csv`, `/api/v1/exports/registers/{id}.qif`, `/api/v1/exports/reports/{kind}.csv` | baseline complete | CSV account/transaction export, QIF register export, and report CSV export exist. Remaining work is coverage review for v1 data portability. |
 | reports | `src-tauri/src/db_reports.rs` | `apps/api/src/rekenraam_api/repositories/reports.py`, `apps/api/src/rekenraam_api/services/reports.py`, `apps/api/src/rekenraam_api/api/v1/reports.py` | `/api/v1/reports/cashflow`, `/api/v1/reports/category-spend`, `/api/v1/reports/payee-totals`, `/api/v1/reports/net-worth`, `/api/v1/reports/account-trends`, `/api/v1/reports/realized-gains`, `/api/v1/reports/unrealized-gains`, `/api/v1/reports/investment-performance`, `/api/v1/reports/account-valuation`, `/api/v1/reports/currency-exposure`, `/api/v1/reports/corporate-actions`, `/api/v1/reports/definitions`, `/api/v1/reports/runs` | baseline complete | Classic reports, net worth, account trends, policy-aware realized/unrealized gains, investment performance, converted account valuation, unconverted currency exposure, saved report definitions, and run metadata are on Python endpoints. Remaining work is saved/custom report UX, chart/print views, budget variance, and account statement/income-expense reports. |
 | report state and caching | `src-tauri/src/db_reports.rs`, `src-tauri/migrations/V1__init.sql` | `apps/api/src/rekenraam_api/db/models/report_state.py`, `apps/api/src/rekenraam_api/db/models/report_metadata.py`, `apps/api/src/rekenraam_api/repositories/reports.py`, `apps/api/src/rekenraam_api/services/reports.py` | `/api/v1/reports*` | baseline complete | `book_state`, `report_cache`, `report_definitions`, and `report_runs` are in the web baseline. Report-relevant writes bump book change sequence. Remaining work is wider cache/report coverage. |
@@ -52,6 +52,37 @@ slices move, each row can be expanded into per-command or per-use-case entries.
 | `session_undo_stack` | dropped as direct port | no direct replacement; redesign only if undo remains a product requirement |
 | `session_redo_stack` | dropped as direct port | no direct replacement; redesign only if redo remains a product requirement |
 | `session_reverts` | dropped as direct port | no direct replacement; redesign only as part of a server-side undo/audit model |
+
+## Final Deletion Audit, 2026-05-18
+
+- Registered Rust desktop command surface checked from
+  `src-tauri/src/lib.rs`: 209 commands total, split across 182 `commands::*`,
+  25 `db_currencies::*`, and 2 `fx_refresh::*` commands.
+- A second-pass Rust function/helper audit is captured in
+  [tauri-rust-function-audit-2026-05-18.md](./tauri-rust-function-audit-2026-05-18.md).
+  That pass reviewed private helpers and tests in addition to command names.
+- Active web runtime checked: no `@tauri`, `invoke`, `__TAURI__`, or Tauri API
+  imports remain outside `src-tauri`, docs/TODO, `.vscode`, `.dockerignore`,
+  and an unreferenced `static/tauri.svg` starter asset.
+  `package.json`, `package-lock.json`, `vite.config.js`, and
+  `svelte.config.js` are Tauri-free.
+- Directly replaced command families: accounts, balances, reconciliation,
+  transactions/splits, imports by uploaded content, import rules/sessions,
+  exports, metadata settings, commodities/currencies, manual FX and pricing
+  refresh, investments/lots/dividends/corporate-action records, built-in
+  reports, saved report definitions/runs, notes, auth/session/admin context,
+  health/runtime status, backup/restore docs and smoke workflows.
+- Intentionally dropped or deferred command families: desktop storage location
+  management and file pickers, desktop SQLite backup scheduling, desktop
+  undo/redo tables, event CRUD, document/attachment CRUD, legacy desktop DB
+  import/path helpers, transaction timestamp/timezone API fields, generic
+  SQL/template `run_report`, report-run pruning, country create/update/delete,
+  commodity price-source override CRUD, dividend income category defaults, and
+  the richer legacy pricing-history fields listed in the V1 gap plan.
+- Delete decision: the Rust tree is no longer required by the active web
+  runtime. It is safe to delete only after product sign-off accepts the
+  dropped/deferred command families above and the tiny non-runtime cleanup
+  references are removed.
 
 ## Deferred vs Unaccounted
 

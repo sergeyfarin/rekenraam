@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-ImportFormat = Literal["auto", "csv", "xls", "xlsx", "qif", "ofx", "qfx"]
+ImportFormat = Literal["auto", "csv", "xls", "xlsx", "qif", "ofx", "qfx", "hbci", "mt940"]
 ImportMode = Literal["always_create", "match_and_enrich", "deduplicate", "review", "update_only"]
 
 
