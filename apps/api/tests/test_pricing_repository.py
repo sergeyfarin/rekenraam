@@ -4,10 +4,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rekenraam_api.db.models.accounts import Account
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import PriceObservation
 from rekenraam_api.db.models.metadata import Commodity
 from rekenraam_api.db.models.pricing import CommodityPriceSource, PricingRefreshState
+from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.repositories.pricing import PricingRepository
 
 
@@ -238,3 +240,160 @@ async def test_pricing_repository_manages_append_only_commodity_price_sources(
         .all()
     )
     assert len(all_rows) == 3
+
+
+@pytest.mark.asyncio
+async def test_pricing_repository_supersedes_price_observations_append_only(
+    repository_session: AsyncSession,
+) -> None:
+    repository = PricingRepository(repository_session)
+    security = await repository_session.merge(
+        Commodity(book_id=1, kind="security", symbol="ACME", name="Acme Corp", scale=4)
+    )
+    await repository_session.commit()
+    await repository_session.refresh(security)
+
+    created = await repository.create_market_price_observation(
+        book_id=1,
+        commodity_id=security.id,
+        quote_commodity_id=1,
+        price_date=date(2026, 5, 1),
+        price_minor=12_345,
+        source="manual",
+    )
+    corrected = await repository.create_market_price_observation(
+        book_id=1,
+        commodity_id=security.id,
+        quote_commodity_id=1,
+        price_date=date(2026, 5, 1),
+        price_minor=12_500,
+        source="manual",
+        supersedes_observation_id=created.id,
+    )
+
+    listed = await repository.list_market_price_observations(
+        book_id=1, commodity_id=security.id, quote_commodity_id=1, limit=10
+    )
+    current_from_original = await repository.get_price_observation(created.id)
+
+    assert [row[0].id for row in listed] == [corrected.id]
+    assert current_from_original is not None
+    assert current_from_original.id == corrected.id
+    assert corrected.supersedes_observation_id == created.id
+    assert corrected.is_manual is True
+
+    assert await repository.delete_market_price_observation(created.id) is True
+    assert (
+        await repository.list_market_price_observations(
+            book_id=1, commodity_id=security.id, quote_commodity_id=1, limit=10
+        )
+        == []
+    )
+
+    all_rows = (
+        (
+            await repository_session.execute(
+                select(PriceObservation).where(PriceObservation.commodity_id == security.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(all_rows) == 3
+    tombstone = next(row for row in all_rows if row.voided_at is not None)
+    assert tombstone.void_reason == "delete"
+
+
+@pytest.mark.asyncio
+async def test_pricing_repository_extracts_implicit_market_price_from_transaction(
+    repository_session: AsyncSession,
+) -> None:
+    repository = PricingRepository(repository_session)
+    security = Commodity(
+        id=210,
+        book_id=1,
+        kind="security",
+        symbol="VWRL",
+        name="Vanguard ETF",
+        scale=4,
+    )
+    repository_session.add(security)
+    repository_session.add_all(
+        [
+            Account(
+                id=200,
+                book_id=1,
+                account_type="cash",
+                name="Cash",
+                commodity_id=1,
+                booking_policy="fifo",
+            ),
+            Account(
+                id=201,
+                book_id=1,
+                account_type="investment",
+                name="Brokerage",
+                commodity_id=1,
+                booking_policy="fifo",
+            ),
+        ]
+    )
+    await repository_session.commit()
+    await repository_session.refresh(security)
+
+    repository_session.add(
+        Transaction(
+            id=300,
+            book_id=1,
+            occurred_date=date(2026, 5, 4),
+            posted_date=date(2026, 5, 4),
+            status="cleared",
+        )
+    )
+    await repository_session.commit()
+
+    repository_session.add_all(
+        [
+            Split(
+                id=301,
+                tx_id=300,
+                account_id=201,
+                commodity_id=security.id,
+                amount_minor=10_000,
+            ),
+            Split(
+                id=302,
+                tx_id=300,
+                account_id=200,
+                commodity_id=1,
+                amount_minor=-25_000,
+            ),
+        ]
+    )
+    await repository_session.commit()
+
+    observation = await repository.create_implicit_market_price_from_transaction(300)
+    same_observation = await repository.create_implicit_market_price_from_transaction(300)
+
+    assert observation is not None
+    assert same_observation is not None
+    assert same_observation.id == observation.id
+    assert observation.book_id == 1
+    assert observation.commodity_id == security.id
+    assert observation.quote_commodity_id == 1
+    assert observation.price_date == date(2026, 5, 4)
+    assert observation.price_minor == 25_000
+    assert observation.source == "implicit"
+    assert observation.is_manual is False
+    assert observation.is_derived is True
+
+    all_implicit_rows = (
+        (
+            await repository_session.execute(
+                select(PriceObservation).where(PriceObservation.source == "implicit")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(all_implicit_rows) == 1

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from rekenraam_api.api.dependencies import get_pricing_service, get_pricing_worker
 from rekenraam_api.schemas.pricing import (
@@ -116,6 +116,26 @@ async def create_market_price(
         return await pricing_service.create_market_price(input)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post(
+    "/market-prices/from-transaction/{transaction_id}",
+    response_model=MarketPriceSummary,
+    responses={status.HTTP_204_NO_CONTENT: {"description": "No implicit price found"}},
+)
+async def create_market_price_from_transaction(
+    transaction_id: int,
+    pricing_service: PricingService = Depends(get_pricing_service),
+) -> MarketPriceSummary | Response:
+    try:
+        summary = await pricing_service.create_implicit_market_price_from_transaction(
+            transaction_id
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    if summary is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return summary
 
 
 @router.delete("/market-prices/{observation_id}", status_code=status.HTTP_204_NO_CONTENT)

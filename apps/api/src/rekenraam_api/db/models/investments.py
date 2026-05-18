@@ -256,6 +256,7 @@ class PriceObservation(Base):
             "observation_kind",
             "price_date",
         ),
+        Index("ix_price_observations_supersedes", "supersedes_observation_id"),
         CheckConstraint(
             "observation_kind IN ('commodity_market', 'fx_daily', 'fx_manual', 'valuation_override')",
             name="ck_price_observations_observation_kind",
@@ -276,6 +277,19 @@ class PriceObservation(Base):
     price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     price_date: Mapped[date] = mapped_column(Date, nullable=False)
     source: Mapped[str | None] = mapped_column(String(128))
+    source_id: Mapped[int | None] = mapped_column(BigInteger)
+    is_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_derived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    derived_via_commodity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("commodities.id", ondelete="SET NULL")
+    )
+    triangulation_path_json: Mapped[str | None] = mapped_column(Text)
+    supersedes_observation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("price_observations.id", ondelete="SET NULL")
+    )
+    ingest_run_id: Mapped[int | None] = mapped_column(BigInteger)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    void_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

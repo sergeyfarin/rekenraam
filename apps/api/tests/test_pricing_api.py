@@ -12,6 +12,7 @@ from rekenraam_api.api.dependencies import (
 from rekenraam_api.app import app
 from rekenraam_api.schemas.pricing import (
     CommodityPriceSourceSummary,
+    MarketPriceSummary,
     PriceSourceSummary,
     PricingExecutionStatusSummary,
     PricingPolicySummary,
@@ -118,6 +119,29 @@ class StubPricingService:
 
     async def delete_commodity_price_source(self, commodity_price_source_id: int) -> bool:
         return commodity_price_source_id == 20
+
+    async def create_implicit_market_price_from_transaction(
+        self, transaction_id: int
+    ) -> MarketPriceSummary | None:
+        if transaction_id == 404:
+            raise ValueError("transaction not found")
+        if transaction_id == 204:
+            return None
+        return MarketPriceSummary(
+            id=90,
+            book_id=1,
+            commodity_id=2,
+            commodity_symbol="VWRL",
+            commodity_name="Vanguard FTSE All-World",
+            quote_commodity_id=1,
+            quote_commodity_symbol="USD",
+            price_date=date(2026, 5, 4),
+            price_minor=25_000,
+            source="implicit",
+            is_manual=False,
+            is_derived=True,
+            created_at=self._created_at,
+        )
 
     async def get_pricing_policy(self, book_id: int) -> PricingPolicySummary | None:
         if book_id != 1:
@@ -376,6 +400,12 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     delete_commodity_source_response = await client.delete(
         "/api/v1/pricing/commodity-price-sources/20"
     )
+    implicit_price_response = await client.post(
+        "/api/v1/pricing/market-prices/from-transaction/300"
+    )
+    no_implicit_price_response = await client.post(
+        "/api/v1/pricing/market-prices/from-transaction/204"
+    )
     create_assignment_response = await client.post(
         "/api/v1/pricing/source-assignments",
         json={
@@ -419,6 +449,10 @@ async def test_pricing_endpoints_return_policy_sources_assignments_and_refresh_s
     assert update_commodity_source_response.status_code == 200
     assert update_commodity_source_response.json()["previous_commodity_price_source_id"] == 20
     assert delete_commodity_source_response.status_code == 204
+    assert implicit_price_response.status_code == 200
+    assert implicit_price_response.json()["source"] == "implicit"
+    assert implicit_price_response.json()["is_derived"] is True
+    assert no_implicit_price_response.status_code == 204
     assert create_assignment_response.status_code == 200
     assert create_assignment_response.json()["id"] == 11
     assert update_assignment_response.status_code == 200

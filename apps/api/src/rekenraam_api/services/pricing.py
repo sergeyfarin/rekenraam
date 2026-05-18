@@ -267,8 +267,24 @@ class PricingService:
             price_date=input.price_date,
             price_minor=input.price_minor,
             source=self._clean_optional_text(input.source),
+            supersedes_observation_id=input.supersedes_observation_id,
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
+        commodity = await self._repository.get_commodity(observation.commodity_id)
+        quote = await self._repository.get_commodity(observation.quote_commodity_id)
+        if commodity is None or quote is None:
+            raise ValueError("price observation references missing commodity")
+        return self._to_market_price_summary(observation, commodity, quote)
+
+    async def create_implicit_market_price_from_transaction(
+        self, transaction_id: int
+    ) -> MarketPriceSummary | None:
+        observation = await self._repository.create_implicit_market_price_from_transaction(
+            transaction_id
+        )
+        if observation is None:
+            return None
+        await bump_report_state(getattr(self._repository, "_session", None), observation.book_id)
         commodity = await self._repository.get_commodity(observation.commodity_id)
         quote = await self._repository.get_commodity(observation.quote_commodity_id)
         if commodity is None or quote is None:
@@ -301,6 +317,7 @@ class PricingService:
             rate_date=input.rate_date,
             rate=Decimal(str(input.rate)),
             source=self._clean_optional_text(input.source),
+            supersedes_observation_id=input.supersedes_observation_id,
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         from_currency = await self._repository.get_commodity(observation.commodity_id)
@@ -359,6 +376,7 @@ class PricingService:
             price_date=price_date,
             rate=Decimal(str(input.rate)),
             source_name=source_name,
+            supersedes_observation_id=input.supersedes_observation_id,
         )
         await bump_report_state(getattr(self._repository, "_session", None), input.book_id)
         from_currency = await self._repository.get_commodity(observation.commodity_id)
@@ -520,6 +538,11 @@ class PricingService:
             rate_date=observation.price_date,
             rate=observation.price_minor / scale_factor,
             source=observation.source,
+            source_id=observation.source_id,
+            is_manual=observation.is_manual,
+            is_derived=observation.is_derived,
+            derived_via_currency_id=observation.derived_via_commodity_id,
+            supersedes_observation_id=observation.supersedes_observation_id,
             created_at=observation.created_at,
         )
 
@@ -540,6 +563,10 @@ class PricingService:
             price_date=observation.price_date,
             price_minor=observation.price_minor,
             source=observation.source,
+            source_id=observation.source_id,
+            is_manual=observation.is_manual,
+            is_derived=observation.is_derived,
+            supersedes_observation_id=observation.supersedes_observation_id,
             created_at=observation.created_at,
         )
 
@@ -564,6 +591,10 @@ class PricingService:
             period_month=period_month,
             rate=observation.price_minor / scale_factor,
             source_name=observation.source or "Manual",
+            source_id=observation.source_id,
+            is_manual=observation.is_manual,
+            is_derived=observation.is_derived,
+            supersedes_observation_id=observation.supersedes_observation_id,
             source_url=None,
             source_date=observation.price_date,
             notes=None,

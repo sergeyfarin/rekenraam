@@ -5,9 +5,10 @@ from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import cast
 
-from sqlalchemy import Select, exists, or_, select
+from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import ColumnElement
 
 from rekenraam_api.db.models.books import Book
 from rekenraam_api.db.models.investments import PriceObservation
@@ -20,6 +21,7 @@ from rekenraam_api.db.models.pricing import (
     PricingRefreshState,
     PricingSourceAssignment,
 )
+from rekenraam_api.db.models.transactions import Split, Transaction
 from rekenraam_api.db.sql import dialect_insert
 
 
@@ -535,6 +537,8 @@ class PricingRepository:
                 PriceObservation.source == source,
                 PriceObservation.price_date >= start_date,
                 PriceObservation.price_date <= end_date,
+                PriceObservation.voided_at.is_(None),
+                self._current_price_observation_filter(),
             )
             .order_by(PriceObservation.price_date.asc())
         )
@@ -553,6 +557,9 @@ class PricingRepository:
         observations: list[PriceObservation],
     ) -> None:
         if observations:
+            for observation in observations:
+                observation.source_id = source_id
+                observation.is_manual = False
             self._session.add_all(observations)
         statement = dialect_insert(self._session, PricingRefreshState).values(
             book_id=book_id,
@@ -654,6 +661,8 @@ class PricingRepository:
             .join(to_currency, PriceObservation.quote_commodity_id == to_currency.id)
             .where(PriceObservation.book_id == book_id)
             .where(PriceObservation.observation_kind == "fx_daily")
+            .where(PriceObservation.voided_at.is_(None))
+            .where(self._current_price_observation_filter())
             .order_by(
                 PriceObservation.price_date.desc(),
                 PriceObservation.created_at.desc(),
@@ -682,6 +691,8 @@ class PricingRepository:
             .where(
                 PriceObservation.observation_kind.in_(["commodity_market", "valuation_override"])
             )
+            .where(PriceObservation.voided_at.is_(None))
+            .where(self._current_price_observation_filter())
             .order_by(
                 PriceObservation.price_date.desc(),
                 PriceObservation.created_at.desc(),
@@ -705,6 +716,7 @@ class PricingRepository:
         price_date: date,
         price_minor: int,
         source: str | None,
+        supersedes_observation_id: int | None = None,
     ) -> PriceObservation:
         commodity = await self._session.get(Commodity, commodity_id)
         quote = await self._session.get(Commodity, quote_commodity_id)
@@ -712,6 +724,14 @@ class PricingRepository:
             raise ValueError("commodity not found")
         if quote is None or quote.book_id != book_id:
             raise ValueError("quote commodity not found")
+        if supersedes_observation_id is not None:
+            await self._require_superseded_observation(
+                supersedes_observation_id,
+                book_id=book_id,
+                commodity_id=commodity_id,
+                quote_commodity_id=quote_commodity_id,
+                observation_kinds={"commodity_market", "valuation_override"},
+            )
         observation = PriceObservation(
             book_id=book_id,
             commodity_id=commodity_id,
@@ -720,6 +740,8 @@ class PricingRepository:
             price_minor=price_minor,
             price_date=price_date,
             source=source,
+            is_manual=True,
+            supersedes_observation_id=supersedes_observation_id,
             created_at=datetime.now(UTC),
         )
         self._session.add(observation)
@@ -728,15 +750,115 @@ class PricingRepository:
         return observation
 
     async def delete_market_price_observation(self, observation_id: int) -> bool:
-        observation = await self._session.get(PriceObservation, observation_id)
+        observation = await self._current_price_observation(observation_id)
         if observation is None or observation.observation_kind not in {
             "commodity_market",
             "valuation_override",
         }:
             return False
-        await self._session.delete(observation)
+        return await self._supersede_price_observation_with_void(observation, "delete")
+
+    async def create_implicit_market_price_from_transaction(
+        self, transaction_id: int
+    ) -> PriceObservation | None:
+        transaction = await self._session.get(Transaction, transaction_id)
+        if transaction is None:
+            raise ValueError("transaction not found")
+
+        split_totals_result = await self._session.execute(
+            select(Split.commodity_id, func.sum(Split.amount_minor))
+            .where(Split.tx_id == transaction_id)
+            .group_by(Split.commodity_id)
+        )
+        split_totals = [
+            (commodity_id, int(amount_minor))
+            for commodity_id, amount_minor in split_totals_result.tuples().all()
+            if int(amount_minor) != 0
+        ]
+        if len(split_totals) != 2:
+            return None
+
+        commodities_result = await self._session.execute(
+            select(Commodity).where(
+                Commodity.id.in_([commodity_id for commodity_id, _ in split_totals]),
+                Commodity.book_id == transaction.book_id,
+            )
+        )
+        commodities = {commodity.id: commodity for commodity in commodities_result.scalars().all()}
+        if len(commodities) != 2:
+            return None
+
+        book = await self._session.get(Book, transaction.book_id)
+        base_currency_id = next(
+            (
+                commodity.id
+                for commodity in commodities.values()
+                if book is not None
+                and commodity.kind == "currency"
+                and commodity.symbol == book.base_currency_code
+            ),
+            None,
+        )
+        quote_commodity_id = base_currency_id
+        if quote_commodity_id is None:
+            currency_ids = [
+                commodity.id for commodity in commodities.values() if commodity.kind == "currency"
+            ]
+            if len(currency_ids) != 1:
+                return None
+            quote_commodity_id = currency_ids[0]
+
+        commodity_id = next(
+            commodity_id for commodity_id, _ in split_totals if commodity_id != quote_commodity_id
+        )
+        commodity_amount = abs(
+            next(amount for current_id, amount in split_totals if current_id == commodity_id)
+        )
+        quote_amount = abs(
+            next(amount for current_id, amount in split_totals if current_id == quote_commodity_id)
+        )
+        if commodity_amount == 0 or quote_amount == 0:
+            return None
+
+        commodity = commodities[commodity_id]
+        price_minor = (quote_amount * (10**commodity.scale)) // commodity_amount
+        if price_minor <= 0:
+            return None
+
+        existing = await self._session.scalar(
+            select(PriceObservation)
+            .where(
+                PriceObservation.book_id == transaction.book_id,
+                PriceObservation.commodity_id == commodity_id,
+                PriceObservation.quote_commodity_id == quote_commodity_id,
+                PriceObservation.observation_kind == "commodity_market",
+                PriceObservation.price_date == transaction.occurred_date,
+                PriceObservation.source == "implicit",
+                PriceObservation.voided_at.is_(None),
+                self._current_price_observation_filter(),
+            )
+            .order_by(PriceObservation.id.desc())
+            .limit(1)
+        )
+        if existing is not None:
+            return existing
+
+        observation = PriceObservation(
+            book_id=transaction.book_id,
+            commodity_id=commodity_id,
+            quote_commodity_id=quote_commodity_id,
+            observation_kind="commodity_market",
+            price_minor=price_minor,
+            price_date=transaction.occurred_date,
+            source="implicit",
+            is_manual=False,
+            is_derived=True,
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(observation)
         await self._session.commit()
-        return True
+        await self._session.refresh(observation)
+        return observation
 
     async def create_fx_rate_daily_observation(
         self,
@@ -747,9 +869,18 @@ class PricingRepository:
         rate_date: date,
         rate: Decimal,
         source: str | None,
+        supersedes_observation_id: int | None = None,
     ) -> PriceObservation:
         from_currency = await self._require_currency(book_id, from_currency_id)
         await self._require_currency(book_id, to_currency_id)
+        if supersedes_observation_id is not None:
+            await self._require_superseded_observation(
+                supersedes_observation_id,
+                book_id=book_id,
+                commodity_id=from_currency_id,
+                quote_commodity_id=to_currency_id,
+                observation_kinds={"fx_daily"},
+            )
 
         scale_factor = Decimal(10) ** from_currency.scale
         price_minor = int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
@@ -761,6 +892,8 @@ class PricingRepository:
             price_minor=price_minor,
             price_date=rate_date,
             source=source,
+            is_manual=True,
+            supersedes_observation_id=supersedes_observation_id,
             created_at=datetime.now(UTC),
         )
         self._session.add(observation)
@@ -769,12 +902,10 @@ class PricingRepository:
         return observation
 
     async def delete_fx_rate_daily_observation(self, observation_id: int) -> bool:
-        observation = await self._session.get(PriceObservation, observation_id)
+        observation = await self._current_price_observation(observation_id)
         if observation is None or observation.observation_kind != "fx_daily":
             return False
-        await self._session.delete(observation)
-        await self._session.commit()
-        return True
+        return await self._supersede_price_observation_with_void(observation, "delete")
 
     async def list_fx_rate_official_observations(
         self,
@@ -790,6 +921,8 @@ class PricingRepository:
             .join(to_currency, PriceObservation.quote_commodity_id == to_currency.id)
             .where(PriceObservation.book_id == book_id)
             .where(PriceObservation.observation_kind == "fx_manual")
+            .where(PriceObservation.voided_at.is_(None))
+            .where(self._current_price_observation_filter())
             .order_by(
                 PriceObservation.price_date.desc(),
                 PriceObservation.created_at.desc(),
@@ -809,9 +942,18 @@ class PricingRepository:
         price_date: date,
         rate: Decimal,
         source_name: str,
+        supersedes_observation_id: int | None = None,
     ) -> PriceObservation:
         from_currency = await self._require_currency(book_id, from_currency_id)
         await self._require_currency(book_id, to_currency_id)
+        if supersedes_observation_id is not None:
+            await self._require_superseded_observation(
+                supersedes_observation_id,
+                book_id=book_id,
+                commodity_id=from_currency_id,
+                quote_commodity_id=to_currency_id,
+                observation_kinds={"fx_manual"},
+            )
 
         scale_factor = Decimal(10) ** from_currency.scale
         price_minor = int((rate * scale_factor).to_integral_value(rounding=ROUND_HALF_UP))
@@ -823,6 +965,8 @@ class PricingRepository:
             price_minor=price_minor,
             price_date=price_date,
             source=source_name,
+            is_manual=True,
+            supersedes_observation_id=supersedes_observation_id,
             created_at=datetime.now(UTC),
         )
         self._session.add(observation)
@@ -831,18 +975,16 @@ class PricingRepository:
         return observation
 
     async def delete_fx_rate_official_observation(self, observation_id: int) -> bool:
-        observation = await self._session.get(PriceObservation, observation_id)
+        observation = await self._current_price_observation(observation_id)
         if observation is None or observation.observation_kind != "fx_manual":
             return False
-        await self._session.delete(observation)
-        await self._session.commit()
-        return True
+        return await self._supersede_price_observation_with_void(observation, "delete")
 
     async def rollback(self) -> None:
         await self._session.rollback()
 
     async def get_price_observation(self, observation_id: int) -> PriceObservation | None:
-        return await self._session.get(PriceObservation, observation_id)
+        return await self._current_price_observation(observation_id)
 
     async def _require_currency(self, book_id: int, commodity_id: int) -> Commodity:
         commodity = await self._session.get(Commodity, commodity_id)
@@ -886,6 +1028,75 @@ class PricingRepository:
         if current is None or current.voided_at is not None:
             return None
         return current
+
+    async def _current_price_observation(self, observation_id: int) -> PriceObservation | None:
+        current = await self._session.get(PriceObservation, observation_id)
+        while current is not None:
+            child = await self._session.scalar(
+                select(PriceObservation)
+                .where(PriceObservation.supersedes_observation_id == current.id)
+                .order_by(PriceObservation.id.desc())
+                .limit(1)
+            )
+            if child is None:
+                break
+            current = child
+        if current is None or current.voided_at is not None:
+            return None
+        return current
+
+    @staticmethod
+    def _current_price_observation_filter() -> ColumnElement[bool]:
+        newer = aliased(PriceObservation)
+        return ~exists(
+            select(newer.id).where(newer.supersedes_observation_id == PriceObservation.id)
+        )
+
+    async def _require_superseded_observation(
+        self,
+        observation_id: int,
+        *,
+        book_id: int,
+        commodity_id: int,
+        quote_commodity_id: int,
+        observation_kinds: set[str],
+    ) -> PriceObservation:
+        observation = await self._current_price_observation(observation_id)
+        if observation is None:
+            raise ValueError("superseded observation not found")
+        if (
+            observation.book_id != book_id
+            or observation.commodity_id != commodity_id
+            or observation.quote_commodity_id != quote_commodity_id
+            or observation.observation_kind not in observation_kinds
+        ):
+            raise ValueError("superseded observation does not match price kind")
+        return observation
+
+    async def _supersede_price_observation_with_void(
+        self, observation: PriceObservation, reason: str
+    ) -> bool:
+        tombstone = PriceObservation(
+            book_id=observation.book_id,
+            commodity_id=observation.commodity_id,
+            quote_commodity_id=observation.quote_commodity_id,
+            observation_kind=observation.observation_kind,
+            price_minor=observation.price_minor,
+            price_date=observation.price_date,
+            source=observation.source,
+            source_id=observation.source_id,
+            is_manual=observation.is_manual,
+            is_derived=observation.is_derived,
+            derived_via_commodity_id=observation.derived_via_commodity_id,
+            triangulation_path_json=observation.triangulation_path_json,
+            supersedes_observation_id=observation.id,
+            ingest_run_id=observation.ingest_run_id,
+            voided_at=datetime.now(UTC),
+            void_reason=reason,
+        )
+        self._session.add(tombstone)
+        await self._session.commit()
+        return True
 
     async def _validate_commodity_price_source_refs(
         self, *, book_id: int, commodity_id: int, source_id: int

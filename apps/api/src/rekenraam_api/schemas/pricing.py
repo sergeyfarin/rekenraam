@@ -16,8 +16,10 @@ class FxRateDailySummary(BaseModel):
     rate: float
     source: str | None
     source_id: int | None = None
+    is_manual: bool = False
     is_derived: bool = False
     derived_via_currency_id: int | None = None
+    supersedes_observation_id: int | None = None
     created_at: datetime
 
 
@@ -30,6 +32,7 @@ class FxRateDailyCreateInput(BaseModel):
     rate_date: date
     rate: float
     source: str | None = None
+    supersedes_observation_id: int | None = None
 
 
 class FxRateOfficialSummary(BaseModel):
@@ -46,6 +49,10 @@ class FxRateOfficialSummary(BaseModel):
     period_month: int | None
     rate: float
     source_name: str
+    source_id: int | None = None
+    is_manual: bool = False
+    is_derived: bool = False
+    supersedes_observation_id: int | None = None
     source_url: str | None = None
     source_date: date | None = None
     notes: str | None = None
@@ -67,6 +74,7 @@ class FxRateOfficialCreateInput(BaseModel):
     source_url: str | None = None
     source_date: date | None = None
     notes: str | None = None
+    supersedes_observation_id: int | None = None
 
 
 class MarketPriceSummary(BaseModel):
@@ -82,6 +90,10 @@ class MarketPriceSummary(BaseModel):
     price_date: date
     price_minor: int
     source: str | None
+    source_id: int | None = None
+    is_manual: bool = False
+    is_derived: bool = False
+    supersedes_observation_id: int | None = None
     created_at: datetime
 
 
@@ -94,6 +106,7 @@ class MarketPriceCreateInput(BaseModel):
     price_date: date
     price_minor: int
     source: str | None = None
+    supersedes_observation_id: int | None = None
 
 
 class PricingSourceHealthSummary(BaseModel):

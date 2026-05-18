@@ -1398,6 +1398,25 @@ def upgrade() -> None:
         sa.Column("price_minor", sa.BigInteger(), nullable=False),
         sa.Column("price_date", sa.Date(), nullable=False),
         sa.Column("source", sa.String(length=128), nullable=True),
+        sa.Column("source_id", sa.BigInteger(), nullable=True),
+        sa.Column("is_manual", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("is_derived", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "derived_via_commodity_id",
+            sa.BigInteger(),
+            sa.ForeignKey("commodities.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("triangulation_path_json", sa.Text(), nullable=True),
+        sa.Column(
+            "supersedes_observation_id",
+            sa.BigInteger(),
+            sa.ForeignKey("price_observations.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("ingest_run_id", sa.BigInteger(), nullable=True),
+        sa.Column("voided_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("void_reason", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -1416,6 +1435,12 @@ def upgrade() -> None:
         "ix_price_observations_lookup",
         "price_observations",
         ["commodity_id", "quote_commodity_id", "observation_kind", "price_date"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_price_observations_supersedes",
+        "price_observations",
+        ["supersedes_observation_id"],
         unique=False,
     )
 
@@ -2985,6 +3010,7 @@ def downgrade() -> None:
     op.drop_table("commodity_price_sources")
     op.drop_index("ix_price_sources_kind", table_name="price_sources")
     op.drop_table("price_sources")
+    op.drop_index("ix_price_observations_supersedes", table_name="price_observations")
     op.drop_index("ix_price_observations_lookup", table_name="price_observations")
     op.drop_index("ix_price_observations_book_id", table_name="price_observations")
     op.drop_table("price_observations")

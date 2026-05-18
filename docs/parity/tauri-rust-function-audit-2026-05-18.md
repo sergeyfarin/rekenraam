@@ -137,10 +137,12 @@ are not direct one-for-one Python ports.
   income accounts and do not expose this default mapping CRUD.
 - [Completed] Rust exposed `get_commodity` as a command. Python now exposes
   `GET /commodities/{id}` with row-scoped read authorization.
-- Rust commodity price commands included implicit price extraction from a
-  transaction and append-only price observation supersession. Python supports
-  manual market prices and FX observations, but the richer supersession/audit
-  and implicit-price command behavior is not direct-ported.
+- [Completed] Rust commodity price commands included implicit price extraction from a
+  transaction and append-only price observation supersession. Python now keeps
+  price observations append-only with current-row filtering, correction
+  supersession, tombstone deletes, nullable provider/plugin audit columns, and
+  `POST /pricing/market-prices/from-transaction/{transaction_id}` for
+  idempotent implicit market price extraction.
 - Rust pricing policy and FX observations carried richer fields:
   `staleness_max_days`, `triangulation_max_hops`, `rounding_mode`,
   `prefer_official_fx`, `mode`, `is_derived`, `derived_via_commodity_id`,
