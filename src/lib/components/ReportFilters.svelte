@@ -21,6 +21,10 @@
     commodities = [],
     busy = false,
     onRefresh,
+    onExport = undefined,
+    onPrint = undefined,
+    exportDisabled = false,
+    printDisabled = false,
   }: {
     dateFrom?: string;
     dateTo?: string;
@@ -31,6 +35,10 @@
     commodities?: Commodity[];
     busy?: boolean;
     onRefresh: () => void | Promise<void>;
+    onExport?: (() => void | Promise<void>) | undefined;
+    onPrint?: (() => void | Promise<void>) | undefined;
+    exportDisabled?: boolean;
+    printDisabled?: boolean;
   } = $props();
 
   const currencies = $derived(commodities.filter((c) => c.kind === "currency"));
@@ -70,6 +78,12 @@
       {/if}
       <Button onclick={() => onRefresh()} disabled={busy}>
         {busy ? "Loading..." : "Refresh"}
+      </Button>
+      <Button variant="secondary" onclick={() => onExport?.()} disabled={busy || exportDisabled}>
+        Export CSV
+      </Button>
+      <Button variant="secondary" onclick={() => onPrint?.()} disabled={busy || printDisabled}>
+        Print
       </Button>
     </div>
   </Card.Content>

@@ -29,23 +29,23 @@ when touching the listed area.
   touched `String(e)`/raw error displays with `formatApiError`.
 - Added loan payment draft/post clients and a basic loan payment assistant in
   the planning page.
+- Refactored `CommoditySettings.svelte` into focused currency, commodity,
+  FX daily, FX official, and FX settings sections; adopted active-book/error
+  handling in the touched flows; and added Vitest coverage for the route and
+  manual FX refresh client behavior.
+- Refactored `investments/+page.svelte` to use typed investment clients,
+  focused trade/dividend form components, explicit active-book/error handling,
+  and Vitest coverage for the route, form payload builders, and API seam.
+- Refactored `reports/+page.svelte` onto typed report contracts and
+  active-book/error handling; added net worth, account trends, performance,
+  account valuation, currency exposure, and saved definitions/runs surfaces;
+  added CSV export and print controls for active report output; and added
+  Vitest coverage for the route and reports API seam.
 - Added Vitest coverage for API error parsing, book context, password reset,
   and invite acceptance.
 
 ## Deferred Findings
 
-- `CommoditySettings.svelte` remains too large and should be split before more
-  pricing work. Risk: hard to test and easy to regress manual FX/market-price
-  flows. Recommended split: currency list, FX daily, FX official, market
-  prices, pricing policy, refresh health/history.
-- `investments/+page.svelte` still uses generic investment API clients and
-  page-local payload shaping. Risk: backend contract drift is not caught by
-  TypeScript. Recommended fix: typed instruments/profiles/corporate-actions/
-  trade clients plus focused form components.
-- `reports/+page.svelte` still exposes only part of the backend reports
-  surface. Recommended fix: typed report request/response contracts, saved
-  definitions/runs UI, net worth/account trends/performance/valuation/exposure
-  tabs, and report CSV/print controls.
 - Hard-coded fallback `book_id: 1` still exists in pages and API helpers not
   touched in this pass. Risk: multi-book users can write/read the wrong book.
   Recommended fix: migrate route-by-route to `bookContext` and make client
