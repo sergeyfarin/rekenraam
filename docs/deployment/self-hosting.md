@@ -71,6 +71,29 @@ database file in the `rekenraam_data` volume, then start the app and run the
 admin integrity check. Keep the prior volume snapshot until the restored app has
 been verified.
 
+## Upgrade Flow
+
+1. Run `make backup-now`.
+2. Pull or deploy the new code.
+3. Run `make prod-config-check`.
+4. Start the same SQLite deployment shape already in use:
+   `docker compose up -d --build` for trusted LAN installs, or
+   `docker compose -f compose.yaml -f compose.public.yaml -f compose.proxy.yaml up -d --build`
+   for public HTTPS installs.
+5. Check `/api/v1/health`, Settings -> Runtime, and the integrity check.
+
+## Public Security Checklist
+
+- HTTPS is required for public access.
+- `SESSION_COOKIE_SECURE=true`.
+- `CORS_ALLOWED_ORIGINS` contains only the public origin.
+- `REKENRAAM_PUBLIC_HOST` resolves to the server before starting Caddy.
+- `MFA_ENFORCED=true` once users have enrolled.
+- Use file-backed secrets for first-admin passwords in public installs.
+- Keep the SQLite volume private to the host.
+- Do not expose the first-run HTTP-only setup directly to the internet.
+- Schedule backups and perform restore drills.
+
 ## Operational Smoke
 
 ```bash

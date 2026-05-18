@@ -7,6 +7,10 @@ work to position Rekenraam as a **small-business accounting system with full
 investment support** rather than the personal-finance-app scope currently
 locked in by [`docs/product/v1-scope.md`](../product/v1-scope.md).
 
+Status note: this document is a future-architecture proposal, not the active v1
+release gate. The active v1 gate remains the personal-finance sqlite-only scope
+in [`docs/product/v1-scope.md`](../product/v1-scope.md).
+
 It is a sibling to the gap plan, not a replacement. The gap plan tracks
 day-to-day work against the existing scope; this document defines a new
 architectural baseline that, if adopted, **reshapes the v1 critical path**.
@@ -40,8 +44,9 @@ This document:
    gap-plan phases.
 
 Source-of-truth recommendation: this doc owns the *why* and the *architectural
-shape*. The gap plan owns *which item ships when*. When the two disagree,
-update both deliberately.
+shape* for a future stricter accounting target. The gap plan owns *which item
+ships when* for the active v1 product. When the two disagree, update both
+deliberately.
 
 ---
 

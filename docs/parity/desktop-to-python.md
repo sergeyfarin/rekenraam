@@ -38,6 +38,47 @@ Tauri/Rust tree is no longer used by builds or runtime code.
 - Server-side undo/redo, OCR, attachment storage, open banking, and plugin/theme
   runtime remain deferred.
 
+## Confirmed Missing Or Changed Behavior
+
+These points were carried in more detail before the last cleanup and should stay
+visible until `src-tauri/` is deleted.
+
+### Transactions
+
+- The Rust desktop runtime exposed timestamp and timezone fields more directly;
+  the web transaction surface is still more date-centric.
+- Rust hard-delete bulk transaction behavior was replaced by safer void-style
+  semantics in the web runtime.
+- Rust auto-created balancing accounts for generic mixed-commodity transfers;
+  the web runtime intentionally routes these through explicit cross-currency
+  transfer flows instead.
+
+### Accounts And Metadata
+
+- Country CRUD is not fully ported.
+- Some reference-data edits are simpler than the old append-only desktop model.
+- Account open/close/reopen semantics exist, but not as the same first-class
+  command shapes the desktop app had.
+- Notes are ported, but not with the same versioned/tombstoned history model.
+- User-facing event CRUD and document/attachment CRUD are not direct Python
+  ports.
+
+### Imports And Reports
+
+- The web import flow is upload-based rather than local-path based.
+- Reverse lookup from transaction to import session is not an exact one-for-one
+  port.
+- Generic SQL/template report execution and report-run pruning were desktop
+  features that remain consciously deferred.
+
+### Pricing, FX, And Investments
+
+- Rich pricing history, source-override, and derivation audit fields were
+  simplified in the web runtime.
+- Dividend-income-category defaults are not exposed as the same CRUD surface.
+- The main investment workflows are ported, but some helper-specific automated
+  accounting remains thinner than the Rust surface.
+
 ## Delete Decision
 
 The Rust tree is safe to delete from a build/runtime point of view after product
