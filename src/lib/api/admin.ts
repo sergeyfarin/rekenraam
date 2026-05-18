@@ -67,6 +67,12 @@ export type AdminUser = {
   memberships: BookMembership[];
 };
 
+export type AdminInviteCreated = {
+  user: AdminUser;
+  token: string;
+  expires_at: string;
+};
+
 export type AuditEvent = {
   id: number;
   book_id: number | null;
@@ -91,6 +97,15 @@ export async function createAdminUser(input: {
   memberships: [number, "owner" | "editor" | "viewer"][];
 }): Promise<AdminUser> {
   return apiPost<AdminUser, typeof input>("/admin/users", input);
+}
+
+export async function createAdminInvite(input: {
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  memberships: [number, "owner" | "editor" | "viewer"][];
+}): Promise<AdminInviteCreated> {
+  return apiPost<AdminInviteCreated, typeof input>("/admin/invites", input);
 }
 
 export async function updateAdminUser(userId: number, input: {

@@ -3,13 +3,14 @@
 Single dashboard for in-flight Rekenraam V1 work. Links back to the canonical
 specs — does **not** duplicate them. Update this file when items move state.
 
-Last updated: 2026-05-16
+Last updated: 2026-05-18
 
 ## Sources of truth
 
 - [SELF_HOSTED_MIGRATION_PLAN.md](SELF_HOSTED_MIGRATION_PLAN.md) — milestone-level roadmap
 - [docs/product/v1-scope.md](docs/product/v1-scope.md) — product scope and release gate
 - [docs/product/v1-gap-plan.md](docs/product/v1-gap-plan.md) — gap analysis, phase status, fix plan, test-coverage gaps
+- [docs/product/frontend-parity-plan.md](docs/product/frontend-parity-plan.md) — live frontend parity/refactor tracker
 - [docs/parity/desktop-to-python.md](docs/parity/desktop-to-python.md) — desktop-to-web parity matrix
 - [docs/architecture/postgres-schema.md](docs/architecture/postgres-schema.md) — schema direction
 - [docs/architecture/accounting-foundations.md](docs/architecture/accounting-foundations.md) — **pending decision**: proposed shift to small-business accounting + investments, with new Phase 1.5/1.6/1.7 inserted before remaining Phase 2 work
@@ -74,7 +75,19 @@ Tests: 197 passed / 2 skipped on real Postgres.
 20. [x] **Phase 3 workstream G** — Shipped 2026-05-15. New [docs/architecture/frontend-testing.md](docs/architecture/frontend-testing.md) (test pyramid, fixture conventions, common patterns, when-to-use-which guidance). README "Development" section now lists `npm test` / `npm run e2e` commands; cross-currency transfer + Phase 3 test infra added to "Working today".
 21. [x] **Phase 2 step 1 — Reconciliation correctness** — Shipped 2026-05-16. TDD-style: wrote 9 e2e tests in [apps/api/tests/e2e/test_reconciliation.py](apps/api/tests/e2e/test_reconciliation.py) covering §2.1 scenarios (locked-range writes, concurrent finishes, constraint validation, unlock-then-post, currency-mismatch offset, void-of-reconciled, partial-state rollback, happy path) plus the two new invariants (1.3.2 + 1.3.3). Fixes: **1.3.2** — `ReconciliationService.create_constraint` now rejects a second constraint per (book_id, account_id) with a 409 conflict (was silent coexistence). **1.3.3** — `pg_advisory_xact_lock` on (namespace, account_id) at the top of `start` and `finish` serializes concurrent reconciliations on the same account; released at txn commit/rollback. **1.3.1** — verified: existing `_ensure_unlocked` check already blocks void of a reconciled txn (the locked-range mechanism subsumes it; no policy change needed). Side fix: the deferred `test_import_commit_marks_session_abandoned_on_locked_account` un-skipped after fixing the underlying `MissingGreenlet` bug in `services/imports.py` — captured `session.id` to a local before the `db_session.commit()` so the post-rollback abandonment path no longer triggers a lazy reload. 233/1 passed/skipped (was 222/2 before). Detail: [v1-gap-plan.md §Phase 2](docs/product/v1-gap-plan.md).
 
-Next: Phase 2 step 2 (transactions correctness — DB-level locked-range + bulk atomicity), Phase 2 step 5 (report cache invalidation on writes), or Phase 1 #8 (full Tauri removal).
+Next: continue the frontend parity/refactor pass in [docs/product/frontend-parity-plan.md](docs/product/frontend-parity-plan.md), Phase 2 step 2 (transactions correctness — DB-level locked-range + bulk atomicity), Phase 2 step 5 (report cache invalidation on writes), or Phase 1 #8 (full Tauri removal).
+
+Frontend parity/refactor started 2026-05-18:
+
+- [x] Typed `ApiError` boundary + `formatApiError` convention.
+- [x] Active-book context foundation.
+- [x] Password reset and invite acceptance browser routes.
+- [x] Admin invite issuance and prompt-free admin password reset UI.
+- [x] Profile display-name/password controls.
+- [x] First active-book/error-management adoption in planning and import/export.
+- [x] Loan payment draft/post client + planning-page assistant.
+- [ ] Split `CommoditySettings.svelte`, `investments/+page.svelte`, `reports/+page.svelte`, and `import-export/+page.svelte` before adding further surface area.
+- [ ] Finish removing `book_id: 1` from remaining pages/helpers.
 
 ## Phase status
 

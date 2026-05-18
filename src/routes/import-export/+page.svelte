@@ -27,6 +27,8 @@
     type CategorySummary,
     type PayeeSummary
   } from "$lib/api/metadata";
+  import { requireActiveBookId } from "$lib/book-context";
+  import { formatApiError } from "$lib/utils";
 
   let accounts: AccountSummary[] = [];
   let categories: CategorySummary[] = [];
@@ -57,13 +59,18 @@
   let result = "";
 
   onMount(async () => {
-    [accounts, categories, payees, rules] = await Promise.all([
-      listAccounts(),
-      listCategories(),
-      listPayees(),
-      listImportRules()
-    ]);
-    accountId = accounts.find((account) => !account.is_closed)?.id ?? accounts[0]?.id ?? 0;
+    try {
+      const bookId = requireActiveBookId();
+      [accounts, categories, payees, rules] = await Promise.all([
+        listAccounts(bookId),
+        listCategories(bookId),
+        listPayees(bookId),
+        listImportRules(bookId)
+      ]);
+      accountId = accounts.find((account) => !account.is_closed)?.id ?? accounts[0]?.id ?? 0;
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
   });
 
   async function readFilePayload(file: File): Promise<{ content?: string; content_base64?: string }> {
@@ -94,7 +101,7 @@
     result = "";
     try {
       preview = await previewImport({
-        book_id: 1,
+        book_id: requireActiveBookId(),
         account_id: accountId,
         format,
         file_name: selectedFile.name,
@@ -105,7 +112,7 @@
         error = preview.file_error;
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = formatApiError(e);
     } finally {
       busy = false;
     }
@@ -118,7 +125,7 @@
     result = "";
     try {
       const committed = await commitImport({
-        book_id: 1,
+        book_id: requireActiveBookId(),
         account_id: accountId,
         drafts: preview.rows.filter((row) => row.draft && !row.error).map((row) => row.draft),
         create_payees: createPayees,
@@ -129,7 +136,7 @@
       });
       result = `Session ${committed.session.id}: ${committed.batch.created_tx_ids.length} created, ${committed.batch.matched_tx_ids.length} matched, ${committed.batch.updated_tx_ids.length} updated, ${committed.batch.skipped} skipped.`;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = formatApiError(e);
     } finally {
       busy = false;
     }
@@ -149,14 +156,14 @@
     error = "";
     try {
       if (kind === "accounts") {
-        saveText("accounts.csv", await exportAccountsCsv());
+        saveText("accounts.csv", await exportAccountsCsv(requireActiveBookId()));
       } else if (kind === "transactions") {
-        saveText("transactions.csv", await exportTransactionsCsv());
+        saveText("transactions.csv", await exportTransactionsCsv(requireActiveBookId()));
       } else if (accountId) {
         saveText(`register-${accountId}.qif`, await exportRegisterQif(accountId));
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = formatApiError(e);
     } finally {
       busy = false;
     }
@@ -169,7 +176,7 @@
       saveText(
         `${reportKind}.csv`,
         await exportReportCsv(reportKind, {
-          book_id: 1,
+          book_id: requireActiveBookId(),
           date_from: reportDateFrom || null,
           date_to: reportDateTo || null,
           base_commodity_id: null,
@@ -177,7 +184,7 @@
         })
       );
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = formatApiError(e);
     } finally {
       busy = false;
     }
@@ -189,7 +196,7 @@
     error = "";
     try {
       await createImportRule({
-        book_id: 1,
+        book_id: requireActiveBookId(),
         rule_kind: ruleKind,
         match_type: ruleMatchType,
         match_text: ruleMatchText.trim(),
@@ -198,13 +205,13 @@
         target_category_id: ruleTargetCategoryId ? Number(ruleTargetCategoryId) : null,
         target_payee_id: ruleTargetPayeeId ? Number(ruleTargetPayeeId) : null
       });
-      rules = await listImportRules();
+      rules = await listImportRules(requireActiveBookId());
       ruleMatchText = "";
       ruleTargetAccountId = "";
       ruleTargetCategoryId = "";
       ruleTargetPayeeId = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = formatApiError(e);
     } finally {
       busy = false;
     }
@@ -217,7 +224,7 @@
       await deleteImportRule(ruleId);
       rules = rules.filter((rule) => rule.id !== ruleId);
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = formatApiError(e);
     } finally {
       busy = false;
     }

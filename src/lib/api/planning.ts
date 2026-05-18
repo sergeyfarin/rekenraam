@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "$lib/api/client";
+import type { TransactionMutationInput } from "$lib/api/transactions";
 
 function query(params: Record<string, string | number | null | undefined>): string {
   const searchParams = new URLSearchParams();
@@ -76,6 +77,39 @@ export type ScheduleOccurrence = {
   posted_transaction_id: number | null;
 };
 
+export type PostedScheduleResult = {
+  occurrence: ScheduleOccurrence;
+  transaction: TransactionSummary;
+};
+
+export type TransactionSummary = {
+  id: number;
+  book_id: number;
+  previous_tx_id: number | null;
+  occurred_date: string;
+  posted_date: string;
+  payee_id: number | null;
+  memo: string | null;
+  status: string;
+  reference: string | null;
+  import_id: string | null;
+  created_at: string;
+  splits: {
+    id: number;
+    tx_id: number;
+    account_id: number;
+    commodity_id: number;
+    amount_minor: number;
+    category_id: number | null;
+    tag_id: number | null;
+    person_id: number | null;
+    project_id: number | null;
+    share_bps: number | null;
+    memo: string | null;
+    created_at: string;
+  }[];
+};
+
 export type ProjectedCashRow = {
   account_id: number;
   projection_date: string;
@@ -108,6 +142,17 @@ export type AmortizationRow = {
   principal_minor: number;
   interest_minor: number;
   remaining_principal_minor: number;
+};
+
+export type LoanPaymentDraftInput = {
+  payment_date: string;
+  payment_account_id: number | null;
+  interest_category_id: number | null;
+  memo: string | null;
+};
+
+export type LoanPaymentDraft = {
+  transaction: TransactionMutationInput;
 };
 
 export async function listBudgets(bookId = 1): Promise<Budget[]> {
@@ -146,8 +191,16 @@ export async function skipSchedule(id: number, occurrenceDate: string): Promise<
   return apiPost<ScheduleOccurrence, Record<string, never>>(`/schedules/${id}/skip${query({ occurrence_date: occurrenceDate })}`, {});
 }
 
-export async function postSchedule(id: number, occurrenceDate: string): Promise<unknown> {
-  return apiPost<unknown, Record<string, never>>(`/schedules/${id}/post${query({ occurrence_date: occurrenceDate })}`, {});
+export async function updateSchedule(id: number, input: ScheduleInput): Promise<Schedule> {
+  return apiPut<Schedule, ScheduleInput>(`/schedules/${id}`, input);
+}
+
+export async function deleteSchedule(id: number): Promise<void> {
+  return apiDelete<void>(`/schedules/${id}`);
+}
+
+export async function postSchedule(id: number, occurrenceDate: string): Promise<PostedScheduleResult> {
+  return apiPost<PostedScheduleResult, Record<string, never>>(`/schedules/${id}/post${query({ occurrence_date: occurrenceDate })}`, {});
 }
 
 export async function projectedCash(bookId: number, start: string, end: string): Promise<ProjectedCashRow[]> {
@@ -162,6 +215,22 @@ export async function createLoan(input: LoanInput): Promise<Loan> {
   return apiPost<Loan, LoanInput>("/loans", input);
 }
 
+export async function updateLoan(id: number, input: LoanInput): Promise<Loan> {
+  return apiPut<Loan, LoanInput>(`/loans/${id}`, input);
+}
+
+export async function deleteLoan(id: number): Promise<void> {
+  return apiDelete<void>(`/loans/${id}`);
+}
+
 export async function loanAmortization(id: number): Promise<AmortizationRow[]> {
   return apiGet<AmortizationRow[]>(`/loans/${id}/amortization`);
+}
+
+export async function loanPaymentDraft(id: number, input: LoanPaymentDraftInput): Promise<LoanPaymentDraft> {
+  return apiPost<LoanPaymentDraft, LoanPaymentDraftInput>(`/loans/${id}/payment-draft`, input);
+}
+
+export async function postLoanPayment(id: number, input: LoanPaymentDraftInput): Promise<TransactionSummary> {
+  return apiPost<TransactionSummary, LoanPaymentDraftInput>(`/loans/${id}/post-payment`, input);
 }

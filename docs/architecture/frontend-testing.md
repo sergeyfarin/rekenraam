@@ -1,6 +1,6 @@
 # Frontend Testing
 
-Last updated: 2026-05-17
+Last updated: 2026-05-18
 
 How tests are structured in the Svelte frontend: what runs where, which tool
 to reach for, and the conventions that keep the suite fast and stable. The
@@ -57,6 +57,10 @@ Run with `npm test` (one-shot) or `npm run test:watch` (TDD loop).
 For pure functions that don't touch the DOM. Examples:
 
 - [src/lib/money.test.ts](../../src/lib/money.test.ts) — parse/format money
+- [src/lib/api/client.test.ts](../../src/lib/api/client.test.ts) — typed API
+  error parsing and user-facing error messages
+- [src/lib/book-context.test.ts](../../src/lib/book-context.test.ts) —
+  active-book initialization and persistence
 - [src/lib/dates.test.ts](../../src/lib/dates.test.ts) — smart-date parser
 - [src/lib/transactions/saved-views.test.ts](../../src/lib/transactions/saved-views.test.ts)
   — filter-state ↔ API-shape round-trip
@@ -89,6 +93,17 @@ Examples:
   render with `$lib/api/auth` mocked.
 - [src/routes/planning/page.test.ts](../../src/routes/planning/page.test.ts)
   — full page render with 11 API modules mocked.
+- [src/routes/reset-password/page.test.ts](../../src/routes/reset-password/page.test.ts)
+  and [src/routes/accept-invite/page.test.ts](../../src/routes/accept-invite/page.test.ts)
+  — auth lifecycle pages with API clients mocked.
+
+### API error convention
+
+All API calls should throw `ApiError` from
+[src/lib/api/client.ts](../../src/lib/api/client.ts). Components and pages
+should render `formatApiError(error)` from [src/lib/utils.ts](../../src/lib/utils.ts)
+instead of `String(error)` or raw `error.message`. Add a focused unit test
+whenever a new error shape is introduced at the client boundary.
 
 ### What jsdom can NOT test
 

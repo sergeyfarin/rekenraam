@@ -1,5 +1,38 @@
 const rawApiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL?.trim() ?? "";
 
+export type ApiValidationError = {
+  loc?: (string | number)[];
+  msg: string;
+  type?: string;
+};
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly statusText: string;
+  readonly detail: string;
+  readonly validationErrors: ApiValidationError[];
+  readonly requestId: string | null;
+  readonly responseText: string;
+
+  constructor(input: {
+    status: number;
+    statusText: string;
+    detail: string;
+    validationErrors?: ApiValidationError[];
+    requestId?: string | null;
+    responseText?: string;
+  }) {
+    super(input.detail || `${input.status} ${input.statusText}`.trim());
+    this.name = "ApiError";
+    this.status = input.status;
+    this.statusText = input.statusText;
+    this.detail = input.detail || `${input.status} ${input.statusText}`.trim();
+    this.validationErrors = input.validationErrors ?? [];
+    this.requestId = input.requestId ?? null;
+    this.responseText = input.responseText ?? "";
+  }
+}
+
 function getApiBaseUrl(): string | null {
   if (rawApiBaseUrl) {
     return rawApiBaseUrl.endsWith("/") ? rawApiBaseUrl.slice(0, -1) : rawApiBaseUrl;
@@ -19,20 +52,54 @@ export function hasApiBaseUrl(): boolean {
   return getApiBaseUrl() !== null;
 }
 
-async function parseError(response: Response): Promise<string> {
+function normalizeValidationErrors(detail: unknown): ApiValidationError[] {
+  if (!Array.isArray(detail)) {
+    return [];
+  }
+  return detail
+    .map((item) => {
+      if (item && typeof item === "object") {
+        const row = item as Record<string, unknown>;
+        const msg = typeof row.msg === "string" ? row.msg : "request failed";
+        const loc = Array.isArray(row.loc)
+          ? row.loc.filter((part): part is string | number => typeof part === "string" || typeof part === "number")
+          : undefined;
+        const type = typeof row.type === "string" ? row.type : undefined;
+        return { loc, msg, type };
+      }
+      return { msg: String(item) };
+    });
+}
+
+async function parseError(response: Response): Promise<ApiError> {
+  const requestId = response.headers.get("x-request-id") ?? response.headers.get("x-correlation-id");
+  let responseText = "";
+  let detail = "";
+  let validationErrors: ApiValidationError[] = [];
+
   try {
-    const body = (await response.json()) as { detail?: string | { msg?: string }[] };
+    responseText = await response.text();
+    const body = responseText ? JSON.parse(responseText) as { detail?: unknown } : {};
     if (typeof body.detail === "string") {
-      return body.detail;
-    }
-    if (Array.isArray(body.detail) && body.detail.length > 0) {
-      return body.detail.map((item) => item.msg ?? "request failed").join(", ");
+      detail = body.detail;
+    } else {
+      validationErrors = normalizeValidationErrors(body.detail);
+      if (validationErrors.length > 0) {
+        detail = validationErrors.map((item) => item.msg).join(", ");
+      }
     }
   } catch {
-    // Ignore JSON parse failures and fall through to status text.
+    // Ignore parse failures and fall through to status text / raw text.
   }
 
-  return `${response.status} ${response.statusText}`.trim();
+  return new ApiError({
+    status: response.status,
+    statusText: response.statusText,
+    detail: detail || responseText || `${response.status} ${response.statusText}`.trim(),
+    validationErrors,
+    requestId,
+    responseText,
+  });
 }
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -50,7 +117,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!response.ok) {
-    throw new Error(await parseError(response));
+    throw await parseError(response);
   }
 
   const text = await response.text();
@@ -83,7 +150,7 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
 
   const response = await fetch(`${baseUrl}${path}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    throw new Error(await parseError(response));
+    throw await parseError(response);
   }
 
   const text = await response.text();
@@ -104,7 +171,7 @@ export async function apiText(path: string, init?: RequestInit): Promise<string>
     },
   });
   if (!response.ok) {
-    throw new Error(await parseError(response));
+    throw await parseError(response);
   }
 
   return response.text();

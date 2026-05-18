@@ -15,7 +15,9 @@
     listBudgets,
     listLoans,
     listSchedules,
+    loanPaymentDraft,
     loanAmortization,
+    postLoanPayment,
     postSchedule,
     projectedCash,
     projectedInstances,
@@ -33,6 +35,8 @@
     validateIsoDate,
     validateNonEmptyString,
   } from "$lib/forms/validators";
+  import { requireActiveBookId } from "$lib/book-context";
+  import { formatApiError } from "$lib/utils";
 
   const today = new Date().toISOString().slice(0, 10);
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
@@ -48,6 +52,7 @@
   let categories: CategorySummary[] = [];
   let accounts: AccountSummary[] = [];
   let variance: BudgetVarianceRow[] = [];
+  let status = "";
 
   let budgetName = "Monthly budget";
   let budgetCategoryId = 0;
@@ -67,6 +72,10 @@
   let principal = 25000000;
   let rateBps = 650;
   let termMonths = 360;
+  let paymentLoanId = 0;
+  let paymentDate = today;
+  let paymentMemo = "";
+  let loanPaymentPreview = "";
 
   $: selectedBudget = budgets.find((budget) => budget.id === selectedBudgetId) ?? budgets[0];
 
@@ -86,16 +95,24 @@
     return categories.find((category) => category.id === id)?.name ?? `Category ${id}`;
   }
 
+  function bookId(): number {
+    return requireActiveBookId();
+  }
+
+  function baseCommodityId(): number {
+    return accounts.find((account) => !account.is_system)?.commodity_id ?? accounts[0]?.commodity_id ?? 1;
+  }
+
   async function loadPlanning() {
     loading = true;
     error = "";
     try {
       [accounts, categories, budgets, schedules, loans] = await Promise.all([
-        listAccounts(),
-        listCategories(),
-        listBudgets(),
-        listSchedules(),
-        listLoans()
+        listAccounts(bookId()),
+        listCategories(bookId()),
+        listBudgets(bookId()),
+        listSchedules(bookId()),
+        listLoans(bookId())
       ]);
       budgetCategoryId = categories[0]?.id ?? 0;
       const usableAccounts = accounts.filter((account) => !account.is_system);
@@ -104,9 +121,10 @@
       loanAccountId = accounts.find((account) => account.account_type === "loan" || account.account_type === "liability")?.id ?? usableAccounts[0]?.id ?? 2;
       paymentAccountId = usableAccounts[0]?.id ?? 2;
       selectedBudgetId = budgets[0]?.id ?? 0;
+      paymentLoanId = loans[0]?.id ?? 0;
       await refreshDerived();
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : "Planning data failed to load";
+      error = formatApiError(caught);
     } finally {
       loading = false;
     }
@@ -114,8 +132,8 @@
 
   async function refreshDerived() {
     [occurrences, forecast] = await Promise.all([
-      projectedInstances(1, today, monthEnd),
-      projectedCash(1, today, monthEnd)
+      projectedInstances(bookId(), today, monthEnd),
+      projectedCash(bookId(), today, monthEnd)
     ]);
     if (selectedBudgetId) variance = await budgetVariance(selectedBudgetId, today);
     if (loans[0]) amortization = await loanAmortization(loans[0].id);
@@ -128,19 +146,24 @@
     const amountResult = validateIntegerInRange(budgetAmount, { min: 1, fieldName: "Target amount" });
     if (!amountResult.ok) { error = amountResult.error; return; }
     error = "";
-    const created = await createBudget({
-      book_id: 1,
-      name: nameResult.value,
-      period: "monthly",
-      starts_on: today.slice(0, 8) + "01",
-      ends_on: null,
-      commodity_id: 1,
-      is_active: true,
-      targets: [{ category_id: budgetCategoryId, amount_minor: amountResult.value, rollover_enabled: true }]
-    });
-    budgets = [...budgets, created];
-    selectedBudgetId = created.id;
-    variance = await budgetVariance(created.id, today);
+    status = "";
+    try {
+      const created = await createBudget({
+        book_id: bookId(),
+        name: nameResult.value,
+        period: "monthly",
+        starts_on: today.slice(0, 8) + "01",
+        ends_on: null,
+        commodity_id: baseCommodityId(),
+        is_active: true,
+        targets: [{ category_id: budgetCategoryId, amount_minor: amountResult.value, rollover_enabled: true }]
+      });
+      budgets = [...budgets, created];
+      selectedBudgetId = created.id;
+      variance = await budgetVariance(created.id, today);
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
   }
 
   async function submitSchedule() {
@@ -151,36 +174,61 @@
     const amountResult = validateIntegerInRange(scheduleAmount, { min: 1, fieldName: "Schedule amount" });
     if (!amountResult.ok) { error = amountResult.error; return; }
     error = "";
-    const created = await createSchedule({
-      book_id: 1,
-      name: nameResult.value,
-      payee_id: null,
-      memo: nameResult.value,
-      status: "uncleared",
-      reference: null,
-      frequency: scheduleFrequency,
-      interval: 1,
-      start_date: startResult.value,
-      end_date: null,
-      reminder_days: 3,
-      enabled: true,
-      splits: [
-        { account_id: scheduleFromAccountId, commodity_id: 1, amount_minor: -amountResult.value, category_id: null, memo: "Source" },
-        { account_id: scheduleToAccountId, commodity_id: 1, amount_minor: amountResult.value, category_id: null, memo: "Destination" }
-      ]
-    });
-    schedules = [...schedules, created];
-    await refreshDerived();
+    status = "";
+    try {
+      const created = await createSchedule({
+        book_id: bookId(),
+        name: nameResult.value,
+        payee_id: null,
+        memo: nameResult.value,
+        status: "uncleared",
+        reference: null,
+        frequency: scheduleFrequency,
+        interval: 1,
+        start_date: startResult.value,
+        end_date: null,
+        reminder_days: 3,
+        enabled: true,
+        splits: [
+          {
+            account_id: scheduleFromAccountId,
+            commodity_id: accounts.find((account) => account.id === scheduleFromAccountId)?.commodity_id ?? baseCommodityId(),
+            amount_minor: -amountResult.value,
+            category_id: null,
+            memo: "Source"
+          },
+          {
+            account_id: scheduleToAccountId,
+            commodity_id: accounts.find((account) => account.id === scheduleToAccountId)?.commodity_id ?? baseCommodityId(),
+            amount_minor: amountResult.value,
+            category_id: null,
+            memo: "Destination"
+          }
+        ]
+      });
+      schedules = [...schedules, created];
+      await refreshDerived();
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
   }
 
   async function skipOccurrence(row: ScheduleOccurrence) {
-    await skipSchedule(row.schedule_id, row.occurrence_date);
-    await refreshDerived();
+    try {
+      await skipSchedule(row.schedule_id, row.occurrence_date);
+      await refreshDerived();
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
   }
 
   async function postOccurrence(row: ScheduleOccurrence) {
-    await postSchedule(row.schedule_id, row.occurrence_date);
-    await refreshDerived();
+    try {
+      await postSchedule(row.schedule_id, row.occurrence_date);
+      await refreshDerived();
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
   }
 
   async function submitLoan() {
@@ -193,20 +241,65 @@
     const termResult = validateIntegerInRange(termMonths, { min: 1, max: 600, fieldName: "Term (months)" });
     if (!termResult.ok) { error = termResult.error; return; }
     error = "";
-    const created = await createLoan({
-      book_id: 1,
-      account_id: loanAccountId,
-      name: nameResult.value,
-      principal_minor: principalResult.value,
-      annual_rate_bps: rateResult.value,
-      term_months: termResult.value,
-      payment_frequency: "monthly",
-      start_date: today,
-      payment_account_id: paymentAccountId,
-      interest_category_id: null
-    });
-    loans = [...loans, created];
-    amortization = await loanAmortization(created.id);
+    status = "";
+    try {
+      const created = await createLoan({
+        book_id: bookId(),
+        account_id: loanAccountId,
+        name: nameResult.value,
+        principal_minor: principalResult.value,
+        annual_rate_bps: rateResult.value,
+        term_months: termResult.value,
+        payment_frequency: "monthly",
+        start_date: today,
+        payment_account_id: paymentAccountId,
+        interest_category_id: null
+      });
+      loans = [...loans, created];
+      paymentLoanId = created.id;
+      amortization = await loanAmortization(created.id);
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
+  }
+
+  async function previewLoanPayment() {
+    if (!paymentLoanId) return;
+    error = "";
+    status = "";
+    loanPaymentPreview = "";
+    try {
+      const draft = await loanPaymentDraft(paymentLoanId, {
+        payment_date: paymentDate,
+        payment_account_id: paymentAccountId || null,
+        interest_category_id: null,
+        memo: paymentMemo || null,
+      });
+      const splits = draft.transaction.splits.length;
+      loanPaymentPreview = `Draft ready for ${draft.transaction.txn_date} with ${splits} splits.`;
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
+  }
+
+  async function submitLoanPayment() {
+    if (!paymentLoanId) return;
+    error = "";
+    status = "";
+    try {
+      const tx = await postLoanPayment(paymentLoanId, {
+        payment_date: paymentDate,
+        payment_account_id: paymentAccountId || null,
+        interest_category_id: null,
+        memo: paymentMemo || null,
+      });
+      status = `Loan payment posted as transaction #${tx.id}.`;
+      loanPaymentPreview = "";
+      amortization = await loanAmortization(paymentLoanId);
+      await refreshDerived();
+    } catch (caught) {
+      error = formatApiError(caught);
+    }
   }
 </script>
 
@@ -219,6 +312,9 @@
 
     {#if error}
       <p class="rounded-md border border-destructive/40 p-3 text-sm text-destructive">{error}</p>
+    {/if}
+    {#if status}
+      <p class="rounded-md border border-border bg-muted p-3 text-sm">{status}</p>
     {/if}
 
     {#if loading}
@@ -338,6 +434,29 @@
                   {/each}
                 </Table.Body>
               </Table.Root>
+            </Card.Content>
+          </Card.Root>
+          <Card.Root>
+            <Card.Header><Card.Title>Loan Payment Assistant</Card.Title></Card.Header>
+            <Card.Content class="space-y-4">
+              <div class="grid gap-3 md:grid-cols-5">
+                <select bind:value={paymentLoanId} class="rounded-md border bg-background px-3 py-2 text-sm">
+                  <option value={0}>Select loan</option>
+                  {#each loans as loan}<option value={loan.id}>{loan.name}</option>{/each}
+                </select>
+                <Input type="date" bind:value={paymentDate} aria-label="Payment date" />
+                <select bind:value={paymentAccountId} class="rounded-md border bg-background px-3 py-2 text-sm">
+                  {#each accounts as account}<option value={account.id}>{account.name}</option>{/each}
+                </select>
+                <Input bind:value={paymentMemo} aria-label="Payment memo" />
+                <div class="flex gap-2">
+                  <Button variant="outline" onclick={previewLoanPayment} disabled={!paymentLoanId}>Draft</Button>
+                  <Button onclick={submitLoanPayment} disabled={!paymentLoanId}>Post</Button>
+                </div>
+              </div>
+              {#if loanPaymentPreview}
+                <p class="text-sm text-muted-foreground">{loanPaymentPreview}</p>
+              {/if}
             </Card.Content>
           </Card.Root>
         </Tabs.Content>

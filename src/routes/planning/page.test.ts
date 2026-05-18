@@ -16,7 +16,9 @@ vi.mock("$lib/api/planning", () => ({
   listBudgets: vi.fn(),
   listLoans: vi.fn(),
   listSchedules: vi.fn(),
+  loanPaymentDraft: vi.fn(),
   loanAmortization: vi.fn(),
+  postLoanPayment: vi.fn(),
   postSchedule: vi.fn(),
   projectedCash: vi.fn(),
   projectedInstances: vi.fn(),
@@ -33,7 +35,9 @@ import {
   listBudgets,
   listLoans,
   listSchedules,
+  loanPaymentDraft,
   loanAmortization,
+  postLoanPayment,
   projectedCash,
   projectedInstances,
 } from "$lib/api/planning";
@@ -91,6 +95,32 @@ beforeEach(() => {
   vi.mocked(projectedCash).mockResolvedValue([]);
   vi.mocked(budgetVariance).mockResolvedValue([]);
   vi.mocked(loanAmortization).mockResolvedValue([]);
+  vi.mocked(loanPaymentDraft).mockResolvedValue({
+    transaction: {
+      book_id: 1,
+      txn_date: "2026-05-18",
+      payee_id: null,
+      memo: null,
+      status: "uncleared",
+      reference: null,
+      import_id: null,
+      splits: [],
+    },
+  });
+  vi.mocked(postLoanPayment).mockResolvedValue({
+    id: 123,
+    book_id: 1,
+    previous_tx_id: null,
+    occurred_date: "2026-05-18",
+    posted_date: "2026-05-18",
+    payee_id: null,
+    memo: null,
+    status: "uncleared",
+    reference: null,
+    import_id: null,
+    created_at: "2026-05-18T00:00:00Z",
+    splits: [],
+  });
 });
 
 afterEach(() => {

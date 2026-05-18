@@ -1,18 +1,34 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getPreferences, updatePreferences, type UserPreferences } from "$lib/api/preferences";
-  import { beginMfaSetup, confirmMfaSetup, disableMfa, getMfaStatus, type MfaStatus } from "$lib/api/auth";
+  import {
+    beginMfaSetup,
+    changePassword,
+    confirmMfaSetup,
+    disableMfa,
+    getCurrentUser,
+    getMfaStatus,
+    updateProfile,
+    type AuthMe,
+    type MfaStatus
+  } from "$lib/api/auth";
   import { listBooks, type BookSummary } from "$lib/api/books";
   import * as Card from "$lib/components/ui/card";
   import * as Alert from "$lib/components/ui/alert";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { formatApiError } from "$lib/utils";
 
   let preferences: UserPreferences = { default_book_id: null, locale: "", date_format: "iso", number_format: "system", theme: "system" };
   let books: BookSummary[] = [];
   let error = "";
   let status = "";
+  let authUser: AuthMe | null = null;
+  let displayName = "";
+  let currentProfilePassword = "";
+  let newProfilePassword = "";
+  let confirmProfilePassword = "";
   let mfaStatus: MfaStatus | null = null;
   let currentPassword = "";
   let disablePassword = "";
@@ -26,9 +42,10 @@
 
   async function load() {
     try {
-      [preferences, books, mfaStatus] = await Promise.all([getPreferences(), listBooks(), getMfaStatus()]);
+      [preferences, books, mfaStatus, authUser] = await Promise.all([getPreferences(), listBooks(), getMfaStatus(), getCurrentUser()]);
+      displayName = authUser.user.display_name;
     } catch (e) {
-      error = String(e);
+      error = formatApiError(e);
     }
   }
 
@@ -42,7 +59,7 @@
       otpauthUri = setup.otpauth_uri;
       currentPassword = "";
     } catch (e) {
-      error = String(e);
+      error = formatApiError(e);
     }
   }
 
@@ -58,7 +75,7 @@
       status = "MFA enabled. Store the recovery codes now; they will not be shown again.";
       mfaStatus = await getMfaStatus();
     } catch (e) {
-      error = String(e);
+      error = formatApiError(e);
     }
   }
 
@@ -72,7 +89,7 @@
       status = "MFA disabled.";
       mfaStatus = await getMfaStatus();
     } catch (e) {
-      error = String(e);
+      error = formatApiError(e);
     }
   }
 
@@ -83,7 +100,40 @@
       preferences = await updatePreferences(preferences);
       status = "Preferences saved.";
     } catch (e) {
-      error = String(e);
+      error = formatApiError(e);
+    }
+  }
+
+  async function saveProfile() {
+    error = "";
+    status = "";
+    try {
+      authUser = await updateProfile({ display_name: displayName.trim() });
+      displayName = authUser.user.display_name;
+      status = "Profile saved.";
+    } catch (e) {
+      error = formatApiError(e);
+    }
+  }
+
+  async function savePassword() {
+    error = "";
+    status = "";
+    if (newProfilePassword !== confirmProfilePassword) {
+      error = "Passwords do not match.";
+      return;
+    }
+    try {
+      await changePassword({
+        current_password: currentProfilePassword,
+        new_password: newProfilePassword,
+      });
+      currentProfilePassword = "";
+      newProfilePassword = "";
+      confirmProfilePassword = "";
+      status = "Password changed.";
+    } catch (e) {
+      error = formatApiError(e);
     }
   }
 </script>
@@ -124,6 +174,46 @@
       </div>
     </div>
     <Button onclick={save}>Save</Button>
+  </Card.Content>
+</Card.Root>
+
+<Card.Root>
+  <Card.Header>
+    <Card.Title>Profile</Card.Title>
+    <Card.Description>Update your display name and password.</Card.Description>
+  </Card.Header>
+  <Card.Content class="max-w-xl space-y-4">
+    <div class="space-y-2">
+      <Label for="profile-email">Email</Label>
+      <Input id="profile-email" value={authUser?.user.email ?? ""} disabled />
+    </div>
+    <div class="space-y-2">
+      <Label for="profile-name">Display name</Label>
+      <Input id="profile-name" bind:value={displayName} autocomplete="name" />
+    </div>
+    <Button onclick={saveProfile} disabled={!displayName.trim()}>Save Profile</Button>
+
+    <div class="grid gap-3 md:grid-cols-3">
+      <div class="space-y-2">
+        <Label for="profile-current-password">Current password</Label>
+        <Input id="profile-current-password" type="password" bind:value={currentProfilePassword} autocomplete="current-password" />
+      </div>
+      <div class="space-y-2">
+        <Label for="profile-new-password">New password</Label>
+        <Input id="profile-new-password" type="password" bind:value={newProfilePassword} autocomplete="new-password" />
+      </div>
+      <div class="space-y-2">
+        <Label for="profile-confirm-password">Confirm password</Label>
+        <Input id="profile-confirm-password" type="password" bind:value={confirmProfilePassword} autocomplete="new-password" />
+      </div>
+    </div>
+    <Button
+      variant="secondary"
+      onclick={savePassword}
+      disabled={!currentProfilePassword || newProfilePassword.length < 12 || confirmProfilePassword.length < 12}
+    >
+      Change Password
+    </Button>
   </Card.Content>
 </Card.Root>
 

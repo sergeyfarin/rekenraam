@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiPost, apiPut } from "./client";
 
 export type BootstrapStatus = {
   bootstrap_required: boolean;
@@ -74,6 +74,26 @@ export async function confirmMfaSetup(code: string): Promise<{ recovery_codes: s
 
 export async function disableMfa(input: { current_password: string; code: string }): Promise<void> {
   return apiPost<void, typeof input>("/auth/mfa/disable", input);
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  return apiPost<void, { email: string }>("/auth/password-reset/request", { email });
+}
+
+export async function confirmPasswordReset(input: { token: string; new_password: string }): Promise<void> {
+  return apiPost<void, typeof input>("/auth/password-reset/confirm", input);
+}
+
+export async function acceptInvite(input: { token: string; password: string }): Promise<AuthMe> {
+  return apiPost<AuthMe, typeof input>("/auth/invite/accept", input);
+}
+
+export async function updateProfile(input: { display_name: string }): Promise<AuthMe> {
+  return apiPut<AuthMe, typeof input>("/auth/me/profile", input);
+}
+
+export async function changePassword(input: { current_password: string; new_password: string }): Promise<void> {
+  return apiPost<void, typeof input>("/auth/me/password", input);
 }
 
 export async function logout(): Promise<void> {
