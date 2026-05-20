@@ -1,0 +1,17 @@
+{
+  "name": "rekenraam",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others --names backend,frontend --prefix-colors blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && go run ./cmd/rekenraam",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test:backend": "cd backend && go test ./...",
+    "test:frontend": "npm --prefix frontend run check",
+    "build": "./scripts/build-single-binary.sh"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

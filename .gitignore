@@ -25,3 +25,35 @@ __pycache__/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /backups
+# Frontend
+/frontend/node_modules
+/frontend/.svelte-kit
+/frontend/build
+/frontend/package
+/frontend/.vercel
+
+# Backend
+/backend/bin
+/backend/coverage.out
+/backend/tmp
+/backend/var/*
+!/backend/var/README.md
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Embedded frontend build copied for Go embed.
+/backend/internal/web/dist/*
+!/backend/internal/web/dist/README.md
+
+# E2E
+/e2e/node_modules
+/e2e/test-results
+/e2e/playwright-report
+/e2e/.playwright
+
+# Release outputs
+/dist/*
+!/dist/README.md

@@ -1,7 +1,8 @@
 {
   "recommendations": [
+    "golang.go",
     "svelte.svelte-vscode",
-    "tauri-apps.tauri-vscode",
-    "rust-lang.rust-analyzer"
+    "bruno-api-client.bruno",
+    "ms-playwright.playwright"
   ]
 }

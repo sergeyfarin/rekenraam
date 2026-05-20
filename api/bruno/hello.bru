@@ -1,0 +1,22 @@
+meta {
+  name: hello
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/hello
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("returns hello", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().message).to.equal("hello from rekenraam backend");
+  });
+}

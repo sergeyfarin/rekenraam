@@ -1,0 +1,21 @@
+openapi: 3.1.0
+info:
+  title: Rekenraam API
+  version: 0.0.0
+paths:
+  /api/hello:
+    get:
+      summary: Hello world API example
+      responses:
+        "200":
+          description: Hello response
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    type: string
+                    example: hello from rekenraam backend
