@@ -25,7 +25,7 @@ dist/           Local release output
 
 ## Architecture Notes
 
-Early decisions for the self-hosted finance app are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md). Keep that document current when a feature introduces a durable product or technical constraint.
+Early decisions for the self-hosted finance app are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md), with staged feature sequencing in [docs/feature-roadmap.md](docs/feature-roadmap.md). Keep these documents current when a feature introduces a durable product or technical constraint.
 
 ## Run Development Servers
 
