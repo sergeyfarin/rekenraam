@@ -17,10 +17,15 @@ backend/        Go backend, SQLite access, migrations, backend tests, and embedd
 frontend/       SvelteKit app compiled to static files
 api/            Bruno API tests and OpenAPI description
 e2e/            End-to-end browser tests
+docs/           Architecture notes and early product decisions
 scripts/        Build and developer workflow scripts
 deploy/         Docker and deployment notes
 dist/           Local release output
 ```
+
+## Architecture Notes
+
+Early decisions for the self-hosted finance app are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md). Keep that document current when a feature introduces a durable product or technical constraint.
 
 ## Run Development Servers
 
