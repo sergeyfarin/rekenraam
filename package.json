@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently --kill-others --names backend,frontend --prefix-colors blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && go run ./cmd/rekenraam",
+    "dev:backend-rust": "cd backend-rust && cargo run",
     "dev:frontend": "npm --prefix frontend run dev",
     "test:backend": "cd backend && go test ./...",
     "test:frontend": "npm --prefix frontend run check",

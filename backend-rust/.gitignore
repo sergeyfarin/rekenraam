@@ -1,0 +1,8 @@
+/target
+/var/*
+!/var/README.md
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
