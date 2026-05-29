@@ -42,6 +42,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
 - Schema changes require explicit migrations under `backend/migrations`.
+- The SQLite Go driver is **`modernc.org/sqlite`** (pure Go, no CGO). Do not use `mattn/go-sqlite3`.
+- Database queries use **`sqlc`** for type-safe Go code generated from SQL. Write SQL in query files alongside migrations; run codegen when queries change.
+- Raw `database/sql` is used as the underlying interface; `sqlc` generates the typed wrappers.
 
 ## API Conventions
 
@@ -51,6 +54,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Database access belongs behind repository-style functions or methods.
 - Error responses should be structured, consistent, and safe for user display.
 - Public request and response shapes should be documented in OpenAPI as endpoints become real.
+- List endpoints that can return large result sets must use **cursor-based pagination**, not offset pagination. Cursors must be stable under concurrent inserts. Return `next_cursor` in the response; a missing or null `next_cursor` means the last page.
+- Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
 
 ## Frontend Conventions
 
@@ -70,6 +75,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - New interactions must be keyboard-usable and accessible.
 - Responsive behavior must be deliberate on both desktop and mobile.
 - Prefer shared frontend helpers and API seams over route-local ad hoc logic.
+- Use **`openapi-typescript`** (type generation) + **`openapi-fetch`** (typed HTTP client) for all frontend API calls. The OpenAPI spec is the single source of type truth.
+- Use **`@tanstack/svelte-query`** as the data layer for all server state. Use `createInfiniteQuery` for paginated lists; use query key composition to cache search results per search string.
+- Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets (account name dropdowns, payee autocomplete). Do not use client-side search for full transaction lists.
 
 ## Design Conventions
 

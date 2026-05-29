@@ -32,6 +32,7 @@ Goal: make daily transaction entry useful.
 - Transfers as ordinary balanced transactions.
 - Friendly category UI mapped to income/expense accounts.
 - Transaction create, edit, void/archive, and list flows.
+- Transaction list uses cursor-based pagination and supports server-side FTS5 search.
 - Backend balancing tests and API smoke tests.
 
 ## Phase 3: Reconciliation And Core Reports
