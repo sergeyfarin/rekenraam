@@ -7,6 +7,7 @@ This document fixes cross-cutting product, engineering, and workflow conventions
 - Active requirements live in `docs/product-requirements.md`.
 - Active architecture rules live in `docs/early-architecture-decisions.md`.
 - Active sequencing lives in `docs/feature-roadmap.md`.
+- Archive review planning lives in `docs/archive-requirements-review.md`.
 - `.archive/` is historical reference only.
 
 When a feature introduces a durable new rule, update one of those documents in the same change.
@@ -36,6 +37,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Use calendar dates for financial facts.
 - Use UTC timestamps for system facts.
 - Keep stable codes in data; translated labels belong in localization assets.
+- Built-in records not entered by users or imported from external sources must use stable keys or codes, not English display names as the only source of truth.
+- Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must be localization-ready.
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
 - Schema changes require explicit migrations under `backend/migrations`.
@@ -52,7 +55,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 ## Frontend Conventions
 
 - All user-facing copy goes through a translation boundary.
-- The initial supported languages are English, Dutch, German, French, and Spanish.
+- English is the initial implementation language.
+- UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.
 - Do not concatenate translated fragments to form sentences.
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.
@@ -75,8 +79,11 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
+- First-run setup is browser-based and creates the single owner with a username and password.
 - Public deployment requires HTTPS and explicit operator guidance.
-- MFA is deferred for now, but the auth design should avoid making MFA hard to add later.
+- Public VPS deployment with real financial data requires MFA.
+- Local-network use may ship before MFA if authentication and operator guidance are clear.
+- SQLite database encryption is deferred for early local use, but docs must explain when encrypted-at-rest storage may be needed.
 - Docker Compose must package the same app shape as the single binary.
 - SQLite data must live in persistent storage outside the container image or binary.
 - Backup and restore instructions are part of product documentation, not only operator folklore.

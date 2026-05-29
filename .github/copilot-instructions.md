@@ -10,6 +10,7 @@ Before making durable product, architecture, or workflow changes, read:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/feature-roadmap.md`
+- `docs/archive-requirements-review.md`
 - `docs/adrs/`
 - `docs/developer-workflow.md`
 - `AGENTS.md`
@@ -32,6 +33,8 @@ Before making durable product, architecture, or workflow changes, read:
 - Prefer void, archive, and corrective-entry workflows for durable changes.
 - Keep the production shape as one Go app serving the static frontend.
 - Keep the product explicitly single-user until an ADR changes that scope.
+- First-run setup creates the single owner with a username and password.
+- Built-in database labels must use stable keys/codes and resolve localized display text outside durable financial data.
 - First export milestone must include core ledger CSV and QIF.
 - Attachments are out of scope until the active requirements say otherwise.
 
@@ -48,4 +51,4 @@ Before making durable product, architecture, or workflow changes, read:
 - Use Conventional Commits.
 - Lightweight feature branches and PRs are encouraged, not mandatory.
 - Keep commit scope focused; do not bundle unrelated refactors.
-- Keep docs, commands, and CI references consistent when workflow files change.
+- Do not add GitHub Actions workflows unless the project owner explicitly reintroduces them.

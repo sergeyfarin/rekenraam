@@ -6,7 +6,8 @@ description: "Use when editing SvelteKit frontend routes, components, client-sid
 # Frontend Instructions
 
 - All user-facing copy must go through a translation boundary.
-- Initial supported languages are English, Dutch, German, French, and Spanish.
+- English is the initial implementation language.
+- UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.
 - Keep formatting of money, dates, and numbers locale-aware and separate from translation strings.
 - Use semantic design tokens for theming.
 - Light and dark themes are the starting requirement.

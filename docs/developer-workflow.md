@@ -10,6 +10,7 @@ Before changing durable behavior, read:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/feature-roadmap.md`
+- `docs/archive-requirements-review.md`
 - `docs/adrs/`
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
@@ -75,7 +76,6 @@ Preferred examples:
 - `feat(frontend): add account list empty state`
 - `fix(api): validate unbalanced postings`
 - `docs(requirements): lock export scope`
-- `ci(e2e): add starter Playwright workflow`
 - `test(backend): cover reconciliation lock behavior`
 
 Use the smallest honest scope. Avoid mixing unrelated concerns in one commit.
@@ -104,26 +104,24 @@ Use the smallest honest scope. Avoid mixing unrelated concerns in one commit.
 - Keep cross-references and commands consistent.
 - Run `git diff --check -- ...` for touched docs when no narrower executable validation exists.
 
-### Testing And CI
+### Testing
 
-- Prefer matching CI commands to local commands.
-- Keep fast checks in the main CI workflow.
-- Keep heavier browser-based checks in a separate workflow.
+- Treat local validation scripts as the development contract.
+- Do not add GitHub Actions workflows unless the project owner explicitly reintroduces them.
+- If automation is reintroduced later, prefer matching automated commands to local commands.
 
-## GitHub Actions Conventions
+## GitHub Actions
 
-The repo currently uses two workflow layers:
-
-- `ci.yml` for fast confidence: backend tests, frontend checks, and integrated build.
-- `e2e.yml` for heavier browser checks against the built app.
+The repo does not currently use GitHub Actions workflows.
 
 Workflow conventions:
 
+- Do not add workflow files without an explicit project decision.
 - Use `pnpm install --frozen-lockfile` in CI.
 - Use Node 22.
 - Use the Go version declared in `backend/go.mod`.
 - Keep job structure simple and readable.
-- Prefer `workflow_dispatch` for expensive workflows until there is pressure to run them on every PR.
+- If workflows are reintroduced, start with manual triggers before considering automatic gates.
 
 ## Documentation Update Rules
 

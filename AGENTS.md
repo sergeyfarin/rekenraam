@@ -17,6 +17,7 @@ Read these before making durable product or architecture changes:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/feature-roadmap.md`
+- `docs/archive-requirements-review.md`
 - `docs/adrs/`
 - `docs/developer-workflow.md`
 - `.github/copilot-instructions.md`
@@ -51,6 +52,7 @@ If a change introduces a durable new rule, update the relevant document in the s
 ## Frontend Rules
 
 - Route all user-facing copy through a translation boundary.
+- Keep built-in database labels localization-ready with stable keys/codes, not English-only source text.
 - Keep formatting of money, dates, and numbers locale-aware and separate from translation strings.
 - Use semantic design tokens for theming; avoid one-off hard-coded visual values in new UI.
 - New screens should define loading, empty, error, and success states.
@@ -74,4 +76,4 @@ If a change introduces a durable new rule, update the relevant document in the s
 - Run the narrowest relevant validation after edits.
 - Prefer feature-scoped tests first, then broader checks.
 - If docs or conventions change, keep references and commands consistent across the repo.
-- Keep workflow YAML, README guidance, and developer commands aligned.
+- Keep README guidance and developer commands aligned.

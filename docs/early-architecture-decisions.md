@@ -105,6 +105,7 @@ Rules:
 - Keep formatting of dates, numbers, percentages, and money separate from translated messages.
 - Store stable codes in data, not translated labels.
 - Do not store built-in definitions in the database only as English display text; store stable keys/codes and resolve display labels through localization.
+- Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must remain localization-ready.
 
 ## API Boundaries
 
@@ -127,6 +128,7 @@ Early default:
 
 - Support a single owner user first.
 - Add local authentication before real financial data entry ships.
+- Use browser-based first-run setup to create the owner username and password.
 - Put all privileged operations behind authentication.
 - Keep auth local to the deployment unless a future decision introduces external identity providers.
 
@@ -181,6 +183,7 @@ Rules:
 - Prefer SQLite online backup or a stopped-app backup over copying a live WAL database file.
 - Provide a restore path before recommending the app for real financial records.
 - Add backup smoke checks once backup tooling exists.
+- Defer SQLite database encryption for early local use, but document the risk and revisit encrypted-at-rest storage before recommending higher-risk deployments.
 
 ## Testing Strategy
 

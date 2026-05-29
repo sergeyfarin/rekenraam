@@ -29,9 +29,11 @@ Active product requirements for the self-hosted finance app are documented in [d
 
 Repo-wide conventions are documented in [docs/conventions.md](docs/conventions.md).
 
+Archive requirement review and near-term package or approach locks are documented in [docs/archive-requirements-review.md](docs/archive-requirements-review.md).
+
 Accepted decision records are documented in [docs/adrs/](docs/adrs/).
 
-Developer workflow, commands, commit conventions, and CI expectations are documented in [docs/developer-workflow.md](docs/developer-workflow.md).
+Developer workflow, commands, and commit conventions are documented in [docs/developer-workflow.md](docs/developer-workflow.md).
 
 Early architecture decisions are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md), with staged feature sequencing in [docs/feature-roadmap.md](docs/feature-roadmap.md).
 

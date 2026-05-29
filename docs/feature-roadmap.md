@@ -8,8 +8,8 @@ Goal: make the empty app safe to evolve.
 
 - SQLite migration runner and schema version table.
 - SQLite connection setup with deliberate pragmas.
-- Local owner authentication before real financial data entry.
-- Translation boundary with English messages only.
+- Browser-based first-run owner setup with username and password before real financial data entry.
+- Translation boundary with English messages and localization-ready built-in data.
 - Versioned `/api/v1` route shape for real domain endpoints.
 - Basic backup and restore documentation.
 - OpenAPI and Bruno coverage for the first real endpoints.
@@ -82,4 +82,3 @@ Goal: add power-user workflows after the core ledger is stable.
 - Small-business AR/AP and invoicing.
 
 Later phases should remain optional. The earlier phases must still produce a complete self-hosted personal finance app.
-

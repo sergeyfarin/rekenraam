@@ -13,6 +13,8 @@ description: "Use when editing Go backend code, migrations, repositories, servic
 - New schema changes require explicit migrations in `backend/migrations/`.
 - Backend tests should prefer temporary SQLite databases.
 - Preserve exact financial arithmetic and reconciliation-safe behavior.
+- Built-in database records must use stable keys/codes for localized display labels instead of English text as the only source of truth.
+- First-run setup creates the single owner with a username and password.
 - Avoid introducing assumptions that depend on cloud services or external identity providers.
 - If a backend change adds a durable domain rule, update `docs/product-requirements.md`, `docs/conventions.md`, or `docs/early-architecture-decisions.md` as appropriate.
 

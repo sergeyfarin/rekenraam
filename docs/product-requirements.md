@@ -26,16 +26,25 @@ Primary product goal:
 - Same-origin deployment: one Go app serving API and frontend.
 - Archive ideas must be translated to the current stack before adoption.
 
-## Locked Decisions
+## Working Decisions
 
-- Initial first-class UI languages are English, Dutch, German, French, and Spanish.
 - Theme infrastructure starts as a token-based system with light and dark themes only.
 - Runtime product scope is strictly single-owner and single-user for now; if household sharing ever becomes real scope, naming can be revised deliberately then.
-- Public VPS deployments require HTTPS and local authentication; MFA is intentionally deferred until there is pressure to introduce it.
+- First-run setup is browser-based and creates the single owner with a username and password.
+- Public VPS deployments require HTTPS and local authentication.
+- Public VPS deployment with real financial data requires MFA; public deployment may be delayed until MFA is implemented.
+- SQLite database encryption is deferred for early local use, but the product should document that encrypted-at-rest storage may be needed before recommending higher-risk deployments.
 - The first non-negotiable report set is net worth, cashflow, and spending by category.
 - The first mandatory export formats are CSV export of core ledger data and QIF export.
 - Attachments such as statement PDFs and receipts are intentionally out of scope for now.
 - The minimum mobile requirement is responsive support for full core workflows, including transaction entry.
+
+## Decisions To Confirm Before Implementation
+
+- Initial first-class UI language set beyond English.
+- Password reset approach for a single-owner self-hosted app.
+- Whether export scope should include full structured JSON in the first export milestone.
+- Whether future attachments should use SQLite, filesystem storage, or pluggable object storage.
 
 ## Must-Have Cross-Cutting Requirements
 
@@ -61,6 +70,7 @@ These apply across all feature phases.
 ### Security
 
 - Local authentication is required before real financial data entry ships.
+- The initial auth flow is browser first-run setup with owner username and password.
 - Public VPS deployments must assume an untrusted network.
 - All privileged operations must require authentication.
 - Session, audit, and request attribution should be designed in from the first real user flows.
@@ -69,7 +79,8 @@ These apply across all feature phases.
 
 - UI copy must go through a translation boundary.
 - The app must support multilingual UI from an early stage.
-- Initial language targets are English, Dutch, German, French, and Spanish.
+- English is the initial implementation language; translation boundaries must keep UI copy and built-in data ready to add other languages without reworking UI code or database schema.
+- Built-in database records not entered by the user or imported from a source must use stable codes or keys and resolve display labels through localization assets.
 - The design system must support themes through semantic tokens rather than hard-coded colors.
 - Theme support starts with light and dark only, but the token model should avoid blocking future named themes.
 - Desktop and mobile layouts must both be intentional and usable.
@@ -88,6 +99,7 @@ These apply across all feature phases.
 ## Phase 0: Foundation
 
 - Local owner authentication.
+- Browser-based first-run owner setup with username and password.
 - SQLite migrations and schema version tracking.
 - Translation boundary with English-first messages.
 - Theme infrastructure with persisted user preference.
@@ -156,7 +168,8 @@ These apply across all feature phases.
 
 These should be fixed before many screens accumulate inconsistent patterns.
 
-- Localization strategy: message catalogs, locale selection, fallback behavior, and number or date formatting boundaries for English, Dutch, German, French, and Spanish.
+- Localization strategy: message catalogs, locale selection, fallback behavior, target languages, and number or date formatting boundaries.
+- Built-in data localization strategy: stable keys for seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels.
 - Theme strategy: light and dark themes first, semantic token naming, persisted preference, and chart color policy.
 - Responsive layout rules: breakpoints, dense-table behavior, sidebar or drawer behavior, and mobile transaction entry expectations.
 - Form conventions: dirty-state handling, autosave policy, cancel behavior, optimistic updates, and server-validation display.
@@ -178,6 +191,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - Import priorities: which file formats arrive first after CSV.
 - Export guarantees: minimum export formats and whether exports should include settings, reports, and metadata.
 - Backup policy: backup location, restore expectations, and Docker volume guidance.
+- Database encryption policy: encryption is deferred, but risks and future requirements must be documented.
 - Attachment policy: whether statement files or receipts are in scope at all.
 - Notification policy: whether the app will ever send email, and what remains strictly local-only.
 - Public deployment stance: reverse proxy assumptions, HTTPS requirements, and operator warnings for internet exposure.
@@ -197,6 +211,8 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - `.archive/` ideas are useful input but not source of truth.
 - Keep a single active book in the UI for now; do not introduce a visible multi-book UX prematurely.
 - Keep runtime UX explicitly single-owner and single-user for now.
+- Use browser-based owner setup with username and password for initial local authentication.
+- Keep app-defined database labels localization-ready; do not seed English-only category, currency, commodity, or system labels as the only source of truth.
 - Prefer void or corrective workflows over destructive deletion.
 - Avoid desktop-only concepts such as native file pickers, session undo stacks, or local database-path selection UX.
 - Keep the web deployment model same-origin and self-contained.
@@ -206,5 +222,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 These are important and should be resolved before the related feature slices begin.
 
 - Which export scope should be available from the first export milestone beyond core ledger CSV and QIF, such as full structured JSON export of settings and metadata?
+- Which first-class UI languages should ship after the English translation boundary is in place?
+- What password-reset flow makes sense for a self-hosted single-owner deployment?
 - When attachments eventually enter scope, should they live in SQLite, the filesystem, or pluggable object storage?
 - Which mobile-heavy workflows deserve dedicated optimization first after the baseline responsive experience ships?
