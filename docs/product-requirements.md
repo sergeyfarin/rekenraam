@@ -94,75 +94,9 @@ These apply across all feature phases.
 - Duplicate detection, reconciliation, and correction behavior must be explicit.
 - Reports and exports must reflect durable accounting semantics rather than ad hoc UI summaries.
 
-## Functional Requirement Areas
+## Delivery Phases
 
-## Phase 0: Foundation
-
-- Local owner authentication.
-- Browser-based first-run owner setup with username and password.
-- SQLite migrations and schema version tracking.
-- Translation boundary with English-first messages.
-- Theme infrastructure with persisted user preference.
-- Versioned API shape starting at `/api/v1`.
-- Backup and restore documentation.
-- OpenAPI and Bruno coverage for the first real endpoints.
-
-## Phase 1: Books, Commodities, And Accounts
-
-- One owner-managed book at runtime.
-- Core tables retain `book_id` for accounting-boundary clarity and possible future multi-book support.
-- Commodity and currency metadata with exact decimal scale behavior.
-- Account tree with asset, liability, equity, income, and expense types.
-- Opening balances via explicit ledger transactions.
-- Account list and account detail flows.
-
-## Phase 2: Ledger Transactions
-
-- Transactions with postings or splits.
-- Transfer workflows as balanced transactions.
-- Friendly category UI mapped to income and expense accounts.
-- Transaction create, edit, void, duplicate, and list workflows.
-- Backend validation that enforces balancing invariants.
-- Import-source metadata attached to imported transactions.
-
-## Phase 3: Reconciliation And Core Reporting
-
-- Account reconciliation against statement balances.
-- Reconciliation-aware editing and correction behavior.
-- Net worth, cashflow, and spending-by-category reports are required in the first usable reporting milestone.
-- Income and expense reporting is still planned, but it is not part of the first non-negotiable report set.
-- Export of core ledger data.
-
-## Phase 4: Import And Cleanup
-
-- CSV import preview and commit.
-- Duplicate detection and source retention.
-- Cleanup helpers for payees and categories.
-- Import rollback or cleanup workflows.
-
-## Phase 5: Planning
-
-- Budgets.
-- Scheduled transactions.
-- Projected balances.
-- Liability helpers that fit the ledger model.
-
-## Phase 6: Advanced Finance
-
-- Multi-currency reporting.
-- Price history.
-- Investment accounts and holdings.
-- Lots and realized or unrealized gain reporting.
-- Snapshot-friendly reports where reproducibility matters.
-
-## Explicitly Deferred
-
-- Bank sync and open banking.
-- Cloud-hosted multi-tenant service shape.
-- Mobile-native apps.
-- Plugin architecture.
-- Small-business accounting workflows such as AR or AP.
-- Tax filing exports.
+Feature phases and their scoped deliverables are maintained in `docs/feature-roadmap.md`. This document captures the cross-cutting requirements that apply across all phases; the roadmap document is the source of truth for phase boundaries and sequencing.
 
 ## UX And Design Requirements To Lock Early
 

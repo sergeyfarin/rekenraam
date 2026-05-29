@@ -9,11 +9,12 @@ Before making durable product, architecture, or workflow changes, read:
 - `docs/product-requirements.md`
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
-- `docs/feature-roadmap.md`
-- `docs/archive-requirements-review.md`
 - `docs/adrs/`
+- `docs/feature-roadmap.md`
 - `docs/developer-workflow.md`
 - `AGENTS.md`
+
+In case of conflict, earlier items in the list take precedence over later items. Accepted ADRs supersede all other documents.
 
 ## Default Working Rules
 
@@ -51,4 +52,3 @@ Before making durable product, architecture, or workflow changes, read:
 - Use Conventional Commits.
 - Lightweight feature branches and PRs are encouraged, not mandatory.
 - Keep commit scope focused; do not bundle unrelated refactors.
-- Do not add GitHub Actions workflows unless the project owner explicitly reintroduces them.

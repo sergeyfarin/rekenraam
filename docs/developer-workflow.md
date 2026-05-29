@@ -107,17 +107,18 @@ Use the smallest honest scope. Avoid mixing unrelated concerns in one commit.
 ### Testing
 
 - Treat local validation scripts as the development contract.
-- Do not add GitHub Actions workflows unless the project owner explicitly reintroduces them.
-- If automation is reintroduced later, prefer matching automated commands to local commands.
+- CI commands must match the local wrapper scripts exactly.
 
 ## GitHub Actions
 
-The repo does not currently use GitHub Actions workflows.
+The repo uses a fast CI workflow in `.github/workflows/ci.yml`.
 
 Workflow conventions:
 
-- Do not add workflow files without an explicit project decision.
+- Fast CI covers backend tests, frontend check, and integrated build.
+- E2E stays in a separate workflow and runs only when a real user journey exists.
 - Use `pnpm install --frozen-lockfile` in CI.
+- Keep CI commands aligned with the local wrapper scripts in `scripts/`.
 - Use Node 22.
 - Use the Go version declared in `backend/go.mod`.
 - Keep job structure simple and readable.

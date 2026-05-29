@@ -16,11 +16,12 @@ Read these before making durable product or architecture changes:
 - `docs/product-requirements.md`
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
-- `docs/feature-roadmap.md`
-- `docs/archive-requirements-review.md`
 - `docs/adrs/`
+- `docs/feature-roadmap.md`
 - `docs/developer-workflow.md`
 - `.github/copilot-instructions.md`
+
+In case of conflict, earlier items in the list take precedence over later items. ADRs supersede all other documents once accepted.
 
 If a change introduces a durable new rule, update the relevant document in the same change.
 
