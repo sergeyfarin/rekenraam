@@ -5,9 +5,9 @@
 
 ## Validation
 
-- [ ] Backend tests run if backend behavior changed
-- [ ] Frontend check run if frontend behavior changed
-- [ ] Integrated build run if app shape or build logic changed
+- [ ] Backend tests passed if backend behavior changed
+- [ ] Frontend check passed if frontend behavior changed
+- [ ] Integrated build passed if app shape or build logic changed
 - [ ] Docs updated if requirements, conventions, or workflows changed
 
 ## Notes

@@ -20,5 +20,5 @@ description: "Use when editing SvelteKit frontend routes, components, client-sid
 
 ## Frontend Validation
 
-- Default validation is `pnpm --dir frontend run check`.
+- Default validation is `./scripts/test-frontend.sh`.
 - If the change affects the production bundle or app shell, also run `pnpm build` from repo root.

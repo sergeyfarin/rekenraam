@@ -54,11 +54,15 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 ## Frontend Conventions
 
+- The frontend i18n library is **Paraglide JS** (Inlang). Use its compile-time message functions for all user-facing copy.
+- Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
 - All user-facing copy goes through a translation boundary.
 - English is the initial implementation language.
 - UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.
 - Do not concatenate translated fragments to form sentences.
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.
+- Use **Dinero.js v2** for all frontend money arithmetic and display (balance checks before submission, running totals, input parsing). Use `Intl.NumberFormat` via Dinero's formatting layer for locale-aware rendering.
+- Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.
 - Themes start with light and dark only.
 - Theme names and token roles must stay stable even if visual styling evolves.

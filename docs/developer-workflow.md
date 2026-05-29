@@ -10,10 +10,7 @@ Before changing durable behavior, read:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/feature-roadmap.md`
-- `docs/archive-requirements-review.md`
 - `docs/adrs/`
-- `AGENTS.md`
-- `.github/copilot-instructions.md`
 
 ## Daily Commands
 

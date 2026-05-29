@@ -7,7 +7,7 @@ description: "Use when editing automated tests, API test assets, Playwright conf
 
 - Prefer the narrowest useful validation for the changed slice.
 - Backend behavior should be covered with Go tests.
-- Frontend logic should at least pass `pnpm --dir frontend run check`.
+- Frontend logic should at least pass `./scripts/test-frontend.sh`.
 - Playwright is for critical user journeys, not every tiny UI branch.
 - API behavior should stay consistent with OpenAPI and Bruno assets as they become real.
 - CI should reuse the repo's real commands rather than invent parallel scripts.
