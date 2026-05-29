@@ -29,19 +29,16 @@ Early decisions for the self-hosted finance app are documented in [docs/early-ar
 
 ## Run Development Servers
 
-Install root and frontend dependencies once:
+Install workspace dependencies once from the repo root:
 
 ```sh
-npm install
-cd frontend
-npm install
-cd ..
+pnpm install
 ```
 
 Start the backend and frontend together from the repo root:
 
 ```sh
-npm run dev
+pnpm dev
 ```
 
 This uses `concurrently` to run both processes in one terminal with labeled `backend` and `frontend` logs. Stop both with `Ctrl+C`.
@@ -57,8 +54,8 @@ During development, SvelteKit serves the app on `16888` and proxies `/api` reque
 You can still run each side separately when needed:
 
 ```sh
-npm run dev:backend
-npm --prefix frontend run dev
+pnpm dev:backend
+pnpm dev:frontend
 ```
 
 ## Test Backend
@@ -88,20 +85,19 @@ curl http://localhost:18888/api/hello
 Install dependencies once:
 
 ```sh
-cd frontend
-npm install
+pnpm install
 ```
 
 Run SvelteKit checks:
 
 ```sh
-npm run check
+pnpm --dir frontend run check
 ```
 
 Build the static frontend:
 
 ```sh
-npm run build
+pnpm --dir frontend run build
 ```
 
 ## Test API With Bruno
@@ -117,20 +113,19 @@ Use the `app` environment when testing the integrated binary or Docker app on `1
 Install e2e dependencies once:
 
 ```sh
-cd e2e
-npm install
+pnpm install
 ```
 
 For development-mode e2e tests, run the backend and frontend dev servers first, then:
 
 ```sh
-npm test
+pnpm --dir e2e test
 ```
 
 For integrated app testing, run the single binary or Docker app on `16888`, then:
 
 ```sh
-E2E_BASE_URL=http://localhost:16888 npm test
+E2E_BASE_URL=http://localhost:16888 pnpm --dir e2e test
 ```
 
 ## Build Single Binary
@@ -138,8 +133,7 @@ E2E_BASE_URL=http://localhost:16888 npm test
 Install frontend dependencies first if needed:
 
 ```sh
-cd frontend
-npm install
+pnpm install
 ```
 
 Build the static frontend, copy it into the Go embed directory, and compile the binary:

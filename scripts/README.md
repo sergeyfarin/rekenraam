@@ -2,12 +2,12 @@
 
 Workflow scripts can live here once the concrete commands are known.
 
-Root npm scripts now provide:
+Root pnpm scripts now provide:
 
-- `npm run dev`: run backend and frontend together with labeled logs
-- `npm run test:backend`: run Go backend tests
-- `npm run test:frontend`: run SvelteKit checks
-- `npm run build`: build the single binary
+- `pnpm dev`: run backend and frontend together with labeled logs
+- `pnpm test:backend`: run Go backend tests
+- `pnpm test:frontend`: run SvelteKit checks
+- `pnpm build`: build the single binary
 
 Suggested future scripts:
 

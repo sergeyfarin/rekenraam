@@ -3,8 +3,7 @@ set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-cd "$ROOT/frontend"
-npm run build
+pnpm --dir "$ROOT/frontend" run build
 
 cd "$ROOT"
 find backend/internal/web/dist -mindepth 1 ! -name README.md -exec rm -rf {} +

@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.5.0",
   "scripts": {
-    "dev": "concurrently --kill-others --names backend,frontend --prefix-colors blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently --kill-others --names backend,frontend --prefix-colors blue,green \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
     "dev:backend": "cd backend && go run ./cmd/rekenraam",
     "dev:backend-rust": "cd backend-rust && cargo run",
-    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:frontend": "pnpm --dir frontend run dev",
     "test:backend": "cd backend && go test ./...",
-    "test:frontend": "npm --prefix frontend run check",
+    "test:frontend": "pnpm --dir frontend run check",
     "build": "./scripts/build-single-binary.sh"
   },
   "devDependencies": {
