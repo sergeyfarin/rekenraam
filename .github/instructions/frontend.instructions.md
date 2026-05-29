@@ -16,7 +16,8 @@ description: "Use when editing SvelteKit frontend routes, components, client-sid
 - Accessibility is required: keyboard paths, labels, focus handling, and readable contrast.
 - Prefer shared frontend helpers and API seams over route-local ad hoc logic.
 - Do not introduce desktop-only assumptions from `.archive/`.
-- Use Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`) for all new component state. Do not use legacy Svelte 4 stores for new code.
+- Use Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`) for all new component state. Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. Do not use Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in any new code.
+- All new frontend files must be TypeScript: `.ts` files or `.svelte` files with `<script lang="ts">`. Do not create `.js` source files under `frontend/src`.
 
 ## Frontend Validation
 

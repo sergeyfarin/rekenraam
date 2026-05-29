@@ -25,6 +25,22 @@ description: "Use when editing Go backend code, migrations, repositories, servic
 - Package names should match the directory name and be a single lowercase word.
 - Do not panic in handlers or services; return errors and let the caller decide.
 
+## Error And Logging Conventions
+
+- API error responses use the envelope shape `{"error": {"code": "STABLE_CODE", "message": "human-readable"}}`. The `code` field is a stable uppercase string. Never return raw Go error strings to the client.
+- Use `log/slog` for all structured logging. Pass the logger via context or as a parameter; do not use a package-level global.
+- Do not log financial values (amounts, payee names, account names) at any level.
+
+## Infrastructure Conventions
+
+- The `APP_ENV` environment variable controls mode: `development` (text logs, dev middleware) or `production` (JSON logs). Default to `production` when unset.
+- HTTP middleware layers run in this order: request ID injection → request logging → auth check → handler. Each layer is a plain `http.Handler` wrapper.
+- Inject a request-scoped UUID as a request ID on every inbound request. Include it in log entries and echo it as `X-Request-ID` in the response.
+- Use `testify/assert` (non-fatal) and `testify/require` (fatal) in all Go tests. Do not write verbose manual assertion blocks.
+- `sqlc`-generated code lives in `backend/internal/db/`. Do not edit generated files by hand; regenerate with `sqlc generate`.
+- Backend tests use a temporary in-memory or temp-file SQLite database. Never use the development database file in tests.
+- The server must handle `SIGTERM` and `SIGINT` with `http.Server.Shutdown(ctx)` and a short grace period.
+
 ## Backend Validation
 
 - Default validation is `./scripts/test-backend.sh`.

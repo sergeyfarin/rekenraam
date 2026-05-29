@@ -4,11 +4,11 @@ Rekenraam is structured as a monorepo with separate backend, frontend, API-test,
 
 ## Ports
 
-- App/frontend development URL: `http://localhost:16888`
-- Backend development API URL: `http://localhost:18888`
+- App/frontend development URL: `http://localhost:1888`
+- Backend development API URL: `http://localhost:16888`
 - Production single binary and Docker URL: `http://localhost:16888`
 
-The backend dev port uses `18888`, a lucky number pattern associated with wealth and success in Chinese numerology.
+The port numbers echo the app's wealth-tracking purpose: `1888` for the frontend dev server and `16888` for the backend, both carrying the lucky `8` pattern.
 
 ## Layout
 
@@ -58,10 +58,10 @@ This uses `concurrently` to run both processes in one terminal with labeled `bac
 Open:
 
 ```text
-http://localhost:16888
+http://localhost:1888
 ```
 
-During development, SvelteKit serves the app on `16888` and proxies `/api` requests to the Go backend on `18888`.
+During development, SvelteKit serves the app on `1888` and proxies `/api` requests to the Go backend on `16888`.
 
 You can still run each side separately when needed:
 
@@ -88,7 +88,7 @@ go run ./cmd/rekenraam
 Check the hello API:
 
 ```sh
-curl http://localhost:18888/api/hello
+curl http://localhost:16888/api/hello
 ```
 
 ## Test Frontend
@@ -115,7 +115,7 @@ pnpm --dir frontend run build
 
 Open `api/bruno/` in Bruno.
 
-Use the `local` environment when the backend is running directly on `18888`.
+Use the `local` environment when the backend is running directly on `16888`.
 
 Use the `app` environment when testing the integrated binary or Docker app on `16888`.
 

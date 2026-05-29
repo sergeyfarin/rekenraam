@@ -36,14 +36,17 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Store exact values as integer plus scale plus commodity code.
 - Use calendar dates for financial facts.
 - Use UTC timestamps for system facts.
+- Calendar dates travel over the wire as ISO 8601 strings (`YYYY-MM-DD`). UTC timestamps travel as RFC 3339 strings (`2025-01-15T14:30:00Z`). Go's `time.Time` marshals as RFC 3339 by default; use a plain `string` or a validated date type for calendar-date fields.
 - Keep stable codes in data; translated labels belong in localization assets.
 - Built-in records not entered by users or imported from external sources must use stable keys or codes, not English display names as the only source of truth.
 - Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must be localization-ready.
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
+- Soft-delete column convention and the specific schema pattern (e.g., `deleted_at` vs `archived_at` vs a status enum) will be documented when first introduced in a migration. Consistency across tables is required; do not mix approaches.
 - Schema changes require explicit migrations under `backend/migrations`.
+- The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
 - The SQLite Go driver is **`modernc.org/sqlite`** (pure Go, no CGO). Do not use `mattn/go-sqlite3`.
-- Database queries use **`sqlc`** for type-safe Go code generated from SQL. Write SQL in query files alongside migrations; run codegen when queries change.
+- Database queries use **`sqlc`** for type-safe Go code generated from SQL. Write SQL in query files alongside migrations; run codegen when queries change. Generated code lives in `backend/internal/db/`; do not edit generated files by hand.
 - Raw `database/sql` is used as the underlying interface; `sqlc` generates the typed wrappers.
 
 ## API Conventions
@@ -53,7 +56,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Business rules belong in application services.
 - Database access belongs behind repository-style functions or methods.
 - Error responses should be structured, consistent, and safe for user display.
+- Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client.
 - Public request and response shapes should be documented in OpenAPI as endpoints become real.
+- Date fields in request and response bodies use ISO 8601 (`YYYY-MM-DD`) for calendar dates and RFC 3339 for timestamps, consistent with the data layer convention.
 - List endpoints that can return large result sets must use **cursor-based pagination**, not offset pagination. Cursors must be stable under concurrent inserts. Return `next_cursor` in the response; a missing or null `next_cursor` means the last page.
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
 
@@ -78,6 +83,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Use **`openapi-typescript`** (type generation) + **`openapi-fetch`** (typed HTTP client) for all frontend API calls. The OpenAPI spec is the single source of type truth.
 - Use **`@tanstack/svelte-query`** as the data layer for all server state. Use `createInfiniteQuery` for paginated lists; use query key composition to cache search results per search string.
 - Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets (account name dropdowns, payee autocomplete). Do not use client-side search for full transaction lists.
+- Use **`date-fns` v3** for all frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
+- All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
+- Component state uses **Svelte 5 runes** (`$state`, `$derived`, `$effect`, `$props`). Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. No Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in new code.
 
 ## Design Conventions
 
@@ -92,14 +100,35 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
 - First-run setup is browser-based and creates the single owner with a username and password.
+- Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.
+- Cookie sessions set `SameSite=Strict` for CSRF mitigation. Revisit if same-site navigation flows require relaxing to `SameSite=Lax` in a later ADR.
+- Password hashing uses **`golang.org/x/crypto/bcrypt`**. Never store plaintext or weakly hashed passwords.
 - Public deployment requires HTTPS and explicit operator guidance.
 - Public VPS deployment with real financial data requires MFA.
 - Local-network use may ship before MFA if authentication and operator guidance are clear.
 - SQLite database encryption is deferred for early local use, but docs must explain when encrypted-at-rest storage may be needed.
 - Docker Compose must package the same app shape as the single binary.
+- The Docker production image uses **`gcr.io/distroless/static-debian12`** as the base. Since `modernc.org/sqlite` is pure Go with no CGO, no libc is required.
 - SQLite data must live in persistent storage outside the container image or binary.
 - Backup and restore instructions are part of product documentation, not only operator folklore.
 - Operator backups do not replace user-facing export features.
+
+## Observability Conventions
+
+- Use **`log/slog`** (Go stdlib) for all structured logging. Output JSON in production, text in development. No third-party logging library.
+- Log at `Info` for normal request lifecycle events, `Warn` for recoverable anomalies, `Error` for failures that need operator attention.
+- Do not log financial record content (amounts, payees, account names) at any level.
+- The application mode is controlled by the **`APP_ENV`** environment variable. Accepted values: `development`, `production`. Default to `production` when unset. Mode gates log format (text vs JSON) and any dev-only middleware.
+- HTTP middleware layers run in a consistent order per request: request ID injection → request logging → auth check → handler. Each layer is a plain `http.Handler` wrapper; no framework-specific middleware interface.
+- A request-scoped UUID is generated for every inbound request, included in all log entries for that request, and echoed in the `X-Request-ID` response header.
+- The HTTP server must handle `SIGTERM` and `SIGINT` with `http.Server.Shutdown(ctx)` and a short grace period before exiting.
+
+## Infrastructure And Port Conventions
+
+- Backend dev server listens on **`:16888`** (via `HTTP_ADDR` env var).
+- Frontend dev server (SvelteKit + Vite) listens on **`:1888`** and proxies `/api` to `http://localhost:16888`.
+- Production single binary and Docker container serve on **`:16888`**.
+- Entity IDs in SQLite use **auto-increment integers** (`INTEGER PRIMARY KEY`). External-facing identifiers in API responses may use integers directly; do not convert to UUIDs unless a later ADR introduces distributed ID requirements.
 
 ## Scope Conventions
 
@@ -111,6 +140,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 ## Testing Conventions
 
 - Backend behavior gets Go tests.
+- Use **`testify`** (`testify/assert` for non-fatal checks, `testify/require` for fatal checks) in all Go tests. Do not write verbose `if got != want` assertion blocks.
 - Frontend logic gets Svelte checks and focused component or unit tests when introduced.
 - Bruno covers important API workflows.
 - Playwright covers critical user journeys.

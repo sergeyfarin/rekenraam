@@ -4,10 +4,10 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [sveltekit()],
   server: {
-    port: 16888,
+    port: 1888,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:18888'
+      '/api': 'http://localhost:16888'
     }
   }
 });
