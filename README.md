@@ -25,7 +25,17 @@ dist/           Local release output
 
 ## Architecture Notes
 
-Early decisions for the self-hosted finance app are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md), with staged feature sequencing in [docs/feature-roadmap.md](docs/feature-roadmap.md). Keep these documents current when a feature introduces a durable product or technical constraint.
+Active product requirements for the self-hosted finance app are documented in [docs/product-requirements.md](docs/product-requirements.md).
+
+Repo-wide conventions are documented in [docs/conventions.md](docs/conventions.md).
+
+Accepted decision records are documented in [docs/adrs/](docs/adrs/).
+
+Developer workflow, commands, commit conventions, and CI expectations are documented in [docs/developer-workflow.md](docs/developer-workflow.md).
+
+Early architecture decisions are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md), with staged feature sequencing in [docs/feature-roadmap.md](docs/feature-roadmap.md).
+
+Keep these documents current when a feature introduces a durable product or technical constraint.
 
 ## Run Development Servers
 
@@ -63,8 +73,7 @@ pnpm dev:frontend
 Backend tests are independent from Node and the frontend:
 
 ```sh
-cd backend
-go test ./...
+./scripts/test-backend.sh
 ```
 
 Run the backend manually:
@@ -91,7 +100,7 @@ pnpm install
 Run SvelteKit checks:
 
 ```sh
-pnpm --dir frontend run check
+./scripts/test-frontend.sh
 ```
 
 Build the static frontend:
@@ -119,13 +128,13 @@ pnpm install
 For development-mode e2e tests, run the backend and frontend dev servers first, then:
 
 ```sh
-pnpm --dir e2e test
+./scripts/test-e2e.sh
 ```
 
 For integrated app testing, run the single binary or Docker app on `16888`, then:
 
 ```sh
-E2E_BASE_URL=http://localhost:16888 pnpm --dir e2e test
+E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
 
 ## Build Single Binary

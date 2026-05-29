@@ -7,7 +7,14 @@ Root pnpm scripts now provide:
 - `pnpm dev`: run backend and frontend together with labeled logs
 - `pnpm test:backend`: run Go backend tests
 - `pnpm test:frontend`: run SvelteKit checks
+- `pnpm test:e2e`: run Playwright tests
 - `pnpm build`: build the single binary
+
+Stable script wrappers now provide:
+
+- `./scripts/test-backend.sh`: backend test entrypoint used by local validation and CI
+- `./scripts/test-frontend.sh`: frontend check entrypoint used by local validation and CI
+- `./scripts/test-e2e.sh`: e2e entrypoint used by local validation and CI
 
 Suggested future scripts:
 
@@ -15,6 +22,4 @@ Suggested future scripts:
 - `build-frontend`: build SvelteKit static output
 - `sync-frontend`: copy static frontend output into `backend/internal/web/dist/`
 - `build-binary`: compile the final Go binary into `dist/`
-- `test-backend`: run Go tests
 - `test-api`: run Bruno CLI requests
-- `test-e2e`: run browser e2e tests

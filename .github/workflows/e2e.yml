@@ -1,0 +1,87 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm --dir e2e exec playwright install --with-deps chromium
+
+      - name: Build integrated app
+        run: pnpm build
+
+      - name: Start app
+        run: |
+          mkdir -p data
+          HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite ./dist/rekenraam > rekenraam.log 2>&1 &
+          echo $! > rekenraam.pid
+
+      - name: Wait for app
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:16888/api/hello > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Application did not become ready in time"
+          cat rekenraam.log
+          exit 1
+
+      - name: Run Playwright tests
+        run: ./scripts/test-e2e.sh
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload app log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rekenraam-log
+          path: rekenraam.log
+          if-no-files-found: ignore
+
+      - name: Stop app
+        if: always()
+        run: |
+          if [ -f rekenraam.pid ]; then
+            kill "$(cat rekenraam.pid)" || true
+          fi
