@@ -14,6 +14,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
+	mux.HandleFunc("/api/", http.NotFound)
 	mux.Handle("/", web.Handler())
 
 	log.Printf("rekenraam backend listening on %s", cfg.HTTPAddr)

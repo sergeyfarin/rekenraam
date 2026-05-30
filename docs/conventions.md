@@ -64,6 +64,10 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 ## Frontend Conventions
 
+- SvelteKit builds static output with `@sveltejs/adapter-static`; production does not run a SvelteKit server.
+- Do not add `+page.server.ts`, `+layout.server.ts`, `+server.ts`, SvelteKit form actions, or production server hooks without first accepting an ADR that changes the runtime shape.
+- Frontend routes may rely on the Go static handler's SPA fallback for extensionless browser paths. Missing asset-like paths with file extensions should 404.
+- All production data access goes through Go API endpoints under `/api/v1`; unknown `/api/` paths must not fall back to the frontend shell.
 - The frontend i18n library is **Paraglide JS** (Inlang). Use its compile-time message functions for all user-facing copy.
 - Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
 - All user-facing copy goes through a translation boundary.
@@ -128,6 +132,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Backend dev server listens on **`:16888`** (via `HTTP_ADDR` env var).
 - Frontend dev server (SvelteKit + Vite) listens on **`:1888`** and proxies `/api` to `http://localhost:16888`.
 - Production single binary and Docker container serve on **`:16888`**.
+- Production static frontend files are copied from `frontend/build/` into `backend/internal/web/dist/` before compiling the Go binary.
 - Entity IDs in SQLite use **auto-increment integers** (`INTEGER PRIMARY KEY`). External-facing identifiers in API responses may use integers directly; do not convert to UUIDs unless a later ADR introduces distributed ID requirements.
 
 ## Scope Conventions

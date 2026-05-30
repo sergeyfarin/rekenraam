@@ -18,6 +18,10 @@ Small-business accounting, tax filing, hosted service operations, bank sync, and
 
 Use the existing production shape: a Go backend serving a statically built SvelteKit frontend from one binary. Docker should package the same app shape rather than introducing a second production architecture.
 
+The frontend runtime is static SvelteKit output built with `@sveltejs/adapter-static` and embedded into the Go binary. Go owns all production server behavior: API routes, authentication, cookies, headers, persistence, logging, and static-file serving. The Go static handler serves real frontend assets directly, returns 404 for missing asset files, and falls back to the SvelteKit `index.html` shell for extensionless browser routes so deep links and refreshes work.
+
+Do not introduce SvelteKit production server routes, server `load` functions, form actions, or hooks unless a later ADR changes the runtime shape. Frontend code should call Go endpoints under `/api/v1` through the typed API client. Unknown `/api/` routes must remain API 404s rather than falling through to the frontend shell.
+
 Reasons:
 
 - Simple to self-host.

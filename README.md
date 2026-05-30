@@ -57,6 +57,8 @@ Early architecture decisions are documented in [docs/early-architecture-decision
 
 Keep these documents current when a feature introduces a durable product or technical constraint.
 
+The production frontend is static SvelteKit output built with `@sveltejs/adapter-static`. The Go binary embeds those files, serves real assets directly, returns API 404s under `/api/`, and falls back to the SvelteKit app shell for browser routes such as `/accounts` or `/transactions/import`.
+
 ## Documentation Shape
 
 The repo keeps durable product and architecture decisions in `docs/` and keeps local README files only when they describe generated or ignored directories. Day-to-day commands live here and in [docs/developer-workflow.md](docs/developer-workflow.md), so area folders do not each need their own repeated command notes.

@@ -15,6 +15,8 @@ description: "Use when editing SvelteKit frontend routes, components, client-sid
 - New screens must define loading, empty, error, and success states.
 - Accessibility is required: keyboard paths, labels, focus handling, and readable contrast.
 - Prefer shared frontend helpers and API seams over route-local ad hoc logic.
+- Production uses `@sveltejs/adapter-static` and the Go binary serves the built frontend. Do not add `+page.server.ts`, `+layout.server.ts`, `+server.ts`, SvelteKit form actions, or production server hooks unless an accepted ADR changes the runtime shape.
+- Route production data access through Go `/api/v1` endpoints and the typed API client.
 - Do not introduce desktop-only assumptions from `.archive/`.
 - Use Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`) for all new component state. Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. Do not use Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in any new code.
 - All new frontend files must be TypeScript: `.ts` files or `.svelte` files with `<script lang="ts">`. Do not create `.js` source files under `frontend/src`.
