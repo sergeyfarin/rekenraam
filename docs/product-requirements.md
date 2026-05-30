@@ -43,20 +43,32 @@ Primary product goal:
 
 ## Decisions To Confirm Before Implementation
 
-- Password reset approach for a single-owner self-hosted app.
+- No remaining product-wide decisions block Phase 0 foundation coding. Feature-specific decisions remain listed below and should be resolved before their related slices.
+
+## Phase 0 Foundation Coding Gates
+
+These are locked before implementation starts:
+
+- First-run setup starts with `GET /api/v1/setup/status` and `POST /api/v1/setup/owner`.
+- Setup progress is persisted as named steps, starting with `owner`, `book`, `currencies`, `system_accounts`, and `categories`, rather than a single boolean.
+- Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path that requires server or database access and invalidates existing sessions.
+- Stable `/api/v1` endpoints are OpenAPI-first with `api/openapi/openapi.yaml` as the checked source of truth.
+- Initial API error codes are `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`, and `INTERNAL_ERROR`.
+- Request IDs are server-generated UUIDs, returned in `X-Request-ID`, and included in logs.
+- Before the first non-placeholder UI screen, add Paraglide/Inlang message catalogs and semantic `light`/`dark` theme tokens.
 
 ## Pre-Domain Readiness Checklist
 
 These decisions must be locked before the first real domain slice beyond setup/auth starts:
 
 - Money representation limits: maximum `quantity_scale`, allowed `commodity_code` formats, custom commodity identifiers, and validation behavior for values that exceed limits.
-- Draft and posted lifecycle: physical delete is allowed only for never-posted drafts. Once a financial record is posted, use void, archive, or correction workflows even when it is unreconciled.
-- API contract workflow: choose OpenAPI-first or code-first generated OpenAPI, add the generation/check command, and wire it into the frontend `openapi-typescript` workflow before real `/api/v1` endpoints become stable.
-- Initial structured error code set: validation, authentication, authorization, conflict, not found, rate/lock/busy, and internal error codes.
-- Request ID middleware behavior: request-scoped UUID creation, incoming request ID trust/override policy, logging fields, and `X-Request-ID` response behavior.
+- Exact OpenAPI type generation/check command and frontend generated-client path.
+- Domain lifecycle status taxonomy for drafts, posted records, voided records, archived records, and corrective entries.
 
 Already locked before domain work:
 
+- Foundation coding gates for setup, password recovery, API contracts, error codes, request IDs, i18n scaffolding, and theme token scaffolding.
+- Physical delete is allowed only for never-posted drafts; posted financial records use void, archive, or corrective-entry workflows.
 - Static frontend routing: Go serves real assets, returns 404 for unknown `/api/` and missing asset-like paths, and falls back to the SvelteKit app shell for extensionless non-API routes.
 - SQLite connection, migration, busy-timeout, WAL, and backup behavior.
 - Docker runtime base image.
@@ -230,14 +242,13 @@ These should be fixed before many screens accumulate inconsistent patterns.
 
 Beyond multilingual support and themes, these areas should be deliberately defined before the app grows:
 
-- Authentication scope: single owner only versus future household users, MFA timing, and password-reset rules.
+- Authentication scope: single owner only versus future household users, and MFA timing for public real-data deployments.
 - Authorization model: whether multi-user language should be avoided or prepared in table and API naming.
 - Audit model: mutation attribution fields, change reasons, and audit visibility.
 - Data lifecycle rules: void, archive, correct, restore, and retention semantics.
 - Import priorities: which file formats arrive first after CSV.
 - Export guarantees: minimum export formats and whether exports should include settings, reports, and metadata.
-- API contract workflow: OpenAPI source of truth, generation command, frontend type generation, and CI check behavior.
-- Initial structured API error code set and request ID behavior.
+- API contract workflow: exact OpenAPI type generation command, frontend generated-client path, and CI check behavior.
 - Money representation limits: maximum scale and commodity code validation.
 - Backup policy: backup location, restore expectations, and Docker volume guidance.
 - SQLite backup implementation: online backup API first, `VACUUM INTO` where useful, and no raw live file-copy guidance as the normal path.
@@ -271,7 +282,6 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 
 These are important and should be resolved before the related feature slices begin.
 
-- What password-reset flow makes sense for a self-hosted single-owner deployment?
 - Which export scope should be available from the first export milestone beyond core ledger CSV and QIF, such as full structured JSON export of settings and metadata?
 - Which first-class UI languages should ship after the English translation boundary is in place?
 - When attachments eventually enter scope, should they live in SQLite, the filesystem, or pluggable object storage?

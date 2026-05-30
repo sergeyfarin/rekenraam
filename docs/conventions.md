@@ -60,9 +60,10 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Business rules belong in application services.
 - Database access belongs behind repository-style functions or methods.
 - Error responses should be structured, consistent, and safe for user display.
-- Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client. Define the initial validation, authentication, authorization, conflict, not-found, busy/locked, and internal error codes before the first stable domain endpoint.
+- Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client.
+- Initial API error codes are `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`, and `INTERNAL_ERROR`.
 - Public request and response shapes should be documented in OpenAPI as endpoints become real.
-- Lock OpenAPI source-of-truth workflow and generation/check commands before the first stable domain endpoint. Frontend API types must be generated from the checked OpenAPI artifact.
+- Stable `/api/v1` endpoints are OpenAPI-first. `api/openapi/openapi.yaml` is the checked source of truth, handler changes and OpenAPI changes land together, and frontend API types must be generated from the checked OpenAPI artifact once frontend API client code lands.
 - Date fields in request and response bodies use ISO 8601 (`YYYY-MM-DD`) for calendar dates and RFC 3339 for timestamps, consistent with the data layer convention.
 - List endpoints that can return large result sets must use **cursor-based pagination**, not offset pagination. Cursors must be stable under concurrent inserts. Return `next_cursor` in the response; a missing or null `next_cursor` means the last page.
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
@@ -75,6 +76,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Frontend routes may rely on the Go static handler's SPA fallback for extensionless browser paths. Missing asset-like paths with file extensions should 404.
 - All production data access goes through Go API endpoints under `/api/v1`; unknown `/api/` paths must not fall back to the frontend shell.
 - The frontend i18n library is **Paraglide JS** (Inlang). Use its compile-time message functions for all user-facing copy.
+- Add the Paraglide/Inlang message catalog structure before the first non-placeholder user-facing screen.
 - Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
 - All user-facing copy goes through a translation boundary.
 - English is the initial implementation language.
@@ -86,6 +88,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.
 - Themes start with light and dark only.
 - Theme names and token roles must stay stable even if visual styling evolves.
+- Define semantic theme tokens as CSS custom properties before the first non-placeholder user-facing screen. Persist theme preference only after a real user-facing theme control exists; until then, respect system preference where practical.
 - New screens must define loading, empty, error, and success states.
 - New interactions must be keyboard-usable and accessible.
 - Responsive behavior must be deliberate on both desktop and mobile.
@@ -110,6 +113,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
 - First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, base currency, optional additional currencies, system accounts, default categories, and optional additional categories as those domains are implemented.
+- First-run setup uses `GET /api/v1/setup/status` and `POST /api/v1/setup/owner` for the first slice. Setup progress is persisted as named steps, not as a single boolean.
+- Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path requiring server or database access, and invalidate existing sessions after password reset.
 - Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.
 - Session tokens are opaque random values. Store only token hashes in SQLite.
 - Session cookies use `HttpOnly`, `SameSite=Strict`, `Path=/`, and no `Domain`. Use `Secure` whenever the app is served over HTTPS. HTTPS deployments should use a `__Host-` prefixed cookie name once auth implementation lands.
@@ -135,8 +140,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Log at `Info` for normal request lifecycle events, `Warn` for recoverable anomalies, `Error` for failures that need operator attention.
 - Do not log financial record content (amounts, payees, account names) at any level.
 - The application mode is controlled by the **`APP_ENV`** environment variable. Accepted values: `development`, `production`. Default to `production` when unset. Mode gates log format (text vs JSON) and any dev-only middleware.
-- HTTP middleware layers run in a consistent order per request: request ID injection → request logging → auth check → handler. Each layer is a plain `http.Handler` wrapper; no framework-specific middleware interface.
-- A request-scoped UUID is generated for every inbound request, included in all log entries for that request, and echoed in the `X-Request-ID` response header.
+- HTTP middleware layers run in a consistent order per request: request ID injection → panic recovery when added → request logging → auth check → CSRF validation for mutating authenticated requests → handler. Each layer is a plain `http.Handler` wrapper; no framework-specific middleware interface.
+- A server-generated request-scoped UUID is generated for every inbound request, included in all log entries for that request, and echoed in the `X-Request-ID` response header. Incoming `X-Request-ID` may be logged as an external/caller request ID, but it does not replace the server-generated ID.
 - The HTTP server must handle `SIGTERM` and `SIGINT` with `http.Server.Shutdown(ctx)` and a short grace period before exiting.
 
 ## Infrastructure And Port Conventions

@@ -40,10 +40,9 @@ No archive behavior becomes active scope just because it existed before.
 
 Review auth, migrations, SQLite pragmas, backup/restore, API shape, translation boundary, theme tokens, and test commands.
 
-Questions to settle before implementation:
+Questions to settle before the related deployment or localization slice:
 
 - What is the smallest acceptable MFA implementation for public VPS real-data deployment?
-- What password-reset model fits a self-hosted single-owner app?
 - Which first-class UI languages should follow English after the translation boundary exists?
 
 Already settled since this review plan was first written:
@@ -109,10 +108,10 @@ Lock these now:
 - SQLite database encryption is deferred for early local use, but documentation must explain when encrypted-at-rest storage may be needed.
 - `modernc.org/sqlite`, `pressly/goose`, `sqlc`, `database/sql`, and the official Debian 13 slim production runtime image as documented in `docs/conventions.md`.
 - SQLite runtime PRAGMAs, migration behavior, busy timeout, and backup approach are locked in ADR 0004.
+- Foundation coding gates for setup endpoints, setup progress, password recovery, OpenAPI workflow, error codes, request IDs, i18n scaffolding, and theme token scaffolding are locked in ADR 0006.
 
 Do not lock these yet:
 
-- Password-reset mechanism.
 - Final UI component abstraction beyond the currently installed Svelte ecosystem.
 - Initial non-English language set.
 - Import formats beyond CSV for the first import milestone.
@@ -120,13 +119,11 @@ Do not lock these yet:
 
 Lock these before the first related implementation slice:
 
-- Exact setup-progress persistence shape and password-reset behavior.
 - Translation catalog file format, built-in data label keys, and locale fallback behavior.
 - Theme token names, persistence key, and light/dark token minimums.
-- OpenAPI source-of-truth workflow, generation/check command, and frontend type generation path.
-- Initial structured error code set and request identifier behavior.
+- Exact OpenAPI type generation/check command and frontend generated-client path.
 - Money representation limits: maximum quantity scale and commodity code validation.
-- Draft versus posted lifecycle details; physical delete only for never-posted drafts.
+- Domain lifecycle status taxonomy for drafts, posted records, voided records, archived records, and corrective entries.
 
 ## Consolidated Carry-Forward From FastAPI Pass
 

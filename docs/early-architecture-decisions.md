@@ -123,6 +123,8 @@ Rules:
 
 - The scaffold `/api/hello` endpoint is disposable.
 - Real domain endpoints should use a versioned prefix, starting with `/api/v1`.
+- Stable `/api/v1` endpoints are OpenAPI-first with `api/openapi/openapi.yaml` as the checked source of truth.
+- The first setup endpoints are `GET /api/v1/setup/status` and `POST /api/v1/setup/owner`.
 - API DTOs belong near HTTP handlers.
 - Business rules belong in application services, not directly inside handlers.
 - Database access belongs behind repository-style functions or methods.
@@ -137,8 +139,10 @@ Early default:
 - Support a single owner user first.
 - Add local authentication before real financial data entry ships.
 - Use browser-based first-run setup to create the owner username and password first, then extend setup with default book, base currency, optional additional currencies, system accounts, default categories, and optional additional categories as those feature slices are implemented.
+- Persist setup progress as named steps rather than a single boolean.
 - Put all privileged operations behind authentication.
 - Keep auth local to the deployment unless a future decision introduces external identity providers.
+- Early password recovery is operator-controlled and local; no unauthenticated browser or email reset flow is included in the first implementation.
 - Hash passwords with Argon2id using self-describing stored hashes and upgradeable parameters.
 - Use same-origin browser sessions with `HttpOnly` cookies, hashed session tokens in SQLite, and CSRF protection on mutating API requests.
 - Public deployments require HTTPS. Localhost development may use HTTP. LAN/private deployments should use HTTPS through either a reverse proxy or app-provided certificate and key configuration.
@@ -212,7 +216,7 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
 
 - Before accounts: account type list, account tree rules, opening-balance behavior, and default book setup.
 - Before commodities: currency metadata source, custom commodity codes, display scale, precision limits, maximum quantity scale, and commodity-code validation.
-- Before first real `/api/v1` domain endpoints: OpenAPI source workflow, generation/check command, initial structured error code set, and request ID middleware details.
+- Before first frontend use of typed API clients: exact OpenAPI generation/check command and generated-client path.
 - Before transactions: posting schema, balancing rules, transfer representation, split editing, draft versus posted lifecycle, correction behavior, and import-source metadata.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
 - Before budgets: period semantics, category/account mapping, rollover rules, and whether budgets are book-wide or account-scoped.
