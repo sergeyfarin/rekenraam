@@ -1,0 +1,6 @@
+{
+  "app_name": "Rekenraam",
+  "checking_backend_health": "Checking backend health...",
+  "backend_status": "Backend status: {status}",
+  "backend_status_unavailable": "Backend status unavailable"
+}

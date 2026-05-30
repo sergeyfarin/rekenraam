@@ -5,10 +5,11 @@
   "type": "module",
   "packageManager": "pnpm@11.5.0",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 1888 --strictPort",
-    "build": "vite build",
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy baseLocale --emit-ts-declarations",
+    "dev": "pnpm run paraglide:compile && vite --host 0.0.0.0 --port 1888 --strictPort",
+    "build": "pnpm run paraglide:compile && vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "pnpm run paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
     "@internationalized/date": "3.12.2",
