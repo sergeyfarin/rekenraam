@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import { healthQueryOptions } from '$lib/api/health';
+  import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import { m } from '$lib/paraglide/messages.js';
 
   const healthQuery = createQuery(() => healthQueryOptions());
@@ -23,10 +24,22 @@
     }
 
     if (healthQuery.isError) {
-      return m.home_health_unavailable();
+      return getAPIClientErrorMessage(healthQuery.error);
     }
 
     return m.home_health_status({ status: healthQuery.data?.status ?? 'unknown' });
+  });
+
+  const healthStateLabel = $derived.by(() => {
+    if (healthState === 'loading') {
+      return m.home_health_state_loading();
+    }
+
+    if (healthState === 'error') {
+      return m.home_health_state_error();
+    }
+
+    return m.home_health_state_success();
   });
 </script>
 
@@ -55,7 +68,7 @@
           class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
           style:background-color={healthState === 'error' ? 'var(--color-danger-soft)' : 'color-mix(in oklab, var(--color-accent) 12%, transparent)'}
         >
-          {healthState}
+          {healthStateLabel}
         </span>
       </div>
 

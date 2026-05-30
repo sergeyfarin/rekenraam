@@ -1,0 +1,35 @@
+import type { APIErrorCode } from '$lib/api/client';
+import { APIClientError } from '$lib/api/client';
+import { m } from '$lib/paraglide/messages.js';
+
+const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
+  VALIDATION_FAILED: () => m.api_error_validation_failed(),
+  UNAUTHENTICATED: () => m.api_error_unauthenticated(),
+  FORBIDDEN: () => m.api_error_forbidden(),
+  NOT_FOUND: () => m.api_error_not_found(),
+  CONFLICT: () => m.api_error_conflict(),
+  CSRF_INVALID: () => m.api_error_csrf_invalid(),
+  RATE_LIMITED: () => m.api_error_rate_limited(),
+  RESOURCE_BUSY: () => m.api_error_resource_busy(),
+  SETUP_REQUIRED: () => m.api_error_setup_required(),
+  SETUP_ALREADY_COMPLETE: () => m.api_error_setup_already_complete(),
+  INTERNAL_ERROR: () => m.api_error_internal_error()
+};
+
+export function getAPIErrorMessage(code: APIErrorCode): string {
+  return apiErrorMessageByCode[code]();
+}
+
+export function getAPIClientErrorMessage(error: unknown): string {
+  if (error instanceof APIClientError) {
+    if (error.code !== undefined) {
+      return getAPIErrorMessage(error.code);
+    }
+
+    if (error.status === 0) {
+      return m.api_error_network();
+    }
+  }
+
+  return m.api_error_generic();
+}
