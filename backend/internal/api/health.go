@@ -25,7 +25,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /api/v1/health", health)
 	mux.HandleFunc("GET /api/v1/setup/status", setupStatus(logger, setupService))
-	mux.HandleFunc("POST /api/v1/setup/owner", createOwner(logger, setupService))
+	mux.HandleFunc("POST /api/v1/setup/owner", createOwner(logger, setupService, options))
 	if authService != nil {
 		mux.HandleFunc("GET /api/v1/auth/session", sessionStatus(logger, authService))
 		mux.HandleFunc("POST /api/v1/auth/login", login(logger, authService, options))

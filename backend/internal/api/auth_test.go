@@ -438,6 +438,30 @@ func TestLoginSetsSessionCookieWithMaxAge(t *testing.T) {
 	assert.Equal(t, int(app.SessionLifetime.Seconds()), cookies[0].MaxAge)
 }
 
+func TestLoginSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandlerWithOptions(t, HandlerOptions{
+		TrustProxyHeaders: true,
+		TrustedProxyCIDRs: []netip.Prefix{netip.MustParsePrefix("203.0.113.0/24")},
+	})
+	bootstrapOwner(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.RemoteAddr = "203.0.113.10:1234"
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	cookies := res.Result().Cookies()
+	require.Len(t, cookies, 1)
+	assert.True(t, cookies[0].Secure)
+}
+
 func legacyPasswordHash(t *testing.T, password string) string {
 	t.Helper()
 

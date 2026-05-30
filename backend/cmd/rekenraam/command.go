@@ -111,14 +111,8 @@ func runRecoverOwner(ctx context.Context, cfg config.Config, args []string, stdi
 	}
 	defer database.Close()
 
-	if err := db.Migrate(ctx, database); err != nil {
-		fmt.Fprintf(stderr, "run migrations: %v\n", err)
-		return 1
-	}
-
 	recoveryService := app.NewRecoveryService(database, cfg.DatabaseURL, db.NewRecoveryRepository(database))
-	result, err := recoveryService.RecoverOwnerAccess(ctx, app.RecoverOwnerInput{
-		Password:      password,
+	resolvedBackupPath, err := recoveryService.PrepareBackup(ctx, app.RecoverOwnerInput{
 		BackupPath:    backupPath,
 		AllowNoBackup: allowNoBackup,
 	})
@@ -127,8 +121,18 @@ func runRecoverOwner(ctx context.Context, cfg config.Config, args []string, stdi
 		return 1
 	}
 
-	if result.BackupPath != "" {
-		fmt.Fprintf(stdout, "owner recovery completed; verified backup written to %s\n", result.BackupPath)
+	if err := db.Migrate(ctx, database); err != nil {
+		fmt.Fprintf(stderr, "run migrations: %v\n", err)
+		return 1
+	}
+
+	if err := recoveryService.ResetOwnerAccess(ctx, password); err != nil {
+		fmt.Fprintf(stderr, "recover owner: %v\n", err)
+		return 1
+	}
+
+	if resolvedBackupPath != "" {
+		fmt.Fprintf(stdout, "owner recovery completed; verified backup written to %s\n", resolvedBackupPath)
 		return 0
 	}
 

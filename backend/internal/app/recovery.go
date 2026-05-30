@@ -40,32 +40,36 @@ func NewRecoveryService(database *sql.DB, databaseURL string, repository *db.Rec
 	}
 }
 
-func (s *RecoveryService) RecoverOwnerAccess(ctx context.Context, input RecoverOwnerInput) (RecoverOwnerResult, error) {
-	if input.Password == "" {
-		return RecoverOwnerResult{}, ValidationError{Message: "password is required"}
-	}
-
+func (s *RecoveryService) PrepareBackup(ctx context.Context, input RecoverOwnerInput) (string, error) {
 	backupPath := strings.TrimSpace(input.BackupPath)
 	if !input.AllowNoBackup {
 		var err error
 		if backupPath == "" {
 			backupPath, err = defaultRecoveryBackupPath(s.databaseURL, s.now().UTC())
 			if err != nil {
-				return RecoverOwnerResult{}, fmt.Errorf("build recovery backup path: %w", err)
+				return "", fmt.Errorf("build recovery backup path: %w", err)
 			}
 		}
 
 		if err := db.BackupSQLiteDatabase(ctx, s.database, backupPath); err != nil {
-			return RecoverOwnerResult{}, fmt.Errorf("create recovery backup: %w", err)
+			return "", fmt.Errorf("create recovery backup: %w", err)
 		}
 		if err := db.VerifySQLiteBackup(ctx, backupPath); err != nil {
-			return RecoverOwnerResult{}, fmt.Errorf("verify recovery backup: %w", err)
+			return "", fmt.Errorf("verify recovery backup: %w", err)
 		}
 	}
 
-	passwordHash, err := hashPassword(input.Password)
+	return backupPath, nil
+}
+
+func (s *RecoveryService) ResetOwnerAccess(ctx context.Context, password string) error {
+	if password == "" {
+		return ValidationError{Message: "password is required"}
+	}
+
+	passwordHash, err := hashPassword(password)
 	if err != nil {
-		return RecoverOwnerResult{}, fmt.Errorf("hash recovery password: %w", err)
+		return fmt.Errorf("hash recovery password: %w", err)
 	}
 
 	now := s.now().UTC().Format(time.RFC3339)
@@ -75,10 +79,23 @@ func (s *RecoveryService) RecoverOwnerAccess(ctx context.Context, input RecoverO
 		RevokedAt:    now,
 	}); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return RecoverOwnerResult{}, ErrRecoveryOwnerNotFound
+			return ErrRecoveryOwnerNotFound
 		}
 
-		return RecoverOwnerResult{}, fmt.Errorf("reset owner access: %w", err)
+		return fmt.Errorf("reset owner access: %w", err)
+	}
+
+	return nil
+}
+
+func (s *RecoveryService) RecoverOwnerAccess(ctx context.Context, input RecoverOwnerInput) (RecoverOwnerResult, error) {
+	backupPath, err := s.PrepareBackup(ctx, input)
+	if err != nil {
+		return RecoverOwnerResult{}, err
+	}
+
+	if err := s.ResetOwnerAccess(ctx, input.Password); err != nil {
+		return RecoverOwnerResult{}, err
 	}
 
 	return RecoverOwnerResult{BackupPath: backupPath}, nil

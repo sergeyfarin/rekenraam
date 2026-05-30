@@ -54,7 +54,7 @@ func setupStatus(logger *slog.Logger, setupService *app.SetupService) http.Handl
 	}
 }
 
-func createOwner(logger *slog.Logger, setupService *app.SetupService) http.HandlerFunc {
+func createOwner(logger *slog.Logger, setupService *app.SetupService, options HandlerOptions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request createOwnerRequest
 		if err := decodeJSONBody(r, &request); err != nil {
@@ -80,7 +80,7 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService) http.Handl
 			return
 		}
 
-		writeSessionCookie(w, r, result.SessionToken)
+		writeSessionCookie(w, r, options, result.SessionToken)
 		writeJSON(w, http.StatusCreated, createOwnerResponse{
 			Owner: OwnerResponse{
 				ID:       result.Owner.ID,
@@ -110,14 +110,14 @@ func toSetupStatusResponse(status app.SetupStatus) setupStatusResponse {
 	}
 }
 
-func writeSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
+func writeSessionCookie(w http.ResponseWriter, r *http.Request, options HandlerOptions, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   r.TLS != nil,
+		Secure:   requestUsesHTTPS(r, options),
 		MaxAge:   int(app.SessionLifetime.Seconds()),
 	})
 }

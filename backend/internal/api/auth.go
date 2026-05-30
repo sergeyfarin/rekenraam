@@ -88,7 +88,7 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 			return
 		}
 
-		writeSessionCookie(w, r, result.SessionToken)
+		writeSessionCookie(w, r, options, result.SessionToken)
 		writeJSON(w, http.StatusOK, loginResponse{
 			User: OwnerResponse{ID: result.User.ID, Username: result.User.Username},
 		})
@@ -103,7 +103,7 @@ func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOp
 			return
 		}
 
-		clearSessionCookie(w, r)
+		clearSessionCookie(w, r, options)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 }
@@ -117,17 +117,30 @@ func readSessionToken(r *http.Request) string {
 	return strings.TrimSpace(cookie.Value)
 }
 
-func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+func clearSessionCookie(w http.ResponseWriter, r *http.Request, options HandlerOptions) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   r.TLS != nil,
+		Secure:   requestUsesHTTPS(r, options),
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
+}
+
+func requestUsesHTTPS(r *http.Request, options HandlerOptions) bool {
+	if r.TLS != nil {
+		return true
+	}
+
+	if !shouldTrustProxyHeaders(r, options) {
+		return false
+	}
+
+	forwardedProto, _, _ := strings.Cut(r.Header.Get("X-Forwarded-Proto"), ",")
+	return strings.EqualFold(strings.TrimSpace(forwardedProto), "https")
 }
 
 // withCSRFProtection validates Origin and CSRF token for requests that carry a session cookie.
