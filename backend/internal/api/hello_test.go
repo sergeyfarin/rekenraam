@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHello(t *testing.T) {
@@ -16,16 +19,10 @@ func TestHello(t *testing.T) {
 
 	mux.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", res.Code)
-	}
+	require.Equal(t, http.StatusOK, res.Code)
 
 	var body map[string]string
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 
-	if body["message"] != "hello from rekenraam backend" {
-		t.Fatalf("unexpected message %q", body["message"])
-	}
+	assert.Equal(t, "hello from rekenraam backend", body["message"])
 }

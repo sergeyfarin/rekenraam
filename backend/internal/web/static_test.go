@@ -3,8 +3,10 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandlerServesStaticIndex(t *testing.T) {
@@ -13,12 +15,8 @@ func TestHandlerServesStaticIndex(t *testing.T) {
 
 	Handler().ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", res.Code)
-	}
-	if !strings.Contains(res.Body.String(), "<!doctype html>") {
-		t.Fatalf("expected frontend index response")
-	}
+	require.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "<!doctype html>")
 }
 
 func TestHandlerFallsBackToIndexForFrontendRoute(t *testing.T) {
@@ -27,12 +25,8 @@ func TestHandlerFallsBackToIndexForFrontendRoute(t *testing.T) {
 
 	Handler().ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", res.Code)
-	}
-	if !strings.Contains(res.Body.String(), "<!doctype html>") {
-		t.Fatalf("expected frontend index fallback response")
-	}
+	require.Equal(t, http.StatusOK, res.Code)
+	assert.Contains(t, res.Body.String(), "<!doctype html>")
 }
 
 func TestHandlerReturnsNotFoundForMissingAsset(t *testing.T) {
@@ -41,7 +35,5 @@ func TestHandlerReturnsNotFoundForMissingAsset(t *testing.T) {
 
 	Handler().ServeHTTP(res, req)
 
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected status 404, got %d", res.Code)
-	}
+	require.Equal(t, http.StatusNotFound, res.Code)
 }
