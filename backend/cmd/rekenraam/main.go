@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 
 	"rekenraam/backend/internal/api"
 	"rekenraam/backend/internal/config"
@@ -14,22 +15,43 @@ import (
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
+	logger := newLogger(cfg.AppEnv)
 
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("open database", slog.Any("err", err))
+		os.Exit(1)
 	}
 	defer database.Close()
 
 	if err := db.Migrate(ctx, database); err != nil {
-		log.Fatal(err)
+		logger.Error("run migrations", slog.Any("err", err))
+		os.Exit(1)
 	}
 
-	mux := http.NewServeMux()
-	api.RegisterRoutes(mux)
-	mux.HandleFunc("/api/", http.NotFound)
-	mux.Handle("/", web.Handler())
+	handler := api.NewHandler(logger, web.Handler())
+	server := &http.Server{
+		Addr:    cfg.HTTPAddr,
+		Handler: handler,
+	}
 
-	log.Printf("rekenraam backend listening on %s", cfg.HTTPAddr)
-	log.Fatal(http.ListenAndServe(cfg.HTTPAddr, mux))
+	logger.Info("server starting",
+		slog.String("addr", cfg.HTTPAddr),
+		slog.String("app_env", cfg.AppEnv),
+	)
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Error("serve http", slog.Any("err", err))
+		os.Exit(1)
+	}
+}
+
+func newLogger(appEnv string) *slog.Logger {
+	handlerOptions := &slog.HandlerOptions{Level: slog.LevelInfo}
+
+	if appEnv == "development" {
+		return slog.New(slog.NewTextHandler(os.Stdout, handlerOptions))
+	}
+
+	return slog.New(slog.NewJSONHandler(os.Stdout, handlerOptions))
 }
