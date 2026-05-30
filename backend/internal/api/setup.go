@@ -13,9 +13,12 @@ import (
 const sessionCookieName = "rekenraam_session"
 
 type setupStatusResponse struct {
-	Completed   bool                `json:"completed"`
-	CurrentStep string              `json:"current_step,omitempty"`
-	Steps       []setupStepResponse `json:"steps"`
+	Completed        bool                `json:"completed"`
+	CurrentStep      string              `json:"current_step,omitempty"`
+	InstallState     string              `json:"install_state"`
+	ImplementedSteps []string            `json:"implemented_steps"`
+	BlockingStep     string              `json:"blocking_step,omitempty"`
+	Steps            []setupStepResponse `json:"steps"`
 }
 
 type setupStepResponse struct {
@@ -98,9 +101,12 @@ func toSetupStatusResponse(status app.SetupStatus) setupStatusResponse {
 	}
 
 	return setupStatusResponse{
-		Completed:   status.Completed,
-		CurrentStep: status.CurrentStep,
-		Steps:       steps,
+		Completed:        status.Completed,
+		CurrentStep:      status.CurrentStep,
+		InstallState:     status.InstallState,
+		ImplementedSteps: append([]string(nil), status.ImplementedSteps...),
+		BlockingStep:     status.BlockingStep,
+		Steps:            steps,
 	}
 }
 

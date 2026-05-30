@@ -34,6 +34,9 @@ func TestSetupStatusReturnsInitialSteps(t *testing.T) {
 	var body setupStatusResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.False(t, body.Completed)
+	assert.Equal(t, app.InstallStateFresh, body.InstallState)
+	assert.Equal(t, []string{"owner"}, body.ImplementedSteps)
+	assert.Equal(t, "owner", body.BlockingStep)
 	assert.Equal(t, "owner", body.CurrentStep)
 	require.Len(t, body.Steps, 5)
 	assert.Equal(t, setupStepResponse{Key: "owner", Status: app.SetupStepStatusPending}, body.Steps[0])
@@ -61,6 +64,9 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.Equal(t, int64(1), body.Owner.ID)
 	assert.Equal(t, "owner", body.Owner.Username)
 	assert.False(t, body.Setup.Completed)
+	assert.Equal(t, app.InstallStateConfigured, body.Setup.InstallState)
+	assert.Equal(t, []string{"owner"}, body.Setup.ImplementedSteps)
+	assert.Empty(t, body.Setup.BlockingStep)
 	assert.Equal(t, "book", body.Setup.CurrentStep)
 	assert.Equal(t, setupStepResponse{Key: "owner", Status: app.SetupStepStatusCompleted}, body.Setup.Steps[0])
 
@@ -128,6 +134,32 @@ func TestCreateOwnerValidatesRequest(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
 	assert.Equal(t, "username is required", body.Error.Message)
+}
+
+func TestSetupStatusReturnsRecoveryRequiredForInconsistentOwnerState(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+
+	_, err := database.ExecContext(context.Background(), `
+		UPDATE setup_steps
+		SET completed_at = '2026-05-30T00:00:00Z'
+		WHERE step_key = 'owner'
+	`)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/setup/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var body setupStatusResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, app.InstallStateRecoveryRequired, body.InstallState)
+	assert.Equal(t, []string{"owner"}, body.ImplementedSteps)
+	assert.Empty(t, body.BlockingStep)
 }
 
 func newSetupTestHandler(t *testing.T) (http.Handler, *sql.DB) {

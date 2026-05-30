@@ -51,6 +51,7 @@ These are locked before implementation starts:
 
 - First-run setup starts with `GET /api/v1/setup/status` and `POST /api/v1/setup/owner`.
 - Setup progress is persisted as named steps, starting with `owner`, `book`, `currencies`, `system_accounts`, and `categories`, rather than a single boolean.
+- Setup status must expose a derived install state so future seeded setup steps do not block current installs before their APIs and UI exist.
 - Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path that requires server or database access and invalidates existing sessions.
 - Stable `/api/v1` endpoints are OpenAPI-first with `api/openapi/openapi.yaml` as the checked source of truth.
 - Initial API error codes are `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`, and `INTERNAL_ERROR`.

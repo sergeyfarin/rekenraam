@@ -127,6 +127,8 @@ components:
       type: object
       required:
         - completed
+        - install_state
+        - implemented_steps
         - steps
       properties:
         completed:
@@ -139,6 +141,22 @@ components:
             - currencies
             - system_accounts
             - categories
+        install_state:
+          type: string
+          enum:
+            - fresh
+            - configured
+            - recovery_required
+        implemented_steps:
+          type: array
+          items:
+            type: string
+            enum:
+              - owner
+        blocking_step:
+          type: string
+          enum:
+            - owner
         steps:
           type: array
           items:

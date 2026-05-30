@@ -20,6 +20,10 @@ const (
 	SetupStepStatusPending   = "pending"
 	SetupStepStatusCompleted = "completed"
 
+	InstallStateFresh            = "fresh"
+	InstallStateConfigured       = "configured"
+	InstallStateRecoveryRequired = "recovery_required"
+
 	argon2MemoryKiB   = 19 * 1024
 	argon2Iterations  = 2
 	argon2Parallelism = 1
@@ -46,6 +50,9 @@ type SetupStatus struct {
 	Completed   bool
 	CurrentStep string
 	Steps       []SetupStep
+	InstallState string
+	ImplementedSteps []string
+	BlockingStep string
 }
 
 type SetupStep struct {
@@ -74,14 +81,20 @@ func NewSetupService(repository *db.SetupRepository) *SetupService {
 }
 
 func (s *SetupService) Status(ctx context.Context) (SetupStatus, error) {
+	overview, err := s.repository.ReadSetupOverview(ctx)
+	if err != nil {
+		return SetupStatus{}, fmt.Errorf("read setup overview: %w", err)
+	}
+
 	stepRecords, err := s.repository.ListSetupSteps(ctx)
 	if err != nil {
 		return SetupStatus{}, fmt.Errorf("read setup status: %w", err)
 	}
 
 	status := SetupStatus{
-		Completed: true,
-		Steps:     make([]SetupStep, 0, len(stepRecords)),
+		Completed:        true,
+		Steps:            make([]SetupStep, 0, len(stepRecords)),
+		ImplementedSteps: []string{"owner"},
 	}
 
 	for _, stepRecord := range stepRecords {
@@ -107,7 +120,23 @@ func (s *SetupService) Status(ctx context.Context) (SetupStatus, error) {
 		status.Completed = false
 	}
 
+	status.InstallState = deriveInstallState(overview)
+	if status.InstallState == InstallStateFresh {
+		status.BlockingStep = "owner"
+	}
+
 	return status, nil
+}
+
+func deriveInstallState(overview db.SetupOverview) string {
+	switch {
+	case !overview.OwnerExists && !overview.OwnerStepCompleted:
+		return InstallStateFresh
+	case overview.OwnerExists && overview.OwnerStepCompleted:
+		return InstallStateConfigured
+	default:
+		return InstallStateRecoveryRequired
+	}
 }
 
 func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) (CreateOwnerResult, error) {
