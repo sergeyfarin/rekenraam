@@ -23,9 +23,27 @@ deploy/         Docker and deployment notes
 dist/           Local release output
 ```
 
+Area notes:
+
+- `backend/cmd/rekenraam/` is the server binary entrypoint.
+- `backend/internal/api/` holds HTTP handlers, middleware, and DTOs.
+- `backend/internal/app/` holds application/service logic.
+- `backend/internal/config/` holds configuration loading and validation.
+- `backend/internal/db/` holds SQLite connection and repository code.
+- `backend/migrations/` holds SQLite schema migrations.
+- `backend/testdata/` holds Go test fixtures.
+- `backend/var/` is for local SQLite databases and is ignored by Git.
+- `backend/internal/web/dist/` is copied SvelteKit output for Go embedding.
+- `frontend/src/` holds the SvelteKit app; `frontend/static/` holds static assets.
+- `api/bruno/` holds Bruno requests and environments.
+- `api/openapi/` holds the OpenAPI description.
+- `e2e/` holds Playwright browser tests.
+- `deploy/docker/` holds Dockerfile and Compose assets.
+- `dist/` is for generated release artifacts and is ignored by Git.
+
 ## Architecture Notes
 
-Active product requirements for the self-hosted finance app are documented in [docs/product-requirements.md](docs/product-requirements.md).
+Active product requirements and staged feature sequencing are documented in [docs/product-requirements.md](docs/product-requirements.md).
 
 Repo-wide conventions are documented in [docs/conventions.md](docs/conventions.md).
 
@@ -35,9 +53,13 @@ Accepted decision records are documented in [docs/adrs/](docs/adrs/).
 
 Developer workflow, commands, and commit conventions are documented in [docs/developer-workflow.md](docs/developer-workflow.md).
 
-Early architecture decisions are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md), with staged feature sequencing in [docs/feature-roadmap.md](docs/feature-roadmap.md).
+Early architecture decisions are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md).
 
 Keep these documents current when a feature introduces a durable product or technical constraint.
+
+## Documentation Shape
+
+The repo keeps durable product and architecture decisions in `docs/` and keeps local README files only when they describe generated or ignored directories. Day-to-day commands live here and in [docs/developer-workflow.md](docs/developer-workflow.md), so area folders do not each need their own repeated command notes.
 
 ## Run Development Servers
 
@@ -119,6 +141,8 @@ Use the `local` environment when the backend is running directly on `16888`.
 
 Use the `app` environment when testing the integrated binary or Docker app on `16888`.
 
+Keep Bruno requests grouped by feature area once real API routes exist.
+
 ## Test E2E
 
 Install e2e dependencies once:
@@ -138,6 +162,8 @@ For integrated app testing, run the single binary or Docker app on `16888`, then
 ```sh
 E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
+
+E2E tests should cover browser-level user journeys. Prefer backend or frontend unit tests for logic that does not need a real browser.
 
 ## Build Single Binary
 

@@ -9,7 +9,6 @@ Before changing durable behavior, read:
 - `docs/product-requirements.md`
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
-- `docs/feature-roadmap.md`
 - `docs/adrs/`
 
 ## Daily Commands
@@ -54,6 +53,15 @@ pnpm build
 ./scripts/test-e2e.sh
 E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
+
+## Area Notes
+
+- Backend code lives in `backend/`; run `go test ./...` there directly only when you intentionally want to bypass the wrapper script.
+- Frontend code lives in `frontend/`; SvelteKit builds static output that is copied into `backend/internal/web/dist/` for the single binary.
+- API examples and contract assets live in `api/`; use the Bruno `local` environment for the backend dev server and `app` for an integrated binary or Docker app.
+- Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
+- Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.
+- `backend/var/`, `backend/internal/web/dist/`, and `dist/` contain local or generated files. Their README files are placeholders that keep those ignored directories present in Git.
 
 ## Default Change Workflow
 
@@ -126,7 +134,7 @@ Workflow conventions:
 - Update `docs/product-requirements.md` when scope or durable product behavior changes.
 - Update `docs/conventions.md` when a repo-wide rule changes.
 - Add or update an ADR in `docs/adrs/` when a decision locks a long-lived tradeoff.
-- Update README or area-specific READMEs when developer commands or workflows change.
+- Update `README.md` and this document when developer commands, repo layout, or workflow expectations change. Avoid reintroducing area README files for short command notes; use them only when an area needs substantial local guidance.
 
 ## Archive Rules
 

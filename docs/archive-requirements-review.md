@@ -29,7 +29,7 @@ Before each phase starts:
 1. Read only the archive documents relevant to that phase.
 2. Classify each discovered requirement as `adopt now`, `adapt later`, `defer`, `drop`, or `ask owner`.
 3. Translate adopted ideas into current-stack terms.
-4. Update `docs/product-requirements.md`, `docs/feature-roadmap.md`, `docs/conventions.md`, or an ADR.
+4. Update `docs/product-requirements.md`, `docs/conventions.md`, or an ADR.
 5. Implement one backend and UI slice at a time, with the narrowest relevant validation.
 
 No archive behavior becomes active scope just because it existed before.

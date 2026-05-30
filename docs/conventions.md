@@ -6,7 +6,7 @@ This document fixes cross-cutting product, engineering, and workflow conventions
 
 - Active requirements live in `docs/product-requirements.md`.
 - Active architecture rules live in `docs/early-architecture-decisions.md`.
-- Active sequencing lives in `docs/feature-roadmap.md`.
+- Active sequencing lives in `docs/product-requirements.md`.
 - Archive review planning lives in `docs/archive-requirements-review.md`.
 - `.archive/` is historical reference only.
 
@@ -157,7 +157,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Requirements belong in `docs/product-requirements.md`.
 - Long-lived architectural constraints belong in `docs/early-architecture-decisions.md`.
-- Sequencing belongs in `docs/feature-roadmap.md`.
+- Sequencing belongs in `docs/product-requirements.md`.
 - Decision records belong in `docs/adrs/`.
 - Repo-wide agent guidance belongs in `AGENTS.md`.
-- Developer workflow notes belong in README files near the relevant tooling.
+- Developer workflow notes belong in `README.md` and `docs/developer-workflow.md` unless a tooling area needs substantial local guidance.
+- Placeholder README files are acceptable for ignored or generated directories that must remain present in Git.

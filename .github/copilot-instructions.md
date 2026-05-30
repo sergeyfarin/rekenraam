@@ -10,7 +10,6 @@ Before making durable product, architecture, or workflow changes, read:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/adrs/`
-- `docs/feature-roadmap.md`
 - `docs/developer-workflow.md`
 
 In case of conflict, earlier items in the list take precedence over later items. Accepted ADRs supersede all other documents. Agent guidance files (`AGENTS.md`, `.github/copilot-instructions.md`) are not product sources of truth; the documents above govern.
