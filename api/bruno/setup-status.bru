@@ -1,0 +1,22 @@
+meta {
+  name: setup status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/setup/status
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("returns setup status", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().steps).to.be.an('array');
+  });
+}

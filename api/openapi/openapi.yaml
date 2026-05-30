@@ -9,13 +9,199 @@ paths:
       responses:
         "200":
           description: Health response
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - status
-                properties:
-                  status:
-                    type: string
-                    example: ok
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/setup/status:
+    get:
+      summary: Read coarse setup progress
+      responses:
+        "200":
+          description: Setup progress
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupStatusResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/setup/owner:
+    post:
+      summary: Create the single owner account during first-run setup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOwnerRequest"
+      responses:
+        "201":
+          description: Owner created and setup advanced to the next step
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+            Set-Cookie:
+              schema:
+                type: string
+              description: Browser session cookie for the newly created owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOwnerResponse"
+        "400":
+          description: Invalid request body or validation failure
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Owner setup is already complete
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  headers:
+    XRequestID:
+      description: Server-generated request identifier for this response.
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+    SetupStep:
+      type: object
+      required:
+        - key
+        - status
+      properties:
+        key:
+          type: string
+          enum:
+            - owner
+            - book
+            - currencies
+            - system_accounts
+            - categories
+        status:
+          type: string
+          enum:
+            - pending
+            - completed
+    SetupStatusResponse:
+      type: object
+      required:
+        - completed
+        - steps
+      properties:
+        completed:
+          type: boolean
+        current_step:
+          type: string
+          enum:
+            - owner
+            - book
+            - currencies
+            - system_accounts
+            - categories
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SetupStep"
+    CreateOwnerRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Username for the single owner account.
+        password:
+          type: string
+          description: Password for the single owner account.
+      additionalProperties: false
+    OwnerResponse:
+      type: object
+      required:
+        - id
+        - username
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+    CreateOwnerResponse:
+      type: object
+      required:
+        - owner
+        - setup
+      properties:
+        owner:
+          $ref: "#/components/schemas/OwnerResponse"
+        setup:
+          $ref: "#/components/schemas/SetupStatusResponse"
+    ErrorBody:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - VALIDATION_FAILED
+            - UNAUTHENTICATED
+            - FORBIDDEN
+            - NOT_FOUND
+            - CONFLICT
+            - CSRF_INVALID
+            - RATE_LIMITED
+            - RESOURCE_BUSY
+            - SETUP_REQUIRED
+            - SETUP_ALREADY_COMPLETE
+            - INTERNAL_ERROR
+        message:
+          type: string
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorBody"

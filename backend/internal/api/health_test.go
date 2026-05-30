@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +14,7 @@ import (
 
 func TestHealth(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterRoutes(mux)
+	RegisterRoutes(mux, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	res := httptest.NewRecorder()

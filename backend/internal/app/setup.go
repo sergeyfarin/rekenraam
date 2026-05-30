@@ -1,0 +1,191 @@
+package app
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"golang.org/x/crypto/argon2"
+
+	"rekenraam/backend/internal/db"
+)
+
+const (
+	SetupStepStatusPending   = "pending"
+	SetupStepStatusCompleted = "completed"
+
+	argon2MemoryKiB   = 19 * 1024
+	argon2Iterations  = 2
+	argon2Parallelism = 1
+	argon2SaltLength  = 16
+	argon2KeyLength   = 32
+	sessionTokenBytes = 32
+)
+
+var ErrSetupAlreadyComplete = errors.New("setup already complete")
+
+type ValidationError struct {
+	Message string
+}
+
+func (e ValidationError) Error() string {
+	return e.Message
+}
+
+type SetupService struct {
+	repository *db.SetupRepository
+}
+
+type SetupStatus struct {
+	Completed   bool
+	CurrentStep string
+	Steps       []SetupStep
+}
+
+type SetupStep struct {
+	Key    string
+	Status string
+}
+
+type CreateOwnerInput struct {
+	Username string
+	Password string
+}
+
+type CreateOwnerResult struct {
+	Owner        Owner
+	SetupStatus  SetupStatus
+	SessionToken string
+}
+
+type Owner struct {
+	ID       int64
+	Username string
+}
+
+func NewSetupService(repository *db.SetupRepository) *SetupService {
+	return &SetupService{repository: repository}
+}
+
+func (s *SetupService) Status(ctx context.Context) (SetupStatus, error) {
+	stepRecords, err := s.repository.ListSetupSteps(ctx)
+	if err != nil {
+		return SetupStatus{}, fmt.Errorf("read setup status: %w", err)
+	}
+
+	status := SetupStatus{
+		Completed: true,
+		Steps:     make([]SetupStep, 0, len(stepRecords)),
+	}
+
+	for _, stepRecord := range stepRecords {
+		stepStatus := SetupStepStatusPending
+		if stepRecord.CompletedAt.Valid {
+			stepStatus = SetupStepStatusCompleted
+		} else if status.CurrentStep == "" {
+			status.CurrentStep = stepRecord.Key
+			status.Completed = false
+		}
+
+		if stepStatus != SetupStepStatusCompleted {
+			status.Completed = false
+		}
+
+		status.Steps = append(status.Steps, SetupStep{
+			Key:    stepRecord.Key,
+			Status: stepStatus,
+		})
+	}
+
+	if len(stepRecords) == 0 {
+		status.Completed = false
+	}
+
+	return status, nil
+}
+
+func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) (CreateOwnerResult, error) {
+	username := strings.TrimSpace(input.Username)
+	if username == "" {
+		return CreateOwnerResult{}, ValidationError{Message: "username is required"}
+	}
+	if input.Password == "" {
+		return CreateOwnerResult{}, ValidationError{Message: "password is required"}
+	}
+
+	passwordHash, err := hashPassword(input.Password)
+	if err != nil {
+		return CreateOwnerResult{}, fmt.Errorf("hash owner password: %w", err)
+	}
+
+	sessionToken, sessionTokenHash, err := newSessionToken()
+	if err != nil {
+		return CreateOwnerResult{}, fmt.Errorf("create owner session token: %w", err)
+	}
+
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+	ownerRecord, err := s.repository.CompleteOwnerSetup(ctx, db.CompleteOwnerSetupParams{
+		Username:         username,
+		PasswordHash:     passwordHash,
+		SessionTokenHash: sessionTokenHash,
+		CreatedAt:        createdAt,
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrOwnerExists) {
+			return CreateOwnerResult{}, ErrSetupAlreadyComplete
+		}
+
+		return CreateOwnerResult{}, fmt.Errorf("persist owner setup: %w", err)
+	}
+
+	setupStatus, err := s.Status(ctx)
+	if err != nil {
+		return CreateOwnerResult{}, fmt.Errorf("reload setup status: %w", err)
+	}
+
+	return CreateOwnerResult{
+		Owner: Owner{
+			ID:       ownerRecord.ID,
+			Username: ownerRecord.Username,
+		},
+		SetupStatus:  setupStatus,
+		SessionToken: sessionToken,
+	}, nil
+}
+
+func hashPassword(password string) (string, error) {
+	salt := make([]byte, argon2SaltLength)
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("generate argon2 salt: %w", err)
+	}
+
+	hash := argon2.IDKey([]byte(password), salt, argon2Iterations, argon2MemoryKiB, argon2Parallelism, argon2KeyLength)
+
+	return fmt.Sprintf(
+		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		argon2.Version,
+		argon2MemoryKiB,
+		argon2Iterations,
+		argon2Parallelism,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(hash),
+	), nil
+}
+
+func newSessionToken() (string, string, error) {
+	tokenBytes := make([]byte, sessionTokenBytes)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", "", fmt.Errorf("generate session token bytes: %w", err)
+	}
+
+	plainToken := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	tokenHash := sha256.Sum256([]byte(plainToken))
+
+	return plainToken, hex.EncodeToString(tokenHash[:]), nil
+}

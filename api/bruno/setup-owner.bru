@@ -1,0 +1,23 @@
+meta {
+  name: setup owner
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/setup/owner
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "owner",
+    "password": "change-me"
+  }
+}

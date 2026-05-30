@@ -60,7 +60,7 @@ func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
 
 	var body errorResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	assert.Equal(t, "INTERNAL_SERVER_ERROR", body.Error.Code)
+	assert.Equal(t, "INTERNAL_ERROR", body.Error.Code)
 	assert.Equal(t, "internal server error", body.Error.Message)
 
 	requestID := res.Header().Get(requestIDHeader)

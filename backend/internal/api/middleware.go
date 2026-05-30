@@ -29,6 +29,21 @@ type errorBody struct {
 	Message string `json:"message"`
 }
 
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeAPIError(w http.ResponseWriter, status int, code string, message string) {
+	writeJSON(w, status, errorResponse{
+		Error: errorBody{
+			Code:    code,
+			Message: message,
+		},
+	})
+}
+
 func RequestIDFromContext(ctx context.Context) string {
 	requestID, _ := ctx.Value(requestIDKey{}).(string)
 	return requestID
@@ -91,14 +106,7 @@ func withRecovery(logger *slog.Logger, next http.Handler) http.Handler {
 
 func writeInternalServerError(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(errorResponse{
-			Error: errorBody{
-				Code:    "INTERNAL_SERVER_ERROR",
-				Message: "internal server error",
-			},
-		})
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
 

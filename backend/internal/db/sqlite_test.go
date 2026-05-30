@@ -38,6 +38,22 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	).Scan(&message)
 	require.NoError(t, err)
 	assert.Equal(t, "hello from sqlite", message)
+
+	rows, err := database.QueryContext(
+		context.Background(),
+		"SELECT step_key FROM setup_steps ORDER BY step_key",
+	)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var stepKeys []string
+	for rows.Next() {
+		var stepKey string
+		require.NoError(t, rows.Scan(&stepKey))
+		stepKeys = append(stepKeys, stepKey)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
 }
 
 func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {

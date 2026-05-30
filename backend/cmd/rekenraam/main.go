@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"rekenraam/backend/internal/api"
+	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/config"
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/web"
@@ -29,7 +30,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler := api.NewHandler(logger, web.Handler())
+	setupRepository := db.NewSetupRepository(database)
+	setupService := app.NewSetupService(setupRepository)
+	handler := api.NewHandler(logger, web.Handler(), setupService)
 	server := &http.Server{
 		Addr:    cfg.HTTPAddr,
 		Handler: handler,
