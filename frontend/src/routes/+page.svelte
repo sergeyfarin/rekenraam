@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { createQuery } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
-  import { authSessionQueryOptions, logout, login } from '$lib/api/auth';
+  import { authSessionQueryOptions, login } from '$lib/api/auth';
   import { healthQueryOptions } from '$lib/api/health';
   import { createOwner, setupStatusQueryOptions } from '$lib/api/setup';
-  import { APIClientError } from '$lib/api/client';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import { m } from '$lib/paraglide/messages.js';
 
@@ -18,10 +19,9 @@
   let loginPassword = $state('');
   let ownerError = $state<unknown>(undefined);
   let loginError = $state<unknown>(undefined);
-  let logoutError = $state<unknown>(undefined);
   let ownerPending = $state(false);
   let loginPending = $state(false);
-  let logoutPending = $state(false);
+  let redirectingToApp = $state(false);
 
   const healthState = $derived.by<'loading' | 'success' | 'error'>(() => {
     if (healthQuery.isPending) {
@@ -116,6 +116,16 @@
     return m.install_gate_next_step({ step: nextStep.replaceAll('_', ' ') });
   });
 
+  $effect(() => {
+    if (!browser || pageState !== 'authenticated') {
+      redirectingToApp = false;
+      return;
+    }
+
+    redirectingToApp = true;
+    void goto('/app');
+  });
+
   async function refreshInstallGate() {
     await Promise.all([setupQuery.refetch(), sessionQuery.refetch(), healthQuery.refetch()]);
   }
@@ -125,7 +135,6 @@
 
     ownerPending = true;
     ownerError = undefined;
-    logoutError = undefined;
 
     try {
       const result = await createOwner({
@@ -149,7 +158,6 @@
 
     loginPending = true;
     loginError = undefined;
-    logoutError = undefined;
 
     try {
       await login({
@@ -166,31 +174,6 @@
     }
   }
 
-  async function handleLogout() {
-    logoutPending = true;
-    logoutError = undefined;
-
-    try {
-      let csrfToken = sessionQuery.data?.csrf_token;
-
-      if (!csrfToken) {
-        const refreshedSession = await sessionQuery.refetch();
-        csrfToken = refreshedSession.data?.csrf_token;
-      }
-
-      if (!csrfToken) {
-        throw new APIClientError({ status: 403, code: 'CSRF_INVALID' });
-      }
-
-      loginUsername = sessionQuery.data?.user?.username ?? loginUsername;
-      await logout(csrfToken);
-      await refreshInstallGate();
-    } catch (error) {
-      logoutError = error;
-    } finally {
-      logoutPending = false;
-    }
-  }
 </script>
 
 <main class="min-h-screen px-6 py-16 sm:px-10">
@@ -364,19 +347,17 @@
             <p class="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
               {m.install_gate_authenticated_signed_in({ username: sessionQuery.data?.user?.username ?? '' })}
             </p>
-            <p class="mt-3 text-sm leading-6 text-muted">{m.install_gate_authenticated_copy()}</p>
+            <p class="mt-3 text-sm leading-6 text-muted">
+              {redirectingToApp ? m.install_gate_authenticated_redirect() : m.install_gate_authenticated_copy()}
+            </p>
           </div>
 
-          <APIFormError error={logoutError} id="logout-form-error" />
-
-          <button
-            type="button"
-            class="inline-flex w-full items-center justify-center rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-60"
-            onclick={handleLogout}
-            disabled={logoutPending}
+          <a
+            href="/app"
+            class="inline-flex w-full items-center justify-center rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-surface-strong"
           >
-            {logoutPending ? m.install_gate_logout_pending() : m.install_gate_logout()}
-          </button>
+            {m.install_gate_open_app()}
+          </a>
         </div>
       {:else}
         <div class="space-y-4">
