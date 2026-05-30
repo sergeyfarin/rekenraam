@@ -3,19 +3,19 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
-  /api/hello:
+  /api/v1/health:
     get:
-      summary: Hello world API example
+      summary: Health check
       responses:
         "200":
-          description: Hello response
+          description: Health response
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - message
+                  - status
                 properties:
-                  message:
+                  status:
                     type: string
-                    example: hello from rekenraam backend
+                    example: ok

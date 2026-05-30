@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHello(t *testing.T) {
+func TestHealth(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/hello", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	res := httptest.NewRecorder()
 
 	mux.ServeHTTP(res, req)
@@ -24,5 +24,5 @@ func TestHello(t *testing.T) {
 	var body map[string]string
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 
-	assert.Equal(t, "hello from rekenraam backend", body["message"])
+	assert.Equal(t, "ok", body["status"])
 }

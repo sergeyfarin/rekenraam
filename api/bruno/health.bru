@@ -1,11 +1,11 @@
 meta {
-  name: hello
+  name: health
   type: http
   seq: 1
 }
 
 get {
-  url: {{baseUrl}}/api/hello
+  url: {{baseUrl}}/api/v1/health
   body: none
   auth: none
 }
@@ -15,8 +15,8 @@ headers {
 }
 
 tests {
-  test("returns hello", function () {
+  test("returns health", function () {
     expect(res.getStatus()).to.equal(200);
-    expect(res.getBody().message).to.equal("hello from rekenraam backend");
+    expect(res.getBody().status).to.equal("ok");
   });
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,6 +28,24 @@ func TestHandlerFallsBackToIndexForFrontendRoute(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, res.Code)
 	assert.Contains(t, res.Body.String(), "<!doctype html>")
+}
+
+func TestHandlerServesExistingAsset(t *testing.T) {
+	dist, err := fs.Sub(files, "dist")
+	require.NoError(t, err)
+
+	entries, err := fs.ReadDir(dist, "_app/immutable/entry")
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
+
+	assetPath := "/_app/immutable/entry/" + entries[0].Name()
+	req := httptest.NewRequest(http.MethodGet, assetPath, nil)
+	res := httptest.NewRecorder()
+
+	Handler().ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+	assert.NotEmpty(t, res.Body.String())
 }
 
 func TestHandlerReturnsNotFoundForMissingAsset(t *testing.T) {

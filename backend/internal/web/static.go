@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed dist
+//go:embed all:dist
 var files embed.FS
 
 func Handler() http.Handler {
@@ -18,25 +18,28 @@ func Handler() http.Handler {
 	}
 
 	return spaHandler{
-		files:      dist,
-		fileServer: http.FileServer(http.FS(dist)),
+		files: dist,
 	}
 }
 
 type spaHandler struct {
-	files      fs.FS
-	fileServer http.Handler
+	files fs.FS
 }
 
 func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestPath := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 	if requestPath == "." || requestPath == "" {
-		h.fileServer.ServeHTTP(w, r)
+		h.serveFile(w, r, "index.html")
 		return
 	}
 
 	if exists(h.files, requestPath) || exists(h.files, path.Join(requestPath, "index.html")) {
-		h.fileServer.ServeHTTP(w, r)
+		if exists(h.files, requestPath) {
+			h.serveFile(w, r, requestPath)
+			return
+		}
+
+		h.serveFile(w, r, path.Join(requestPath, "index.html"))
 		return
 	}
 
@@ -45,12 +48,14 @@ func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	indexRequest := r.Clone(r.Context())
-	indexRequest.URL.Path = "/"
-	h.fileServer.ServeHTTP(w, indexRequest)
+	h.serveFile(w, r, "index.html")
 }
 
 func exists(files fs.FS, name string) bool {
 	_, err := fs.Stat(files, name)
 	return err == nil
+}
+
+func (h spaHandler) serveFile(w http.ResponseWriter, r *http.Request, name string) {
+	http.ServeFileFS(w, r, h.files, name)
 }
