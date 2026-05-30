@@ -17,8 +17,20 @@ func Handler() http.Handler {
 		return http.NotFoundHandler()
 	}
 
+	return HandlerForFS(dist)
+}
+
+func HandlerForFS(filesystem fs.FS) http.Handler {
+	if filesystem == nil {
+		return http.NotFoundHandler()
+	}
+
+	if _, err := fs.Stat(filesystem, "index.html"); err != nil {
+		return http.NotFoundHandler()
+	}
+
 	return spaHandler{
-		files: dist,
+		files: filesystem,
 	}
 }
 
