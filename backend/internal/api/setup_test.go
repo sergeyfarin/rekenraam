@@ -79,6 +79,7 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.True(t, cookies[0].HttpOnly)
 	assert.Equal(t, http.SameSiteStrictMode, cookies[0].SameSite)
 	assert.False(t, cookies[0].Secure)
+	assert.Equal(t, int(app.SessionLifetime.Seconds()), cookies[0].MaxAge)
 
 	var passwordHash string
 	err := database.QueryRowContext(context.Background(), `SELECT password_hash FROM users WHERE username = ?`, "owner").Scan(&passwordHash)

@@ -350,6 +350,94 @@ func TestLoginRehashesLegacyPasswordHashOnSuccess(t *testing.T) {
 	assert.NotEqual(t, legacyHash, passwordHash)
 }
 
+func TestLoginValidatesRequest(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	bootstrapOwner(t, handler)
+
+	cases := []struct {
+		name    string
+		body    string
+		message string
+	}{
+		{"empty username", `{"username":"","password":"test-password"}`, "username is required"},
+		{"whitespace username", `{"username":"  ","password":"test-password"}`, "username is required"},
+		{"empty password", `{"username":"owner","password":""}`, "password is required"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, http.StatusBadRequest, res.Code)
+
+			var body errorResponse
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+			assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+			assert.Equal(t, tc.message, body.Error.Message)
+		})
+	}
+}
+
+func TestSuccessfulLoginPreservesIPThrottleState(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	bootstrapOwner(t, handler)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO login_throttles (scope_type, scope_key, failed_attempts, blocked_until, updated_at)
+		VALUES ('client_ip', '198.51.100.50', 3, NULL, '2000-01-01T00:00:00Z')
+	`)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "198.51.100.50:1234"
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var ipThrottleCount int
+	err = database.QueryRowContext(context.Background(), `SELECT COUNT(1) FROM login_throttles WHERE scope_type = 'client_ip' AND scope_key = '198.51.100.50'`).Scan(&ipThrottleCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, ipThrottleCount, "IP throttle should be preserved after successful login")
+
+	var usernameThrottleCount int
+	err = database.QueryRowContext(context.Background(), `SELECT COUNT(1) FROM login_throttles WHERE scope_type = 'username' AND scope_key = 'owner'`).Scan(&usernameThrottleCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, usernameThrottleCount, "username throttle should be cleared after successful login")
+}
+
+func TestLoginSetsSessionCookieWithMaxAge(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	bootstrapOwner(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	cookies := res.Result().Cookies()
+	require.Len(t, cookies, 1)
+	assert.Equal(t, sessionCookieName, cookies[0].Name)
+	assert.Equal(t, int(app.SessionLifetime.Seconds()), cookies[0].MaxAge)
+}
+
 func legacyPasswordHash(t *testing.T, password string) string {
 	t.Helper()
 
