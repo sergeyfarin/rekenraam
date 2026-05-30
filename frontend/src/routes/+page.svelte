@@ -26,27 +26,44 @@
   });
 </script>
 
-<main>
-  <h1>{m.app_name()}</h1>
-  <p data-state={healthState}>{healthMessage}</p>
+<main class="min-h-screen px-6 py-16 sm:px-10">
+  <section class="mx-auto grid max-w-4xl gap-8 lg:grid-cols-[1.25fr_0.9fr] lg:items-end">
+    <div class="space-y-5">
+      <p class="text-sm font-medium uppercase tracking-[0.24em] text-muted">Personal finance, rebuilt carefully</p>
+      <h1 class="max-w-2xl text-5xl font-semibold tracking-tight text-balance sm:text-6xl">
+        {m.app_name()}
+      </h1>
+      <p class="max-w-xl text-base leading-7 text-muted sm:text-lg">
+        UI foundations now run through semantic theme tokens so the first real screens can share one visual language across light and dark modes.
+      </p>
+    </div>
+
+    <div class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur">
+      <div class="mb-5 flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-medium text-muted">Backend handshake</p>
+          <p class="text-xs uppercase tracking-[0.2em] text-muted">Foundation check</p>
+        </div>
+        <span
+          class:text-danger={healthState === 'error'}
+          class:bg-danger-soft={healthState === 'error'}
+          class:text-accent={healthState !== 'error'}
+          class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
+          style:background-color={healthState === 'error' ? 'var(--color-danger-soft)' : 'color-mix(in oklab, var(--color-accent) 12%, transparent)'}
+        >
+          {healthState}
+        </span>
+      </div>
+
+      <div class="rounded-2xl border border-border bg-surface-strong/60 p-4">
+        <p
+          class:text-danger={healthState === 'error'}
+          class:text-foreground={healthState !== 'error'}
+          class="text-sm leading-6"
+        >
+          {healthMessage}
+        </p>
+      </div>
+    </div>
+  </section>
 </main>
-
-<style>
-  main {
-    min-height: 100vh;
-    display: grid;
-    place-content: center;
-    gap: 1rem;
-    font-family: system-ui, sans-serif;
-    text-align: center;
-  }
-
-  h1,
-  p {
-    margin: 0;
-  }
-
-  p[data-state='error'] {
-    color: #8a1c1c;
-  }
-</style>

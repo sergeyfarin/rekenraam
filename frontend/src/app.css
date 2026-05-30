@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  --font-sans: "Inter Variable", "Inter", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", "SF Mono", monospace;
+
+  --color-background: oklch(0.98 0.006 95);
+  --color-foreground: oklch(0.22 0.015 85);
+  --color-surface: oklch(0.995 0.004 95);
+  --color-surface-strong: oklch(0.94 0.01 90);
+  --color-border: oklch(0.88 0.008 90);
+  --color-muted: oklch(0.55 0.016 75);
+  --color-accent: oklch(0.56 0.12 160);
+  --color-accent-foreground: oklch(0.98 0.01 160);
+  --color-danger: oklch(0.56 0.2 25);
+  --color-danger-soft: oklch(0.93 0.03 25);
+  --shadow-panel: 0 24px 60px -28px rgb(35 31 24 / 0.24);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-background: oklch(0.2 0.012 85);
+    --color-foreground: oklch(0.93 0.01 95);
+    --color-surface: oklch(0.26 0.012 85);
+    --color-surface-strong: oklch(0.32 0.014 85);
+    --color-border: oklch(0.38 0.012 85);
+    --color-muted: oklch(0.76 0.015 85);
+    --color-accent: oklch(0.7 0.12 160);
+    --color-accent-foreground: oklch(0.19 0.01 160);
+    --color-danger: oklch(0.68 0.18 25);
+    --color-danger-soft: oklch(0.3 0.06 25);
+    --shadow-panel: 0 30px 80px -32px rgb(0 0 0 / 0.55);
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --color-background: var(--color-background);
+  --color-foreground: var(--color-foreground);
+  --color-surface: var(--color-surface);
+  --color-surface-strong: var(--color-surface-strong);
+  --color-border: var(--color-border);
+  --color-muted: var(--color-muted);
+  --color-accent: var(--color-accent);
+  --color-accent-foreground: var(--color-accent-foreground);
+  --color-danger: var(--color-danger);
+  --color-danger-soft: var(--color-danger-soft);
+}
+
+@layer base {
+  html {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground font-sans;
+    background-image:
+      radial-gradient(circle at top, color-mix(in oklab, var(--color-accent) 14%, transparent) 0%, transparent 36%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-surface) 45%, transparent) 0%, transparent 100%);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 32%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 72%, white);
+    outline-offset: 3px;
+  }
+}
