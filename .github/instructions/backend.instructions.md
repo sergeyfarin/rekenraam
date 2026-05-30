@@ -16,6 +16,8 @@ description: "Use when editing Go backend code, migrations, repositories, servic
 - Built-in database records must use stable keys/codes for localized display labels instead of English text as the only source of truth.
 - First-run setup creates the single owner with a username and password.
 - Avoid introducing assumptions that depend on cloud services or external identity providers.
+- Browser sessions use opaque `HttpOnly` cookie tokens, hashed session storage, `SameSite=Strict`, and CSRF validation for mutating API requests.
+- Public deployments require HTTPS. Localhost development may use HTTP. LAN/private HTTPS can be provided by a reverse proxy or app-configured certificate and key.
 - If a backend change adds a durable domain rule, update `docs/product-requirements.md`, `docs/conventions.md`, or `docs/early-architecture-decisions.md` as appropriate.
 
 ## Go Conventions

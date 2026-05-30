@@ -33,6 +33,8 @@ Primary product goal:
 - First-run setup is browser-based and creates the single owner with a username and password.
 - Public VPS deployments require HTTPS and local authentication.
 - Public VPS deployment with real financial data requires MFA; public deployment may be delayed until MFA is implemented.
+- Localhost development may use HTTP. LAN/private deployments should strongly prefer HTTPS through a reverse proxy or app-provided certificate and key configuration.
+- Browser-warning-free LAN/private HTTPS requires either a trusted certificate for a real domain or installing a trusted local certificate authority on client devices.
 - SQLite database encryption is deferred for early local use, but the product should document that encrypted-at-rest storage may be needed before recommending higher-risk deployments.
 - The first non-negotiable report set is net worth, cashflow, and spending by category.
 - The first mandatory export formats are CSV export of core ledger data and QIF export.

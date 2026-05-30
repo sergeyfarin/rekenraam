@@ -105,10 +105,15 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Local authentication must exist before real data entry.
 - First-run setup is browser-based and creates the single owner with a username and password.
 - Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.
-- Cookie sessions set `SameSite=Strict` for CSRF mitigation. Revisit if same-site navigation flows require relaxing to `SameSite=Lax` in a later ADR.
+- Session tokens are opaque random values. Store only token hashes in SQLite.
+- Session cookies use `HttpOnly`, `SameSite=Strict`, `Path=/`, and no `Domain`. Use `Secure` whenever the app is served over HTTPS. HTTPS deployments should use a `__Host-` prefixed cookie name once auth implementation lands.
+- CSRF protection for mutating API requests uses SameSite cookies as a baseline plus server-side `Origin` validation and a session-bound or signed CSRF token sent in a custom header such as `X-CSRF-Token`.
+- `GET`, `HEAD`, and `OPTIONS` endpoints must not mutate durable state.
 - Password hashing uses **`golang.org/x/crypto/bcrypt`**. Never store plaintext or weakly hashed passwords.
 - Public deployment requires HTTPS and explicit operator guidance.
 - Public VPS deployment with real financial data requires MFA.
+- Localhost development may use HTTP.
+- LAN/private-network deployments should use HTTPS and may use either a reverse proxy or app-provided certificate and key configuration. Browser-warning-free LAN/private HTTPS requires either a real trusted certificate for a domain or installing a trusted local certificate authority on every client device.
 - Local-network use may ship before MFA if authentication and operator guidance are clear.
 - SQLite database encryption is deferred for early local use, but docs must explain when encrypted-at-rest storage may be needed.
 - Docker Compose must package the same app shape as the single binary.

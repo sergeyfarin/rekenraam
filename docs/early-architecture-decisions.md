@@ -135,6 +135,8 @@ Early default:
 - Use browser-based first-run setup to create the owner username and password.
 - Put all privileged operations behind authentication.
 - Keep auth local to the deployment unless a future decision introduces external identity providers.
+- Use same-origin browser sessions with `HttpOnly` cookies, hashed session tokens in SQLite, and CSRF protection on mutating API requests.
+- Public deployments require HTTPS. Localhost development may use HTTP. LAN/private deployments should use HTTPS through either a reverse proxy or app-provided certificate and key configuration.
 
 Multi-user households, sharing, and book permissions can be added later. Avoid names that imply there can only ever be one global user or one global book.
 
