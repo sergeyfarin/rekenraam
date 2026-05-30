@@ -120,12 +120,13 @@ Do not lock these yet:
 
 Lock these before the first related implementation slice:
 
-- Migration transaction behavior and the exact connection-pragmas installation point.
 - Exact setup-progress persistence shape and password-reset behavior.
 - Translation catalog file format, built-in data label keys, and locale fallback behavior.
 - Theme token names, persistence key, and light/dark token minimums.
-- API error envelope and request identifier behavior.
-- Money quantity type, scale limits, and commodity code validation.
+- OpenAPI source-of-truth workflow, generation/check command, and frontend type generation path.
+- Initial structured error code set and request identifier behavior.
+- Money representation limits: maximum quantity scale and commodity code validation.
+- Draft versus posted lifecycle details; physical delete only for never-posted drafts.
 
 ## Consolidated Carry-Forward From FastAPI Pass
 

@@ -42,6 +42,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must be localization-ready.
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
+- Physical delete is allowed only for never-posted drafts. Posted financial records must use void, archive, or corrective-entry workflows even when unreconciled.
 - Soft-delete column convention and the specific schema pattern (e.g., `deleted_at` vs `archived_at` vs a status enum) will be documented when first introduced in a migration. Consistency across tables is required; do not mix approaches.
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
@@ -59,8 +60,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Business rules belong in application services.
 - Database access belongs behind repository-style functions or methods.
 - Error responses should be structured, consistent, and safe for user display.
-- Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client.
+- Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client. Define the initial validation, authentication, authorization, conflict, not-found, busy/locked, and internal error codes before the first stable domain endpoint.
 - Public request and response shapes should be documented in OpenAPI as endpoints become real.
+- Lock OpenAPI source-of-truth workflow and generation/check commands before the first stable domain endpoint. Frontend API types must be generated from the checked OpenAPI artifact.
 - Date fields in request and response bodies use ISO 8601 (`YYYY-MM-DD`) for calendar dates and RFC 3339 for timestamps, consistent with the data layer convention.
 - List endpoints that can return large result sets must use **cursor-based pagination**, not offset pagination. Cursors must be stable under concurrent inserts. Return `next_cursor` in the response; a missing or null `next_cursor` means the last page.
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.

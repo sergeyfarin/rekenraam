@@ -211,8 +211,9 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
 ## Decisions To Make Before Specific Features
 
 - Before accounts: account type list, account tree rules, opening-balance behavior, and default book setup.
-- Before commodities: currency metadata source, custom commodity codes, display scale, and precision limits.
-- Before transactions: posting schema, balancing rules, transfer representation, split editing, correction behavior, and import-source metadata.
+- Before commodities: currency metadata source, custom commodity codes, display scale, precision limits, maximum quantity scale, and commodity-code validation.
+- Before first real `/api/v1` domain endpoints: OpenAPI source workflow, generation/check command, initial structured error code set, and request ID middleware details.
+- Before transactions: posting schema, balancing rules, transfer representation, split editing, draft versus posted lifecycle, correction behavior, and import-source metadata.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
 - Before budgets: period semantics, category/account mapping, rollover rules, and whether budgets are book-wide or account-scoped.
 - Before reports: cashflow basis, date range inclusivity, multi-currency totals, and whether report runs need snapshots.

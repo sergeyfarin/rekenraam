@@ -43,10 +43,34 @@ Primary product goal:
 
 ## Decisions To Confirm Before Implementation
 
-- Initial first-class UI language set beyond English.
 - Password reset approach for a single-owner self-hosted app.
-- Whether export scope should include full structured JSON in the first export milestone.
-- Whether future attachments should use SQLite, filesystem storage, or pluggable object storage.
+
+## Pre-Domain Readiness Checklist
+
+These decisions must be locked before the first real domain slice beyond setup/auth starts:
+
+- Money representation limits: maximum `quantity_scale`, allowed `commodity_code` formats, custom commodity identifiers, and validation behavior for values that exceed limits.
+- Draft and posted lifecycle: physical delete is allowed only for never-posted drafts. Once a financial record is posted, use void, archive, or correction workflows even when it is unreconciled.
+- API contract workflow: choose OpenAPI-first or code-first generated OpenAPI, add the generation/check command, and wire it into the frontend `openapi-typescript` workflow before real `/api/v1` endpoints become stable.
+- Initial structured error code set: validation, authentication, authorization, conflict, not found, rate/lock/busy, and internal error codes.
+- Request ID middleware behavior: request-scoped UUID creation, incoming request ID trust/override policy, logging fields, and `X-Request-ID` response behavior.
+
+Already locked before domain work:
+
+- Static frontend routing: Go serves real assets, returns 404 for unknown `/api/` and missing asset-like paths, and falls back to the SvelteKit app shell for extensionless non-API routes.
+- SQLite connection, migration, busy-timeout, WAL, and backup behavior.
+- Docker runtime base image.
+- Password hashing and staged first-run setup.
+
+These can wait until the related feature slice:
+
+- First non-English UI language.
+- Full structured JSON export scope.
+- Attachment storage.
+- Report snapshots.
+- Import formats beyond CSV.
+- Investment, pricing, and price-correction semantics.
+- Multi-user or household model.
 
 ## Must-Have Cross-Cutting Requirements
 
@@ -212,6 +236,9 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - Data lifecycle rules: void, archive, correct, restore, and retention semantics.
 - Import priorities: which file formats arrive first after CSV.
 - Export guarantees: minimum export formats and whether exports should include settings, reports, and metadata.
+- API contract workflow: OpenAPI source of truth, generation command, frontend type generation, and CI check behavior.
+- Initial structured API error code set and request ID behavior.
+- Money representation limits: maximum scale and commodity code validation.
 - Backup policy: backup location, restore expectations, and Docker volume guidance.
 - SQLite backup implementation: online backup API first, `VACUUM INTO` where useful, and no raw live file-copy guidance as the normal path.
 - Database encryption policy: encryption is deferred, but risks and future requirements must be documented.
@@ -244,8 +271,8 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 
 These are important and should be resolved before the related feature slices begin.
 
+- What password-reset flow makes sense for a self-hosted single-owner deployment?
 - Which export scope should be available from the first export milestone beyond core ledger CSV and QIF, such as full structured JSON export of settings and metadata?
 - Which first-class UI languages should ship after the English translation boundary is in place?
-- What password-reset flow makes sense for a self-hosted single-owner deployment?
 - When attachments eventually enter scope, should they live in SQLite, the filesystem, or pluggable object storage?
 - Which mobile-heavy workflows deserve dedicated optimization first after the baseline responsive experience ships?
