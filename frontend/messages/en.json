@@ -2,5 +2,14 @@
   "app_name": "Rekenraam",
   "checking_backend_health": "Checking backend health...",
   "backend_status": "Backend status: {status}",
-  "backend_status_unavailable": "Backend status unavailable"
+  "backend_status_unavailable": "Backend status unavailable",
+  "hero_eyebrow": "Personal finance, rebuilt carefully",
+  "hero_foundation_copy": "UI foundations now run through semantic theme tokens so the first real screens can share one visual language across light and dark modes.",
+  "backend_handshake": "Backend handshake",
+  "foundation_check": "Foundation check",
+  "theme_label": "Theme",
+  "theme_name_light": "Light",
+  "theme_name_dark": "Dark",
+  "theme_switch_to_light": "Switch to light theme",
+  "theme_switch_to_dark": "Switch to dark theme"
 }

@@ -19,8 +19,28 @@
   --shadow-panel: 0 24px 60px -28px rgb(35 31 24 / 0.24);
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-background: oklch(0.2 0.012 85);
+  --color-foreground: oklch(0.93 0.01 95);
+  --color-surface: oklch(0.26 0.012 85);
+  --color-surface-strong: oklch(0.32 0.014 85);
+  --color-border: oklch(0.38 0.012 85);
+  --color-muted: oklch(0.76 0.015 85);
+  --color-accent: oklch(0.7 0.12 160);
+  --color-accent-foreground: oklch(0.19 0.01 160);
+  --color-danger: oklch(0.68 0.18 25);
+  --color-danger-soft: oklch(0.3 0.06 25);
+  --shadow-panel: 0 30px 80px -32px rgb(0 0 0 / 0.55);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     color-scheme: dark;
 
     --color-background: oklch(0.2 0.012 85);
