@@ -42,18 +42,14 @@ func NewSetupRepository(database *sql.DB) *SetupRepository {
 }
 
 func (r *SetupRepository) ReadSetupOverview(ctx context.Context) (SetupOverview, error) {
-	var ownerCount int
-	if err := r.database.QueryRowContext(ctx, `SELECT COUNT(1) FROM users WHERE is_owner = 1`).Scan(&ownerCount); err != nil {
-		return SetupOverview{}, fmt.Errorf("count owners: %w", err)
-	}
-
-	var ownerStepCount int
-	if err := r.database.QueryRowContext(ctx, `
-		SELECT COUNT(1)
-		FROM setup_steps
-		WHERE step_key = 'owner' AND completed_at IS NOT NULL
-	`).Scan(&ownerStepCount); err != nil {
-		return SetupOverview{}, fmt.Errorf("read owner setup step: %w", err)
+	var ownerCount, ownerStepCount int
+	err := r.database.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(1) FROM users WHERE is_owner = 1),
+			(SELECT COUNT(1) FROM setup_steps WHERE step_key = 'owner' AND completed_at IS NOT NULL)
+	`).Scan(&ownerCount, &ownerStepCount)
+	if err != nil {
+		return SetupOverview{}, fmt.Errorf("read setup overview: %w", err)
 	}
 
 	return SetupOverview{
