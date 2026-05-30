@@ -18,6 +18,7 @@ type RecoveryService struct {
 	database    *sql.DB
 	databaseURL string
 	repository  *db.RecoveryRepository
+	now         func() time.Time
 }
 
 type RecoverOwnerInput struct {
@@ -35,6 +36,7 @@ func NewRecoveryService(database *sql.DB, databaseURL string, repository *db.Rec
 		database:    database,
 		databaseURL: databaseURL,
 		repository:  repository,
+		now:         time.Now,
 	}
 }
 
@@ -47,7 +49,7 @@ func (s *RecoveryService) RecoverOwnerAccess(ctx context.Context, input RecoverO
 	if !input.AllowNoBackup {
 		var err error
 		if backupPath == "" {
-			backupPath, err = defaultRecoveryBackupPath(s.databaseURL, time.Now().UTC())
+			backupPath, err = defaultRecoveryBackupPath(s.databaseURL, s.now().UTC())
 			if err != nil {
 				return RecoverOwnerResult{}, fmt.Errorf("build recovery backup path: %w", err)
 			}
@@ -66,7 +68,7 @@ func (s *RecoveryService) RecoverOwnerAccess(ctx context.Context, input RecoverO
 		return RecoverOwnerResult{}, fmt.Errorf("hash recovery password: %w", err)
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := s.now().UTC().Format(time.RFC3339)
 	if err := s.repository.ResetOwnerPasswordAndRevokeSessions(ctx, db.ResetOwnerAccessParams{
 		PasswordHash: passwordHash,
 		UpdatedAt:    now,

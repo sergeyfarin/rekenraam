@@ -118,6 +118,7 @@ func writeSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   r.TLS != nil,
+		MaxAge:   int(app.SessionLifetime.Seconds()),
 	})
 }
 

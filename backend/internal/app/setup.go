@@ -30,7 +30,7 @@ const (
 	argon2SaltLength  = 16
 	argon2KeyLength   = 32
 	sessionTokenBytes = 32
-	sessionLifetime   = 30 * 24 * time.Hour
+	SessionLifetime   = 30 * 24 * time.Hour
 )
 
 var ErrSetupAlreadyComplete = errors.New("setup already complete")
@@ -223,5 +223,5 @@ func newSessionToken() (string, string, error) {
 }
 
 func sessionExpiresAt(now time.Time) string {
-	return now.Add(sessionLifetime).UTC().Format(time.RFC3339)
+	return now.Add(SessionLifetime).UTC().Format(time.RFC3339)
 }

@@ -26,6 +26,9 @@ var (
 const (
 	loginThrottleMaxFailures = 5
 	loginThrottleWindow      = 15 * time.Minute
+
+	throttleScopeUsername = "username"
+	throttleScopeClientIP = "client_ip"
 )
 
 type AuthService struct {
@@ -50,7 +53,6 @@ type parsedPasswordHash struct {
 type SessionStatus struct {
 	Authenticated bool
 	User          *Owner
-	CSRFToken     string
 }
 
 type LoginInput struct {
@@ -91,7 +93,6 @@ func (s *AuthService) Session(ctx context.Context, token string) (SessionStatus,
 			ID:       userRecord.ID,
 			Username: userRecord.Username,
 		},
-		CSRFToken: csrfTokenForSession(token),
 	}, nil
 }
 
@@ -312,6 +313,12 @@ func (s *AuthService) recordLoginFailure(ctx context.Context, scopes []loginThro
 
 func (s *AuthService) clearLoginFailures(ctx context.Context, scopes []loginThrottleScope) error {
 	for _, scope := range scopes {
+		// Only clear the username-scoped throttle on success. The IP-scoped throttle
+		// is intentionally kept: clearing it on a successful login from the same IP
+		// would un-block an attacker sharing a NAT address with the legitimate user.
+		if scope.ScopeType != throttleScopeUsername {
+			continue
+		}
 		if err := s.repository.DeleteLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey); err != nil {
 			return fmt.Errorf("delete login throttle: %w", err)
 		}
@@ -343,9 +350,8 @@ func (s *AuthService) isScopeBlocked(ctx context.Context, scope loginThrottleSco
 		return true, nil
 	}
 
-	if err := s.repository.DeleteLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey); err != nil {
-		return false, fmt.Errorf("clear expired login throttle: %w", err)
-	}
+	// Best-effort cleanup: stale throttle record delete failure must not block login.
+	_ = s.repository.DeleteLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey)
 
 	return false, nil
 }
@@ -404,10 +410,10 @@ func (s *AuthService) recordScopeLoginFailure(ctx context.Context, scope loginTh
 }
 
 func loginThrottleScopes(username string, clientIP string) []loginThrottleScope {
-	scopes := []loginThrottleScope{{ScopeType: "username", ScopeKey: username}}
+	scopes := []loginThrottleScope{{ScopeType: throttleScopeUsername, ScopeKey: username}}
 	clientIP = strings.TrimSpace(clientIP)
 	if clientIP != "" {
-		scopes = append(scopes, loginThrottleScope{ScopeType: "client_ip", ScopeKey: clientIP})
+		scopes = append(scopes, loginThrottleScope{ScopeType: throttleScopeClientIP, ScopeKey: clientIP})
 	}
 
 	return scopes
@@ -430,9 +436,4 @@ func readArgonParameter(segment string, expectedKey string) (int, error) {
 func hashSessionToken(token string) string {
 	tokenHash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(tokenHash[:])
-}
-
-func csrfTokenForSession(token string) string {
-	tokenHash := sha256.Sum256([]byte("csrf:" + token))
-	return base64.RawURLEncoding.EncodeToString(tokenHash[:])
 }

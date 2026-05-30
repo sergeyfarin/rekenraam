@@ -36,7 +36,8 @@ type loginResponse struct {
 
 func sessionStatus(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		status, err := authService.Session(r.Context(), readSessionToken(r))
+		token := readSessionToken(r)
+		status, err := authService.Session(r.Context(), token)
 		if err != nil {
 			logger.ErrorContext(r.Context(), "read auth session", slog.Any("err", err))
 			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
@@ -49,7 +50,7 @@ func sessionStatus(logger *slog.Logger, authService *app.AuthService) http.Handl
 				ID:       status.User.ID,
 				Username: status.User.Username,
 			}
-			response.CSRFToken = status.CSRFToken
+			response.CSRFToken = deriveCSRFToken(token)
 		}
 
 		writeJSON(w, http.StatusOK, response)
@@ -95,7 +96,7 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 }
 
 func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
-	return withAuthenticatedMutationProtection(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return withCSRFProtection(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := authService.Logout(r.Context(), readSessionToken(r)); err != nil {
 			logger.ErrorContext(r.Context(), "logout owner", slog.Any("err", err))
 			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
@@ -129,7 +130,10 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func withAuthenticatedMutationProtection(authService *app.AuthService, options HandlerOptions, next http.Handler) http.HandlerFunc {
+// withCSRFProtection validates Origin and CSRF token for requests that carry a session cookie.
+// Requests without a session cookie (unauthenticated) pass through; the wrapped handler is
+// responsible for deciding whether authentication is required.
+func withCSRFProtection(authService *app.AuthService, options HandlerOptions, next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := readSessionToken(r)
 		if token == "" {

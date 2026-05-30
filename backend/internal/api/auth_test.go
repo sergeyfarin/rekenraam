@@ -245,8 +245,7 @@ func TestLoginUsesForwardedClientIPHeadersWhenTrusted(t *testing.T) {
 
 	require.Equal(t, http.StatusTooManyRequests, blockedRes.Code)
 
-	rebuiltHandler := newAuthHandlerForDatabaseWithOptions(database, HandlerOptions{TrustProxyHeaders: true})
-	rebuiltHandler = newAuthHandlerForDatabaseWithOptions(database, HandlerOptions{
+	rebuiltHandler := newAuthHandlerForDatabaseWithOptions(database, HandlerOptions{
 		TrustProxyHeaders: true,
 		TrustedProxyCIDRs: []netip.Prefix{netip.MustParsePrefix("203.0.113.0/24")},
 	})
