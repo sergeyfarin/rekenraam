@@ -7,24 +7,26 @@ export type APIErrorCode = components['schemas']['ErrorBody']['code'];
 export class APIClientError extends Error {
   status: number;
   code?: APIErrorCode;
+  detail?: string;
   requestId?: string;
 
   constructor({
     status,
-    message,
     code,
+    detail,
     requestId
   }: {
     status: number;
-    message: string;
     code?: APIErrorCode;
+    detail?: string;
     requestId?: string;
   }) {
-    super(message);
+    super(code ?? 'API_REQUEST_FAILED');
 
     this.name = 'APIClientError';
     this.status = status;
     this.code = code;
+    this.detail = detail;
     this.requestId = requestId;
   }
 }
@@ -39,16 +41,24 @@ export const apiClient = createClient<paths>({
 
 export function toAPIClientError(
   response: Response | undefined,
-  error: unknown,
-  fallbackMessage: string
+  error: unknown
 ): APIClientError {
   const errorBody = isAPIErrorResponse(error) ? error.error : undefined;
 
   return new APIClientError({
     status: response?.status ?? 0,
-    message: errorBody?.message ?? fallbackMessage,
     code: errorBody?.code,
+    detail: errorBody?.message,
     requestId: response?.headers.get('X-Request-ID') ?? undefined
+  });
+}
+
+export function toNetworkError(error: unknown): APIClientError {
+  const detail = error instanceof Error ? error.message : undefined;
+
+  return new APIClientError({
+    status: 0,
+    detail
   });
 }
 

@@ -1,5 +1,5 @@
 import type { components } from '$lib/api/schema';
-import { APIClientError, apiClient, toAPIClientError } from '$lib/api/client';
+import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$lib/api/client';
 
 export type HealthResponse = components['schemas']['HealthResponse'];
 
@@ -21,12 +21,12 @@ async function getHealth(): Promise<HealthResponse> {
       return data;
     }
 
-    throw toAPIClientError(response, error, 'Unable to read backend health.');
+    throw toAPIClientError(response, error);
   } catch (error) {
     if (error instanceof APIClientError) {
       throw error;
     }
 
-    throw new Error('Unable to read backend health.');
+    throw toNetworkError(error);
   }
 }
