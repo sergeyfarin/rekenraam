@@ -17,6 +17,8 @@
   "api_error_internal_error": "Something went wrong on the server. Try again.",
   "api_error_network": "The server could not be reached. Check the connection and try again.",
   "api_error_generic": "Something went wrong. Try again.",
+  "form_error_title": "We couldn't complete that action.",
+  "form_error_request_id": "Request ID: {requestId}",
   "home_health_checking": "Checking backend health...",
   "home_health_status": "Backend status: {status}",
   "home_health_unavailable": "Backend status unavailable",
