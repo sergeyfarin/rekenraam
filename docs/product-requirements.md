@@ -52,7 +52,7 @@ These are locked before implementation starts:
 - First-run setup starts with `GET /api/v1/setup/status` and `POST /api/v1/setup/owner`.
 - Setup progress is persisted as named steps, starting with `owner`, `book`, `currencies`, `system_accounts`, and `categories`, rather than a single boolean.
 - Setup status must expose a derived install state so future seeded setup steps do not block current installs before their APIs and UI exist.
-- Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path that requires server or database access and invalidates existing sessions.
+- Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path that requires server or database access, creates a verified backup by default, supports an explicit emergency override, and invalidates existing sessions.
 - Stable `/api/v1` endpoints are OpenAPI-first with `api/openapi/openapi.yaml` as the checked source of truth.
 - Initial API error codes are `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`, and `INTERNAL_ERROR`.
 - Request IDs are server-generated UUIDs, returned in `X-Request-ID`, and included in logs.
@@ -111,7 +111,9 @@ These apply across all feature phases.
 - Local authentication is required before real financial data entry ships.
 - The initial auth flow is browser first-run setup with owner username and password.
 - Password hashing must use Argon2id with self-describing stored hashes and upgradeable parameters.
+- Owner login must throttle repeated failed attempts by username and client IP in a way that survives process restarts and should upgrade stale Argon2id password hashes on successful login.
 - Public VPS deployments must assume an untrusted network.
+- Forwarded proxy headers must be ignored unless the deployment explicitly enables trusted proxy handling and limits trusted peers to an allowlisted proxy CIDR set.
 - All privileged operations must require authentication.
 - Session, audit, and request attribution should be designed in from the first real user flows.
 

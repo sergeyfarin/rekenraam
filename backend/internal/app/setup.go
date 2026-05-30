@@ -30,6 +30,7 @@ const (
 	argon2SaltLength  = 16
 	argon2KeyLength   = 32
 	sessionTokenBytes = 32
+	sessionLifetime   = 30 * 24 * time.Hour
 )
 
 var ErrSetupAlreadyComplete = errors.New("setup already complete")
@@ -158,12 +159,14 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 		return CreateOwnerResult{}, fmt.Errorf("create owner session token: %w", err)
 	}
 
-	createdAt := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
+	createdAt := now.Format(time.RFC3339)
 	ownerRecord, err := s.repository.CompleteOwnerSetup(ctx, db.CompleteOwnerSetupParams{
 		Username:         username,
 		PasswordHash:     passwordHash,
 		SessionTokenHash: sessionTokenHash,
 		CreatedAt:        createdAt,
+		SessionExpiresAt: sessionExpiresAt(now),
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrOwnerExists) {
@@ -217,4 +220,8 @@ func newSessionToken() (string, string, error) {
 	tokenHash := sha256.Sum256([]byte(plainToken))
 
 	return plainToken, hex.EncodeToString(tokenHash[:]), nil
+}
+
+func sessionExpiresAt(now time.Time) string {
+	return now.Add(sessionLifetime).UTC().Format(time.RFC3339)
 }

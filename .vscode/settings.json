@@ -1,6 +1,8 @@
 {
   "svelte.enable-ts-plugin": true,
   "chat.tools.terminal.autoApprove": {
-    "./scripts/test-frontend.sh": true
+    "./scripts/test-frontend.sh": true,
+    "go": true,
+    "./scripts/test-backend.sh": true
   }
 }

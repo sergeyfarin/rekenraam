@@ -13,6 +13,11 @@ type healthResponse struct {
 }
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
+
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, HandlerOptions{})
+}
+
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -21,6 +26,11 @@ func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.S
 	mux.HandleFunc("GET /api/v1/health", health)
 	mux.HandleFunc("GET /api/v1/setup/status", setupStatus(logger, setupService))
 	mux.HandleFunc("POST /api/v1/setup/owner", createOwner(logger, setupService))
+	if authService != nil {
+		mux.HandleFunc("GET /api/v1/auth/session", sessionStatus(logger, authService))
+		mux.HandleFunc("POST /api/v1/auth/login", login(logger, authService, options))
+		mux.HandleFunc("POST /api/v1/auth/logout", logout(logger, authService, options))
+	}
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {

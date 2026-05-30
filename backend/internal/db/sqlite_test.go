@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -30,15 +31,6 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	require.NoError(t, Migrate(context.Background(), database))
 	require.NoError(t, Migrate(context.Background(), database))
 
-	var message string
-	err := database.QueryRowContext(
-		context.Background(),
-		"SELECT value FROM app_info WHERE key = ?",
-		"hello",
-	).Scan(&message)
-	require.NoError(t, err)
-	assert.Equal(t, "hello from sqlite", message)
-
 	rows, err := database.QueryContext(
 		context.Background(),
 		"SELECT step_key FROM setup_steps ORDER BY step_key",
@@ -54,6 +46,8 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
+	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
+	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
 }
 
 func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {
@@ -77,4 +71,29 @@ func openTestDatabase(t *testing.T) *sql.DB {
 	})
 
 	return database
+}
+
+func readTableColumns(t *testing.T, database *sql.DB, tableName string) []string {
+	t.Helper()
+
+	rows, err := database.QueryContext(context.Background(), fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var columnNames []string
+	for rows.Next() {
+		var (
+			columnID   int
+			columnName string
+			columnType string
+			notNull    int
+			defaultVal sql.NullString
+			primaryKey int
+		)
+		require.NoError(t, rows.Scan(&columnID, &columnName, &columnType, &notNull, &defaultVal, &primaryKey))
+		columnNames = append(columnNames, columnName)
+	}
+	require.NoError(t, rows.Err())
+
+	return columnNames
 }

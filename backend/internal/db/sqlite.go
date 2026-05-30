@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/pressly/goose/v3"
@@ -125,4 +128,88 @@ func withRequiredPragmas(databaseURL string) string {
 	}
 
 	return databaseURL + separator + strings.Join(parts, "&")
+}
+
+func ResolveSQLiteFilePath(databaseURL string) (string, error) {
+	if databaseURL == "" {
+		databaseURL = DefaultSQLiteURL
+	}
+
+	parsedURL, err := url.Parse(databaseURL)
+	if err == nil && parsedURL.Scheme == "file" {
+		switch {
+		case parsedURL.Opaque != "":
+			return parsedURL.Opaque, nil
+		case parsedURL.Host != "":
+			return "//" + parsedURL.Host + parsedURL.Path, nil
+		case parsedURL.Path != "":
+			return parsedURL.Path, nil
+		}
+	}
+
+	if strings.HasPrefix(databaseURL, "file:") {
+		trimmed := strings.TrimPrefix(databaseURL, "file:")
+		if idx := strings.Index(trimmed, "?"); idx >= 0 {
+			trimmed = trimmed[:idx]
+		}
+		if trimmed != "" {
+			return trimmed, nil
+		}
+	}
+
+	return "", fmt.Errorf("sqlite backup requires a file database URL")
+}
+
+func BackupSQLiteDatabase(ctx context.Context, database *sql.DB, backupPath string) error {
+	backupPath = filepath.Clean(strings.TrimSpace(backupPath))
+	if backupPath == "" {
+		return fmt.Errorf("backup path is required")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0o755); err != nil {
+		return fmt.Errorf("create backup directory: %w", err)
+	}
+	if _, err := os.Stat(backupPath); err == nil {
+		return fmt.Errorf("backup path already exists")
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat backup path: %w", err)
+	}
+
+	statement := fmt.Sprintf("VACUUM INTO %s", sqliteStringLiteral(backupPath))
+	if _, err := database.ExecContext(ctx, statement); err != nil {
+		return fmt.Errorf("vacuum into backup: %w", err)
+	}
+
+	return nil
+}
+
+func VerifySQLiteBackup(ctx context.Context, backupPath string) error {
+	backupPath = filepath.Clean(strings.TrimSpace(backupPath))
+	if backupPath == "" {
+		return fmt.Errorf("backup path is required")
+	}
+
+	backupDatabase, err := sql.Open(driverName, "file:"+backupPath+"?mode=ro")
+	if err != nil {
+		return fmt.Errorf("open sqlite backup: %w", err)
+	}
+	defer backupDatabase.Close()
+
+	if err := backupDatabase.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping sqlite backup: %w", err)
+	}
+
+	var integrityResult string
+	if err := backupDatabase.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrityResult); err != nil {
+		return fmt.Errorf("run sqlite integrity_check: %w", err)
+	}
+	if !strings.EqualFold(integrityResult, "ok") {
+		return fmt.Errorf("sqlite integrity_check returned %q", integrityResult)
+	}
+
+	return nil
+}
+
+func sqliteStringLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }

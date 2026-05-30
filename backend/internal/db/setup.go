@@ -8,6 +8,7 @@ import (
 )
 
 var ErrOwnerExists = errors.New("owner already exists")
+var ErrNotFound = errors.New("record not found")
 
 type SetupRepository struct {
 	database *sql.DB
@@ -33,6 +34,7 @@ type CompleteOwnerSetupParams struct {
 	PasswordHash     string
 	SessionTokenHash string
 	CreatedAt        string
+	SessionExpiresAt string
 }
 
 func NewSetupRepository(database *sql.DB) *SetupRepository {
@@ -131,9 +133,9 @@ func (r *SetupRepository) CompleteOwnerSetup(ctx context.Context, params Complet
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO auth_sessions (user_id, token_hash, created_at)
-		VALUES (?, ?, ?)
-	`, ownerID, params.SessionTokenHash, params.CreatedAt); err != nil {
+		INSERT INTO auth_sessions (user_id, token_hash, created_at, expires_at, revoked_at)
+		VALUES (?, ?, ?, ?, NULL)
+	`, ownerID, params.SessionTokenHash, params.CreatedAt, params.SessionExpiresAt); err != nil {
 		return OwnerRecord{}, fmt.Errorf("insert owner session: %w", err)
 	}
 

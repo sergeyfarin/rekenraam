@@ -35,6 +35,26 @@ pnpm dev:frontend
 ./scripts/test-backend.sh
 ```
 
+### Local Owner Recovery
+
+Reset the owner password locally with a verified SQLite backup first:
+
+```sh
+printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin
+```
+
+Write the verified backup to an explicit path when needed:
+
+```sh
+printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin --backup-path dist/recovery.sqlite
+```
+
+Only use the emergency override when backup creation or verification is impossible and you accept the risk of proceeding without a fresh verified backup:
+
+```sh
+printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin --allow-no-backup
+```
+
 ### Frontend Validation
 
 ```sh
@@ -57,12 +77,14 @@ E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ## Area Notes
 
 - Backend code lives in `backend/`; run `go test ./...` there directly only when you intentionally want to bypass the wrapper script.
+- The backend binary also exposes a local maintenance command, `recover-owner`, for backup-first password recovery and session revocation.
 - Frontend code lives in `frontend/`; SvelteKit builds static output that is copied into `backend/internal/web/dist/` for the single binary.
 - Frontend foundation libraries are pinned in `frontend/package.json`: Tailwind CSS, Bits UI, shadcn-svelte, Paraglide JS, `@tanstack/svelte-query`, `openapi-typescript`, `openapi-fetch`, `date-fns`, and Dinero.js. Add TanStack Table and Virtual only when a concrete screen needs them.
 - Frontend message catalogs live in `frontend/messages/`, split by domain as `frontend/messages/<domain>/<locale>.json`. Keep message IDs flat and prefixed by domain or screen intent instead of using one growing locale file or deep nested objects. Generated Paraglide output lives in `frontend/src/lib/paraglide/`. Regenerate the typed message layer with `pnpm --dir frontend run paraglide:compile` when changing catalog structure outside the normal `dev`, `check`, or `build` scripts.
 - Frontend OpenAPI types are generated from `api/openapi/openapi.yaml` into `frontend/src/lib/api/schema.d.ts`. Regenerate them with `pnpm --dir frontend run openapi:generate` when changing the contract outside the normal `dev`, `check`, or `build` scripts.
 - Keep the OpenAPI client seam language-agnostic. Do not embed user-facing English fallbacks in `frontend/src/lib/api/`; translate API status and error presentation at the UI layer with Paraglide using stable error codes or screen-specific fallback copy.
 - API examples and contract assets live in `api/`; use the Bruno `local` environment for the backend dev server and `app` for an integrated binary or Docker app.
+- Forwarded proxy headers are ignored by default. Set `TRUST_PROXY_HEADERS=1` only when the app is behind a trusted reverse proxy that rewrites those headers, and set `TRUSTED_PROXY_CIDRS` to the proxy source ranges that are allowed to supply them.
 - Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
 - Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.
 - `backend/var/`, `backend/internal/web/dist/`, and `dist/` contain local or generated files. Their README files are placeholders that keep those ignored directories present in Git.

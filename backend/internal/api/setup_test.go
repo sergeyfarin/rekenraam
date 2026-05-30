@@ -163,6 +163,10 @@ func TestSetupStatusReturnsRecoveryRequiredForInconsistentOwnerState(t *testing.
 }
 
 func newSetupTestHandler(t *testing.T) (http.Handler, *sql.DB) {
+	return newSetupTestHandlerWithOptions(t, HandlerOptions{})
+}
+
+func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.Handler, *sql.DB) {
 	t.Helper()
 
 	database, err := db.Open(context.Background(), "file:"+filepath.Join(t.TempDir(), "rekenraam.sqlite"))
@@ -175,7 +179,9 @@ func newSetupTestHandler(t *testing.T) (http.Handler, *sql.DB) {
 
 	setupRepository := db.NewSetupRepository(database)
 	setupService := app.NewSetupService(setupRepository)
+	authRepository := db.NewAuthRepository(database)
+	authService := app.NewAuthService(authRepository)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, options), database
 }

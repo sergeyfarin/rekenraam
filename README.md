@@ -115,6 +115,26 @@ Check the hello API:
 curl http://localhost:16888/api/hello
 ```
 
+## Local Owner Recovery
+
+Reset the owner password locally with a verified SQLite backup first:
+
+```sh
+printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin
+```
+
+Write the verified backup to an explicit path when needed:
+
+```sh
+printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin --backup-path dist/recovery.sqlite
+```
+
+Only use the emergency override when backup creation or verification is impossible and you accept the risk of proceeding without a fresh verified backup:
+
+```sh
+printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin --allow-no-backup
+```
+
 ## Test Frontend
 
 Install dependencies once:
@@ -201,6 +221,12 @@ Run the app:
 
 ```sh
 HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite ./dist/rekenraam
+```
+
+If the app runs behind a trusted reverse proxy that rewrites forwarding headers, opt in explicitly and allowlist the proxy source ranges:
+
+```sh
+HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite TRUST_PROXY_HEADERS=1 TRUSTED_PROXY_CIDRS=127.0.0.1/32,10.0.0.0/8 ./dist/rekenraam
 ```
 
 Open:

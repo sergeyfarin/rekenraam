@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS setup_steps (
@@ -32,7 +34,17 @@ VALUES
   ('system_accounts', NULL),
   ('categories', NULL);
 
+CREATE TABLE IF NOT EXISTS login_throttles (
+  scope_type TEXT NOT NULL,
+  scope_key TEXT NOT NULL,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  blocked_until TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (scope_type, scope_key)
+);
+
 -- +goose Down
+DROP TABLE IF EXISTS login_throttles;
 DROP TABLE IF EXISTS auth_sessions;
 DROP INDEX IF EXISTS users_one_owner_idx;
 DROP TABLE IF EXISTS users;
