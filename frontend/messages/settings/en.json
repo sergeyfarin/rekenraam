@@ -1,0 +1,14 @@
+{
+  "theme_label": "Theme",
+  "theme_name_light": "Light",
+  "theme_name_dark": "Dark",
+  "theme_switch_to_light": "Switch to light theme",
+  "theme_switch_to_dark": "Switch to dark theme",
+  "home_health_checking": "Checking backend health...",
+  "home_health_status": "Backend status: {status}",
+  "home_health_unavailable": "Backend status unavailable",
+  "home_hero_eyebrow": "Personal finance, rebuilt carefully",
+  "home_hero_foundation_copy": "UI foundations now run through semantic theme tokens so the first real screens can share one visual language across light and dark modes.",
+  "home_backend_handshake": "Backend handshake",
+  "home_foundation_check": "Foundation check"
+}
