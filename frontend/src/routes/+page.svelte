@@ -1,10 +1,27 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
+  import APIFormError from '$lib/components/api-form-error.svelte';
+  import { authSessionQueryOptions, logout, login } from '$lib/api/auth';
   import { healthQueryOptions } from '$lib/api/health';
+  import { createOwner, setupStatusQueryOptions } from '$lib/api/setup';
+  import { APIClientError } from '$lib/api/client';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import { m } from '$lib/paraglide/messages.js';
 
   const healthQuery = createQuery(() => healthQueryOptions());
+  const setupQuery = createQuery(() => setupStatusQueryOptions());
+  const sessionQuery = createQuery(() => authSessionQueryOptions());
+
+  let ownerUsername = $state('');
+  let ownerPassword = $state('');
+  let loginUsername = $state('');
+  let loginPassword = $state('');
+  let ownerError = $state<unknown>(undefined);
+  let loginError = $state<unknown>(undefined);
+  let logoutError = $state<unknown>(undefined);
+  let ownerPending = $state(false);
+  let loginPending = $state(false);
+  let logoutPending = $state(false);
 
   const healthState = $derived.by<'loading' | 'success' | 'error'>(() => {
     if (healthQuery.isPending) {
@@ -41,11 +58,144 @@
 
     return m.home_health_state_success();
   });
+
+  const installGateError = $derived(setupQuery.error ?? sessionQuery.error);
+
+  const pageState = $derived.by<
+    'loading' | 'error' | 'fresh' | 'login' | 'authenticated' | 'recovery_required'
+  >(() => {
+    if (setupQuery.isPending || sessionQuery.isPending) {
+      return 'loading';
+    }
+
+    if (setupQuery.isError || sessionQuery.isError) {
+      return 'error';
+    }
+
+    if (setupQuery.data === undefined || sessionQuery.data === undefined) {
+      return 'loading';
+    }
+
+    if (setupQuery.data.install_state === 'fresh') {
+      return 'fresh';
+    }
+
+    if (setupQuery.data.install_state === 'recovery_required') {
+      return 'recovery_required';
+    }
+
+    return sessionQuery.data.authenticated ? 'authenticated' : 'login';
+  });
+
+  const stateBadge = $derived.by(() => {
+    switch (pageState) {
+      case 'fresh':
+        return m.install_gate_state_fresh();
+      case 'login':
+        return m.install_gate_state_configured();
+      case 'authenticated':
+        return m.install_gate_state_authenticated();
+      case 'recovery_required':
+        return m.install_gate_state_recovery();
+      case 'error':
+        return m.install_gate_error_badge();
+      default:
+        return m.install_gate_loading_badge();
+    }
+  });
+
+  const completedSteps = $derived.by(() => setupQuery.data?.steps.filter((step) => step.status === 'completed').length ?? 0);
+
+  const nextStepLabel = $derived.by(() => {
+    const nextStep = setupQuery.data?.current_step;
+
+    if (!nextStep) {
+      return null;
+    }
+
+    return m.install_gate_next_step({ step: nextStep.replaceAll('_', ' ') });
+  });
+
+  async function refreshInstallGate() {
+    await Promise.all([setupQuery.refetch(), sessionQuery.refetch(), healthQuery.refetch()]);
+  }
+
+  async function handleCreateOwner(event: SubmitEvent) {
+    event.preventDefault();
+
+    ownerPending = true;
+    ownerError = undefined;
+    logoutError = undefined;
+
+    try {
+      const result = await createOwner({
+        username: ownerUsername,
+        password: ownerPassword
+      });
+
+      loginUsername = result.owner.username;
+      ownerPassword = '';
+
+      await refreshInstallGate();
+    } catch (error) {
+      ownerError = error;
+    } finally {
+      ownerPending = false;
+    }
+  }
+
+  async function handleLogin(event: SubmitEvent) {
+    event.preventDefault();
+
+    loginPending = true;
+    loginError = undefined;
+    logoutError = undefined;
+
+    try {
+      await login({
+        username: loginUsername,
+        password: loginPassword
+      });
+
+      loginPassword = '';
+      await refreshInstallGate();
+    } catch (error) {
+      loginError = error;
+    } finally {
+      loginPending = false;
+    }
+  }
+
+  async function handleLogout() {
+    logoutPending = true;
+    logoutError = undefined;
+
+    try {
+      let csrfToken = sessionQuery.data?.csrf_token;
+
+      if (!csrfToken) {
+        const refreshedSession = await sessionQuery.refetch();
+        csrfToken = refreshedSession.data?.csrf_token;
+      }
+
+      if (!csrfToken) {
+        throw new APIClientError({ status: 403, code: 'CSRF_INVALID' });
+      }
+
+      loginUsername = sessionQuery.data?.user?.username ?? loginUsername;
+      await logout(csrfToken);
+      await refreshInstallGate();
+    } catch (error) {
+      logoutError = error;
+    } finally {
+      logoutPending = false;
+    }
+  }
 </script>
 
 <main class="min-h-screen px-6 py-16 sm:px-10">
-  <section class="mx-auto grid max-w-4xl gap-8 lg:grid-cols-[1.25fr_0.9fr] lg:items-end">
-    <div class="space-y-5">
+  <section class="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+    <div class="space-y-6">
       <p class="text-sm font-medium uppercase tracking-[0.24em] text-muted">{m.home_hero_eyebrow()}</p>
       <h1 class="max-w-2xl text-5xl font-semibold tracking-tight text-balance sm:text-6xl">
         {m.app_name()}
@@ -53,34 +203,193 @@
       <p class="max-w-xl text-base leading-7 text-muted sm:text-lg">
         {m.home_hero_foundation_copy()}
       </p>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="rounded-[1.75rem] border border-border/80 bg-surface/90 p-5 shadow-[var(--shadow-panel)] backdrop-blur">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+            {m.install_gate_progress_label()}
+          </p>
+          <p class="mt-3 text-3xl font-semibold text-foreground">
+            {completedSteps} / {setupQuery.data?.steps.length ?? 0}
+          </p>
+
+          {#if nextStepLabel}
+            <p class="mt-2 text-sm leading-6 text-muted">{nextStepLabel}</p>
+          {/if}
+
+          <p class="mt-3 text-sm leading-6 text-muted">{m.install_gate_non_blocking_note()}</p>
+        </div>
+
+        <div class="rounded-[1.75rem] border border-border/80 bg-surface/90 p-5 shadow-[var(--shadow-panel)] backdrop-blur">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm font-medium text-muted">{m.home_backend_handshake()}</p>
+              <p class="text-xs uppercase tracking-[0.2em] text-muted">{m.home_foundation_check()}</p>
+            </div>
+            <span
+              class:text-danger={healthState === 'error'}
+              class:bg-danger-soft={healthState === 'error'}
+              class:text-accent={healthState !== 'error'}
+              class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
+              style:background-color={healthState === 'error' ? 'var(--color-danger-soft)' : 'color-mix(in oklab, var(--color-accent) 12%, transparent)'}
+            >
+              {healthStateLabel}
+            </span>
+          </div>
+
+          <p class="mt-4 text-sm leading-6 text-muted">{healthMessage}</p>
+        </div>
+      </div>
     </div>
 
-    <div class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur">
-      <div class="mb-5 flex items-center justify-between gap-4">
-        <div>
-          <p class="text-sm font-medium text-muted">{m.home_backend_handshake()}</p>
-          <p class="text-xs uppercase tracking-[0.2em] text-muted">{m.home_foundation_check()}</p>
+    <div class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
+      <div class="mb-6 flex items-center justify-between gap-4">
+        <div class="space-y-2">
+          <span class="inline-flex rounded-full bg-surface-strong px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+            {stateBadge}
+          </span>
+
+          {#if pageState === 'fresh'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_fresh_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_fresh_copy()}</p>
+          {:else if pageState === 'login'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_login_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_login_copy()}</p>
+          {:else if pageState === 'authenticated'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_authenticated_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_authenticated_copy()}</p>
+          {:else if pageState === 'recovery_required'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_recovery_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_recovery_copy()}</p>
+          {:else if pageState === 'error'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_error_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_error_copy()}</p>
+          {:else}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_loading_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_loading_copy()}</p>
+          {/if}
         </div>
-        <span
-          class:text-danger={healthState === 'error'}
-          class:bg-danger-soft={healthState === 'error'}
-          class:text-accent={healthState !== 'error'}
-          class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
-          style:background-color={healthState === 'error' ? 'var(--color-danger-soft)' : 'color-mix(in oklab, var(--color-accent) 12%, transparent)'}
-        >
-          {healthStateLabel}
-        </span>
+
+        <div class="hidden h-16 w-16 rounded-[1.5rem] border border-border bg-surface-strong/70 sm:block"></div>
       </div>
 
-      <div class="rounded-2xl border border-border bg-surface-strong/60 p-4">
-        <p
-          class:text-danger={healthState === 'error'}
-          class:text-foreground={healthState !== 'error'}
-          class="text-sm leading-6"
-        >
-          {healthMessage}
-        </p>
-      </div>
+      {#if pageState === 'loading'}
+        <div class="rounded-[1.75rem] border border-border bg-surface-strong/60 p-5 text-sm leading-6 text-muted">
+          {m.install_gate_loading_copy()}
+        </div>
+      {:else if pageState === 'error'}
+        <div class="space-y-4">
+          <APIFormError error={installGateError} id="install-gate-error" />
+          <button
+            type="button"
+            class="inline-flex items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90"
+            onclick={refreshInstallGate}
+          >
+            {m.install_gate_retry()}
+          </button>
+        </div>
+      {:else if pageState === 'fresh'}
+        <form class="space-y-4" onsubmit={handleCreateOwner}>
+          <APIFormError error={ownerError} id="owner-form-error" />
+
+          <label class="block space-y-2">
+            <span class="text-sm font-medium text-foreground">{m.install_gate_username_label()}</span>
+            <input
+              bind:value={ownerUsername}
+              name="username"
+              autocomplete="username"
+              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+              required
+            />
+          </label>
+
+          <label class="block space-y-2">
+            <span class="text-sm font-medium text-foreground">{m.install_gate_password_label()}</span>
+            <input
+              bind:value={ownerPassword}
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+              required
+            />
+          </label>
+
+          <button
+            type="submit"
+            class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={ownerPending}
+          >
+            {ownerPending ? m.install_gate_owner_submit_pending() : m.install_gate_owner_submit()}
+          </button>
+        </form>
+      {:else if pageState === 'login'}
+        <form class="space-y-4" onsubmit={handleLogin}>
+          <APIFormError error={loginError} id="login-form-error" />
+
+          <label class="block space-y-2">
+            <span class="text-sm font-medium text-foreground">{m.install_gate_username_label()}</span>
+            <input
+              bind:value={loginUsername}
+              name="username"
+              autocomplete="username"
+              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+              required
+            />
+          </label>
+
+          <label class="block space-y-2">
+            <span class="text-sm font-medium text-foreground">{m.install_gate_password_label()}</span>
+            <input
+              bind:value={loginPassword}
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+              required
+            />
+          </label>
+
+          <button
+            type="submit"
+            class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={loginPending}
+          >
+            {loginPending ? m.install_gate_login_submit_pending() : m.install_gate_login_submit()}
+          </button>
+        </form>
+      {:else if pageState === 'authenticated'}
+        <div class="space-y-4">
+          <div class="rounded-[1.75rem] border border-border bg-surface-strong/60 p-5">
+            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+              {m.install_gate_authenticated_signed_in({ username: sessionQuery.data?.user?.username ?? '' })}
+            </p>
+            <p class="mt-3 text-sm leading-6 text-muted">{m.install_gate_authenticated_copy()}</p>
+          </div>
+
+          <APIFormError error={logoutError} id="logout-form-error" />
+
+          <button
+            type="button"
+            class="inline-flex w-full items-center justify-center rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-60"
+            onclick={handleLogout}
+            disabled={logoutPending}
+          >
+            {logoutPending ? m.install_gate_logout_pending() : m.install_gate_logout()}
+          </button>
+        </div>
+      {:else}
+        <div class="space-y-4">
+          <div class="rounded-[1.75rem] border border-danger/25 bg-danger-soft p-5 text-sm leading-6 text-danger shadow-[var(--shadow-panel)]">
+            <p class="font-semibold text-foreground">{m.install_gate_recovery_command_label()}</p>
+            <p class="mt-2 font-mono text-xs leading-6 sm:text-sm">
+              printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin
+            </p>
+          </div>
+
+          <p class="text-sm leading-6 text-muted">{m.install_gate_recovery_backup_note()}</p>
+        </div>
+      {/if}
     </div>
   </section>
 </main>

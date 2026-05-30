@@ -173,11 +173,13 @@ Install e2e dependencies once:
 pnpm install
 ```
 
-For development-mode e2e tests, run the backend and frontend dev servers first, then:
+Run the self-contained e2e path from the repo root:
 
 ```sh
 ./scripts/test-e2e.sh
 ```
+
+This builds the integrated app, starts a fresh local instance on `127.0.0.1:16888`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` for the test run.
 
 For integrated app testing, run the single binary or Docker app on `16888`, then:
 

@@ -74,6 +74,9 @@ pnpm build
 E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
 
+- `./scripts/test-e2e.sh` now builds the integrated app, starts a fresh local instance on `127.0.0.1:16888`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` unless `E2E_BASE_URL` is set.
+- Set `E2E_BASE_URL` when you want Playwright to target an already-running app instead of booting its own fresh instance.
+
 ## Area Notes
 
 - Backend code lives in `backend/`; run `go test ./...` there directly only when you intentionally want to bypass the wrapper script.
