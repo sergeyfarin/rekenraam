@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE IF NOT EXISTS app_info (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -5,3 +6,6 @@ CREATE TABLE IF NOT EXISTS app_info (
 
 INSERT OR IGNORE INTO app_info (key, value)
 VALUES ('hello', 'hello from sqlite');
+
+-- +goose Down
+DROP TABLE IF EXISTS app_info;
