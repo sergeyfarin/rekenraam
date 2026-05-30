@@ -20,6 +20,7 @@ Use these archive documents as historical input:
 - `.archive/docs/architecture/frontend-testing.md` for testing tradeoffs.
 - `.archive/docs/parity/desktop-to-python.md` and `.archive/docs/parity/tauri-rust-function-audit-2026-05-18.md` for consciously dropped desktop behavior.
 - `.archive/docs/deployment/self-hosting.md` and `.archive/SELF_HOSTED_MIGRATION_PLAN.md` for deployment, backup, and restore lessons.
+- `docs/archive-fastapi-backend-review.md` for the consolidated pass over `.archive/apps/api` and the FastAPI-era requirements documents.
 
 ## Review Method
 
@@ -44,7 +45,11 @@ Questions to settle before implementation:
 - What is the smallest acceptable MFA implementation for public VPS real-data deployment?
 - What password-reset model fits a self-hosted single-owner app?
 - Which first-class UI languages should follow English after the translation boundary exists?
-- Which CGO SQLite driver and migration approach should be locked before the first real schema?
+
+Already settled since this review plan was first written:
+
+- Use `modernc.org/sqlite`, not a CGO SQLite driver.
+- Use `pressly/goose` with embedded SQL migrations.
 
 ### Phase 1: Books, Commodities, And Accounts
 
@@ -92,12 +97,13 @@ Lock these now:
 - Playwright only for critical user journeys, run manually for now.
 - `/api/v1` for real domain endpoints; `/api/hello` remains scaffold-only.
 - Same-origin production shape: one Go binary serving API and static frontend.
-- No GitHub Actions workflows for now.
-- CGO SQLite drivers are acceptable.
+- Keep GitHub Actions CI aligned with the local validation wrapper scripts.
 - Public VPS deployment with real financial data requires MFA, even if that delays public VPS readiness.
 - Browser-based first-run setup creates the single owner with a username and password.
 - English-first UI and built-in data with translation boundaries ready for additional languages.
 - SQLite database encryption is deferred for early local use, but documentation must explain when encrypted-at-rest storage may be needed.
+- `modernc.org/sqlite`, `pressly/goose`, `sqlc`, `database/sql`, and distroless production images as documented in `docs/conventions.md`.
+- SQLite runtime pragmas should include foreign keys, WAL, busy timeout, and an explicit synchronous mode once real database setup lands.
 
 Do not lock these yet:
 
@@ -110,9 +116,32 @@ Do not lock these yet:
 
 Lock these before the first related implementation slice:
 
-- Specific SQLite driver, migration runner, migration transaction behavior, and connection pragmas.
+- Migration transaction behavior and the exact connection-pragmas installation point.
 - Password hashing, session storage, cookie settings, setup completion semantics, and password-reset behavior.
 - Translation catalog file format, built-in data label keys, and locale fallback behavior.
 - Theme token names, persistence key, and light/dark token minimums.
 - API error envelope and request identifier behavior.
 - Money quantity type, scale limits, and commodity code validation.
+
+## Consolidated Carry-Forward From FastAPI Pass
+
+The 2026-05-30 FastAPI archive pass found several decisions worth preserving as current-stack requirements when their feature slices arrive:
+
+- **Setup and auth:** keep browser-based bootstrap status/create-owner endpoints, hashed cookie session tokens, revocable session rows, and request IDs. Device attribution is useful for audit quality, but full invite, membership, and role workflows stay deferred while scope is single-user.
+- **SQLite operations:** keep the one-app deployment shape, persistent SQLite data directory, online-backup preference, restore-smoke checks, `PRAGMA integrity_check`, and explicit warnings for unsafe public deployments.
+- **Ledger foundations:** keep `book_id`, account trees, system account roles, exact quantities, transaction postings, import-source metadata, and no hard delete for posted financial records. Translate archived category rows into the current convention: categories are UI concepts mapped to income/expense accounts.
+- **Auditability:** preserve actor/session/request attribution and plan for change reasons before reconciliation and correction workflows become serious. In Go, prefer SQLite constraints/triggers for invariants that must survive service-layer bypass.
+- **Reconciliation:** use account balancing/checkpoint rows as the reconciliation lock floor. Unlocking a reconciled range should require an explicit reason and confirmation.
+- **Imports:** keep the preview -> rules -> commit workflow, import sessions, source file metadata/hash, duplicate keys, and an `imbalance_import` system-account path for incomplete imported rows.
+- **Exports and reports:** keep account/register-level QIF, core ledger CSV, report CSV output, saved report definitions as a later convenience, and report-run input capture as an open reproducibility decision.
+- **Ergonomics:** saved transaction views, transaction templates, and payee defaults are good later slices because they speed daily entry without changing ledger semantics.
+
+The same pass also identified archive decisions not to port directly:
+
+- Full multi-user role, invite, and book membership workflows.
+- Person/project cost-sharing as first-class early scope.
+- Broad import support beyond the first approved import formats.
+- Generic SQL report definitions exposed to users.
+- Plugin/theme runtimes or reserved placeholder endpoints.
+- Desktop path selection, desktop undo/redo tables, native file-picker assumptions, and attachment/document workflows.
+- Hard-delete APIs for transactions, pricing observations, planning records, or financial/reference records whose history matters.

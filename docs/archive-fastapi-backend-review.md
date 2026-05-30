@@ -348,11 +348,115 @@ Two parallel audit mechanisms:
 
 ---
 
+## 2026-05-30 Consolidation Pass
+
+This pass reviewed the FastAPI backend path and the archived requirements documents together:
+
+- `.archive/apps/api/src/rekenraam_api`
+- `.archive/apps/api/alembic/versions`
+- `.archive/apps/api/tests`
+- `.archive/docs/product/*.md`
+- `.archive/docs/architecture/*.md`
+- `.archive/docs/deployment/self-hosting.md`
+- `.archive/docs/audits/python-backend-v1-audit.md`
+- `.archive/SELF_HOSTED_MIGRATION_PLAN.md`
+
+The useful archive material mostly falls into three buckets:
+
+1. **Already active:** decisions now captured in `docs/product-requirements.md`, `docs/conventions.md`, `docs/early-architecture-decisions.md`, and ADR 0001.
+2. **Adapt when the feature arrives:** good workflows that need Go/SvelteKit translation and narrower single-user scope.
+3. **Do not port:** Python, Tauri, multi-user, or over-broad v1 choices that conflict with the current product direction.
+
+### Active Or Already Locked
+
+These archive decisions are already represented in active docs and should be treated as settled unless a later ADR changes them:
+
+- One Go binary serves `/api/v1` and the static SvelteKit frontend.
+- Docker Compose preserves the same app shape.
+- SQLite is the primary database.
+- `book_id` stays on core financial tables even while the runtime is single-book.
+- Money and quantities are exact values, never floats.
+- Account trees, double-entry-capable transactions, postings/splits, and ordinary-transfer semantics are the ledger foundation.
+- Local browser auth and first-run owner setup are required before real data entry.
+- Public deployments require HTTPS guidance and MFA before real financial data is recommended.
+- CSV core-ledger export and QIF export are the first mandatory user-facing export formats.
+- Attachments, plugin runtimes, bank feeds, cloud sync, hosted operations, and household sharing remain out of early scope.
+
+### Adapt By Phase
+
+**Phase 0 foundation:**
+
+- Use the archive bootstrap shape as a model: status endpoint plus create-owner endpoint.
+- Keep session tokens stored hashed in SQLite, with expiry and revocation fields.
+- Keep request IDs and request-scoped attribution from the first protected write flows.
+- Consider device/user-agent/IP attribution as audit-quality data, but avoid building a full device-management product early.
+- Carry forward admin/runtime health ideas: SQLite connection state, migration version, configured data path, backup status, and integrity checks.
+- Surface public-host misconfiguration warnings in-product over time; do not rely only on deployment docs.
+- Prefer online SQLite backup or stopped-app backup over copying live WAL-mode database files.
+
+**Phase 1 books, commodities, and accounts:**
+
+- Create a default book during first-run setup unless a later decision says otherwise.
+- Keep runtime single-book guardrails centralized; avoid scattered `book_id = 1` assumptions.
+- Create system accounts with stable roles when account setup lands: `opening_balance`, `imbalance_import`, `income_summary`, `expense_summary`, and `retained_earnings`.
+- Treat account close/reopen as lifecycle state, not deletion.
+- Defer investment booking policies on accounts until investment workflows exist.
+- Translate archived categories into the active model: friendly category UI mapped to income/expense accounts, not a separate ledger primitive.
+
+**Phase 2 ledger transactions:**
+
+- Preserve `previous_tx_id` or an equivalent version/correction chain.
+- Keep a clear status model for unreconciled, cleared, reconciled, and voided records.
+- Do not copy the archive's hard-delete endpoint for ordinary transactions.
+- Keep payee defaults, saved transaction views, and transaction templates as high-value ergonomics after the core transaction workflow is stable.
+- Use server-side transaction search and cursor pagination per active conventions, not archive-era offset pagination.
+- Keep explicit cross-currency transfer workflows for later multi-currency support.
+
+**Phase 3 reconciliation and reports:**
+
+- Use account balancing rows as reconciliation checkpoints and lock floors.
+- Require confirmation and a reason when unlocking a reconciled range.
+- Prefer corrective-entry workflows once records are reconciled or period-closed.
+- Decide before report implementation whether saved report runs are reproducible snapshots or live recalculations.
+- If "frozen" or reproducible reports are promised, snapshot the inputs needed to reproduce them rather than only storing filter parameters.
+
+**Phase 4 import and cleanup:**
+
+- Preserve the two-phase import flow: preview, apply rules, commit.
+- Preserve import sessions with source filename, size/hash, status, and committed transaction links.
+- Preserve duplicate detection based on source transaction identity scoped by book/account.
+- Use an `imbalance_import` system account for incomplete single-sided imports that need later cleanup.
+- Keep import rules ordered and recoverable; avoid hard-deleting rules.
+
+**Later planning, pricing, and investments:**
+
+- Budgets are per-book and category/account based; rollover rules can wait.
+- Scheduled transactions should mirror the transaction/posting shape closely enough that posting an occurrence creates a normal transaction.
+- Price observations should be superseded or voided, not destructively deleted, once reports can depend on them.
+- Keep official FX rates separate from market rates if regulatory/accounting reports later need that distinction.
+- Keep investment lots and cost-basis methods layered over ordinary transactions/postings rather than building a separate ledger.
+- Defer cost-basis history, corporate actions, wash-sale-like checks, and performance reporting until the core ledger is stable.
+
+### Owner Questions Preserved
+
+These are not settled by the archive and should remain visible before implementation reaches the relevant slice:
+
+- What password reset flow fits a single-owner self-hosted app?
+- What is the minimum MFA implementation required before public VPS real-data deployment?
+- Should first-run setup create the default book and base currency immediately?
+- What exact columns and files define the first core-ledger CSV export?
+- Is first QIF export per-account register only, or should a broader export arrive in the same milestone?
+- Should change reasons be mandatory on every write, only on financial corrections, or only after reconciliation?
+- Should report runs be reproducible snapshots in the first reporting milestone?
+- How should price corrections and supersession work before investment and multi-currency reports depend on them?
+
+---
+
 ## What Is Worth Adopting In The Go/SvelteKit Rewrite
 
 These patterns and decisions from the archive are worth carrying forward explicitly:
 
-- **Integer minor units + commodity scale** — already locked in current conventions.
+- **Exact integer values with explicit scale and commodity** — already locked in current conventions.
 - **`book_id` on all financial tables** — already in Go conventions.
 - **System accounts with stable roles** — adopt when account creation is implemented.
 - **`previous_tx_id` corrective-entry chain** — needed once reconciliation is built.
@@ -368,7 +472,7 @@ These patterns and decisions from the archive are worth carrying forward explici
 - **Payee defaults (learned + explicit)** — materially speeds up manual entry.
 - **Saved transaction views** — high value for repeat filter patterns.
 - **Transaction templates** — useful for common split patterns.
-- **QIF export per account register** — already in roadmap as first export milestone.
+- **QIF export per account register** — good candidate shape for the first QIF milestone; confirm exact scope before implementation.
 - **CSV export for accounts and transactions** — already in roadmap.
 
 ---
