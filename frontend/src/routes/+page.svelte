@@ -1,28 +1,32 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { createQuery } from '@tanstack/svelte-query';
+  import { healthQueryOptions } from '$lib/api/health';
   import { m } from '$lib/paraglide/messages.js';
 
-  type HealthResponse = {
-    status: string;
-  };
+  const healthQuery = createQuery(() => healthQueryOptions());
 
-  let healthState = $state<'loading' | 'success' | 'error'>('loading');
-  let healthMessage = $state(m.home_health_checking());
-
-  onMount(async () => {
-    try {
-      const response = await fetch('/api/v1/health');
-      if (!response.ok) {
-        throw new Error(`health request failed: ${response.status}`);
-      }
-
-      const body = (await response.json()) as HealthResponse;
-      healthState = 'success';
-      healthMessage = m.home_health_status({ status: body.status });
-    } catch {
-      healthState = 'error';
-      healthMessage = m.home_health_unavailable();
+  const healthState = $derived.by<'loading' | 'success' | 'error'>(() => {
+    if (healthQuery.isPending) {
+      return 'loading';
     }
+
+    if (healthQuery.isError) {
+      return 'error';
+    }
+
+    return 'success';
+  });
+
+  const healthMessage = $derived.by(() => {
+    if (healthQuery.isPending) {
+      return m.home_health_checking();
+    }
+
+    if (healthQuery.isError) {
+      return m.home_health_unavailable();
+    }
+
+    return m.home_health_status({ status: healthQuery.data?.status ?? 'unknown' });
   });
 </script>
 
