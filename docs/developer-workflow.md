@@ -58,6 +58,7 @@ E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 
 - Backend code lives in `backend/`; run `go test ./...` there directly only when you intentionally want to bypass the wrapper script.
 - Frontend code lives in `frontend/`; SvelteKit builds static output that is copied into `backend/internal/web/dist/` for the single binary.
+- Frontend foundation libraries are pinned in `frontend/package.json`: Tailwind CSS, Bits UI, shadcn-svelte, Paraglide JS, `@tanstack/svelte-query`, `openapi-typescript`, `openapi-fetch`, `date-fns`, and Dinero.js. Add TanStack Table and Virtual only when a concrete screen needs them.
 - API examples and contract assets live in `api/`; use the Bruno `local` environment for the backend dev server and `app` for an integrated binary or Docker app.
 - Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
 - Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.

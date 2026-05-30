@@ -75,6 +75,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Do not add `+page.server.ts`, `+layout.server.ts`, `+server.ts`, SvelteKit form actions, or production server hooks without first accepting an ADR that changes the runtime shape.
 - Frontend routes may rely on the Go static handler's SPA fallback for extensionless browser paths. Missing asset-like paths with file extensions should 404.
 - All production data access goes through Go API endpoints under `/api/v1`; unknown `/api/` paths must not fall back to the frontend shell.
+- The frontend foundation stack uses **SvelteKit**, **Tailwind CSS**, **Bits UI**, and **shadcn-svelte**. Bits UI provides accessible primitives; shadcn-svelte is a component scaffolding source, not the product design system.
 - The frontend i18n library is **Paraglide JS** (Inlang). Use its compile-time message functions for all user-facing copy.
 - Add the Paraglide/Inlang message catalog structure before the first non-placeholder user-facing screen.
 - Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
@@ -85,6 +86,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.
 - Use **Dinero.js v2** for all frontend money arithmetic and display (balance checks before submission, running totals, input parsing). Use `Intl.NumberFormat` via Dinero's formatting layer for locale-aware rendering.
 - Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
+- Use Tailwind for implementation ergonomics, layout composition, and utility authoring, but keep semantic design tokens in CSS custom properties as the source of truth for theme roles. Tailwind utilities do not replace the token system or the app's product-specific visual language.
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.
 - Themes start with light and dark only.
 - Theme names and token roles must stay stable even if visual styling evolves.
@@ -95,6 +97,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Prefer shared frontend helpers and API seams over route-local ad hoc logic.
 - Use **`openapi-typescript`** (type generation) + **`openapi-fetch`** (typed HTTP client) for all frontend API calls. The OpenAPI spec is the single source of type truth.
 - Use **`@tanstack/svelte-query`** as the data layer for all server state. Use `createInfiniteQuery` for paginated lists; use query key composition to cache search results per search string.
+- Add **`@tanstack/svelte-table`** and TanStack Virtual only when the first dense table or virtualized list screen actually needs them; do not lock them into the baseline dependency set before first use.
 - Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets (account name dropdowns, payee autocomplete). Do not use client-side search for full transaction lists.
 - Use **`date-fns` v3** for all frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
 - All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
