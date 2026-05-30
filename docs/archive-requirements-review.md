@@ -50,6 +50,10 @@ Already settled since this review plan was first written:
 
 - Use `modernc.org/sqlite`, not a CGO SQLite driver.
 - Use `pressly/goose` with embedded SQL migrations.
+- Install SQLite PRAGMAs per physical connection: `busy_timeout(5000)`, `foreign_keys(1)`, `journal_mode(WAL)`, `synchronous(NORMAL)`, and `wal_autocheckpoint(1000)`.
+- Run pending migrations automatically at startup before serving HTTP; fail startup if migrations fail.
+- Use goose's default per-file migration transaction behavior unless a migration documents why `NO TRANSACTION` is required.
+- Prefer SQLite's online backup API for in-app live backups; `VACUUM INTO` is acceptable for compact operator-triggered backups.
 
 ### Phase 1: Books, Commodities, And Accounts
 
@@ -57,7 +61,7 @@ Review account tree rules, commodity precision, opening-balance behavior, and si
 
 Questions to settle before implementation:
 
-- Should the initial setup create a default book automatically?
+- What exact fields and choices belong in the default book, base currency, optional additional currency, and system-account setup step?
 - Which currency metadata source is acceptable for the first slice?
 - How much account-type customization is allowed before real reporting exists?
 
@@ -89,7 +93,7 @@ Review imports, cleanup helpers, budgets, schedules, pricing, investments, and a
 
 Lock these now:
 
-- Go `1.22` as declared by `backend/go.mod`.
+- Go `1.26` as declared by `backend/go.mod`.
 - Go standard `net/http` routing until a concrete backend feature proves a framework is needed.
 - SvelteKit with static adapter output served by the Go binary.
 - `pnpm` `11.5.0` for JavaScript workspace tasks.
@@ -99,15 +103,15 @@ Lock these now:
 - Same-origin production shape: one Go binary serving API and static frontend.
 - Keep GitHub Actions CI aligned with the local validation wrapper scripts.
 - Public VPS deployment with real financial data requires MFA, even if that delays public VPS readiness.
-- Browser-based first-run setup creates the single owner with a username and password.
+- Browser-based first-run setup is staged: owner first, then default book/currency/system-account setup, then category choices as those domains exist.
+- Password hashing uses Argon2id with self-describing stored hashes and upgradeable parameters.
 - English-first UI and built-in data with translation boundaries ready for additional languages.
 - SQLite database encryption is deferred for early local use, but documentation must explain when encrypted-at-rest storage may be needed.
-- `modernc.org/sqlite`, `pressly/goose`, `sqlc`, `database/sql`, and distroless production images as documented in `docs/conventions.md`.
-- SQLite runtime pragmas should include foreign keys, WAL, busy timeout, and an explicit synchronous mode once real database setup lands.
+- `modernc.org/sqlite`, `pressly/goose`, `sqlc`, `database/sql`, and the official Debian 13 slim production runtime image as documented in `docs/conventions.md`.
+- SQLite runtime PRAGMAs, migration behavior, busy timeout, and backup approach are locked in ADR 0004.
 
 Do not lock these yet:
 
-- Authentication/password/session packages.
 - Password-reset mechanism.
 - Final UI component abstraction beyond the currently installed Svelte ecosystem.
 - Initial non-English language set.
@@ -117,7 +121,7 @@ Do not lock these yet:
 Lock these before the first related implementation slice:
 
 - Migration transaction behavior and the exact connection-pragmas installation point.
-- Password hashing, session storage, cookie settings, setup completion semantics, and password-reset behavior.
+- Exact setup-progress persistence shape and password-reset behavior.
 - Translation catalog file format, built-in data label keys, and locale fallback behavior.
 - Theme token names, persistence key, and light/dark token minimums.
 - API error envelope and request identifier behavior.

@@ -30,7 +30,7 @@ Primary product goal:
 
 - Theme infrastructure starts as a token-based system with light and dark themes only.
 - Runtime product scope is strictly single-owner and single-user for now; if household sharing ever becomes real scope, naming can be revised deliberately then.
-- First-run setup is browser-based and creates the single owner with a username and password.
+- First-run setup is browser-based and guided. It creates the owner first, then grows to include the default book, base currency, optional additional currencies, system accounts, default categories, and optional additional categories as those feature slices are implemented.
 - Public VPS deployments require HTTPS and local authentication.
 - Public VPS deployment with real financial data requires MFA; public deployment may be delayed until MFA is implemented.
 - Localhost development may use HTTP. LAN/private deployments should strongly prefer HTTPS through a reverse proxy or app-provided certificate and key configuration.
@@ -73,6 +73,7 @@ These apply across all feature phases.
 
 - Local authentication is required before real financial data entry ships.
 - The initial auth flow is browser first-run setup with owner username and password.
+- Password hashing must use Argon2id with self-describing stored hashes and upgradeable parameters.
 - Public VPS deployments must assume an untrusted network.
 - All privileged operations must require authentication.
 - Session, audit, and request attribution should be designed in from the first real user flows.
@@ -105,8 +106,9 @@ These phases keep Rekenraam incremental while preserving the foundations needed 
 Goal: make the empty app safe to evolve.
 
 - SQLite migration runner and schema version table.
-- SQLite connection setup with deliberate pragmas.
-- Browser-based first-run owner setup with username and password before real financial data entry.
+- SQLite connection setup with deliberate per-connection PRAGMAs: foreign keys on, WAL, busy timeout, explicit synchronous mode, and WAL autocheckpoint.
+- Automatic startup migrations before the HTTP server starts serving requests.
+- Browser-based first-run owner setup with username and password before real financial data entry. This slice creates the owner only; later setup steps are added with books, accounts, and categories.
 - Translation boundary with English messages and localization-ready built-in data.
 - Versioned `/api/v1` route shape for real domain endpoints.
 - Basic backup and restore documentation.
@@ -118,6 +120,7 @@ Goal: create the durable accounting skeleton.
 
 - Single owner book.
 - Commodity/currency table with exact decimal scale metadata.
+- First-run setup extension for default book, base currency, optional additional currencies, and required system accounts.
 - Account tree with account types.
 - Opening balances through explicit equity/opening-balance transactions.
 - Account list and account detail UI.
@@ -129,6 +132,7 @@ Goal: make daily transaction entry useful.
 - Transactions with postings/splits.
 - Transfers as ordinary balanced transactions.
 - Friendly category UI mapped to income/expense accounts.
+- First-run setup extension for choosing default categories and optional additional categories.
 - Transaction create, edit, void/archive, and list flows.
 - Transaction list uses cursor-based pagination and supports server-side FTS5 search.
 - Backend balancing tests and API smoke tests.
@@ -209,6 +213,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - Import priorities: which file formats arrive first after CSV.
 - Export guarantees: minimum export formats and whether exports should include settings, reports, and metadata.
 - Backup policy: backup location, restore expectations, and Docker volume guidance.
+- SQLite backup implementation: online backup API first, `VACUUM INTO` where useful, and no raw live file-copy guidance as the normal path.
 - Database encryption policy: encryption is deferred, but risks and future requirements must be documented.
 - Attachment policy: whether statement files or receipts are in scope at all.
 - Notification policy: whether the app will ever send email, and what remains strictly local-only.
@@ -229,7 +234,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - `.archive/` ideas are useful input but not source of truth.
 - Keep a single active book in the UI for now; do not introduce a visible multi-book UX prematurely.
 - Keep runtime UX explicitly single-owner and single-user for now.
-- Use browser-based owner setup with username and password for initial local authentication.
+- Use browser-based setup for initial local authentication. Implement owner creation first, then extend the setup workflow with default book, currency, system account, and category choices when those domains exist.
 - Keep app-defined database labels localization-ready; do not seed English-only category, currency, commodity, or system labels as the only source of truth.
 - Prefer void or corrective workflows over destructive deletion.
 - Avoid desktop-only concepts such as native file pickers, session undo stacks, or local database-path selection UX.

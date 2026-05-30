@@ -396,7 +396,7 @@ These archive decisions are already represented in active docs and should be tre
 
 **Phase 1 books, commodities, and accounts:**
 
-- Create a default book during first-run setup unless a later decision says otherwise.
+- Extend first-run setup with default book, base currency, optional additional currencies, and required system accounts when book/account setup lands.
 - Keep runtime single-book guardrails centralized; avoid scattered `book_id = 1` assumptions.
 - Create system accounts with stable roles when account setup lands: `opening_balance`, `imbalance_import`, `income_summary`, `expense_summary`, and `retained_earnings`.
 - Treat account close/reopen as lifecycle state, not deletion.
@@ -443,7 +443,6 @@ These are not settled by the archive and should remain visible before implementa
 
 - What password reset flow fits a single-owner self-hosted app?
 - What is the minimum MFA implementation required before public VPS real-data deployment?
-- Should first-run setup create the default book and base currency immediately?
 - What exact columns and files define the first core-ledger CSV export?
 - Is first QIF export per-account register only, or should a broader export arrive in the same milestone?
 - Should change reasons be mandatory on every write, only on financial corrections, or only after reconciliation?

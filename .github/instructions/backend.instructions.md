@@ -11,13 +11,17 @@ description: "Use when editing Go backend code, migrations, repositories, servic
 - Keep request and response DTOs near API handlers.
 - Real endpoints belong under `/api/v1`.
 - New schema changes require explicit migrations in `backend/migrations/`.
+- SQLite connections must install PRAGMAs per physical connection: `busy_timeout(5000)`, `foreign_keys(1)`, `journal_mode(WAL)`, `synchronous(NORMAL)`, and `wal_autocheckpoint(1000)`.
+- Startup runs embedded goose migrations before the HTTP server listens; migration failure fails startup.
 - Backend tests should prefer temporary SQLite databases.
 - Preserve exact financial arithmetic and reconciliation-safe behavior.
 - Built-in database records must use stable keys/codes for localized display labels instead of English text as the only source of truth.
-- First-run setup creates the single owner with a username and password.
+- First-run setup creates the single owner with a username and password first, then later setup steps add default book, currency, system account, and category choices as those domains are implemented.
+- Password hashing uses Argon2id via `golang.org/x/crypto/argon2`; store self-describing hashes with parameters and never store plaintext or reversibly encrypted passwords.
 - Avoid introducing assumptions that depend on cloud services or external identity providers.
 - Browser sessions use opaque `HttpOnly` cookie tokens, hashed session storage, `SameSite=Strict`, and CSRF validation for mutating API requests.
 - Public deployments require HTTPS. Localhost development may use HTTP. LAN/private HTTPS can be provided by a reverse proxy or app-configured certificate and key.
+- Docker production runtime uses the official Debian 13 slim base, `debian:trixie-slim`, and runs the app as a non-root numeric user.
 - If a backend change adds a durable domain rule, update `docs/product-requirements.md`, `docs/conventions.md`, or `docs/early-architecture-decisions.md` as appropriate.
 
 ## Go Conventions
@@ -41,6 +45,7 @@ description: "Use when editing Go backend code, migrations, repositories, servic
 - Use `testify/assert` (non-fatal) and `testify/require` (fatal) in all Go tests. Do not write verbose manual assertion blocks.
 - `sqlc`-generated code lives in `backend/internal/db/`. Do not edit generated files by hand; regenerate with `sqlc generate`.
 - Backend tests use a temporary in-memory or temp-file SQLite database. Never use the development database file in tests.
+- Live SQLite backup code must use the online backup API or `VACUUM INTO`; do not implement raw live file copy as the normal backup path.
 - The server must handle `SIGTERM` and `SIGINT` with `http.Server.Shutdown(ctx)` and a short grace period.
 
 ## Backend Validation

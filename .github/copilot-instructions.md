@@ -32,7 +32,8 @@ In case of conflict, earlier items in the list take precedence over later items.
 - Prefer void, archive, and corrective-entry workflows for durable changes.
 - Keep the production shape as one Go app serving the static frontend.
 - Keep the product explicitly single-user until an ADR changes that scope.
-- First-run setup creates the single owner with a username and password.
+- First-run setup creates the single owner with a username and password first, then later setup steps add default book, currency, system account, and category choices as those domains are implemented.
+- Password hashing uses Argon2id with self-describing stored hashes and upgradeable parameters.
 - Built-in database labels must use stable keys/codes and resolve localized display text outside durable financial data.
 - First export milestone must include core ledger CSV and QIF.
 - Attachments are out of scope until the active requirements say otherwise.

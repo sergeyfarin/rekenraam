@@ -46,6 +46,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
 - The SQLite Go driver is **`modernc.org/sqlite`** (pure Go, no CGO). Do not use `mattn/go-sqlite3`.
+- SQLite connections must install PRAGMAs on every physical connection through the modernc DSN: `busy_timeout(5000)`, `foreign_keys(1)`, `journal_mode(WAL)`, `synchronous(NORMAL)`, and `wal_autocheckpoint(1000)`.
+- Startup must validate effective SQLite PRAGMA state before serving requests.
+- Early runtime uses one application `*sql.DB` pool with `SetMaxOpenConns(1)`; revisit only when real workload pressure justifies more concurrency.
 - Database queries use **`sqlc`** for type-safe Go code generated from SQL. Write SQL in query files alongside migrations; run codegen when queries change. Generated code lives in `backend/internal/db/`; do not edit generated files by hand.
 - Raw `database/sql` is used as the underlying interface; `sqlc` generates the typed wrappers.
 
@@ -61,6 +64,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Date fields in request and response bodies use ISO 8601 (`YYYY-MM-DD`) for calendar dates and RFC 3339 for timestamps, consistent with the data layer convention.
 - List endpoints that can return large result sets must use **cursor-based pagination**, not offset pagination. Cursors must be stable under concurrent inserts. Return `next_cursor` in the response; a missing or null `next_cursor` means the last page.
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
+- API code must treat `SQLITE_BUSY` as possible even with `busy_timeout`. If the timeout is exhausted, return a retryable server error instead of hiding or partially applying the operation.
 
 ## Frontend Conventions
 
@@ -103,13 +107,13 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
-- First-run setup is browser-based and creates the single owner with a username and password.
+- First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, base currency, optional additional currencies, system accounts, default categories, and optional additional categories as those domains are implemented.
 - Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.
 - Session tokens are opaque random values. Store only token hashes in SQLite.
 - Session cookies use `HttpOnly`, `SameSite=Strict`, `Path=/`, and no `Domain`. Use `Secure` whenever the app is served over HTTPS. HTTPS deployments should use a `__Host-` prefixed cookie name once auth implementation lands.
 - CSRF protection for mutating API requests uses SameSite cookies as a baseline plus server-side `Origin` validation and a session-bound or signed CSRF token sent in a custom header such as `X-CSRF-Token`.
 - `GET`, `HEAD`, and `OPTIONS` endpoints must not mutate durable state.
-- Password hashing uses **`golang.org/x/crypto/bcrypt`**. Never store plaintext or weakly hashed passwords.
+- Password hashing uses **Argon2id** via `golang.org/x/crypto/argon2`. Store hashes in a self-describing format, such as PHC string format, with algorithm and parameters. Start from the OWASP minimum profile of 19 MiB memory, 2 iterations, and parallelism 1, then tune if local hardware requires it. Never store plaintext or reversibly encrypted passwords.
 - Public deployment requires HTTPS and explicit operator guidance.
 - Public VPS deployment with real financial data requires MFA.
 - Localhost development may use HTTP.
@@ -117,10 +121,11 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Local-network use may ship before MFA if authentication and operator guidance are clear.
 - SQLite database encryption is deferred for early local use, but docs must explain when encrypted-at-rest storage may be needed.
 - Docker Compose must package the same app shape as the single binary.
-- The Docker production image uses **`gcr.io/distroless/static-debian12`** as the base. Since `modernc.org/sqlite` is pure Go with no CGO, no libc is required.
+- The Docker production runtime image uses the official Debian 13 slim base: **`debian:trixie-slim`**. The app runs as a non-root numeric user.
 - SQLite data must live in persistent storage outside the container image or binary.
 - Backup and restore instructions are part of product documentation, not only operator folklore.
 - Operator backups do not replace user-facing export features.
+- Live SQLite backups must use SQLite-aware flows: the online backup API as the preferred in-app approach, or `VACUUM INTO` when a compact operator-triggered copy is acceptable. Do not recommend raw live file copy as the normal backup path.
 
 ## Observability Conventions
 

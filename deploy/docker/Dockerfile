@@ -1,4 +1,4 @@
-FROM node:22-alpine AS frontend
+FROM node:22-trixie-slim AS frontend
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -8,16 +8,18 @@ COPY frontend ./frontend
 WORKDIR /src/frontend
 RUN pnpm run build
 
-FROM golang:1.22-alpine AS backend
+FROM golang:1.26-trixie AS backend
 WORKDIR /src
 COPY backend ./backend
 COPY --from=frontend /src/frontend/build ./backend/internal/web/dist
 WORKDIR /src/backend
-RUN go build -o /out/rekenraam ./cmd/rekenraam
+RUN CGO_ENABLED=0 go build -trimpath -o /out/rekenraam ./cmd/rekenraam
 
-FROM alpine:3.20
+FROM debian:trixie-slim
 WORKDIR /app
-COPY --from=backend /out/rekenraam /app/rekenraam
+RUN mkdir -p /app/data && chown -R 10001:10001 /app
+COPY --from=backend --chown=10001:10001 /out/rekenraam /app/rekenraam
+USER 10001:10001
 VOLUME ["/app/data"]
 ENV HTTP_ADDR=:16888
 ENV DATABASE_URL=file:/app/data/rekenraam.sqlite

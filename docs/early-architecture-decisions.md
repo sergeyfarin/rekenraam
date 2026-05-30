@@ -41,6 +41,10 @@ Rules:
 - Tests should use temporary SQLite databases.
 - Runtime database files belong in a persistent data directory, not inside the binary or container image.
 - Install SQLite connection pragmas deliberately: foreign keys on, WAL mode for normal runtime use, a busy timeout, and an explicit synchronous setting.
+- Install those PRAGMAs on every physical SQLite connection through the driver DSN: `busy_timeout(5000)`, `foreign_keys(1)`, `journal_mode(WAL)`, `synchronous(NORMAL)`, and `wal_autocheckpoint(1000)`.
+- Run embedded goose migrations automatically at startup before the HTTP server listens. Migration failure fails startup.
+- Keep goose's default per-file transaction behavior unless a migration explicitly documents why `NO TRANSACTION` is required.
+- Prefer SQLite's online backup API, or `VACUUM INTO` for compact operator-triggered backups, over raw live file copying.
 
 Do not optimize the first schema around a hypothetical PostgreSQL migration. Avoid gratuitous SQLite-only tricks in ordinary queries, but use SQLite constraints and triggers when they protect financial invariants that should survive application bugs.
 
@@ -132,9 +136,10 @@ Early default:
 
 - Support a single owner user first.
 - Add local authentication before real financial data entry ships.
-- Use browser-based first-run setup to create the owner username and password.
+- Use browser-based first-run setup to create the owner username and password first, then extend setup with default book, base currency, optional additional currencies, system accounts, default categories, and optional additional categories as those feature slices are implemented.
 - Put all privileged operations behind authentication.
 - Keep auth local to the deployment unless a future decision introduces external identity providers.
+- Hash passwords with Argon2id using self-describing stored hashes and upgradeable parameters.
 - Use same-origin browser sessions with `HttpOnly` cookies, hashed session tokens in SQLite, and CSRF protection on mutating API requests.
 - Public deployments require HTTPS. Localhost development may use HTTP. LAN/private deployments should use HTTPS through either a reverse proxy or app-provided certificate and key configuration.
 
@@ -187,6 +192,7 @@ Rules:
 
 - Document where the SQLite database lives in single-binary and Docker deployments.
 - Prefer SQLite online backup or a stopped-app backup over copying a live WAL database file.
+- In-app backup tooling should use the SQLite online backup API through the Go SQLite driver. `VACUUM INTO` is acceptable for compact operator-triggered backups when its extra I/O is acceptable.
 - Provide a restore path before recommending the app for real financial records.
 - Add backup smoke checks once backup tooling exists.
 - Defer SQLite database encryption for early local use, but document the risk and revisit encrypted-at-rest storage before recommending higher-risk deployments.
