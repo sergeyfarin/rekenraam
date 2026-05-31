@@ -50,6 +50,72 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
 }
 
+func TestMigrateUpgradesHistoricalSetupOwnerSchema(t *testing.T) {
+	database := openTestDatabase(t)
+
+	_, err := database.ExecContext(context.Background(), `
+		CREATE TABLE goose_db_version (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			version_id INTEGER NOT NULL,
+			is_applied INTEGER NOT NULL,
+			tstamp TIMESTAMP DEFAULT (datetime('now'))
+		);
+		INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, 1), (1, 1), (2, 1);
+
+		CREATE TABLE users (
+			id INTEGER PRIMARY KEY,
+			username TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			is_owner INTEGER NOT NULL CHECK (is_owner IN (0, 1)),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
+
+		CREATE UNIQUE INDEX users_one_owner_idx
+			ON users (is_owner)
+			WHERE is_owner = 1;
+
+		CREATE TABLE auth_sessions (
+			id INTEGER PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL UNIQUE,
+			created_at TEXT NOT NULL
+		);
+
+		CREATE TABLE setup_steps (
+			step_key TEXT PRIMARY KEY,
+			completed_at TEXT
+		);
+
+		INSERT INTO setup_steps (step_key, completed_at)
+		VALUES
+			('owner', NULL),
+			('book', NULL),
+			('currencies', NULL),
+			('system_accounts', NULL),
+			('categories', NULL);
+
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (1, 'owner', 'hash', 1, '2026-05-31T06:07:00Z', '2026-05-31T06:07:00Z');
+
+		INSERT INTO auth_sessions (id, user_id, token_hash, created_at)
+		VALUES (1, 1, 'token-hash', '2026-05-31T06:07:00Z');
+	`)
+	require.NoError(t, err)
+
+	require.NoError(t, Migrate(context.Background(), database))
+
+	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
+	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
+
+	var expiresAt string
+	var revokedAt sql.NullString
+	err = database.QueryRowContext(context.Background(), `SELECT expires_at, revoked_at FROM auth_sessions WHERE id = 1`).Scan(&expiresAt, &revokedAt)
+	require.NoError(t, err)
+	assert.Equal(t, "2026-06-30T06:07:00Z", expiresAt)
+	assert.False(t, revokedAt.Valid)
+}
+
 func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {
 	got := withRequiredPragmas("file:var/dev.sqlite?mode=rwc")
 

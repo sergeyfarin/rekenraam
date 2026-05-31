@@ -53,6 +53,19 @@
     return m.install_gate_next_step({ step: nextStep.replaceAll('_', ' ') });
   });
 
+    const installStateLabel = $derived.by(() => {
+    switch (setupQuery.data?.install_state) {
+      case 'fresh':
+        return m.app_shell_install_state_fresh();
+      case 'configured':
+        return m.app_shell_install_state_configured();
+      case 'recovery_required':
+        return m.app_shell_install_state_recovery_required();
+      default:
+        return setupQuery.data?.install_state ?? 'unknown';
+    }
+    });
+
   $effect(() => {
     if (browser && shouldRedirectHome) {
       void goto('/');
@@ -147,7 +160,7 @@
         <div class="mt-8 rounded-[1.75rem] border border-border bg-surface-strong/60 p-4">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_status_title()}</p>
           <p class="mt-3 text-sm leading-6 text-foreground">
-            {m.app_shell_status_install_state({ state: setupQuery.data?.install_state ?? '' })}
+	            {m.app_shell_status_install_state({ state: installStateLabel })}
           </p>
           <p class="mt-2 text-sm leading-6 text-muted">
             {m.app_shell_status_session({ username: sessionQuery.data?.user?.username ?? '' })}

@@ -43,18 +43,21 @@ async function ensureOwnerExistsAndReachLogin(page: Parameters<typeof test>[0]['
   await page.goto('/');
 
   const freshHeading = page.getByRole('heading', { name: 'Create the owner account' });
+  const loginHeading = page.getByRole('heading', { name: 'Sign in to continue' });
   const signOutButton = page.getByRole('button', { name: 'Sign out' });
 
-  if (await freshHeading.isVisible({ timeout: 5000 }).catch(() => false)) {
+  await expect(freshHeading.or(loginHeading).or(signOutButton)).toBeVisible({ timeout: 5000 });
+
+  if (await freshHeading.isVisible()) {
     await page.getByLabel('Username').fill('owner');
     await page.getByLabel('Password').fill('test-password');
     await page.getByRole('button', { name: 'Create owner' }).click();
     await expect(page).toHaveURL(/\/app$/);
     await page.getByRole('button', { name: 'Sign out' }).click();
-  } else if (await signOutButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+  } else if (await signOutButton.isVisible()) {
     await signOutButton.click();
   }
 
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toBeVisible();
+  await expect(loginHeading).toBeVisible();
 }

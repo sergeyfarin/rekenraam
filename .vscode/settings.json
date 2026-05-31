@@ -3,6 +3,8 @@
   "chat.tools.terminal.autoApprove": {
     "./scripts/test-frontend.sh": true,
     "go": true,
-    "./scripts/test-backend.sh": true
+    "./scripts/test-backend.sh": true,
+    "sqlite3": true,
+    "printf": true
   }
 }
