@@ -7,14 +7,13 @@ import (
 	"errors"
 	"log/slog"
 	"net"
-	"net/netip"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
 
 	"rekenraam/backend/internal/app"
-
 )
 
 const csrfTokenHeader = "X-CSRF-Token"
@@ -96,7 +95,7 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 }
 
 func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
-	return withCSRFProtection(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := authService.Logout(r.Context(), readSessionToken(r)); err != nil {
 			logger.ErrorContext(r.Context(), "logout owner", slog.Any("err", err))
 			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
@@ -109,22 +108,32 @@ func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOp
 }
 
 func readSessionToken(r *http.Request) string {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil {
-		return ""
+	for _, name := range []string{secureSessionCookieName, sessionCookieName} {
+		cookie, err := r.Cookie(name)
+		if err == nil {
+			return strings.TrimSpace(cookie.Value)
+		}
 	}
 
-	return strings.TrimSpace(cookie.Value)
+	return ""
 }
 
 func clearSessionCookie(w http.ResponseWriter, r *http.Request, options HandlerOptions) {
+	secure := requestUsesHTTPS(r, options)
+	clearCookie(w, requestSessionCookieName(r, options), secure)
+	if requestSessionCookieName(r, options) != sessionCookieName {
+		clearCookie(w, sessionCookieName, secure)
+	}
+}
+
+func clearCookie(w http.ResponseWriter, name string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
+		Name:     name,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   requestUsesHTTPS(r, options),
+		Secure:   secure,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
@@ -143,14 +152,27 @@ func requestUsesHTTPS(r *http.Request, options HandlerOptions) bool {
 	return strings.EqualFold(strings.TrimSpace(forwardedProto), "https")
 }
 
-// withCSRFProtection validates Origin and CSRF token for requests that carry a session cookie.
-// Requests without a session cookie (unauthenticated) pass through; the wrapped handler is
-// responsible for deciding whether authentication is required.
-func withCSRFProtection(authService *app.AuthService, options HandlerOptions, next http.Handler) http.HandlerFunc {
+func requireSameOrigin(options HandlerOptions, next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !originMatchesRequest(r, options) {
+			writeAPIError(w, http.StatusForbidden, "CSRF_INVALID", "origin validation failed")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+func requireAuthenticatedMutation(authService *app.AuthService, options HandlerOptions, next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if authService == nil {
+			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			return
+		}
+
 		token := readSessionToken(r)
 		if token == "" {
-			next.ServeHTTP(w, r)
+			writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "authentication is required")
 			return
 		}
 

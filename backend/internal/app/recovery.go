@@ -58,8 +58,8 @@ func (s *RecoveryService) PrepareBackup(ctx context.Context, input RecoverOwnerI
 }
 
 func (s *RecoveryService) ResetOwnerAccess(ctx context.Context, password string) error {
-	if password == "" {
-		return ValidationError{Message: "password is required"}
+	if err := validateNewOwnerPassword(password); err != nil {
+		return err
 	}
 
 	passwordHash, err := hashPassword(password)

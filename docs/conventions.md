@@ -50,8 +50,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - SQLite connections must install PRAGMAs on every physical connection through the modernc DSN: `busy_timeout(5000)`, `foreign_keys(1)`, `journal_mode(WAL)`, `synchronous(NORMAL)`, and `wal_autocheckpoint(1000)`.
 - Startup must validate effective SQLite PRAGMA state before serving requests.
 - Early runtime uses one application `*sql.DB` pool with `SetMaxOpenConns(1)`; revisit only when real workload pressure justifies more concurrency.
-- Database queries use **`sqlc`** for type-safe Go code generated from SQL. Write SQL in query files alongside migrations; run codegen when queries change. Generated code lives in `backend/internal/db/`; do not edit generated files by hand.
-- Raw `database/sql` is used as the underlying interface; `sqlc` generates the typed wrappers.
+- Database access uses repository-style methods over raw `database/sql`. Introduce **`sqlc`** only when the query surface is large enough to justify code generation, and document the generation command before generated files land.
 
 ## API Conventions
 
@@ -99,7 +98,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Use **`@tanstack/svelte-query`** as the data layer for all server state. Use `createInfiniteQuery` for paginated lists; use query key composition to cache search results per search string.
 - Add **`@tanstack/svelte-table`** and TanStack Virtual only when the first dense table or virtualized list screen actually needs them; do not lock them into the baseline dependency set before first use.
 - Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets (account name dropdowns, payee autocomplete). Do not use client-side search for full transaction lists.
-- Use **`date-fns` v3** for all frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
+- Use **`date-fns` v4** for frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
 - All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
 - Component state uses **Svelte 5 runes** (`$state`, `$derived`, `$effect`, `$props`). Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. No Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in new code.
 
@@ -124,6 +123,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - CSRF protection for mutating API requests uses SameSite cookies as a baseline plus server-side `Origin` validation and a session-bound or signed CSRF token sent in a custom header such as `X-CSRF-Token`.
 - `GET`, `HEAD`, and `OPTIONS` endpoints must not mutate durable state.
 - Password hashing uses **Argon2id** via `golang.org/x/crypto/argon2`. Store hashes in a self-describing format, such as PHC string format, with algorithm and parameters. Start from the OWASP minimum profile of 19 MiB memory, 2 iterations, and parallelism 1, then tune if local hardware requires it. Never store plaintext or reversibly encrypted passwords.
+- Owner passwords must be at least 12 Unicode characters and at most 1024 bytes. Apply the same policy to owner setup and local owner recovery; login may accept existing shorter passwords only if such hashes were created by an older build.
+- Mutating browser API routes must reject non-JSON request bodies unless a feature explicitly documents another content type. Mutating browser API routes must validate same-origin requests before business logic runs; authenticated mutations must also validate the session-bound CSRF token.
 - Public deployment requires HTTPS and explicit operator guidance.
 - Public VPS deployment with real financial data requires MFA.
 - Localhost development may use HTTP.

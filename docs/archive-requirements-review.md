@@ -98,7 +98,7 @@ Lock these now:
 - `pnpm` `11.5.0` for JavaScript workspace tasks.
 - Svelte checks for frontend validation and Go tests for backend validation.
 - Playwright only for critical user journeys, run manually for now.
-- `/api/v1` for real domain endpoints; `/api/hello` remains scaffold-only.
+- `/api/v1` for real domain endpoints; removed scaffold endpoints must not be reintroduced as product API.
 - Same-origin production shape: one Go binary serving API and static frontend.
 - Keep GitHub Actions CI aligned with the local validation wrapper scripts.
 - Public VPS deployment with real financial data requires MFA, even if that delays public VPS readiness.
@@ -106,7 +106,7 @@ Lock these now:
 - Password hashing uses Argon2id with self-describing stored hashes and upgradeable parameters.
 - English-first UI and built-in data with translation boundaries ready for additional languages.
 - SQLite database encryption is deferred for early local use, but documentation must explain when encrypted-at-rest storage may be needed.
-- `modernc.org/sqlite`, `pressly/goose`, `sqlc`, `database/sql`, and the official Debian 13 slim production runtime image as documented in `docs/conventions.md`.
+- `modernc.org/sqlite`, `pressly/goose`, repository-style `database/sql` access, and the official Debian 13 slim production runtime image as documented in `docs/conventions.md`.
 - SQLite runtime PRAGMAs, migration behavior, busy timeout, and backup approach are locked in ADR 0004.
 - Foundation coding gates for setup endpoints, setup progress, password recovery, OpenAPI workflow, error codes, request IDs, i18n scaffolding, and theme token scaffolding are locked in ADR 0006.
 

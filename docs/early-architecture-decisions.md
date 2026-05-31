@@ -121,7 +121,7 @@ Keep API behavior behind explicit HTTP endpoints and document public request and
 
 Rules:
 
-- The scaffold `/api/hello` endpoint is disposable.
+- Scaffold endpoints such as the old `/api/hello` route are disposable and must not be treated as product API.
 - Real domain endpoints should use a versioned prefix, starting with `/api/v1`.
 - Stable `/api/v1` endpoints are OpenAPI-first with `api/openapi/openapi.yaml` as the checked source of truth.
 - The first setup endpoints are `GET /api/v1/setup/status` and `POST /api/v1/setup/owner`.

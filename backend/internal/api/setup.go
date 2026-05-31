@@ -5,12 +5,17 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
+	"strings"
 
 	"rekenraam/backend/internal/app"
 )
 
-const sessionCookieName = "rekenraam_session"
+const (
+	sessionCookieName       = "rekenraam_session"
+	secureSessionCookieName = "__Host-rekenraam_session"
+)
 
 type setupStatusResponse struct {
 	Completed        bool                `json:"completed"`
@@ -112,7 +117,7 @@ func toSetupStatusResponse(status app.SetupStatus) setupStatusResponse {
 
 func writeSessionCookie(w http.ResponseWriter, r *http.Request, options HandlerOptions, token string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
+		Name:     requestSessionCookieName(r, options),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -122,7 +127,21 @@ func writeSessionCookie(w http.ResponseWriter, r *http.Request, options HandlerO
 	})
 }
 
+func requestSessionCookieName(r *http.Request, options HandlerOptions) string {
+	if requestUsesHTTPS(r, options) {
+		return secureSessionCookieName
+	}
+
+	return sessionCookieName
+}
+
 func decodeJSONBody(r *http.Request, destination any) error {
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return app.ValidationError{Message: "content type must be application/json"}
+	}
+
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
 

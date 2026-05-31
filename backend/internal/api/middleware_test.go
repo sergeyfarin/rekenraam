@@ -19,10 +19,12 @@ func TestMiddlewareAddsRequestIDAndLogsRequest(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 
 	var seenRequestID string
-	handler := withRequestID(withRequestLogging(logger, withRecovery(logger, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seenRequestID = RequestIDFromContext(r.Context())
-		w.WriteHeader(http.StatusNoContent)
-	}))))
+	handler := withRequestID(withSecurityHeaders(withRequestLogging(logger, withRecovery(logger,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			seenRequestID = RequestIDFromContext(r.Context())
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	))))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	res := httptest.NewRecorder()
@@ -38,6 +40,9 @@ func TestMiddlewareAddsRequestIDAndLogsRequest(t *testing.T) {
 	assert.Contains(t, logs.String(), `"msg":"request completed"`)
 	assert.Contains(t, logs.String(), `"request_id":"`+requestID+`"`)
 	assert.Contains(t, logs.String(), `"status":204`)
+	assert.Equal(t, "nosniff", res.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", res.Header().Get("X-Frame-Options"))
+	assert.Contains(t, res.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
 }
 
 func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
@@ -46,9 +51,11 @@ func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 
-	handler := withRequestID(withRequestLogging(logger, withRecovery(logger, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		panic("boom")
-	}))))
+	handler := withRequestID(withSecurityHeaders(withRequestLogging(logger, withRecovery(logger,
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			panic("boom")
+		}),
+	))))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/panic", nil)
 	res := httptest.NewRecorder()
@@ -68,4 +75,21 @@ func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
 	assert.Contains(t, logs.String(), `"msg":"panic recovered"`)
 	assert.Contains(t, logs.String(), `"request_id":"`+requestID+`"`)
 	assert.Contains(t, logs.String(), `"status":500`)
+}
+
+func TestSecurityMiddlewareDisablesAuthResponseCaching(t *testing.T) {
+	t.Parallel()
+
+	handler := withSecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusNoContent, res.Code)
+	assert.Equal(t, "no-store", res.Header().Get("Cache-Control"))
+	assert.Equal(t, "no-cache", res.Header().Get("Pragma"))
 }

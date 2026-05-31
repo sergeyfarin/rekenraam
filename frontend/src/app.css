@@ -85,6 +85,10 @@
       linear-gradient(180deg, color-mix(in oklab, var(--color-surface) 45%, transparent) 0%, transparent 100%);
   }
 
+  #app-root {
+    display: contents;
+  }
+
   * {
     @apply border-border;
   }
@@ -96,5 +100,11 @@
   :focus-visible {
     outline: 2px solid color-mix(in oklab, var(--color-accent) 72%, white);
     outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .status-accent-soft {
+    background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
   }
 }

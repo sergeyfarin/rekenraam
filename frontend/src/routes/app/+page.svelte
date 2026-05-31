@@ -61,8 +61,8 @@
         class:text-danger={healthQuery.isError}
         class:bg-danger-soft={healthQuery.isError}
         class:text-accent={!healthQuery.isError}
+        class:status-accent-soft={!healthQuery.isError}
         class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
-        style:background-color={healthQuery.isError ? 'var(--color-danger-soft)' : 'color-mix(in oklab, var(--color-accent) 12%, transparent)'}
       >
         {healthStateLabel}
       </span>

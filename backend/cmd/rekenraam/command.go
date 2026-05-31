@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"rekenraam/backend/internal/api"
 	"rekenraam/backend/internal/app"
@@ -17,7 +18,11 @@ import (
 )
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(stderr, "load config: %v\n", err)
+		return 2
+	}
 	logger := newLogger(cfg.AppEnv)
 
 	if len(args) == 0 {
@@ -66,9 +71,31 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		slog.String("app_env", cfg.AppEnv),
 	)
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("serve http", slog.Any("err", err))
-		return 1
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil && err != http.ErrServerClosed {
+			logger.Error("serve http", slog.Any("err", err))
+			return 1
+		}
+	case <-ctx.Done():
+		logger.Info("server shutting down")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			logger.Error("shutdown http server", slog.Any("err", err))
+			return 1
+		}
+
+		if err := <-errCh; err != nil && err != http.ErrServerClosed {
+			logger.Error("serve http", slog.Any("err", err))
+			return 1
+		}
 	}
 
 	return 0

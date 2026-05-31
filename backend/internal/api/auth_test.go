@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/netip"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -48,6 +48,7 @@ func TestLoginSetsSessionCookieAndReturnsOwner(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -74,6 +75,7 @@ func TestLoginRejectsInvalidCredentials(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -95,6 +97,7 @@ func TestLoginRateLimitsRepeatedFailures(t *testing.T) {
 	for attempt := 0; attempt < 4; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
 		res := httptest.NewRecorder()
 
 		handler.ServeHTTP(res, req)
@@ -104,6 +107,7 @@ func TestLoginRateLimitsRepeatedFailures(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -125,6 +129,7 @@ func TestLoginThrottlePersistsAcrossHandlerRebuild(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
 		res := httptest.NewRecorder()
 
 		handler.ServeHTTP(res, req)
@@ -133,6 +138,7 @@ func TestLoginThrottlePersistsAcrossHandlerRebuild(t *testing.T) {
 	rebuiltHandler := newAuthHandlerForDatabase(database)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	rebuiltHandler.ServeHTTP(res, req)
@@ -153,6 +159,7 @@ func TestLoginRateLimitsRepeatedFailuresFromSameIPAcrossDifferentUsernames(t *te
 	for attempt := 0; attempt < 4; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-`+string(rune('a'+attempt))+`","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
 		req.RemoteAddr = "198.51.100.10:1234"
 		res := httptest.NewRecorder()
 
@@ -163,6 +170,7 @@ func TestLoginRateLimitsRepeatedFailuresFromSameIPAcrossDifferentUsernames(t *te
 
 	blockedReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-e","password":"wrong-password"}`))
 	blockedReq.Header.Set("Content-Type", "application/json")
+	setSameOrigin(blockedReq)
 	blockedReq.RemoteAddr = "198.51.100.10:1234"
 	blockedRes := httptest.NewRecorder()
 
@@ -173,6 +181,7 @@ func TestLoginRateLimitsRepeatedFailuresFromSameIPAcrossDifferentUsernames(t *te
 	rebuiltHandler := newAuthHandlerForDatabase(database)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	req.RemoteAddr = "198.51.100.10:1234"
 	res := httptest.NewRecorder()
 
@@ -194,6 +203,7 @@ func TestLoginIgnoresForwardedClientIPHeadersByDefault(t *testing.T) {
 	for attempt := 0; attempt < 4; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
 		req.Header.Set("X-Forwarded-For", "198.51.100.20")
 		req.RemoteAddr = "203.0.113.10:1234"
 		res := httptest.NewRecorder()
@@ -205,6 +215,7 @@ func TestLoginIgnoresForwardedClientIPHeadersByDefault(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	req.Header.Set("X-Forwarded-For", "198.51.100.20")
 	req.RemoteAddr = "198.51.100.20:1234"
 	res := httptest.NewRecorder()
@@ -226,6 +237,7 @@ func TestLoginUsesForwardedClientIPHeadersWhenTrusted(t *testing.T) {
 	for attempt := 0; attempt < 4; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
 		req.Header.Set("X-Forwarded-For", "198.51.100.30")
 		req.RemoteAddr = "203.0.113.10:1234"
 		res := httptest.NewRecorder()
@@ -237,6 +249,7 @@ func TestLoginUsesForwardedClientIPHeadersWhenTrusted(t *testing.T) {
 
 	blockedReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 	blockedReq.Header.Set("Content-Type", "application/json")
+	setSameOrigin(blockedReq)
 	blockedReq.Header.Set("X-Forwarded-For", "198.51.100.30")
 	blockedReq.RemoteAddr = "203.0.113.10:1234"
 	blockedRes := httptest.NewRecorder()
@@ -251,6 +264,7 @@ func TestLoginUsesForwardedClientIPHeadersWhenTrusted(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	req.Header.Set("X-Forwarded-For", "198.51.100.30")
 	req.RemoteAddr = "203.0.113.10:1234"
 	res := httptest.NewRecorder()
@@ -272,6 +286,7 @@ func TestLoginIgnoresForwardedClientIPHeadersWhenPeerNotAllowlisted(t *testing.T
 	for attempt := 0; attempt < 4; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
 		req.Header.Set("X-Forwarded-For", "198.51.100.40")
 		req.RemoteAddr = "203.0.113.10:1234"
 		res := httptest.NewRecorder()
@@ -283,6 +298,7 @@ func TestLoginIgnoresForwardedClientIPHeadersWhenPeerNotAllowlisted(t *testing.T
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	req.Header.Set("X-Forwarded-For", "198.51.100.40")
 	req.RemoteAddr = "198.51.100.40:1234"
 	res := httptest.NewRecorder()
@@ -307,6 +323,7 @@ func TestSuccessfulLoginClearsPersistentThrottleState(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	req.RemoteAddr = "198.51.100.11:1234"
 	res := httptest.NewRecorder()
 
@@ -336,6 +353,7 @@ func TestLoginRehashesLegacyPasswordHashOnSuccess(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -372,6 +390,7 @@ func TestLoginValidatesRequest(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
+			setSameOrigin(req)
 			res := httptest.NewRecorder()
 
 			handler.ServeHTTP(res, req)
@@ -400,6 +419,7 @@ func TestSuccessfulLoginPreservesIPThrottleState(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	req.RemoteAddr = "198.51.100.50:1234"
 	res := httptest.NewRecorder()
 
@@ -426,6 +446,7 @@ func TestLoginSetsSessionCookieWithMaxAge(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -450,6 +471,7 @@ func TestLoginSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testing.T) 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://example.com")
 	req.RemoteAddr = "203.0.113.10:1234"
 	res := httptest.NewRecorder()
 
@@ -459,7 +481,49 @@ func TestLoginSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testing.T) 
 
 	cookies := res.Result().Cookies()
 	require.Len(t, cookies, 1)
+	assert.Equal(t, secureSessionCookieName, cookies[0].Name)
 	assert.True(t, cookies[0].Secure)
+}
+
+func TestLoginRejectsCrossOriginRequest(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	bootstrapOwner(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://attacker.example")
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusForbidden, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "CSRF_INVALID", body.Error.Code)
+}
+
+func TestLoginRejectsNonJSONContentType(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	bootstrapOwner(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "text/plain")
+	setSameOrigin(req)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusBadRequest, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+	assert.Equal(t, "content type must be application/json", body.Error.Message)
 }
 
 func legacyPasswordHash(t *testing.T, password string) string {
@@ -491,6 +555,7 @@ func TestLoginRequiresSetupBeforeOwnerExists(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -724,6 +789,7 @@ func bootstrapOwner(t *testing.T, handler http.Handler) *http.Cookie {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)

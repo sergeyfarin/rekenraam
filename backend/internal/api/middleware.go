@@ -59,6 +59,24 @@ func withRequestID(next http.Handler) http.Handler {
 	})
 }
 
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := w.Header()
+		header.Set("X-Content-Type-Options", "nosniff")
+		header.Set("Referrer-Policy", "no-referrer")
+		header.Set("X-Frame-Options", "DENY")
+		header.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self'")
+		header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || strings.HasPrefix(r.URL.Path, "/api/v1/setup/") {
+			header.Set("Cache-Control", "no-store")
+			header.Set("Pragma", "no-cache")
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func withRequestLogging(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startedAt := time.Now()

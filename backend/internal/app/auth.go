@@ -42,12 +42,12 @@ type loginThrottleScope struct {
 }
 
 type parsedPasswordHash struct {
-	Version      int
-	MemoryKiB    int
-	Iterations   int
-	Parallelism  int
-	Salt         []byte
-	Hash         []byte
+	Version     int
+	MemoryKiB   int
+	Iterations  int
+	Parallelism int
+	Salt        []byte
+	Hash        []byte
 }
 
 type SessionStatus struct {
@@ -101,8 +101,8 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	if username == "" {
 		return LoginResult{}, ValidationError{Message: "username is required"}
 	}
-	if input.Password == "" {
-		return LoginResult{}, ValidationError{Message: "password is required"}
+	if err := validateLoginPassword(input.Password); err != nil {
+		return LoginResult{}, err
 	}
 	scopes := loginThrottleScopes(username, input.ClientIP)
 	if blocked, err := s.isLoginBlocked(ctx, scopes); err != nil {

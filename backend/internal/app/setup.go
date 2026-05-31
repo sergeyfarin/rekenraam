@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 
@@ -31,6 +32,9 @@ const (
 	argon2KeyLength   = 32
 	sessionTokenBytes = 32
 	SessionLifetime   = 30 * 24 * time.Hour
+
+	ownerPasswordMinLength = 12
+	ownerPasswordMaxBytes  = 1024
 )
 
 var ErrSetupAlreadyComplete = errors.New("setup already complete")
@@ -48,12 +52,12 @@ type SetupService struct {
 }
 
 type SetupStatus struct {
-	Completed   bool
-	CurrentStep string
-	Steps       []SetupStep
-	InstallState string
+	Completed        bool
+	CurrentStep      string
+	Steps            []SetupStep
+	InstallState     string
 	ImplementedSteps []string
-	BlockingStep string
+	BlockingStep     string
 }
 
 type SetupStep struct {
@@ -145,8 +149,8 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 	if username == "" {
 		return CreateOwnerResult{}, ValidationError{Message: "username is required"}
 	}
-	if input.Password == "" {
-		return CreateOwnerResult{}, ValidationError{Message: "password is required"}
+	if err := validateNewOwnerPassword(input.Password); err != nil {
+		return CreateOwnerResult{}, err
 	}
 
 	passwordHash, err := hashPassword(input.Password)
@@ -189,6 +193,31 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 		SetupStatus:  setupStatus,
 		SessionToken: sessionToken,
 	}, nil
+}
+
+func validateNewOwnerPassword(password string) error {
+	if password == "" {
+		return ValidationError{Message: "password is required"}
+	}
+	if utf8.RuneCountInString(password) < ownerPasswordMinLength {
+		return ValidationError{Message: "password must be at least 12 characters"}
+	}
+	if len(password) > ownerPasswordMaxBytes {
+		return ValidationError{Message: "password must be at most 1024 bytes"}
+	}
+
+	return nil
+}
+
+func validateLoginPassword(password string) error {
+	if password == "" {
+		return ValidationError{Message: "password is required"}
+	}
+	if len(password) > ownerPasswordMaxBytes {
+		return ValidationError{Message: "password must be at most 1024 bytes"}
+	}
+
+	return nil
 }
 
 func hashPassword(password string) (string, error) {

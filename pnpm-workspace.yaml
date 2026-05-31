@@ -1,3 +1,6 @@
 packages:
   - frontend
   - e2e
+
+overrides:
+  cookie: 1.0.2

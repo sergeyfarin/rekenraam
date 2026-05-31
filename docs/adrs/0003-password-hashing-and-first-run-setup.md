@@ -26,6 +26,7 @@ Implementation rules:
 4. Generate a unique cryptographically random salt per password.
 5. Store no plaintext passwords and no reversible password encryption.
 6. Keep parameters upgradeable so future logins can rehash with stronger settings when needed.
+7. Owner setup and local owner recovery require passwords between 12 Unicode characters and 1024 bytes.
 
 First-run setup is a guided workflow whose complete target state is:
 
@@ -61,6 +62,6 @@ This workflow is implemented incrementally:
 
 ### Follow-Up
 
-- Define password length, password reset, and failed-login throttling before auth is exposed beyond localhost development.
+- Revisit password reset and failed-login throttling parameters before auth is exposed beyond localhost development.
 - Define the exact system account roles before account setup lands.
 - Define the initial default category set before category setup lands.

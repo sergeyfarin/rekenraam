@@ -54,6 +54,7 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -105,6 +106,7 @@ func TestCreateOwnerSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testi
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://example.com")
 	req.RemoteAddr = "203.0.113.10:1234"
 	res := httptest.NewRecorder()
 
@@ -114,7 +116,57 @@ func TestCreateOwnerSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testi
 
 	cookies := res.Result().Cookies()
 	require.Len(t, cookies, 1)
+	assert.Equal(t, secureSessionCookieName, cookies[0].Name)
 	assert.True(t, cookies[0].Secure)
+}
+
+func TestCreateOwnerRejectsCrossOriginRequest(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://attacker.example")
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusForbidden, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "CSRF_INVALID", body.Error.Code)
+
+	var ownerCount int
+	err := database.QueryRowContext(context.Background(), `SELECT COUNT(1) FROM users WHERE is_owner = 1`).Scan(&ownerCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, ownerCount)
+}
+
+func TestCreateOwnerRejectsNonJSONContentType(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "text/plain")
+	setSameOrigin(req)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusBadRequest, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+	assert.Equal(t, "content type must be application/json", body.Error.Message)
+
+	var ownerCount int
+	err := database.QueryRowContext(context.Background(), `SELECT COUNT(1) FROM users WHERE is_owner = 1`).Scan(&ownerCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, ownerCount)
 }
 
 func TestCreateOwnerRejectsSecondOwner(t *testing.T) {
@@ -124,12 +176,14 @@ func TestCreateOwnerRejectsSecondOwner(t *testing.T) {
 
 	firstReq := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
 	firstReq.Header.Set("Content-Type", "application/json")
+	setSameOrigin(firstReq)
 	firstRes := httptest.NewRecorder()
 	handler.ServeHTTP(firstRes, firstReq)
 	require.Equal(t, http.StatusCreated, firstRes.Code)
 
 	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"other","password":"test-password"}`))
 	secondReq.Header.Set("Content-Type", "application/json")
+	setSameOrigin(secondReq)
 	secondRes := httptest.NewRecorder()
 
 	handler.ServeHTTP(secondRes, secondReq)
@@ -149,6 +203,7 @@ func TestCreateOwnerValidatesRequest(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":" ","password":""}`))
 	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -159,6 +214,26 @@ func TestCreateOwnerValidatesRequest(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
 	assert.Equal(t, "username is required", body.Error.Message)
+}
+
+func TestCreateOwnerRejectsShortPassword(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"short"}`))
+	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusBadRequest, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+	assert.Equal(t, "password must be at least 12 characters", body.Error.Message)
 }
 
 func TestSetupStatusReturnsRecoveryRequiredForInconsistentOwnerState(t *testing.T) {
@@ -209,4 +284,12 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, options), database
+}
+
+func setSameOrigin(req *http.Request) {
+	scheme := "http"
+	if req.TLS != nil {
+		scheme = "https"
+	}
+	req.Header.Set("Origin", scheme+"://"+req.Host)
 }

@@ -79,6 +79,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Origin validation failed
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Owner setup is required before login
           headers:
@@ -200,6 +209,15 @@ paths:
                 $ref: "#/components/schemas/CreateOwnerResponse"
         "400":
           description: Invalid request body or validation failure
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Origin validation failed
           headers:
             X-Request-ID:
               $ref: "#/components/headers/XRequestID"
