@@ -619,6 +619,36 @@ func TestLogoutClearsSessionAndRevokesCookie(t *testing.T) {
 	assert.Equal(t, 1, revokedCount)
 }
 
+func TestLogoutAcceptsTrustedForwardedOrigin(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandlerWithOptions(t, HandlerOptions{
+		TrustProxyHeaders: true,
+		TrustedProxyCIDRs: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")},
+	})
+	cookie := bootstrapOwner(t, handler)
+	csrfToken := authSessionCSRFToken(t, handler, cookie)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.AddCookie(cookie)
+	req.Host = "127.0.0.1:16888"
+	req.RemoteAddr = "127.0.0.1:45678"
+	req.Header.Set("Origin", "http://127.0.0.1:1888")
+	req.Header.Set("X-Forwarded-Host", "127.0.0.1:1888")
+	req.Header.Set("X-Forwarded-Proto", "http")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusNoContent, res.Code)
+
+	var sessionCount int
+	err := database.QueryRowContext(context.Background(), `SELECT COUNT(1) FROM auth_sessions WHERE revoked_at IS NULL`).Scan(&sessionCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, sessionCount)
+}
+
 func TestLogoutRejectsMissingOrigin(t *testing.T) {
 	t.Parallel()
 

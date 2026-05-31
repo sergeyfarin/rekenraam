@@ -17,7 +17,10 @@ export default defineConfig({
     port: 1888,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:16888'
+      '/api': {
+        target: 'http://localhost:16888',
+        xfwd: true
+      }
     }
   }
 });

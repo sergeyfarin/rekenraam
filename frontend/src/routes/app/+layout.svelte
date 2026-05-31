@@ -81,18 +81,18 @@
     logoutError = undefined;
 
     try {
-      let csrfToken = sessionQuery.data?.csrf_token;
+      const refreshedSession = await sessionQuery.refetch();
 
-      if (!csrfToken) {
-        const refreshedSession = await sessionQuery.refetch();
-        csrfToken = refreshedSession.data?.csrf_token;
+      if (!refreshedSession.data?.authenticated) {
+        await goto('/');
+        return;
       }
 
-      if (!csrfToken) {
+      if (!refreshedSession.data.csrf_token) {
         throw new APIClientError({ status: 403, code: 'CSRF_INVALID' });
       }
 
-      await logout(csrfToken);
+      await logout(refreshedSession.data.csrf_token);
       await sessionQuery.refetch();
       await goto('/');
     } catch (error) {

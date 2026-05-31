@@ -5,6 +5,7 @@
     "go": true,
     "./scripts/test-backend.sh": true,
     "sqlite3": true,
-    "printf": true
+    "printf": true,
+    "./scripts/build-single-binary.sh": true
   }
 }

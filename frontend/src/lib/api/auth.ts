@@ -53,12 +53,19 @@ export async function login(input: LoginRequest): Promise<LoginResponse> {
   }
 }
 
-export async function logout(csrfToken: string): Promise<void> {
+export async function logout(csrfToken?: string): Promise<void> {
   try {
+    let currentCSRFToken = csrfToken;
+
+    if (!currentCSRFToken) {
+      const session = await getAuthSession();
+      currentCSRFToken = session.csrf_token;
+    }
+
     const { error, response } = await apiClient.POST('/api/v1/auth/logout', {
       params: {
         header: {
-          'X-CSRF-Token': csrfToken
+          'X-CSRF-Token': currentCSRFToken ?? ''
         }
       }
     });
