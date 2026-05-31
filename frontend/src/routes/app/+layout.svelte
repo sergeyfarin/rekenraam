@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { createQuery } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions, logout } from '$lib/api/auth';
@@ -133,7 +134,7 @@
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_nav_title()}</p>
           <a
             href="/app"
-            aria-current="page"
+            aria-current={$page.url.pathname === '/app' ? 'page' : undefined}
             class="flex items-center rounded-2xl border border-border bg-surface-strong/70 px-4 py-3 text-sm font-semibold text-foreground"
           >
             {m.app_shell_nav_overview()}
@@ -145,7 +146,9 @@
 
         <div class="mt-8 rounded-[1.75rem] border border-border bg-surface-strong/60 p-4">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_status_title()}</p>
-          <p class="mt-3 text-sm leading-6 text-foreground">{m.app_shell_status_setup()}</p>
+          <p class="mt-3 text-sm leading-6 text-foreground">
+            {m.app_shell_status_install_state({ state: setupQuery.data?.install_state ?? '' })}
+          </p>
           <p class="mt-2 text-sm leading-6 text-muted">
             {m.app_shell_status_session({ username: sessionQuery.data?.user?.username ?? '' })}
           </p>
@@ -163,7 +166,7 @@
             onclick={handleLogout}
             disabled={logoutPending}
           >
-            {logoutPending ? m.install_gate_logout_pending() : m.install_gate_logout()}
+            {logoutPending ? m.app_shell_logout_pending() : m.app_shell_logout()}
           </button>
         </div>
       </aside>

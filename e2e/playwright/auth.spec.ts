@@ -42,14 +42,17 @@ test('shows translated feedback for wrong owner password', async ({ page }) => {
 async function ensureOwnerExistsAndReachLogin(page: Parameters<typeof test>[0]['page']) {
   await page.goto('/');
 
-  if (await page.getByRole('heading', { name: 'Create the owner account' }).isVisible().catch(() => false)) {
+  const freshHeading = page.getByRole('heading', { name: 'Create the owner account' });
+  const signOutButton = page.getByRole('button', { name: 'Sign out' });
+
+  if (await freshHeading.isVisible({ timeout: 5000 }).catch(() => false)) {
     await page.getByLabel('Username').fill('owner');
     await page.getByLabel('Password').fill('test-password');
     await page.getByRole('button', { name: 'Create owner' }).click();
     await expect(page).toHaveURL(/\/app$/);
     await page.getByRole('button', { name: 'Sign out' }).click();
-  } else if (await page.getByRole('button', { name: 'Sign out' }).isVisible().catch(() => false)) {
-    await page.getByRole('button', { name: 'Sign out' }).click();
+  } else if (await signOutButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await signOutButton.click();
   }
 
   await expect(page).toHaveURL('/');

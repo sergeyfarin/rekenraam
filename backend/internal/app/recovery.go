@@ -22,13 +22,8 @@ type RecoveryService struct {
 }
 
 type RecoverOwnerInput struct {
-	Password      string
 	BackupPath    string
 	AllowNoBackup bool
-}
-
-type RecoverOwnerResult struct {
-	BackupPath string
 }
 
 func NewRecoveryService(database *sql.DB, databaseURL string, repository *db.RecoveryRepository) *RecoveryService {
@@ -86,19 +81,6 @@ func (s *RecoveryService) ResetOwnerAccess(ctx context.Context, password string)
 	}
 
 	return nil
-}
-
-func (s *RecoveryService) RecoverOwnerAccess(ctx context.Context, input RecoverOwnerInput) (RecoverOwnerResult, error) {
-	backupPath, err := s.PrepareBackup(ctx, input)
-	if err != nil {
-		return RecoverOwnerResult{}, err
-	}
-
-	if err := s.ResetOwnerAccess(ctx, input.Password); err != nil {
-		return RecoverOwnerResult{}, err
-	}
-
-	return RecoverOwnerResult{BackupPath: backupPath}, nil
 }
 
 func defaultRecoveryBackupPath(databaseURL string, now time.Time) (string, error) {

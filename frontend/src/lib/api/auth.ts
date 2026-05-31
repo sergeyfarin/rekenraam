@@ -54,13 +54,6 @@ export async function login(input: LoginRequest): Promise<LoginResponse> {
 }
 
 export async function logout(csrfToken: string): Promise<void> {
-  if (csrfToken.trim() === '') {
-    throw new APIClientError({
-      status: 403,
-      code: 'CSRF_INVALID'
-    });
-  }
-
   try {
     const { error, response } = await apiClient.POST('/api/v1/auth/logout', {
       params: {
