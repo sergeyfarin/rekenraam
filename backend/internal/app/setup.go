@@ -35,6 +35,8 @@ const (
 
 	ownerPasswordMinLength = 12
 	ownerPasswordMaxBytes  = 1024
+
+	ownerUsernameMaxBytes = 64
 )
 
 var ErrSetupAlreadyComplete = errors.New("setup already complete")
@@ -149,6 +151,9 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 	if username == "" {
 		return CreateOwnerResult{}, ValidationError{Message: "username is required"}
 	}
+	if err := validateOwnerUsername(username); err != nil {
+		return CreateOwnerResult{}, err
+	}
 	if err := validateNewOwnerPassword(input.Password); err != nil {
 		return CreateOwnerResult{}, err
 	}
@@ -193,6 +198,18 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 		SetupStatus:  setupStatus,
 		SessionToken: sessionToken,
 	}, nil
+}
+
+func validateOwnerUsername(username string) error {
+	if len(username) > ownerUsernameMaxBytes {
+		return ValidationError{Message: fmt.Sprintf("username must be at most %d bytes", ownerUsernameMaxBytes)}
+	}
+	for _, r := range username {
+		if r < 32 || r == 127 {
+			return ValidationError{Message: "username must not contain control characters"}
+		}
+	}
+	return nil
 }
 
 func validateNewOwnerPassword(password string) error {

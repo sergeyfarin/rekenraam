@@ -19,5 +19,5 @@ func NewHandler(logger *slog.Logger, webHandler http.Handler, setupService *app.
 	mux.HandleFunc("/api/", http.NotFound)
 	mux.Handle("/", webHandler)
 
-	return withRequestID(withSecurityHeaders(withRequestLogging(logger, withRecovery(logger, mux))))
+	return withRequestID(withSecurityHeaders(options, withRequestLogging(logger, withRecovery(logger, mux))))
 }

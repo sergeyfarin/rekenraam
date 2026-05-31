@@ -6,10 +6,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,10 +73,16 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 		})
 		if err != nil {
 			var validationError app.ValidationError
+			var rateLimitError app.RateLimitError
 			switch {
 			case errors.As(err, &validationError):
 				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
-			case errors.Is(err, app.ErrRateLimited):
+			case errors.As(err, &rateLimitError):
+				retryAfterSecs := int(math.Ceil(rateLimitError.RetryAfter.Seconds()))
+				if retryAfterSecs < 1 {
+					retryAfterSecs = 1
+				}
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
 				writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
 			case errors.Is(err, app.ErrSetupRequired):
 				writeAPIError(w, http.StatusConflict, "SETUP_REQUIRED", "owner setup is required before login")

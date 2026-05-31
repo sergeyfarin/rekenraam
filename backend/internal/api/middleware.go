@@ -59,14 +59,22 @@ func withRequestID(next http.Handler) http.Handler {
 	})
 }
 
-func withSecurityHeaders(next http.Handler) http.Handler {
+func withSecurityHeaders(options HandlerOptions, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("Referrer-Policy", "no-referrer")
 		header.Set("X-Frame-Options", "DENY")
+		// NOTE: script-src includes 'unsafe-inline' because SvelteKit adapter-static injects
+		// an inline bootstrapping script into index.html at build time. Removing 'unsafe-inline'
+		// requires computing a SHA-256 hash of that script at build time and embedding it here;
+		// that work is deferred. See docs/conventions.md for the planned approach.
 		header.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self'")
 		header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+		if requestUsesHTTPS(r, options) {
+			header.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
 
 		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || strings.HasPrefix(r.URL.Path, "/api/v1/setup/") {
 			header.Set("Cache-Control", "no-store")

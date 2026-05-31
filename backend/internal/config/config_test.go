@@ -35,6 +35,16 @@ func TestLoadRejectsInvalidTrustedProxyCIDR(t *testing.T) {
 	assert.Contains(t, err.Error(), "TRUSTED_PROXY_CIDRS contains invalid CIDR")
 }
 
+func TestLoadRejectsZeroPrefixTrustedProxyCIDR(t *testing.T) {
+	t.Setenv("TRUST_PROXY_HEADERS", "1")
+	t.Setenv("TRUSTED_PROXY_CIDRS", "0.0.0.0/0")
+
+	_, err := Load()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "matches all addresses")
+}
+
 func TestLoadRejectsInvalidAppEnv(t *testing.T) {
 	t.Setenv("APP_ENV", "staging")
 

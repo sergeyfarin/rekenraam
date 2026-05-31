@@ -33,6 +33,11 @@ func Load() (Config, error) {
 	if trustProxyHeaders && len(trustedProxyCIDRs) == 0 {
 		return Config{}, fmt.Errorf("TRUSTED_PROXY_CIDRS is required when TRUST_PROXY_HEADERS is enabled")
 	}
+	for _, cidr := range trustedProxyCIDRs {
+		if cidr.Bits() == 0 {
+			return Config{}, fmt.Errorf("TRUSTED_PROXY_CIDRS: %s matches all addresses; specify a narrower network range", cidr)
+		}
+	}
 
 	return Config{
 		AppEnv:            appEnv,

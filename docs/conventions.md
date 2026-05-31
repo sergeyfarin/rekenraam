@@ -68,6 +68,16 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Transaction list endpoints must support a `search` query parameter backed by **SQLite FTS5** on the backend. Do not implement client-side full-text search over server-fetched pages.
 - API code must treat `SQLITE_BUSY` as possible even with `busy_timeout`. If the timeout is exhausted, return a retryable server error instead of hiding or partially applying the operation.
 
+## Authentication And Session Security
+
+- Username validation requires: non-empty after trimming, at most 64 bytes, no control characters (Unicode < U+0020 or U+007F). These constraints apply at both owner creation and login. OpenAPI schemas for `CreateOwnerRequest` and `LoginRequest` must document the same limits.
+- Any feature that changes the owner password must revoke all existing sessions atomically in the same database transaction. The `recover-owner` command demonstrates the required pattern. Do not implement a "change password" endpoint that updates the hash without revoking sessions.
+- Login throttle scopes use `username` and `client_ip` as independent scope keys. The `username` throttle is cleared on successful login; the `client_ip` throttle is intentionally retained. When multi-user support is added, confirm that throttle scope keys remain globally unique and cannot be confused across user classes.
+- `429 Too Many Requests` responses from the login endpoint must include a `Retry-After` header with the remaining wait in seconds. The blocked-until time is known at the point the error is returned; derive `Retry-After` from it rather than from a fixed constant.
+- Expired and revoked `auth_sessions` rows accumulate over time. A periodic cleanup should delete rows where `revoked_at IS NOT NULL OR expires_at <= now`. The index `auth_sessions_expires_revoked_idx` exists to support this. Document and implement the cleanup strategy before the app is recommended for long-running deployments.
+- The `script-src 'unsafe-inline'` directive in the Content-Security-Policy header exists because SvelteKit `adapter-static` injects an inline bootstrapping script into `index.html` at build time. The correct fix is to compute a SHA-256 hash of that script during the frontend build and embed it in the Go middleware's CSP. This is deferred; when implemented, the build script must output the hash and the Go source must consume it at build time. Do not remove `'unsafe-inline'` until that mechanism is in place.
+- `Strict-Transport-Security` (HSTS) is emitted only when the request is served over HTTPS (direct TLS or trusted proxy signalling `X-Forwarded-Proto: https`). Do not emit HSTS on plain HTTP responses.
+
 ## Frontend Conventions
 
 - SvelteKit builds static output with `@sveltejs/adapter-static`; production does not run a SvelteKit server.

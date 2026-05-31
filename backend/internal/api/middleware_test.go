@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -19,7 +20,7 @@ func TestMiddlewareAddsRequestIDAndLogsRequest(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 
 	var seenRequestID string
-	handler := withRequestID(withSecurityHeaders(withRequestLogging(logger, withRecovery(logger,
+	handler := withRequestID(withSecurityHeaders(HandlerOptions{}, withRequestLogging(logger, withRecovery(logger,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			seenRequestID = RequestIDFromContext(r.Context())
 			w.WriteHeader(http.StatusNoContent)
@@ -51,7 +52,7 @@ func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 
-	handler := withRequestID(withSecurityHeaders(withRequestLogging(logger, withRecovery(logger,
+	handler := withRequestID(withSecurityHeaders(HandlerOptions{}, withRequestLogging(logger, withRecovery(logger,
 		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 			panic("boom")
 		}),
@@ -80,7 +81,7 @@ func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
 func TestSecurityMiddlewareDisablesAuthResponseCaching(t *testing.T) {
 	t.Parallel()
 
-	handler := withSecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := withSecurityHeaders(HandlerOptions{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -92,4 +93,31 @@ func TestSecurityMiddlewareDisablesAuthResponseCaching(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, res.Code)
 	assert.Equal(t, "no-store", res.Header().Get("Cache-Control"))
 	assert.Equal(t, "no-cache", res.Header().Get("Pragma"))
+}
+
+func TestSecurityMiddlewareSetsHSTSOnlyForHTTPS(t *testing.T) {
+	t.Parallel()
+
+	handler := withSecurityHeaders(HandlerOptions{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Run("no HSTS over plain HTTP", func(t *testing.T) {
+		t.Parallel()
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		assert.Empty(t, res.Header().Get("Strict-Transport-Security"))
+	})
+
+	t.Run("HSTS set when TLS active", func(t *testing.T) {
+		t.Parallel()
+
+		req := httptest.NewRequest(http.MethodGet, "https://example.com/", nil)
+		req.TLS = &tls.ConnectionState{}
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		assert.Equal(t, "max-age=63072000; includeSubDomains", res.Header().Get("Strict-Transport-Security"))
+	})
 }

@@ -23,6 +23,18 @@ var (
 	ErrRateLimited        = errors.New("rate limited")
 )
 
+// RateLimitError is returned when a login attempt is blocked by the throttle.
+// It carries the remaining wait duration so callers can populate Retry-After.
+// errors.Is(err, ErrRateLimited) returns true for RateLimitError values.
+type RateLimitError struct {
+	RetryAfter time.Duration
+}
+
+func (e RateLimitError) Error() string { return ErrRateLimited.Error() }
+func (e RateLimitError) Is(target error) bool {
+	return target == ErrRateLimited
+}
+
 const (
 	loginThrottleMaxFailures = 5
 	loginThrottleWindow      = 15 * time.Minute
@@ -101,14 +113,17 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	if username == "" {
 		return LoginResult{}, ValidationError{Message: "username is required"}
 	}
+	if err := validateOwnerUsername(username); err != nil {
+		return LoginResult{}, err
+	}
 	if err := validateLoginPassword(input.Password); err != nil {
 		return LoginResult{}, err
 	}
 	scopes := loginThrottleScopes(username, input.ClientIP)
-	if blocked, err := s.isLoginBlocked(ctx, scopes); err != nil {
+	if blockedUntil, err := s.isLoginBlocked(ctx, scopes); err != nil {
 		return LoginResult{}, fmt.Errorf("check login throttle: %w", err)
-	} else if blocked {
-		return LoginResult{}, ErrRateLimited
+	} else if !blockedUntil.IsZero() {
+		return LoginResult{}, RateLimitError{RetryAfter: time.Until(blockedUntil)}
 	}
 
 	ownerExists, err := s.repository.OwnerExists(ctx)
@@ -122,12 +137,12 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	credentials, err := s.repository.ReadOwnerCredentials(ctx, username)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			blocked, err := s.recordLoginFailure(ctx, scopes)
+			blockedUntil, err := s.recordLoginFailure(ctx, scopes)
 			if err != nil {
 				return LoginResult{}, fmt.Errorf("record login throttle failure: %w", err)
 			}
-			if blocked {
-				return LoginResult{}, ErrRateLimited
+			if !blockedUntil.IsZero() {
+				return LoginResult{}, RateLimitError{RetryAfter: time.Until(blockedUntil)}
 			}
 			return LoginResult{}, ErrInvalidCredentials
 		}
@@ -140,12 +155,12 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		return LoginResult{}, fmt.Errorf("verify password: %w", err)
 	}
 	if !verified {
-		blocked, err := s.recordLoginFailure(ctx, scopes)
+		blockedUntil, err := s.recordLoginFailure(ctx, scopes)
 		if err != nil {
 			return LoginResult{}, fmt.Errorf("record login throttle failure: %w", err)
 		}
-		if blocked {
-			return LoginResult{}, ErrRateLimited
+		if !blockedUntil.IsZero() {
+			return LoginResult{}, RateLimitError{RetryAfter: time.Until(blockedUntil)}
 		}
 		return LoginResult{}, ErrInvalidCredentials
 	}
@@ -282,33 +297,33 @@ func passwordNeedsRehash(encodedHash string) bool {
 		len(parsedHash.Hash) != argon2KeyLength
 }
 
-func (s *AuthService) isLoginBlocked(ctx context.Context, scopes []loginThrottleScope) (bool, error) {
+func (s *AuthService) isLoginBlocked(ctx context.Context, scopes []loginThrottleScope) (time.Time, error) {
 	for _, scope := range scopes {
-		blocked, err := s.isScopeBlocked(ctx, scope)
+		blockedUntil, err := s.isScopeBlocked(ctx, scope)
 		if err != nil {
-			return false, err
+			return time.Time{}, err
 		}
-		if blocked {
-			return true, nil
+		if !blockedUntil.IsZero() {
+			return blockedUntil, nil
 		}
 	}
 
-	return false, nil
+	return time.Time{}, nil
 }
 
-func (s *AuthService) recordLoginFailure(ctx context.Context, scopes []loginThrottleScope) (bool, error) {
-	blocked := false
+func (s *AuthService) recordLoginFailure(ctx context.Context, scopes []loginThrottleScope) (time.Time, error) {
+	var latestBlock time.Time
 	for _, scope := range scopes {
-		scopeBlocked, err := s.recordScopeLoginFailure(ctx, scope)
+		blockedUntil, err := s.recordScopeLoginFailure(ctx, scope)
 		if err != nil {
-			return false, err
+			return time.Time{}, err
 		}
-		if scopeBlocked {
-			blocked = true
+		if blockedUntil.After(latestBlock) {
+			latestBlock = blockedUntil
 		}
 	}
 
-	return blocked, nil
+	return latestBlock, nil
 }
 
 func (s *AuthService) clearLoginFailures(ctx context.Context, scopes []loginThrottleScope) error {
@@ -328,49 +343,50 @@ func (s *AuthService) clearLoginFailures(ctx context.Context, scopes []loginThro
 
 }
 
-func (s *AuthService) isScopeBlocked(ctx context.Context, scope loginThrottleScope) (bool, error) {
+func (s *AuthService) isScopeBlocked(ctx context.Context, scope loginThrottleScope) (time.Time, error) {
 	record, err := s.repository.ReadLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return false, nil
+			return time.Time{}, nil
 		}
 
-		return false, fmt.Errorf("read login throttle: %w", err)
+		return time.Time{}, fmt.Errorf("read login throttle: %w", err)
 	}
 
 	if !record.BlockedUntil.Valid {
-		return false, nil
+		return time.Time{}, nil
 	}
 
 	blockedUntil, err := time.Parse(time.RFC3339, record.BlockedUntil.String)
 	if err != nil {
-		return false, fmt.Errorf("parse login throttle blocked_until: %w", err)
+		return time.Time{}, fmt.Errorf("parse login throttle blocked_until: %w", err)
 	}
 	if blockedUntil.After(s.now()) {
-		return true, nil
+		return blockedUntil, nil
 	}
 
 	// Best-effort cleanup: stale throttle record delete failure must not block login.
 	_ = s.repository.DeleteLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey)
 
-	return false, nil
+	return time.Time{}, nil
 }
 
-func (s *AuthService) recordScopeLoginFailure(ctx context.Context, scope loginThrottleScope) (bool, error) {
+func (s *AuthService) recordScopeLoginFailure(ctx context.Context, scope loginThrottleScope) (time.Time, error) {
 	record, err := s.repository.ReadLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		return false, fmt.Errorf("read login throttle: %w", err)
+		return time.Time{}, fmt.Errorf("read login throttle: %w", err)
 	}
 
 	now := s.now().UTC()
 	failedAttempts := 1
 	var blockedUntil *string
+	var blockedUntilTime time.Time
 
 	if err == nil {
 		if record.BlockedUntil.Valid {
 			existingBlockedUntil, parseErr := time.Parse(time.RFC3339, record.BlockedUntil.String)
 			if parseErr != nil {
-				return false, fmt.Errorf("parse login throttle blocked_until: %w", parseErr)
+				return time.Time{}, fmt.Errorf("parse login throttle blocked_until: %w", parseErr)
 			}
 			if existingBlockedUntil.After(now) {
 				blocked := existingBlockedUntil.Format(time.RFC3339)
@@ -381,9 +397,9 @@ func (s *AuthService) recordScopeLoginFailure(ctx context.Context, scope loginTh
 					BlockedUntil:   &blocked,
 					UpdatedAt:      now.Format(time.RFC3339),
 				}); upsertErr != nil {
-					return false, fmt.Errorf("refresh active login throttle: %w", upsertErr)
+					return time.Time{}, fmt.Errorf("refresh active login throttle: %w", upsertErr)
 				}
-				return true, nil
+				return existingBlockedUntil, nil
 			}
 		}
 
@@ -391,7 +407,8 @@ func (s *AuthService) recordScopeLoginFailure(ctx context.Context, scope loginTh
 	}
 
 	if failedAttempts >= loginThrottleMaxFailures {
-		blocked := now.Add(loginThrottleWindow).Format(time.RFC3339)
+		blockedUntilTime = now.Add(loginThrottleWindow)
+		blocked := blockedUntilTime.Format(time.RFC3339)
 		blockedUntil = &blocked
 		failedAttempts = 0
 	}
@@ -403,10 +420,10 @@ func (s *AuthService) recordScopeLoginFailure(ctx context.Context, scope loginTh
 		BlockedUntil:   blockedUntil,
 		UpdatedAt:      now.Format(time.RFC3339),
 	}); err != nil {
-		return false, fmt.Errorf("upsert login throttle: %w", err)
+		return time.Time{}, fmt.Errorf("upsert login throttle: %w", err)
 	}
 
-	return blockedUntil != nil, nil
+	return blockedUntilTime, nil
 }
 
 func loginThrottleScopes(username string, clientIP string) []loginThrottleScope {
