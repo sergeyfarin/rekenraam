@@ -1,0 +1,25 @@
+meta {
+  name: setup book
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/setup/book
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+  Origin: {{baseUrl}}
+  X-CSRF-Token: {{csrfToken}}
+}
+
+body:json {
+  {
+    "code": "personal",
+    "name": "Personal"
+  }
+}

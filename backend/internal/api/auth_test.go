@@ -544,8 +544,9 @@ func newAuthHandlerForDatabaseWithOptions(database *sql.DB, options HandlerOptio
 	authRepository := db.NewAuthRepository(database)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	authService := app.NewAuthService(authRepository, logger)
+	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, options)
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, options)
 }
 
 func TestLoginRequiresSetupBeforeOwnerExists(t *testing.T) {

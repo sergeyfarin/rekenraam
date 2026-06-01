@@ -13,9 +13,9 @@ type HandlerOptions struct {
 	TrustedProxyCIDRs []netip.Prefix
 }
 
-func NewHandler(logger *slog.Logger, webHandler http.Handler, setupService *app.SetupService, authService *app.AuthService, options HandlerOptions) http.Handler {
+func NewHandler(logger *slog.Logger, webHandler http.Handler, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, options HandlerOptions) http.Handler {
 	mux := http.NewServeMux()
-	RegisterRoutesWithAuth(mux, logger, setupService, authService, options)
+	RegisterRoutesWithAuth(mux, logger, setupService, authService, bookService, options)
 	mux.HandleFunc("/api/", http.NotFound)
 	mux.Handle("/", webHandler)
 

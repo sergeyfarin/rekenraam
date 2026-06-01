@@ -10,7 +10,7 @@ This document records the completed Phase 0 setup/auth baseline and the remainin
 - Cookie session plus CSRF stays same-origin and follows ADR 0002.
 - Owner creation stays Argon2id-based and upgradeable.
 - Phase 0 does not create books, commodities, institutions, accounts, opening balances, or system accounts.
-- Phase 1 starts with book setup, then commodities/currencies, then institutions and accounts.
+- Phase 1 starts with setup for the single runtime book, then commodities/currencies, then institutions and accounts.
 
 ## Completed Baseline
 
@@ -74,9 +74,9 @@ Build:
 
 ## Phase 1 Handoff
 
-1. Add the single owner book setup step.
+1. Add the single owner book setup step. The `books` table remains the future extension point, but current runtime creates only book `1`.
 2. Add commodity and currency identity/version tables before account tables.
 3. Add institution and account management after commodities exist.
 4. Seed required system accounts only after the account model exists.
 5. Do not add opening-balance amounts to account creation. Opening balances require Phase 2 posted transactions.
-6. Keep runtime single-book guardrails centralized; do not scatter `book_id = 1` assumptions.
+6. Do not add book selection UI or a flow to create additional books until a later multi-book decision is accepted.

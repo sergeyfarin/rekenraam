@@ -158,7 +158,7 @@ Goal: make the empty app safe to evolve.
 
 Goal: create the durable accounting skeleton.
 
-- Single owner book.
+- Single owner book. The `books` table remains a future extension point, but current runtime creates and uses only book `1` with no book selector.
 - Commodity/currency table with exact decimal scale metadata.
 - First-run setup extension for default book, base currency, optional additional currencies, and required system accounts.
 - Commodity and currency setup comes before accounts. Account precision must derive from commodity metadata or an explicit account-level quantity scale override, not from floating-point or free-text currency fields.

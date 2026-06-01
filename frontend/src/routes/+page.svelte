@@ -5,7 +5,7 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions, login } from '$lib/api/auth';
   import { healthQueryOptions } from '$lib/api/health';
-  import { createOwner, setupStatusQueryOptions } from '$lib/api/setup';
+  import { createBook, createOwner, setupStatusQueryOptions } from '$lib/api/setup';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import { m } from '$lib/paraglide/messages.js';
 
@@ -17,10 +17,14 @@
   let ownerPassword = $state('');
   let loginUsername = $state('');
   let loginPassword = $state('');
+  let bookCode = $state('personal');
+  let bookName = $state('');
   let ownerError = $state<unknown>(undefined);
   let loginError = $state<unknown>(undefined);
+  let bookError = $state<unknown>(undefined);
   let ownerPending = $state(false);
   let loginPending = $state(false);
+  let bookPending = $state(false);
   let redirectingToApp = $state(false);
 
   const healthState = $derived.by<'loading' | 'success' | 'error'>(() => {
@@ -62,7 +66,7 @@
   const installGateError = $derived(setupQuery.error ?? sessionQuery.error);
 
   const pageState = $derived.by<
-    'loading' | 'error' | 'fresh' | 'login' | 'authenticated' | 'recovery_required'
+    'loading' | 'error' | 'fresh' | 'login' | 'book_setup' | 'authenticated' | 'recovery_required'
   >(() => {
     if (setupQuery.isPending || sessionQuery.isPending) {
       return 'loading';
@@ -84,7 +88,15 @@
       return 'recovery_required';
     }
 
-    return sessionQuery.data.authenticated ? 'authenticated' : 'login';
+    if (!sessionQuery.data.authenticated) {
+      return 'login';
+    }
+
+    if (setupQuery.data.current_step === 'book') {
+      return 'book_setup';
+    }
+
+    return 'authenticated';
   });
 
   const stateBadge = $derived.by(() => {
@@ -93,6 +105,8 @@
         return m.install_gate_state_fresh();
       case 'login':
         return m.install_gate_state_configured();
+      case 'book_setup':
+        return m.install_gate_state_book();
       case 'authenticated':
         return m.install_gate_state_authenticated();
       case 'recovery_required':
@@ -174,6 +188,29 @@
     }
   }
 
+  async function handleCreateBook(event: SubmitEvent) {
+    event.preventDefault();
+
+    bookPending = true;
+    bookError = undefined;
+
+    try {
+      await createBook(
+        {
+          code: bookCode,
+          name: bookName
+        },
+        sessionQuery.data?.csrf_token ?? ''
+      );
+
+      await refreshInstallGate();
+    } catch (error) {
+      bookError = error;
+    } finally {
+      bookPending = false;
+    }
+  }
+
 </script>
 
 <main class="min-h-screen px-6 py-16 sm:px-10">
@@ -238,6 +275,9 @@
           {:else if pageState === 'login'}
             <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_login_title()}</h2>
             <p class="text-sm leading-6 text-muted">{m.install_gate_login_copy()}</p>
+          {:else if pageState === 'book_setup'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_book_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_book_copy()}</p>
           {:else if pageState === 'authenticated'}
             <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_authenticated_title()}</h2>
             <p class="text-sm leading-6 text-muted">{m.install_gate_authenticated_copy()}</p>
@@ -339,6 +379,39 @@
             disabled={loginPending}
           >
             {loginPending ? m.install_gate_login_submit_pending() : m.install_gate_login_submit()}
+          </button>
+        </form>
+      {:else if pageState === 'book_setup'}
+        <form class="space-y-4" onsubmit={handleCreateBook}>
+          <APIFormError error={bookError} id="book-form-error" />
+
+          <label class="block space-y-2">
+            <span class="text-sm font-medium text-foreground">{m.install_gate_book_name_label()}</span>
+            <input
+              bind:value={bookName}
+              name="book-name"
+              autocomplete="off"
+              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+              required
+            />
+          </label>
+
+          <label class="block space-y-2">
+            <span class="text-sm font-medium text-foreground">{m.install_gate_book_code_label()}</span>
+            <input
+              bind:value={bookCode}
+              name="book-code"
+              autocomplete="off"
+              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+            />
+          </label>
+
+          <button
+            type="submit"
+            class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={bookPending}
+          >
+            {bookPending ? m.install_gate_book_submit_pending() : m.install_gate_book_submit()}
           </button>
         </form>
       {:else if pageState === 'authenticated'}

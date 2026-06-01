@@ -36,7 +36,7 @@ func TestSetupStatusReturnsInitialSteps(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.False(t, body.Completed)
 	assert.Equal(t, app.InstallStateFresh, body.InstallState)
-	assert.Equal(t, []string{"owner"}, body.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book"}, body.ImplementedSteps)
 	assert.Equal(t, "owner", body.BlockingStep)
 	assert.Equal(t, "owner", body.CurrentStep)
 	require.Len(t, body.Steps, 5)
@@ -67,7 +67,7 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.Equal(t, "owner", body.Owner.Username)
 	assert.False(t, body.Setup.Completed)
 	assert.Equal(t, app.InstallStateConfigured, body.Setup.InstallState)
-	assert.Equal(t, []string{"owner"}, body.Setup.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book"}, body.Setup.ImplementedSteps)
 	assert.Empty(t, body.Setup.BlockingStep)
 	assert.Equal(t, "book", body.Setup.CurrentStep)
 	assert.Equal(t, setupStepResponse{Key: "owner", Status: app.SetupStepStatusCompleted}, body.Setup.Steps[0])
@@ -258,7 +258,7 @@ func TestSetupStatusReturnsRecoveryRequiredForInconsistentOwnerState(t *testing.
 	var body setupStatusResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, app.InstallStateRecoveryRequired, body.InstallState)
-	assert.Equal(t, []string{"owner"}, body.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book"}, body.ImplementedSteps)
 	assert.Empty(t, body.BlockingStep)
 }
 
@@ -282,8 +282,9 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	authRepository := db.NewAuthRepository(database)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	authService := app.NewAuthService(authRepository, logger)
+	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, options), database
 }
 
 func setSameOrigin(req *http.Request) {

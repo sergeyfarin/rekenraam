@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -30,6 +30,10 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("GET /api/v1/auth/session", sessionStatus(logger, authService))
 		mux.HandleFunc("POST /api/v1/auth/login", requireSameOrigin(options, login(logger, authService, options)))
 		mux.HandleFunc("POST /api/v1/auth/logout", logout(logger, authService, options))
+	}
+	if authService != nil && bookService != nil {
+		mux.HandleFunc("GET /api/v1/books/current", currentBook(logger, authService, bookService))
+		mux.HandleFunc("POST /api/v1/setup/book", createBook(logger, authService, bookService, options))
 	}
 }
 

@@ -391,6 +391,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the single owner book during setup */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateBookRequest"];
+                };
+            };
+            responses: {
+                /** @description Book created and setup advanced to the next step */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CreateBookResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Book already exists */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current single owner book */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current book */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BookResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Book not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -417,7 +578,7 @@ export interface components {
             current_step?: "owner" | "book" | "currencies" | "system_accounts" | "categories";
             /** @enum {string} */
             install_state: "fresh" | "configured" | "recovery_required";
-            implemented_steps: "owner"[];
+            implemented_steps: ("owner" | "book")[];
             /** @enum {string} */
             blocking_step?: "owner";
             steps: components["schemas"]["SetupStep"][];
@@ -431,6 +592,35 @@ export interface components {
         OwnerResponse: {
             id: number;
             username: string;
+        };
+        BookResponse: {
+            /**
+             * Format: int64
+             * @description Current runtime always uses book id 1.
+             */
+            id: number;
+            /** Format: int64 */
+            owner_user_id: number;
+            /** @description Stable internal code for the single owner book. */
+            code: string;
+            /** @description User-visible book name. */
+            name: string;
+            /** Format: int64 */
+            base_currency_commodity_id?: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateBookRequest: {
+            /** @description Optional stable code. Defaults to personal. Lowercase letters, numbers, underscores, and hyphens only. */
+            code?: string;
+            /** @description User-visible book name. */
+            name: string;
+        };
+        CreateBookResponse: {
+            book: components["schemas"]["BookResponse"];
+            setup: components["schemas"]["SetupStatusResponse"];
         };
         AuthSessionResponse: {
             authenticated: boolean;
