@@ -201,7 +201,10 @@ func createOwnerSession(t *testing.T, handler http.Handler) (*http.Cookie, strin
 func createBookForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, name string) {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/book", strings.NewReader(`{"name":"`+name+`"}`))
+	body, err := json.Marshal(createBookRequest{Name: name})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/book", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(csrfTokenHeader, csrfToken)
 	setSameOrigin(req)

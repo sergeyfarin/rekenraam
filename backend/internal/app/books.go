@@ -20,8 +20,7 @@ const (
 var (
 	ErrBookAlreadyExists = errors.New("book already exists")
 	ErrBookNotFound      = errors.New("book not found")
-	ErrUnauthenticated   = errors.New("unauthenticated")
-	bookCodePattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+	bookCodePattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 )
 
 type BookService struct {
@@ -73,7 +72,7 @@ func (s *BookService) CurrentBook(ctx context.Context) (Book, error) {
 
 func (s *BookService) CreateBook(ctx context.Context, input CreateBookInput) (CreateBookResult, error) {
 	if input.OwnerUserID <= 0 {
-		return CreateBookResult{}, ErrUnauthenticated
+		return CreateBookResult{}, ValidationError{Message: "owner user is required"}
 	}
 
 	code := normalizeBookCode(input.Code)

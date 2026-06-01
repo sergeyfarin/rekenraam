@@ -52,7 +52,7 @@ func currentBook(logger *slog.Logger, authService *app.AuthService, bookService 
 
 func createBook(logger *slog.Logger, authService *app.AuthService, bookService *app.BookService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		owner, ok := authenticatedOwner(w, r, logger, authService)
+		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
 		}
@@ -75,8 +75,6 @@ func createBook(logger *slog.Logger, authService *app.AuthService, bookService *
 				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
 			case errors.Is(err, app.ErrBookAlreadyExists):
 				writeAPIError(w, http.StatusConflict, "CONFLICT", "book already exists")
-			case errors.Is(err, app.ErrUnauthenticated):
-				writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "authentication is required")
 			default:
 				logger.ErrorContext(r.Context(), "create setup book", slog.Any("err", err))
 				writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
@@ -89,6 +87,16 @@ func createBook(logger *slog.Logger, authService *app.AuthService, bookService *
 			Setup: toSetupStatusResponse(result.SetupStatus),
 		})
 	}))
+}
+
+func authenticatedMutationOwner(w http.ResponseWriter, r *http.Request) (app.Owner, bool) {
+	owner, ok := r.Context().Value(authenticatedOwnerKey{}).(app.Owner)
+	if !ok {
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		return app.Owner{}, false
+	}
+
+	return owner, true
 }
 
 func authenticatedOwner(w http.ResponseWriter, r *http.Request, logger *slog.Logger, authService *app.AuthService) (app.Owner, bool) {
