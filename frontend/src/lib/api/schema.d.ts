@@ -423,9 +423,9 @@ export interface components {
             steps: components["schemas"]["SetupStep"][];
         };
         CreateOwnerRequest: {
-            /** @description Username for the single owner account. */
+            /** @description Username for the single owner account. Must be 1–64 bytes, no control characters. */
             username: string;
-            /** @description Password for the single owner account. */
+            /** @description Password for the single owner account. Minimum 12 Unicode characters, maximum 1024 bytes. */
             password: string;
         };
         OwnerResponse: {

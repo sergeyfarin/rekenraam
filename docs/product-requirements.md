@@ -152,6 +152,7 @@ Goal: make the empty app safe to evolve.
 - Versioned `/api/v1` route shape for real domain endpoints.
 - Basic backup and restore documentation.
 - OpenAPI and Bruno coverage for the first real endpoints.
+- Phase 0 does not add books, commodities, institutions, accounts, opening balances, or system-account seeding. It leaves those setup steps visible but non-blocking until their domain slices exist.
 
 ### Phase 1: Books, Commodities, And Accounts
 
@@ -160,8 +161,9 @@ Goal: create the durable accounting skeleton.
 - Single owner book.
 - Commodity/currency table with exact decimal scale metadata.
 - First-run setup extension for default book, base currency, optional additional currencies, and required system accounts.
+- Commodity and currency setup comes before accounts. Account precision must derive from commodity metadata or an explicit account-level quantity scale override, not from floating-point or free-text currency fields.
 - Account tree with account types.
-- Opening balances through explicit equity/opening-balance transactions.
+- Account creation does not create balances. Opening balances require posted transactions and arrive with the ledger transaction slice.
 - Account list and account detail UI.
 
 ### Phase 2: Ledger Transactions
@@ -170,6 +172,7 @@ Goal: make daily transaction entry useful.
 
 - Transactions with postings/splits.
 - Transfers as ordinary balanced transactions.
+- Opening balances through explicit equity/opening-balance transactions.
 - Friendly category UI mapped to income/expense accounts.
 - First-run setup extension for choosing default categories and optional additional categories.
 - Transaction create, edit, void/archive, and list flows.

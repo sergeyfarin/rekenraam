@@ -239,6 +239,42 @@ http://localhost:16888
 
 For a real server, run the binary under a process manager such as `systemd`, and keep the SQLite data directory on persistent storage.
 
+## Backup And Restore
+
+SQLite data lives wherever `DATABASE_URL` points. For the single-binary example above, that is:
+
+```text
+data/rekenraam.sqlite
+```
+
+For Docker Compose, SQLite data lives in the `rekenraam-data` Docker volume.
+
+Prefer app-aware or stopped-app backups. Do not copy a live WAL-mode SQLite database file as the normal backup path.
+
+Create a compact operator backup from the project root while the app is stopped or lightly used:
+
+```sh
+sqlite3 data/rekenraam.sqlite "VACUUM INTO 'data/rekenraam-backup.sqlite'"
+sqlite3 data/rekenraam-backup.sqlite "PRAGMA integrity_check"
+```
+
+The integrity check should print:
+
+```text
+ok
+```
+
+Restore by stopping the app, moving the existing database aside, copying the verified backup into place, then starting the app again:
+
+```sh
+mv data/rekenraam.sqlite data/rekenraam.sqlite.before-restore
+cp data/rekenraam-backup.sqlite data/rekenraam.sqlite
+```
+
+For Docker Compose, stop the app before restore and copy the verified backup into the mounted `rekenraam-data` volume. Keep the old database until the restored app has started and the setup/status endpoint responds successfully.
+
+The local owner recovery command also creates and verifies a SQLite backup by default before changing the owner password.
+
 ## Deploy Docker
 
 Build and run with Docker Compose:
