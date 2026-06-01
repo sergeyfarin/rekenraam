@@ -1,0 +1,31 @@
+meta {
+  name: Setup Currencies
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/setup/currencies
+  body: json
+  auth: none
+}
+
+headers {
+  X-CSRF-Token: {{csrfToken}}
+}
+
+body:json {
+  {
+    "default_currency_code": "USD",
+    "currencies": [
+      {
+        "code": "USD",
+        "name": "US Dollar"
+      },
+      {
+        "code": "EUR",
+        "name": "Euro"
+      }
+    ]
+  }
+}

@@ -59,7 +59,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	authService := app.NewAuthService(authRepository, logger)
 	bookRepository := db.NewBookRepository(database)
 	bookService := app.NewBookService(bookRepository, setupService)
-	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, api.HandlerOptions{
+	commodityRepository := db.NewCommodityRepository(database)
+	currencyService := app.NewCurrencyService(commodityRepository, setupService)
+	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
 	})

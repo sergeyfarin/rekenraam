@@ -57,9 +57,9 @@ func TestCreateBookCompletesBookStep(t *testing.T) {
 	assert.Equal(t, int64(1), body.Book.OwnerUserID)
 	assert.Equal(t, "household", body.Book.Code)
 	assert.Equal(t, "Household", body.Book.Name)
-	assert.Nil(t, body.Book.BaseCurrencyCommodityID)
+	assert.Nil(t, body.Book.DefaultCurrencyCommodityID)
 	assert.Equal(t, app.InstallStateConfigured, body.Setup.InstallState)
-	assert.Equal(t, []string{"owner", "book"}, body.Setup.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies"}, body.Setup.ImplementedSteps)
 	assert.Equal(t, "currencies", body.Setup.CurrentStep)
 	assert.Equal(t, setupStepResponse{Key: "book", Status: app.SetupStepStatusCompleted}, body.Setup.Steps[1])
 

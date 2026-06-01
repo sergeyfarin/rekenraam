@@ -4,6 +4,7 @@
   import { createQuery } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions, login } from '$lib/api/auth';
+  import { completeCurrencySetup, currencyCatalogQueryOptions } from '$lib/api/currencies';
   import { healthQueryOptions } from '$lib/api/health';
   import { createBook, createOwner, setupStatusQueryOptions } from '$lib/api/setup';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
@@ -12,6 +13,10 @@
   const healthQuery = createQuery(() => healthQueryOptions());
   const setupQuery = createQuery(() => setupStatusQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
+  const currencyCatalogQuery = createQuery(() => ({
+    ...currencyCatalogQueryOptions(),
+    enabled: sessionQuery.data?.authenticated === true
+  }));
 
   let ownerUsername = $state('');
   let ownerPassword = $state('');
@@ -19,12 +24,16 @@
   let loginPassword = $state('');
   let bookCode = $state('personal');
   let bookName = $state('');
+  let currencyDefaultCode = $state('USD');
+  let additionalCurrencyCodes = $state<string[]>([]);
   let ownerError = $state<unknown>(undefined);
   let loginError = $state<unknown>(undefined);
   let bookError = $state<unknown>(undefined);
+  let currencyError = $state<unknown>(undefined);
   let ownerPending = $state(false);
   let loginPending = $state(false);
   let bookPending = $state(false);
+  let currencyPending = $state(false);
   let redirectingToApp = $state(false);
 
   const healthState = $derived.by<'loading' | 'success' | 'error'>(() => {
@@ -63,10 +72,34 @@
     return m.home_health_state_success();
   });
 
-  const installGateError = $derived(setupQuery.error ?? sessionQuery.error);
+  const currencyDisplayNames = $derived.by(() => {
+    if (!browser || typeof Intl.DisplayNames === 'undefined') {
+      return null;
+    }
+
+    return new Intl.DisplayNames(undefined, { type: 'currency' });
+  });
+
+  const localizedCurrencyCatalog = $derived.by(() =>
+    (currencyCatalogQuery.data?.currencies ?? []).map((currency) => {
+      const name = currencyDisplayNames?.of(currency.code) ?? currency.english_name;
+
+      return {
+        ...currency,
+        name,
+        label: `${currency.code} - ${name}`
+      };
+    })
+  );
+
+  const currencyNamesByCode = $derived.by(
+    () => new Map(localizedCurrencyCatalog.map((currency) => [currency.code, currency.name]))
+  );
+
+  const installGateError = $derived(setupQuery.error ?? sessionQuery.error ?? currencyCatalogQuery.error);
 
   const pageState = $derived.by<
-    'loading' | 'error' | 'fresh' | 'login' | 'book_setup' | 'authenticated' | 'recovery_required'
+    'loading' | 'error' | 'fresh' | 'login' | 'book_setup' | 'currency_setup' | 'authenticated' | 'recovery_required'
   >(() => {
     if (setupQuery.isPending || sessionQuery.isPending) {
       return 'loading';
@@ -96,6 +129,10 @@
       return 'book_setup';
     }
 
+    if (setupQuery.data.current_step === 'currencies') {
+      return 'currency_setup';
+    }
+
     return 'authenticated';
   });
 
@@ -107,6 +144,8 @@
         return m.install_gate_state_configured();
       case 'book_setup':
         return m.install_gate_state_book();
+      case 'currency_setup':
+        return m.install_gate_state_currencies();
       case 'authenticated':
         return m.install_gate_state_authenticated();
       case 'recovery_required':
@@ -140,8 +179,24 @@
     void goto('/app');
   });
 
+  $effect(() => {
+    if (localizedCurrencyCatalog.length === 0) {
+      return;
+    }
+
+    if (!localizedCurrencyCatalog.some((currency) => currency.code === currencyDefaultCode)) {
+      currencyDefaultCode = localizedCurrencyCatalog[0]?.code ?? 'USD';
+    }
+  });
+
   async function refreshInstallGate() {
-    await Promise.all([setupQuery.refetch(), sessionQuery.refetch(), healthQuery.refetch()]);
+    const refreshes: Promise<unknown>[] = [setupQuery.refetch(), sessionQuery.refetch(), healthQuery.refetch()];
+
+    if (sessionQuery.data?.authenticated === true) {
+      refreshes.push(currencyCatalogQuery.refetch());
+    }
+
+    await Promise.all(refreshes);
   }
 
   async function handleCreateOwner(event: SubmitEvent) {
@@ -208,6 +263,34 @@
       bookError = error;
     } finally {
       bookPending = false;
+    }
+  }
+
+  async function handleCompleteCurrencySetup(event: SubmitEvent) {
+    event.preventDefault();
+
+    currencyPending = true;
+    currencyError = undefined;
+
+    try {
+      const currencyCodes = Array.from(new Set([currencyDefaultCode, ...additionalCurrencyCodes])).filter(Boolean);
+
+      await completeCurrencySetup(
+        {
+          default_currency_code: currencyDefaultCode,
+          currencies: currencyCodes.map((code) => ({
+            code,
+            name: currencyNamesByCode.get(code) ?? code
+          }))
+        },
+        sessionQuery.data?.csrf_token ?? ''
+      );
+
+      await refreshInstallGate();
+    } catch (error) {
+      currencyError = error;
+    } finally {
+      currencyPending = false;
     }
   }
 
@@ -278,6 +361,9 @@
           {:else if pageState === 'book_setup'}
             <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_book_title()}</h2>
             <p class="text-sm leading-6 text-muted">{m.install_gate_book_copy()}</p>
+          {:else if pageState === 'currency_setup'}
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_currencies_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_currencies_copy()}</p>
           {:else if pageState === 'authenticated'}
             <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_authenticated_title()}</h2>
             <p class="text-sm leading-6 text-muted">{m.install_gate_authenticated_copy()}</p>
@@ -413,6 +499,56 @@
           >
             {bookPending ? m.install_gate_book_submit_pending() : m.install_gate_book_submit()}
           </button>
+        </form>
+      {:else if pageState === 'currency_setup'}
+        <form class="space-y-4" onsubmit={handleCompleteCurrencySetup}>
+          <APIFormError error={currencyError ?? currencyCatalogQuery.error} id="currency-form-error" />
+
+          {#if currencyCatalogQuery.isPending}
+            <div class="rounded-[1.75rem] border border-border bg-surface-strong/60 p-5 text-sm leading-6 text-muted">
+              {m.install_gate_currencies_loading()}
+            </div>
+          {:else if localizedCurrencyCatalog.length === 0}
+            <div class="rounded-[1.75rem] border border-border bg-surface-strong/60 p-5 text-sm leading-6 text-muted">
+              {m.install_gate_currencies_empty()}
+            </div>
+          {:else}
+            <label class="block space-y-2">
+              <span class="text-sm font-medium text-foreground">{m.install_gate_default_currency_label()}</span>
+              <select
+                bind:value={currencyDefaultCode}
+                name="default-currency"
+                class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground"
+                required
+              >
+                {#each localizedCurrencyCatalog as currency}
+                  <option value={currency.code}>{currency.label}</option>
+                {/each}
+              </select>
+            </label>
+
+            <label class="block space-y-2">
+              <span class="text-sm font-medium text-foreground">{m.install_gate_additional_currencies_label()}</span>
+              <select
+                bind:value={additionalCurrencyCodes}
+                name="additional-currencies"
+                class="min-h-48 w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground"
+                multiple
+              >
+                {#each localizedCurrencyCatalog as currency}
+                  <option value={currency.code}>{currency.label}</option>
+                {/each}
+              </select>
+            </label>
+
+            <button
+              type="submit"
+              class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={currencyPending || currencyCatalogQuery.isPending}
+            >
+              {currencyPending ? m.install_gate_currencies_submit_pending() : m.install_gate_currencies_submit()}
+            </button>
+          {/if}
         </form>
       {:else if pageState === 'authenticated'}
         <div class="space-y-4">

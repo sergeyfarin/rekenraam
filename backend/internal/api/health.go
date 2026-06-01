@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -34,6 +34,13 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 	if authService != nil && bookService != nil {
 		mux.HandleFunc("GET /api/v1/books/current", currentBook(logger, authService, bookService))
 		mux.HandleFunc("POST /api/v1/setup/book", createBook(logger, authService, bookService, options))
+	}
+	if authService != nil && currencyService != nil {
+		mux.HandleFunc("GET /api/v1/currencies/catalog", currencyCatalog(logger, authService, currencyService))
+		mux.HandleFunc("GET /api/v1/currencies", listCurrencies(logger, authService, currencyService))
+		mux.HandleFunc("POST /api/v1/currencies", createCurrency(logger, authService, currencyService, options))
+		mux.HandleFunc("POST /api/v1/currencies/{commodity_id}/default", setDefaultCurrency(logger, authService, currencyService, options))
+		mux.HandleFunc("POST /api/v1/setup/currencies", completeCurrencySetup(logger, authService, currencyService, options))
 	}
 }
 

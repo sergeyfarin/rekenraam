@@ -1,0 +1,15 @@
+meta {
+  name: Set Default Currency
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/currencies/{{currencyId}}/default
+  body: none
+  auth: none
+}
+
+headers {
+  X-CSRF-Token: {{csrfToken}}
+}

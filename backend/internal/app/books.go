@@ -36,13 +36,13 @@ type CreateBookInput struct {
 }
 
 type Book struct {
-	ID                      int64
-	OwnerUserID             int64
-	Code                    string
-	Name                    string
-	BaseCurrencyCommodityID *int64
-	CreatedAt               string
-	UpdatedAt               string
+	ID                         int64
+	OwnerUserID                int64
+	Code                       string
+	Name                       string
+	DefaultCurrencyCommodityID *int64
+	CreatedAt                  string
+	UpdatedAt                  string
 }
 
 type CreateBookResult struct {
@@ -131,19 +131,19 @@ func validateBookCode(code string) error {
 }
 
 func toBook(record db.BookRecord) Book {
-	var baseCurrencyCommodityID *int64
-	if record.BaseCurrencyCommodityID.Valid {
-		value := record.BaseCurrencyCommodityID.Int64
-		baseCurrencyCommodityID = &value
+	var defaultCurrencyCommodityID *int64
+	if record.DefaultCurrencyCommodityID.Valid {
+		value := record.DefaultCurrencyCommodityID.Int64
+		defaultCurrencyCommodityID = &value
 	}
 
 	return Book{
-		ID:                      record.ID,
-		OwnerUserID:             record.OwnerUserID,
-		Code:                    record.Code,
-		Name:                    record.Name,
-		BaseCurrencyCommodityID: baseCurrencyCommodityID,
-		CreatedAt:               record.CreatedAt,
-		UpdatedAt:               record.UpdatedAt,
+		ID:                         record.ID,
+		OwnerUserID:                record.OwnerUserID,
+		Code:                       record.Code,
+		Name:                       record.Name,
+		DefaultCurrencyCommodityID: defaultCurrencyCommodityID,
+		CreatedAt:                  record.CreatedAt,
+		UpdatedAt:                  record.UpdatedAt,
 	}
 }

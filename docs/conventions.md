@@ -124,7 +124,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
-- First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, base currency, optional additional currencies, system accounts, default categories, and optional additional categories as those domains are implemented.
+- First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, default currency preference, optional additional currencies, system accounts, default categories, and optional additional categories as those domains are implemented.
 - First-run setup uses `GET /api/v1/setup/status` and `POST /api/v1/setup/owner` for the first slice. Setup progress is persisted as named steps, not as a single boolean.
 - Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path requiring server or database access, and invalidate existing sessions after password reset.
 - Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.

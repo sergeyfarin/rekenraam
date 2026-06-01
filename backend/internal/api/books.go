@@ -9,13 +9,13 @@ import (
 )
 
 type bookResponse struct {
-	ID                      int64  `json:"id"`
-	OwnerUserID             int64  `json:"owner_user_id"`
-	Code                    string `json:"code"`
-	Name                    string `json:"name"`
-	BaseCurrencyCommodityID *int64 `json:"base_currency_commodity_id,omitempty"`
-	CreatedAt               string `json:"created_at"`
-	UpdatedAt               string `json:"updated_at"`
+	ID                         int64  `json:"id"`
+	OwnerUserID                int64  `json:"owner_user_id"`
+	Code                       string `json:"code"`
+	Name                       string `json:"name"`
+	DefaultCurrencyCommodityID *int64 `json:"default_currency_commodity_id,omitempty"`
+	CreatedAt                  string `json:"created_at"`
+	UpdatedAt                  string `json:"updated_at"`
 }
 
 type createBookRequest struct {
@@ -121,12 +121,12 @@ func authenticatedOwner(w http.ResponseWriter, r *http.Request, logger *slog.Log
 
 func toBookResponse(book app.Book) bookResponse {
 	return bookResponse{
-		ID:                      book.ID,
-		OwnerUserID:             book.OwnerUserID,
-		Code:                    book.Code,
-		Name:                    book.Name,
-		BaseCurrencyCommodityID: book.BaseCurrencyCommodityID,
-		CreatedAt:               book.CreatedAt,
-		UpdatedAt:               book.UpdatedAt,
+		ID:                         book.ID,
+		OwnerUserID:                book.OwnerUserID,
+		Code:                       book.Code,
+		Name:                       book.Name,
+		DefaultCurrencyCommodityID: book.DefaultCurrencyCommodityID,
+		CreatedAt:                  book.CreatedAt,
+		UpdatedAt:                  book.UpdatedAt,
 	}
 }

@@ -388,7 +388,12 @@ entry defaults and validation.
 
 Account commodity rules:
 
-- Posting accounts must have `default_commodity_id`.
+- Posting accounts that are restricted to one commodity must have
+  `default_commodity_id`.
+- Multi-commodity posting accounts such as income, expense, equity, brokerage
+  containers, and system clearing accounts may leave `default_commodity_id`
+  null. Their postings still carry explicit commodity ids and must balance per
+  commodity unless an explicit FX transaction supplies conversion metadata.
 - Container accounts may leave `default_commodity_id` null if their children use
   different commodities.
 - `quantity_scale_override` is optional and account-specific.
@@ -404,7 +409,7 @@ Recommended account shapes:
 - Checking account: asset/checking, default commodity USD or EUR,
   `allows_postings=true`.
 - Credit card: liability/credit_card, default commodity matching the card.
-- Brokerage: asset/investment, default commodity nullable or base currency,
+- Brokerage: asset/investment, default commodity nullable,
   `allows_postings=false`.
 - Brokerage cash: asset/brokerage_cash under brokerage, default commodity USD.
 - Security holding: asset/security_holding under brokerage, default commodity
@@ -413,8 +418,8 @@ Recommended account shapes:
   commodity. Defer UI support until reward commodities and report-exclusion
   rules exist.
 - Property or vehicle: asset/property or asset/vehicle, default commodity set to
-  the book base currency. Valuation changes should be explicit transactions or
-  later price observations, not silent account edits.
+  the relevant valuation commodity. Valuation changes should be explicit
+  transactions or later price observations, not silent account edits.
 
 Investment booking policy (`fifo`, `lifo`, `average`, `specific_id`) should be
 deferred until investment transactions and lots are implemented. Do not put it

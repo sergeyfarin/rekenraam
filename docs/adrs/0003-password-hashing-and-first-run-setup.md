@@ -32,7 +32,7 @@ First-run setup is a guided workflow whose complete target state is:
 
 1. Create the single owner user.
 2. Create the default book.
-3. Choose the base currency.
+3. Choose the default currency preference.
 4. Optionally choose additional currencies.
 5. Create required system accounts.
 6. Choose default categories.

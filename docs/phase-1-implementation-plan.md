@@ -21,7 +21,7 @@ account setup.
 Backend schema:
 
 - Add `books` table with `id`, `owner_user_id`, `code`, `name`,
-  `base_currency_commodity_id`, `created_at`, and `updated_at`.
+  `default_currency_commodity_id`, `created_at`, and `updated_at`.
 - Keep the `books` table as the future extension point, but current runtime has
   exactly one book with `id = 1`.
 - Do not add book selection UI or any flow for creating another book.
@@ -72,9 +72,12 @@ Backend APIs:
 
 Setup behavior:
 
-- Currency setup selects or creates a base currency.
+- Currency setup selects a default currency preference from the embedded
+  currency catalog and may add optional additional currencies.
 - Mark `setup_steps.currencies` complete.
-- Update `books.base_currency_commodity_id`.
+- Update `books.default_currency_commodity_id`.
+- The default currency is not a base/reporting currency. Reports choose their
+  reporting currency and FX method later without changing the book.
 
 ## Slice 3: Institutions
 
@@ -144,6 +147,9 @@ Behavior:
 - Mark `setup_steps.system_accounts` complete.
 - Make seeding idempotent.
 - Do not add opening-balance transaction UI or API in Phase 1.
+- System accounts must not assume a single book base currency. Income, expense,
+  equity, and system accounts should be able to receive postings in multiple
+  commodities unless a later account policy explicitly restricts them.
 
 ## Slice 6: Frontend Account/Institution Experience
 
@@ -193,7 +199,8 @@ pnpm build
 
 Also verify:
 
-- Fresh setup can create owner, book, base currency, and system accounts.
+- Fresh setup can create owner, book, default currency preference, optional
+  additional currencies, and system accounts.
 - Future categories step remains pending but non-blocking if not implemented.
 - Account creation never creates balances.
 - Current runtime uses only book `1`; future multi-book support must be a
