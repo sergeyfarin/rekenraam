@@ -280,8 +280,8 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	setupRepository := db.NewSetupRepository(database)
 	setupService := app.NewSetupService(setupRepository)
 	authRepository := db.NewAuthRepository(database)
-	authService := app.NewAuthService(authRepository)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	authService := app.NewAuthService(authRepository, logger)
 
 	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, options), database
 }

@@ -5,6 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,7 +72,7 @@ func TestRecoverOwnerCommandCreatesBackupAndRevokesSessions(t *testing.T) {
 	database := openRecoveryCommandDatabase(t, databaseURL)
 	defer database.Close()
 
-	authService := app.NewAuthService(db.NewAuthRepository(database))
+	authService := app.NewAuthService(db.NewAuthRepository(database), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	loginResult, err := authService.Login(context.Background(), app.LoginInput{Username: "owner", Password: "new-password"})
 	require.NoError(t, err)
 	assert.NotEmpty(t, loginResult.SessionToken)
@@ -107,7 +109,7 @@ func TestRecoverOwnerCommandAbortsWhenBackupFailsWithoutOverride(t *testing.T) {
 	database := openRecoveryCommandDatabase(t, databaseURL)
 	defer database.Close()
 
-	authService := app.NewAuthService(db.NewAuthRepository(database))
+	authService := app.NewAuthService(db.NewAuthRepository(database), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	_, err := authService.Login(context.Background(), app.LoginInput{Username: "owner", Password: "old-password"})
 	require.NoError(t, err)
 
@@ -132,7 +134,7 @@ func TestRecoverOwnerCommandAllowsNoBackupOverride(t *testing.T) {
 	database := openRecoveryCommandDatabase(t, databaseURL)
 	defer database.Close()
 
-	authService := app.NewAuthService(db.NewAuthRepository(database))
+	authService := app.NewAuthService(db.NewAuthRepository(database), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	_, err := authService.Login(context.Background(), app.LoginInput{Username: "owner", Password: "new-password"})
 	require.NoError(t, err)
 

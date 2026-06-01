@@ -56,7 +56,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	setupRepository := db.NewSetupRepository(database)
 	setupService := app.NewSetupService(setupRepository)
 	authRepository := db.NewAuthRepository(database)
-	authService := app.NewAuthService(authRepository)
+	authService := app.NewAuthService(authRepository, logger)
 	handler := api.NewHandler(logger, web.Handler(), setupService, authService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,

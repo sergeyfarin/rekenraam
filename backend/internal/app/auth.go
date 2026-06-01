@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ const (
 
 type AuthService struct {
 	repository *db.AuthRepository
+	logger     *slog.Logger
 	now        func() time.Time
 }
 
@@ -78,9 +80,10 @@ type LoginResult struct {
 	SessionToken string
 }
 
-func NewAuthService(repository *db.AuthRepository) *AuthService {
+func NewAuthService(repository *db.AuthRepository, logger *slog.Logger) *AuthService {
 	return &AuthService{
 		repository: repository,
+		logger:     logger,
 		now:        time.Now,
 	}
 }
@@ -165,7 +168,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		return LoginResult{}, ErrInvalidCredentials
 	}
 
-	if passwordNeedsRehash(credentials.PasswordHash) {
+	if s.passwordNeedsRehash(ctx, credentials.PasswordHash) {
 		passwordHash, err := hashPassword(input.Password)
 		if err != nil {
 			return LoginResult{}, fmt.Errorf("rehash owner password: %w", err)
@@ -283,9 +286,10 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 	}, nil
 }
 
-func passwordNeedsRehash(encodedHash string) bool {
+func (s *AuthService) passwordNeedsRehash(ctx context.Context, encodedHash string) bool {
 	parsedHash, err := parsePasswordHash(encodedHash)
 	if err != nil {
+		s.logger.WarnContext(ctx, "failed to parse password hash for rehash check", slog.Any("err", err))
 		return false
 	}
 
