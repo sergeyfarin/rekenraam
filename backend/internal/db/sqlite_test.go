@@ -48,6 +48,32 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
 	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
 	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
+	assert.Contains(t, readTableColumns(t, database, "books"), "updated_by_user_id")
+}
+
+func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (1, 'owner', 'hash', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
+
+		INSERT INTO books (
+			id,
+			owner_user_id,
+			code,
+			name,
+			default_currency_commodity_id,
+			updated_by_user_id,
+			created_at,
+			updated_at
+		)
+		VALUES (1, 1, 'personal', 'Personal', 999, 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "book default currency must reference a currency in the same book")
 }
 
 func TestMigrateUpgradesHistoricalSetupOwnerSchema(t *testing.T) {

@@ -150,6 +150,25 @@ func TestCurrentBookRequiresAuthentication(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, res.Code)
 }
 
+func TestCurrentBookReturnsNotFoundBeforeBookSetup(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, _ := createOwnerSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/books/current", nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusNotFound, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "NOT_FOUND", body.Error.Code)
+}
+
 func TestCurrentBookReturnsCreatedBook(t *testing.T) {
 	t.Parallel()
 

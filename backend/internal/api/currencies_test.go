@@ -122,6 +122,77 @@ func TestCompleteCurrencySetupAllowsOmittedAdditionalCurrencies(t *testing.T) {
 	assert.Equal(t, "Japanese Yen", body.DefaultCurrency.Name)
 }
 
+func TestCompleteCurrencySetupValidatesDefaultCurrency(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+		wantErr  string
+	}{
+		{
+			name:     "missing default",
+			body:     `{"currencies":[{"code":"USD"}]}`,
+			wantCode: http.StatusBadRequest,
+			wantErr:  "VALIDATION_FAILED",
+		},
+		{
+			name:     "unknown catalog code",
+			body:     `{"default_currency_code":"ZZZ"}`,
+			wantCode: http.StatusNotFound,
+			wantErr:  "NOT_FOUND",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler, _ := newSetupTestHandler(t)
+			sessionCookie, csrfToken := createOwnerSession(t, handler)
+			createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/currencies", strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set(csrfTokenHeader, csrfToken)
+			setSameOrigin(req)
+			req.AddCookie(sessionCookie)
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, test.wantCode, res.Code)
+
+			var body errorResponse
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+			assert.Equal(t, test.wantErr, body.Error.Code)
+		})
+	}
+}
+
+func TestCompleteCurrencySetupRequiresBook(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/currencies", strings.NewReader(`{"default_currency_code":"USD"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusNotFound, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "NOT_FOUND", body.Error.Code)
+}
+
 func TestCompleteCurrencySetupRejectsSecondSetup(t *testing.T) {
 	t.Parallel()
 
@@ -174,6 +245,95 @@ func TestListCurrenciesReturnsCurrentCurrencies(t *testing.T) {
 	assert.Equal(t, []string{"EUR", "USD"}, currencyCodes(body.Currencies))
 }
 
+func TestCreateCurrencyAddsCatalogCurrencyAfterSetup(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "USD", Name: "US Dollar"}})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/currencies", strings.NewReader(`{"code":"EUR","name":"Euro"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusCreated, res.Code)
+
+	var body currencyResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "EUR", body.Code)
+	assert.Equal(t, "Euro", body.Name)
+	assert.True(t, body.IsBuiltin)
+
+	var createdByUserID int64
+	var versionCount int
+	err := database.QueryRowContext(context.Background(), `
+		SELECT c.created_by_user_id, COUNT(cv.id)
+		FROM commodities c
+		JOIN commodity_versions cv ON cv.commodity_id = c.id
+		WHERE c.id = ?
+		GROUP BY c.created_by_user_id
+	`, body.ID).Scan(&createdByUserID, &versionCount)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), createdByUserID)
+	assert.Equal(t, 1, versionCount)
+}
+
+func TestCreateCurrencyRejectsDuplicateAndUnknownCatalogCode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+		wantErr  string
+	}{
+		{
+			name:     "duplicate",
+			body:     `{"code":"USD"}`,
+			wantCode: http.StatusConflict,
+			wantErr:  "CONFLICT",
+		},
+		{
+			name:     "unknown catalog code",
+			body:     `{"code":"ZZZ"}`,
+			wantCode: http.StatusNotFound,
+			wantErr:  "NOT_FOUND",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler, _ := newSetupTestHandler(t)
+			sessionCookie, csrfToken := createOwnerSession(t, handler)
+			createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+			completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "USD", Name: "US Dollar"}})
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/currencies", strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set(csrfTokenHeader, csrfToken)
+			setSameOrigin(req)
+			req.AddCookie(sessionCookie)
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, test.wantCode, res.Code)
+
+			var body errorResponse
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+			assert.Equal(t, test.wantErr, body.Error.Code)
+		})
+	}
+}
+
 func TestSetDefaultCurrencyChangesPreference(t *testing.T) {
 	t.Parallel()
 
@@ -218,6 +378,55 @@ func TestSetDefaultCurrencyChangesPreference(t *testing.T) {
 	assert.Equal(t, euroID, defaultCurrencyID)
 	require.True(t, updatedByUserID.Valid)
 	assert.Equal(t, int64(1), updatedByUserID.Int64)
+}
+
+func TestSetDefaultCurrencyValidatesID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		pathID   string
+		wantCode int
+		wantErr  string
+	}{
+		{
+			name:     "invalid path id",
+			pathID:   "not-an-id",
+			wantCode: http.StatusBadRequest,
+			wantErr:  "VALIDATION_FAILED",
+		},
+		{
+			name:     "missing currency",
+			pathID:   "999",
+			wantCode: http.StatusNotFound,
+			wantErr:  "NOT_FOUND",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler, _ := newSetupTestHandler(t)
+			sessionCookie, csrfToken := createOwnerSession(t, handler)
+			createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+			completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "USD", Name: "US Dollar"}})
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/currencies/"+test.pathID+"/default", nil)
+			req.Header.Set(csrfTokenHeader, csrfToken)
+			setSameOrigin(req)
+			req.AddCookie(sessionCookie)
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, test.wantCode, res.Code)
+
+			var body errorResponse
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+			assert.Equal(t, test.wantErr, body.Error.Code)
+		})
+	}
 }
 
 func TestCommodityVersionsAreAppendOnly(t *testing.T) {
