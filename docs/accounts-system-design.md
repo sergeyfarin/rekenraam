@@ -97,6 +97,10 @@ free-text currency field.
 - `created_by_user_id`
 - `created_request_id`
 
+For currencies, `is_builtin` means the identity was created from the embedded
+currency catalog rather than as a free-form custom commodity. It does not mean
+the row was preloaded before user setup.
+
 `commodity_versions` is the append-only state row:
 
 - `id`

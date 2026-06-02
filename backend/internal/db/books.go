@@ -19,6 +19,7 @@ type BookRecord struct {
 	Code                       string
 	Name                       string
 	DefaultCurrencyCommodityID sql.NullInt64
+	UpdatedByUserID            sql.NullInt64
 	CreatedAt                  string
 	UpdatedAt                  string
 }
@@ -37,7 +38,7 @@ func NewBookRepository(database *sql.DB) *BookRepository {
 func (r *BookRepository) CurrentBook(ctx context.Context) (BookRecord, error) {
 	var record BookRecord
 	if err := r.database.QueryRowContext(ctx, `
-		SELECT id, owner_user_id, code, name, default_currency_commodity_id, created_at, updated_at
+		SELECT id, owner_user_id, code, name, default_currency_commodity_id, updated_by_user_id, created_at, updated_at
 		FROM books
 		WHERE id = 1
 	`).Scan(
@@ -46,6 +47,7 @@ func (r *BookRepository) CurrentBook(ctx context.Context) (BookRecord, error) {
 		&record.Code,
 		&record.Name,
 		&record.DefaultCurrencyCommodityID,
+		&record.UpdatedByUserID,
 		&record.CreatedAt,
 		&record.UpdatedAt,
 	); err != nil {
@@ -80,9 +82,9 @@ func (r *BookRepository) CompleteBookSetup(ctx context.Context, params CompleteB
 	}
 
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO books (id, owner_user_id, code, name, default_currency_commodity_id, created_at, updated_at)
-		VALUES (1, ?, ?, ?, NULL, ?, ?)
-	`, params.OwnerUserID, params.Code, params.Name, params.CreatedAt, params.CreatedAt)
+		INSERT INTO books (id, owner_user_id, code, name, default_currency_commodity_id, updated_by_user_id, created_at, updated_at)
+		VALUES (1, ?, ?, ?, NULL, ?, ?, ?)
+	`, params.OwnerUserID, params.Code, params.Name, params.OwnerUserID, params.CreatedAt, params.CreatedAt)
 	if err != nil {
 		return BookRecord{}, fmt.Errorf("insert book: %w", err)
 	}

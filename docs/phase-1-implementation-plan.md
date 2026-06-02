@@ -212,7 +212,7 @@ Also verify:
 Phase 1 is complete when:
 
 - Setup can create owner book.
-- Base currency exists.
+- Default currency preference exists.
 - Commodities/currencies are modeled with exact scale metadata.
 - Institutions can be managed.
 - Accounts can be managed as an append-only versioned tree.

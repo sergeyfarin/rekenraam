@@ -1073,7 +1073,8 @@ export interface components {
         CompleteCurrencySetupRequest: {
             /** @description Default currency preference for new currency-sensitive UI and accounts. It is not a reporting/base currency. */
             default_currency_code: string;
-            currencies: components["schemas"]["CurrencySetupSelection"][];
+            /** @description Optional additional catalog currencies. The default currency is always created even when this list is omitted or empty. */
+            currencies?: components["schemas"]["CurrencySetupSelection"][];
         };
         CompleteCurrencySetupResponse: {
             currencies: components["schemas"]["CurrencyResponse"][];

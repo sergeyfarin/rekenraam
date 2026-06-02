@@ -154,13 +154,21 @@ func completeCurrencySetup(logger *slog.Logger, authService *app.AuthService, cu
 
 func setDefaultCurrency(logger *slog.Logger, authService *app.AuthService, currencyService *app.CurrencyService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+
 		commodityID, err := strconv.ParseInt(r.PathValue("commodity_id"), 10, 64)
 		if err != nil || commodityID <= 0 {
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "currency id is invalid")
 			return
 		}
 
-		result, err := currencyService.SetDefaultCurrency(r.Context(), app.SetDefaultCurrencyInput{CommodityID: commodityID})
+		result, err := currencyService.SetDefaultCurrency(r.Context(), app.SetDefaultCurrencyInput{
+			OwnerUserID: owner.ID,
+			CommodityID: commodityID,
+		})
 		if err != nil {
 			writeCurrencyServiceError(w, r, logger, "set default currency", err)
 			return

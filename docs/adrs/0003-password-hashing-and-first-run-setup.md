@@ -41,7 +41,7 @@ First-run setup is a guided workflow whose complete target state is:
 This workflow is implemented incrementally:
 
 1. The first auth slice creates only the owner user.
-2. Book, base-currency, additional-currency, and system-account setup are added when books, commodities, and accounts are implemented.
+2. Book, default-currency-preference, additional-currency, and system-account setup are added when books, commodities, and accounts are implemented.
 3. Default and additional category selection is added when category functionality is implemented.
 4. The setup state must be resumable so partially completed deployments can continue through later setup steps after upgrades.
 

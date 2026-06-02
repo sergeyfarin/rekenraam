@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	// BookID is the current single-book runtime boundary; multi-book support must
+	// replace this deliberately rather than spreading selector assumptions.
 	BookID = int64(1)
 
 	currencyCodeLength   = 3
@@ -71,6 +73,7 @@ type CompleteCurrencySetupResult struct {
 }
 
 type SetDefaultCurrencyInput struct {
+	OwnerUserID int64
 	CommodityID int64
 }
 
@@ -213,12 +216,20 @@ func (s *CurrencyService) CompleteCurrencySetup(ctx context.Context, input Compl
 }
 
 func (s *CurrencyService) SetDefaultCurrency(ctx context.Context, input SetDefaultCurrencyInput) (SetDefaultCurrencyResult, error) {
+	if input.OwnerUserID <= 0 {
+		return SetDefaultCurrencyResult{}, ValidationError{Message: "owner user is required"}
+	}
 	if input.CommodityID <= 0 {
 		return SetDefaultCurrencyResult{}, ValidationError{Message: "currency id is required"}
 	}
 
 	now := s.now().UTC().Format(time.RFC3339)
-	record, err := s.repository.SetDefaultCurrency(ctx, BookID, input.CommodityID, now)
+	record, err := s.repository.SetDefaultCurrency(ctx, db.SetDefaultCurrencyParams{
+		BookID:          BookID,
+		CommodityID:     input.CommodityID,
+		UpdatedAt:       now,
+		UpdatedByUserID: input.OwnerUserID,
+	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return SetDefaultCurrencyResult{}, ErrCurrencyNotFound

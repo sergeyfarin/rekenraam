@@ -95,6 +95,33 @@ func TestCompleteCurrencySetupCreatesDefaultAndAdditionalCurrencies(t *testing.T
 	assert.Equal(t, body.DefaultCurrency.ID, defaultCurrencyID.Int64)
 }
 
+func TestCompleteCurrencySetupAllowsOmittedAdditionalCurrencies(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/currencies", strings.NewReader(`{
+		"default_currency_code": "JPY"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusCreated, res.Code)
+
+	var body completeCurrencySetupResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	require.Len(t, body.Currencies, 1)
+	assert.Equal(t, "JPY", body.DefaultCurrency.Code)
+	assert.Equal(t, "Japanese Yen", body.DefaultCurrency.Name)
+}
+
 func TestCompleteCurrencySetupRejectsSecondSetup(t *testing.T) {
 	t.Parallel()
 
@@ -181,13 +208,16 @@ func TestSetDefaultCurrencyChangesPreference(t *testing.T) {
 	assert.Equal(t, "EUR", body.DefaultCurrency.Code)
 
 	var defaultCurrencyID int64
+	var updatedByUserID sql.NullInt64
 	err := database.QueryRowContext(context.Background(), `
-		SELECT default_currency_commodity_id
+		SELECT default_currency_commodity_id, updated_by_user_id
 		FROM books
 		WHERE id = 1
-	`).Scan(&defaultCurrencyID)
+	`).Scan(&defaultCurrencyID, &updatedByUserID)
 	require.NoError(t, err)
 	assert.Equal(t, euroID, defaultCurrencyID)
+	require.True(t, updatedByUserID.Valid)
+	assert.Equal(t, int64(1), updatedByUserID.Int64)
 }
 
 func TestCommodityVersionsAreAppendOnly(t *testing.T) {

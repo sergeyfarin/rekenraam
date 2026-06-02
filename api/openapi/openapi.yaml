@@ -954,7 +954,6 @@ components:
       type: object
       required:
         - default_currency_code
-        - currencies
       properties:
         default_currency_code:
           type: string
@@ -963,7 +962,7 @@ components:
           description: Default currency preference for new currency-sensitive UI and accounts. It is not a reporting/base currency.
         currencies:
           type: array
-          minItems: 1
+          description: Optional additional catalog currencies. The default currency is always created even when this list is omitted or empty.
           items:
             $ref: "#/components/schemas/CurrencySetupSelection"
       additionalProperties: false

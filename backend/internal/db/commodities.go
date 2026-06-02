@@ -68,6 +68,13 @@ type CompleteCurrencySetupRecord struct {
 	DefaultUpdatedAt string
 }
 
+type SetDefaultCurrencyParams struct {
+	BookID          int64
+	CommodityID     int64
+	UpdatedAt       string
+	UpdatedByUserID int64
+}
+
 func NewCommodityRepository(database *sql.DB) *CommodityRepository {
 	return &CommodityRepository{database: database}
 }
@@ -187,9 +194,9 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE books
-		SET default_currency_commodity_id = ?, updated_at = ?
+		SET default_currency_commodity_id = ?, updated_at = ?, updated_by_user_id = ?
 		WHERE id = ?
-	`, defaultCurrency.ID, params.CreatedAt, params.BookID); err != nil {
+	`, defaultCurrency.ID, params.CreatedAt, params.ChangedByUserID, params.BookID); err != nil {
 		return CompleteCurrencySetupRecord{}, fmt.Errorf("set default currency: %w", err)
 	}
 
@@ -221,7 +228,7 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 	}, nil
 }
 
-func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, bookID int64, commodityID int64, updatedAt string) (CommodityRecord, error) {
+func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, params SetDefaultCurrencyParams) (CommodityRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return CommodityRecord{}, fmt.Errorf("begin set default currency transaction: %w", err)
@@ -234,7 +241,7 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, bookID int
 		}
 	}()
 
-	record, err := r.currentCurrencyByID(ctx, tx, bookID, commodityID)
+	record, err := r.currentCurrencyByID(ctx, tx, params.BookID, params.CommodityID)
 	if err != nil {
 		return CommodityRecord{}, err
 	}
@@ -244,9 +251,9 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, bookID int
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE books
-		SET default_currency_commodity_id = ?, updated_at = ?
+		SET default_currency_commodity_id = ?, updated_at = ?, updated_by_user_id = ?
 		WHERE id = ?
-	`, commodityID, updatedAt, bookID); err != nil {
+	`, params.CommodityID, params.UpdatedAt, params.UpdatedByUserID, params.BookID); err != nil {
 		return CommodityRecord{}, fmt.Errorf("set default currency: %w", err)
 	}
 

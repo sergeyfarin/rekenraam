@@ -16,9 +16,3 @@ Money representation limits not yet decided — shopspring/decimal is named in c
 OpenAPI code generation command undocumented — openapi.yaml is declared the source of truth, but the command to regenerate frontend types (openapi-fetch + openapi-typescript) is not in developer-workflow.md. Add it so contributors know what to run after schema changes.
 
 Domain lifecycle status taxonomy missing — Account, transaction, and posting records will each need an archived/void/draft/posted status. Defining the allowed states and valid transitions now (as a short ADR or conventions section) prevents incompatible patterns from landing in separate feature slices.
-
-
-Issues to fix or track
-setDefaultCurrency drops the actor — consider passing the owner ID through SetDefaultCurrencyInput and recording it in a books_audit_log or adding updated_by_user_id to books, or at minimum documenting this gap. Not a blocker but inconsistent with the other mutation handlers.
-BookID constant — add a brief comment explaining it's a single-book simplification to aid future readers.
-is_builtin semantic drift — consider renaming to is_catalog_sourced or documenting the intended distinction between catalog-sourced and truly system-pre-loaded currencies.
