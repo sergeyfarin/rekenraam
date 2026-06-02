@@ -566,6 +566,439 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/institutions:
+    get:
+      summary: List current institutions
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - active
+              - archived
+        - in: query
+          name: include_archived
+          schema:
+            type: boolean
+          description: Include archived institutions when no explicit status filter is set.
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Small-set institution name, kind, or country filter.
+      responses:
+        "200":
+          description: Current institutions
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionsResponse"
+        "400":
+          description: Invalid query
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Create an institution
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+          description: Session-bound CSRF token for authenticated mutating requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstitutionRequest"
+      responses:
+        "201":
+          description: Institution created
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionResponse"
+        "400":
+          description: Invalid request body or validation failure
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Origin or CSRF validation failed
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Book not found
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/institutions/{institution_id}:
+    get:
+      summary: Read an institution
+      parameters:
+        - $ref: "#/components/parameters/InstitutionID"
+      responses:
+        "200":
+          description: Institution
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Institution not found
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      summary: Update an institution by creating a new version
+      parameters:
+        - $ref: "#/components/parameters/InstitutionID"
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+          description: Session-bound CSRF token for authenticated mutating requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstitutionRequest"
+      responses:
+        "200":
+          description: Institution updated
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionResponse"
+        "400":
+          description: Invalid request body or validation failure
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Origin or CSRF validation failed
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Institution not found
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/institutions/{institution_id}/archive:
+    post:
+      summary: Archive an institution
+      parameters:
+        - $ref: "#/components/parameters/InstitutionID"
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+          description: Session-bound CSRF token for authenticated mutating requests.
+      responses:
+        "200":
+          description: Institution archived
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Origin or CSRF validation failed
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Institution not found
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/institutions/{institution_id}/restore:
+    post:
+      summary: Restore an archived institution
+      parameters:
+        - $ref: "#/components/parameters/InstitutionID"
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+          description: Session-bound CSRF token for authenticated mutating requests.
+      responses:
+        "200":
+          description: Institution restored
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Origin or CSRF validation failed
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Institution not found
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/institutions/{institution_id}/versions:
+    get:
+      summary: List institution versions
+      parameters:
+        - $ref: "#/components/parameters/InstitutionID"
+      responses:
+        "200":
+          description: Institution versions, newest first
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstitutionsResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication is required
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Institution not found
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/setup/currencies:
     post:
       summary: Create setup currencies and choose the book default currency
@@ -653,6 +1086,14 @@ components:
       schema:
         type: string
         format: uuid
+  parameters:
+    InstitutionID:
+      in: path
+      name: institution_id
+      required: true
+      schema:
+        type: integer
+        format: int64
   schemas:
     HealthResponse:
       type: object
@@ -988,6 +1429,134 @@ components:
       properties:
         default_currency:
           $ref: "#/components/schemas/CurrencyResponse"
+    InstitutionKind:
+      type: string
+      enum:
+        - bank
+        - credit_union
+        - brokerage
+        - card_issuer
+        - lender
+        - insurance
+        - employer
+        - rewards_program
+        - government
+        - other
+    InstitutionResponse:
+      type: object
+      required:
+        - id
+        - book_id
+        - status
+        - name
+        - kind
+        - address_json
+        - comment_markdown
+        - metadata_json
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        book_id:
+          type: integer
+          format: int64
+          description: Current runtime always uses book id 1.
+        status:
+          type: string
+          enum:
+            - active
+            - archived
+        name:
+          type: string
+          description: User-entered institution name.
+          maxLength: 200
+        kind:
+          $ref: "#/components/schemas/InstitutionKind"
+        country_code:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: Optional ISO 3166-1 alpha-2 country code.
+        website:
+          type: string
+          format: uri
+          maxLength: 500
+        logo_url:
+          type: string
+          maxLength: 1000
+          description: Optional absolute URL or same-origin path for the institution logo.
+        logo_small_url:
+          type: string
+          maxLength: 1000
+          description: Optional absolute URL or same-origin path for compact list logos.
+        backdrop_url:
+          type: string
+          maxLength: 1000
+          description: Optional absolute URL or same-origin path for larger institution backdrop artwork.
+        address_json:
+          type: string
+          description: Reserved structured address JSON string. Defaults to {}.
+        comment_markdown:
+          type: string
+          description: User-entered institution notes.
+          maxLength: 5000
+        metadata_json:
+          type: string
+          description: Reserved structured metadata JSON string. Defaults to {}.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    InstitutionsResponse:
+      type: object
+      required:
+        - institutions
+      properties:
+        institutions:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstitutionResponse"
+    InstitutionRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        kind:
+          $ref: "#/components/schemas/InstitutionKind"
+        country_code:
+          type: string
+          minLength: 2
+          maxLength: 2
+        website:
+          type: string
+          format: uri
+          maxLength: 500
+        logo_url:
+          type: string
+          maxLength: 1000
+        logo_small_url:
+          type: string
+          maxLength: 1000
+        backdrop_url:
+          type: string
+          maxLength: 1000
+        address_json:
+          type: string
+          description: Reserved structured address JSON string. Omit for {}.
+        comment_markdown:
+          type: string
+          maxLength: 5000
+        metadata_json:
+          type: string
+          description: Reserved structured metadata JSON string. Omit for {}.
+      additionalProperties: false
     AuthSessionResponse:
       type: object
       required:

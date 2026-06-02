@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -41,6 +41,15 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/currencies", createCurrency(logger, authService, currencyService, options))
 		mux.HandleFunc("POST /api/v1/currencies/{commodity_id}/default", setDefaultCurrency(logger, authService, currencyService, options))
 		mux.HandleFunc("POST /api/v1/setup/currencies", completeCurrencySetup(logger, authService, currencyService, options))
+	}
+	if authService != nil && institutionService != nil {
+		mux.HandleFunc("GET /api/v1/institutions", listInstitutions(logger, authService, institutionService))
+		mux.HandleFunc("POST /api/v1/institutions", createInstitution(logger, authService, institutionService, options))
+		mux.HandleFunc("GET /api/v1/institutions/{institution_id}", readInstitution(logger, authService, institutionService))
+		mux.HandleFunc("PATCH /api/v1/institutions/{institution_id}", updateInstitution(logger, authService, institutionService, options))
+		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/archive", archiveInstitution(logger, authService, institutionService, options))
+		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/restore", restoreInstitution(logger, authService, institutionService, options))
+		mux.HandleFunc("GET /api/v1/institutions/{institution_id}/versions", listInstitutionVersions(logger, authService, institutionService))
 	}
 }
 

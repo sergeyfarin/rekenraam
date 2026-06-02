@@ -22,10 +22,9 @@
   let ownerPassword = $state('');
   let loginUsername = $state('');
   let loginPassword = $state('');
-  let bookCode = $state('personal');
-  let bookName = $state('');
-  let currencyDefaultCode = $state('USD');
-  let additionalCurrencyCodes = $state<string[]>([]);
+  let currencyDefaultCode = $state('');
+  let selectedCurrencyCodes = $state<string[]>([]);
+  let currencySearchCode = $state('');
   let ownerError = $state<unknown>(undefined);
   let loginError = $state<unknown>(undefined);
   let bookError = $state<unknown>(undefined);
@@ -92,8 +91,52 @@
     })
   );
 
-  const currencyNamesByCode = $derived.by(
-    () => new Map(localizedCurrencyCatalog.map((currency) => [currency.code, currency.name]))
+  const localeCurrencyCode = $derived.by(() => {
+    if (!browser) {
+      return 'USD';
+    }
+
+    for (const locale of navigator.languages.length > 0 ? navigator.languages : [navigator.language]) {
+      const region = regionFromLocale(locale);
+      const currencyCode = region ? regionCurrencyCodes[region] : undefined;
+
+      if (currencyCode) {
+        return currencyCode;
+      }
+    }
+
+    return 'USD';
+  });
+
+  const quickCurrencyCodes = $derived.by(() => {
+    const catalogCodes = new Set(localizedCurrencyCatalog.map((currency) => currency.code));
+    const preferredCodes = [
+      localeCurrencyCode,
+      'USD',
+      'EUR',
+      'CAD',
+      'AUD',
+      'GBP',
+      'JPY',
+      'CHF',
+      'NZD',
+      'SEK',
+      'NOK',
+      'DKK',
+      'BTC'
+    ];
+
+    return Array.from(new Set(preferredCodes)).filter((code) => catalogCodes.has(code));
+  });
+
+  const selectedCurrencies = $derived.by(() =>
+    selectedCurrencyCodes
+      .map((code) => localizedCurrencyCatalog.find((currency) => currency.code === code))
+      .filter((currency) => currency !== undefined)
+  );
+
+  const availableCurrencyOptions = $derived.by(() =>
+    localizedCurrencyCatalog.filter((currency) => !selectedCurrencyCodes.includes(currency.code))
   );
 
   const installGateError = $derived(setupQuery.error ?? sessionQuery.error ?? currencyCatalogQuery.error);
@@ -143,7 +186,7 @@
       case 'login':
         return m.install_gate_state_configured();
       case 'book_setup':
-        return m.install_gate_state_book();
+        return m.install_gate_state_preparing();
       case 'currency_setup':
         return m.install_gate_state_currencies();
       case 'authenticated':
@@ -162,7 +205,7 @@
   const nextStepLabel = $derived.by(() => {
     const nextStep = setupQuery.data?.current_step;
 
-    if (!nextStep) {
+    if (!nextStep || nextStep === 'book') {
       return null;
     }
 
@@ -184,9 +227,28 @@
       return;
     }
 
-    if (!localizedCurrencyCatalog.some((currency) => currency.code === currencyDefaultCode)) {
-      currencyDefaultCode = localizedCurrencyCatalog[0]?.code ?? 'USD';
+    const catalogCodes = new Set(localizedCurrencyCatalog.map((currency) => currency.code));
+    const fallbackCode = [localeCurrencyCode, 'USD', localizedCurrencyCatalog[0]?.code].find(
+      (code) => code !== undefined && catalogCodes.has(code)
+    );
+
+    if (selectedCurrencyCodes.length === 0 && fallbackCode) {
+      selectedCurrencyCodes = [fallbackCode];
+    } else {
+      selectedCurrencyCodes = selectedCurrencyCodes.filter((code) => catalogCodes.has(code));
     }
+
+    if (!currencyDefaultCode || !selectedCurrencyCodes.includes(currencyDefaultCode)) {
+      currencyDefaultCode = selectedCurrencyCodes[0] ?? fallbackCode ?? '';
+    }
+  });
+
+  $effect(() => {
+    if (!browser || pageState !== 'book_setup' || bookPending || bookError) {
+      return;
+    }
+
+    void createDefaultBook();
   });
 
   async function refreshInstallGate() {
@@ -243,17 +305,15 @@
     }
   }
 
-  async function handleCreateBook(event: SubmitEvent) {
-    event.preventDefault();
-
+  async function createDefaultBook() {
     bookPending = true;
     bookError = undefined;
 
     try {
       await createBook(
         {
-          code: bookCode,
-          name: bookName
+          code: 'personal',
+          name: 'personal'
         },
         sessionQuery.data?.csrf_token ?? ''
       );
@@ -266,6 +326,46 @@
     }
   }
 
+  function toggleCurrency(code: string) {
+    if (selectedCurrencyCodes.includes(code)) {
+      selectedCurrencyCodes = selectedCurrencyCodes.filter((selectedCode) => selectedCode !== code);
+
+      if (currencyDefaultCode === code) {
+        currencyDefaultCode = selectedCurrencyCodes[0] ?? '';
+      }
+
+      return;
+    }
+
+    selectedCurrencyCodes = [...selectedCurrencyCodes, code];
+    currencyDefaultCode ||= code;
+  }
+
+  function addCurrencyFromSearch() {
+    const code = currencySearchCode.trim().toUpperCase();
+
+    if (!code || selectedCurrencyCodes.includes(code)) {
+      currencySearchCode = '';
+      return;
+    }
+
+    if (!localizedCurrencyCatalog.some((currency) => currency.code === code)) {
+      return;
+    }
+
+    selectedCurrencyCodes = [...selectedCurrencyCodes, code];
+    currencyDefaultCode ||= code;
+    currencySearchCode = '';
+  }
+
+  function removeSelectedCurrency(code: string) {
+    selectedCurrencyCodes = selectedCurrencyCodes.filter((selectedCode) => selectedCode !== code);
+
+    if (currencyDefaultCode === code) {
+      currencyDefaultCode = selectedCurrencyCodes[0] ?? '';
+    }
+  }
+
   async function handleCompleteCurrencySetup(event: SubmitEvent) {
     event.preventDefault();
 
@@ -273,14 +373,13 @@
     currencyError = undefined;
 
     try {
-      const currencyCodes = Array.from(new Set([currencyDefaultCode, ...additionalCurrencyCodes])).filter(Boolean);
+      const currencyCodes = Array.from(new Set([currencyDefaultCode, ...selectedCurrencyCodes])).filter(Boolean);
 
       await completeCurrencySetup(
         {
           default_currency_code: currencyDefaultCode,
           currencies: currencyCodes.map((code) => ({
-            code,
-            name: currencyNamesByCode.get(code) ?? code
+            code
           }))
         },
         sessionQuery.data?.csrf_token ?? ''
@@ -294,6 +393,49 @@
     }
   }
 
+  const regionCurrencyCodes: Record<string, string> = {
+    AT: 'EUR',
+    AU: 'AUD',
+    BE: 'EUR',
+    BR: 'BRL',
+    CA: 'CAD',
+    CH: 'CHF',
+    CN: 'CNY',
+    CZ: 'CZK',
+    DE: 'EUR',
+    DK: 'DKK',
+    ES: 'EUR',
+    FI: 'EUR',
+    FR: 'EUR',
+    GB: 'GBP',
+    IE: 'EUR',
+    IN: 'INR',
+    IT: 'EUR',
+    JP: 'JPY',
+    MX: 'MXN',
+    NL: 'EUR',
+    NO: 'NOK',
+    NZ: 'NZD',
+    PL: 'PLN',
+    PT: 'EUR',
+    SE: 'SEK',
+    US: 'USD',
+    ZA: 'ZAR'
+  };
+
+  function regionFromLocale(locale: string) {
+    try {
+      const parsedLocale = new Intl.Locale(locale);
+
+      if (parsedLocale.region) {
+        return parsedLocale.region.toUpperCase();
+      }
+    } catch {
+      // Fall through to the simple BCP-47 region match below.
+    }
+
+    return locale.match(/[-_]([A-Za-z]{2})\b/)?.[1]?.toUpperCase();
+  }
 </script>
 
 <main class="min-h-screen px-6 py-16 sm:px-10">
@@ -359,8 +501,8 @@
             <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_login_title()}</h2>
             <p class="text-sm leading-6 text-muted">{m.install_gate_login_copy()}</p>
           {:else if pageState === 'book_setup'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_book_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_book_copy()}</p>
+            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_preparing_title()}</h2>
+            <p class="text-sm leading-6 text-muted">{m.install_gate_preparing_copy()}</p>
           {:else if pageState === 'currency_setup'}
             <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_currencies_title()}</h2>
             <p class="text-sm leading-6 text-muted">{m.install_gate_currencies_copy()}</p>
@@ -468,38 +610,24 @@
           </button>
         </form>
       {:else if pageState === 'book_setup'}
-        <form class="space-y-4" onsubmit={handleCreateBook}>
-          <APIFormError error={bookError} id="book-form-error" />
+        <div class="space-y-4">
+          <APIFormError error={bookError} id="workspace-form-error" />
 
-          <label class="block space-y-2">
-            <span class="text-sm font-medium text-foreground">{m.install_gate_book_name_label()}</span>
-            <input
-              bind:value={bookName}
-              name="book-name"
-              autocomplete="off"
-              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
-              required
-            />
-          </label>
+          <div class="rounded-[1.75rem] border border-border bg-surface-strong/60 p-5 text-sm leading-6 text-muted">
+            {bookError ? m.install_gate_preparing_error_copy() : m.install_gate_preparing_copy()}
+          </div>
 
-          <label class="block space-y-2">
-            <span class="text-sm font-medium text-foreground">{m.install_gate_book_code_label()}</span>
-            <input
-              bind:value={bookCode}
-              name="book-code"
-              autocomplete="off"
-              class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
-            />
-          </label>
-
-          <button
-            type="submit"
-            class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={bookPending}
-          >
-            {bookPending ? m.install_gate_book_submit_pending() : m.install_gate_book_submit()}
-          </button>
-        </form>
+          {#if bookError}
+            <button
+              type="button"
+              class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              onclick={createDefaultBook}
+              disabled={bookPending}
+            >
+              {bookPending ? m.install_gate_preparing_submit_pending() : m.install_gate_preparing_submit()}
+            </button>
+          {/if}
+        </div>
       {:else if pageState === 'currency_setup'}
         <form class="space-y-4" onsubmit={handleCompleteCurrencySetup}>
           <APIFormError error={currencyError ?? currencyCatalogQuery.error} id="currency-form-error" />
@@ -513,6 +641,91 @@
               {m.install_gate_currencies_empty()}
             </div>
           {:else}
+            <div class="space-y-3">
+              <span class="text-sm font-medium text-foreground">{m.install_gate_quick_currencies_label()}</span>
+              <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {#each quickCurrencyCodes as code}
+                  {@const currency = localizedCurrencyCatalog.find((entry) => entry.code === code)}
+                  {#if currency}
+                    <button
+                      type="button"
+                      class:border-accent={selectedCurrencyCodes.includes(code)}
+                      class:bg-accent={selectedCurrencyCodes.includes(code)}
+                      class:text-accent-foreground={selectedCurrencyCodes.includes(code)}
+                      class:bg-surface-strong={!selectedCurrencyCodes.includes(code)}
+                      class:text-foreground={!selectedCurrencyCodes.includes(code)}
+                      class="min-h-16 rounded-2xl border px-3 py-2 text-left transition hover:border-accent"
+                      aria-pressed={selectedCurrencyCodes.includes(code)}
+                      onclick={() => toggleCurrency(code)}
+                    >
+                      <span class="block text-sm font-semibold">{currency.code}</span>
+                      <span class="block truncate text-xs opacity-80">{currency.name}</span>
+                    </button>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block space-y-2">
+                <span class="text-sm font-medium text-foreground">{m.install_gate_add_currency_label()}</span>
+                <input
+                  bind:value={currencySearchCode}
+                  list="currency-options"
+                  name="currency-search"
+                  autocomplete="off"
+                  class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+                  placeholder={m.install_gate_add_currency_placeholder()}
+                  onkeydown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addCurrencyFromSearch();
+                    }
+                  }}
+                />
+              </label>
+              <datalist id="currency-options">
+                {#each availableCurrencyOptions as currency}
+                  <option value={currency.code}>{currency.label}</option>
+                {/each}
+              </datalist>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-60"
+                onclick={addCurrencyFromSearch}
+                disabled={currencySearchCode.trim() === ''}
+              >
+                {m.install_gate_add_currency_submit()}
+              </button>
+            </div>
+
+            <div class="space-y-3">
+              <span class="text-sm font-medium text-foreground">{m.install_gate_selected_currencies_label()}</span>
+
+              {#if selectedCurrencies.length === 0}
+                <div class="rounded-[1.75rem] border border-border bg-surface-strong/60 p-5 text-sm leading-6 text-muted">
+                  {m.install_gate_selected_currencies_empty()}
+                </div>
+              {:else}
+                <div class="flex flex-wrap gap-2">
+                  {#each selectedCurrencies as currency}
+                    <span class="inline-flex items-center gap-2 rounded-full border border-border bg-surface-strong px-3 py-2 text-sm text-foreground">
+                      <span class="font-semibold">{currency.code}</span>
+                      <span class="max-w-40 truncate text-muted">{currency.name}</span>
+                      <button
+                        type="button"
+                        class="rounded-full px-2 text-muted transition hover:bg-surface hover:text-foreground"
+                        aria-label={m.install_gate_remove_currency({ code: currency.code })}
+                        onclick={() => removeSelectedCurrency(currency.code)}
+                      >
+                        x
+                      </button>
+                    </span>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+
             <label class="block space-y-2">
               <span class="text-sm font-medium text-foreground">{m.install_gate_default_currency_label()}</span>
               <select
@@ -521,21 +734,7 @@
                 class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground"
                 required
               >
-                {#each localizedCurrencyCatalog as currency}
-                  <option value={currency.code}>{currency.label}</option>
-                {/each}
-              </select>
-            </label>
-
-            <label class="block space-y-2">
-              <span class="text-sm font-medium text-foreground">{m.install_gate_additional_currencies_label()}</span>
-              <select
-                bind:value={additionalCurrencyCodes}
-                name="additional-currencies"
-                class="min-h-48 w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground"
-                multiple
-              >
-                {#each localizedCurrencyCatalog as currency}
+                {#each selectedCurrencies as currency}
                   <option value={currency.code}>{currency.label}</option>
                 {/each}
               </select>
@@ -544,7 +743,7 @@
             <button
               type="submit"
               class="inline-flex w-full items-center justify-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={currencyPending || currencyCatalogQuery.isPending}
+              disabled={currencyPending || currencyCatalogQuery.isPending || selectedCurrencies.length === 0 || !currencyDefaultCode}
             >
               {currencyPending ? m.install_gate_currencies_submit_pending() : m.install_gate_currencies_submit()}
             </button>

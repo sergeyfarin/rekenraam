@@ -164,6 +164,7 @@ Goal: create the durable accounting skeleton.
 - First-run setup extension for default book, default currency preference, optional additional currencies, and required system accounts.
 - The default currency is a UI/account-default preference, not a book base currency or reporting currency. Reports choose their reporting currency and FX method later without changing the book.
 - Commodity and currency setup comes before accounts. Account precision must derive from commodity metadata or an explicit account-level quantity scale override, not from floating-point or free-text currency fields.
+- Institution logo and backdrop support is limited to optional URL/reference metadata in Phase 1. File upload, attachment storage, statement PDFs, and receipts remain out of scope.
 - Account tree with account types.
 - Account creation does not create balances. Opening balances require posted transactions and arrive with the ledger transaction slice.
 - Account list and account detail UI.

@@ -76,7 +76,7 @@ func withSecurityHeaders(options HandlerOptions, next http.Handler) http.Handler
 			header.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}
 
-		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || strings.HasPrefix(r.URL.Path, "/api/v1/setup/") || strings.HasPrefix(r.URL.Path, "/api/v1/books/") || strings.HasPrefix(r.URL.Path, "/api/v1/currencies") {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || strings.HasPrefix(r.URL.Path, "/api/v1/setup/") || strings.HasPrefix(r.URL.Path, "/api/v1/books/") || strings.HasPrefix(r.URL.Path, "/api/v1/currencies") || strings.HasPrefix(r.URL.Path, "/api/v1/institutions") {
 			header.Set("Cache-Control", "no-store")
 			header.Set("Pragma", "no-cache")
 		}

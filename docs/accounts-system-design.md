@@ -161,9 +161,18 @@ Use a stable identity table plus append-only versions.
 - `kind`
 - `country_code`
 - `website`
+- `logo_url`
+- `logo_small_url`
+- `backdrop_url`
 - `address_json`
 - `comment_markdown`
 - `metadata_json`
+
+Logo and backdrop fields are optional URL/reference fields for UI
+presentation. They do not introduce attachment storage or upload handling. A
+small logo is intended for compact account and institution lists; the main logo
+or backdrop can be used on institution detail/edit screens and account screens
+grouped under that institution.
 
 Do not store `activated_on` or `archived_on` separately. A lifecycle state is
 effective on the version's `effective_from` date.

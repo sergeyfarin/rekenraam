@@ -846,6 +846,579 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/institutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List current institutions */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "active" | "archived";
+                    /** @description Include archived institutions when no explicit status filter is set. */
+                    include_archived?: boolean;
+                    /** @description Small-set institution name, kind, or country filter. */
+                    q?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current institutions */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionsResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create an institution */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InstitutionRequest"];
+                };
+            };
+            responses: {
+                /** @description Institution created */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Book not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an institution */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    institution_id: components["parameters"]["InstitutionID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Institution */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Institution not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update an institution by creating a new version */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    institution_id: components["parameters"]["InstitutionID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InstitutionRequest"];
+                };
+            };
+            responses: {
+                /** @description Institution updated */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Institution not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive an institution */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    institution_id: components["parameters"]["InstitutionID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Institution archived */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Institution not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore an archived institution */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    institution_id: components["parameters"]["InstitutionID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Institution restored */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Institution not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List institution versions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    institution_id: components["parameters"]["InstitutionID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Institution versions, newest first */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InstitutionsResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Institution not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/currencies": {
         parameters: {
             query?: never;
@@ -1084,6 +1657,60 @@ export interface components {
         SetDefaultCurrencyResponse: {
             default_currency: components["schemas"]["CurrencyResponse"];
         };
+        /** @enum {string} */
+        InstitutionKind: "bank" | "credit_union" | "brokerage" | "card_issuer" | "lender" | "insurance" | "employer" | "rewards_program" | "government" | "other";
+        InstitutionResponse: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description Current runtime always uses book id 1.
+             */
+            book_id: number;
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** @description User-entered institution name. */
+            name: string;
+            kind: components["schemas"]["InstitutionKind"];
+            /** @description Optional ISO 3166-1 alpha-2 country code. */
+            country_code?: string;
+            /** Format: uri */
+            website?: string;
+            /** @description Optional absolute URL or same-origin path for the institution logo. */
+            logo_url?: string;
+            /** @description Optional absolute URL or same-origin path for compact list logos. */
+            logo_small_url?: string;
+            /** @description Optional absolute URL or same-origin path for larger institution backdrop artwork. */
+            backdrop_url?: string;
+            /** @description Reserved structured address JSON string. Defaults to {}. */
+            address_json: string;
+            /** @description User-entered institution notes. */
+            comment_markdown: string;
+            /** @description Reserved structured metadata JSON string. Defaults to {}. */
+            metadata_json: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        InstitutionsResponse: {
+            institutions: components["schemas"]["InstitutionResponse"][];
+        };
+        InstitutionRequest: {
+            name: string;
+            kind?: components["schemas"]["InstitutionKind"];
+            country_code?: string;
+            /** Format: uri */
+            website?: string;
+            logo_url?: string;
+            logo_small_url?: string;
+            backdrop_url?: string;
+            /** @description Reserved structured address JSON string. Omit for {}. */
+            address_json?: string;
+            comment_markdown?: string;
+            /** @description Reserved structured metadata JSON string. Omit for {}. */
+            metadata_json?: string;
+        };
         AuthSessionResponse: {
             authenticated: boolean;
             user?: components["schemas"]["OwnerResponse"];
@@ -1107,7 +1734,9 @@ export interface components {
         };
     };
     responses: never;
-    parameters: never;
+    parameters: {
+        InstitutionID: number;
+    };
     requestBodies: never;
     headers: {
         /** @description Server-generated request identifier for this response. */
