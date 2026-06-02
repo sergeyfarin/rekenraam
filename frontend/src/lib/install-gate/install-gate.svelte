@@ -17,16 +17,12 @@
   import RecoveryPanel from './recovery-panel.svelte';
   import WorkspacePreparingPanel from './workspace-preparing-panel.svelte';
   import { localeCurrencyCode, localizedCurrencyCatalog, quickCurrencyCodes } from './currency-options';
-
-  type PageState =
-    | 'loading'
-    | 'error'
-    | 'fresh'
-    | 'login'
-    | 'book_setup'
-    | 'currency_setup'
-    | 'authenticated'
-    | 'recovery_required';
+  import { installGateStateCopy } from './install-gate-copy';
+  import {
+    resolveInstallGateState,
+    shouldCreateDefaultBook,
+    shouldRedirectToApp
+  } from './install-gate-state';
 
   const healthQuery = createQuery(() => healthQueryOptions());
   const setupQuery = createQuery(() => setupStatusQueryOptions());
@@ -81,38 +77,18 @@
   const quickCodes = $derived(quickCurrencyCodes(catalog, localeCode));
   const installGateError = $derived(setupQuery.error ?? sessionQuery.error ?? currencyCatalogQuery.error);
 
-  const pageState = $derived.by<PageState>(() => {
-    if (setupQuery.isPending || sessionQuery.isPending) return 'loading';
-    if (setupQuery.isError || sessionQuery.isError) return 'error';
-    if (setupQuery.data === undefined || sessionQuery.data === undefined) return 'loading';
-    if (setupQuery.data.install_state === 'fresh') return 'fresh';
-    if (setupQuery.data.install_state === 'recovery_required') return 'recovery_required';
-    if (!sessionQuery.data.authenticated) return 'login';
-    if (setupQuery.data.current_step === 'book') return 'book_setup';
-    if (setupQuery.data.current_step === 'currencies') return 'currency_setup';
-    return 'authenticated';
-  });
+  const pageState = $derived.by(() =>
+    resolveInstallGateState({
+      setupPending: setupQuery.isPending,
+      setupError: setupQuery.isError,
+      setup: setupQuery.data,
+      sessionPending: sessionQuery.isPending,
+      sessionError: sessionQuery.isError,
+      session: sessionQuery.data
+    })
+  );
 
-  const stateBadge = $derived.by(() => {
-    switch (pageState) {
-      case 'fresh':
-        return m.install_gate_state_fresh();
-      case 'login':
-        return m.install_gate_state_configured();
-      case 'book_setup':
-        return m.install_gate_state_preparing();
-      case 'currency_setup':
-        return m.install_gate_state_currencies();
-      case 'authenticated':
-        return m.install_gate_state_authenticated();
-      case 'recovery_required':
-        return m.install_gate_state_recovery();
-      case 'error':
-        return m.install_gate_error_badge();
-      default:
-        return m.install_gate_loading_badge();
-    }
-  });
+  const stateCopy = $derived(installGateStateCopy(pageState));
 
   const completedSteps = $derived(setupQuery.data?.steps.filter((step) => step.status === 'completed').length ?? 0);
   const totalSteps = $derived(setupQuery.data?.steps.length ?? 0);
@@ -124,7 +100,7 @@
   });
 
   $effect(() => {
-    if (!browser || pageState !== 'authenticated') {
+    if (!shouldRedirectToApp(browser, pageState)) {
       redirectingToApp = false;
       return;
     }
@@ -151,7 +127,7 @@
   });
 
   $effect(() => {
-    if (!browser || pageState !== 'book_setup' || bookPending || bookError) return;
+    if (!shouldCreateDefaultBook({ browser, state: pageState, pending: bookPending, error: bookError })) return;
     void createDefaultBook();
   });
 
@@ -252,34 +228,11 @@
       <div class="mb-6 flex items-center justify-between gap-4">
         <div class="space-y-2">
           <span class="inline-flex rounded-full bg-surface-strong px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-            {stateBadge}
+            {stateCopy.badge}
           </span>
 
-          {#if pageState === 'fresh'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_fresh_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_fresh_copy()}</p>
-          {:else if pageState === 'login'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_login_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_login_copy()}</p>
-          {:else if pageState === 'book_setup'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_preparing_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_preparing_copy()}</p>
-          {:else if pageState === 'currency_setup'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_currencies_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_currencies_copy()}</p>
-          {:else if pageState === 'authenticated'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_authenticated_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_authenticated_copy()}</p>
-          {:else if pageState === 'recovery_required'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_recovery_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_recovery_copy()}</p>
-          {:else if pageState === 'error'}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_error_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_error_copy()}</p>
-          {:else}
-            <h2 class="text-3xl font-semibold tracking-tight text-balance">{m.install_gate_loading_title()}</h2>
-            <p class="text-sm leading-6 text-muted">{m.install_gate_loading_copy()}</p>
-          {/if}
+          <h2 class="text-3xl font-semibold tracking-tight text-balance">{stateCopy.title}</h2>
+          <p class="text-sm leading-6 text-muted">{stateCopy.copy}</p>
         </div>
 
         <div class="hidden h-16 w-16 rounded-[1.5rem] border border-border bg-surface-strong/70 sm:block"></div>
