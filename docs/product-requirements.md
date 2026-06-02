@@ -123,6 +123,7 @@ These apply across all feature phases.
 - The app must support multilingual UI from an early stage.
 - English is the initial implementation language; translation boundaries must keep UI copy and built-in data ready to add other languages without reworking UI code or database schema.
 - Built-in database records not entered by the user or imported from a source must use stable codes or keys and resolve display labels through localization assets.
+- Built-in currency, category, account-type, system-account, and other app-defined labels must be translated at frontend render time from stable identifiers, not stored as localized canonical database names during setup.
 - The design system must support themes through semantic tokens rather than hard-coded colors.
 - Theme support starts with light and dark only, but the token model should avoid blocking future named themes.
 - Desktop and mobile layouts must both be intentional and usable.

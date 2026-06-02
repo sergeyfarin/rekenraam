@@ -113,6 +113,7 @@ Rules:
 - Keep formatting of dates, numbers, percentages, and money separate from translated messages.
 - Store stable codes in data, not translated labels.
 - Do not store built-in definitions in the database only as English display text; store stable keys/codes and resolve display labels through localization.
+- Resolve built-in labels at the frontend render boundary. Localized names for built-in currencies, categories, account types, system accounts, and other app-defined records are not canonical database values.
 - Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must remain localization-ready.
 
 ## API Boundaries
