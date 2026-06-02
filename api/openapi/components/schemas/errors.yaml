@@ -1,0 +1,29 @@
+ErrorBody:
+  type: object
+  required:
+    - code
+    - message
+  properties:
+    code:
+      type: string
+      enum:
+        - VALIDATION_FAILED
+        - UNAUTHENTICATED
+        - FORBIDDEN
+        - NOT_FOUND
+        - CONFLICT
+        - CSRF_INVALID
+        - RATE_LIMITED
+        - RESOURCE_BUSY
+        - SETUP_REQUIRED
+        - SETUP_ALREADY_COMPLETE
+        - INTERNAL_ERROR
+    message:
+      type: string
+ErrorResponse:
+  type: object
+  required:
+    - error
+  properties:
+    error:
+      $ref: "../../openapi.yaml#/components/schemas/ErrorBody"

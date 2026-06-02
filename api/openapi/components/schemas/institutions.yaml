@@ -1,0 +1,128 @@
+InstitutionKind:
+  type: string
+  enum:
+    - bank
+    - credit_union
+    - brokerage
+    - card_issuer
+    - lender
+    - insurance
+    - employer
+    - rewards_program
+    - government
+    - other
+InstitutionResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - status
+    - name
+    - kind
+    - address_json
+    - comment_markdown
+    - metadata_json
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+      description: Current runtime always uses book id 1.
+    status:
+      type: string
+      enum:
+        - active
+        - archived
+    name:
+      type: string
+      description: User-entered institution name.
+      maxLength: 200
+    kind:
+      $ref: "../../openapi.yaml#/components/schemas/InstitutionKind"
+    country_code:
+      type: string
+      minLength: 2
+      maxLength: 2
+      description: Optional ISO 3166-1 alpha-2 country code.
+    website:
+      type: string
+      format: uri
+      maxLength: 500
+    logo_url:
+      type: string
+      maxLength: 1000
+      description: Optional absolute URL or same-origin path for the institution logo.
+    logo_small_url:
+      type: string
+      maxLength: 1000
+      description: Optional absolute URL or same-origin path for compact list logos.
+    backdrop_url:
+      type: string
+      maxLength: 1000
+      description: Optional absolute URL or same-origin path for larger institution backdrop artwork.
+    address_json:
+      type: string
+      description: Reserved structured address JSON string. Defaults to {}.
+    comment_markdown:
+      type: string
+      description: User-entered institution notes.
+      maxLength: 5000
+    metadata_json:
+      type: string
+      description: Reserved structured metadata JSON string. Defaults to {}.
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+InstitutionsResponse:
+  type: object
+  required:
+    - institutions
+  properties:
+    institutions:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/InstitutionResponse"
+InstitutionRequest:
+  type: object
+  required:
+    - name
+  properties:
+    name:
+      type: string
+      maxLength: 200
+    kind:
+      $ref: "../../openapi.yaml#/components/schemas/InstitutionKind"
+    country_code:
+      type: string
+      minLength: 2
+      maxLength: 2
+    website:
+      type: string
+      format: uri
+      maxLength: 500
+    logo_url:
+      type: string
+      maxLength: 1000
+    logo_small_url:
+      type: string
+      maxLength: 1000
+    backdrop_url:
+      type: string
+      maxLength: 1000
+    address_json:
+      type: string
+      description: Reserved structured address JSON string. Omit for {}.
+    comment_markdown:
+      type: string
+      maxLength: 5000
+    metadata_json:
+      type: string
+      description: Reserved structured metadata JSON string. Omit for {}.
+  additionalProperties: false

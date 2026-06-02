@@ -1,0 +1,28 @@
+post:
+  summary: Create setup currencies and choose the book default currency
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CompleteCurrencySetupRequest"
+  responses:
+    "201":
+      description: Currencies created and setup advanced to the next step
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CompleteCurrencySetupResponse"
+    "400":
+      description: Invalid request body or validation failure
+      headers:

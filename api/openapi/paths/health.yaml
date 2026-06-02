@@ -1,0 +1,12 @@
+get:
+  summary: Health check
+  responses:
+    "200":
+      description: Health response
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/HealthResponse"

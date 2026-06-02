@@ -1458,62 +1458,9 @@ export interface paths {
                 /** @description Invalid request body or validation failure */
                 400: {
                     headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Authentication is required */
-                401: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Origin or CSRF validation failed */
-                403: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Currency or book not found */
-                404: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Currency setup is already complete */
-                409: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
+                    content?: never;
                 };
             };
         };

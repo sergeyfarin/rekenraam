@@ -1,0 +1,166 @@
+CurrencyCatalogEntry:
+  type: object
+  required:
+    - code
+    - symbol
+    - english_name
+    - standard_scale
+    - max_quantity_scale
+  properties:
+    code:
+      type: string
+      minLength: 3
+      maxLength: 3
+    symbol:
+      type: string
+    english_name:
+      type: string
+      description: English fallback from the embedded catalog. Frontend locale formatting should provide the displayed translated name.
+    standard_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    max_quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+CurrencyCatalogResponse:
+  type: object
+  required:
+    - currencies
+  properties:
+    currencies:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CurrencyCatalogEntry"
+CurrencyResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - code
+    - name
+    - symbol
+    - display_symbol
+    - status
+    - standard_scale
+    - max_quantity_scale
+    - is_builtin
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+      description: Current runtime always uses book id 1.
+    code:
+      type: string
+      minLength: 3
+      maxLength: 3
+    name:
+      type: string
+      description: Stored display name snapshot supplied by the frontend locale or catalog fallback.
+      maxLength: 200
+    symbol:
+      type: string
+    display_symbol:
+      type: string
+    status:
+      type: string
+      enum:
+        - active
+        - archived
+    standard_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    max_quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    is_builtin:
+      type: boolean
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+CurrenciesResponse:
+  type: object
+  required:
+    - currencies
+  properties:
+    currencies:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CurrencyResponse"
+CreateCurrencyRequest:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      minLength: 3
+      maxLength: 3
+    name:
+      type: string
+      description: Display name snapshot supplied by the frontend locale. Falls back to catalog English if omitted.
+      maxLength: 200
+  additionalProperties: false
+CurrencySetupSelection:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      minLength: 3
+      maxLength: 3
+    name:
+      type: string
+      description: Display name snapshot supplied by the frontend locale. Falls back to catalog English if omitted.
+      maxLength: 200
+  additionalProperties: false
+CompleteCurrencySetupRequest:
+  type: object
+  required:
+    - default_currency_code
+  properties:
+    default_currency_code:
+      type: string
+      minLength: 3
+      maxLength: 3
+      description: Default currency preference for new currency-sensitive UI and accounts. It is not a reporting/base currency.
+    currencies:
+      type: array
+      description: Optional additional catalog currencies. The default currency is always created even when this list is omitted or empty.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CurrencySetupSelection"
+  additionalProperties: false
+CompleteCurrencySetupResponse:
+  type: object
+  required:
+    - currencies
+    - default_currency
+    - setup
+  properties:
+    currencies:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CurrencyResponse"
+    default_currency:
+      $ref: "../../openapi.yaml#/components/schemas/CurrencyResponse"
+    setup:
+      $ref: "../../openapi.yaml#/components/schemas/SetupStatusResponse"
+SetDefaultCurrencyResponse:
+  type: object
+  required:
+    - default_currency
+  properties:
+    default_currency:
+      $ref: "../../openapi.yaml#/components/schemas/CurrencyResponse"

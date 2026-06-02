@@ -1,0 +1,59 @@
+SetupStep:
+  type: object
+  required:
+    - key
+    - status
+  properties:
+    key:
+      type: string
+      enum:
+        - owner
+        - book
+        - currencies
+        - system_accounts
+        - categories
+    status:
+      type: string
+      enum:
+        - pending
+        - completed
+SetupStatusResponse:
+  type: object
+  required:
+    - completed
+    - install_state
+    - implemented_steps
+    - steps
+  properties:
+    completed:
+      type: boolean
+    current_step:
+      type: string
+      enum:
+        - owner
+        - book
+        - currencies
+        - system_accounts
+        - categories
+    install_state:
+      type: string
+      enum:
+        - fresh
+        - configured
+        - recovery_required
+    implemented_steps:
+      type: array
+      items:
+        type: string
+        enum:
+          - owner
+          - book
+          - currencies
+    blocking_step:
+      type: string
+      enum:
+        - owner
+    steps:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SetupStep"

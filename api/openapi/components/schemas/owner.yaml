@@ -1,0 +1,26 @@
+CreateOwnerRequest:
+  type: object
+  required:
+    - username
+    - password
+  properties:
+    username:
+      type: string
+      description: Username for the single owner account. Must be 1–64 bytes, no control characters.
+      maxLength: 64
+    password:
+      type: string
+      description: Password for the single owner account. Minimum 12 Unicode characters, maximum 1024 bytes.
+      minLength: 12
+      maxLength: 1024
+  additionalProperties: false
+OwnerResponse:
+  type: object
+  required:
+    - id
+    - username
+  properties:
+    id:
+      type: integer
+    username:
+      type: string

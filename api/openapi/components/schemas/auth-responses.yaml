@@ -1,0 +1,29 @@
+AuthSessionResponse:
+  type: object
+  required:
+    - authenticated
+  properties:
+    authenticated:
+      type: boolean
+    user:
+      $ref: "../../openapi.yaml#/components/schemas/OwnerResponse"
+    csrf_token:
+      type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
+LoginResponse:
+  type: object
+  required:
+    - user
+  properties:
+    user:
+      $ref: "../../openapi.yaml#/components/schemas/OwnerResponse"
+CreateOwnerResponse:
+  type: object
+  required:
+    - owner
+    - setup
+  properties:
+    owner:
+      $ref: "../../openapi.yaml#/components/schemas/OwnerResponse"
+    setup:
+      $ref: "../../openapi.yaml#/components/schemas/SetupStatusResponse"
