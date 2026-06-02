@@ -174,6 +174,11 @@ small logo is intended for compact account and institution lists; the main logo
 or backdrop can be used on institution detail/edit screens and account screens
 grouped under that institution.
 
+API responses and requests must expose structured JSON columns as domain
+objects, not storage-column strings. For example, institutions expose `address`
+and `metadata` objects even though the SQLite columns are `address_json` and
+`metadata_json`.
+
 Do not store `activated_on` or `archived_on` separately. A lifecycle state is
 effective on the version's `effective_from` date.
 

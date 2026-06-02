@@ -98,11 +98,7 @@ func (r *InstitutionRepository) ListInstitutions(ctx context.Context, params Lis
 		args = append(args, like, like, like)
 	}
 
-	limit := params.Limit
-	if limit <= 0 {
-		limit = 2000
-	}
-	args = append(args, limit)
+	args = append(args, params.Limit)
 
 	rows, err := r.database.QueryContext(ctx, currentInstitutionSelect("AND "+strings.Join(where, " AND ")+`
 		ORDER BY iv.status, iv.name COLLATE NOCASE, i.id
@@ -140,9 +136,6 @@ func (r *InstitutionRepository) ListInstitutionVersions(ctx context.Context, boo
 	records, err := scanInstitutionRecords(rows)
 	if err != nil {
 		return nil, err
-	}
-	if len(records) == 0 {
-		return nil, ErrNotFound
 	}
 
 	return records, nil

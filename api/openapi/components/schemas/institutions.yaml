@@ -19,9 +19,9 @@ InstitutionResponse:
     - status
     - name
     - kind
-    - address_json
+    - address
     - comment_markdown
-    - metadata_json
+    - metadata
     - created_at
     - updated_at
   properties:
@@ -64,16 +64,18 @@ InstitutionResponse:
       type: string
       maxLength: 1000
       description: Optional absolute URL or same-origin path for larger institution backdrop artwork.
-    address_json:
-      type: string
-      description: Reserved structured address JSON string. Defaults to {}.
+    address:
+      type: object
+      additionalProperties: true
+      description: Reserved structured address object. Defaults to {}.
     comment_markdown:
       type: string
       description: User-entered institution notes.
       maxLength: 5000
-    metadata_json:
-      type: string
-      description: Reserved structured metadata JSON string. Defaults to {}.
+    metadata:
+      type: object
+      additionalProperties: true
+      description: Reserved structured metadata object. Defaults to {}.
     created_at:
       type: string
       format: date-time
@@ -116,13 +118,15 @@ InstitutionRequest:
     backdrop_url:
       type: string
       maxLength: 1000
-    address_json:
-      type: string
-      description: Reserved structured address JSON string. Omit for {}.
+    address:
+      type: object
+      additionalProperties: true
+      description: Reserved structured address object. Omit for {}.
     comment_markdown:
       type: string
       maxLength: 5000
-    metadata_json:
-      type: string
-      description: Reserved structured metadata JSON string. Omit for {}.
+    metadata:
+      type: object
+      additionalProperties: true
+      description: Reserved structured metadata object. Omit for {}.
   additionalProperties: false

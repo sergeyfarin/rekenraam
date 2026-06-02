@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -10,21 +11,21 @@ import (
 )
 
 type institutionResponse struct {
-	ID              int64  `json:"id"`
-	BookID          int64  `json:"book_id"`
-	Status          string `json:"status"`
-	Name            string `json:"name"`
-	Kind            string `json:"kind"`
-	CountryCode     string `json:"country_code,omitempty"`
-	Website         string `json:"website,omitempty"`
-	LogoURL         string `json:"logo_url,omitempty"`
-	LogoSmallURL    string `json:"logo_small_url,omitempty"`
-	BackdropURL     string `json:"backdrop_url,omitempty"`
-	AddressJSON     string `json:"address_json"`
-	CommentMarkdown string `json:"comment_markdown"`
-	MetadataJSON    string `json:"metadata_json"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
+	ID              int64           `json:"id"`
+	BookID          int64           `json:"book_id"`
+	Status          string          `json:"status"`
+	Name            string          `json:"name"`
+	Kind            string          `json:"kind"`
+	CountryCode     string          `json:"country_code,omitempty"`
+	Website         string          `json:"website,omitempty"`
+	LogoURL         string          `json:"logo_url,omitempty"`
+	LogoSmallURL    string          `json:"logo_small_url,omitempty"`
+	BackdropURL     string          `json:"backdrop_url,omitempty"`
+	Address         json.RawMessage `json:"address"`
+	CommentMarkdown string          `json:"comment_markdown"`
+	Metadata        json.RawMessage `json:"metadata"`
+	CreatedAt       string          `json:"created_at"`
+	UpdatedAt       string          `json:"updated_at"`
 }
 
 type institutionsResponse struct {
@@ -32,16 +33,16 @@ type institutionsResponse struct {
 }
 
 type institutionRequest struct {
-	Name            string `json:"name"`
-	Kind            string `json:"kind"`
-	CountryCode     string `json:"country_code"`
-	Website         string `json:"website"`
-	LogoURL         string `json:"logo_url"`
-	LogoSmallURL    string `json:"logo_small_url"`
-	BackdropURL     string `json:"backdrop_url"`
-	AddressJSON     string `json:"address_json"`
-	CommentMarkdown string `json:"comment_markdown"`
-	MetadataJSON    string `json:"metadata_json"`
+	Name            string          `json:"name"`
+	Kind            string          `json:"kind"`
+	CountryCode     string          `json:"country_code"`
+	Website         string          `json:"website"`
+	LogoURL         string          `json:"logo_url"`
+	LogoSmallURL    string          `json:"logo_small_url"`
+	BackdropURL     string          `json:"backdrop_url"`
+	Address         json.RawMessage `json:"address"`
+	CommentMarkdown string          `json:"comment_markdown"`
+	Metadata        json.RawMessage `json:"metadata"`
 }
 
 func listInstitutions(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService) http.HandlerFunc {
@@ -134,9 +135,9 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			LogoURL:         request.LogoURL,
 			LogoSmallURL:    request.LogoSmallURL,
 			BackdropURL:     request.BackdropURL,
-			AddressJSON:     request.AddressJSON,
+			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
-			MetadataJSON:    request.MetadataJSON,
+			MetadataJSON:    rawJSONText(request.Metadata),
 		})
 		if err != nil {
 			writeInstitutionServiceError(w, r, logger, "create institution", err)
@@ -175,9 +176,9 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			LogoURL:         request.LogoURL,
 			LogoSmallURL:    request.LogoSmallURL,
 			BackdropURL:     request.BackdropURL,
-			AddressJSON:     request.AddressJSON,
+			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
-			MetadataJSON:    request.MetadataJSON,
+			MetadataJSON:    rawJSONText(request.Metadata),
 		})
 		if err != nil {
 			writeInstitutionServiceError(w, r, logger, "update institution", err)
@@ -259,6 +260,14 @@ func parseOptionalBool(value string) (bool, error) {
 	return strconv.ParseBool(value)
 }
 
+func rawJSONText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+
+	return string(raw)
+}
+
 func toInstitutionResponse(institution app.Institution) institutionResponse {
 	return institutionResponse{
 		ID:              institution.ID,
@@ -271,9 +280,9 @@ func toInstitutionResponse(institution app.Institution) institutionResponse {
 		LogoURL:         institution.LogoURL,
 		LogoSmallURL:    institution.LogoSmallURL,
 		BackdropURL:     institution.BackdropURL,
-		AddressJSON:     institution.AddressJSON,
+		Address:         json.RawMessage(institution.AddressJSON),
 		CommentMarkdown: institution.CommentMarkdown,
-		MetadataJSON:    institution.MetadataJSON,
+		Metadata:        json.RawMessage(institution.MetadataJSON),
 		CreatedAt:       institution.CreatedAt,
 		UpdatedAt:       institution.UpdatedAt,
 	}

@@ -148,12 +148,12 @@ func (s *InstitutionService) InstitutionVersions(ctx context.Context, institutio
 	if institutionID <= 0 {
 		return nil, ValidationError{Message: "institution id is required"}
 	}
+	if _, err := s.Institution(ctx, institutionID); err != nil {
+		return nil, err
+	}
 
 	records, err := s.repository.ListInstitutionVersions(ctx, BookID, institutionID)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, ErrInstitutionNotFound
-		}
 		return nil, fmt.Errorf("read institution versions: %w", err)
 	}
 
@@ -264,28 +264,12 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		return Institution{}, err
 	}
 
-	spec, err := institutionSpec(institutionSpecInput{
-		Name:            current.Name,
-		Kind:            current.Kind,
-		CountryCode:     current.CountryCode,
-		Website:         current.Website,
-		LogoURL:         current.LogoURL,
-		LogoSmallURL:    current.LogoSmallURL,
-		BackdropURL:     current.BackdropURL,
-		AddressJSON:     current.AddressJSON,
-		CommentMarkdown: current.CommentMarkdown,
-		MetadataJSON:    current.MetadataJSON,
-	})
-	if err != nil {
-		return Institution{}, err
-	}
-
 	now := s.now().UTC()
 	record, err := s.repository.UpdateInstitution(ctx, db.UpdateInstitutionParams{
 		BookID:          BookID,
 		InstitutionID:   input.InstitutionID,
 		ChangedByUserID: input.OwnerUserID,
-		Spec:            spec,
+		Spec:            institutionSpecFromStored(current),
 		Status:          status,
 		ChangeReason:    reason,
 		RecordedAt:      now.Format(time.RFC3339),
@@ -360,15 +344,9 @@ func institutionSpec(input institutionSpecInput) (db.InstitutionSpec, error) {
 		return db.InstitutionSpec{}, err
 	}
 
-	addressJSON := strings.TrimSpace(input.AddressJSON)
-	if addressJSON == "" {
-		addressJSON = "{}"
-	}
-	if len(addressJSON) > institutionJSONMaxBytes {
-		return db.InstitutionSpec{}, ValidationError{Message: fmt.Sprintf("institution address JSON must be at most %d bytes", institutionJSONMaxBytes)}
-	}
-	if !json.Valid([]byte(addressJSON)) {
-		return db.InstitutionSpec{}, ValidationError{Message: "institution address JSON must be valid JSON"}
+	addressJSON, err := cleanJSONObject(input.AddressJSON, "institution address")
+	if err != nil {
+		return db.InstitutionSpec{}, err
 	}
 
 	commentMarkdown := strings.TrimSpace(input.CommentMarkdown)
@@ -376,15 +354,9 @@ func institutionSpec(input institutionSpecInput) (db.InstitutionSpec, error) {
 		return db.InstitutionSpec{}, ValidationError{Message: fmt.Sprintf("institution comment must be at most %d bytes", institutionCommentMaxBytes)}
 	}
 
-	metadataJSON := strings.TrimSpace(input.MetadataJSON)
-	if metadataJSON == "" {
-		metadataJSON = "{}"
-	}
-	if len(metadataJSON) > institutionJSONMaxBytes {
-		return db.InstitutionSpec{}, ValidationError{Message: fmt.Sprintf("institution metadata JSON must be at most %d bytes", institutionJSONMaxBytes)}
-	}
-	if !json.Valid([]byte(metadataJSON)) {
-		return db.InstitutionSpec{}, ValidationError{Message: "institution metadata JSON must be valid JSON"}
+	metadataJSON, err := cleanJSONObject(input.MetadataJSON, "institution metadata")
+	if err != nil {
+		return db.InstitutionSpec{}, err
 	}
 
 	return db.InstitutionSpec{
@@ -399,6 +371,39 @@ func institutionSpec(input institutionSpecInput) (db.InstitutionSpec, error) {
 		CommentMarkdown: commentMarkdown,
 		MetadataJSON:    metadataJSON,
 	}, nil
+}
+
+func institutionSpecFromStored(institution Institution) db.InstitutionSpec {
+	return db.InstitutionSpec{
+		Name:            institution.Name,
+		Kind:            institution.Kind,
+		CountryCode:     institution.CountryCode,
+		Website:         institution.Website,
+		LogoURL:         institution.LogoURL,
+		LogoSmallURL:    institution.LogoSmallURL,
+		BackdropURL:     institution.BackdropURL,
+		AddressJSON:     institution.AddressJSON,
+		CommentMarkdown: institution.CommentMarkdown,
+		MetadataJSON:    institution.MetadataJSON,
+	}
+}
+
+func cleanJSONObject(value string, field string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "{}", nil
+	}
+	if len(cleaned) > institutionJSONMaxBytes {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, institutionJSONMaxBytes)}
+	}
+	if !json.Valid([]byte(cleaned)) {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
+	}
+	if cleaned[0] != '{' {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be a JSON object", field)}
+	}
+
+	return cleaned, nil
 }
 
 func cleanHTTPURL(value string, field string, maxBytes int) (string, error) {

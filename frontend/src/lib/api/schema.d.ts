@@ -1629,12 +1629,16 @@ export interface components {
             logo_small_url?: string;
             /** @description Optional absolute URL or same-origin path for larger institution backdrop artwork. */
             backdrop_url?: string;
-            /** @description Reserved structured address JSON string. Defaults to {}. */
-            address_json: string;
+            /** @description Reserved structured address object. Defaults to {}. */
+            address: {
+                [key: string]: unknown;
+            };
             /** @description User-entered institution notes. */
             comment_markdown: string;
-            /** @description Reserved structured metadata JSON string. Defaults to {}. */
-            metadata_json: string;
+            /** @description Reserved structured metadata object. Defaults to {}. */
+            metadata: {
+                [key: string]: unknown;
+            };
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -1652,11 +1656,15 @@ export interface components {
             logo_url?: string;
             logo_small_url?: string;
             backdrop_url?: string;
-            /** @description Reserved structured address JSON string. Omit for {}. */
-            address_json?: string;
+            /** @description Reserved structured address object. Omit for {}. */
+            address?: {
+                [key: string]: unknown;
+            };
             comment_markdown?: string;
-            /** @description Reserved structured metadata JSON string. Omit for {}. */
-            metadata_json?: string;
+            /** @description Reserved structured metadata object. Omit for {}. */
+            metadata?: {
+                [key: string]: unknown;
+            };
         };
         AuthSessionResponse: {
             authenticated: boolean;

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -492,8 +491,4 @@ func currencyCodes(currencies []currencyResponse) []string {
 		codes = append(codes, currency.Code)
 	}
 	return codes
-}
-
-func strconvFormatInt(value int64) string {
-	return strconv.FormatInt(value, 10)
 }

@@ -49,8 +49,8 @@ func TestCreateInstitutionPersistsLogoFields(t *testing.T) {
 	assert.Equal(t, "https://example.test/logo.svg", institution.LogoURL)
 	assert.Equal(t, "/institution-assets/example-small.svg", institution.LogoSmallURL)
 	assert.Equal(t, "https://example.test/backdrop.jpg", institution.BackdropURL)
-	assert.Equal(t, "{}", institution.AddressJSON)
-	assert.Equal(t, "{}", institution.MetadataJSON)
+	assert.Equal(t, "{}", string(institution.Address))
+	assert.Equal(t, "{}", string(institution.Metadata))
 	assert.Equal(t, "Primary bank", institution.CommentMarkdown)
 
 	var versionCount int
@@ -61,6 +61,27 @@ func TestCreateInstitutionPersistsLogoFields(t *testing.T) {
 	`, institution.ID).Scan(&versionCount)
 	require.NoError(t, err)
 	assert.Equal(t, 1, versionCount)
+}
+
+func TestReadInstitutionReturnsSingleInstitution(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{
+		"name": "Read Me Bank",
+		"kind": "bank",
+		"address": {"street": "123 Main"},
+		"metadata": {"source": "manual"}
+	}`)
+
+	read := readInstitutionForSession(t, handler, sessionCookie, institution.ID)
+
+	assert.Equal(t, institution.ID, read.ID)
+	assert.Equal(t, "Read Me Bank", read.Name)
+	assert.Equal(t, `{"street":"123 Main"}`, string(read.Address))
+	assert.Equal(t, `{"source":"manual"}`, string(read.Metadata))
 }
 
 func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
@@ -108,6 +129,51 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	assert.Equal(t, "Old Bank", versions.Institutions[1].Name)
 }
 
+func TestUpdateInstitutionCanClearOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Clear Fields Bank",
+		"kind":"bank",
+		"country_code":"US",
+		"website":"https://clear.example",
+		"logo_url":"https://clear.example/logo.svg",
+		"logo_small_url":"/institution-assets/clear-small.svg",
+		"backdrop_url":"https://clear.example/backdrop.jpg",
+		"address":{"city":"Portland"},
+		"comment_markdown":"Clear me",
+		"metadata":{"tag":"old"}
+	}`)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/institutions/"+strconvFormatInt(institution.ID), strings.NewReader(`{
+		"name": "Clear Fields Bank",
+		"kind": "bank"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var body institutionResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "", body.CountryCode)
+	assert.Equal(t, "", body.Website)
+	assert.Equal(t, "", body.LogoURL)
+	assert.Equal(t, "", body.LogoSmallURL)
+	assert.Equal(t, "", body.BackdropURL)
+	assert.Equal(t, "{}", string(body.Address))
+	assert.Equal(t, "", body.CommentMarkdown)
+	assert.Equal(t, "{}", string(body.Metadata))
+}
+
 func TestArchiveInstitutionHidesFromDefaultListAndRestoreShowsIt(t *testing.T) {
 	t.Parallel()
 
@@ -132,6 +198,76 @@ func TestArchiveInstitutionHidesFromDefaultListAndRestoreShowsIt(t *testing.T) {
 	assert.Equal(t, "active", restoredList.Institutions[0].Status)
 }
 
+func TestListInstitutionsFiltersByStatus(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	active := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Active Bank","kind":"bank"}`)
+	archived := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Archived Bank","kind":"bank"}`)
+	mutateInstitution(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/institutions/"+strconvFormatInt(archived.ID)+"/archive", http.StatusOK)
+
+	activeList := listInstitutionsForSession(t, handler, sessionCookie, "?status=active")
+	require.Len(t, activeList.Institutions, 1)
+	assert.Equal(t, active.ID, activeList.Institutions[0].ID)
+	assert.Equal(t, "active", activeList.Institutions[0].Status)
+
+	archivedList := listInstitutionsForSession(t, handler, sessionCookie, "?status=archived")
+	require.Len(t, archivedList.Institutions, 1)
+	assert.Equal(t, archived.ID, archivedList.Institutions[0].ID)
+	assert.Equal(t, "archived", archivedList.Institutions[0].Status)
+}
+
+func TestInstitutionMutationsRequireAuthentication(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{
+			name:   "create",
+			method: http.MethodPost,
+			path:   "/api/v1/institutions",
+			body:   `{"name":"No Auth","kind":"bank"}`,
+		},
+		{
+			name:   "update",
+			method: http.MethodPatch,
+			path:   "/api/v1/institutions/1",
+			body:   `{"name":"No Auth","kind":"bank"}`,
+		},
+		{
+			name:   "archive",
+			method: http.MethodPost,
+			path:   "/api/v1/institutions/1/archive",
+		},
+		{
+			name:   "restore",
+			method: http.MethodPost,
+			path:   "/api/v1/institutions/1/restore",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler, _ := newSetupTestHandler(t)
+			req := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, http.StatusUnauthorized, res.Code)
+		})
+	}
+}
+
 func TestCreateInstitutionValidatesInput(t *testing.T) {
 	t.Parallel()
 
@@ -152,8 +288,8 @@ func TestCreateInstitutionValidatesInput(t *testing.T) {
 			body: `{"name":"Bad Logo","kind":"bank","logo_url":"ftp://example.test/logo.svg"}`,
 		},
 		{
-			name: "invalid metadata json",
-			body: `{"name":"Bad Metadata","kind":"bank","metadata_json":"not json"}`,
+			name: "invalid metadata object",
+			body: `{"name":"Bad Metadata","kind":"bank","metadata":"not object"}`,
 		},
 	}
 
@@ -196,6 +332,23 @@ func createInstitutionForSession(t *testing.T, handler http.Handler, sessionCook
 	handler.ServeHTTP(res, req)
 
 	require.Equal(t, http.StatusCreated, res.Code)
+
+	var response institutionResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+
+	return response
+}
+
+func readInstitutionForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, institutionID int64) institutionResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/institutions/"+strconvFormatInt(institutionID), nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
 
 	var response institutionResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
