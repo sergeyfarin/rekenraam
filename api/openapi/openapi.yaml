@@ -37,6 +37,22 @@ paths:
     $ref: "./paths/institution-versions.yaml"
   /api/v1/setup/currencies:
     $ref: "./paths/setup-currencies.yaml"
+  /api/v1/accounts:
+    $ref: "./paths/accounts.yaml"
+  /api/v1/accounts/{account_id}:
+    $ref: "./paths/account.yaml"
+  /api/v1/accounts/{account_id}/close:
+    $ref: "./paths/account-close.yaml"
+  /api/v1/accounts/{account_id}/reopen:
+    $ref: "./paths/account-reopen.yaml"
+  /api/v1/accounts/{account_id}/archive:
+    $ref: "./paths/account-archive.yaml"
+  /api/v1/accounts/{account_id}/restore:
+    $ref: "./paths/account-restore.yaml"
+  /api/v1/accounts/{account_id}/versions:
+    $ref: "./paths/account-versions.yaml"
+  /api/v1/setup/system-accounts:
+    $ref: "./paths/setup-system-accounts.yaml"
 components:
   headers:
     XRequestID:
@@ -48,6 +64,13 @@ components:
     InstitutionID:
       in: path
       name: institution_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AccountID:
+      in: path
+      name: account_id
       required: true
       schema:
         type: integer
@@ -97,6 +120,22 @@ components:
       $ref: "./components/schemas/institutions.yaml#/InstitutionsResponse"
     InstitutionRequest:
       $ref: "./components/schemas/institutions.yaml#/InstitutionRequest"
+    AccountClass:
+      $ref: "./components/schemas/accounts.yaml#/AccountClass"
+    AccountKind:
+      $ref: "./components/schemas/accounts.yaml#/AccountKind"
+    AccountStatus:
+      $ref: "./components/schemas/accounts.yaml#/AccountStatus"
+    SystemAccountRole:
+      $ref: "./components/schemas/accounts.yaml#/SystemAccountRole"
+    AccountResponse:
+      $ref: "./components/schemas/accounts.yaml#/AccountResponse"
+    AccountsResponse:
+      $ref: "./components/schemas/accounts.yaml#/AccountsResponse"
+    AccountRequest:
+      $ref: "./components/schemas/accounts.yaml#/AccountRequest"
+    CompleteSystemAccountsSetupResponse:
+      $ref: "./components/schemas/accounts.yaml#/CompleteSystemAccountsSetupResponse"
     AuthSessionResponse:
       $ref: "./components/schemas/auth-responses.yaml#/AuthSessionResponse"
     LoginResponse:

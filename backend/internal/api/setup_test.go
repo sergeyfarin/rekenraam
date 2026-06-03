@@ -36,7 +36,7 @@ func TestSetupStatusReturnsInitialSteps(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.False(t, body.Completed)
 	assert.Equal(t, app.InstallStateFresh, body.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies"}, body.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.ImplementedSteps)
 	assert.Equal(t, "owner", body.BlockingStep)
 	assert.Equal(t, "owner", body.CurrentStep)
 	require.Len(t, body.Steps, 5)
@@ -67,7 +67,7 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.Equal(t, "owner", body.Owner.Username)
 	assert.False(t, body.Setup.Completed)
 	assert.Equal(t, app.InstallStateConfigured, body.Setup.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies"}, body.Setup.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.Setup.ImplementedSteps)
 	assert.Empty(t, body.Setup.BlockingStep)
 	assert.Equal(t, "book", body.Setup.CurrentStep)
 	assert.Equal(t, setupStepResponse{Key: "owner", Status: app.SetupStepStatusCompleted}, body.Setup.Steps[0])
@@ -258,7 +258,7 @@ func TestSetupStatusReturnsRecoveryRequiredForInconsistentOwnerState(t *testing.
 	var body setupStatusResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, app.InstallStateRecoveryRequired, body.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies"}, body.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.ImplementedSteps)
 	assert.Empty(t, body.BlockingStep)
 }
 
@@ -284,9 +284,11 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	authService := app.NewAuthService(authRepository, logger)
 	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
 	currencyService := app.NewCurrencyService(db.NewCommodityRepository(database), setupService)
-	institutionService := app.NewInstitutionService(db.NewInstitutionRepository(database))
+	institutionRepository := db.NewInstitutionRepository(database)
+	institutionService := app.NewInstitutionService(institutionRepository)
+	accountService := app.NewAccountService(db.NewAccountRepository(database), institutionRepository, setupService)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, options), database
 }
 
 func setSameOrigin(req *http.Request) {

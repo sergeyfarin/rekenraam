@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -50,6 +50,18 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/archive", archiveInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/restore", restoreInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("GET /api/v1/institutions/{institution_id}/versions", listInstitutionVersions(logger, authService, institutionService))
+	}
+	if authService != nil && accountService != nil {
+		mux.HandleFunc("GET /api/v1/accounts", listAccounts(logger, authService, accountService))
+		mux.HandleFunc("POST /api/v1/accounts", createAccount(logger, authService, accountService, options))
+		mux.HandleFunc("GET /api/v1/accounts/{account_id}", readAccount(logger, authService, accountService))
+		mux.HandleFunc("PATCH /api/v1/accounts/{account_id}", updateAccount(logger, authService, accountService, options))
+		mux.HandleFunc("POST /api/v1/accounts/{account_id}/close", closeAccount(logger, authService, accountService, options))
+		mux.HandleFunc("POST /api/v1/accounts/{account_id}/reopen", reopenAccount(logger, authService, accountService, options))
+		mux.HandleFunc("POST /api/v1/accounts/{account_id}/archive", archiveAccount(logger, authService, accountService, options))
+		mux.HandleFunc("POST /api/v1/accounts/{account_id}/restore", restoreAccount(logger, authService, accountService, options))
+		mux.HandleFunc("GET /api/v1/accounts/{account_id}/versions", listAccountVersions(logger, authService, accountService))
+		mux.HandleFunc("POST /api/v1/setup/system-accounts", completeSystemAccountsSetup(logger, authService, accountService, options))
 	}
 }
 

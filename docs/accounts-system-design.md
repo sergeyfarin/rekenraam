@@ -443,6 +443,34 @@ Investment booking policy (`fifo`, `lifo`, `average`, `specific_id`) should be
 deferred until investment transactions and lots are implemented. Do not put it
 in the first account version unless the first investment slice needs it.
 
+## Account Terms, Interest, And Household Context
+
+Do not put one-off interest-rate, maturity, renewal, counterparty, child-owner,
+or household-membership fields directly into `account_versions`. Those facts
+change on different timelines than the core ledger account and need their own
+history once the UI supports them.
+
+Recommended later extension tables:
+
+- `account_terms`: fixed-term deposits, certificates of deposit, promotional
+  savings terms, and loan terms. A renewal is a new term row linked to the same
+  account identity, with its own start date, maturity date, rate terms, and
+  renewal source.
+- `account_interest_rate_versions`: variable deposit, card, loan, and mortgage
+  rate schedules. Store exact rates as integer-plus-scale, with effective dates,
+  compounding/accrual metadata, and source notes.
+- `account_counterparties`: personal loans to or from friends/relatives and
+  institution-like non-financial parties, without pretending every person is a
+  bank institution.
+- `account_household_context_versions`: child/custodial accounts, household
+  visibility, and future multi-user ownership/context. A child becoming an adult
+  should change household context or visibility, not delete or rewrite the
+  historical ledger account.
+
+Until those tables exist, account `metadata_json` may preserve imported source
+hints, but it must not become the canonical implementation of rates, maturity
+dates, ownership, or recurring term semantics.
+
 ## Lifecycle
 
 Lifecycle is represented by new versions, not row mutation.

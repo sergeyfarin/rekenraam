@@ -63,7 +63,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	currencyService := app.NewCurrencyService(commodityRepository, setupService)
 	institutionRepository := db.NewInstitutionRepository(database)
 	institutionService := app.NewInstitutionService(institutionRepository)
-	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, api.HandlerOptions{
+	accountRepository := db.NewAccountRepository(database)
+	accountService := app.NewAccountService(accountRepository, institutionRepository, setupService)
+	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, accountService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
 	})

@@ -1,0 +1,214 @@
+AccountClass:
+  type: string
+  enum:
+    - asset
+    - liability
+    - equity
+    - income
+    - expense
+AccountKind:
+  type: string
+  enum:
+    - cash
+    - checking
+    - savings
+    - time_deposit
+    - money_market
+    - investment
+    - brokerage_cash
+    - security_holding
+    - crypto_wallet
+    - property
+    - vehicle
+    - collectible
+    - points_miles
+    - loan_receivable
+    - other_asset
+    - credit_card
+    - line_of_credit
+    - loan
+    - mortgage
+    - tax_liability
+    - payable
+    - other_liability
+    - opening_balance
+    - retained_earnings
+    - current_earnings
+    - trading
+    - imbalance
+    - equity
+    - salary
+    - interest
+    - dividend
+    - realized_capital_gain
+    - unrealized_capital_gain
+    - reward_income
+    - other_income
+    - expense
+    - fee
+    - tax
+    - interest_expense
+    - investment_fee
+    - other_expense
+    - realized_losses
+    - unrealized_losses
+AccountStatus:
+  type: string
+  enum:
+    - active
+    - closed
+    - archived
+SystemAccountRole:
+  type: string
+  enum:
+    - opening_balance
+    - imbalance_import
+    - retained_earnings
+    - income_summary
+    - expense_summary
+AccountResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - is_system
+    - status
+    - account_class
+    - account_kind
+    - allows_postings
+    - comment_markdown
+    - metadata
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+      description: Current runtime always uses book id 1.
+    is_system:
+      type: boolean
+    system_role:
+      $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/AccountStatus"
+    code:
+      type: string
+      maxLength: 100
+    name:
+      type: string
+      maxLength: 200
+    account_class:
+      $ref: "../../openapi.yaml#/components/schemas/AccountClass"
+    account_kind:
+      $ref: "../../openapi.yaml#/components/schemas/AccountKind"
+    parent_account_id:
+      type: integer
+      format: int64
+    institution_id:
+      type: integer
+      format: int64
+    country_code:
+      type: string
+      minLength: 2
+      maxLength: 2
+    default_commodity_id:
+      type: integer
+      format: int64
+    quantity_scale_override:
+      type: integer
+      minimum: 0
+      maximum: 12
+    allows_postings:
+      type: boolean
+    number_last4:
+      type: string
+      maxLength: 8
+      description: Recognition hint only; full account numbers must not be stored.
+    external_ref_hint:
+      type: string
+      maxLength: 200
+    comment_markdown:
+      type: string
+      maxLength: 5000
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+AccountsResponse:
+  type: object
+  required:
+    - accounts
+  properties:
+    accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
+AccountRequest:
+  type: object
+  required:
+    - name
+    - account_class
+  properties:
+    code:
+      type: string
+      maxLength: 100
+    name:
+      type: string
+      maxLength: 200
+    account_class:
+      $ref: "../../openapi.yaml#/components/schemas/AccountClass"
+    account_kind:
+      $ref: "../../openapi.yaml#/components/schemas/AccountKind"
+    parent_account_id:
+      type: integer
+      format: int64
+    institution_id:
+      type: integer
+      format: int64
+    country_code:
+      type: string
+      minLength: 2
+      maxLength: 2
+    default_commodity_id:
+      type: integer
+      format: int64
+    quantity_scale_override:
+      type: integer
+      minimum: 0
+      maximum: 12
+    allows_postings:
+      type: boolean
+      description: Defaults to true when omitted.
+    number_last4:
+      type: string
+      maxLength: 8
+    external_ref_hint:
+      type: string
+      maxLength: 200
+    comment_markdown:
+      type: string
+      maxLength: 5000
+    metadata:
+      type: object
+      additionalProperties: true
+  additionalProperties: false
+CompleteSystemAccountsSetupResponse:
+  type: object
+  required:
+    - accounts
+    - setup
+  properties:
+    accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
+    setup:
+      $ref: "../../openapi.yaml#/components/schemas/SetupStatusResponse"
