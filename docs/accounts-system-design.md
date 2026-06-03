@@ -1,6 +1,8 @@
 # Accounts And Institutions System Draft
 
-Status: draft for review, not yet an accepted source of truth.
+Status: active Phase 1 design guidance for implemented institution and account
+backend slices; still open for later transaction, reconciliation, investment,
+and household-context extensions.
 
 This document proposes the Phase 1 account and institution system before any schema,
 backend, or frontend implementation. It translates the active requirements, the
@@ -546,6 +548,14 @@ Rules:
   ordinary account management.
 - System account names come from translation keys, not English-only database
   labels.
+- The first backend implementation intentionally stores no `name` on system
+  account versions. API responses expose `system_role` and may omit `name`; the
+  frontend resolves visible labels from stable role keys.
+- `income_summary` and `expense_summary` both use
+  `account_kind=current_earnings` because they are distinct workflow roles for
+  future closing entries, not distinct accounting classes. Their role identifies
+  the workflow target; their kind keeps them under the same equity/current
+  earnings accounting treatment.
 
 ## Opening Balances
 

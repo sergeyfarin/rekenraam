@@ -61,6 +61,7 @@ type CreateInstitutionParams struct {
 	BookID          int64
 	CreatedByUserID int64
 	Spec            InstitutionSpec
+	ChangeReason    string
 	CreatedAt       string
 	EffectiveFrom   string
 }
@@ -137,6 +138,9 @@ func (r *InstitutionRepository) ListInstitutionVersions(ctx context.Context, boo
 	if err != nil {
 		return nil, err
 	}
+	if len(records) == 0 {
+		return nil, ErrNotFound
+	}
 
 	return records, nil
 }
@@ -180,7 +184,7 @@ func (r *InstitutionRepository) CreateInstitution(ctx context.Context, params Cr
 		EffectiveFrom:   params.EffectiveFrom,
 		RecordedAt:      params.CreatedAt,
 		ChangedByUserID: params.CreatedByUserID,
-		ChangeReason:    "created institution",
+		ChangeReason:    params.ChangeReason,
 		Status:          "active",
 		Spec:            params.Spec,
 	})

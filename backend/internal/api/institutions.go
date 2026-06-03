@@ -24,6 +24,8 @@ type institutionResponse struct {
 	Address         json.RawMessage `json:"address"`
 	CommentMarkdown string          `json:"comment_markdown"`
 	Metadata        json.RawMessage `json:"metadata"`
+	EffectiveFrom   string          `json:"effective_from"`
+	ChangeReason    string          `json:"change_reason"`
 	CreatedAt       string          `json:"created_at"`
 	UpdatedAt       string          `json:"updated_at"`
 }
@@ -43,6 +45,13 @@ type institutionRequest struct {
 	Address         json.RawMessage `json:"address"`
 	CommentMarkdown string          `json:"comment_markdown"`
 	Metadata        json.RawMessage `json:"metadata"`
+	EffectiveFrom   string          `json:"effective_from"`
+	ChangeReason    string          `json:"change_reason"`
+}
+
+type institutionLifecycleRequest struct {
+	EffectiveFrom string `json:"effective_from"`
+	ChangeReason  string `json:"change_reason"`
 }
 
 func listInstitutions(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService) http.HandlerFunc {
@@ -138,6 +147,8 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
 			MetadataJSON:    rawJSONText(request.Metadata),
+			EffectiveFrom:   request.EffectiveFrom,
+			ChangeReason:    request.ChangeReason,
 		})
 		if err != nil {
 			writeInstitutionServiceError(w, r, logger, "create institution", err)
@@ -179,6 +190,8 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
 			MetadataJSON:    rawJSONText(request.Metadata),
+			EffectiveFrom:   request.EffectiveFrom,
+			ChangeReason:    request.ChangeReason,
 		})
 		if err != nil {
 			writeInstitutionServiceError(w, r, logger, "update institution", err)
@@ -190,24 +203,28 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 }
 
 func archiveInstitution(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions) http.HandlerFunc {
-	return institutionLifecycleMutation(logger, authService, institutionService, options, "archive institution", func(ctxOwner app.Owner, institutionID int64, r *http.Request) (app.Institution, error) {
+	return institutionLifecycleMutation(logger, authService, institutionService, options, "archive institution", func(ctxOwner app.Owner, institutionID int64, request institutionLifecycleRequest, r *http.Request) (app.Institution, error) {
 		return institutionService.ArchiveInstitution(r.Context(), app.InstitutionLifecycleInput{
 			OwnerUserID:   ctxOwner.ID,
 			InstitutionID: institutionID,
+			EffectiveFrom: request.EffectiveFrom,
+			ChangeReason:  request.ChangeReason,
 		})
 	})
 }
 
 func restoreInstitution(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions) http.HandlerFunc {
-	return institutionLifecycleMutation(logger, authService, institutionService, options, "restore institution", func(ctxOwner app.Owner, institutionID int64, r *http.Request) (app.Institution, error) {
+	return institutionLifecycleMutation(logger, authService, institutionService, options, "restore institution", func(ctxOwner app.Owner, institutionID int64, request institutionLifecycleRequest, r *http.Request) (app.Institution, error) {
 		return institutionService.RestoreInstitution(r.Context(), app.InstitutionLifecycleInput{
 			OwnerUserID:   ctxOwner.ID,
 			InstitutionID: institutionID,
+			EffectiveFrom: request.EffectiveFrom,
+			ChangeReason:  request.ChangeReason,
 		})
 	})
 }
 
-func institutionLifecycleMutation(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions, action string, mutate func(app.Owner, int64, *http.Request) (app.Institution, error)) http.HandlerFunc {
+func institutionLifecycleMutation(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions, action string, mutate func(app.Owner, int64, institutionLifecycleRequest, *http.Request) (app.Institution, error)) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
@@ -219,7 +236,13 @@ func institutionLifecycleMutation(logger *slog.Logger, authService *app.AuthServ
 			return
 		}
 
-		institution, err := mutate(owner, institutionID, r)
+		var request institutionLifecycleRequest
+		if err := decodeOptionalJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
+		institution, err := mutate(owner, institutionID, request, r)
 		if err != nil {
 			writeInstitutionServiceError(w, r, logger, action, err)
 			return
@@ -283,6 +306,8 @@ func toInstitutionResponse(institution app.Institution) institutionResponse {
 		Address:         json.RawMessage(institution.AddressJSON),
 		CommentMarkdown: institution.CommentMarkdown,
 		Metadata:        json.RawMessage(institution.MetadataJSON),
+		EffectiveFrom:   institution.EffectiveFrom,
+		ChangeReason:    institution.ChangeReason,
 		CreatedAt:       institution.CreatedAt,
 		UpdatedAt:       institution.UpdatedAt,
 	}

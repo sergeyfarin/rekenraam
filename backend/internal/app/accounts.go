@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -24,12 +25,11 @@ const (
 )
 
 var (
-	ErrAccountNotFound            = errors.New("account not found")
-	ErrSystemAccountsAlreadySetup = errors.New("system accounts setup already complete")
-	ErrSystemAccountProtected     = errors.New("system account cannot be changed through account management")
-	ErrAccountInvalidLifecycle    = errors.New("account lifecycle transition is invalid")
-	ErrAccountParentInvalid       = errors.New("account parent is invalid")
-	ErrAccountReferenceInvalid    = errors.New("account reference is invalid")
+	ErrAccountNotFound         = errors.New("account not found")
+	ErrSystemAccountProtected  = errors.New("system account cannot be changed through account management")
+	ErrAccountInvalidLifecycle = errors.New("account lifecycle transition is invalid")
+	ErrAccountParentInvalid    = errors.New("account parent is invalid")
+	ErrAccountReferenceInvalid = errors.New("account reference is invalid")
 )
 
 var accountKindsByClass = map[string]map[string]bool{
@@ -85,6 +85,8 @@ type Account struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	EffectiveFrom         string
+	ChangeReason          string
 	CreatedAt             string
 	UpdatedAt             string
 }
@@ -112,6 +114,8 @@ type CreateAccountInput struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	EffectiveFrom         string
+	ChangeReason          string
 }
 
 type UpdateAccountInput struct {
@@ -131,11 +135,15 @@ type UpdateAccountInput struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	EffectiveFrom         string
+	ChangeReason          string
 }
 
 type AccountLifecycleInput struct {
-	OwnerUserID int64
-	AccountID   int64
+	OwnerUserID   int64
+	AccountID     int64
+	EffectiveFrom string
+	ChangeReason  string
 }
 
 type EnsureSystemAccountsInput struct {
@@ -209,12 +217,12 @@ func (s *AccountService) AccountVersions(ctx context.Context, accountID int64) (
 	if accountID <= 0 {
 		return nil, ValidationError{Message: "account id is required"}
 	}
-	if _, err := s.Account(ctx, accountID); err != nil {
-		return nil, err
-	}
 
 	records, err := s.repository.ListAccountVersions(ctx, BookID, accountID)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, ErrAccountNotFound
+		}
 		return nil, fmt.Errorf("read account versions: %w", err)
 	}
 
@@ -247,13 +255,22 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 	}
 
 	now := s.now().UTC()
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	if err != nil {
+		return Account{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, "created account")
+	if err != nil {
+		return Account{}, err
+	}
 	record, err := s.repository.CreateAccount(ctx, db.CreateAccountParams{
 		BookID:          BookID,
 		CreatedByUserID: input.OwnerUserID,
 		IsSystem:        false,
 		Spec:            spec,
+		ChangeReason:    changeReason,
 		CreatedAt:       now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -303,14 +320,22 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 	}
 
 	now := s.now().UTC()
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	if err != nil {
+		return Account{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, "updated account")
+	if err != nil {
+		return Account{}, err
+	}
 	record, err := s.repository.UpdateAccount(ctx, db.UpdateAccountParams{
 		BookID:          BookID,
 		AccountID:       input.AccountID,
 		ChangedByUserID: input.OwnerUserID,
 		Spec:            spec,
-		ChangeReason:    "updated account",
+		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -354,7 +379,7 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrSystemAccountsSetupComplete):
-			return EnsureSystemAccountsResult{}, ErrSystemAccountsAlreadySetup
+			return EnsureSystemAccountsResult{}, ErrSetupAlreadyComplete
 		case errors.Is(err, db.ErrNotFound):
 			return EnsureSystemAccountsResult{}, ErrAccountReferenceInvalid
 		default:
@@ -393,15 +418,23 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 	}
 
 	now := s.now().UTC()
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	if err != nil {
+		return Account{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, reason)
+	if err != nil {
+		return Account{}, err
+	}
 	record, err := s.repository.UpdateAccount(ctx, db.UpdateAccountParams{
 		BookID:          BookID,
 		AccountID:       input.AccountID,
 		ChangedByUserID: input.OwnerUserID,
 		Spec:            accountSpecFromStored(current),
 		Status:          status,
-		ChangeReason:    reason,
+		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -640,14 +673,20 @@ func cleanAccountJSONObject(value string, field string) (string, error) {
 	if cleaned == "" {
 		return "{}", nil
 	}
-	if len(cleaned) > accountJSONMaxBytes {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, accountJSONMaxBytes)}
-	}
 	if !json.Valid([]byte(cleaned)) {
 		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
 	}
+
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte(cleaned)); err != nil {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
+	}
+	cleaned = compact.String()
 	if cleaned[0] != '{' {
 		return "", ValidationError{Message: fmt.Sprintf("%s must be a JSON object", field)}
+	}
+	if len(cleaned) > accountJSONMaxBytes {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, accountJSONMaxBytes)}
 	}
 
 	return cleaned, nil
@@ -713,6 +752,8 @@ func toAccount(record db.AccountRecord) Account {
 		ExternalRefHint:       nullableString(record.ExternalRefHint),
 		CommentMarkdown:       record.CommentMarkdown,
 		MetadataJSON:          record.MetadataJSON,
+		EffectiveFrom:         record.EffectiveFrom,
+		ChangeReason:          record.ChangeReason,
 		CreatedAt:             record.CreatedAt,
 		UpdatedAt:             record.RecordedAt,
 	}

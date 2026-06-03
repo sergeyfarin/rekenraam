@@ -78,6 +78,8 @@ AccountResponse:
     - allows_postings
     - comment_markdown
     - metadata
+    - effective_from
+    - change_reason
     - created_at
     - updated_at
   properties:
@@ -136,6 +138,14 @@ AccountResponse:
     metadata:
       type: object
       additionalProperties: true
+    effective_from:
+      type: string
+      format: date
+      description: Calendar date when this account version became effective.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Audit reason recorded for this account version.
     created_at:
       type: string
       format: date-time
@@ -199,6 +209,26 @@ AccountRequest:
     metadata:
       type: object
       additionalProperties: true
+    effective_from:
+      type: string
+      format: date
+      description: Omit to use today's date. Future dates are rejected.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Omit to use the default reason for the operation.
+  additionalProperties: false
+AccountLifecycleRequest:
+  type: object
+  properties:
+    effective_from:
+      type: string
+      format: date
+      description: Omit to use today's date. Future dates are rejected.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Omit to use the default reason for the lifecycle transition.
   additionalProperties: false
 CompleteSystemAccountsSetupResponse:
   type: object

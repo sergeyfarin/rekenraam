@@ -45,7 +45,9 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 		"default_commodity_id":`+strconvFormatInt(currencyID)+`,
 		"quantity_scale_override":2,
 		"number_last4":"1234",
-		"metadata":{"statement_day":15}
+		"metadata":{"statement_day":15},
+		"effective_from":"2020-01-15",
+		"change_reason":"Imported from legacy account list"
 	}`)
 
 	assert.Equal(t, "Everyday Checking", account.Name)
@@ -61,6 +63,8 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	assert.Equal(t, 2, *account.QuantityScaleOverride)
 	assert.Equal(t, "1234", account.NumberLast4)
 	assert.Equal(t, `{"statement_day":15}`, string(account.Metadata))
+	assert.Equal(t, "2020-01-15", account.EffectiveFrom)
+	assert.Equal(t, "Imported from legacy account list", account.ChangeReason)
 }
 
 func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing.T) {
@@ -83,7 +87,9 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 		"name":"Renamed Savings",
 		"account_class":"asset",
 		"account_kind":"savings",
-		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`,
+		"effective_from":"2021-02-03",
+		"change_reason":"Corrected account name"
 	}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(csrfTokenHeader, csrfToken)
@@ -103,6 +109,8 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 	assert.Equal(t, "", body.NumberLast4)
 	assert.Equal(t, "", body.CommentMarkdown)
 	assert.Equal(t, "{}", string(body.Metadata))
+	assert.Equal(t, "2021-02-03", body.EffectiveFrom)
+	assert.Equal(t, "Corrected account name", body.ChangeReason)
 
 	var versionCount int
 	err := database.QueryRowContext(context.Background(), `
@@ -116,6 +124,7 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 	versions := listAccountsForSession(t, handler, sessionCookie, "/"+strconvFormatInt(account.ID)+"/versions")
 	require.Len(t, versions.Accounts, 2)
 	assert.Equal(t, "Renamed Savings", versions.Accounts[0].Name)
+	assert.Equal(t, "Corrected account name", versions.Accounts[0].ChangeReason)
 	assert.Equal(t, "Old Savings", versions.Accounts[1].Name)
 }
 
@@ -133,8 +142,13 @@ func TestAccountLifecycleRequiresCloseBeforeArchiveAndRestoresClosed(t *testing.
 
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/archive", http.StatusConflict)
 
-	closed := mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/close", http.StatusOK)
+	closed := mutateAccountWithBody(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/close", `{
+		"effective_from":"2022-05-01",
+		"change_reason":"Closed after card replacement"
+	}`, http.StatusOK)
 	assert.Equal(t, "closed", closed.Status)
+	assert.Equal(t, "2022-05-01", closed.EffectiveFrom)
+	assert.Equal(t, "Closed after card replacement", closed.ChangeReason)
 
 	archived := mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/archive", http.StatusOK)
 	assert.Equal(t, "archived", archived.Status)
@@ -151,6 +165,48 @@ func TestAccountLifecycleRequiresCloseBeforeArchiveAndRestoresClosed(t *testing.
 
 	reopened := mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/reopen", http.StatusOK)
 	assert.Equal(t, "active", reopened.Status)
+}
+
+func TestAccountValidationRejectsPostingAssetWithoutCommodityAndNonObjectMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "posting asset without commodity",
+			body: `{"name":"No Commodity","account_class":"asset","account_kind":"checking"}`,
+		},
+		{
+			name: "metadata array",
+			body: `{"name":"Bad Metadata","account_class":"income","metadata":[1,2]}`,
+		},
+		{
+			name: "metadata string",
+			body: `{"name":"Bad Metadata","account_class":"income","metadata":"string"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler, _ := newSetupTestHandler(t)
+			sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set(csrfTokenHeader, csrfToken)
+			setSameOrigin(req)
+			req.AddCookie(sessionCookie)
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, http.StatusBadRequest, res.Code)
+		})
+	}
 }
 
 func TestAccountParentRulesRejectCyclesAndClassMismatch(t *testing.T) {
@@ -186,6 +242,58 @@ func TestAccountParentRulesRejectCyclesAndClassMismatch(t *testing.T) {
 		"account_kind":"loan",
 		"parent_account_id":`+strconvFormatInt(parent.ID)+`,
 		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`, http.StatusBadRequest)
+}
+
+func TestAccountParentRulesRejectArchivedParent(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	parent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Old Parent",
+		"account_class":"asset",
+		"account_kind":"investment",
+		"allows_postings":false
+	}`)
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(parent.ID)+"/close", http.StatusOK)
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(parent.ID)+"/archive", http.StatusOK)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/accounts", strings.NewReader(`{
+		"name":"Child",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"parent_account_id":`+strconvFormatInt(parent.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusBadRequest, res.Code)
+}
+
+func TestUpdateAccountRevalidatesPostingCommodityRequirement(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+	account := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Container",
+		"account_class":"asset",
+		"account_kind":"investment",
+		"allows_postings":false
+	}`)
+
+	patchAccount(t, handler, sessionCookie, csrfToken, account.ID, `{
+		"name":"Container",
+		"account_class":"asset",
+		"account_kind":"investment",
+		"allows_postings":true
 	}`, http.StatusBadRequest)
 }
 
@@ -233,6 +341,16 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	`).Scan(&completedAt)
 	require.NoError(t, err)
 	assert.True(t, completedAt.Valid)
+}
+
+func TestSystemAccountSetupCannotRunTwice(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusConflict)
 }
 
 func TestAccountMutationsRequireAuthentication(t *testing.T) {
@@ -344,6 +462,28 @@ func mutateAccount(t *testing.T, handler http.Handler, sessionCookie *http.Cooki
 	t.Helper()
 
 	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, wantStatus, res.Code)
+
+	var response accountResponse
+	if wantStatus >= 200 && wantStatus < 300 {
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	}
+
+	return response
+}
+
+func mutateAccountWithBody(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, body string, wantStatus int) accountResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(csrfTokenHeader, csrfToken)
 	setSameOrigin(req)
 	req.AddCookie(sessionCookie)

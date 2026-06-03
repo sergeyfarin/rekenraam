@@ -30,6 +30,8 @@ type accountResponse struct {
 	ExternalRefHint       string          `json:"external_ref_hint,omitempty"`
 	CommentMarkdown       string          `json:"comment_markdown"`
 	Metadata              json.RawMessage `json:"metadata"`
+	EffectiveFrom         string          `json:"effective_from"`
+	ChangeReason          string          `json:"change_reason"`
 	CreatedAt             string          `json:"created_at"`
 	UpdatedAt             string          `json:"updated_at"`
 }
@@ -53,6 +55,13 @@ type accountRequest struct {
 	ExternalRefHint       string          `json:"external_ref_hint"`
 	CommentMarkdown       string          `json:"comment_markdown"`
 	Metadata              json.RawMessage `json:"metadata"`
+	EffectiveFrom         string          `json:"effective_from"`
+	ChangeReason          string          `json:"change_reason"`
+}
+
+type accountLifecycleRequest struct {
+	EffectiveFrom string `json:"effective_from"`
+	ChangeReason  string `json:"change_reason"`
 }
 
 type completeSystemAccountsSetupResponse struct {
@@ -158,6 +167,8 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			ExternalRefHint:       request.ExternalRefHint,
 			CommentMarkdown:       request.CommentMarkdown,
 			MetadataJSON:          rawJSONText(request.Metadata),
+			EffectiveFrom:         request.EffectiveFrom,
+			ChangeReason:          request.ChangeReason,
 		})
 		if err != nil {
 			writeAccountServiceError(w, r, logger, "create account", err)
@@ -203,6 +214,8 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			ExternalRefHint:       request.ExternalRefHint,
 			CommentMarkdown:       request.CommentMarkdown,
 			MetadataJSON:          rawJSONText(request.Metadata),
+			EffectiveFrom:         request.EffectiveFrom,
+			ChangeReason:          request.ChangeReason,
 		})
 		if err != nil {
 			writeAccountServiceError(w, r, logger, "update account", err)
@@ -214,42 +227,50 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 }
 
 func closeAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return accountLifecycleMutation(logger, authService, accountService, options, "close account", func(owner app.Owner, accountID int64, r *http.Request) (app.Account, error) {
+	return accountLifecycleMutation(logger, authService, accountService, options, "close account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.CloseAccount(r.Context(), app.AccountLifecycleInput{
-			OwnerUserID: owner.ID,
-			AccountID:   accountID,
+			OwnerUserID:   owner.ID,
+			AccountID:     accountID,
+			EffectiveFrom: request.EffectiveFrom,
+			ChangeReason:  request.ChangeReason,
 		})
 	})
 }
 
 func reopenAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return accountLifecycleMutation(logger, authService, accountService, options, "reopen account", func(owner app.Owner, accountID int64, r *http.Request) (app.Account, error) {
+	return accountLifecycleMutation(logger, authService, accountService, options, "reopen account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.ReopenAccount(r.Context(), app.AccountLifecycleInput{
-			OwnerUserID: owner.ID,
-			AccountID:   accountID,
+			OwnerUserID:   owner.ID,
+			AccountID:     accountID,
+			EffectiveFrom: request.EffectiveFrom,
+			ChangeReason:  request.ChangeReason,
 		})
 	})
 }
 
 func archiveAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return accountLifecycleMutation(logger, authService, accountService, options, "archive account", func(owner app.Owner, accountID int64, r *http.Request) (app.Account, error) {
+	return accountLifecycleMutation(logger, authService, accountService, options, "archive account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.ArchiveAccount(r.Context(), app.AccountLifecycleInput{
-			OwnerUserID: owner.ID,
-			AccountID:   accountID,
+			OwnerUserID:   owner.ID,
+			AccountID:     accountID,
+			EffectiveFrom: request.EffectiveFrom,
+			ChangeReason:  request.ChangeReason,
 		})
 	})
 }
 
 func restoreAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return accountLifecycleMutation(logger, authService, accountService, options, "restore account", func(owner app.Owner, accountID int64, r *http.Request) (app.Account, error) {
+	return accountLifecycleMutation(logger, authService, accountService, options, "restore account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.RestoreAccount(r.Context(), app.AccountLifecycleInput{
-			OwnerUserID: owner.ID,
-			AccountID:   accountID,
+			OwnerUserID:   owner.ID,
+			AccountID:     accountID,
+			EffectiveFrom: request.EffectiveFrom,
+			ChangeReason:  request.ChangeReason,
 		})
 	})
 }
 
-func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions, action string, mutate func(app.Owner, int64, *http.Request) (app.Account, error)) http.HandlerFunc {
+func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions, action string, mutate func(app.Owner, int64, accountLifecycleRequest, *http.Request) (app.Account, error)) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
@@ -261,7 +282,13 @@ func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService,
 			return
 		}
 
-		account, err := mutate(owner, accountID, r)
+		var request accountLifecycleRequest
+		if err := decodeOptionalJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
+		account, err := mutate(owner, accountID, request, r)
 		if err != nil {
 			writeAccountServiceError(w, r, logger, action, err)
 			return
@@ -318,7 +345,7 @@ func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account lifecycle transition is invalid")
 	case errors.Is(err, app.ErrSystemAccountProtected):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "system account cannot be changed")
-	case errors.Is(err, app.ErrSystemAccountsAlreadySetup):
+	case errors.Is(err, app.ErrSetupAlreadyComplete):
 		writeAPIError(w, http.StatusConflict, "SETUP_ALREADY_COMPLETE", "system accounts setup is already complete")
 	default:
 		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
@@ -347,6 +374,8 @@ func toAccountResponse(account app.Account) accountResponse {
 		ExternalRefHint:       account.ExternalRefHint,
 		CommentMarkdown:       account.CommentMarkdown,
 		Metadata:              json.RawMessage(account.MetadataJSON),
+		EffectiveFrom:         account.EffectiveFrom,
+		ChangeReason:          account.ChangeReason,
 		CreatedAt:             account.CreatedAt,
 		UpdatedAt:             account.UpdatedAt,
 	}

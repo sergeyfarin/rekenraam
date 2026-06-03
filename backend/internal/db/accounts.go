@@ -76,6 +76,7 @@ type CreateAccountParams struct {
 	IsSystem        bool
 	SystemRole      string
 	Spec            AccountSpec
+	ChangeReason    string
 	CreatedAt       string
 	EffectiveFrom   string
 }
@@ -189,7 +190,15 @@ func (r *AccountRepository) ListAccountVersions(ctx context.Context, bookID int6
 	}
 	defer rows.Close()
 
-	return scanAccountRecords(rows)
+	records, err := scanAccountRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, ErrNotFound
+	}
+
+	return records, nil
 }
 
 func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAccountParams) (AccountRecord, error) {
@@ -231,7 +240,7 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 		EffectiveFrom:   params.EffectiveFrom,
 		RecordedAt:      params.CreatedAt,
 		ChangedByUserID: params.CreatedByUserID,
-		ChangeReason:    "created account",
+		ChangeReason:    params.ChangeReason,
 		Status:          "active",
 		Spec:            params.Spec,
 	})
@@ -475,7 +484,9 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 		ChangeReason:    "seeded system account",
 		Status:          "active",
 		Spec: AccountSpec{
-			Code:           systemSpec.Role,
+			Code: systemSpec.Role,
+			// System account display names are derived from system_role at the
+			// frontend localization boundary; do not seed English names here.
 			AccountClass:   systemSpec.AccountClass,
 			AccountKind:    systemSpec.AccountKind,
 			AllowsPostings: true,
@@ -565,14 +576,14 @@ func currentSystemAccountByRole(ctx context.Context, tx *sql.Tx, bookID int64, r
 	return record, nil
 }
 
-func currentAccountSelect(whereClause string) string {
+func currentAccountSelect(extraConditions string) string {
 	return accountSelect(`
 		WHERE av.version_seq = (
 			SELECT MAX(latest.version_seq)
 			FROM account_versions latest
 			WHERE latest.account_id = a.id
 		)
-	` + whereClause)
+	` + extraConditions)
 }
 
 func accountSelect(whereClause string) string {

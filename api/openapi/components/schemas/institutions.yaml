@@ -22,6 +22,8 @@ InstitutionResponse:
     - address
     - comment_markdown
     - metadata
+    - effective_from
+    - change_reason
     - created_at
     - updated_at
   properties:
@@ -76,6 +78,14 @@ InstitutionResponse:
       type: object
       additionalProperties: true
       description: Reserved structured metadata object. Defaults to {}.
+    effective_from:
+      type: string
+      format: date
+      description: Calendar date when this institution version became effective.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Audit reason recorded for this institution version.
     created_at:
       type: string
       format: date-time
@@ -129,4 +139,24 @@ InstitutionRequest:
       type: object
       additionalProperties: true
       description: Reserved structured metadata object. Omit for {}.
+    effective_from:
+      type: string
+      format: date
+      description: Omit to use today's date. Future dates are rejected.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Omit to use the default reason for the operation.
+  additionalProperties: false
+InstitutionLifecycleRequest:
+  type: object
+  properties:
+    effective_from:
+      type: string
+      format: date
+      description: Omit to use today's date. Future dates are rejected.
+    change_reason:
+      type: string
+      maxLength: 500
+      description: Omit to use the default reason for the lifecycle transition.
   additionalProperties: false

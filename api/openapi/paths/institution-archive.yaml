@@ -8,6 +8,12 @@ post:
       schema:
         type: string
       description: Session-bound CSRF token for authenticated mutating requests.
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InstitutionLifecycleRequest"
   responses:
     "200":
       description: Institution archived

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -52,6 +53,8 @@ type Institution struct {
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
+	EffectiveFrom   string
+	ChangeReason    string
 	CreatedAt       string
 	UpdatedAt       string
 }
@@ -74,6 +77,8 @@ type CreateInstitutionInput struct {
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
+	EffectiveFrom   string
+	ChangeReason    string
 }
 
 type UpdateInstitutionInput struct {
@@ -89,11 +94,15 @@ type UpdateInstitutionInput struct {
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
+	EffectiveFrom   string
+	ChangeReason    string
 }
 
 type InstitutionLifecycleInput struct {
 	OwnerUserID   int64
 	InstitutionID int64
+	EffectiveFrom string
+	ChangeReason  string
 }
 
 type InstitutionService struct {
@@ -148,12 +157,12 @@ func (s *InstitutionService) InstitutionVersions(ctx context.Context, institutio
 	if institutionID <= 0 {
 		return nil, ValidationError{Message: "institution id is required"}
 	}
-	if _, err := s.Institution(ctx, institutionID); err != nil {
-		return nil, err
-	}
 
 	records, err := s.repository.ListInstitutionVersions(ctx, BookID, institutionID)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, ErrInstitutionNotFound
+		}
 		return nil, fmt.Errorf("read institution versions: %w", err)
 	}
 
@@ -182,12 +191,21 @@ func (s *InstitutionService) CreateInstitution(ctx context.Context, input Create
 	}
 
 	now := s.now().UTC()
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	if err != nil {
+		return Institution{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, "created institution")
+	if err != nil {
+		return Institution{}, err
+	}
 	record, err := s.repository.CreateInstitution(ctx, db.CreateInstitutionParams{
 		BookID:          BookID,
 		CreatedByUserID: input.OwnerUserID,
 		Spec:            spec,
+		ChangeReason:    changeReason,
 		CreatedAt:       now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -224,14 +242,22 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 	}
 
 	now := s.now().UTC()
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	if err != nil {
+		return Institution{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, "updated institution")
+	if err != nil {
+		return Institution{}, err
+	}
 	record, err := s.repository.UpdateInstitution(ctx, db.UpdateInstitutionParams{
 		BookID:          BookID,
 		InstitutionID:   input.InstitutionID,
 		ChangedByUserID: input.OwnerUserID,
 		Spec:            spec,
-		ChangeReason:    "updated institution",
+		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -265,15 +291,23 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 	}
 
 	now := s.now().UTC()
+	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	if err != nil {
+		return Institution{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, reason)
+	if err != nil {
+		return Institution{}, err
+	}
 	record, err := s.repository.UpdateInstitution(ctx, db.UpdateInstitutionParams{
 		BookID:          BookID,
 		InstitutionID:   input.InstitutionID,
 		ChangedByUserID: input.OwnerUserID,
 		Spec:            institutionSpecFromStored(current),
 		Status:          status,
-		ChangeReason:    reason,
+		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -393,14 +427,20 @@ func cleanJSONObject(value string, field string) (string, error) {
 	if cleaned == "" {
 		return "{}", nil
 	}
-	if len(cleaned) > institutionJSONMaxBytes {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, institutionJSONMaxBytes)}
-	}
 	if !json.Valid([]byte(cleaned)) {
 		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
 	}
+
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte(cleaned)); err != nil {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
+	}
+	cleaned = compact.String()
 	if cleaned[0] != '{' {
 		return "", ValidationError{Message: fmt.Sprintf("%s must be a JSON object", field)}
+	}
+	if len(cleaned) > institutionJSONMaxBytes {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, institutionJSONMaxBytes)}
 	}
 
 	return cleaned, nil
@@ -462,6 +502,8 @@ func toInstitution(record db.InstitutionRecord) Institution {
 		AddressJSON:     record.AddressJSON,
 		CommentMarkdown: record.CommentMarkdown,
 		MetadataJSON:    record.MetadataJSON,
+		EffectiveFrom:   record.EffectiveFrom,
+		ChangeReason:    record.ChangeReason,
 		CreatedAt:       record.CreatedAt,
 		UpdatedAt:       record.RecordedAt,
 	}

@@ -1178,7 +1178,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["InstitutionLifecycleRequest"];
+                };
+            };
             responses: {
                 /** @description Institution archived */
                 200: {
@@ -1270,7 +1274,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["InstitutionLifecycleRequest"];
+                };
+            };
             responses: {
                 /** @description Institution restored */
                 200: {
@@ -1773,7 +1781,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleRequest"];
+                };
+            };
             responses: {
                 /** @description Account closed */
                 200: {
@@ -1865,7 +1877,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleRequest"];
+                };
+            };
             responses: {
                 /** @description Account reopened */
                 200: {
@@ -1947,7 +1963,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleRequest"];
+                };
+            };
             responses: {
                 /** @description Account archived */
                 200: {
@@ -2029,7 +2049,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleRequest"];
+                };
+            };
             responses: {
                 /** @description Account restored to closed status */
                 200: {
@@ -2387,6 +2411,13 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /**
+             * Format: date
+             * @description Calendar date when this institution version became effective.
+             */
+            effective_from: string;
+            /** @description Audit reason recorded for this institution version. */
+            change_reason: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2413,6 +2444,22 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            /**
+             * Format: date
+             * @description Omit to use today's date. Future dates are rejected.
+             */
+            effective_from?: string;
+            /** @description Omit to use the default reason for the operation. */
+            change_reason?: string;
+        };
+        InstitutionLifecycleRequest: {
+            /**
+             * Format: date
+             * @description Omit to use today's date. Future dates are rejected.
+             */
+            effective_from?: string;
+            /** @description Omit to use the default reason for the lifecycle transition. */
+            change_reason?: string;
         };
         /** @enum {string} */
         AccountClass: "asset" | "liability" | "equity" | "income" | "expense";
@@ -2453,6 +2500,13 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /**
+             * Format: date
+             * @description Calendar date when this account version became effective.
+             */
+            effective_from: string;
+            /** @description Audit reason recorded for this account version. */
+            change_reason: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2482,6 +2536,22 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            /**
+             * Format: date
+             * @description Omit to use today's date. Future dates are rejected.
+             */
+            effective_from?: string;
+            /** @description Omit to use the default reason for the operation. */
+            change_reason?: string;
+        };
+        AccountLifecycleRequest: {
+            /**
+             * Format: date
+             * @description Omit to use today's date. Future dates are rejected.
+             */
+            effective_from?: string;
+            /** @description Omit to use the default reason for the lifecycle transition. */
+            change_reason?: string;
         };
         CompleteSystemAccountsSetupResponse: {
             accounts: components["schemas"]["AccountResponse"][];

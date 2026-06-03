@@ -95,7 +95,9 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/institutions/"+strconvFormatInt(institution.ID), strings.NewReader(`{
 		"name": "Renamed Bank",
 		"kind": "credit_union",
-		"country_code": "US"
+		"country_code": "US",
+		"effective_from": "2021-04-05",
+		"change_reason": "Imported corrected institution details"
 	}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(csrfTokenHeader, csrfToken)
@@ -113,6 +115,8 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	assert.Equal(t, "Renamed Bank", body.Name)
 	assert.Equal(t, "credit_union", body.Kind)
 	assert.Equal(t, "US", body.CountryCode)
+	assert.Equal(t, "2021-04-05", body.EffectiveFrom)
+	assert.Equal(t, "Imported corrected institution details", body.ChangeReason)
 
 	var versionCount int
 	err := database.QueryRowContext(context.Background(), `
@@ -126,6 +130,7 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	versions := listInstitutionsForSession(t, handler, sessionCookie, "/"+strconvFormatInt(institution.ID)+"/versions")
 	require.Len(t, versions.Institutions, 2)
 	assert.Equal(t, "Renamed Bank", versions.Institutions[0].Name)
+	assert.Equal(t, "Imported corrected institution details", versions.Institutions[0].ChangeReason)
 	assert.Equal(t, "Old Bank", versions.Institutions[1].Name)
 }
 

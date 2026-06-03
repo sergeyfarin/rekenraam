@@ -120,6 +120,8 @@ components:
       $ref: "./components/schemas/institutions.yaml#/InstitutionsResponse"
     InstitutionRequest:
       $ref: "./components/schemas/institutions.yaml#/InstitutionRequest"
+    InstitutionLifecycleRequest:
+      $ref: "./components/schemas/institutions.yaml#/InstitutionLifecycleRequest"
     AccountClass:
       $ref: "./components/schemas/accounts.yaml#/AccountClass"
     AccountKind:
@@ -134,6 +136,8 @@ components:
       $ref: "./components/schemas/accounts.yaml#/AccountsResponse"
     AccountRequest:
       $ref: "./components/schemas/accounts.yaml#/AccountRequest"
+    AccountLifecycleRequest:
+      $ref: "./components/schemas/accounts.yaml#/AccountLifecycleRequest"
     CompleteSystemAccountsSetupResponse:
       $ref: "./components/schemas/accounts.yaml#/CompleteSystemAccountsSetupResponse"
     AuthSessionResponse:

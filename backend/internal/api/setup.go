@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -143,6 +144,39 @@ func decodeJSONBody(r *http.Request, destination any) error {
 	}
 
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(destination); err != nil {
+		return app.ValidationError{Message: "invalid request body"}
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return app.ValidationError{Message: "request body must contain a single JSON object"}
+	}
+
+	return nil
+}
+
+func decodeOptionalJSONBody(r *http.Request, destination any) error {
+	if r.Body == nil {
+		return nil
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		return app.ValidationError{Message: "invalid request body"}
+	}
+	if strings.TrimSpace(string(body)) == "" {
+		return nil
+	}
+
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return app.ValidationError{Message: "content type must be application/json"}
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(destination); err != nil {
