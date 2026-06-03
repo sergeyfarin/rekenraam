@@ -241,6 +241,13 @@ Treat `is_system` and `system_role` as immutable after insert.
 - `comment_markdown`
 - `metadata_json`
 
+`effective_from` is an advanced versioning field, not the account's opening
+date and not a transaction-date constraint. Normal manual account creation
+should omit it and let the backend default to the current date. Frontend account
+creation should expose it only in an advanced/import mode. If the product later
+needs the real-world date an account was opened, add a separate optional
+`opened_on` attribute instead of overloading `effective_from`.
+
 Do not store `activated_on`, `closed_on`, or `archived_on` separately. The
 status transition date is the `effective_from` date of the version that changes
 status.

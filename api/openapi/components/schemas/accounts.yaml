@@ -212,7 +212,7 @@ AccountRequest:
     effective_from:
       type: string
       format: date
-      description: Omit to use today's date. Future dates are rejected.
+      description: Advanced/import field for the account version date. Normal account creation should omit it. Future dates are rejected.
     change_reason:
       type: string
       maxLength: 500
@@ -224,7 +224,7 @@ AccountLifecycleRequest:
     effective_from:
       type: string
       format: date
-      description: Omit to use today's date. Future dates are rejected.
+      description: Advanced/import field for the lifecycle version date. Normal lifecycle actions may omit it. Future dates are rejected.
     change_reason:
       type: string
       maxLength: 500

@@ -2538,7 +2538,7 @@ export interface components {
             };
             /**
              * Format: date
-             * @description Omit to use today's date. Future dates are rejected.
+             * @description Advanced/import field for the account version date. Normal account creation should omit it. Future dates are rejected.
              */
             effective_from?: string;
             /** @description Omit to use the default reason for the operation. */
@@ -2547,7 +2547,7 @@ export interface components {
         AccountLifecycleRequest: {
             /**
              * Format: date
-             * @description Omit to use today's date. Future dates are rejected.
+             * @description Advanced/import field for the lifecycle version date. Normal lifecycle actions may omit it. Future dates are rejected.
              */
             effective_from?: string;
             /** @description Omit to use the default reason for the lifecycle transition. */
