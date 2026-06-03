@@ -53,7 +53,7 @@
     return m.install_gate_next_step({ step: nextStep.replaceAll('_', ' ') });
   });
 
-    const installStateLabel = $derived.by(() => {
+  const installStateLabel = $derived.by(() => {
     switch (setupQuery.data?.install_state) {
       case 'fresh':
         return m.app_shell_install_state_fresh();
@@ -64,7 +64,13 @@
       default:
         return setupQuery.data?.install_state ?? 'unknown';
     }
-    });
+  });
+
+  const isOverviewRoute = $derived($page.url.pathname === '/app');
+  const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
+
+  const headerTitle = $derived(isAccountsRoute ? m.accounts_title() : m.app_shell_header_title());
+  const headerCopy = $derived(isAccountsRoute ? m.accounts_shell_copy() : m.app_shell_header_copy());
 
   $effect(() => {
     if (browser && shouldRedirectHome) {
@@ -147,20 +153,24 @@
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_nav_title()}</p>
           <a
             href="/app"
-            aria-current={$page.url.pathname === '/app' ? 'page' : undefined}
+            aria-current={isOverviewRoute ? 'page' : undefined}
             class="flex items-center rounded-2xl border border-border bg-surface-strong/70 px-4 py-3 text-sm font-semibold text-foreground"
           >
             {m.app_shell_nav_overview()}
           </a>
-          <div class="rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted">
-            {m.app_shell_nav_future()}
-          </div>
+          <a
+            href="/app/accounts"
+            aria-current={isAccountsRoute ? 'page' : undefined}
+            class="flex items-center rounded-2xl border border-border bg-surface-strong/70 px-4 py-3 text-sm font-semibold text-foreground"
+          >
+            {m.app_shell_nav_accounts()}
+          </a>
         </nav>
 
         <div class="mt-8 rounded-[1.75rem] border border-border bg-surface-strong/60 p-4">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_status_title()}</p>
           <p class="mt-3 text-sm leading-6 text-foreground">
-	            {m.app_shell_status_install_state({ state: installStateLabel })}
+            {m.app_shell_status_install_state({ state: installStateLabel })}
           </p>
           <p class="mt-2 text-sm leading-6 text-muted">
             {m.app_shell_status_session({ username: sessionQuery.data?.user?.username ?? '' })}
@@ -187,8 +197,8 @@
       <section class="space-y-6">
         <header class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{m.app_shell_header_eyebrow()}</p>
-          <h2 class="mt-3 text-4xl font-semibold tracking-tight text-balance">{m.app_shell_header_title()}</h2>
-          <p class="mt-3 max-w-3xl text-sm leading-6 text-muted">{m.app_shell_header_copy()}</p>
+          <h2 class="mt-3 text-4xl font-semibold tracking-tight text-balance">{headerTitle}</h2>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-muted">{headerCopy}</p>
         </header>
 
         {@render children()}
