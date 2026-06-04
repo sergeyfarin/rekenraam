@@ -36,9 +36,6 @@ type AuditEventParams struct {
 
 func insertAuditEvent(ctx context.Context, tx *sql.Tx, params AuditEventParams) (int64, error) {
 	originType := strings.TrimSpace(params.OriginType)
-	if originType == "" {
-		originType = "internal"
-	}
 	if !auditOriginTypes[originType] {
 		return 0, fmt.Errorf("audit origin type is invalid: %s", originType)
 	}
@@ -50,7 +47,7 @@ func insertAuditEvent(ctx context.Context, tx *sql.Tx, params AuditEventParams) 
 
 	occurredAt := strings.TrimSpace(params.OccurredAt)
 	parsedOccurredAt, err := time.Parse(time.RFC3339, occurredAt)
-	if err != nil || parsedOccurredAt.Format(time.RFC3339) != occurredAt {
+	if err != nil || parsedOccurredAt.Location() != time.UTC || parsedOccurredAt.Format(time.RFC3339) != occurredAt {
 		return 0, fmt.Errorf("audit occurred_at must be UTC RFC3339 without fractional seconds")
 	}
 

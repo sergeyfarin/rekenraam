@@ -422,6 +422,8 @@ func TestSystemAccountSetupRerunWithoutCompletedStepKeepsAuditEventReferenced(t 
 		FROM audit_events
 		WHERE operation = 'system_accounts.setup'
 		  AND id NOT IN (
+			-- A setup rerun may find all system accounts already present; in
+			-- that case setup_steps is the intentional audit-event anchor.
 			SELECT completed_audit_event_id
 			FROM setup_steps
 			WHERE completed_audit_event_id IS NOT NULL
