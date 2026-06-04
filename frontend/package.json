@@ -3,7 +3,6 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@11.5.1",
   "scripts": {
     "openapi:generate": "openapi-typescript ../api/openapi/openapi.yaml -o ./src/lib/api/schema.d.ts",
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy baseLocale --emit-ts-declarations",
