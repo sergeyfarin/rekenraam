@@ -64,9 +64,18 @@ func TestCreateBookCompletesBookStep(t *testing.T) {
 	assert.Equal(t, setupStepResponse{Key: "book", Status: app.SetupStepStatusCompleted}, body.Setup.Steps[1])
 
 	var completedAt sql.NullString
-	err := database.QueryRowContext(context.Background(), `SELECT completed_at FROM setup_steps WHERE step_key = 'book'`).Scan(&completedAt)
+	var auditEventID sql.NullInt64
+	var operation string
+	err := database.QueryRowContext(context.Background(), `
+		SELECT setup_steps.completed_at, setup_steps.completed_audit_event_id, audit_events.operation
+		FROM setup_steps
+		JOIN audit_events ON audit_events.id = setup_steps.completed_audit_event_id
+		WHERE setup_steps.step_key = 'book'
+	`).Scan(&completedAt, &auditEventID, &operation)
 	require.NoError(t, err)
 	assert.True(t, completedAt.Valid)
+	assert.True(t, auditEventID.Valid)
+	assert.Equal(t, "book.setup", operation)
 }
 
 func TestCreateBookDefaultsCode(t *testing.T) {

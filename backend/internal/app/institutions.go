@@ -69,6 +69,8 @@ type CreateInstitutionInput struct {
 	OwnerUserID     int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 	Name            string
 	Kind            string
 	CountryCode     string
@@ -87,6 +89,8 @@ type UpdateInstitutionInput struct {
 	OwnerUserID     int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 	InstitutionID   int64
 	Name            string
 	Kind            string
@@ -106,6 +110,7 @@ type InstitutionLifecycleInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
 	InstitutionID int64
 	EffectiveFrom string
 	ChangeReason  string
@@ -210,6 +215,8 @@ func (s *InstitutionService) CreateInstitution(ctx context.Context, input Create
 		CreatedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		CreatedAt:       now.Format(time.RFC3339),
@@ -264,7 +271,8 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 		ChangedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
-		Operation:       "institution.update",
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
@@ -316,6 +324,7 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		ChangedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
 		Operation:       operation,
 		Spec:            institutionSpecFromStored(current),
 		Status:          status,

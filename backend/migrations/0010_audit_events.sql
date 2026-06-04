@@ -4,10 +4,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
   book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
   actor_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
   auth_session_id INTEGER REFERENCES auth_sessions(id) ON DELETE SET NULL,
-  occurred_at TEXT NOT NULL,
+  occurred_at TEXT NOT NULL CHECK (
+    length(occurred_at) = 20
+    AND occurred_at GLOB '????-??-??T??:??:??Z'
+  ),
   request_id TEXT,
   origin_type TEXT NOT NULL CHECK (origin_type IN ('browser_api', 'setup', 'cli_recovery', 'import', 'system_seed', 'scheduled', 'internal')),
-  operation TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK (length(trim(operation)) > 0 AND operation = trim(operation)),
   reason TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}'
 );
@@ -21,6 +24,8 @@ CREATE INDEX IF NOT EXISTS audit_events_actor_occurred_idx
 CREATE INDEX IF NOT EXISTS audit_events_request_idx
   ON audit_events (request_id)
   WHERE request_id IS NOT NULL;
+
+ALTER TABLE setup_steps ADD COLUMN completed_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT;
 
 ALTER TABLE books ADD COLUMN created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT;
 ALTER TABLE books ADD COLUMN updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT;
@@ -46,6 +51,8 @@ ALTER TABLE commodities DROP COLUMN created_audit_event_id;
 
 ALTER TABLE books DROP COLUMN updated_audit_event_id;
 ALTER TABLE books DROP COLUMN created_audit_event_id;
+
+ALTER TABLE setup_steps DROP COLUMN completed_audit_event_id;
 
 DROP INDEX IF EXISTS audit_events_request_idx;
 DROP INDEX IF EXISTS audit_events_actor_occurred_idx;

@@ -111,6 +111,8 @@ func createCurrency(logger *slog.Logger, authService *app.AuthService, currencyS
 			OwnerUserID:   owner.ID,
 			AuthSessionID: authenticatedSessionID(r),
 			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "browser_api",
+			Operation:     "currency.create",
 			Code:          request.Code,
 			Name:          request.Name,
 		})
@@ -140,6 +142,8 @@ func completeCurrencySetup(logger *slog.Logger, authService *app.AuthService, cu
 			OwnerUserID:         owner.ID,
 			AuthSessionID:       authenticatedSessionID(r),
 			RequestID:           RequestIDFromContext(r.Context()),
+			OriginType:          "setup",
+			Operation:           "currencies.setup",
 			DefaultCurrencyCode: request.DefaultCurrencyCode,
 			Currencies:          toCurrencySelectionInputs(request.Currencies),
 		})
@@ -173,6 +177,8 @@ func setDefaultCurrency(logger *slog.Logger, authService *app.AuthService, curre
 			OwnerUserID:   owner.ID,
 			AuthSessionID: authenticatedSessionID(r),
 			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "browser_api",
+			Operation:     "book.default_currency.set",
 			CommodityID:   commodityID,
 		})
 		if err != nil {

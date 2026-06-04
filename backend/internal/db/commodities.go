@@ -50,7 +50,8 @@ type CreateCurrencyParams struct {
 	CreatedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
-	AuditEventID    int64
+	OriginType      string
+	Operation       string
 	Spec            CurrencySpec
 	CreatedAt       string
 	EffectiveFrom   string
@@ -61,6 +62,8 @@ type CompleteCurrencySetupParams struct {
 	ChangedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 	DefaultCode     string
 	Specs           []CurrencySpec
 	CreatedAt       string
@@ -80,6 +83,8 @@ type SetDefaultCurrencyParams struct {
 	UpdatedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 }
 
 func NewCommodityRepository(database *sql.DB) *CommodityRepository {
@@ -133,16 +138,15 @@ func (r *CommodityRepository) CreateCurrency(ctx context.Context, params CreateC
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.CreatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "currency.create",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        "created currency",
 	})
 	if err != nil {
 		return CommodityRecord{}, err
 	}
-	params.AuditEventID = auditEventID
 
-	record, err := r.createCurrency(ctx, tx, params)
+	record, err := r.createCurrency(ctx, tx, params, auditEventID)
 	if err != nil {
 		return CommodityRecord{}, err
 	}
@@ -201,8 +205,8 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.CreatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "setup",
-		Operation:     "currencies.setup",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        "completed currency setup",
 	})
 	if err != nil {
@@ -217,11 +221,10 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 			CreatedByUserID: params.ChangedByUserID,
 			AuthSessionID:   params.AuthSessionID,
 			RequestID:       params.RequestID,
-			AuditEventID:    auditEventID,
 			Spec:            spec,
 			CreatedAt:       params.CreatedAt,
 			EffectiveFrom:   params.EffectiveFrom,
-		})
+		}, auditEventID)
 		if err != nil {
 			return CompleteCurrencySetupRecord{}, err
 		}
@@ -245,9 +248,9 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE setup_steps
-		SET completed_at = ?
+		SET completed_at = ?, completed_audit_event_id = ?
 		WHERE step_key = 'currencies' AND completed_at IS NULL
-	`, params.CreatedAt)
+	`, params.CreatedAt, auditEventID)
 	if err != nil {
 		return CompleteCurrencySetupRecord{}, fmt.Errorf("mark currencies setup complete: %w", err)
 	}
@@ -298,8 +301,8 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, params Set
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.UpdatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "book.default_currency.set",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        "set default currency",
 	})
 	if err != nil {
@@ -322,7 +325,7 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, params Set
 	return record, nil
 }
 
-func (r *CommodityRepository) ensureCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams) (CommodityRecord, error) {
+func (r *CommodityRepository) ensureCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams, auditEventID int64) (CommodityRecord, error) {
 	record, err := r.currentCurrencyByCode(ctx, tx, params.BookID, params.Spec.Code)
 	if err == nil {
 		return record, nil
@@ -331,10 +334,10 @@ func (r *CommodityRepository) ensureCurrency(ctx context.Context, tx *sql.Tx, pa
 		return CommodityRecord{}, err
 	}
 
-	return r.createCurrency(ctx, tx, params)
+	return r.createCurrency(ctx, tx, params, auditEventID)
 }
 
-func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams) (CommodityRecord, error) {
+func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams, auditEventID int64) (CommodityRecord, error) {
 	if _, err := r.currentCurrencyByCode(ctx, tx, params.BookID, params.Spec.Code); err == nil {
 		return CommodityRecord{}, ErrCommodityExists
 	} else if !errors.Is(err, ErrNotFound) {
@@ -344,7 +347,7 @@ func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, pa
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO commodities (book_id, code, kind, is_builtin, created_at, created_by_user_id, created_request_id, created_audit_event_id)
 		VALUES (?, ?, 'currency', 1, ?, ?, NULLIF(?, ''), ?)
-	`, params.BookID, params.Spec.Code, params.CreatedAt, params.CreatedByUserID, params.RequestID, params.AuditEventID)
+	`, params.BookID, params.Spec.Code, params.CreatedAt, params.CreatedByUserID, params.RequestID, auditEventID)
 	if err != nil {
 		return CommodityRecord{}, fmt.Errorf("insert currency commodity: %w", err)
 	}
@@ -372,7 +375,7 @@ func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, pa
 			change_audit_event_id
 		)
 		VALUES (?, 1, ?, ?, ?, 'created from embedded currency catalog', 'active', ?, ?, ?, ?, ?, '{"source":"embedded_currency_catalog"}', ?)
-	`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, params.AuditEventID)
+	`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, auditEventID)
 	if err != nil {
 		return CommodityRecord{}, fmt.Errorf("insert currency version: %w", err)
 	}

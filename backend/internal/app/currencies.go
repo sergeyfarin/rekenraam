@@ -58,6 +58,8 @@ type CreateCurrencyInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
+	Operation     string
 	Code          string
 	Name          string
 }
@@ -66,6 +68,8 @@ type CompleteCurrencySetupInput struct {
 	OwnerUserID         int64
 	AuthSessionID       int64
 	RequestID           string
+	OriginType          string
+	Operation           string
 	DefaultCurrencyCode string
 	Currencies          []CurrencySelectionInput
 }
@@ -80,6 +84,8 @@ type SetDefaultCurrencyInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
+	Operation     string
 	CommodityID   int64
 }
 
@@ -142,6 +148,8 @@ func (s *CurrencyService) CreateCurrency(ctx context.Context, input CreateCurren
 		CreatedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		Spec:            spec,
 		CreatedAt:       now.Format(time.RFC3339),
 		EffectiveFrom:   now.Format(time.DateOnly),
@@ -197,6 +205,8 @@ func (s *CurrencyService) CompleteCurrencySetup(ctx context.Context, input Compl
 		ChangedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		DefaultCode:     defaultCode,
 		Specs:           specs,
 		CreatedAt:       now.Format(time.RFC3339),
@@ -241,6 +251,8 @@ func (s *CurrencyService) SetDefaultCurrency(ctx context.Context, input SetDefau
 		UpdatedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {

@@ -84,14 +84,20 @@ func TestCompleteCurrencySetupCreatesDefaultAndAdditionalCurrencies(t *testing.T
 	assert.Equal(t, "system_accounts", body.Setup.CurrentStep)
 
 	var defaultCurrencyID sql.NullInt64
+	var setupAuditEventID sql.NullInt64
+	var operation string
 	err := database.QueryRowContext(context.Background(), `
-		SELECT default_currency_commodity_id
+		SELECT books.default_currency_commodity_id, setup_steps.completed_audit_event_id, audit_events.operation
 		FROM books
-		WHERE id = 1
-	`).Scan(&defaultCurrencyID)
+		JOIN setup_steps ON setup_steps.step_key = 'currencies'
+		JOIN audit_events ON audit_events.id = setup_steps.completed_audit_event_id
+		WHERE books.id = 1
+	`).Scan(&defaultCurrencyID, &setupAuditEventID, &operation)
 	require.NoError(t, err)
 	require.True(t, defaultCurrencyID.Valid)
 	assert.Equal(t, body.DefaultCurrency.ID, defaultCurrencyID.Int64)
+	assert.True(t, setupAuditEventID.Valid)
+	assert.Equal(t, "currencies.setup", operation)
 }
 
 func TestCompleteCurrencySetupAllowsOmittedAdditionalCurrencies(t *testing.T) {

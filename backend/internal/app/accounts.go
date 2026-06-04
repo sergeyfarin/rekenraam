@@ -102,6 +102,8 @@ type CreateAccountInput struct {
 	OwnerUserID           int64
 	AuthSessionID         int64
 	RequestID             string
+	OriginType            string
+	Operation             string
 	Code                  string
 	Name                  string
 	AccountClass          string
@@ -124,6 +126,8 @@ type UpdateAccountInput struct {
 	OwnerUserID           int64
 	AuthSessionID         int64
 	RequestID             string
+	OriginType            string
+	Operation             string
 	AccountID             int64
 	Code                  string
 	Name                  string
@@ -147,6 +151,7 @@ type AccountLifecycleInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
 	AccountID     int64
 	EffectiveFrom string
 	ChangeReason  string
@@ -156,6 +161,8 @@ type EnsureSystemAccountsInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
+	Operation     string
 }
 
 type EnsureSystemAccountsResult struct {
@@ -276,6 +283,8 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 		CreatedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		IsSystem:        false,
 		Spec:            spec,
 		ChangeReason:    changeReason,
@@ -344,7 +353,8 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 		ChangedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
-		Operation:       "account.update",
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
@@ -387,6 +397,8 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 		ChangedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
+		Operation:       input.Operation,
 		Specs:           systemAccountSpecs,
 		CreatedAt:       now.Format(time.RFC3339),
 		EffectiveFrom:   now.Format(time.DateOnly),
@@ -447,6 +459,7 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 		ChangedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
+		OriginType:      input.OriginType,
 		Operation:       operation,
 		Spec:            accountSpecFromStored(current),
 		Status:          status,

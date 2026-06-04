@@ -151,6 +151,18 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 	require.NoError(t, err)
 	assert.Equal(t, 2, versionCount)
 
+	var operation string
+	err = database.QueryRowContext(context.Background(), `
+		SELECT audit_events.operation
+		FROM account_versions
+		JOIN audit_events ON audit_events.id = account_versions.change_audit_event_id
+		WHERE account_versions.account_id = ?
+		ORDER BY account_versions.version_seq DESC
+		LIMIT 1
+	`, account.ID).Scan(&operation)
+	require.NoError(t, err)
+	assert.Equal(t, "account.update", operation)
+
 	versions := listAccountsForSession(t, handler, sessionCookie, "/"+strconvFormatInt(account.ID)+"/versions")
 	require.Len(t, versions.Accounts, 2)
 	assert.Equal(t, "Renamed Savings", versions.Accounts[0].Name)
@@ -364,13 +376,18 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	patchAccount(t, handler, sessionCookie, csrfToken, body.Accounts[0].ID, `{}`, http.StatusConflict)
 
 	var completedAt sql.NullString
+	var auditEventID sql.NullInt64
+	var operation string
 	err := database.QueryRowContext(context.Background(), `
-		SELECT completed_at
+		SELECT setup_steps.completed_at, setup_steps.completed_audit_event_id, audit_events.operation
 		FROM setup_steps
-		WHERE step_key = 'system_accounts'
-	`).Scan(&completedAt)
+		JOIN audit_events ON audit_events.id = setup_steps.completed_audit_event_id
+		WHERE setup_steps.step_key = 'system_accounts'
+	`).Scan(&completedAt, &auditEventID, &operation)
 	require.NoError(t, err)
 	assert.True(t, completedAt.Valid)
+	assert.True(t, auditEventID.Valid)
+	assert.Equal(t, "system_accounts.setup", operation)
 }
 
 func TestSystemAccountSetupCannotRunTwice(t *testing.T) {
@@ -381,6 +398,42 @@ func TestSystemAccountSetupCannotRunTwice(t *testing.T) {
 
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusConflict)
+}
+
+func TestSystemAccountSetupRerunWithoutCompletedStepKeepsAuditEventReferenced(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
+
+	_, err := database.ExecContext(context.Background(), `
+		UPDATE setup_steps
+		SET completed_at = NULL, completed_audit_event_id = NULL
+		WHERE step_key = 'system_accounts'
+	`)
+	require.NoError(t, err)
+
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
+
+	var unreferencedSetupEvents int
+	err = database.QueryRowContext(context.Background(), `
+		SELECT COUNT(1)
+		FROM audit_events
+		WHERE operation = 'system_accounts.setup'
+		  AND id NOT IN (
+			SELECT completed_audit_event_id
+			FROM setup_steps
+			WHERE completed_audit_event_id IS NOT NULL
+		  )
+		  AND id NOT IN (
+			SELECT change_audit_event_id
+			FROM account_versions
+			WHERE change_audit_event_id IS NOT NULL
+		  )
+	`).Scan(&unreferencedSetupEvents)
+	require.NoError(t, err)
+	assert.Equal(t, 0, unreferencedSetupEvents)
 }
 
 func TestAccountMutationsRequireAuthentication(t *testing.T) {

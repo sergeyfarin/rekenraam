@@ -75,6 +75,8 @@ type CreateAccountParams struct {
 	CreatedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 	IsSystem        bool
 	SystemRole      string
 	Spec            AccountSpec
@@ -89,6 +91,7 @@ type UpdateAccountParams struct {
 	ChangedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
 	Operation       string
 	Spec            AccountSpec
 	Status          string
@@ -108,6 +111,8 @@ type EnsureSystemAccountsParams struct {
 	ChangedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 	Specs           []SystemAccountSpec
 	CreatedAt       string
 	EffectiveFrom   string
@@ -231,8 +236,8 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.CreatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "account.create",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        params.ChangeReason,
 	})
 	if err != nil {
@@ -305,19 +310,14 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 	if changeReason == "" {
 		changeReason = "updated account"
 	}
-	operation := strings.TrimSpace(params.Operation)
-	if operation == "" {
-		operation = "account.update"
-	}
-
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ChangedByUserID,
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.RecordedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "browser_api",
-		Operation:     operation,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        changeReason,
 	})
 	if err != nil {
@@ -388,8 +388,8 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.CreatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "setup",
-		Operation:     "system_accounts.setup",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        "seeded system accounts",
 	})
 	if err != nil {
@@ -407,9 +407,9 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE setup_steps
-		SET completed_at = ?
+		SET completed_at = ?, completed_audit_event_id = ?
 		WHERE step_key = 'system_accounts' AND completed_at IS NULL
-	`, params.CreatedAt)
+	`, params.CreatedAt, auditEventID)
 	if err != nil {
 		return EnsureSystemAccountsRecord{}, fmt.Errorf("mark system accounts setup complete: %w", err)
 	}

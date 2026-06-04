@@ -28,6 +28,8 @@ type CompleteBookSetupParams struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
+	Operation     string
 	Code          string
 	Name          string
 	CreatedAt     string
@@ -97,14 +99,16 @@ func (r *BookRepository) CompleteBookSetup(ctx context.Context, params CompleteB
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.CreatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "setup",
-		Operation:     "book.setup",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        "created book during setup",
 	})
 	if err != nil {
 		return BookRecord{}, err
 	}
 
+	// The first book must exist before its audit event can safely reference
+	// book_id = 1, so book setup attaches the creation event after insert.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE books
 		SET created_audit_event_id = ?, updated_audit_event_id = ?
@@ -115,9 +119,9 @@ func (r *BookRepository) CompleteBookSetup(ctx context.Context, params CompleteB
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE setup_steps
-		SET completed_at = ?
+		SET completed_at = ?, completed_audit_event_id = ?
 		WHERE step_key = 'book' AND completed_at IS NULL
-	`, params.CreatedAt)
+	`, params.CreatedAt, auditEventID)
 	if err != nil {
 		return BookRecord{}, fmt.Errorf("mark book setup step complete: %w", err)
 	}

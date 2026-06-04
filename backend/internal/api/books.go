@@ -67,6 +67,8 @@ func createBook(logger *slog.Logger, authService *app.AuthService, bookService *
 			OwnerUserID:   owner.ID,
 			AuthSessionID: authenticatedSessionID(r),
 			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "setup",
+			Operation:     "book.setup",
 			Code:          request.Code,
 			Name:          request.Name,
 		})

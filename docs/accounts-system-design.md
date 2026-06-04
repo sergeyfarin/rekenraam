@@ -302,6 +302,20 @@ book default currency; system-account setup can create several account
 identities and versions; future import commit can create transactions,
 postings, source metadata, and duplicate-detection records under one event.
 
+Setup completion rows use `setup_steps.completed_audit_event_id` to reference
+the grouped setup event. This keeps setup operations audit-visible even if a
+retry finds already-created domain rows and only marks the setup step complete.
+
+Identity rows may keep `created_request_id` alongside
+`created_audit_event_id`. The direct request id is a denormalized snapshot for
+simple exports and history queries; the audit event remains canonical for
+request, optional session, origin, operation, and grouped-workflow provenance.
+
+The first book is the one structural exception to "created audit event at
+insert time": the book row must exist before an audit event can reference
+`book_id = 1`, so book setup inserts the book, creates the audit event, then
+attaches the event to the book in the same transaction.
+
 Version ordering rules:
 
 - `version_seq` is assigned by the application service inside the same database

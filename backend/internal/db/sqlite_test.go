@@ -48,10 +48,27 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
 	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
 	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
-	assert.Contains(t, readTableColumns(t, database, "audit_events"), "operation")
-	assert.Contains(t, readTableColumns(t, database, "audit_events"), "auth_session_id")
+	assert.Contains(t, readTableColumns(t, database, "setup_steps"), "completed_audit_event_id")
+	assert.Subset(t, readTableColumns(t, database, "audit_events"), []string{
+		"id",
+		"book_id",
+		"actor_user_id",
+		"auth_session_id",
+		"occurred_at",
+		"request_id",
+		"origin_type",
+		"operation",
+		"reason",
+		"metadata_json",
+	})
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_by_user_id")
+	assert.Contains(t, readTableColumns(t, database, "books"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_audit_event_id")
+	assert.Contains(t, readTableColumns(t, database, "commodities"), "created_audit_event_id")
+	assert.Contains(t, readTableColumns(t, database, "commodity_versions"), "change_audit_event_id")
+	assert.Contains(t, readTableColumns(t, database, "institutions"), "created_audit_event_id")
+	assert.Contains(t, readTableColumns(t, database, "institution_versions"), "change_audit_event_id")
+	assert.Contains(t, readTableColumns(t, database, "accounts"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "account_versions"), "change_audit_event_id")
 }
 

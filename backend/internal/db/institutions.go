@@ -62,6 +62,8 @@ type CreateInstitutionParams struct {
 	CreatedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
+	Operation       string
 	Spec            InstitutionSpec
 	ChangeReason    string
 	CreatedAt       string
@@ -74,6 +76,7 @@ type UpdateInstitutionParams struct {
 	ChangedByUserID int64
 	AuthSessionID   int64
 	RequestID       string
+	OriginType      string
 	Operation       string
 	Spec            InstitutionSpec
 	Status          string
@@ -173,8 +176,8 @@ func (r *InstitutionRepository) CreateInstitution(ctx context.Context, params Cr
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.CreatedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "institution.create",
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        params.ChangeReason,
 	})
 	if err != nil {
@@ -247,19 +250,14 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	if changeReason == "" {
 		changeReason = "updated institution"
 	}
-	operation := strings.TrimSpace(params.Operation)
-	if operation == "" {
-		operation = "institution.update"
-	}
-
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ChangedByUserID,
 		AuthSessionID: params.AuthSessionID,
 		OccurredAt:    params.RecordedAt,
 		RequestID:     params.RequestID,
-		OriginType:    "browser_api",
-		Operation:     operation,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
 		Reason:        changeReason,
 	})
 	if err != nil {

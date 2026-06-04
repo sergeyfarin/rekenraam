@@ -33,6 +33,8 @@ type CreateBookInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
+	OriginType    string
+	Operation     string
 	Code          string
 	Name          string
 }
@@ -98,6 +100,8 @@ func (s *BookService) CreateBook(ctx context.Context, input CreateBookInput) (Cr
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		Operation:     input.Operation,
 		Code:          code,
 		Name:          name,
 		CreatedAt:     now,
