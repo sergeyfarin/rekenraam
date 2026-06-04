@@ -100,6 +100,8 @@ type ListAccountsInput struct {
 
 type CreateAccountInput struct {
 	OwnerUserID           int64
+	AuthSessionID         int64
+	RequestID             string
 	Code                  string
 	Name                  string
 	AccountClass          string
@@ -120,6 +122,8 @@ type CreateAccountInput struct {
 
 type UpdateAccountInput struct {
 	OwnerUserID           int64
+	AuthSessionID         int64
+	RequestID             string
 	AccountID             int64
 	Code                  string
 	Name                  string
@@ -141,13 +145,17 @@ type UpdateAccountInput struct {
 
 type AccountLifecycleInput struct {
 	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
 	AccountID     int64
 	EffectiveFrom string
 	ChangeReason  string
 }
 
 type EnsureSystemAccountsInput struct {
-	OwnerUserID int64
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
 }
 
 type EnsureSystemAccountsResult struct {
@@ -266,6 +274,8 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 	record, err := s.repository.CreateAccount(ctx, db.CreateAccountParams{
 		BookID:          BookID,
 		CreatedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
 		IsSystem:        false,
 		Spec:            spec,
 		ChangeReason:    changeReason,
@@ -332,6 +342,9 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 		BookID:          BookID,
 		AccountID:       input.AccountID,
 		ChangedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		Operation:       "account.update",
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
@@ -348,19 +361,19 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 }
 
 func (s *AccountService) CloseAccount(ctx context.Context, input AccountLifecycleInput) (Account, error) {
-	return s.changeAccountStatus(ctx, input, "closed", "closed account", "active")
+	return s.changeAccountStatus(ctx, input, "closed", "closed account", "account.close", "active")
 }
 
 func (s *AccountService) ReopenAccount(ctx context.Context, input AccountLifecycleInput) (Account, error) {
-	return s.changeAccountStatus(ctx, input, "active", "reopened account", "closed")
+	return s.changeAccountStatus(ctx, input, "active", "reopened account", "account.reopen", "closed")
 }
 
 func (s *AccountService) ArchiveAccount(ctx context.Context, input AccountLifecycleInput) (Account, error) {
-	return s.changeAccountStatus(ctx, input, "archived", "archived account", "closed")
+	return s.changeAccountStatus(ctx, input, "archived", "archived account", "account.archive", "closed")
 }
 
 func (s *AccountService) RestoreAccount(ctx context.Context, input AccountLifecycleInput) (Account, error) {
-	return s.changeAccountStatus(ctx, input, "closed", "restored account", "archived")
+	return s.changeAccountStatus(ctx, input, "closed", "restored account", "account.restore", "archived")
 }
 
 func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureSystemAccountsInput) (EnsureSystemAccountsResult, error) {
@@ -372,6 +385,8 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 	result, err := s.repository.EnsureSystemAccounts(ctx, db.EnsureSystemAccountsParams{
 		BookID:          BookID,
 		ChangedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
 		Specs:           systemAccountSpecs,
 		CreatedAt:       now.Format(time.RFC3339),
 		EffectiveFrom:   now.Format(time.DateOnly),
@@ -398,7 +413,7 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 	}, nil
 }
 
-func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountLifecycleInput, status string, reason string, allowedCurrentStatuses ...string) (Account, error) {
+func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountLifecycleInput, status string, reason string, operation string, allowedCurrentStatuses ...string) (Account, error) {
 	if input.OwnerUserID <= 0 {
 		return Account{}, ValidationError{Message: "owner user is required"}
 	}
@@ -430,6 +445,9 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 		BookID:          BookID,
 		AccountID:       input.AccountID,
 		ChangedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		Operation:       operation,
 		Spec:            accountSpecFromStored(current),
 		Status:          status,
 		ChangeReason:    changeReason,

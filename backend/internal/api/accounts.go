@@ -153,6 +153,8 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 
 		account, err := accountService.CreateAccount(r.Context(), app.CreateAccountInput{
 			OwnerUserID:           owner.ID,
+			AuthSessionID:         authenticatedSessionID(r),
+			RequestID:             RequestIDFromContext(r.Context()),
 			Code:                  request.Code,
 			Name:                  request.Name,
 			AccountClass:          request.AccountClass,
@@ -199,6 +201,8 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 
 		account, err := accountService.UpdateAccount(r.Context(), app.UpdateAccountInput{
 			OwnerUserID:           owner.ID,
+			AuthSessionID:         authenticatedSessionID(r),
+			RequestID:             RequestIDFromContext(r.Context()),
 			AccountID:             accountID,
 			Code:                  request.Code,
 			Name:                  request.Name,
@@ -230,6 +234,8 @@ func closeAccount(logger *slog.Logger, authService *app.AuthService, accountServ
 	return accountLifecycleMutation(logger, authService, accountService, options, "close account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.CloseAccount(r.Context(), app.AccountLifecycleInput{
 			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
@@ -241,6 +247,8 @@ func reopenAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 	return accountLifecycleMutation(logger, authService, accountService, options, "reopen account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.ReopenAccount(r.Context(), app.AccountLifecycleInput{
 			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
@@ -252,6 +260,8 @@ func archiveAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 	return accountLifecycleMutation(logger, authService, accountService, options, "archive account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.ArchiveAccount(r.Context(), app.AccountLifecycleInput{
 			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
@@ -263,6 +273,8 @@ func restoreAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 	return accountLifecycleMutation(logger, authService, accountService, options, "restore account", func(owner app.Owner, accountID int64, request accountLifecycleRequest, r *http.Request) (app.Account, error) {
 		return accountService.RestoreAccount(r.Context(), app.AccountLifecycleInput{
 			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
@@ -306,7 +318,9 @@ func completeSystemAccountsSetup(logger *slog.Logger, authService *app.AuthServi
 		}
 
 		result, err := accountService.EnsureSystemAccounts(r.Context(), app.EnsureSystemAccountsInput{
-			OwnerUserID: owner.ID,
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 		})
 		if err != nil {
 			writeAccountServiceError(w, r, logger, "complete system accounts setup", err)

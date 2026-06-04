@@ -48,6 +48,9 @@ type CurrencySpec struct {
 type CreateCurrencyParams struct {
 	BookID          int64
 	CreatedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
+	AuditEventID    int64
 	Spec            CurrencySpec
 	CreatedAt       string
 	EffectiveFrom   string
@@ -56,6 +59,8 @@ type CreateCurrencyParams struct {
 type CompleteCurrencySetupParams struct {
 	BookID          int64
 	ChangedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
 	DefaultCode     string
 	Specs           []CurrencySpec
 	CreatedAt       string
@@ -73,6 +78,8 @@ type SetDefaultCurrencyParams struct {
 	CommodityID     int64
 	UpdatedAt       string
 	UpdatedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
 }
 
 func NewCommodityRepository(database *sql.DB) *CommodityRepository {
@@ -115,6 +122,25 @@ func (r *CommodityRepository) CreateCurrency(ctx context.Context, params CreateC
 			_ = tx.Rollback()
 		}
 	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return CommodityRecord{}, err
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.CreatedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "currency.create",
+		Reason:        "created currency",
+	})
+	if err != nil {
+		return CommodityRecord{}, err
+	}
+	params.AuditEventID = auditEventID
 
 	record, err := r.createCurrency(ctx, tx, params)
 	if err != nil {
@@ -169,12 +195,29 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 		return CompleteCurrencySetupRecord{}, fmt.Errorf("read setup book: %w", err)
 	}
 
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ChangedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "setup",
+		Operation:     "currencies.setup",
+		Reason:        "completed currency setup",
+	})
+	if err != nil {
+		return CompleteCurrencySetupRecord{}, err
+	}
+
 	currencies := make([]CommodityRecord, 0, len(params.Specs))
 	var defaultCurrency CommodityRecord
 	for _, spec := range params.Specs {
 		record, err := r.ensureCurrency(ctx, tx, CreateCurrencyParams{
 			BookID:          params.BookID,
 			CreatedByUserID: params.ChangedByUserID,
+			AuthSessionID:   params.AuthSessionID,
+			RequestID:       params.RequestID,
+			AuditEventID:    auditEventID,
 			Spec:            spec,
 			CreatedAt:       params.CreatedAt,
 			EffectiveFrom:   params.EffectiveFrom,
@@ -194,9 +237,9 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE books
-		SET default_currency_commodity_id = ?, updated_at = ?, updated_by_user_id = ?
+		SET default_currency_commodity_id = ?, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
 		WHERE id = ?
-	`, defaultCurrency.ID, params.CreatedAt, params.ChangedByUserID, params.BookID); err != nil {
+	`, defaultCurrency.ID, params.CreatedAt, params.ChangedByUserID, auditEventID, params.BookID); err != nil {
 		return CompleteCurrencySetupRecord{}, fmt.Errorf("set default currency: %w", err)
 	}
 
@@ -249,11 +292,25 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, params Set
 		return CommodityRecord{}, ErrNotFound
 	}
 
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.UpdatedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.UpdatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "book.default_currency.set",
+		Reason:        "set default currency",
+	})
+	if err != nil {
+		return CommodityRecord{}, err
+	}
+
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE books
-		SET default_currency_commodity_id = ?, updated_at = ?, updated_by_user_id = ?
+		SET default_currency_commodity_id = ?, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
 		WHERE id = ?
-	`, params.CommodityID, params.UpdatedAt, params.UpdatedByUserID, params.BookID); err != nil {
+	`, params.CommodityID, params.UpdatedAt, params.UpdatedByUserID, auditEventID, params.BookID); err != nil {
 		return CommodityRecord{}, fmt.Errorf("set default currency: %w", err)
 	}
 
@@ -285,9 +342,9 @@ func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, pa
 	}
 
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO commodities (book_id, code, kind, is_builtin, created_at, created_by_user_id, created_request_id)
-		VALUES (?, ?, 'currency', 1, ?, ?, NULL)
-	`, params.BookID, params.Spec.Code, params.CreatedAt, params.CreatedByUserID)
+		INSERT INTO commodities (book_id, code, kind, is_builtin, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, ?, 'currency', 1, ?, ?, NULLIF(?, ''), ?)
+	`, params.BookID, params.Spec.Code, params.CreatedAt, params.CreatedByUserID, params.RequestID, params.AuditEventID)
 	if err != nil {
 		return CommodityRecord{}, fmt.Errorf("insert currency commodity: %w", err)
 	}
@@ -311,10 +368,11 @@ func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, pa
 			name,
 			standard_scale,
 			max_quantity_scale,
-			metadata_json
+			metadata_json,
+			change_audit_event_id
 		)
-		VALUES (?, 1, ?, ?, ?, 'created from embedded currency catalog', 'active', ?, ?, ?, ?, ?, '{"source":"embedded_currency_catalog"}')
-	`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale)
+		VALUES (?, 1, ?, ?, ?, 'created from embedded currency catalog', 'active', ?, ?, ?, ?, ?, '{"source":"embedded_currency_catalog"}', ?)
+	`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, params.AuditEventID)
 	if err != nil {
 		return CommodityRecord{}, fmt.Errorf("insert currency version: %w", err)
 	}

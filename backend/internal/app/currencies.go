@@ -55,13 +55,17 @@ type CurrencySelectionInput struct {
 }
 
 type CreateCurrencyInput struct {
-	OwnerUserID int64
-	Code        string
-	Name        string
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	Code          string
+	Name          string
 }
 
 type CompleteCurrencySetupInput struct {
 	OwnerUserID         int64
+	AuthSessionID       int64
+	RequestID           string
 	DefaultCurrencyCode string
 	Currencies          []CurrencySelectionInput
 }
@@ -73,8 +77,10 @@ type CompleteCurrencySetupResult struct {
 }
 
 type SetDefaultCurrencyInput struct {
-	OwnerUserID int64
-	CommodityID int64
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	CommodityID   int64
 }
 
 type SetDefaultCurrencyResult struct {
@@ -134,6 +140,8 @@ func (s *CurrencyService) CreateCurrency(ctx context.Context, input CreateCurren
 	record, err := s.repository.CreateCurrency(ctx, db.CreateCurrencyParams{
 		BookID:          BookID,
 		CreatedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
 		Spec:            spec,
 		CreatedAt:       now.Format(time.RFC3339),
 		EffectiveFrom:   now.Format(time.DateOnly),
@@ -187,6 +195,8 @@ func (s *CurrencyService) CompleteCurrencySetup(ctx context.Context, input Compl
 	result, err := s.repository.CompleteCurrencySetup(ctx, db.CompleteCurrencySetupParams{
 		BookID:          BookID,
 		ChangedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
 		DefaultCode:     defaultCode,
 		Specs:           specs,
 		CreatedAt:       now.Format(time.RFC3339),
@@ -229,6 +239,8 @@ func (s *CurrencyService) SetDefaultCurrency(ctx context.Context, input SetDefau
 		CommodityID:     input.CommodityID,
 		UpdatedAt:       now,
 		UpdatedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {

@@ -60,6 +60,8 @@ type ListInstitutionsParams struct {
 type CreateInstitutionParams struct {
 	BookID          int64
 	CreatedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
 	Spec            InstitutionSpec
 	ChangeReason    string
 	CreatedAt       string
@@ -70,6 +72,9 @@ type UpdateInstitutionParams struct {
 	BookID          int64
 	InstitutionID   int64
 	ChangedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
+	Operation       string
 	Spec            InstitutionSpec
 	Status          string
 	ChangeReason    string
@@ -162,10 +167,24 @@ func (r *InstitutionRepository) CreateInstitution(ctx context.Context, params Cr
 		return InstitutionRecord{}, err
 	}
 
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.CreatedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "institution.create",
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return InstitutionRecord{}, err
+	}
+
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO institutions (book_id, created_at, created_by_user_id, created_request_id)
-		VALUES (?, ?, ?, NULL)
-	`, params.BookID, params.CreatedAt, params.CreatedByUserID)
+		INSERT INTO institutions (book_id, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, ?, ?, NULLIF(?, ''), ?)
+	`, params.BookID, params.CreatedAt, params.CreatedByUserID, params.RequestID, auditEventID)
 	if err != nil {
 		return InstitutionRecord{}, fmt.Errorf("insert institution: %w", err)
 	}
@@ -176,17 +195,18 @@ func (r *InstitutionRepository) CreateInstitution(ctx context.Context, params Cr
 	}
 
 	record, err := insertInstitutionVersion(ctx, tx, insertInstitutionVersionParams{
-		BookID:          params.BookID,
-		InstitutionID:   institutionID,
-		CreatedAt:       params.CreatedAt,
-		CreatedByUserID: params.CreatedByUserID,
-		VersionSeq:      1,
-		EffectiveFrom:   params.EffectiveFrom,
-		RecordedAt:      params.CreatedAt,
-		ChangedByUserID: params.CreatedByUserID,
-		ChangeReason:    params.ChangeReason,
-		Status:          "active",
-		Spec:            params.Spec,
+		BookID:             params.BookID,
+		InstitutionID:      institutionID,
+		CreatedAt:          params.CreatedAt,
+		CreatedByUserID:    params.CreatedByUserID,
+		VersionSeq:         1,
+		EffectiveFrom:      params.EffectiveFrom,
+		RecordedAt:         params.CreatedAt,
+		ChangedByUserID:    params.CreatedByUserID,
+		ChangeReason:       params.ChangeReason,
+		ChangeAuditEventID: auditEventID,
+		Status:             "active",
+		Spec:               params.Spec,
 	})
 	if err != nil {
 		return InstitutionRecord{}, err
@@ -227,19 +247,38 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	if changeReason == "" {
 		changeReason = "updated institution"
 	}
+	operation := strings.TrimSpace(params.Operation)
+	if operation == "" {
+		operation = "institution.update"
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ChangedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.RecordedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "browser_api",
+		Operation:     operation,
+		Reason:        changeReason,
+	})
+	if err != nil {
+		return InstitutionRecord{}, err
+	}
 
 	record, err := insertInstitutionVersion(ctx, tx, insertInstitutionVersionParams{
-		BookID:          params.BookID,
-		InstitutionID:   params.InstitutionID,
-		CreatedAt:       current.CreatedAt,
-		CreatedByUserID: current.CreatedByUserID,
-		VersionSeq:      current.VersionSeq + 1,
-		EffectiveFrom:   params.EffectiveFrom,
-		RecordedAt:      params.RecordedAt,
-		ChangedByUserID: params.ChangedByUserID,
-		ChangeReason:    changeReason,
-		Status:          status,
-		Spec:            params.Spec,
+		BookID:             params.BookID,
+		InstitutionID:      params.InstitutionID,
+		CreatedAt:          current.CreatedAt,
+		CreatedByUserID:    current.CreatedByUserID,
+		VersionSeq:         current.VersionSeq + 1,
+		EffectiveFrom:      params.EffectiveFrom,
+		RecordedAt:         params.RecordedAt,
+		ChangedByUserID:    params.ChangedByUserID,
+		ChangeReason:       changeReason,
+		ChangeAuditEventID: auditEventID,
+		Status:             status,
+		Spec:               params.Spec,
 	})
 	if err != nil {
 		return InstitutionRecord{}, err
@@ -254,17 +293,18 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 }
 
 type insertInstitutionVersionParams struct {
-	BookID          int64
-	InstitutionID   int64
-	CreatedAt       string
-	CreatedByUserID int64
-	VersionSeq      int64
-	EffectiveFrom   string
-	RecordedAt      string
-	ChangedByUserID int64
-	ChangeReason    string
-	Status          string
-	Spec            InstitutionSpec
+	BookID             int64
+	InstitutionID      int64
+	CreatedAt          string
+	CreatedByUserID    int64
+	VersionSeq         int64
+	EffectiveFrom      string
+	RecordedAt         string
+	ChangedByUserID    int64
+	ChangeReason       string
+	ChangeAuditEventID int64
+	Status             string
+	Spec               InstitutionSpec
 }
 
 func insertInstitutionVersion(ctx context.Context, tx *sql.Tx, params insertInstitutionVersionParams) (InstitutionRecord, error) {
@@ -286,10 +326,11 @@ func insertInstitutionVersion(ctx context.Context, tx *sql.Tx, params insertInst
 			backdrop_url,
 			address_json,
 			comment_markdown,
-			metadata_json
+			metadata_json,
+			change_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
-	`, params.InstitutionID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Name, params.Spec.Kind, params.Spec.CountryCode, params.Spec.Website, params.Spec.LogoURL, params.Spec.LogoSmallURL, params.Spec.BackdropURL, params.Spec.AddressJSON, params.Spec.CommentMarkdown, params.Spec.MetadataJSON)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
+	`, params.InstitutionID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Name, params.Spec.Kind, params.Spec.CountryCode, params.Spec.Website, params.Spec.LogoURL, params.Spec.LogoSmallURL, params.Spec.BackdropURL, params.Spec.AddressJSON, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
 	if err != nil {
 		return InstitutionRecord{}, fmt.Errorf("insert institution version: %w", err)
 	}

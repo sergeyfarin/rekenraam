@@ -137,6 +137,8 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 
 		institution, err := institutionService.CreateInstitution(r.Context(), app.CreateInstitutionInput{
 			OwnerUserID:     owner.ID,
+			AuthSessionID:   authenticatedSessionID(r),
+			RequestID:       RequestIDFromContext(r.Context()),
 			Name:            request.Name,
 			Kind:            request.Kind,
 			CountryCode:     request.CountryCode,
@@ -179,6 +181,8 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 
 		institution, err := institutionService.UpdateInstitution(r.Context(), app.UpdateInstitutionInput{
 			OwnerUserID:     owner.ID,
+			AuthSessionID:   authenticatedSessionID(r),
+			RequestID:       RequestIDFromContext(r.Context()),
 			InstitutionID:   institutionID,
 			Name:            request.Name,
 			Kind:            request.Kind,
@@ -206,6 +210,8 @@ func archiveInstitution(logger *slog.Logger, authService *app.AuthService, insti
 	return institutionLifecycleMutation(logger, authService, institutionService, options, "archive institution", func(ctxOwner app.Owner, institutionID int64, request institutionLifecycleRequest, r *http.Request) (app.Institution, error) {
 		return institutionService.ArchiveInstitution(r.Context(), app.InstitutionLifecycleInput{
 			OwnerUserID:   ctxOwner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 			InstitutionID: institutionID,
 			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
@@ -217,6 +223,8 @@ func restoreInstitution(logger *slog.Logger, authService *app.AuthService, insti
 	return institutionLifecycleMutation(logger, authService, institutionService, options, "restore institution", func(ctxOwner app.Owner, institutionID int64, request institutionLifecycleRequest, r *http.Request) (app.Institution, error) {
 		return institutionService.RestoreInstitution(r.Context(), app.InstitutionLifecycleInput{
 			OwnerUserID:   ctxOwner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
 			InstitutionID: institutionID,
 			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,

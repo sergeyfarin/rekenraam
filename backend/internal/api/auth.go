@@ -22,6 +22,7 @@ import (
 const csrfTokenHeader = "X-CSRF-Token"
 
 type authenticatedOwnerKey struct{}
+type authenticatedSessionIDKey struct{}
 
 type authSessionResponse struct {
 	Authenticated bool           `json:"authenticated"`
@@ -205,6 +206,9 @@ func requireAuthenticatedMutation(authService *app.AuthService, options HandlerO
 		ctx := r.Context()
 		if status.User != nil {
 			ctx = context.WithValue(ctx, authenticatedOwnerKey{}, *status.User)
+		}
+		if status.SessionID > 0 {
+			ctx = context.WithValue(ctx, authenticatedSessionIDKey{}, status.SessionID)
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))

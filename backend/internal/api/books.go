@@ -64,9 +64,11 @@ func createBook(logger *slog.Logger, authService *app.AuthService, bookService *
 		}
 
 		result, err := bookService.CreateBook(r.Context(), app.CreateBookInput{
-			OwnerUserID: owner.ID,
-			Code:        request.Code,
-			Name:        request.Name,
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			Code:          request.Code,
+			Name:          request.Name,
 		})
 		if err != nil {
 			var validationError app.ValidationError
@@ -97,6 +99,11 @@ func authenticatedMutationOwner(w http.ResponseWriter, r *http.Request) (app.Own
 	}
 
 	return owner, true
+}
+
+func authenticatedSessionID(r *http.Request) int64 {
+	sessionID, _ := r.Context().Value(authenticatedSessionIDKey{}).(int64)
+	return sessionID
 }
 
 func authenticatedOwner(w http.ResponseWriter, r *http.Request, logger *slog.Logger, authService *app.AuthService) (app.Owner, bool) {

@@ -108,9 +108,11 @@ func createCurrency(logger *slog.Logger, authService *app.AuthService, currencyS
 		}
 
 		currency, err := currencyService.CreateCurrency(r.Context(), app.CreateCurrencyInput{
-			OwnerUserID: owner.ID,
-			Code:        request.Code,
-			Name:        request.Name,
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			Code:          request.Code,
+			Name:          request.Name,
 		})
 		if err != nil {
 			writeCurrencyServiceError(w, r, logger, "create currency", err)
@@ -136,6 +138,8 @@ func completeCurrencySetup(logger *slog.Logger, authService *app.AuthService, cu
 
 		result, err := currencyService.CompleteCurrencySetup(r.Context(), app.CompleteCurrencySetupInput{
 			OwnerUserID:         owner.ID,
+			AuthSessionID:       authenticatedSessionID(r),
+			RequestID:           RequestIDFromContext(r.Context()),
 			DefaultCurrencyCode: request.DefaultCurrencyCode,
 			Currencies:          toCurrencySelectionInputs(request.Currencies),
 		})
@@ -166,8 +170,10 @@ func setDefaultCurrency(logger *slog.Logger, authService *app.AuthService, curre
 		}
 
 		result, err := currencyService.SetDefaultCurrency(r.Context(), app.SetDefaultCurrencyInput{
-			OwnerUserID: owner.ID,
-			CommodityID: commodityID,
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			CommodityID:   commodityID,
 		})
 		if err != nil {
 			writeCurrencyServiceError(w, r, logger, "set default currency", err)

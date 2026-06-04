@@ -44,6 +44,10 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
 - Physical delete is allowed only for never-posted drafts. Posted financial records must use void, archive, or corrective-entry workflows even when unreconciled.
+- Use the hybrid audit model for durable domain changes: domain version/lifecycle tables explain what changed, while `audit_events` rows explain who, when, how, and why the operation was initiated.
+- One `audit_events` row should represent one user/system operation, not one changed column. Multi-row workflows such as setup, imports, reconciliation, and transaction correction should create one event inside the same database transaction and reference it from every created version/lifecycle row.
+- Keep essential attribution columns such as `created_at`, `recorded_at`, `created_by_user_id`, `changed_by_user_id`, and `change_reason` on domain rows for straightforward history and export queries. Use audit-event references for request/session/origin provenance.
+- `audit_events.auth_session_id` is nullable and must not block session cleanup; request IDs and actor IDs remain the stable attribution floor.
 - Soft-delete column convention and the specific schema pattern (e.g., `deleted_at` vs `archived_at` vs a status enum) will be documented when first introduced in a migration. Consistency across tables is required; do not mix approaches.
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.

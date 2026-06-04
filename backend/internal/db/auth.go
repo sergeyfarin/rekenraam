@@ -18,15 +18,16 @@ type OwnerCredentialsRecord struct {
 }
 
 type AuthenticatedUserRecord struct {
-	ID       int64
-	Username string
+	SessionID int64
+	ID        int64
+	Username  string
 }
 
 type CreateSessionParams struct {
-	UserID     int64
-	TokenHash  string
-	CreatedAt  string
-	ExpiresAt  string
+	UserID    int64
+	TokenHash string
+	CreatedAt string
+	ExpiresAt string
 }
 
 type UpdatePasswordHashParams struct {
@@ -94,13 +95,13 @@ func (r *AuthRepository) CreateSession(ctx context.Context, params CreateSession
 func (r *AuthRepository) ReadSessionUser(ctx context.Context, tokenHash string, now string) (AuthenticatedUserRecord, error) {
 	var record AuthenticatedUserRecord
 	if err := r.database.QueryRowContext(ctx, `
-		SELECT users.id, users.username
+		SELECT auth_sessions.id, users.id, users.username
 		FROM auth_sessions
 		JOIN users ON users.id = auth_sessions.user_id
 		WHERE auth_sessions.token_hash = ?
 		  AND auth_sessions.revoked_at IS NULL
 		  AND auth_sessions.expires_at > ?
-	`, tokenHash, now).Scan(&record.ID, &record.Username); err != nil {
+	`, tokenHash, now).Scan(&record.SessionID, &record.ID, &record.Username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return AuthenticatedUserRecord{}, ErrNotFound
 		}

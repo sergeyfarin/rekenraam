@@ -161,7 +161,10 @@ Early rules:
 - Once a transaction is reconciled or belongs to a closed period, prefer corrective transactions over in-place mutation.
 - Preserve import source metadata for imported transactions.
 - Track `created_at` and `updated_at` on mutable records.
-- Plan for actor, request, and reason fields before multi-user or public deployment features are added.
+- Use a hybrid audit model. Append-only domain version, lifecycle, correction, import, and reconciliation tables explain the financial or reference-data state change. The `audit_events` table explains the initiating operation: actor, timestamp, request id, optional session id, origin type, operation code, reason, and structured metadata.
+- Create audit events in the same database transaction as the domain rows they explain. One event may be referenced by many rows when the user/system action is a multi-row workflow, such as setup, import commit, system account seeding, transaction correction, or reconciliation.
+- Keep row-local attribution such as `created_at`, `created_by_user_id`, `recorded_at`, `changed_by_user_id`, and `change_reason` where it makes history/export queries clear. Do not replace domain history with generic JSON before/after audit blobs.
+- Plan for actor, request, session, origin, and reason fields before multi-user or public deployment features are added.
 
 The first implementation can be modest, but table names and APIs should not assume destructive rewriting is the normal long-term behavior.
 

@@ -30,9 +30,11 @@ type BookService struct {
 }
 
 type CreateBookInput struct {
-	OwnerUserID int64
-	Code        string
-	Name        string
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	Code          string
+	Name          string
 }
 
 type Book struct {
@@ -93,10 +95,12 @@ func (s *BookService) CreateBook(ctx context.Context, input CreateBookInput) (Cr
 
 	now := s.now().UTC().Format(time.RFC3339)
 	record, err := s.repository.CompleteBookSetup(ctx, db.CompleteBookSetupParams{
-		OwnerUserID: input.OwnerUserID,
-		Code:        code,
-		Name:        name,
-		CreatedAt:   now,
+		OwnerUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		Code:          code,
+		Name:          name,
+		CreatedAt:     now,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrBookExists) {

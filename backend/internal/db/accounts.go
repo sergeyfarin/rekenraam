@@ -73,6 +73,8 @@ type ListAccountsParams struct {
 type CreateAccountParams struct {
 	BookID          int64
 	CreatedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
 	IsSystem        bool
 	SystemRole      string
 	Spec            AccountSpec
@@ -85,6 +87,9 @@ type UpdateAccountParams struct {
 	BookID          int64
 	AccountID       int64
 	ChangedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
+	Operation       string
 	Spec            AccountSpec
 	Status          string
 	ChangeReason    string
@@ -101,6 +106,8 @@ type SystemAccountSpec struct {
 type EnsureSystemAccountsParams struct {
 	BookID          int64
 	ChangedByUserID int64
+	AuthSessionID   int64
+	RequestID       string
 	Specs           []SystemAccountSpec
 	CreatedAt       string
 	EffectiveFrom   string
@@ -218,10 +225,24 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 		return AccountRecord{}, err
 	}
 
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.CreatedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "account.create",
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return AccountRecord{}, err
+	}
+
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO accounts (book_id, is_system, system_role, created_at, created_by_user_id, created_request_id)
-		VALUES (?, ?, NULLIF(?, ''), ?, ?, NULL)
-	`, params.BookID, boolToInt(params.IsSystem), params.SystemRole, params.CreatedAt, params.CreatedByUserID)
+		INSERT INTO accounts (book_id, is_system, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, ?, NULLIF(?, ''), ?, ?, NULLIF(?, ''), ?)
+	`, params.BookID, boolToInt(params.IsSystem), params.SystemRole, params.CreatedAt, params.CreatedByUserID, params.RequestID, auditEventID)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert account: %w", err)
 	}
@@ -232,17 +253,18 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 	}
 
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
-		BookID:          params.BookID,
-		AccountID:       accountID,
-		CreatedAt:       params.CreatedAt,
-		CreatedByUserID: params.CreatedByUserID,
-		VersionSeq:      1,
-		EffectiveFrom:   params.EffectiveFrom,
-		RecordedAt:      params.CreatedAt,
-		ChangedByUserID: params.CreatedByUserID,
-		ChangeReason:    params.ChangeReason,
-		Status:          "active",
-		Spec:            params.Spec,
+		BookID:             params.BookID,
+		AccountID:          accountID,
+		CreatedAt:          params.CreatedAt,
+		CreatedByUserID:    params.CreatedByUserID,
+		VersionSeq:         1,
+		EffectiveFrom:      params.EffectiveFrom,
+		RecordedAt:         params.CreatedAt,
+		ChangedByUserID:    params.CreatedByUserID,
+		ChangeReason:       params.ChangeReason,
+		ChangeAuditEventID: auditEventID,
+		Status:             "active",
+		Spec:               params.Spec,
 	})
 	if err != nil {
 		return AccountRecord{}, err
@@ -283,19 +305,38 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 	if changeReason == "" {
 		changeReason = "updated account"
 	}
+	operation := strings.TrimSpace(params.Operation)
+	if operation == "" {
+		operation = "account.update"
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ChangedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.RecordedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "browser_api",
+		Operation:     operation,
+		Reason:        changeReason,
+	})
+	if err != nil {
+		return AccountRecord{}, err
+	}
 
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
-		BookID:          params.BookID,
-		AccountID:       params.AccountID,
-		CreatedAt:       current.CreatedAt,
-		CreatedByUserID: current.CreatedByUserID,
-		VersionSeq:      current.VersionSeq + 1,
-		EffectiveFrom:   params.EffectiveFrom,
-		RecordedAt:      params.RecordedAt,
-		ChangedByUserID: params.ChangedByUserID,
-		ChangeReason:    changeReason,
-		Status:          status,
-		Spec:            params.Spec,
+		BookID:             params.BookID,
+		AccountID:          params.AccountID,
+		CreatedAt:          current.CreatedAt,
+		CreatedByUserID:    current.CreatedByUserID,
+		VersionSeq:         current.VersionSeq + 1,
+		EffectiveFrom:      params.EffectiveFrom,
+		RecordedAt:         params.RecordedAt,
+		ChangedByUserID:    params.ChangedByUserID,
+		ChangeReason:       changeReason,
+		ChangeAuditEventID: auditEventID,
+		Status:             status,
+		Spec:               params.Spec,
 	})
 	if err != nil {
 		return AccountRecord{}, err
@@ -341,9 +382,23 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 		return EnsureSystemAccountsRecord{}, err
 	}
 
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ChangedByUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "setup",
+		Operation:     "system_accounts.setup",
+		Reason:        "seeded system accounts",
+	})
+	if err != nil {
+		return EnsureSystemAccountsRecord{}, err
+	}
+
 	records := make([]AccountRecord, 0, len(params.Specs))
 	for _, spec := range params.Specs {
-		record, err := r.ensureSystemAccount(ctx, tx, params, spec)
+		record, err := r.ensureSystemAccount(ctx, tx, params, spec, auditEventID)
 		if err != nil {
 			return EnsureSystemAccountsRecord{}, err
 		}
@@ -450,7 +505,7 @@ func (r *AccountRepository) CurrentCommodityByID(ctx context.Context, bookID int
 	return record, nil
 }
 
-func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx, params EnsureSystemAccountsParams, systemSpec SystemAccountSpec) (AccountRecord, error) {
+func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx, params EnsureSystemAccountsParams, systemSpec SystemAccountSpec, auditEventID int64) (AccountRecord, error) {
 	record, err := currentSystemAccountByRole(ctx, tx, params.BookID, systemSpec.Role)
 	if err == nil {
 		return record, nil
@@ -460,9 +515,9 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 	}
 
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO accounts (book_id, is_system, system_role, created_at, created_by_user_id, created_request_id)
-		VALUES (?, 1, ?, ?, ?, NULL)
-	`, params.BookID, systemSpec.Role, params.CreatedAt, params.ChangedByUserID)
+		INSERT INTO accounts (book_id, is_system, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, 1, ?, ?, ?, NULLIF(?, ''), ?)
+	`, params.BookID, systemSpec.Role, params.CreatedAt, params.ChangedByUserID, params.RequestID, auditEventID)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert system account: %w", err)
 	}
@@ -473,16 +528,17 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 	}
 
 	return insertAccountVersion(ctx, tx, insertAccountVersionParams{
-		BookID:          params.BookID,
-		AccountID:       accountID,
-		CreatedAt:       params.CreatedAt,
-		CreatedByUserID: params.ChangedByUserID,
-		VersionSeq:      1,
-		EffectiveFrom:   params.EffectiveFrom,
-		RecordedAt:      params.CreatedAt,
-		ChangedByUserID: params.ChangedByUserID,
-		ChangeReason:    "seeded system account",
-		Status:          "active",
+		BookID:             params.BookID,
+		AccountID:          accountID,
+		CreatedAt:          params.CreatedAt,
+		CreatedByUserID:    params.ChangedByUserID,
+		VersionSeq:         1,
+		EffectiveFrom:      params.EffectiveFrom,
+		RecordedAt:         params.CreatedAt,
+		ChangedByUserID:    params.ChangedByUserID,
+		ChangeReason:       "seeded system account",
+		ChangeAuditEventID: auditEventID,
+		Status:             "active",
 		Spec: AccountSpec{
 			Code: systemSpec.Role,
 			// System account display names are derived from system_role at the
@@ -496,17 +552,18 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 }
 
 type insertAccountVersionParams struct {
-	BookID          int64
-	AccountID       int64
-	CreatedAt       string
-	CreatedByUserID int64
-	VersionSeq      int64
-	EffectiveFrom   string
-	RecordedAt      string
-	ChangedByUserID int64
-	ChangeReason    string
-	Status          string
-	Spec            AccountSpec
+	BookID             int64
+	AccountID          int64
+	CreatedAt          string
+	CreatedByUserID    int64
+	VersionSeq         int64
+	EffectiveFrom      string
+	RecordedAt         string
+	ChangedByUserID    int64
+	ChangeReason       string
+	ChangeAuditEventID int64
+	Status             string
+	Spec               AccountSpec
 }
 
 func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountVersionParams) (AccountRecord, error) {
@@ -532,10 +589,11 @@ func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountV
 			number_last4,
 			external_ref_hint,
 			comment_markdown,
-			metadata_json
+			metadata_json,
+			change_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)
-	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON)
+		VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
+	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert account version: %w", err)
 	}

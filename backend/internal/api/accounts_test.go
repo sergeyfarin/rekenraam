@@ -29,7 +29,7 @@ func TestListAccountsRequiresAuthentication(t *testing.T) {
 func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := newSetupTestHandler(t)
+	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
 	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Example Bank",
@@ -65,6 +65,36 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	assert.Equal(t, `{"statement_day":15}`, string(account.Metadata))
 	assert.Equal(t, "2020-01-15", account.EffectiveFrom)
 	assert.Equal(t, "Imported from legacy account list", account.ChangeReason)
+
+	var (
+		operation        string
+		originType       string
+		actorUserID      int64
+		hasAuthSessionID int
+		hasRequestID     int
+		reason           string
+	)
+	err := database.QueryRowContext(context.Background(), `
+		SELECT
+			ae.operation,
+			ae.origin_type,
+			ae.actor_user_id,
+			ae.auth_session_id IS NOT NULL,
+			ae.request_id IS NOT NULL,
+			ae.reason
+		FROM accounts a
+		JOIN account_versions av ON av.account_id = a.id
+		JOIN audit_events ae ON ae.id = av.change_audit_event_id
+		WHERE a.id = ?
+		  AND a.created_audit_event_id = av.change_audit_event_id
+	`, account.ID).Scan(&operation, &originType, &actorUserID, &hasAuthSessionID, &hasRequestID, &reason)
+	require.NoError(t, err)
+	assert.Equal(t, "account.create", operation)
+	assert.Equal(t, "browser_api", originType)
+	assert.Equal(t, int64(1), actorUserID)
+	assert.Equal(t, 1, hasAuthSessionID)
+	assert.Equal(t, 1, hasRequestID)
+	assert.Equal(t, "Imported from legacy account list", reason)
 }
 
 func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing.T) {

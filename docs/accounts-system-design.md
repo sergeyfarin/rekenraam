@@ -98,6 +98,7 @@ free-text currency field.
 - `created_at`
 - `created_by_user_id`
 - `created_request_id`
+- `created_audit_event_id`
 
 For currencies, `is_builtin` means the identity was created from the embedded
 currency catalog rather than as a free-form custom commodity. It does not mean
@@ -112,6 +113,7 @@ the row was preloaded before user setup.
 - `recorded_at`
 - `changed_by_user_id`
 - `change_reason`
+- `change_audit_event_id`
 - `status`: `active`, `archived`
 - `symbol`
 - `display_symbol`
@@ -148,6 +150,7 @@ Use a stable identity table plus append-only versions.
 - `created_at`
 - `created_by_user_id`
 - `created_request_id`
+- `created_audit_event_id`
 
 `institution_versions` is the append-only state row:
 
@@ -158,6 +161,7 @@ Use a stable identity table plus append-only versions.
 - `recorded_at`
 - `changed_by_user_id`
 - `change_reason`
+- `change_audit_event_id`
 - `status`: `active`, `archived`
 - `name`
 - `kind`
@@ -209,6 +213,7 @@ into columns. Use a child table when this becomes UI scope:
 - `created_at`
 - `created_by_user_id`
 - `created_request_id`
+- `created_audit_event_id`
 
 `is_system` and `system_role` belong to the account identity, not to account
 versions. A system account cannot stop being a system account through a later
@@ -225,6 +230,7 @@ Treat `is_system` and `system_role` as immutable after insert.
 - `recorded_at`
 - `changed_by_user_id`
 - `change_reason`
+- `change_audit_event_id`
 - `status`: `active`, `closed`, `archived`
 - `code`
 - `name`: required for user accounts, nullable for system accounts
@@ -265,6 +271,36 @@ explicitly not part of financial attribute history.
 
 Do not physically store `valid_to` in either version table. Because rows are
 append-only, `valid_to` should be derived for the canonical timeline.
+
+## Audit Events
+
+Use `audit_events` for cross-table operation provenance. The version tables
+remain the source of truth for account, institution, and commodity state
+history; audit events explain who initiated the operation, when it happened,
+which request/session carried it, how it originated, and why.
+
+The initial event fields are:
+
+- `id`
+- `book_id`
+- `actor_user_id`
+- `auth_session_id`
+- `occurred_at`
+- `request_id`
+- `origin_type`: `browser_api`, `setup`, `cli_recovery`, `import`,
+  `system_seed`, `scheduled`, or `internal`
+- `operation`: stable codes such as `account.create`,
+  `institution.archive`, `currencies.setup`, or future
+  `transaction.correct`
+- `reason`
+- `metadata_json`
+
+Create one audit event per user/system operation inside the same database
+transaction as the domain changes. For grouped workflows, many rows may point at
+the same event: currency setup can create multiple commodity rows and update the
+book default currency; system-account setup can create several account
+identities and versions; future import commit can create transactions,
+postings, source metadata, and duplicate-detection records under one event.
 
 Version ordering rules:
 

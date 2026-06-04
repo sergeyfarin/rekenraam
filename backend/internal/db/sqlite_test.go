@@ -48,7 +48,11 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
 	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
 	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
+	assert.Contains(t, readTableColumns(t, database, "audit_events"), "operation")
+	assert.Contains(t, readTableColumns(t, database, "audit_events"), "auth_session_id")
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_by_user_id")
+	assert.Contains(t, readTableColumns(t, database, "books"), "updated_audit_event_id")
+	assert.Contains(t, readTableColumns(t, database, "account_versions"), "change_audit_event_id")
 }
 
 func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {

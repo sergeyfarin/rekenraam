@@ -66,6 +66,7 @@ type parsedPasswordHash struct {
 
 type SessionStatus struct {
 	Authenticated bool
+	SessionID     int64
 	User          *Owner
 }
 
@@ -104,6 +105,7 @@ func (s *AuthService) Session(ctx context.Context, token string) (SessionStatus,
 
 	return SessionStatus{
 		Authenticated: true,
+		SessionID:     userRecord.SessionID,
 		User: &Owner{
 			ID:       userRecord.ID,
 			Username: userRecord.Username,

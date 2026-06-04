@@ -67,6 +67,8 @@ type ListInstitutionsInput struct {
 
 type CreateInstitutionInput struct {
 	OwnerUserID     int64
+	AuthSessionID   int64
+	RequestID       string
 	Name            string
 	Kind            string
 	CountryCode     string
@@ -83,6 +85,8 @@ type CreateInstitutionInput struct {
 
 type UpdateInstitutionInput struct {
 	OwnerUserID     int64
+	AuthSessionID   int64
+	RequestID       string
 	InstitutionID   int64
 	Name            string
 	Kind            string
@@ -100,6 +104,8 @@ type UpdateInstitutionInput struct {
 
 type InstitutionLifecycleInput struct {
 	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
 	InstitutionID int64
 	EffectiveFrom string
 	ChangeReason  string
@@ -202,6 +208,8 @@ func (s *InstitutionService) CreateInstitution(ctx context.Context, input Create
 	record, err := s.repository.CreateInstitution(ctx, db.CreateInstitutionParams{
 		BookID:          BookID,
 		CreatedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		CreatedAt:       now.Format(time.RFC3339),
@@ -254,6 +262,9 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 		BookID:          BookID,
 		InstitutionID:   input.InstitutionID,
 		ChangedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		Operation:       "institution.update",
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
@@ -270,14 +281,14 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 }
 
 func (s *InstitutionService) ArchiveInstitution(ctx context.Context, input InstitutionLifecycleInput) (Institution, error) {
-	return s.changeInstitutionStatus(ctx, input, "archived", "archived institution")
+	return s.changeInstitutionStatus(ctx, input, "archived", "archived institution", "institution.archive")
 }
 
 func (s *InstitutionService) RestoreInstitution(ctx context.Context, input InstitutionLifecycleInput) (Institution, error) {
-	return s.changeInstitutionStatus(ctx, input, "active", "restored institution")
+	return s.changeInstitutionStatus(ctx, input, "active", "restored institution", "institution.restore")
 }
 
-func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input InstitutionLifecycleInput, status string, reason string) (Institution, error) {
+func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input InstitutionLifecycleInput, status string, reason string, operation string) (Institution, error) {
 	if input.OwnerUserID <= 0 {
 		return Institution{}, ValidationError{Message: "owner user is required"}
 	}
@@ -303,6 +314,9 @@ func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input 
 		BookID:          BookID,
 		InstitutionID:   input.InstitutionID,
 		ChangedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		Operation:       operation,
 		Spec:            institutionSpecFromStored(current),
 		Status:          status,
 		ChangeReason:    changeReason,
