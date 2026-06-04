@@ -28,7 +28,7 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
         with:
-          version: "11.5.0"
+          version: "11.5.1"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run frontend check
@@ -48,7 +48,7 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
         with:
-          version: "11.5.0"
+          version: "11.5.1"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build single binary
