@@ -3,7 +3,11 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { createQuery } from '@tanstack/svelte-query';
+  import { LayoutDashboard, LogOut, RefreshCw, WalletCards } from '@lucide/svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
+  import PageHeader from '$lib/components/page-header.svelte';
+  import Panel from '$lib/components/panel.svelte';
+  import StatusBadge from '$lib/components/status-badge.svelte';
   import { authSessionQueryOptions, logout } from '$lib/api/auth';
   import { setupStatusQueryOptions } from '$lib/api/setup';
   import { APIClientError } from '$lib/api/client';
@@ -110,99 +114,115 @@
 </script>
 
 {#if shellState === 'loading'}
-  <main class="min-h-screen px-6 py-16 sm:px-10">
-    <section class="mx-auto max-w-3xl rounded-[2rem] border border-border/80 bg-surface/95 p-8 shadow-[var(--shadow-panel)] backdrop-blur">
-      <span class="inline-flex rounded-full bg-surface-strong px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-        {m.app_shell_badge()}
-      </span>
-      <h1 class="mt-4 text-3xl font-semibold tracking-tight text-balance">{m.app_shell_loading_title()}</h1>
+  <main class="min-h-screen px-4 py-14 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl">
+      <StatusBadge>{m.app_shell_badge()}</StatusBadge>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight text-balance">{m.app_shell_loading_title()}</h1>
       <p class="mt-3 text-sm leading-6 text-muted">{m.app_shell_loading_copy()}</p>
-    </section>
+    </div>
   </main>
 {:else if shellState === 'error'}
-  <main class="min-h-screen px-6 py-16 sm:px-10">
-    <section class="mx-auto max-w-3xl rounded-[2rem] border border-border/80 bg-surface/95 p-8 shadow-[var(--shadow-panel)] backdrop-blur">
-      <span class="inline-flex rounded-full bg-danger-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-danger">
-        {m.app_shell_badge()}
-      </span>
-      <h1 class="mt-4 text-3xl font-semibold tracking-tight text-balance">{m.app_shell_error_title()}</h1>
-      <p class="mt-3 text-sm leading-6 text-muted">{m.app_shell_error_copy()}</p>
+  <main class="min-h-screen px-4 py-14 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl">
+      <Panel>
+        <StatusBadge tone="danger">{m.app_shell_badge()}</StatusBadge>
+        <h1 class="mt-4 text-2xl font-semibold tracking-tight text-balance">{m.app_shell_error_title()}</h1>
+        <p class="mt-3 text-sm leading-6 text-muted">{m.app_shell_error_copy()}</p>
 
-      <div class="mt-6 space-y-4">
-        <APIFormError error={shellError} id="app-shell-error" />
-        <button
-          type="button"
-          class="inline-flex items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90"
-          onclick={refreshShell}
-        >
-          {m.app_shell_retry()}
-        </button>
-      </div>
-    </section>
+        <div class="mt-6 space-y-4">
+          <APIFormError error={shellError} id="app-shell-error" />
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+            onclick={refreshShell}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            {m.app_shell_retry()}
+          </button>
+        </div>
+      </Panel>
+    </div>
   </main>
 {:else if !shouldRedirectHome}
-  <main class="min-h-screen px-6 py-10 sm:px-10 sm:py-12">
-    <div class="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[17rem_1fr]">
-      <aside class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur">
+  <main class="min-h-screen lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+    <aside class="border-b border-border bg-sidebar px-4 py-4 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
+      <div class="flex items-center justify-between gap-3 lg:block">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{m.app_shell_badge()}</p>
-          <h1 class="mt-3 text-3xl font-semibold tracking-tight text-balance">{m.app_name()}</h1>
+          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{m.app_shell_badge()}</p>
+          <h1 class="mt-1 text-xl font-semibold tracking-tight text-balance">{m.app_name()}</h1>
         </div>
 
-        <nav class="mt-8 space-y-3" aria-label={m.app_shell_nav_title()}>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_nav_title()}</p>
-          <a
-            href="/app"
-            aria-current={isOverviewRoute ? 'page' : undefined}
-            class="flex items-center rounded-2xl border border-border bg-surface-strong/70 px-4 py-3 text-sm font-semibold text-foreground"
-          >
-            {m.app_shell_nav_overview()}
-          </a>
-          <a
-            href="/app/accounts"
-            aria-current={isAccountsRoute ? 'page' : undefined}
-            class="flex items-center rounded-2xl border border-border bg-surface-strong/70 px-4 py-3 text-sm font-semibold text-foreground"
-          >
-            {m.app_shell_nav_accounts()}
-          </a>
-        </nav>
+        <StatusBadge tone={setupQuery.data?.install_state === 'configured' ? 'positive' : 'warning'}>
+          {installStateLabel}
+        </StatusBadge>
+      </div>
 
-        <div class="mt-8 rounded-[1.75rem] border border-border bg-surface-strong/60 p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{m.app_shell_status_title()}</p>
-          <p class="mt-3 text-sm leading-6 text-foreground">
+      <nav
+        class="mt-5 flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0"
+        aria-label={m.app_shell_nav_title()}
+      >
+        <a
+          href="/app"
+          aria-current={isOverviewRoute ? 'page' : undefined}
+          class:bg-selected={isOverviewRoute}
+          class:text-selected-foreground={isOverviewRoute}
+          class:bg-transparent={!isOverviewRoute}
+          class:text-foreground={!isOverviewRoute}
+          class="flex min-w-fit items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <LayoutDashboard size={16} aria-hidden="true" />
+          {m.app_shell_nav_overview()}
+        </a>
+        <a
+          href="/app/accounts"
+          aria-current={isAccountsRoute ? 'page' : undefined}
+          class:bg-selected={isAccountsRoute}
+          class:text-selected-foreground={isAccountsRoute}
+          class:bg-transparent={!isAccountsRoute}
+          class:text-foreground={!isAccountsRoute}
+          class="flex min-w-fit items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <WalletCards size={16} aria-hidden="true" />
+          {m.app_shell_nav_accounts()}
+        </a>
+      </nav>
+
+      <div class="mt-5 hidden rounded-[var(--radius-panel)] border border-border bg-surface/70 p-3 lg:block">
+        <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{m.app_shell_status_title()}</p>
+        <div class="mt-3 space-y-2 text-sm leading-5">
+          <p class="text-foreground">
             {m.app_shell_status_install_state({ state: installStateLabel })}
           </p>
-          <p class="mt-2 text-sm leading-6 text-muted">
+          <p class="text-muted">
             {m.app_shell_status_session({ username: sessionQuery.data?.user?.username ?? '' })}
           </p>
 
           {#if nextStepLabel}
-            <p class="mt-2 text-sm leading-6 text-muted">{nextStepLabel}</p>
+            <p class="text-muted">{nextStepLabel}</p>
           {/if}
         </div>
+      </div>
 
-        <div class="mt-8 space-y-4">
-          <APIFormError error={logoutError} id="app-shell-logout-error" />
-          <button
-            type="button"
-            class="inline-flex w-full items-center justify-center rounded-full border border-border bg-surface px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-60"
-            onclick={handleLogout}
-            disabled={logoutPending}
-          >
-            {logoutPending ? m.app_shell_logout_pending() : m.app_shell_logout()}
-          </button>
-        </div>
-      </aside>
+      <div class="mt-5 space-y-3">
+        <APIFormError error={logoutError} id="app-shell-logout-error" />
+        <button
+          type="button"
+          class="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
+          onclick={handleLogout}
+          disabled={logoutPending}
+        >
+          <LogOut size={16} aria-hidden="true" />
+          {logoutPending ? m.app_shell_logout_pending() : m.app_shell_logout()}
+        </button>
+      </div>
+    </aside>
 
-      <section class="space-y-6">
-        <header class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{m.app_shell_header_eyebrow()}</p>
-          <h2 class="mt-3 text-4xl font-semibold tracking-tight text-balance">{headerTitle}</h2>
-          <p class="mt-3 max-w-3xl text-sm leading-6 text-muted">{headerCopy}</p>
-        </header>
+    <section class="min-w-0">
+      <PageHeader eyebrow={m.app_shell_header_eyebrow()} title={headerTitle} copy={headerCopy} />
 
+      <div class="px-4 py-4 sm:px-6 lg:px-8">
         {@render children()}
-      </section>
-    </div>
+      </div>
+    </section>
   </main>
 {/if}

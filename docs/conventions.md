@@ -102,6 +102,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Use **Dinero.js v2** for all frontend money arithmetic and display (balance checks before submission, running totals, input parsing). Use `Intl.NumberFormat` via Dinero's formatting layer for locale-aware rendering.
 - Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
 - Use Tailwind for implementation ergonomics, layout composition, and utility authoring, but keep semantic design tokens in CSS custom properties as the source of truth for theme roles. Tailwind utilities do not replace the token system or the app's product-specific visual language.
+- Build app screens from shared shell and surface primitives (`PageHeader`, `Panel`, `StatePanel`, status badges, toolbar/list-row patterns) before adding route-local visual styling. Route files may compose layout, but token roles and reusable financial-app chrome should stay centralized.
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.
 - Themes start with light and dark only.
 - Theme names and token roles must stay stable even if visual styling evolves.

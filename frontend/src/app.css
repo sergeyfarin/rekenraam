@@ -6,17 +6,30 @@
   --font-sans: "Inter Variable", "Inter", "IBM Plex Sans", "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", "SF Mono", monospace;
 
-  --color-background: oklch(0.98 0.006 95);
-  --color-foreground: oklch(0.22 0.015 85);
-  --color-surface: oklch(0.995 0.004 95);
-  --color-surface-strong: oklch(0.94 0.01 90);
-  --color-border: oklch(0.88 0.008 90);
-  --color-muted: oklch(0.55 0.016 75);
-  --color-accent: oklch(0.56 0.12 160);
-  --color-accent-foreground: oklch(0.98 0.01 160);
+  --color-background: oklch(0.972 0.003 250);
+  --color-foreground: oklch(0.23 0.018 255);
+  --color-surface: oklch(0.995 0.002 250);
+  --color-surface-strong: oklch(0.944 0.006 250);
+  --color-sidebar: oklch(0.958 0.006 250);
+  --color-toolbar: oklch(0.985 0.003 250);
+  --color-control: oklch(0.993 0.002 250);
+  --color-control-hover: oklch(0.935 0.008 250);
+  --color-selected: oklch(0.61 0.16 245);
+  --color-selected-foreground: oklch(0.985 0.006 245);
+  --color-row-hover: oklch(0.965 0.006 250);
+  --color-border: oklch(0.86 0.012 250);
+  --color-muted: oklch(0.51 0.025 255);
+  --color-accent: oklch(0.58 0.13 178);
+  --color-accent-foreground: oklch(0.985 0.008 178);
+  --color-positive: oklch(0.52 0.12 155);
+  --color-positive-soft: oklch(0.925 0.035 155);
+  --color-warning: oklch(0.62 0.12 78);
+  --color-warning-soft: oklch(0.945 0.04 78);
   --color-danger: oklch(0.56 0.2 25);
   --color-danger-soft: oklch(0.93 0.03 25);
-  --shadow-panel: 0 24px 60px -28px rgb(35 31 24 / 0.24);
+  --radius-panel: 12px;
+  --radius-control: 8px;
+  --shadow-panel: 0 10px 28px -22px rgb(18 28 44 / 0.42);
 }
 
 :root[data-theme='light'] {
@@ -26,34 +39,56 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --color-background: oklch(0.2 0.012 85);
-  --color-foreground: oklch(0.93 0.01 95);
-  --color-surface: oklch(0.26 0.012 85);
-  --color-surface-strong: oklch(0.32 0.014 85);
-  --color-border: oklch(0.38 0.012 85);
-  --color-muted: oklch(0.76 0.015 85);
-  --color-accent: oklch(0.7 0.12 160);
-  --color-accent-foreground: oklch(0.19 0.01 160);
+  --color-background: oklch(0.18 0.014 255);
+  --color-foreground: oklch(0.93 0.012 250);
+  --color-surface: oklch(0.245 0.016 255);
+  --color-surface-strong: oklch(0.31 0.018 255);
+  --color-sidebar: oklch(0.21 0.016 255);
+  --color-toolbar: oklch(0.255 0.016 255);
+  --color-control: oklch(0.28 0.018 255);
+  --color-control-hover: oklch(0.35 0.02 255);
+  --color-selected: oklch(0.62 0.15 245);
+  --color-selected-foreground: oklch(0.98 0.008 245);
+  --color-row-hover: oklch(0.295 0.018 255);
+  --color-border: oklch(0.39 0.018 255);
+  --color-muted: oklch(0.73 0.018 255);
+  --color-accent: oklch(0.69 0.12 178);
+  --color-accent-foreground: oklch(0.17 0.01 178);
+  --color-positive: oklch(0.7 0.12 155);
+  --color-positive-soft: oklch(0.3 0.06 155);
+  --color-warning: oklch(0.78 0.12 78);
+  --color-warning-soft: oklch(0.34 0.055 78);
   --color-danger: oklch(0.68 0.18 25);
   --color-danger-soft: oklch(0.3 0.06 25);
-  --shadow-panel: 0 30px 80px -32px rgb(0 0 0 / 0.55);
+  --shadow-panel: 0 16px 36px -26px rgb(0 0 0 / 0.78);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --color-background: oklch(0.2 0.012 85);
-    --color-foreground: oklch(0.93 0.01 95);
-    --color-surface: oklch(0.26 0.012 85);
-    --color-surface-strong: oklch(0.32 0.014 85);
-    --color-border: oklch(0.38 0.012 85);
-    --color-muted: oklch(0.76 0.015 85);
-    --color-accent: oklch(0.7 0.12 160);
-    --color-accent-foreground: oklch(0.19 0.01 160);
+    --color-background: oklch(0.18 0.014 255);
+    --color-foreground: oklch(0.93 0.012 250);
+    --color-surface: oklch(0.245 0.016 255);
+    --color-surface-strong: oklch(0.31 0.018 255);
+    --color-sidebar: oklch(0.21 0.016 255);
+    --color-toolbar: oklch(0.255 0.016 255);
+    --color-control: oklch(0.28 0.018 255);
+    --color-control-hover: oklch(0.35 0.02 255);
+    --color-selected: oklch(0.62 0.15 245);
+    --color-selected-foreground: oklch(0.98 0.008 245);
+    --color-row-hover: oklch(0.295 0.018 255);
+    --color-border: oklch(0.39 0.018 255);
+    --color-muted: oklch(0.73 0.018 255);
+    --color-accent: oklch(0.69 0.12 178);
+    --color-accent-foreground: oklch(0.17 0.01 178);
+    --color-positive: oklch(0.7 0.12 155);
+    --color-positive-soft: oklch(0.3 0.06 155);
+    --color-warning: oklch(0.78 0.12 78);
+    --color-warning-soft: oklch(0.34 0.055 78);
     --color-danger: oklch(0.68 0.18 25);
     --color-danger-soft: oklch(0.3 0.06 25);
-    --shadow-panel: 0 30px 80px -32px rgb(0 0 0 / 0.55);
+    --shadow-panel: 0 16px 36px -26px rgb(0 0 0 / 0.78);
   }
 }
 
@@ -65,10 +100,21 @@
   --color-foreground: var(--color-foreground);
   --color-surface: var(--color-surface);
   --color-surface-strong: var(--color-surface-strong);
+  --color-sidebar: var(--color-sidebar);
+  --color-toolbar: var(--color-toolbar);
+  --color-control: var(--color-control);
+  --color-control-hover: var(--color-control-hover);
+  --color-selected: var(--color-selected);
+  --color-selected-foreground: var(--color-selected-foreground);
+  --color-row-hover: var(--color-row-hover);
   --color-border: var(--color-border);
   --color-muted: var(--color-muted);
   --color-accent: var(--color-accent);
   --color-accent-foreground: var(--color-accent-foreground);
+  --color-positive: var(--color-positive);
+  --color-positive-soft: var(--color-positive-soft);
+  --color-warning: var(--color-warning);
+  --color-warning-soft: var(--color-warning-soft);
   --color-danger: var(--color-danger);
   --color-danger-soft: var(--color-danger-soft);
 }
@@ -80,9 +126,7 @@
 
   body {
     @apply min-h-screen bg-background text-foreground font-sans;
-    background-image:
-      radial-gradient(circle at top, color-mix(in oklab, var(--color-accent) 14%, transparent) 0%, transparent 36%),
-      linear-gradient(180deg, color-mix(in oklab, var(--color-surface) 45%, transparent) 0%, transparent 100%);
+    background-image: linear-gradient(180deg, var(--color-background), color-mix(in oklab, var(--color-background) 92%, var(--color-surface-strong)));
   }
 
   #app-root {
@@ -106,5 +150,13 @@
 @layer components {
   .status-accent-soft {
     background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  }
+
+  .app-control {
+    @apply border border-border bg-control text-foreground shadow-sm transition;
+  }
+
+  .app-control:hover {
+    @apply bg-control-hover;
   }
 }

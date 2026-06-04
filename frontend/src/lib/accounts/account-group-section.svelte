@@ -2,6 +2,7 @@
   import type { AccountResponse } from '$lib/api/accounts';
   import type { CurrencyResponse } from '$lib/api/currencies';
   import type { InstitutionResponse } from '$lib/api/institutions';
+  import StatusBadge from '$lib/components/status-badge.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
     accountClassLabel,
@@ -22,17 +23,17 @@
   }>();
 </script>
 
-<section class="rounded-[2rem] border border-border/80 bg-surface/95 p-5 shadow-[var(--shadow-panel)] backdrop-blur sm:p-6">
-  <div class="flex items-center justify-between gap-4">
-    <h4 class="text-lg font-semibold tracking-tight text-foreground">{label}</h4>
-    <span class="rounded-full bg-surface-strong px-3 py-1 text-xs font-semibold text-muted">
+<section class="overflow-hidden rounded-[var(--radius-panel)] border border-border bg-surface shadow-[var(--shadow-panel)]">
+  <div class="flex items-center justify-between gap-4 border-b border-border bg-toolbar px-4 py-3">
+    <h2 class="truncate text-sm font-semibold tracking-tight text-foreground">{label}</h2>
+    <span class="rounded-[var(--radius-control)] bg-surface-strong px-2.5 py-1 text-xs font-semibold text-muted">
       {m.accounts_group_count({ count: accounts.length })}
     </span>
   </div>
 
-  <div class="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
+  <div class="divide-y divide-border">
     {#each accounts as account (account.id)}
-      <article class="grid gap-3 p-4 sm:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.8fr)_minmax(8rem,0.8fr)_auto] sm:items-center">
+      <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover sm:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.8fr)_minmax(8rem,0.8fr)_auto] sm:items-center">
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
           <p class="mt-1 text-xs text-muted">
@@ -58,15 +59,9 @@
         </div>
 
         <div class="flex items-center justify-start sm:justify-end">
-          <span
-            class:bg-danger-soft={account.status === 'closed'}
-            class:text-danger={account.status === 'closed'}
-            class:status-accent-soft={account.status === 'active'}
-            class:text-accent={account.status === 'active'}
-            class="rounded-full px-3 py-1 text-xs font-semibold"
-          >
+          <StatusBadge tone={account.status === 'closed' ? 'danger' : 'accent'}>
             {accountStatusLabel(account.status)}
-          </span>
+          </StatusBadge>
         </div>
       </article>
     {/each}

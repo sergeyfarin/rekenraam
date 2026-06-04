@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
+  import Panel from '$lib/components/panel.svelte';
+  import StatePanel from '$lib/components/state-panel.svelte';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { institutionsQueryOptions, type InstitutionResponse } from '$lib/api/institutions';
@@ -221,52 +223,34 @@
   }
 </script>
 
-<section class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
-  <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{m.accounts_eyebrow()}</p>
-      <h3 class="mt-3 text-3xl font-semibold tracking-tight text-balance">{m.accounts_title()}</h3>
-      <p class="mt-3 max-w-3xl text-sm leading-6 text-muted">{m.accounts_copy()}</p>
-    </div>
-
+<Panel variant="toolbar">
+  <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
     <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
+    <div class="min-w-0 flex-1">
+      <AccountFilterBar bind:query bind:statusFilter bind:classFilter bind:groupMode bind:sortMode />
+    </div>
   </div>
-
-  <AccountFilterBar bind:query bind:statusFilter bind:classFilter bind:groupMode bind:sortMode />
-</section>
+</Panel>
 
 {#if screenState === 'loading'}
-  <section class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
-    <p class="text-sm font-semibold text-foreground">{m.accounts_loading_title()}</p>
-    <p class="mt-2 text-sm leading-6 text-muted">{m.accounts_loading_copy()}</p>
-  </section>
+  <StatePanel title={m.accounts_loading_title()} copy={m.accounts_loading_copy()} />
 {:else if screenState === 'error'}
-  <section class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
-    <p class="text-sm font-semibold text-foreground">{m.accounts_error_title()}</p>
-    <p class="mt-2 text-sm leading-6 text-muted">{m.accounts_error_copy()}</p>
-    <div class="mt-5 space-y-4">
-      <APIFormError error={shellError} id="accounts-error" />
-      <button
-        type="button"
-        class="inline-flex items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90"
-        onclick={refreshAccounts}
-      >
-        {m.accounts_retry()}
-      </button>
-    </div>
-  </section>
+  <StatePanel title={m.accounts_error_title()} copy={m.accounts_error_copy()}>
+    <APIFormError error={shellError} id="accounts-error" />
+    <button
+      type="button"
+      class="inline-flex items-center rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+      onclick={refreshAccounts}
+    >
+      {m.accounts_retry()}
+    </button>
+  </StatePanel>
 {:else if screenState === 'empty'}
-  <section class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
-    <p class="text-sm font-semibold text-foreground">{m.accounts_empty_title()}</p>
-    <p class="mt-2 text-sm leading-6 text-muted">{m.accounts_empty_copy()}</p>
-  </section>
+  <StatePanel title={m.accounts_empty_title()} copy={m.accounts_empty_copy()} />
 {:else if visibleAccounts.length === 0}
-  <section class="rounded-[2rem] border border-border/80 bg-surface/95 p-6 shadow-[var(--shadow-panel)] backdrop-blur sm:p-8">
-    <p class="text-sm font-semibold text-foreground">{m.accounts_no_results_title()}</p>
-    <p class="mt-2 text-sm leading-6 text-muted">{m.accounts_no_results_copy()}</p>
-  </section>
+  <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
 {:else}
-  <div class="space-y-5">
+  <div class="mt-4 space-y-4">
     {#each groupedAccounts as group (group.key)}
       <AccountGroupSection
         label={group.label}
