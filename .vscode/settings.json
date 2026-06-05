@@ -7,5 +7,8 @@
     "sqlite3": true,
     "printf": true,
     "./scripts/build-single-binary.sh": true
-  }
+  },
+  "files.associations": {
+   "*.css": "tailwindcss"
+  },
 }
