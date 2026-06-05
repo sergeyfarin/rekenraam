@@ -95,7 +95,7 @@ Lock these now:
 - Go `1.26` as declared by `backend/go.mod`.
 - Go standard `net/http` routing until a concrete backend feature proves a framework is needed.
 - SvelteKit with static adapter output served by the Go binary.
-- `pnpm` `11.5.1` for JavaScript workspace tasks.
+- `pnpm` `11.5.2` for JavaScript workspace tasks.
 - Svelte checks for frontend validation and Go tests for backend validation.
 - Playwright only for critical user journeys, run manually for now.
 - `/api/v1` for real domain endpoints; removed scaffold endpoints must not be reintroduced as product API.
