@@ -17,7 +17,7 @@
     id={id}
     role="alert"
     aria-live="polite"
-    class="rounded-2xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger shadow-[var(--shadow-panel)]"
+    class="rounded-2xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger shadow-(--shadow-panel)"
   >
     <p class="font-semibold text-foreground">{m.form_error_title()}</p>
     <p class="mt-1 leading-6">{formError.message}</p>

@@ -37,7 +37,7 @@
   });
 </script>
 
-<section class={`rounded-[var(--radius-panel)] border border-border shadow-[var(--shadow-panel)] ${variantClass} ${paddingClass}`}>
+<section class={`rounded-(--radius-panel) border border-border shadow-(--shadow-panel) ${variantClass} ${paddingClass}`}>
   {#if children}
     {@render children()}
   {/if}
