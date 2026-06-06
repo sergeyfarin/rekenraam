@@ -133,7 +133,7 @@ func (r *InstitutionRepository) CurrentInstitutionByID(ctx context.Context, book
 }
 
 func (r *InstitutionRepository) ListInstitutionVersions(ctx context.Context, bookID int64, institutionID int64) ([]InstitutionRecord, error) {
-	rows, err := r.database.QueryContext(ctx, institutionSelect(`
+	rows, err := r.database.QueryContext(ctx, institutionSelect("institution_versions", `
 		WHERE i.book_id = ? AND i.id = ?
 		ORDER BY iv.version_seq DESC
 	`), bookID, institutionID)
@@ -375,16 +375,12 @@ func currentInstitutionByID(ctx context.Context, tx *sql.Tx, bookID int64, insti
 }
 
 func currentInstitutionSelect(whereClause string) string {
-	return institutionSelect(`
-		WHERE iv.version_seq = (
-			SELECT MAX(latest.version_seq)
-			FROM institution_versions latest
-			WHERE latest.institution_id = i.id
-		)
-	` + whereClause)
+	return institutionSelect("current_institution_versions", `
+		WHERE 1 = 1
+	`+whereClause)
 }
 
-func institutionSelect(whereClause string) string {
+func institutionSelect(versionSource string, whereClause string) string {
 	return `
 		SELECT
 			i.id,
@@ -409,7 +405,7 @@ func institutionSelect(whereClause string) string {
 			iv.comment_markdown,
 			iv.metadata_json
 		FROM institutions i
-		JOIN institution_versions iv ON iv.institution_id = i.id
+		JOIN ` + versionSource + ` iv ON iv.institution_id = i.id
 	` + whereClause
 }
 

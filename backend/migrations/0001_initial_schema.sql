@@ -127,6 +127,17 @@ CREATE TABLE IF NOT EXISTS commodity_versions (
 CREATE INDEX IF NOT EXISTS commodity_versions_commodity_seq_idx
   ON commodity_versions (commodity_id, version_seq DESC);
 
+CREATE VIEW IF NOT EXISTS current_commodity_versions AS
+SELECT cv.*
+FROM commodity_versions cv
+JOIN (
+  SELECT commodity_id, MAX(version_seq) AS version_seq
+  FROM commodity_versions
+  GROUP BY commodity_id
+) latest
+  ON latest.commodity_id = cv.commodity_id
+ AND latest.version_seq = cv.version_seq;
+
 CREATE TABLE IF NOT EXISTS institutions (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
@@ -164,6 +175,17 @@ CREATE TABLE IF NOT EXISTS institution_versions (
 
 CREATE INDEX IF NOT EXISTS institution_versions_institution_seq_idx
   ON institution_versions (institution_id, version_seq DESC);
+
+CREATE VIEW IF NOT EXISTS current_institution_versions AS
+SELECT iv.*
+FROM institution_versions iv
+JOIN (
+  SELECT institution_id, MAX(version_seq) AS version_seq
+  FROM institution_versions
+  GROUP BY institution_id
+) latest
+  ON latest.institution_id = iv.institution_id
+ AND latest.version_seq = iv.version_seq;
 
 CREATE TABLE IF NOT EXISTS account_kinds (
   code TEXT PRIMARY KEY,
@@ -276,6 +298,17 @@ CREATE INDEX IF NOT EXISTS account_versions_institution_idx
 CREATE INDEX IF NOT EXISTS account_versions_default_commodity_idx
   ON account_versions (default_commodity_id);
 
+CREATE VIEW IF NOT EXISTS current_account_versions AS
+SELECT av.*
+FROM account_versions av
+JOIN (
+  SELECT account_id, MAX(version_seq) AS version_seq
+  FROM account_versions
+  GROUP BY account_id
+) latest
+  ON latest.account_id = av.account_id
+ AND latest.version_seq = av.version_seq;
+
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS books_default_currency_must_exist_on_insert
 BEFORE INSERT ON books
@@ -379,6 +412,7 @@ DROP INDEX IF EXISTS account_versions_default_commodity_idx;
 DROP INDEX IF EXISTS account_versions_institution_idx;
 DROP INDEX IF EXISTS account_versions_parent_idx;
 DROP INDEX IF EXISTS account_versions_account_seq_idx;
+DROP VIEW IF EXISTS current_account_versions;
 DROP TABLE IF EXISTS account_versions;
 
 DROP INDEX IF EXISTS accounts_book_idx;
@@ -388,12 +422,14 @@ DROP TABLE IF EXISTS accounts;
 DROP TABLE IF EXISTS account_kinds;
 
 DROP INDEX IF EXISTS institution_versions_institution_seq_idx;
+DROP VIEW IF EXISTS current_institution_versions;
 DROP TABLE IF EXISTS institution_versions;
 
 DROP INDEX IF EXISTS institutions_book_idx;
 DROP TABLE IF EXISTS institutions;
 
 DROP INDEX IF EXISTS commodity_versions_commodity_seq_idx;
+DROP VIEW IF EXISTS current_commodity_versions;
 DROP TABLE IF EXISTS commodity_versions;
 
 DROP INDEX IF EXISTS commodities_book_kind_idx;

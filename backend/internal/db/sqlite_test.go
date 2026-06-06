@@ -77,6 +77,9 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	})
 	assert.Contains(t, readTableColumns(t, database, "accounts"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "account_versions"), "change_audit_event_id")
+	assert.True(t, sqliteObjectExists(t, database, "view", "current_account_versions"))
+	assert.True(t, sqliteObjectExists(t, database, "view", "current_institution_versions"))
+	assert.True(t, sqliteObjectExists(t, database, "view", "current_commodity_versions"))
 }
 
 func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
@@ -150,4 +153,19 @@ func readTableColumns(t *testing.T, database *sql.DB, tableName string) []string
 	require.NoError(t, rows.Err())
 
 	return columnNames
+}
+
+func sqliteObjectExists(t *testing.T, database *sql.DB, objectType string, objectName string) bool {
+	t.Helper()
+
+	var exists int
+	err := database.QueryRowContext(
+		context.Background(),
+		`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?)`,
+		objectType,
+		objectName,
+	).Scan(&exists)
+	require.NoError(t, err)
+
+	return exists == 1
 }

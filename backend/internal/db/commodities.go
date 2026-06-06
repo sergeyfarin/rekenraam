@@ -455,12 +455,8 @@ func currentCurrencySelect(whereClause string) string {
 			cv.max_quantity_scale,
 			cv.metadata_json
 		FROM commodities c
-		JOIN commodity_versions cv ON cv.commodity_id = c.id
-		WHERE cv.version_seq = (
-			SELECT MAX(latest.version_seq)
-			FROM commodity_versions latest
-			WHERE latest.commodity_id = c.id
-		)
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE 1 = 1
 	` + whereClause
 }
 

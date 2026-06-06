@@ -281,8 +281,18 @@ account class rank, parent, localized/user name, and id. If manual ordering is
 needed later, add a separate ordering table or identity-level preference that is
 explicitly not part of financial attribute history.
 
-Do not physically store `valid_to` in either version table. Because rows are
+Do not physically store `valid_to` in these version tables. Because rows are
 append-only, `valid_to` should be derived for the canonical timeline.
+
+Expose current state through SQLite views:
+
+- `current_account_versions`
+- `current_institution_versions`
+- `current_commodity_versions`
+
+Repository current-state helpers should query these views instead of repeating
+the `MAX(version_seq)` pattern. History and version-list endpoints should query
+the base version tables directly.
 
 ## Audit Events
 
@@ -348,7 +358,7 @@ is implemented. Corrections create a new version with a clear reason.
 
 ## Current-State Query Strategy
 
-The backend should expose repository helpers or SQL views for current state.
+The backend exposes SQL views plus repository helpers for current state.
 Handlers should not hand-roll "latest version" joins.
 
 Current account state for normal account management:

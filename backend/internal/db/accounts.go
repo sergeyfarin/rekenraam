@@ -207,7 +207,7 @@ func (r *AccountRepository) CurrentAccountByID(ctx context.Context, bookID int64
 }
 
 func (r *AccountRepository) ListAccountVersions(ctx context.Context, bookID int64, accountID int64) ([]AccountRecord, error) {
-	rows, err := r.database.QueryContext(ctx, accountSelect(`
+	rows, err := r.database.QueryContext(ctx, accountSelect("account_versions", `
 		WHERE a.book_id = ? AND a.id = ?
 		ORDER BY av.version_seq DESC
 	`), bookID, accountID)
@@ -452,25 +452,15 @@ func (r *AccountRepository) WouldCreateCycle(ctx context.Context, bookID int64, 
 		WITH RECURSIVE ancestors(id, parent_id) AS (
 			SELECT a.id, av.parent_account_id
 			FROM accounts a
-			JOIN account_versions av ON av.account_id = a.id
-			WHERE av.version_seq = (
-				SELECT MAX(latest.version_seq)
-				FROM account_versions latest
-				WHERE latest.account_id = a.id
-			)
-				AND a.book_id = ?
+			JOIN current_account_versions av ON av.account_id = a.id
+			WHERE a.book_id = ?
 				AND a.id = ?
 			UNION ALL
 			SELECT parent.id, parent_version.parent_account_id
 			FROM accounts parent
-			JOIN account_versions parent_version ON parent_version.account_id = parent.id
+			JOIN current_account_versions parent_version ON parent_version.account_id = parent.id
 			JOIN ancestors ON ancestors.parent_id = parent.id
-			WHERE parent_version.version_seq = (
-				SELECT MAX(latest.version_seq)
-				FROM account_versions latest
-				WHERE latest.account_id = parent.id
-			)
-				AND parent.book_id = ?
+			WHERE parent.book_id = ?
 		)
 		SELECT id
 		FROM ancestors
@@ -501,12 +491,8 @@ func (r *AccountRepository) CurrentCommodityByID(ctx context.Context, bookID int
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT c.id, c.book_id, c.kind, cv.status, cv.max_quantity_scale
 		FROM commodities c
-		JOIN commodity_versions cv ON cv.commodity_id = c.id
-		WHERE cv.version_seq = (
-			SELECT MAX(latest.version_seq)
-			FROM commodity_versions latest
-			WHERE latest.commodity_id = c.id
-		)
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE 1 = 1
 			AND c.book_id = ?
 			AND c.id = ?
 	`, bookID, commodityID).Scan(&record.ID, &record.BookID, &record.Kind, &record.Status, &record.MaxQuantityScale); err != nil {
@@ -686,16 +672,12 @@ func currentSystemAccountByRole(ctx context.Context, tx *sql.Tx, bookID int64, r
 }
 
 func currentAccountSelect(extraConditions string) string {
-	return accountSelect(`
-		WHERE av.version_seq = (
-			SELECT MAX(latest.version_seq)
-			FROM account_versions latest
-			WHERE latest.account_id = a.id
-		)
-	` + extraConditions)
+	return accountSelect("current_account_versions", `
+		WHERE 1 = 1
+	`+extraConditions)
 }
 
-func accountSelect(whereClause string) string {
+func accountSelect(versionSource string, whereClause string) string {
 	return `
 		SELECT
 			a.id,
@@ -725,7 +707,7 @@ func accountSelect(whereClause string) string {
 			av.comment_markdown,
 			av.metadata_json
 		FROM accounts a
-		JOIN account_versions av ON av.account_id = a.id
+		JOIN ` + versionSource + ` av ON av.account_id = a.id
 	` + whereClause
 }
 
