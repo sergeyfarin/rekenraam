@@ -303,6 +303,10 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 		}
 	}()
 
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return AccountRecord{}, err
+	}
+
 	current, err := currentCategoryByID(ctx, tx, params.BookID, params.CategoryID)
 	if err != nil {
 		return AccountRecord{}, err
@@ -369,6 +373,10 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 			_ = tx.Rollback()
 		}
 	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return AccountRecord{}, err
+	}
 
 	current, err := currentCategoryByID(ctx, tx, params.BookID, params.CategoryID)
 	if err != nil {
@@ -446,6 +454,10 @@ func (r *CategoryRepository) DeleteUnusedCategory(ctx context.Context, params De
 			_ = tx.Rollback()
 		}
 	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return err
+	}
 
 	current, err := currentCategoryByID(ctx, tx, params.BookID, params.CategoryID)
 	if err != nil {

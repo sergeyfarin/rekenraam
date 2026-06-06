@@ -222,6 +222,8 @@ func writeTagServiceError(w http.ResponseWriter, r *http.Request, logger *slog.L
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "tag not found")
 	case errors.Is(err, app.ErrTagExists):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "tag already exists")
+	case errors.Is(err, app.ErrTagArchived):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "archived tag cannot be updated")
 	default:
 		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
 		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")

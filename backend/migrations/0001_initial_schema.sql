@@ -95,7 +95,15 @@ CREATE TABLE IF NOT EXISTS tags (
   name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
   kind TEXT NOT NULL CHECK (kind IN ('project', 'person', 'flag', 'place', 'custom')),
   color TEXT CHECK (color IS NULL OR color GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'),
-  icon TEXT CHECK (icon IS NULL OR (length(trim(icon)) > 0 AND icon = trim(icon))),
+  icon TEXT CHECK (
+    icon IS NULL
+    OR (
+      length(icon) BETWEEN 1 AND 64
+      AND icon = trim(icon)
+      AND icon GLOB '[a-z]*'
+      AND icon NOT GLOB '*[^a-z0-9_-]*'
+    )
+  ),
   status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,

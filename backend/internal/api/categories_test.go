@@ -79,6 +79,10 @@ func TestCategoryCreateUpdateDisableRestoreAndDeleteUnused(t *testing.T) {
 	assert.True(t, child.AllowsPostings)
 	assert.False(t, child.IsBuiltin)
 
+	read := readCategoryForSession(t, handler, sessionCookie, child.ID, http.StatusOK)
+	assert.Equal(t, child.ID, read.ID)
+	assert.Equal(t, "Dairy", read.Name)
+
 	patchCategory(t, handler, sessionCookie, csrfToken, child.ID, `{"name":"Bread"}`, http.StatusOK)
 	createCategoryForSessionStatus(t, handler, sessionCookie, csrfToken, `{
 		"name":"Bread",

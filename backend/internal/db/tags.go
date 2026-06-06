@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-var ErrTagExists = errors.New("tag already exists")
+var (
+	ErrTagExists   = errors.New("tag already exists")
+	ErrTagArchived = errors.New("archived tag cannot be updated")
+)
 
 type TagRepository struct {
 	database *sql.DB
@@ -232,14 +235,19 @@ func (r *TagRepository) UpdateTag(ctx context.Context, params UpdateTagParams) (
 		}
 	}()
 
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TagRecord{}, err
+	}
+
 	current, err := tagByID(ctx, tx, params.BookID, params.TagID)
 	if err != nil {
 		return TagRecord{}, err
 	}
-	if current.Status == "active" {
-		if err := ensureActiveTagNameAvailable(ctx, tx, params.BookID, params.Spec.Kind, params.Spec.Name, params.TagID); err != nil {
-			return TagRecord{}, err
-		}
+	if current.Status == "archived" {
+		return TagRecord{}, ErrTagArchived
+	}
+	if err := ensureActiveTagNameAvailable(ctx, tx, params.BookID, params.Spec.Kind, params.Spec.Name, params.TagID); err != nil {
+		return TagRecord{}, err
 	}
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -296,6 +304,10 @@ func (r *TagRepository) ChangeTagStatus(ctx context.Context, params TagLifecycle
 			_ = tx.Rollback()
 		}
 	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TagRecord{}, err
+	}
 
 	current, err := tagByID(ctx, tx, params.BookID, params.TagID)
 	if err != nil {

@@ -26,6 +26,7 @@ const (
 var (
 	ErrTagNotFound  = errors.New("tag not found")
 	ErrTagExists    = errors.New("tag already exists")
+	ErrTagArchived  = errors.New("archived tag cannot be updated")
 	tagColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 	tagIconPattern  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
@@ -340,6 +341,8 @@ func tagRepositoryError(action string, err error) error {
 		return ErrTagNotFound
 	case errors.Is(err, db.ErrTagExists):
 		return ErrTagExists
+	case errors.Is(err, db.ErrTagArchived):
+		return ErrTagArchived
 	default:
 		return fmt.Errorf("%s: %w", action, err)
 	}

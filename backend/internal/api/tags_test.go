@@ -47,6 +47,10 @@ func TestCreateTagPersistsAndAudits(t *testing.T) {
 	assert.Equal(t, "active", tag.Status)
 	assert.Equal(t, `{"scope":"trip"}`, string(tag.Metadata))
 
+	read := readTagForSession(t, handler, sessionCookie, tag.ID, http.StatusOK)
+	assert.Equal(t, tag.ID, read.ID)
+	assert.Equal(t, "Vacation Summer 2026", read.Name)
+
 	var (
 		operation        string
 		originType       string
@@ -122,6 +126,11 @@ func TestArchiveAndRestoreTag(t *testing.T) {
 
 	archived := mutateTag(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/tags/"+strconvFormatInt(tag.ID)+"/archive", http.StatusOK)
 	assert.Equal(t, "archived", archived.Status)
+
+	patchTag(t, handler, sessionCookie, csrfToken, tag.ID, `{
+		"name":"Renamed while archived",
+		"kind":"project"
+	}`, http.StatusConflict)
 
 	defaultList := listTagsForSession(t, handler, sessionCookie, "")
 	assert.Empty(t, defaultList.Tags)
@@ -282,6 +291,45 @@ func listTagsForSession(t *testing.T, handler http.Handler, sessionCookie *http.
 	var response tagsResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 
+	return response
+}
+
+func readTagForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, tagID int64, wantStatus int) tagResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tags/"+strconvFormatInt(tagID), nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, wantStatus, res.Code)
+
+	var response tagResponse
+	if wantStatus == http.StatusOK {
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	}
+	return response
+}
+
+func patchTag(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, tagID int64, body string, wantStatus int) tagResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/tags/"+strconvFormatInt(tagID), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, wantStatus, res.Code)
+
+	var response tagResponse
+	if wantStatus >= 200 && wantStatus < 300 {
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	}
 	return response
 }
 

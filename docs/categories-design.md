@@ -81,7 +81,8 @@ should choose one income or expense category.
 Tags answer "what context does this belong to?" Tags can represent projects,
 people, flags, places, hobbies, or custom groupings. A transaction or posting
 may have multiple tags later, such as `Vacation Summer 2026`, `Alex`, and
-`reimbursable`.
+`reimbursable`. Tag kind is mutable: changing a tag from `project` to `custom`,
+for example, changes the grouping for every existing reference to that tag.
 
 ## Built-In Starter Set
 

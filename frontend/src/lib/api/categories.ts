@@ -10,10 +10,10 @@ export type CompleteCategoriesSetupResponse = components['schemas']['CompleteCat
 
 export const categoriesQueryKey = ['api', 'categories'] as const;
 
-export function categoriesQueryOptions(includeArchived = false) {
+export function categoriesQueryOptions(options: { includeArchived?: boolean; categoryType?: 'income' | 'expense' } = {}) {
   return {
-    queryKey: [...categoriesQueryKey, { includeArchived }] as const,
-    queryFn: () => getCategories({ includeArchived }),
+    queryKey: [...categoriesQueryKey, options] as const,
+    queryFn: () => getCategories(options),
     staleTime: 10_000
   };
 }

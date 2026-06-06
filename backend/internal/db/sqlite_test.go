@@ -205,6 +205,31 @@ func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
 }
 
+func TestMigrationsEnforceTagIconFormat(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO tags (
+			book_id,
+			name,
+			kind,
+			icon,
+			status,
+			metadata_json,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id
+		)
+		VALUES (1, 'Bad Icon', 'custom', 'Plane!', 'active', '{}', '2026-06-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
+}
+
 func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) {
 	database := openTestDatabase(t)
 

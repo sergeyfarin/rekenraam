@@ -36,6 +36,7 @@ TagResponse:
       description: User-entered tag label. Built-in translation is not applied to user tags.
     kind:
       $ref: "../../openapi.yaml#/components/schemas/TagKind"
+      description: Tag kind is mutable; existing references keep pointing to the same tag and will see the new grouping.
     color:
       type: string
       pattern: "^#[0-9A-Fa-f]{6}$"

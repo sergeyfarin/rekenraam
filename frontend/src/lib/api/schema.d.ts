@@ -3894,6 +3894,7 @@ export interface components {
             book_id: number;
             /** @description User-entered tag label. Built-in translation is not applied to user tags. */
             name: string;
+            /** @description Tag kind is mutable; existing references keep pointing to the same tag and will see the new grouping. */
             kind: components["schemas"]["TagKind"];
             /** @description Optional hex color token for tag UI. */
             color?: string;
