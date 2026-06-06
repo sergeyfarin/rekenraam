@@ -11,7 +11,7 @@ Accepted
 ## Context
 
 Rekenraam seeds and offers app-defined records such as currencies, commodities,
-account types, system accounts, and default categories. These records need
+account classes, account kinds, system accounts, and default categories. These records need
 localized labels in the UI, but they also become part of long-lived financial
 data, setup choices, imports, exports, reports, and audit trails.
 

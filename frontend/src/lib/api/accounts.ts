@@ -14,20 +14,21 @@ export type AdvancedAccountRequest = AccountRequest;
 
 export const accountsQueryKey = ['api', 'accounts'] as const;
 
-export function accountsQueryOptions(includeArchived = false) {
+export function accountsQueryOptions(includeArchived = false, includeSystem = false) {
   return {
-    queryKey: [...accountsQueryKey, { includeArchived }] as const,
-    queryFn: () => getAccounts(includeArchived),
+    queryKey: [...accountsQueryKey, { includeArchived, includeSystem }] as const,
+    queryFn: () => getAccounts(includeArchived, includeSystem),
     staleTime: 10_000
   };
 }
 
-export async function getAccounts(includeArchived = false): Promise<AccountsResponse> {
+export async function getAccounts(includeArchived = false, includeSystem = false): Promise<AccountsResponse> {
   try {
     const { data, error, response } = await apiClient.GET('/api/v1/accounts', {
       params: {
         query: {
-          include_archived: includeArchived || undefined
+          include_archived: includeArchived || undefined,
+          include_system: includeSystem || undefined
         }
       }
     });

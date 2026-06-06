@@ -221,6 +221,18 @@ attribute version. Enforce one system account identity per `book_id` and
 `system_role` with a unique partial index where `system_role IS NOT NULL`.
 Treat `is_system` and `system_role` as immutable after insert.
 
+`account_kinds` is the app-owned built-in catalog for behavior and UI profiles:
+
+- `code`
+- `account_class`
+- `base_kind`
+- `ui_profile`
+- `is_builtin`
+- `is_user_assignable`
+- `is_system_only`
+- `display_key`
+- `sort_order`
+
 `account_versions` is the append-only state row:
 
 - `id`
@@ -374,23 +386,25 @@ Separate accounting class from user-facing kind.
 - `income`
 - `expense`
 
-`account_kind` is a localized/user-facing subtype. Initial supported kinds:
+`account_kind` is a catalog-backed behavior and UI profile. It is not a category
+taxonomy, system workflow role, country-specific tax wrapper, or investment lot
+accounting concept.
 
-- Asset kinds: `cash`, `checking`, `savings`, `time_deposit`, `money_market`,
-  `investment`, `brokerage_cash`, `security_holding`, `crypto_wallet`,
-  `property`, `vehicle`, `collectible`, `points_miles`, `loan_receivable`,
-  `other_asset`
+Initial supported kinds:
+
+- Asset kinds: `cash`, `depository`, `checking`, `savings`, `time_deposit`,
+  `brokerage`, `brokerage_cash`, `security_holding`, `crypto_wallet`,
+  `property`, `vehicle`, `rewards_balance`, `receivable`, `other_asset`
 - Liability kinds: `credit_card`, `line_of_credit`, `loan`, `mortgage`,
   `tax_liability`, `payable`, `other_liability`
-- Equity kinds: `opening_balance`, `retained_earnings`, `current_earnings`,
-  `trading`, `imbalance`, `equity`
-- Income kinds: `salary`, `interest`, `dividend`, `realized_capital_gain`,
-  `unrealized_capital_gain`, `reward_income`, `other_income`
-- Expense kinds: `expense`, `fee`, `tax`, `interest_expense`,
-  `investment_fee`, `other_expense`, `realized_losses`, `unrealized_losses`
+- Equity kind: `equity`
+- Income kind: `income`
+- Expense kind: `expense`
 
-This keeps the ledger orthodox while allowing personal-finance language. It also
-avoids making every specialized account kind a top-level accounting type.
+The database stores the built-in account kind catalog in `account_kinds`. The
+backend validates that a requested kind exists, belongs to the requested class,
+and is user assignable. The frontend uses stable kind codes for labels and UI
+profiles. See `docs/account-hierarchy.md` for the readable taxonomy.
 
 ## Tree Rules
 
@@ -403,7 +417,7 @@ avoids making every specialized account kind a top-level accounting type.
   it only where explicitly allowed.
 - Recommended first rule: active children should have the same `account_class`
   as the parent.
-- Later exception: investment containers may hold asset children with different
+- Later exception: brokerage containers may hold asset children with different
   commodities, such as brokerage cash and security-holding accounts.
 - `allows_postings=false` makes a container or placeholder account. Reports roll
   up child balances, but transaction entry cannot post directly to it.
@@ -486,12 +500,12 @@ Recommended account shapes:
 - Checking account: asset/checking, default commodity USD or EUR,
   `allows_postings=true`.
 - Credit card: liability/credit_card, default commodity matching the card.
-- Brokerage: asset/investment, default commodity nullable,
+- Brokerage: asset/brokerage, default commodity nullable,
   `allows_postings=false`.
 - Brokerage cash: asset/brokerage_cash under brokerage, default commodity USD.
 - Security holding: asset/security_holding under brokerage, default commodity
   set to the security commodity.
-- Points or miles: asset/points_miles, default commodity set to a rewards
+- Points or miles: asset/rewards_balance, default commodity set to a rewards
   commodity. Defer UI support until reward commodities and report-exclusion
   rules exist.
 - Property or vehicle: asset/property or asset/vehicle, default commodity set to
@@ -582,37 +596,36 @@ System accounts are ordinary accounts with `is_system=true` and a stable
 
 Required in Phase 1:
 
-- `opening_balance`: equity/opening_balance, counterpart for explicit opening
+- `opening_balance`: equity/equity, counterpart for explicit opening
   balance transactions.
-- `imbalance_import`: equity/imbalance, temporary counterpart for imported
+- `imbalance_import`: equity/equity, temporary counterpart for imported
   single-sided entries that need cleanup.
-- `retained_earnings`: equity/retained_earnings, future close-period target.
-- `income_summary`: equity/current_earnings, future income close workflow.
-- `expense_summary`: equity/current_earnings, future expense close workflow.
+- `retained_earnings`: equity/equity, future close-period target.
+- `income_summary`: equity/equity, future income close workflow.
+- `expense_summary`: equity/equity, future expense close workflow.
 
 Recommended later roles:
 
-- `currency_trading`: equity/trading, multi-currency conversion counterpart.
-- `rounding`: expense/fee or equity/imbalance, explicit tiny rounding
+- `currency_trading`: equity/equity, multi-currency conversion counterpart.
+- `rounding`: expense/expense or equity/equity, explicit tiny rounding
   adjustments.
-- `unrealized_gain_loss`: income/capital_gain, valuation reporting support.
-- `realized_gain_loss`: income/capital_gain, investment sale support.
+- `unrealized_gain_loss`: income/income, valuation reporting support.
+- `realized_gain_loss`: income/income, investment sale support.
 
 Rules:
 
 - One system account identity per `book_id` and `system_role`.
+- System roles identify workflow behavior; `account_kind` stays a generic
+  behavior profile such as `equity`.
 - System accounts cannot be edited, closed, archived, or reparented through
   ordinary account management.
+- System accounts are hidden from ordinary account lists unless an API caller
+  passes `include_system=true`.
 - System account names come from translation keys, not English-only database
   labels.
 - The first backend implementation intentionally stores no `name` on system
   account versions. API responses expose `system_role` and may omit `name`; the
   frontend resolves visible labels from stable role keys.
-- `income_summary` and `expense_summary` both use
-  `account_kind=current_earnings` because they are distinct workflow roles for
-  future closing entries, not distinct accounting classes. Their role identifies
-  the workflow target; their kind keeps them under the same equity/current
-  earnings accounting treatment.
 
 ## Opening Balances
 

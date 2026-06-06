@@ -32,37 +32,20 @@ var (
 	ErrAccountReferenceInvalid = errors.New("account reference is invalid")
 )
 
-var accountKindsByClass = map[string]map[string]bool{
-	"asset": {
-		"cash": true, "checking": true, "savings": true, "time_deposit": true, "money_market": true,
-		"investment": true, "brokerage_cash": true, "security_holding": true, "crypto_wallet": true,
-		"property": true, "vehicle": true, "collectible": true, "points_miles": true,
-		"loan_receivable": true, "other_asset": true,
-	},
-	"liability": {
-		"credit_card": true, "line_of_credit": true, "loan": true, "mortgage": true,
-		"tax_liability": true, "payable": true, "other_liability": true,
-	},
-	"equity": {
-		"opening_balance": true, "retained_earnings": true, "current_earnings": true,
-		"trading": true, "imbalance": true, "equity": true,
-	},
-	"income": {
-		"salary": true, "interest": true, "dividend": true, "realized_capital_gain": true,
-		"unrealized_capital_gain": true, "reward_income": true, "other_income": true,
-	},
-	"expense": {
-		"expense": true, "fee": true, "tax": true, "interest_expense": true,
-		"investment_fee": true, "other_expense": true, "realized_losses": true, "unrealized_losses": true,
-	},
+var accountClasses = map[string]bool{
+	"asset":     true,
+	"liability": true,
+	"equity":    true,
+	"income":    true,
+	"expense":   true,
 }
 
 var systemAccountSpecs = []db.SystemAccountSpec{
-	{Role: "opening_balance", AccountClass: "equity", AccountKind: "opening_balance"},
-	{Role: "imbalance_import", AccountClass: "equity", AccountKind: "imbalance"},
-	{Role: "retained_earnings", AccountClass: "equity", AccountKind: "retained_earnings"},
-	{Role: "income_summary", AccountClass: "equity", AccountKind: "current_earnings"},
-	{Role: "expense_summary", AccountClass: "equity", AccountKind: "current_earnings"},
+	{Role: "opening_balance", AccountClass: "equity", AccountKind: "equity"},
+	{Role: "imbalance_import", AccountClass: "equity", AccountKind: "equity"},
+	{Role: "retained_earnings", AccountClass: "equity", AccountKind: "equity"},
+	{Role: "income_summary", AccountClass: "equity", AccountKind: "equity"},
+	{Role: "expense_summary", AccountClass: "equity", AccountKind: "equity"},
 }
 
 type Account struct {
@@ -95,6 +78,7 @@ type ListAccountsInput struct {
 	Status          string
 	AccountClass    string
 	IncludeArchived bool
+	IncludeSystem   bool
 	Query           string
 }
 
@@ -193,7 +177,7 @@ func (s *AccountService) ListAccounts(ctx context.Context, input ListAccountsInp
 	}
 
 	accountClass := strings.TrimSpace(input.AccountClass)
-	if accountClass != "" && accountKindsByClass[accountClass] == nil {
+	if accountClass != "" && !accountClasses[accountClass] {
 		return nil, ValidationError{Message: "account class is invalid"}
 	}
 
@@ -202,6 +186,7 @@ func (s *AccountService) ListAccounts(ctx context.Context, input ListAccountsInp
 		Status:          status,
 		AccountClass:    accountClass,
 		IncludeArchived: input.IncludeArchived,
+		IncludeSystem:   input.IncludeSystem,
 		Query:           strings.TrimSpace(input.Query),
 		Limit:           accountListLimit,
 	})
@@ -525,7 +510,7 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 	}
 
 	accountClass := strings.TrimSpace(input.AccountClass)
-	if accountKindsByClass[accountClass] == nil {
+	if !accountClasses[accountClass] {
 		return db.AccountSpec{}, ValidationError{Message: "account class is invalid"}
 	}
 
@@ -533,7 +518,14 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 	if accountKind == "" {
 		accountKind = defaultAccountKind(accountClass)
 	}
-	if !accountKindsByClass[accountClass][accountKind] {
+	kind, err := s.repository.AccountKindByCode(ctx, accountKind)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return db.AccountSpec{}, ValidationError{Message: "account kind is invalid"}
+		}
+		return db.AccountSpec{}, fmt.Errorf("read account kind: %w", err)
+	}
+	if kind.AccountClass != accountClass || !kind.IsUserAssignable || kind.IsSystemOnly {
 		return db.AccountSpec{}, ValidationError{Message: "account kind is invalid for account class"}
 	}
 
@@ -670,7 +662,7 @@ func defaultAccountKind(accountClass string) string {
 	case "equity":
 		return "equity"
 	case "income":
-		return "other_income"
+		return "income"
 	default:
 		return "expense"
 	}

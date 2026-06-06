@@ -15,6 +15,11 @@ get:
         type: boolean
       description: Include archived accounts when no explicit status filter is set.
     - in: query
+      name: include_system
+      schema:
+        type: boolean
+      description: Include system accounts. System accounts are hidden from ordinary account lists by default.
+    - in: query
       name: q
       schema:
         type: string

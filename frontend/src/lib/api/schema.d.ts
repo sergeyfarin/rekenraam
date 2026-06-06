@@ -1493,6 +1493,8 @@ export interface paths {
                     account_class?: components["schemas"]["AccountClass"];
                     /** @description Include archived accounts when no explicit status filter is set. */
                     include_archived?: boolean;
+                    /** @description Include system accounts. System accounts are hidden from ordinary account lists by default. */
+                    include_system?: boolean;
                     /** @description Small-set account name, code, role, or kind filter. */
                     q?: string;
                 };
@@ -2464,7 +2466,7 @@ export interface components {
         /** @enum {string} */
         AccountClass: "asset" | "liability" | "equity" | "income" | "expense";
         /** @enum {string} */
-        AccountKind: "cash" | "checking" | "savings" | "time_deposit" | "money_market" | "investment" | "brokerage_cash" | "security_holding" | "crypto_wallet" | "property" | "vehicle" | "collectible" | "points_miles" | "loan_receivable" | "other_asset" | "credit_card" | "line_of_credit" | "loan" | "mortgage" | "tax_liability" | "payable" | "other_liability" | "opening_balance" | "retained_earnings" | "current_earnings" | "trading" | "imbalance" | "equity" | "salary" | "interest" | "dividend" | "realized_capital_gain" | "unrealized_capital_gain" | "reward_income" | "other_income" | "expense" | "fee" | "tax" | "interest_expense" | "investment_fee" | "other_expense" | "realized_losses" | "unrealized_losses";
+        AccountKind: "cash" | "depository" | "checking" | "savings" | "time_deposit" | "brokerage" | "brokerage_cash" | "security_holding" | "crypto_wallet" | "property" | "vehicle" | "rewards_balance" | "receivable" | "other_asset" | "credit_card" | "line_of_credit" | "loan" | "mortgage" | "tax_liability" | "payable" | "other_liability" | "equity" | "income" | "expense";
         /** @enum {string} */
         AccountStatus: "active" | "closed" | "archived";
         /** @enum {string} */

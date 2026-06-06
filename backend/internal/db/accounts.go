@@ -66,6 +66,7 @@ type ListAccountsParams struct {
 	Status          string
 	AccountClass    string
 	IncludeArchived bool
+	IncludeSystem   bool
 	Query           string
 	Limit           int
 }
@@ -130,6 +131,18 @@ type AccountCommodityRecord struct {
 	MaxQuantityScale int
 }
 
+type AccountKindRecord struct {
+	Code             string
+	AccountClass     string
+	BaseKind         string
+	UIProfile        string
+	IsBuiltin        bool
+	IsUserAssignable bool
+	IsSystemOnly     bool
+	DisplayKey       string
+	SortOrder        int
+}
+
 func NewAccountRepository(database *sql.DB) *AccountRepository {
 	return &AccountRepository{database: database}
 }
@@ -148,6 +161,10 @@ func (r *AccountRepository) ListAccounts(ctx context.Context, params ListAccount
 	if params.AccountClass != "" {
 		where = append(where, "av.account_class = ?")
 		args = append(args, params.AccountClass)
+	}
+
+	if !params.IncludeSystem {
+		where = append(where, "a.is_system = 0")
 	}
 
 	query := strings.TrimSpace(params.Query)
@@ -502,6 +519,47 @@ func (r *AccountRepository) CurrentCommodityByID(ctx context.Context, bookID int
 		return AccountCommodityRecord{}, fmt.Errorf("read account commodity: %w", err)
 	}
 
+	return record, nil
+}
+
+func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) (AccountKindRecord, error) {
+	var record AccountKindRecord
+	var isBuiltin int
+	var isUserAssignable int
+	var isSystemOnly int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT
+			code,
+			account_class,
+			base_kind,
+			ui_profile,
+			is_builtin,
+			is_user_assignable,
+			is_system_only,
+			display_key,
+			sort_order
+		FROM account_kinds
+		WHERE code = ?
+	`, code).Scan(
+		&record.Code,
+		&record.AccountClass,
+		&record.BaseKind,
+		&record.UIProfile,
+		&isBuiltin,
+		&isUserAssignable,
+		&isSystemOnly,
+		&record.DisplayKey,
+		&record.SortOrder,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return AccountKindRecord{}, ErrNotFound
+		}
+		return AccountKindRecord{}, fmt.Errorf("read account kind: %w", err)
+	}
+
+	record.IsBuiltin = isBuiltin == 1
+	record.IsUserAssignable = isUserAssignable == 1
+	record.IsSystemOnly = isSystemOnly == 1
 	return record, nil
 }
 

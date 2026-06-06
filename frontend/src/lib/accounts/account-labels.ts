@@ -41,16 +41,16 @@ export function accountKindLabel(accountKind: AccountKind): string {
   switch (accountKind) {
     case 'cash':
       return m.account_kind_cash();
+    case 'depository':
+      return m.account_kind_depository();
     case 'checking':
       return m.account_kind_checking();
     case 'savings':
       return m.account_kind_savings();
     case 'time_deposit':
       return m.account_kind_time_deposit();
-    case 'money_market':
-      return m.account_kind_money_market();
-    case 'investment':
-      return m.account_kind_investment();
+    case 'brokerage':
+      return m.account_kind_brokerage();
     case 'brokerage_cash':
       return m.account_kind_brokerage_cash();
     case 'security_holding':
@@ -61,12 +61,10 @@ export function accountKindLabel(accountKind: AccountKind): string {
       return m.account_kind_property();
     case 'vehicle':
       return m.account_kind_vehicle();
-    case 'collectible':
-      return m.account_kind_collectible();
-    case 'points_miles':
-      return m.account_kind_points_miles();
-    case 'loan_receivable':
-      return m.account_kind_loan_receivable();
+    case 'rewards_balance':
+      return m.account_kind_rewards_balance();
+    case 'receivable':
+      return m.account_kind_receivable();
     case 'other_asset':
       return m.account_kind_other_asset();
     case 'credit_card':
@@ -83,48 +81,12 @@ export function accountKindLabel(accountKind: AccountKind): string {
       return m.account_kind_payable();
     case 'other_liability':
       return m.account_kind_other_liability();
-    case 'opening_balance':
-      return m.account_kind_opening_balance();
-    case 'retained_earnings':
-      return m.account_kind_retained_earnings();
-    case 'current_earnings':
-      return m.account_kind_current_earnings();
-    case 'trading':
-      return m.account_kind_trading();
-    case 'imbalance':
-      return m.account_kind_imbalance();
     case 'equity':
       return m.account_kind_equity();
-    case 'salary':
-      return m.account_kind_salary();
-    case 'interest':
-      return m.account_kind_interest();
-    case 'dividend':
-      return m.account_kind_dividend();
-    case 'realized_capital_gain':
-      return m.account_kind_realized_capital_gain();
-    case 'unrealized_capital_gain':
-      return m.account_kind_unrealized_capital_gain();
-    case 'reward_income':
-      return m.account_kind_reward_income();
-    case 'other_income':
-      return m.account_kind_other_income();
+    case 'income':
+      return m.account_kind_income();
     case 'expense':
       return m.account_kind_expense();
-    case 'fee':
-      return m.account_kind_fee();
-    case 'tax':
-      return m.account_kind_tax();
-    case 'interest_expense':
-      return m.account_kind_interest_expense();
-    case 'investment_fee':
-      return m.account_kind_investment_fee();
-    case 'other_expense':
-      return m.account_kind_other_expense();
-    case 'realized_losses':
-      return m.account_kind_realized_losses();
-    case 'unrealized_losses':
-      return m.account_kind_unrealized_losses();
   }
 }
 

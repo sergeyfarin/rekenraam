@@ -24,7 +24,12 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - A book is the top-level accounting boundary.
 - Accounts form a tree.
-- Account types are asset, liability, equity, income, and expense.
+- Account classes are asset, liability, equity, income, and expense.
+- Account kinds are catalog-backed behavior/UI profiles constrained by class;
+  they are not categories, tax wrappers, system roles, or investment lot
+  concepts.
+- System accounts are identified by `system_role` and hidden from ordinary
+  account lists by default.
 - Categories are UI concepts mapped to income and expense accounts, not a separate ledger primitive.
 - Transactions contain postings or splits.
 - Transfers are ordinary transactions.
@@ -40,7 +45,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Keep stable codes in data; translated labels belong in localization assets.
 - Built-in records not entered by users or imported from external sources must use stable keys or codes, not English display names as the only source of truth.
 - Built-in labels are resolved at render time by the frontend localization boundary. Do not store localized built-in names as canonical database values or require them in setup/API requests.
-- Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must be localization-ready.
+- Seeded categories, account classes, account kinds, currencies, commodities, system accounts, and other app-defined labels must be localization-ready.
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
 - Physical delete is allowed only for never-posted drafts. Posted financial records must use void, archive, or corrective-entry workflows even when unreconciled.

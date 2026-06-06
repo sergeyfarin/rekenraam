@@ -123,7 +123,7 @@ These apply across all feature phases.
 - The app must support multilingual UI from an early stage.
 - English is the initial implementation language; translation boundaries must keep UI copy and built-in data ready to add other languages without reworking UI code or database schema.
 - Built-in database records not entered by the user or imported from a source must use stable codes or keys and resolve display labels through localization assets.
-- Built-in currency, category, account-type, system-account, and other app-defined labels must be translated at frontend render time from stable identifiers, not stored as localized canonical database names during setup.
+- Built-in currency, category, account-class, account-kind, system-account, and other app-defined labels must be translated at frontend render time from stable identifiers, not stored as localized canonical database names during setup.
 - The design system must support themes through semantic tokens rather than hard-coded colors.
 - Theme support starts with light and dark only, but the token model should avoid blocking future named themes.
 - Desktop and mobile layouts must both be intentional and usable.
@@ -165,7 +165,7 @@ Goal: create the durable accounting skeleton.
 - The default currency is a UI/account-default preference, not a book base currency or reporting currency. Reports choose their reporting currency and FX method later without changing the book.
 - Commodity and currency setup comes before accounts. Account precision must derive from commodity metadata or an explicit account-level quantity scale override, not from floating-point or free-text currency fields.
 - Institution logo and backdrop support is limited to optional URL/reference metadata in Phase 1. File upload, attachment storage, statement PDFs, and receipts remain out of scope.
-- Account tree with account types.
+- Account tree with fixed accounting classes and catalog-backed account kinds.
 - Account creation does not create balances. Opening balances require posted transactions and arrive with the ledger transaction slice.
 - Account list and account detail UI.
 
@@ -236,7 +236,7 @@ Later phases should remain optional. The earlier phases must still produce a com
 These should be fixed before many screens accumulate inconsistent patterns.
 
 - Localization strategy: message catalogs, locale selection, fallback behavior, target languages, and number or date formatting boundaries.
-- Built-in data localization strategy: stable keys for seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels.
+- Built-in data localization strategy: stable keys for seeded categories, account classes, account kinds, currencies, commodities, system accounts, and other app-defined labels.
 - Theme strategy: light and dark themes first, semantic token naming, persisted preference, and chart color policy.
 - Responsive layout rules: breakpoints, dense-table behavior, sidebar or drawer behavior, and mobile transaction entry expectations.
 - Form conventions: dirty-state handling, autosave policy, cancel behavior, optimistic updates, and server-validation display.

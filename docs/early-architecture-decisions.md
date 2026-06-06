@@ -57,7 +57,7 @@ Rules:
 - A book is the top-level accounting boundary.
 - Support one user-owned book first, but keep `book_id` in core domain tables so multi-book support does not require a schema reset.
 - Accounts form a tree.
-- Account types should include at least asset, liability, equity, income, and expense.
+- Account classes should include asset, liability, equity, income, and expense.
 - Categories are presented in the UI as friendly budgeting/reporting concepts, but they should map to income or expense accounts instead of becoming a separate transaction primitive.
 - Transactions contain postings, also called splits, against accounts.
 - Transfers are ordinary transactions with postings to two or more accounts.
@@ -113,8 +113,8 @@ Rules:
 - Keep formatting of dates, numbers, percentages, and money separate from translated messages.
 - Store stable codes in data, not translated labels.
 - Do not store built-in definitions in the database only as English display text; store stable keys/codes and resolve display labels through localization.
-- Resolve built-in labels at the frontend render boundary. Localized names for built-in currencies, categories, account types, system accounts, and other app-defined records are not canonical database values.
-- Seeded categories, account types, currencies, commodities, system accounts, and other app-defined labels must remain localization-ready.
+- Resolve built-in labels at the frontend render boundary. Localized names for built-in currencies, categories, account classes, account kinds, system accounts, and other app-defined records are not canonical database values.
+- Seeded categories, account classes, account kinds, currencies, commodities, system accounts, and other app-defined labels must remain localization-ready.
 
 ## API Boundaries
 
@@ -218,7 +218,7 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
 
 ## Decisions To Make Before Specific Features
 
-- Before accounts: account type list, account tree rules, opening-balance behavior, and default book setup.
+- Before accounts: account class and kind lists, account tree rules, opening-balance behavior, and default book setup.
 - Before commodities: currency metadata source, custom commodity codes, display scale, precision limits, maximum quantity scale, and commodity-code validation.
 - Before first frontend use of typed API clients: exact OpenAPI generation/check command and generated-client path.
 - Before transactions: posting schema, balancing rules, transfer representation, split editing, draft versus posted lifecycle, correction behavior, and import-source metadata.

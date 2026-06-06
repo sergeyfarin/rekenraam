@@ -228,6 +228,10 @@ func TestAccountValidationRejectsPostingAssetWithoutCommodityAndNonObjectMetadat
 			name: "metadata string",
 			body: `{"name":"Bad Metadata","account_class":"income","metadata":"string"}`,
 		},
+		{
+			name: "category-like kind rejected",
+			body: `{"name":"Salary","account_class":"income","account_kind":"salary"}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -259,7 +263,7 @@ func TestAccountParentRulesRejectCyclesAndClassMismatch(t *testing.T) {
 	parent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Brokerage",
 		"account_class":"asset",
-		"account_kind":"investment",
+		"account_kind":"brokerage",
 		"allows_postings":false
 	}`)
 	child := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
@@ -273,7 +277,7 @@ func TestAccountParentRulesRejectCyclesAndClassMismatch(t *testing.T) {
 	patchAccount(t, handler, sessionCookie, csrfToken, parent.ID, `{
 		"name":"Brokerage",
 		"account_class":"asset",
-		"account_kind":"investment",
+		"account_kind":"brokerage",
 		"parent_account_id":`+strconvFormatInt(child.ID)+`,
 		"allows_postings":false
 	}`, http.StatusBadRequest)
@@ -295,7 +299,7 @@ func TestAccountParentRulesRejectArchivedParent(t *testing.T) {
 	parent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Old Parent",
 		"account_class":"asset",
-		"account_kind":"investment",
+		"account_kind":"brokerage",
 		"allows_postings":false
 	}`)
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(parent.ID)+"/close", http.StatusOK)
@@ -327,14 +331,14 @@ func TestUpdateAccountRevalidatesPostingCommodityRequirement(t *testing.T) {
 	account := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Container",
 		"account_class":"asset",
-		"account_kind":"investment",
+		"account_kind":"brokerage",
 		"allows_postings":false
 	}`)
 
 	patchAccount(t, handler, sessionCookie, csrfToken, account.ID, `{
 		"name":"Container",
 		"account_class":"asset",
-		"account_kind":"investment",
+		"account_kind":"brokerage",
 		"allows_postings":true
 	}`, http.StatusBadRequest)
 }
@@ -365,6 +369,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		assert.True(t, account.IsSystem)
 		assert.Equal(t, "active", account.Status)
 		assert.Equal(t, "equity", account.AccountClass)
+		assert.Equal(t, "equity", account.AccountKind)
 		roles[account.SystemRole] = true
 	}
 	assert.True(t, roles["opening_balance"])
@@ -374,6 +379,16 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	assert.True(t, roles["expense_summary"])
 
 	patchAccount(t, handler, sessionCookie, csrfToken, body.Accounts[0].ID, `{}`, http.StatusConflict)
+
+	defaultList := listAccountsForSession(t, handler, sessionCookie, "")
+	assert.Empty(t, defaultList.Accounts)
+
+	systemList := listAccountsForSession(t, handler, sessionCookie, "?include_system=true")
+	require.Len(t, systemList.Accounts, 5)
+	for _, account := range systemList.Accounts {
+		assert.True(t, account.IsSystem)
+		assert.NotEmpty(t, account.SystemRole)
+	}
 
 	var completedAt sql.NullString
 	var auditEventID sql.NullInt64

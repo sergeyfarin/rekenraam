@@ -10,19 +10,18 @@ AccountKind:
   type: string
   enum:
     - cash
+    - depository
     - checking
     - savings
     - time_deposit
-    - money_market
-    - investment
+    - brokerage
     - brokerage_cash
     - security_holding
     - crypto_wallet
     - property
     - vehicle
-    - collectible
-    - points_miles
-    - loan_receivable
+    - rewards_balance
+    - receivable
     - other_asset
     - credit_card
     - line_of_credit
@@ -31,27 +30,9 @@ AccountKind:
     - tax_liability
     - payable
     - other_liability
-    - opening_balance
-    - retained_earnings
-    - current_earnings
-    - trading
-    - imbalance
     - equity
-    - salary
-    - interest
-    - dividend
-    - realized_capital_gain
-    - unrealized_capital_gain
-    - reward_income
-    - other_income
+    - income
     - expense
-    - fee
-    - tax
-    - interest_expense
-    - investment_fee
-    - other_expense
-    - realized_losses
-    - unrealized_losses
 AccountStatus:
   type: string
   enum:

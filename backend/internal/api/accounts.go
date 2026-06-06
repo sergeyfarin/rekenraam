@@ -80,11 +80,17 @@ func listAccounts(logger *slog.Logger, authService *app.AuthService, accountServ
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "include_archived is invalid")
 			return
 		}
+		includeSystem, err := parseOptionalBool(r.URL.Query().Get("include_system"))
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "include_system is invalid")
+			return
+		}
 
 		accounts, err := accountService.ListAccounts(r.Context(), app.ListAccountsInput{
 			Status:          r.URL.Query().Get("status"),
 			AccountClass:    r.URL.Query().Get("account_class"),
 			IncludeArchived: includeArchived,
+			IncludeSystem:   includeSystem,
 			Query:           r.URL.Query().Get("q"),
 		})
 		if err != nil {
