@@ -109,7 +109,7 @@ the row was preloaded before user setup.
 - `id`
 - `commodity_id`
 - `version_seq`
-- `effective_from`
+- `effective_from`: date-only `YYYY-MM-DD`
 - `recorded_at`
 - `changed_by_user_id`
 - `change_reason`
@@ -157,7 +157,7 @@ Use a stable identity table plus append-only versions.
 - `id`
 - `institution_id`
 - `version_seq`
-- `effective_from`
+- `effective_from`: date-only `YYYY-MM-DD`
 - `recorded_at`
 - `changed_by_user_id`
 - `change_reason`
@@ -167,18 +167,15 @@ Use a stable identity table plus append-only versions.
 - `kind`
 - `country_code`
 - `website`
-- `logo_url`
-- `logo_small_url`
-- `backdrop_url`
 - `address_json`
 - `comment_markdown`
 - `metadata_json`
 
-Logo and backdrop fields are optional URL/reference fields for UI
-presentation. They do not introduce attachment storage or upload handling. A
-small logo is intended for compact account and institution lists; the main logo
-or backdrop can be used on institution detail/edit screens and account screens
-grouped under that institution.
+Institution branding and integration-specific UI hints belong in
+`metadata_json`, not in first-class financial schema columns. Optional logo and
+backdrop references may be represented there when the UI needs them, but the
+core institution version row should remain about durable institution identity
+and lifecycle state.
 
 API responses and requests must expose structured JSON columns as domain
 objects, not storage-column strings. For example, institutions expose `address`
@@ -222,23 +219,29 @@ partial index where `system_role IS NOT NULL`. Treat `system_role` as immutable
 after insert. API responses may expose a derived `is_system` boolean for UI
 convenience, but the database should not store both values.
 
-`account_kinds` is the app-owned built-in catalog for behavior and UI profiles:
+`account_kinds` is the app-owned built-in catalog for behavior and localized
+display:
 
 - `code`
 - `account_class`
 - `base_kind`
-- `ui_profile`
 - `is_builtin`
 - `is_user_assignable`
 - `display_key`
 - `sort_order`
+
+Use `code` as the stable UI profile key when a particular kind needs distinct
+frontend treatment. Use `base_kind` only for coarse backend behavior shared by
+multiple kinds, such as bank-account-like validation. Do not add a second UI
+profile column unless custom user-defined kinds later need to opt into a
+different built-in presentation profile.
 
 `account_versions` is the append-only state row:
 
 - `id`
 - `account_id`
 - `version_seq`
-- `effective_from`
+- `effective_from`: date-only `YYYY-MM-DD`
 - `recorded_at`
 - `changed_by_user_id`
 - `change_reason`
@@ -338,12 +341,22 @@ insert time": the book row must exist before an audit event can reference
 `book_id = 1`, so book setup inserts the book, creates the audit event, then
 attaches the event to the book in the same transaction.
 
+`books` is intentionally mutable setup/profile state in the current single-book
+scope, not append-only financial state. The schema enforces that scope with
+`books.id CHECK (id = 1)`. Adding real multi-book support must explicitly
+revisit book lifecycle/versioning and remove or replace that guard as part of an
+accepted design change.
+
 Version ordering rules:
 
 - `version_seq` is assigned by the application service inside the same database
   transaction as the insert.
-- It is unique per identity row: `(account_id, version_seq)` or
+- It must be positive and unique per identity row:
+  `(commodity_id, version_seq)`, `(account_id, version_seq)`, or
   `(institution_id, version_seq)`.
+- `effective_from` is always a date-only `YYYY-MM-DD` value. Do not store
+  timestamps in this field; timestamp strings break date comparison semantics
+  and create timezone ambiguity.
 - It is the authoritative tiebreaker; do not rely on timestamp precision.
 - Multiple versions may share the same `effective_from`. This is allowed for
   corrections and reseeding.

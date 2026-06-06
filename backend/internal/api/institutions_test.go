@@ -25,7 +25,7 @@ func TestListInstitutionsRequiresAuthentication(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, res.Code)
 }
 
-func TestCreateInstitutionPersistsLogoFields(t *testing.T) {
+func TestCreateInstitutionPersistsMetadata(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
@@ -37,20 +37,21 @@ func TestCreateInstitutionPersistsLogoFields(t *testing.T) {
 		"kind": "bank",
 		"country_code": "nl",
 		"website": "https://example.test",
-		"logo_url": "https://example.test/logo.svg",
-		"logo_small_url": "/institution-assets/example-small.svg",
-		"backdrop_url": "https://example.test/backdrop.jpg",
+		"metadata": {
+			"images": {
+				"logo_url": "https://example.test/logo.svg",
+				"logo_small_url": "/institution-assets/example-small.svg",
+				"backdrop_url": "https://example.test/backdrop.jpg"
+			}
+		},
 		"comment_markdown": "Primary bank"
 	}`)
 
 	assert.Equal(t, "Example Bank", institution.Name)
 	assert.Equal(t, "bank", institution.Kind)
 	assert.Equal(t, "NL", institution.CountryCode)
-	assert.Equal(t, "https://example.test/logo.svg", institution.LogoURL)
-	assert.Equal(t, "/institution-assets/example-small.svg", institution.LogoSmallURL)
-	assert.Equal(t, "https://example.test/backdrop.jpg", institution.BackdropURL)
 	assert.Equal(t, "{}", string(institution.Address))
-	assert.Equal(t, "{}", string(institution.Metadata))
+	assert.Equal(t, `{"images":{"logo_url":"https://example.test/logo.svg","logo_small_url":"/institution-assets/example-small.svg","backdrop_url":"https://example.test/backdrop.jpg"}}`, string(institution.Metadata))
 	assert.Equal(t, "Primary bank", institution.CommentMarkdown)
 
 	var versionCount int
@@ -145,9 +146,6 @@ func TestUpdateInstitutionCanClearOptionalFields(t *testing.T) {
 		"kind":"bank",
 		"country_code":"US",
 		"website":"https://clear.example",
-		"logo_url":"https://clear.example/logo.svg",
-		"logo_small_url":"/institution-assets/clear-small.svg",
-		"backdrop_url":"https://clear.example/backdrop.jpg",
 		"address":{"city":"Portland"},
 		"comment_markdown":"Clear me",
 		"metadata":{"tag":"old"}
@@ -171,9 +169,6 @@ func TestUpdateInstitutionCanClearOptionalFields(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, "", body.CountryCode)
 	assert.Equal(t, "", body.Website)
-	assert.Equal(t, "", body.LogoURL)
-	assert.Equal(t, "", body.LogoSmallURL)
-	assert.Equal(t, "", body.BackdropURL)
 	assert.Equal(t, "{}", string(body.Address))
 	assert.Equal(t, "", body.CommentMarkdown)
 	assert.Equal(t, "{}", string(body.Metadata))
@@ -287,10 +282,6 @@ func TestCreateInstitutionValidatesInput(t *testing.T) {
 		{
 			name: "invalid kind",
 			body: `{"name":"Bad Kind","kind":"wallet"}`,
-		},
-		{
-			name: "invalid logo url",
-			body: `{"name":"Bad Logo","kind":"bank","logo_url":"ftp://example.test/logo.svg"}`,
 		},
 		{
 			name: "invalid metadata object",

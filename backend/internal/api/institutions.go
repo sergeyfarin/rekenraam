@@ -18,9 +18,6 @@ type institutionResponse struct {
 	Kind            string          `json:"kind"`
 	CountryCode     string          `json:"country_code,omitempty"`
 	Website         string          `json:"website,omitempty"`
-	LogoURL         string          `json:"logo_url,omitempty"`
-	LogoSmallURL    string          `json:"logo_small_url,omitempty"`
-	BackdropURL     string          `json:"backdrop_url,omitempty"`
 	Address         json.RawMessage `json:"address"`
 	CommentMarkdown string          `json:"comment_markdown"`
 	Metadata        json.RawMessage `json:"metadata"`
@@ -39,9 +36,6 @@ type institutionRequest struct {
 	Kind            string          `json:"kind"`
 	CountryCode     string          `json:"country_code"`
 	Website         string          `json:"website"`
-	LogoURL         string          `json:"logo_url"`
-	LogoSmallURL    string          `json:"logo_small_url"`
-	BackdropURL     string          `json:"backdrop_url"`
 	Address         json.RawMessage `json:"address"`
 	CommentMarkdown string          `json:"comment_markdown"`
 	Metadata        json.RawMessage `json:"metadata"`
@@ -145,9 +139,6 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			Kind:            request.Kind,
 			CountryCode:     request.CountryCode,
 			Website:         request.Website,
-			LogoURL:         request.LogoURL,
-			LogoSmallURL:    request.LogoSmallURL,
-			BackdropURL:     request.BackdropURL,
 			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
 			MetadataJSON:    rawJSONText(request.Metadata),
@@ -192,9 +183,6 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			Kind:            request.Kind,
 			CountryCode:     request.CountryCode,
 			Website:         request.Website,
-			LogoURL:         request.LogoURL,
-			LogoSmallURL:    request.LogoSmallURL,
-			BackdropURL:     request.BackdropURL,
 			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
 			MetadataJSON:    rawJSONText(request.Metadata),
@@ -314,9 +302,6 @@ func toInstitutionResponse(institution app.Institution) institutionResponse {
 		Kind:            institution.Kind,
 		CountryCode:     institution.CountryCode,
 		Website:         institution.Website,
-		LogoURL:         institution.LogoURL,
-		LogoSmallURL:    institution.LogoSmallURL,
-		BackdropURL:     institution.BackdropURL,
 		Address:         json.RawMessage(institution.AddressJSON),
 		CommentMarkdown: institution.CommentMarkdown,
 		Metadata:        json.RawMessage(institution.MetadataJSON),

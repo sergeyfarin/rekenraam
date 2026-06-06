@@ -28,9 +28,6 @@ type InstitutionRecord struct {
 	Kind            string
 	CountryCode     sql.NullString
 	Website         sql.NullString
-	LogoURL         sql.NullString
-	LogoSmallURL    sql.NullString
-	BackdropURL     sql.NullString
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
@@ -41,9 +38,6 @@ type InstitutionSpec struct {
 	Kind            string
 	CountryCode     string
 	Website         string
-	LogoURL         string
-	LogoSmallURL    string
-	BackdropURL     string
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
@@ -319,16 +313,13 @@ func insertInstitutionVersion(ctx context.Context, tx *sql.Tx, params insertInst
 			kind,
 			country_code,
 			website,
-			logo_url,
-			logo_small_url,
-			backdrop_url,
 			address_json,
 			comment_markdown,
 			metadata_json,
 			change_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
-	`, params.InstitutionID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Name, params.Spec.Kind, params.Spec.CountryCode, params.Spec.Website, params.Spec.LogoURL, params.Spec.LogoSmallURL, params.Spec.BackdropURL, params.Spec.AddressJSON, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
+	`, params.InstitutionID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Name, params.Spec.Kind, params.Spec.CountryCode, params.Spec.Website, params.Spec.AddressJSON, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
 	if err != nil {
 		return InstitutionRecord{}, fmt.Errorf("insert institution version: %w", err)
 	}
@@ -398,9 +389,6 @@ func institutionSelect(versionSource string, whereClause string) string {
 			iv.kind,
 			iv.country_code,
 			iv.website,
-			iv.logo_url,
-			iv.logo_small_url,
-			iv.backdrop_url,
 			iv.address_json,
 			iv.comment_markdown,
 			iv.metadata_json
@@ -426,9 +414,6 @@ func scanInstitutionRecord(row rowScanner, record *InstitutionRecord) error {
 		&record.Kind,
 		&record.CountryCode,
 		&record.Website,
-		&record.LogoURL,
-		&record.LogoSmallURL,
-		&record.BackdropURL,
 		&record.AddressJSON,
 		&record.CommentMarkdown,
 		&record.MetadataJSON,

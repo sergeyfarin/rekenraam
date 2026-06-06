@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode"
 
 	"rekenraam/backend/internal/db"
 )
@@ -18,7 +17,6 @@ import (
 const (
 	institutionNameMaxBytes    = 200
 	institutionWebsiteMaxBytes = 500
-	institutionAssetMaxBytes   = 1000
 	institutionCommentMaxBytes = 5000
 	institutionJSONMaxBytes    = 10000
 	institutionListLimit       = 2000
@@ -47,9 +45,6 @@ type Institution struct {
 	Kind            string
 	CountryCode     string
 	Website         string
-	LogoURL         string
-	LogoSmallURL    string
-	BackdropURL     string
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
@@ -75,9 +70,6 @@ type CreateInstitutionInput struct {
 	Kind            string
 	CountryCode     string
 	Website         string
-	LogoURL         string
-	LogoSmallURL    string
-	BackdropURL     string
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
@@ -96,9 +88,6 @@ type UpdateInstitutionInput struct {
 	Kind            string
 	CountryCode     string
 	Website         string
-	LogoURL         string
-	LogoSmallURL    string
-	BackdropURL     string
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
@@ -190,9 +179,6 @@ func (s *InstitutionService) CreateInstitution(ctx context.Context, input Create
 		Kind:            input.Kind,
 		CountryCode:     input.CountryCode,
 		Website:         input.Website,
-		LogoURL:         input.LogoURL,
-		LogoSmallURL:    input.LogoSmallURL,
-		BackdropURL:     input.BackdropURL,
 		AddressJSON:     input.AddressJSON,
 		CommentMarkdown: input.CommentMarkdown,
 		MetadataJSON:    input.MetadataJSON,
@@ -245,9 +231,6 @@ func (s *InstitutionService) UpdateInstitution(ctx context.Context, input Update
 		Kind:            input.Kind,
 		CountryCode:     input.CountryCode,
 		Website:         input.Website,
-		LogoURL:         input.LogoURL,
-		LogoSmallURL:    input.LogoSmallURL,
-		BackdropURL:     input.BackdropURL,
 		AddressJSON:     input.AddressJSON,
 		CommentMarkdown: input.CommentMarkdown,
 		MetadataJSON:    input.MetadataJSON,
@@ -347,9 +330,6 @@ type institutionSpecInput struct {
 	Kind            string
 	CountryCode     string
 	Website         string
-	LogoURL         string
-	LogoSmallURL    string
-	BackdropURL     string
 	AddressJSON     string
 	CommentMarkdown string
 	MetadataJSON    string
@@ -388,18 +368,6 @@ func institutionSpec(input institutionSpecInput) (db.InstitutionSpec, error) {
 	if err != nil {
 		return db.InstitutionSpec{}, err
 	}
-	logoURL, err := cleanAssetReference(input.LogoURL, "institution logo URL")
-	if err != nil {
-		return db.InstitutionSpec{}, err
-	}
-	logoSmallURL, err := cleanAssetReference(input.LogoSmallURL, "institution small logo URL")
-	if err != nil {
-		return db.InstitutionSpec{}, err
-	}
-	backdropURL, err := cleanAssetReference(input.BackdropURL, "institution backdrop URL")
-	if err != nil {
-		return db.InstitutionSpec{}, err
-	}
 
 	addressJSON, err := cleanJSONObject(input.AddressJSON, "institution address")
 	if err != nil {
@@ -421,9 +389,6 @@ func institutionSpec(input institutionSpecInput) (db.InstitutionSpec, error) {
 		Kind:            kind,
 		CountryCode:     countryCode,
 		Website:         website,
-		LogoURL:         logoURL,
-		LogoSmallURL:    logoSmallURL,
-		BackdropURL:     backdropURL,
 		AddressJSON:     addressJSON,
 		CommentMarkdown: commentMarkdown,
 		MetadataJSON:    metadataJSON,
@@ -436,9 +401,6 @@ func institutionSpecFromStored(institution Institution) db.InstitutionSpec {
 		Kind:            institution.Kind,
 		CountryCode:     institution.CountryCode,
 		Website:         institution.Website,
-		LogoURL:         institution.LogoURL,
-		LogoSmallURL:    institution.LogoSmallURL,
-		BackdropURL:     institution.BackdropURL,
 		AddressJSON:     institution.AddressJSON,
 		CommentMarkdown: institution.CommentMarkdown,
 		MetadataJSON:    institution.MetadataJSON,
@@ -489,27 +451,6 @@ func cleanHTTPURL(value string, field string, maxBytes int) (string, error) {
 	return cleaned, nil
 }
 
-func cleanAssetReference(value string, field string) (string, error) {
-	cleaned := strings.TrimSpace(value)
-	if cleaned == "" {
-		return "", nil
-	}
-	if len(cleaned) > institutionAssetMaxBytes {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, institutionAssetMaxBytes)}
-	}
-
-	if strings.HasPrefix(cleaned, "/") && !strings.HasPrefix(cleaned, "//") {
-		for _, r := range cleaned {
-			if unicode.IsControl(r) {
-				return "", ValidationError{Message: fmt.Sprintf("%s must not contain control characters", field)}
-			}
-		}
-		return cleaned, nil
-	}
-
-	return cleanHTTPURL(cleaned, field, institutionAssetMaxBytes)
-}
-
 func toInstitution(record db.InstitutionRecord) Institution {
 	return Institution{
 		ID:              record.ID,
@@ -519,9 +460,6 @@ func toInstitution(record db.InstitutionRecord) Institution {
 		Kind:            record.Kind,
 		CountryCode:     nullableString(record.CountryCode),
 		Website:         nullableString(record.Website),
-		LogoURL:         nullableString(record.LogoURL),
-		LogoSmallURL:    nullableString(record.LogoSmallURL),
-		BackdropURL:     nullableString(record.BackdropURL),
 		AddressJSON:     record.AddressJSON,
 		CommentMarkdown: record.CommentMarkdown,
 		MetadataJSON:    record.MetadataJSON,

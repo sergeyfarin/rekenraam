@@ -72,7 +72,6 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 		"code",
 		"account_class",
 		"base_kind",
-		"ui_profile",
 		"is_user_assignable",
 	})
 	assert.Contains(t, readTableColumns(t, database, "accounts"), "created_audit_event_id")
@@ -80,6 +79,96 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_account_versions"))
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_institution_versions"))
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_commodity_versions"))
+}
+
+func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO commodity_versions (
+			commodity_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			symbol,
+			display_symbol,
+			name,
+			standard_scale,
+			max_quantity_scale
+		)
+		VALUES (1, 1, '2026-06-06T00:00:00Z', '2026-06-06T00:00:00Z', 1, 'test', 'active', 'USD', '$', 'US Dollar', 2, 2);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO institution_versions (
+			institution_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			name,
+			kind
+		)
+		VALUES (1, 0, '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test', 'active', 'Bank', 'bank');
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO account_versions (
+			account_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			name,
+			account_class,
+			account_kind,
+			allows_postings
+		)
+		VALUES (1, 1, '2026-06-06T00:00:00Z', '2026-06-06T00:00:00Z', 1, 'test', 'active', 'Checking', 'asset', 'checking', 1);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
+}
+
+func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (1, 'owner', 'hash', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
+	`)
+	require.NoError(t, err)
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO books (
+			id,
+			owner_user_id,
+			code,
+			name,
+			updated_by_user_id,
+			created_at,
+			updated_at
+		)
+		VALUES (2, 1, 'second', 'Second', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
 }
 
 func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
@@ -105,6 +194,36 @@ func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
 	`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "book default currency must reference a currency in the same book")
+}
+
+func insertMinimalFinancialFixture(t *testing.T, database *sql.DB) {
+	t.Helper()
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (1, 'owner', 'hash', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
+
+		INSERT INTO books (
+			id,
+			owner_user_id,
+			code,
+			name,
+			updated_by_user_id,
+			created_at,
+			updated_at
+		)
+		VALUES (1, 1, 'personal', 'Personal', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
+
+		INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
+		VALUES (1, 1, 'USD', 'currency', 1, '2026-06-01T00:00:00Z', 1);
+
+		INSERT INTO institutions (id, book_id, created_at, created_by_user_id)
+		VALUES (1, 1, '2026-06-01T00:00:00Z', 1);
+
+		INSERT INTO accounts (id, book_id, created_at, created_by_user_id)
+		VALUES (1, 1, '2026-06-01T00:00:00Z', 1);
+	`)
+	require.NoError(t, err)
 }
 
 func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {

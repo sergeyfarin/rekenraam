@@ -133,7 +133,6 @@ type AccountKindRecord struct {
 	Code             string
 	AccountClass     string
 	BaseKind         string
-	UIProfile        string
 	IsBuiltin        bool
 	IsUserAssignable bool
 	DisplayKey       string
@@ -514,7 +513,6 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 			code,
 			account_class,
 			base_kind,
-			ui_profile,
 			is_builtin,
 			is_user_assignable,
 			display_key,
@@ -525,7 +523,6 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 		&record.Code,
 		&record.AccountClass,
 		&record.BaseKind,
-		&record.UIProfile,
 		&isBuiltin,
 		&isUserAssignable,
 		&record.DisplayKey,

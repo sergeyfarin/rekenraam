@@ -54,18 +54,6 @@ InstitutionResponse:
       type: string
       format: uri
       maxLength: 500
-    logo_url:
-      type: string
-      maxLength: 1000
-      description: Optional absolute URL or same-origin path for the institution logo.
-    logo_small_url:
-      type: string
-      maxLength: 1000
-      description: Optional absolute URL or same-origin path for compact list logos.
-    backdrop_url:
-      type: string
-      maxLength: 1000
-      description: Optional absolute URL or same-origin path for larger institution backdrop artwork.
     address:
       type: object
       additionalProperties: true
@@ -119,15 +107,6 @@ InstitutionRequest:
       type: string
       format: uri
       maxLength: 500
-    logo_url:
-      type: string
-      maxLength: 1000
-    logo_small_url:
-      type: string
-      maxLength: 1000
-    backdrop_url:
-      type: string
-      maxLength: 1000
     address:
       type: object
       additionalProperties: true

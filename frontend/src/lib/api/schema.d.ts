@@ -2397,12 +2397,6 @@ export interface components {
             country_code?: string;
             /** Format: uri */
             website?: string;
-            /** @description Optional absolute URL or same-origin path for the institution logo. */
-            logo_url?: string;
-            /** @description Optional absolute URL or same-origin path for compact list logos. */
-            logo_small_url?: string;
-            /** @description Optional absolute URL or same-origin path for larger institution backdrop artwork. */
-            backdrop_url?: string;
             /** @description Reserved structured address object. Defaults to {}. */
             address: {
                 [key: string]: unknown;
@@ -2434,9 +2428,6 @@ export interface components {
             country_code?: string;
             /** Format: uri */
             website?: string;
-            logo_url?: string;
-            logo_small_url?: string;
-            backdrop_url?: string;
             /** @description Reserved structured address object. Omit for {}. */
             address?: {
                 [key: string]: unknown;
