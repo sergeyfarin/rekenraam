@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -70,6 +70,16 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("PATCH /api/v1/tags/{tag_id}", updateTag(logger, authService, tagService, options))
 		mux.HandleFunc("POST /api/v1/tags/{tag_id}/archive", archiveTag(logger, authService, tagService, options))
 		mux.HandleFunc("POST /api/v1/tags/{tag_id}/restore", restoreTag(logger, authService, tagService, options))
+	}
+	if authService != nil && categoryService != nil {
+		mux.HandleFunc("GET /api/v1/categories", listCategories(logger, authService, categoryService))
+		mux.HandleFunc("POST /api/v1/categories", createCategory(logger, authService, categoryService, options))
+		mux.HandleFunc("GET /api/v1/categories/{category_id}", readCategory(logger, authService, categoryService))
+		mux.HandleFunc("PATCH /api/v1/categories/{category_id}", updateCategory(logger, authService, categoryService, options))
+		mux.HandleFunc("POST /api/v1/categories/{category_id}/disable", disableCategory(logger, authService, categoryService, options))
+		mux.HandleFunc("POST /api/v1/categories/{category_id}/restore", restoreCategory(logger, authService, categoryService, options))
+		mux.HandleFunc("DELETE /api/v1/categories/{category_id}", deleteCategory(logger, authService, categoryService, options))
+		mux.HandleFunc("POST /api/v1/setup/categories", completeCategoriesSetup(logger, authService, categoryService, options))
 	}
 }
 

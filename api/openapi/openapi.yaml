@@ -53,6 +53,16 @@ paths:
     $ref: "./paths/account-versions.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
+  /api/v1/setup/categories:
+    $ref: "./paths/setup-categories.yaml"
+  /api/v1/categories:
+    $ref: "./paths/categories.yaml"
+  /api/v1/categories/{category_id}:
+    $ref: "./paths/category.yaml"
+  /api/v1/categories/{category_id}/disable:
+    $ref: "./paths/category-disable.yaml"
+  /api/v1/categories/{category_id}/restore:
+    $ref: "./paths/category-restore.yaml"
   /api/v1/tags:
     $ref: "./paths/tags.yaml"
   /api/v1/tags/{tag_id}:
@@ -86,6 +96,13 @@ components:
     TagID:
       in: path
       name: tag_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CategoryID:
+      in: path
+      name: category_id
       required: true
       schema:
         type: integer
@@ -155,6 +172,22 @@ components:
       $ref: "./components/schemas/accounts.yaml#/AccountLifecycleRequest"
     CompleteSystemAccountsSetupResponse:
       $ref: "./components/schemas/accounts.yaml#/CompleteSystemAccountsSetupResponse"
+    CategoryType:
+      $ref: "./components/schemas/categories.yaml#/CategoryType"
+    CategoryStatus:
+      $ref: "./components/schemas/categories.yaml#/CategoryStatus"
+    CategoryResponse:
+      $ref: "./components/schemas/categories.yaml#/CategoryResponse"
+    CategoriesResponse:
+      $ref: "./components/schemas/categories.yaml#/CategoriesResponse"
+    CreateCategoryRequest:
+      $ref: "./components/schemas/categories.yaml#/CreateCategoryRequest"
+    UpdateCategoryRequest:
+      $ref: "./components/schemas/categories.yaml#/UpdateCategoryRequest"
+    CategoryLifecycleRequest:
+      $ref: "./components/schemas/categories.yaml#/CategoryLifecycleRequest"
+    CompleteCategoriesSetupResponse:
+      $ref: "./components/schemas/categories.yaml#/CompleteCategoriesSetupResponse"
     TagKind:
       $ref: "./components/schemas/tags.yaml#/TagKind"
     TagStatus:

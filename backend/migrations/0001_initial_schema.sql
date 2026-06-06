@@ -422,6 +422,12 @@ END;
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS account_versions_no_delete
 BEFORE DELETE ON account_versions
+WHEN NOT (
+  OLD.account_class IN ('income', 'expense')
+  AND OLD.account_kind = OLD.account_class
+  AND json_extract(OLD.metadata_json, '$.category.type') = OLD.account_class
+  AND json_extract(OLD.metadata_json, '$.category.is_builtin') = 0
+)
 BEGIN
   SELECT RAISE(ABORT, 'account_versions rows are append-only');
 END;

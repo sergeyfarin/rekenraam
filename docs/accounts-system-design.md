@@ -452,7 +452,8 @@ Income and expense categories are account-backed. A category is an account whose
 `expense`. Category renames, moves, closes, and archives use `account_versions`;
 do not add a separate category version table. Built-in categories should store
 stable keys/codes so the UI can translate them. User-entered category names are
-data and are shown as entered.
+data and are shown as entered. The detailed category API, lifecycle policy, and
+starter taxonomy live in `docs/categories-design.md`.
 
 Categories answer "what kind of income or expense is this?" They may be nested:
 

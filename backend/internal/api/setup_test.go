@@ -36,7 +36,7 @@ func TestSetupStatusReturnsInitialSteps(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.False(t, body.Completed)
 	assert.Equal(t, app.InstallStateFresh, body.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts", "categories"}, body.ImplementedSteps)
 	assert.Equal(t, "owner", body.BlockingStep)
 	assert.Equal(t, "owner", body.CurrentStep)
 	require.Len(t, body.Steps, 5)
@@ -67,7 +67,7 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.Equal(t, "owner", body.Owner.Username)
 	assert.False(t, body.Setup.Completed)
 	assert.Equal(t, app.InstallStateConfigured, body.Setup.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.Setup.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts", "categories"}, body.Setup.ImplementedSteps)
 	assert.Empty(t, body.Setup.BlockingStep)
 	assert.Equal(t, "book", body.Setup.CurrentStep)
 	assert.Equal(t, setupStepResponse{Key: "owner", Status: app.SetupStepStatusCompleted}, body.Setup.Steps[0])
@@ -258,7 +258,7 @@ func TestSetupStatusReturnsRecoveryRequiredForInconsistentOwnerState(t *testing.
 	var body setupStatusResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, app.InstallStateRecoveryRequired, body.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts", "categories"}, body.ImplementedSteps)
 	assert.Empty(t, body.BlockingStep)
 }
 
@@ -288,8 +288,9 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	institutionService := app.NewInstitutionService(institutionRepository)
 	accountService := app.NewAccountService(db.NewAccountRepository(database), institutionRepository, setupService)
 	tagService := app.NewTagService(db.NewTagRepository(database))
+	categoryService := app.NewCategoryService(db.NewCategoryRepository(database), setupService)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, options), database
 }
 
 func setSameOrigin(req *http.Request) {

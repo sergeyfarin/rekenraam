@@ -1,0 +1,165 @@
+CategoryType:
+  type: string
+  enum:
+    - income
+    - expense
+CategoryStatus:
+  type: string
+  enum:
+    - active
+    - archived
+CategoryResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - status
+    - category_type
+    - allows_postings
+    - is_builtin
+    - metadata
+    - opened_on
+    - effective_from
+    - change_reason
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+      description: Current runtime always uses book id 1.
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/CategoryStatus"
+    code:
+      type: string
+      maxLength: 100
+      description: Stable built-in code or optional user code.
+    name:
+      type: string
+      maxLength: 200
+      description: User-entered display name. Built-ins omit this until renamed.
+    category_type:
+      $ref: "../../openapi.yaml#/components/schemas/CategoryType"
+    parent_category_id:
+      type: integer
+      format: int64
+      description: Parent category within the same income or expense tree.
+    allows_postings:
+      type: boolean
+      description: Parent groups usually disallow postings; leaf categories usually allow them.
+    is_builtin:
+      type: boolean
+    builtin_key:
+      type: string
+      description: Stable frontend translation key suffix for built-in categories.
+    metadata:
+      type: object
+      additionalProperties: true
+    opened_on:
+      type: string
+      format: date
+    closed_on:
+      type: string
+      format: date
+    effective_from:
+      type: string
+      format: date
+    change_reason:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+CategoriesResponse:
+  type: object
+  required:
+    - categories
+  properties:
+    categories:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CategoryResponse"
+CreateCategoryRequest:
+  type: object
+  required:
+    - name
+    - category_type
+  properties:
+    code:
+      type: string
+      maxLength: 100
+    name:
+      type: string
+      maxLength: 200
+    category_type:
+      $ref: "../../openapi.yaml#/components/schemas/CategoryType"
+    parent_category_id:
+      type: integer
+      format: int64
+    allows_postings:
+      type: boolean
+      description: Defaults to true.
+    opened_on:
+      type: string
+      format: date
+    effective_from:
+      type: string
+      format: date
+    change_reason:
+      type: string
+  additionalProperties: false
+UpdateCategoryRequest:
+  type: object
+  properties:
+    code:
+      type: string
+      maxLength: 100
+    name:
+      type: string
+      maxLength: 200
+    category_type:
+      $ref: "../../openapi.yaml#/components/schemas/CategoryType"
+      description: Included for client clarity; changing category type is rejected.
+    parent_category_id:
+      type: integer
+      format: int64
+    clear_parent:
+      type: boolean
+      description: Move the category to the income or expense root.
+    allows_postings:
+      type: boolean
+    opened_on:
+      type: string
+      format: date
+    effective_from:
+      type: string
+      format: date
+    change_reason:
+      type: string
+  additionalProperties: false
+CategoryLifecycleRequest:
+  type: object
+  properties:
+    effective_from:
+      type: string
+      format: date
+    change_reason:
+      type: string
+  additionalProperties: false
+CompleteCategoriesSetupResponse:
+  type: object
+  required:
+    - categories
+    - setup
+  properties:
+    categories:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CategoryResponse"
+    setup:
+      $ref: "../../openapi.yaml#/components/schemas/SetupStatusResponse"

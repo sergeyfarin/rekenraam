@@ -80,7 +80,7 @@ func TestCompleteCurrencySetupCreatesDefaultAndAdditionalCurrencies(t *testing.T
 	assert.Equal(t, "US Dollar", body.DefaultCurrency.Name)
 	assert.Equal(t, 2, body.DefaultCurrency.StandardScale)
 	assert.Equal(t, app.InstallStateConfigured, body.Setup.InstallState)
-	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts"}, body.Setup.ImplementedSteps)
+	assert.Equal(t, []string{"owner", "book", "currencies", "system_accounts", "categories"}, body.Setup.ImplementedSteps)
 	assert.Equal(t, "system_accounts", body.Setup.CurrentStep)
 
 	var defaultCurrencyID sql.NullInt64

@@ -101,7 +101,7 @@ func (s *SetupService) Status(ctx context.Context) (SetupStatus, error) {
 	status := SetupStatus{
 		Completed:        true,
 		Steps:            make([]SetupStep, 0, len(stepRecords)),
-		ImplementedSteps: []string{"owner", "book", "currencies", "system_accounts"},
+		ImplementedSteps: []string{"owner", "book", "currencies", "system_accounts", "categories"},
 	}
 
 	for _, stepRecord := range stepRecords {

@@ -36,6 +36,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Hidden income and expense fallback accounts use `account_class=income` and
   `account_class=expense` respectively; they are not equity summary accounts.
 - Categories are UI concepts mapped to income and expense accounts, not a separate ledger primitive.
+- Category API behavior, built-in metadata, lifecycle rules, and the starter
+  taxonomy are documented in `docs/categories-design.md`.
 - Transactions contain postings or splits.
 - Transfers are ordinary transactions.
 - Reconciliation status belongs to posting or account-specific ledger state, not only a transaction header.
