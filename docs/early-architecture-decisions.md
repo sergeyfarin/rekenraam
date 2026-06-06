@@ -223,7 +223,10 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
 - Before first frontend use of typed API clients: exact OpenAPI generation/check command and generated-client path.
 - Before transactions: posting schema, balancing rules, transfer representation, split editing, draft versus posted lifecycle, correction behavior, and import-source metadata.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
-- Before budgets: period semantics, category/account mapping, rollover rules, and whether budgets are book-wide or account-scoped.
+- Before budgets: period semantics, category/account mapping, rollover rules,
+  whether budgets are book-wide or account-scoped, and the detailed UI for
+  account budget treatment. Budget treatment is a separate account-facing axis,
+  not an account kind.
 - Before reports: cashflow basis, date range inclusivity, multi-currency totals, and whether report runs need snapshots.
 - Before file import: supported formats, duplicate detection, source retention, preview/commit workflow, and rollback behavior.
 - Before backups: backup location, restore UX, encryption expectations, Docker volume guidance, and smoke validation.

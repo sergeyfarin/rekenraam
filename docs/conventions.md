@@ -26,10 +26,15 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Accounts form a tree.
 - Account classes are asset, liability, equity, income, and expense.
 - Account kinds are catalog-backed behavior/UI profiles constrained by class;
-  they are not categories, tax wrappers, system roles, or investment lot
-  concepts.
+  they are not categories, tax wrappers, budget-visibility wrappers, system
+  roles, or investment lot concepts.
+- Account budget treatment is a separate planning/reporting axis from
+  `account_kind`, because the same kind of account can be on-budget,
+  off-budget, or excluded from budget views.
 - System accounts are identified by `system_role` and hidden from ordinary
   account lists by default.
+- Hidden income and expense fallback accounts use `account_class=income` and
+  `account_class=expense` respectively; they are not equity summary accounts.
 - Categories are UI concepts mapped to income and expense accounts, not a separate ledger primitive.
 - Transactions contain postings or splits.
 - Transfers are ordinary transactions.

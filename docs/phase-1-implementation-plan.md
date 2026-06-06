@@ -137,8 +137,8 @@ Required roles:
 - `opening_balance`
 - `imbalance_import`
 - `retained_earnings`
-- `income_summary`
-- `expense_summary`
+- `uncategorized_income`
+- `uncategorized_expense`
 
 Behavior:
 

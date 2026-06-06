@@ -2470,7 +2470,7 @@ export interface components {
         /** @enum {string} */
         AccountStatus: "active" | "closed" | "archived";
         /** @enum {string} */
-        SystemAccountRole: "opening_balance" | "imbalance_import" | "retained_earnings" | "income_summary" | "expense_summary";
+        SystemAccountRole: "opening_balance" | "imbalance_import" | "retained_earnings" | "uncategorized_income" | "uncategorized_expense";
         AccountResponse: {
             /** Format: int64 */
             id: number;
@@ -2491,7 +2491,10 @@ export interface components {
             /** Format: int64 */
             institution_id?: number;
             country_code?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Default entry commodity. Omitted for multi-commodity accounts such as transient receivable/payable accounts or containers.
+             */
             default_commodity_id?: number;
             quantity_scale_override?: number;
             allows_postings: boolean;
@@ -2527,7 +2530,10 @@ export interface components {
             /** Format: int64 */
             institution_id?: number;
             country_code?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Default entry commodity. Required for single-commodity posting asset and liability accounts; omit for multi-commodity transient accounts such as receivable/payable.
+             */
             default_commodity_id?: number;
             quantity_scale_override?: number;
             /** @description Defaults to true when omitted. */

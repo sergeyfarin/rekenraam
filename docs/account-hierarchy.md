@@ -4,12 +4,14 @@ Rekenraam uses a double-entry chart of accounts. Accounts are ledger buckets
 arranged in a tree. Postings always point to accounts; friendly concepts such as
 categories, wrappers, and reports layer on top of those accounts.
 
-The account model deliberately separates four ideas:
+The account model deliberately separates these ideas:
 
 - `account_class`: the accounting class that drives signs, reports, and
   double-entry rules.
 - `account_kind`: the account's behavioral and UI profile.
 - `system_role`: the internal workflow role for seeded system accounts.
+- Budget treatment: whether an account participates in budget views.
+- Tax or legal treatment: country-specific wrappers such as pension accounts.
 - Categories: user-facing income and expense reporting buckets backed by
   income or expense accounts.
 
@@ -52,7 +54,8 @@ Initial built-in asset kinds:
 - `vehicle`: vehicle tracked as an asset.
 - `rewards_balance`: points, miles, or other non-cash balances tracked as a
   commodity.
-- `receivable`: money owed to the user.
+- `receivable`: money owed to the user. UI should label this in personal
+  language such as "Money owed to me" or "Expected money".
 - `other_asset`: fallback asset kind.
 
 Initial built-in liability kinds:
@@ -62,7 +65,8 @@ Initial built-in liability kinds:
 - `loan`
 - `mortgage`
 - `tax_liability`
-- `payable`
+- `payable`: money the user owes. UI should label this in personal language
+  such as "Money I owe" or "Pending payment".
 - `other_liability`
 
 Initial built-in equity, income, and expense kinds:
@@ -77,8 +81,25 @@ More detail belongs elsewhere:
   labels are categories backed by income or expense accounts.
 - 401(k), ISA, RRSP, superannuation, pension, and similar country-specific
   account meanings are wrappers or tax treatments, not account kinds.
+- On-budget, off-budget, and excluded-from-budget behavior is budget treatment,
+  not account kind.
 - Realized gains, unrealized gains, investment fees, and lots belong to the
   investment workflow layer once that layer exists.
+
+## Budget Treatment
+
+Budget treatment is a separate account-facing planning axis. It should not be
+encoded into `account_kind`, because the same kind of account can be shown
+differently in budget views.
+
+Expected future treatments:
+
+- `on_budget`: included in ordinary budget cash flow and available balances.
+- `off_budget`: tracked in the ledger and reports but outside day-to-day budget
+  availability.
+- `excluded`: hidden from budget views unless explicitly included.
+
+This belongs to the budget/planning slice, not the current account-kind catalog.
 
 ## System Accounts
 
@@ -86,16 +107,20 @@ System accounts are ordinary accounts with `is_system=true`, `account_class`,
 and `account_kind`, plus a stable `system_role`. They are hidden from normal
 account lists unless the API caller explicitly asks for `include_system=true`.
 
-Current system roles use `account_class=equity` and `account_kind=equity`:
+Current system roles:
 
-- `opening_balance`
-- `imbalance_import`
-- `retained_earnings`
-- `income_summary`
-- `expense_summary`
+- `opening_balance`: equity/equity
+- `imbalance_import`: equity/equity
+- `retained_earnings`: equity/equity
+- `uncategorized_income`: income/income
+- `uncategorized_expense`: expense/expense
 
 The role, not the kind, identifies the workflow. System account labels come from
 translation keys based on `system_role`.
+
+System income and expense accounts are hidden fallback accounts, not user-facing
+categories. They can receive postings in multiple commodities and leave
+`default_commodity_id` unset.
 
 ## Tree Shape
 
@@ -119,9 +144,11 @@ flowchart TD
   Brokerage --> BrokerageCash[Brokerage Cash\nasset/brokerage_cash]
   Brokerage --> Security[Security Holding\nasset/security_holding]
   Assets --> Rewards[Rewards Balance\nasset/rewards_balance]
+  Assets --> Receivable[Money Owed To Me\nasset/receivable]
   Assets --> Property[Property\nasset/property]
 
   Liabilities --> CreditCard[Credit Card\nliability/credit_card]
+  Liabilities --> Payable[Money I Owe\nliability/payable]
   Liabilities --> Loan[Loan\nliability/loan]
   Liabilities --> Mortgage[Mortgage\nliability/mortgage]
 
@@ -129,7 +156,9 @@ flowchart TD
   Equity --> Imbalance[Import Imbalance\nsystem_role/imbalance_import]
   Equity --> Retained[Retained Earnings\nsystem_role/retained_earnings]
 
+  Income --> UncategorizedIncome[Uncategorized Income\nsystem_role/uncategorized_income]
   Income --> IncomeCategory[Income Category Account\nincome/income]
+  Expenses --> UncategorizedExpense[Uncategorized Expense\nsystem_role/uncategorized_expense]
   Expenses --> ExpenseCategory[Expense Category Account\nexpense/expense]
 ```
 
@@ -139,3 +168,9 @@ Accounts hold quantities of commodities. Money is a commodity, but so are
 securities, crypto assets, points, miles, and other countable units. A rewards
 balance is still an asset account; its non-monetary nature belongs to the
 commodity, not to a new accounting class.
+
+Transient accounts such as `receivable` and `payable` may be
+commodity-flexible. They can omit `default_commodity_id` and hold postings in
+multiple currencies or commodities, with balances displayed separately per
+commodity. The UI should not sum unlike commodities unless a report explicitly
+chooses an FX conversion method.

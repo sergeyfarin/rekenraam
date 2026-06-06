@@ -387,8 +387,8 @@ Separate accounting class from user-facing kind.
 - `expense`
 
 `account_kind` is a catalog-backed behavior and UI profile. It is not a category
-taxonomy, system workflow role, country-specific tax wrapper, or investment lot
-accounting concept.
+taxonomy, system workflow role, country-specific tax wrapper, budget-visibility
+wrapper, or investment lot accounting concept.
 
 Initial supported kinds:
 
@@ -405,6 +405,15 @@ The database stores the built-in account kind catalog in `account_kinds`. The
 backend validates that a requested kind exists, belongs to the requested class,
 and is user assignable. The frontend uses stable kind codes for labels and UI
 profiles. See `docs/account-hierarchy.md` for the readable taxonomy.
+
+The `income` and `expense` kinds are generic kind profiles for income and
+expense accounts. They are not system-only. Hidden fallback behavior belongs to
+`is_system` and `system_role`, and category-facing behavior belongs to the
+category layer.
+
+User-facing labels should avoid business jargon for personal transient
+balances. The stable kind codes remain `receivable` and `payable`, but UI copy
+should use plain labels such as "Money owed to me" and "Money I owe".
 
 ## Tree Rules
 
@@ -481,6 +490,9 @@ Account commodity rules:
 
 - Posting accounts that are restricted to one commodity must have
   `default_commodity_id`.
+- Transient personal accounts such as `asset/receivable` and
+  `liability/payable` may omit `default_commodity_id` even when they allow
+  postings. Their balances are grouped and displayed separately by commodity.
 - Multi-commodity posting accounts such as income, expense, equity, brokerage
   containers, and system clearing accounts may leave `default_commodity_id`
   null. Their postings still carry explicit commodity ids and must balance per
@@ -508,13 +520,41 @@ Recommended account shapes:
 - Points or miles: asset/rewards_balance, default commodity set to a rewards
   commodity. Defer UI support until reward commodities and report-exclusion
   rules exist.
+- Money owed to me: asset/receivable, default commodity nullable,
+  `allows_postings=true`. Use this for expected refunds, delayed incoming
+  transfers, reimbursements, and other temporary amounts owed to the user.
+- Money I owe: liability/payable, default commodity nullable,
+  `allows_postings=true`. Use this for unpaid purchases, delayed outgoing
+  transfers, and other temporary amounts the user owes.
 - Property or vehicle: asset/property or asset/vehicle, default commodity set to
   the relevant valuation commodity. Valuation changes should be explicit
   transactions or later price observations, not silent account edits.
 
+Receivable and payable balances must not be auto-summed across currencies or
+other commodities. Reports may present converted totals only when they choose an
+explicit reporting commodity and FX method.
+
 Investment booking policy (`fifo`, `lifo`, `average`, `specific_id`) should be
 deferred until investment transactions and lots are implemented. Do not put it
 in the first account version unless the first investment slice needs it.
+
+## Budget Treatment
+
+Budget visibility is a separate account-facing planning axis, similar in shape
+to tax treatment but distinct from it. Do not encode budget behavior into
+`account_kind`.
+
+Expected later treatment codes:
+
+- `on_budget`: included in ordinary budget availability and cash planning.
+- `off_budget`: tracked in ledger and reports but outside daily budget
+  availability.
+- `excluded`: hidden from budget views unless explicitly included.
+
+This should be implemented with a dedicated versioned table when the budget
+slice arrives, not as fields on the initial `account_versions` table. This
+keeps account kinds stable while allowing checking, savings, brokerage,
+receivable, payable, and other kinds to participate differently in budgets.
 
 ## Account Terms, Interest, And Household Context
 
@@ -601,8 +641,10 @@ Required in Phase 1:
 - `imbalance_import`: equity/equity, temporary counterpart for imported
   single-sided entries that need cleanup.
 - `retained_earnings`: equity/equity, future close-period target.
-- `income_summary`: equity/equity, future income close workflow.
-- `expense_summary`: equity/equity, future expense close workflow.
+- `uncategorized_income`: income/income, hidden fallback account for income
+  postings before the user chooses a proper income category.
+- `uncategorized_expense`: expense/expense, hidden fallback account for expense
+  postings before the user chooses a proper expense category.
 
 Recommended later roles:
 
@@ -615,12 +657,14 @@ Recommended later roles:
 Rules:
 
 - One system account identity per `book_id` and `system_role`.
-- System roles identify workflow behavior; `account_kind` stays a generic
-  behavior profile such as `equity`.
+- System roles identify workflow behavior; `account_class` and `account_kind`
+  still describe the actual ledger class and behavior profile.
 - System accounts cannot be edited, closed, archived, or reparented through
   ordinary account management.
 - System accounts are hidden from ordinary account lists unless an API caller
   passes `include_system=true`.
+- System income and expense accounts are multi-commodity by default. They leave
+  `default_commodity_id` null, and balances are grouped by posting commodity.
 - System account names come from translation keys, not English-only database
   labels.
 - The first backend implementation intentionally stores no `name` on system

@@ -255,6 +255,46 @@ func TestAccountValidationRejectsPostingAssetWithoutCommodityAndNonObjectMetadat
 	}
 }
 
+func TestAccountValidationAllowsTransientAccountsWithoutDefaultCommodity(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		body         string
+		accountClass string
+		accountKind  string
+	}{
+		{
+			name:         "receivable",
+			body:         `{"name":"Expected refund","account_class":"asset","account_kind":"receivable"}`,
+			accountClass: "asset",
+			accountKind:  "receivable",
+		},
+		{
+			name:         "payable",
+			body:         `{"name":"Pending payment","account_class":"liability","account_kind":"payable"}`,
+			accountClass: "liability",
+			accountKind:  "payable",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler, _ := newSetupTestHandler(t)
+			sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+
+			account := createAccountForSession(t, handler, sessionCookie, csrfToken, test.body)
+
+			assert.Equal(t, test.accountClass, account.AccountClass)
+			assert.Equal(t, test.accountKind, account.AccountKind)
+			assert.Nil(t, account.DefaultCommodityID)
+			assert.True(t, account.AllowsPostings)
+		})
+	}
+}
+
 func TestAccountParentRulesRejectCyclesAndClassMismatch(t *testing.T) {
 	t.Parallel()
 
@@ -364,19 +404,35 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	require.Len(t, body.Accounts, 5)
 	assert.Equal(t, setupStepResponse{Key: "system_accounts", Status: "completed"}, body.Setup.Steps[3])
 
-	roles := make(map[string]bool, len(body.Accounts))
+	expectedRoles := map[string]struct {
+		accountClass string
+		accountKind  string
+	}{
+		"opening_balance":       {accountClass: "equity", accountKind: "equity"},
+		"imbalance_import":      {accountClass: "equity", accountKind: "equity"},
+		"retained_earnings":     {accountClass: "equity", accountKind: "equity"},
+		"uncategorized_income":  {accountClass: "income", accountKind: "income"},
+		"uncategorized_expense": {accountClass: "expense", accountKind: "expense"},
+	}
+	seenRoles := make(map[string]bool, len(body.Accounts))
 	for _, account := range body.Accounts {
 		assert.True(t, account.IsSystem)
 		assert.Equal(t, "active", account.Status)
-		assert.Equal(t, "equity", account.AccountClass)
-		assert.Equal(t, "equity", account.AccountKind)
-		roles[account.SystemRole] = true
+		assert.Nil(t, account.DefaultCommodityID)
+
+		expected, ok := expectedRoles[account.SystemRole]
+		require.True(t, ok, "unexpected system role %q", account.SystemRole)
+		assert.Equal(t, expected.accountClass, account.AccountClass)
+		assert.Equal(t, expected.accountKind, account.AccountKind)
+		seenRoles[account.SystemRole] = true
 	}
-	assert.True(t, roles["opening_balance"])
-	assert.True(t, roles["imbalance_import"])
-	assert.True(t, roles["retained_earnings"])
-	assert.True(t, roles["income_summary"])
-	assert.True(t, roles["expense_summary"])
+	assert.Equal(t, map[string]bool{
+		"opening_balance":       true,
+		"imbalance_import":      true,
+		"retained_earnings":     true,
+		"uncategorized_income":  true,
+		"uncategorized_expense": true,
+	}, seenRoles)
 
 	patchAccount(t, handler, sessionCookie, csrfToken, body.Accounts[0].ID, `{}`, http.StatusConflict)
 

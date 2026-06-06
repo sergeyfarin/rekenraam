@@ -44,8 +44,8 @@ var systemAccountSpecs = []db.SystemAccountSpec{
 	{Role: "opening_balance", AccountClass: "equity", AccountKind: "equity"},
 	{Role: "imbalance_import", AccountClass: "equity", AccountKind: "equity"},
 	{Role: "retained_earnings", AccountClass: "equity", AccountKind: "equity"},
-	{Role: "income_summary", AccountClass: "equity", AccountKind: "equity"},
-	{Role: "expense_summary", AccountClass: "equity", AccountKind: "equity"},
+	{Role: "uncategorized_income", AccountClass: "income", AccountKind: "income"},
+	{Role: "uncategorized_expense", AccountClass: "expense", AccountKind: "expense"},
 }
 
 type Account struct {
@@ -595,7 +595,7 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		}
 		commodityMaxScale = commodity.MaxQuantityScale
 	}
-	if allowsPostings && defaultCommodityID.Valid == false && accountClassRequiresDefaultCommodity(accountClass) {
+	if allowsPostings && defaultCommodityID.Valid == false && accountKindRequiresDefaultCommodity(accountClass, accountKind) {
 		return db.AccountSpec{}, ValidationError{Message: "default commodity is required for this posting account"}
 	}
 
@@ -668,8 +668,12 @@ func defaultAccountKind(accountClass string) string {
 	}
 }
 
-func accountClassRequiresDefaultCommodity(accountClass string) bool {
-	return accountClass == "asset" || accountClass == "liability"
+func accountKindRequiresDefaultCommodity(accountClass string, accountKind string) bool {
+	if accountClass != "asset" && accountClass != "liability" {
+		return false
+	}
+
+	return accountKind != "receivable" && accountKind != "payable"
 }
 
 func accountSpecFromStored(account Account) db.AccountSpec {

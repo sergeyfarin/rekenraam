@@ -44,8 +44,8 @@ INSERT OR IGNORE INTO account_kinds (
   ('payable', 'liability', 'payable', 'payable', 1, 1, 0, 'account_kind_payable', 310),
   ('other_liability', 'liability', 'other', 'other_liability', 1, 1, 0, 'account_kind_other_liability', 900),
   ('equity', 'equity', 'equity', 'equity', 1, 1, 0, 'account_kind_equity', 100),
-  ('income', 'income', 'income', 'income', 1, 1, 1, 'account_kind_income', 100),
-  ('expense', 'expense', 'expense', 'expense', 1, 1, 1, 'account_kind_expense', 100);
+  ('income', 'income', 'income', 'income', 1, 1, 0, 'account_kind_income', 100),
+  ('expense', 'expense', 'expense', 'expense', 1, 1, 0, 'account_kind_expense', 100);
 
 DROP TRIGGER IF EXISTS account_versions_no_delete;
 DROP TRIGGER IF EXISTS account_versions_no_update;

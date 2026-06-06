@@ -44,8 +44,8 @@ SystemAccountRole:
     - opening_balance
     - imbalance_import
     - retained_earnings
-    - income_summary
-    - expense_summary
+    - uncategorized_income
+    - uncategorized_expense
 AccountResponse:
   type: object
   required:
@@ -99,6 +99,7 @@ AccountResponse:
     default_commodity_id:
       type: integer
       format: int64
+      description: Default entry commodity. Omitted for multi-commodity accounts such as transient receivable/payable accounts or containers.
     quantity_scale_override:
       type: integer
       minimum: 0
@@ -170,6 +171,7 @@ AccountRequest:
     default_commodity_id:
       type: integer
       format: int64
+      description: Default entry commodity. Required for single-commodity posting asset and liability accounts; omit for multi-commodity transient accounts such as receivable/payable.
     quantity_scale_override:
       type: integer
       minimum: 0

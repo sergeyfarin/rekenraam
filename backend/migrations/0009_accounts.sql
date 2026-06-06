@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS accounts (
       'opening_balance',
       'imbalance_import',
       'retained_earnings',
-      'income_summary',
-      'expense_summary'
+      'uncategorized_income',
+      'uncategorized_expense'
     )
   ),
   created_at TEXT NOT NULL,

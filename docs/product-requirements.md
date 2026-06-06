@@ -206,6 +206,8 @@ Goal: reduce manual entry without sacrificing trust.
 Goal: support forward-looking personal finance.
 
 - Budgets.
+- Account budget treatment as a separate account-facing planning axis, not an
+  account kind.
 - Scheduled transactions.
 - Projected balances.
 - Simple loan/liability helpers if they fit the existing ledger model.
