@@ -2466,7 +2466,7 @@ export interface components {
         /** @enum {string} */
         AccountClass: "asset" | "liability" | "equity" | "income" | "expense";
         /** @enum {string} */
-        AccountKind: "cash" | "depository" | "checking" | "savings" | "time_deposit" | "brokerage" | "brokerage_cash" | "security_holding" | "crypto_wallet" | "property" | "vehicle" | "rewards_balance" | "receivable" | "other_asset" | "credit_card" | "line_of_credit" | "loan" | "mortgage" | "tax_liability" | "payable" | "other_liability" | "equity" | "income" | "expense";
+        AccountKind: "cash" | "checking" | "savings" | "term_deposit" | "brokerage" | "brokerage_cash" | "security_holding" | "crypto_wallet" | "property" | "vehicle" | "rewards_balance" | "receivable" | "other_asset" | "credit_card" | "line_of_credit" | "loan" | "mortgage" | "tax_liability" | "payable" | "other_liability" | "equity" | "income" | "expense";
         /** @enum {string} */
         AccountStatus: "active" | "closed" | "archived";
         /** @enum {string} */

@@ -392,7 +392,7 @@ accounting concept.
 
 Initial supported kinds:
 
-- Asset kinds: `cash`, `depository`, `checking`, `savings`, `time_deposit`,
+- Asset kinds: `cash`, `checking`, `savings`, `term_deposit`,
   `brokerage`, `brokerage_cash`, `security_holding`, `crypto_wallet`,
   `property`, `vehicle`, `rewards_balance`, `receivable`, `other_asset`
 - Liability kinds: `credit_card`, `line_of_credit`, `loan`, `mortgage`,

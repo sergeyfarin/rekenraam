@@ -39,11 +39,9 @@ programs, or system workflow roles.
 Initial built-in asset kinds:
 
 - `cash`: physical cash or cash-like wallet balances.
-- `depository`: generic bank or payment account when a more specific kind is
-  not useful.
 - `checking`: transactional bank account.
 - `savings`: liquid savings or reserve account.
-- `time_deposit`: fixed-term savings, CD, or term deposit with maturity-related
+- `term_deposit`: fixed-term savings, CD, or term deposit with maturity-related
   fields later.
 - `brokerage`: investment container; usually `allows_postings=false` and holds
   child accounts.
@@ -116,7 +114,7 @@ flowchart TD
   Assets --> Cash[Cash\nasset/cash]
   Assets --> Checking[Checking\nasset/checking]
   Assets --> Savings[Savings\nasset/savings]
-  Assets --> TimeDeposit[Term Deposit\nasset/time_deposit]
+  Assets --> TermDeposit[Term Deposit\nasset/term_deposit]
   Assets --> Brokerage[Brokerage\nasset/brokerage\ncontainer]
   Brokerage --> BrokerageCash[Brokerage Cash\nasset/brokerage_cash]
   Brokerage --> Security[Security Holding\nasset/security_holding]

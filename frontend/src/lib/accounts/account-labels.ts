@@ -41,14 +41,12 @@ export function accountKindLabel(accountKind: AccountKind): string {
   switch (accountKind) {
     case 'cash':
       return m.account_kind_cash();
-    case 'depository':
-      return m.account_kind_depository();
     case 'checking':
       return m.account_kind_checking();
     case 'savings':
       return m.account_kind_savings();
-    case 'time_deposit':
-      return m.account_kind_time_deposit();
+    case 'term_deposit':
+      return m.account_kind_term_deposit();
     case 'brokerage':
       return m.account_kind_brokerage();
     case 'brokerage_cash':

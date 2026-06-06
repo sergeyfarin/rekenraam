@@ -10,10 +10,9 @@ AccountKind:
   type: string
   enum:
     - cash
-    - depository
     - checking
     - savings
-    - time_deposit
+    - term_deposit
     - brokerage
     - brokerage_cash
     - security_holding

@@ -24,10 +24,9 @@ INSERT OR IGNORE INTO account_kinds (
   sort_order
 ) VALUES
   ('cash', 'asset', 'cash', 'cash', 1, 1, 0, 'account_kind_cash', 100),
-  ('depository', 'asset', 'depository', 'depository', 1, 1, 0, 'account_kind_depository', 110),
-  ('checking', 'asset', 'depository', 'checking', 1, 1, 0, 'account_kind_checking', 120),
-  ('savings', 'asset', 'depository', 'savings', 1, 1, 0, 'account_kind_savings', 130),
-  ('time_deposit', 'asset', 'depository', 'time_deposit', 1, 1, 0, 'account_kind_time_deposit', 140),
+  ('checking', 'asset', 'bank_account', 'checking', 1, 1, 0, 'account_kind_checking', 120),
+  ('savings', 'asset', 'bank_account', 'savings', 1, 1, 0, 'account_kind_savings', 130),
+  ('term_deposit', 'asset', 'bank_account', 'term_deposit', 1, 1, 0, 'account_kind_term_deposit', 140),
   ('brokerage', 'asset', 'investment_container', 'brokerage', 1, 1, 0, 'account_kind_brokerage', 200),
   ('brokerage_cash', 'asset', 'investment_cash', 'brokerage_cash', 1, 1, 0, 'account_kind_brokerage_cash', 210),
   ('security_holding', 'asset', 'security_holding', 'security_holding', 1, 1, 0, 'account_kind_security_holding', 220),
@@ -123,6 +122,7 @@ SELECT
   CASE
     WHEN account_kind = 'investment' THEN 'brokerage'
     WHEN account_kind = 'money_market' THEN 'savings'
+    WHEN account_kind = 'time_deposit' THEN 'term_deposit'
     WHEN account_kind = 'collectible' THEN 'other_asset'
     WHEN account_kind = 'points_miles' THEN 'rewards_balance'
     WHEN account_kind = 'loan_receivable' THEN 'receivable'
@@ -295,7 +295,7 @@ SELECT
     WHEN account_kind = 'brokerage' THEN 'investment'
     WHEN account_kind = 'rewards_balance' THEN 'points_miles'
     WHEN account_kind = 'receivable' THEN 'loan_receivable'
-    WHEN account_kind = 'depository' THEN 'checking'
+    WHEN account_kind = 'term_deposit' THEN 'time_deposit'
     WHEN account_kind = 'income' THEN 'other_income'
     ELSE account_kind
   END,
