@@ -2470,7 +2470,7 @@ export interface components {
         /** @enum {string} */
         AccountStatus: "active" | "closed" | "archived";
         /** @enum {string} */
-        SystemAccountRole: "opening_balance" | "imbalance_import" | "retained_earnings" | "uncategorized_income" | "uncategorized_expense";
+        SystemAccountRole: "opening_balance" | "import_imbalance" | "retained_earnings" | "unassigned_income" | "unassigned_expense";
         AccountResponse: {
             /** Format: int64 */
             id: number;

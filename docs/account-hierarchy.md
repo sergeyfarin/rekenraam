@@ -157,9 +157,9 @@ flowchart TD
   Equity --> Imbalance[Import Imbalance\nsystem_role/import_imbalance]
   Equity --> Retained[Retained Earnings\nsystem_role/retained_earnings]
 
-  Income --> UncategorizedIncome[Uncategorized Income\nsystem_role/unassigned_income]
+  Income --> UnassignedIncome[Unassigned Income\nsystem_role/unassigned_income]
   Income --> IncomeCategory[Income Category Account\nincome/income]
-  Expenses --> UncategorizedExpense[Uncategorized Expense\nsystem_role/unassigned_expense]
+  Expenses --> UnassignedExpense[Unassigned Expense\nsystem_role/unassigned_expense]
   Expenses --> ExpenseCategory[Expense Category Account\nexpense/expense]
 ```
 

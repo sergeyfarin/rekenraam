@@ -408,9 +408,9 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		accountClass string
 		accountKind  string
 	}{
-		"opening_balance":       {accountClass: "equity", accountKind: "equity"},
-		"import_imbalance":      {accountClass: "equity", accountKind: "equity"},
-		"retained_earnings":     {accountClass: "equity", accountKind: "equity"},
+		"opening_balance":    {accountClass: "equity", accountKind: "equity"},
+		"import_imbalance":   {accountClass: "equity", accountKind: "equity"},
+		"retained_earnings":  {accountClass: "equity", accountKind: "equity"},
 		"unassigned_income":  {accountClass: "income", accountKind: "income"},
 		"unassigned_expense": {accountClass: "expense", accountKind: "expense"},
 	}
@@ -427,9 +427,9 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		seenRoles[account.SystemRole] = true
 	}
 	assert.Equal(t, map[string]bool{
-		"opening_balance":       true,
-		"import_imbalance":      true,
-		"retained_earnings":     true,
+		"opening_balance":    true,
+		"import_imbalance":   true,
+		"retained_earnings":  true,
 		"unassigned_income":  true,
 		"unassigned_expense": true,
 	}, seenRoles)

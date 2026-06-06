@@ -134,7 +134,7 @@ The 2026-05-30 FastAPI archive pass found several decisions worth preserving as 
 - **Ledger foundations:** keep `book_id`, account trees, system account roles, exact quantities, transaction postings, import-source metadata, and no hard delete for posted financial records. Translate archived category rows into the current convention: categories are UI concepts mapped to income/expense accounts.
 - **Auditability:** preserve actor/session/request attribution and plan for change reasons before reconciliation and correction workflows become serious. In Go, prefer SQLite constraints/triggers for invariants that must survive service-layer bypass.
 - **Reconciliation:** use account balancing/checkpoint rows as the reconciliation lock floor. Unlocking a reconciled range should require an explicit reason and confirmation.
-- **Imports:** keep the preview -> rules -> commit workflow, import sessions, source file metadata/hash, duplicate keys, and an `imbalance_import` system-account path for incomplete imported rows.
+- **Imports:** keep the preview -> rules -> commit workflow, import sessions, source file metadata/hash, duplicate keys, and an `import_imbalance` system-account path for incomplete imported rows.
 - **Exports and reports:** keep account/register-level QIF, core ledger CSV, report CSV output, saved report definitions as a later convenience, and report-run input capture as an open reproducibility decision.
 - **Ergonomics:** saved transaction views, transaction templates, and payee defaults are good later slices because they speed daily entry without changing ledger semantics.
 
