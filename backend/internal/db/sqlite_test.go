@@ -64,6 +64,17 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_by_user_id")
 	assert.Contains(t, readTableColumns(t, database, "books"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "books"), "updated_audit_event_id")
+	assert.Subset(t, readTableColumns(t, database, "tags"), []string{
+		"id",
+		"book_id",
+		"name",
+		"kind",
+		"status",
+		"metadata_json",
+		"created_audit_event_id",
+		"updated_audit_event_id",
+	})
+	assert.True(t, sqliteObjectExists(t, database, "index", "tags_active_name_kind_idx"))
 	assert.Contains(t, readTableColumns(t, database, "commodities"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "commodity_versions"), "change_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "institutions"), "created_audit_event_id")

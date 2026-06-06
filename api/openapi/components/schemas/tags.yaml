@@ -1,0 +1,89 @@
+TagKind:
+  type: string
+  enum:
+    - project
+    - person
+    - flag
+    - place
+    - custom
+TagStatus:
+  type: string
+  enum:
+    - active
+    - archived
+TagResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - name
+    - kind
+    - status
+    - metadata
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+      description: Current runtime always uses book id 1.
+    name:
+      type: string
+      maxLength: 120
+      description: User-entered tag label. Built-in translation is not applied to user tags.
+    kind:
+      $ref: "../../openapi.yaml#/components/schemas/TagKind"
+    color:
+      type: string
+      pattern: "^#[0-9A-Fa-f]{6}$"
+      description: Optional hex color token for tag UI.
+    icon:
+      type: string
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9_-]*$"
+      description: Optional stable icon token for tag UI.
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TagStatus"
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+TagsResponse:
+  type: object
+  required:
+    - tags
+  properties:
+    tags:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/TagResponse"
+TagRequest:
+  type: object
+  required:
+    - name
+  properties:
+    name:
+      type: string
+      maxLength: 120
+    kind:
+      $ref: "../../openapi.yaml#/components/schemas/TagKind"
+      description: Defaults to custom when omitted.
+    color:
+      type: string
+      pattern: "^#[0-9A-Fa-f]{6}$"
+    icon:
+      type: string
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9_-]*$"
+    metadata:
+      type: object
+      additionalProperties: true
+  additionalProperties: false

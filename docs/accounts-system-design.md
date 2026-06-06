@@ -445,6 +445,65 @@ User-facing labels should avoid business jargon for personal transient
 balances. The stable kind codes remain `receivable` and `payable`, but UI copy
 should use plain labels such as "Money owed to me" and "Money I owe".
 
+## Categories And Tags
+
+Income and expense categories are account-backed. A category is an account whose
+`account_class` is `income` or `expense` and whose `account_kind` is `income` or
+`expense`. Category renames, moves, closes, and archives use `account_versions`;
+do not add a separate category version table. Built-in categories should store
+stable keys/codes so the UI can translate them. User-entered category names are
+data and are shown as entered.
+
+Categories answer "what kind of income or expense is this?" They may be nested:
+
+```text
+Expenses
+  Groceries
+    Dairy
+    Bread
+  Travel
+    Flights
+    Hotels
+```
+
+Expense and income category accounts are currency agnostic. They normally leave
+`default_commodity_id` null and accept postings in any commodity; each posting
+stores its own commodity and quantity.
+
+Tags answer "what context does this belong to?" They are not ledger accounts and
+do not replace categories. Examples include projects, people, flags, places, and
+custom contexts:
+
+- `project`: Vacation Summer 2026, House Renovation
+- `person`: Alice, Parent Care
+- `flag`: Reimbursable, Tax Relevant, Needs Receipt
+- `place`: Netherlands, School
+- `custom`: user-defined context without a stronger group
+
+Tags are book-scoped mutable records with `name`, `kind`, optional `color`,
+optional `icon`, `status`, and `metadata_json`. Archive tags instead of hard
+deleting them. Active tags are unique per `(book_id, kind, name)` using
+case-insensitive comparison. A tag rename changes the tag label everywhere it is
+used; if historical label preservation becomes necessary later, add tag
+versions then.
+
+When transactions arrive, add join tables rather than embedding tag ids on the
+transaction row:
+
+```text
+transaction_tags
+- transaction_id
+- tag_id
+
+posting_tags
+- posting_id
+- tag_id
+```
+
+Allow multiple tags per transaction and per posting initially. If real usage
+shows that a group should be exclusive, add a later constraint such as "only one
+`project` tag per transaction/posting" without changing the basic tag model.
+
 ## Tree Rules
 
 - Accounts form a per-book tree through `parent_account_id`.

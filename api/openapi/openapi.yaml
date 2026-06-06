@@ -53,6 +53,14 @@ paths:
     $ref: "./paths/account-versions.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
+  /api/v1/tags:
+    $ref: "./paths/tags.yaml"
+  /api/v1/tags/{tag_id}:
+    $ref: "./paths/tag.yaml"
+  /api/v1/tags/{tag_id}/archive:
+    $ref: "./paths/tag-archive.yaml"
+  /api/v1/tags/{tag_id}/restore:
+    $ref: "./paths/tag-restore.yaml"
 components:
   headers:
     XRequestID:
@@ -71,6 +79,13 @@ components:
     AccountID:
       in: path
       name: account_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TagID:
+      in: path
+      name: tag_id
       required: true
       schema:
         type: integer
@@ -140,6 +155,16 @@ components:
       $ref: "./components/schemas/accounts.yaml#/AccountLifecycleRequest"
     CompleteSystemAccountsSetupResponse:
       $ref: "./components/schemas/accounts.yaml#/CompleteSystemAccountsSetupResponse"
+    TagKind:
+      $ref: "./components/schemas/tags.yaml#/TagKind"
+    TagStatus:
+      $ref: "./components/schemas/tags.yaml#/TagStatus"
+    TagResponse:
+      $ref: "./components/schemas/tags.yaml#/TagResponse"
+    TagsResponse:
+      $ref: "./components/schemas/tags.yaml#/TagsResponse"
+    TagRequest:
+      $ref: "./components/schemas/tags.yaml#/TagRequest"
     AuthSessionResponse:
       $ref: "./components/schemas/auth-responses.yaml#/AuthSessionResponse"
     LoginResponse:

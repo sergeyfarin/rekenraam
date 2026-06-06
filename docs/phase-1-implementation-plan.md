@@ -11,7 +11,8 @@ Create the durable accounting skeleton:
 3. Institutions.
 4. Accounts and account tree.
 5. System account seeding.
-6. Account/institution UI.
+6. Tags for transaction/posting context.
+7. Account/institution UI.
 
 No transaction posting yet. No opening balances yet. No balances created by
 account setup.
@@ -153,7 +154,28 @@ Behavior:
   equity, and system accounts should be able to receive postings in multiple
   commodities unless a later account policy explicitly restricts them.
 
-## Slice 6: Frontend Account/Institution Experience
+## Slice 6: Tags
+
+Backend schema:
+
+- Add book-scoped `tags` table.
+- Store `name`, `kind`, optional `color`, optional `icon`, `status`, and
+  `metadata_json`.
+- Enforce active tag uniqueness per `(book_id, kind, name)`.
+- Archive tags instead of hard deleting them.
+- Do not add `transaction_tags` or `posting_tags` until transaction and posting
+  tables exist.
+
+Backend APIs:
+
+- `GET /api/v1/tags`
+- `POST /api/v1/tags`
+- `GET /api/v1/tags/{tag_id}`
+- `PATCH /api/v1/tags/{tag_id}`
+- `POST /api/v1/tags/{tag_id}/archive`
+- `POST /api/v1/tags/{tag_id}/restore`
+
+## Slice 7: Frontend Account/Institution Experience
 
 Suggested routes:
 

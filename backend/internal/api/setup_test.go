@@ -287,8 +287,9 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	institutionRepository := db.NewInstitutionRepository(database)
 	institutionService := app.NewInstitutionService(institutionRepository)
 	accountService := app.NewAccountService(db.NewAccountRepository(database), institutionRepository, setupService)
+	tagService := app.NewTagService(db.NewTagRepository(database))
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, options), database
 }
 
 func setSameOrigin(req *http.Request) {

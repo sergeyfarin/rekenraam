@@ -89,6 +89,31 @@ CREATE TABLE IF NOT EXISTS books (
   updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS tags (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  kind TEXT NOT NULL CHECK (kind IN ('project', 'person', 'flag', 'place', 'custom')),
+  color TEXT CHECK (color IS NULL OR color GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'),
+  icon TEXT CHECK (icon IS NULL OR (length(trim(icon)) > 0 AND icon = trim(icon))),
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_request_id TEXT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS tags_book_status_kind_idx
+  ON tags (book_id, status, kind, name COLLATE NOCASE);
+
+CREATE UNIQUE INDEX IF NOT EXISTS tags_active_name_kind_idx
+  ON tags (book_id, kind, name COLLATE NOCASE)
+  WHERE status = 'active';
+
 CREATE TABLE IF NOT EXISTS commodities (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
@@ -439,6 +464,10 @@ DROP TABLE IF EXISTS commodity_versions;
 
 DROP INDEX IF EXISTS commodities_book_kind_idx;
 DROP TABLE IF EXISTS commodities;
+
+DROP INDEX IF EXISTS tags_active_name_kind_idx;
+DROP INDEX IF EXISTS tags_book_status_kind_idx;
+DROP TABLE IF EXISTS tags;
 
 DROP TABLE IF EXISTS books;
 DROP TABLE IF EXISTS login_throttles;
