@@ -2499,7 +2499,17 @@ export interface components {
             };
             /**
              * Format: date
-             * @description Calendar date when this account version became effective.
+             * @description First date on which postings are valid for this account. System accounts use an internal conventional date.
+             */
+            opened_on: string;
+            /**
+             * Format: date
+             * @description First date after which ordinary new postings should not target this account. Present for closed and archived accounts.
+             */
+            closed_on?: string;
+            /**
+             * Format: date
+             * @description Calendar date when this account attribute version became effective for as-of display and reporting.
              */
             effective_from: string;
             /** @description Audit reason recorded for this account version. */
@@ -2538,7 +2548,12 @@ export interface components {
             };
             /**
              * Format: date
-             * @description Advanced/import field for the account version date. Normal account creation should omit it. Future dates are rejected.
+             * @description Account opening date used for future transaction-date validation. Omit to default to the account version date.
+             */
+            opened_on?: string;
+            /**
+             * Format: date
+             * @description Account attribute version date for as-of display and reporting. Omit to use today's date. Future dates are rejected.
              */
             effective_from?: string;
             /** @description Omit to use the default reason for the operation. */
@@ -2547,9 +2562,14 @@ export interface components {
         AccountLifecycleRequest: {
             /**
              * Format: date
-             * @description Advanced/import field for the lifecycle version date. Normal lifecycle actions may omit it. Future dates are rejected.
+             * @description Attribute version date for the lifecycle change. For close, omit to use closed_on. Future dates are rejected.
              */
             effective_from?: string;
+            /**
+             * Format: date
+             * @description Account close date used for future transaction-date validation. Close defaults to this value when effective_from is omitted.
+             */
+            closed_on?: string;
             /** @description Omit to use the default reason for the lifecycle transition. */
             change_reason?: string;
         };

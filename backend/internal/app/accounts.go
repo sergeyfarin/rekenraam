@@ -22,6 +22,7 @@ const (
 	accountCommentMaxBytes     = 5000
 	accountJSONMaxBytes        = 10000
 	accountListLimit           = 2000
+	systemAccountDate          = "0001-01-01"
 )
 
 var (
@@ -68,6 +69,8 @@ type Account struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	OpenedOn              string
+	ClosedOn              string
 	EffectiveFrom         string
 	ChangeReason          string
 	CreatedAt             string
@@ -102,6 +105,7 @@ type CreateAccountInput struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	OpenedOn              string
 	EffectiveFrom         string
 	ChangeReason          string
 }
@@ -127,6 +131,7 @@ type UpdateAccountInput struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	OpenedOn              string
 	EffectiveFrom         string
 	ChangeReason          string
 }
@@ -138,6 +143,7 @@ type AccountLifecycleInput struct {
 	OriginType    string
 	AccountID     int64
 	EffectiveFrom string
+	ClosedOn      string
 	ChangeReason  string
 }
 
@@ -255,10 +261,22 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 	}
 
 	now := s.now().UTC()
-	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	openedOn, err := cleanAccountOpenedOn(input.OpenedOn, input.EffectiveFrom, now)
 	if err != nil {
 		return Account{}, err
 	}
+	effectiveInput := input.EffectiveFrom
+	if strings.TrimSpace(effectiveInput) == "" {
+		effectiveInput = openedOn
+	}
+	effectiveFrom, err := cleanEffectiveFrom(effectiveInput, now)
+	if err != nil {
+		return Account{}, err
+	}
+	if effectiveFrom < openedOn {
+		return Account{}, ValidationError{Message: "account effective date must not be before opened date"}
+	}
+	spec.OpenedOn = openedOn
 	changeReason, err := cleanChangeReason(input.ChangeReason, "created account")
 	if err != nil {
 		return Account{}, err
@@ -327,6 +345,18 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 	if err != nil {
 		return Account{}, err
 	}
+	openedOn, err := cleanAccountOpenedOn(input.OpenedOn, current.OpenedOn, now)
+	if err != nil {
+		return Account{}, err
+	}
+	if effectiveFrom < openedOn {
+		return Account{}, ValidationError{Message: "account effective date must not be before opened date"}
+	}
+	if current.ClosedOn != "" && openedOn > current.ClosedOn {
+		return Account{}, ValidationError{Message: "account opened date must not be after closed date"}
+	}
+	spec.OpenedOn = openedOn
+	spec.ClosedOn = nullableSQLString(current.ClosedOn)
 	changeReason, err := cleanChangeReason(input.ChangeReason, "updated account")
 	if err != nil {
 		return Account{}, err
@@ -385,7 +415,7 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 		Operation:       input.Operation,
 		Specs:           systemAccountSpecs,
 		CreatedAt:       now.Format(time.RFC3339),
-		EffectiveFrom:   now.Format(time.DateOnly),
+		EffectiveFrom:   systemAccountDate,
 	})
 	if err != nil {
 		switch {
@@ -429,7 +459,30 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 	}
 
 	now := s.now().UTC()
-	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	effectiveInput := input.EffectiveFrom
+	closedOn := current.ClosedOn
+	if status == "closed" {
+		fallbackClosedOn := current.ClosedOn
+		if fallbackClosedOn == "" {
+			fallbackClosedOn = effectiveInput
+		}
+		closedOn, err = cleanAccountLifecycleDate(input.ClosedOn, fallbackClosedOn, now)
+		if err != nil {
+			return Account{}, err
+		}
+		if closedOn < current.OpenedOn {
+			return Account{}, ValidationError{Message: "account closed date must not be before opened date"}
+		}
+		if current.Status != "archived" {
+			if strings.TrimSpace(effectiveInput) != "" && strings.TrimSpace(effectiveInput) != closedOn {
+				return Account{}, ValidationError{Message: "account close effective date must match closed date"}
+			}
+			effectiveInput = closedOn
+		}
+	} else if status == "active" {
+		closedOn = ""
+	}
+	effectiveFrom, err := cleanEffectiveFrom(effectiveInput, now)
 	if err != nil {
 		return Account{}, err
 	}
@@ -445,7 +498,7 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 		RequestID:       input.RequestID,
 		OriginType:      input.OriginType,
 		Operation:       operation,
-		Spec:            accountSpecFromStored(current),
+		Spec:            accountSpecWithLifecycle(accountSpecFromStored(current), current.OpenedOn, closedOn),
 		Status:          status,
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
@@ -691,7 +744,45 @@ func accountSpecFromStored(account Account) db.AccountSpec {
 		ExternalRefHint:       account.ExternalRefHint,
 		CommentMarkdown:       account.CommentMarkdown,
 		MetadataJSON:          account.MetadataJSON,
+		OpenedOn:              account.OpenedOn,
+		ClosedOn:              nullableSQLString(account.ClosedOn),
 	}
+}
+
+func accountSpecWithLifecycle(spec db.AccountSpec, openedOn string, closedOn string) db.AccountSpec {
+	spec.OpenedOn = openedOn
+	spec.ClosedOn = nullableSQLString(closedOn)
+	return spec
+}
+
+func cleanAccountOpenedOn(value string, fallback string, now time.Time) (string, error) {
+	return cleanOptionalAccountDate(value, fallback, now, "account opened date")
+}
+
+func cleanAccountLifecycleDate(value string, fallback string, now time.Time) (string, error) {
+	return cleanOptionalAccountDate(value, fallback, now, "account closed date")
+}
+
+func cleanOptionalAccountDate(value string, fallback string, now time.Time, field string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		cleaned = strings.TrimSpace(fallback)
+	}
+	if cleaned == "" {
+		cleaned = now.UTC().Format(time.DateOnly)
+	}
+
+	parsed, err := time.Parse(time.DateOnly, cleaned)
+	if err != nil {
+		return "", ValidationError{Message: field + " must use YYYY-MM-DD"}
+	}
+
+	today, _ := time.Parse(time.DateOnly, now.UTC().Format(time.DateOnly))
+	if parsed.After(today) {
+		return "", ValidationError{Message: field + " must not be in the future"}
+	}
+
+	return cleaned, nil
 }
 
 func cleanAccountJSONObject(value string, field string) (string, error) {
@@ -741,6 +832,14 @@ func nullableInt(value *int) sql.NullInt64 {
 	return sql.NullInt64{Int64: int64(*value), Valid: true}
 }
 
+func nullableSQLString(value string) sql.NullString {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: cleaned, Valid: true}
+}
+
 func int64Ptr(value sql.NullInt64) *int64 {
 	if !value.Valid {
 		return nil
@@ -778,6 +877,8 @@ func toAccount(record db.AccountRecord) Account {
 		ExternalRefHint:       nullableString(record.ExternalRefHint),
 		CommentMarkdown:       record.CommentMarkdown,
 		MetadataJSON:          record.MetadataJSON,
+		OpenedOn:              record.OpenedOn,
+		ClosedOn:              nullableString(record.ClosedOn),
 		EffectiveFrom:         record.EffectiveFrom,
 		ChangeReason:          record.ChangeReason,
 		CreatedAt:             record.CreatedAt,

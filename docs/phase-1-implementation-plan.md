@@ -106,8 +106,9 @@ Backend schema:
 - Add append-only `account_versions` table.
 - Store nullable `system_role` on identity rows. A non-null role marks the
   account as system-owned.
-- Do not store balances, `normal_balance`, `display_order`, `closed_on`, or
-  `archived_on`.
+- Do not store balances, `normal_balance`, `display_order`, or `archived_on`.
+- Store account validity dates as `opened_on` and `closed_on`; keep
+  `effective_from` for account-version/as-of history.
 
 Backend APIs:
 

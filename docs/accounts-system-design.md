@@ -247,6 +247,9 @@ different built-in presentation profile.
 - `change_reason`
 - `change_audit_event_id`
 - `status`: `active`, `closed`, `archived`
+- `opened_on`: first date on which postings are valid for this account
+- `closed_on`: first date after which ordinary new postings should not target
+  this account; null for active accounts
 - `code`
 - `name`: required for user accounts, nullable for system accounts
 - `account_class`
@@ -262,16 +265,21 @@ different built-in presentation profile.
 - `comment_markdown`
 - `metadata_json`
 
-`effective_from` is an advanced versioning field, not the account's opening
-date and not a transaction-date constraint. Normal manual account creation
-should omit it and let the backend default to the current date. Frontend account
-creation should expose it only in an advanced/import mode. If the product later
-needs the real-world date an account was opened, add a separate optional
-`opened_on` attribute instead of overloading `effective_from`.
+`effective_from` is the account attribute version date used for as-of display
+and reporting. It is not the account opening date and not by itself a posting
+permission rule.
 
-Do not store `activated_on`, `closed_on`, or `archived_on` separately. The
-status transition date is the `effective_from` date of the version that changes
-status.
+`opened_on` and `closed_on` are account validity dates. Future transaction entry
+and imports should reject or warn on postings before `opened_on` or after
+`closed_on`, then offer a repair choice: amend the account validity dates, amend
+the transaction date, skip the transaction, or keep it unresolved for import
+review. Account creation UI should ask for `opened_on` in plain language such as
+"Account opened on" or "Use account from." Account edit UI may allow correcting
+`opened_on`. The close workflow should ask for `closed_on` in plain language
+such as "Closed on."
+
+System account versions use the internal conventional date `0001-01-01` for
+`effective_from` and `opened_on`. These dates are not user-facing semantics.
 
 Do not store `normal_balance`. It is deterministic:
 
@@ -618,7 +626,7 @@ Lifecycle is represented by new versions, not row mutation.
 `closed`:
 
 - Historical account that should not receive new ordinary postings after
-  the close version's `effective_from`.
+  `closed_on`.
 - Still appears in history, reports, exports, and reconciliation history.
 - May be shown in account lists behind a "show closed" control.
 
@@ -687,6 +695,8 @@ Rules:
   ordinary account management.
 - System accounts are hidden from ordinary account lists unless an API caller
   passes `include_system=true`.
+- System account `effective_from` and `opened_on` are internal conventional
+  dates and should not be surfaced in ordinary UI.
 - System income and expense accounts are multi-commodity by default. They leave
   `default_commodity_id` null, and balances are grouped by posting commodity.
 - System account names come from translation keys, not English-only database

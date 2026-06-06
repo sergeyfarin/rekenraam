@@ -30,6 +30,8 @@ type accountResponse struct {
 	ExternalRefHint       string          `json:"external_ref_hint,omitempty"`
 	CommentMarkdown       string          `json:"comment_markdown"`
 	Metadata              json.RawMessage `json:"metadata"`
+	OpenedOn              string          `json:"opened_on"`
+	ClosedOn              string          `json:"closed_on,omitempty"`
 	EffectiveFrom         string          `json:"effective_from"`
 	ChangeReason          string          `json:"change_reason"`
 	CreatedAt             string          `json:"created_at"`
@@ -55,12 +57,14 @@ type accountRequest struct {
 	ExternalRefHint       string          `json:"external_ref_hint"`
 	CommentMarkdown       string          `json:"comment_markdown"`
 	Metadata              json.RawMessage `json:"metadata"`
+	OpenedOn              string          `json:"opened_on"`
 	EffectiveFrom         string          `json:"effective_from"`
 	ChangeReason          string          `json:"change_reason"`
 }
 
 type accountLifecycleRequest struct {
 	EffectiveFrom string `json:"effective_from"`
+	ClosedOn      string `json:"closed_on"`
 	ChangeReason  string `json:"change_reason"`
 }
 
@@ -177,6 +181,7 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			ExternalRefHint:       request.ExternalRefHint,
 			CommentMarkdown:       request.CommentMarkdown,
 			MetadataJSON:          rawJSONText(request.Metadata),
+			OpenedOn:              request.OpenedOn,
 			EffectiveFrom:         request.EffectiveFrom,
 			ChangeReason:          request.ChangeReason,
 		})
@@ -228,6 +233,7 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			ExternalRefHint:       request.ExternalRefHint,
 			CommentMarkdown:       request.CommentMarkdown,
 			MetadataJSON:          rawJSONText(request.Metadata),
+			OpenedOn:              request.OpenedOn,
 			EffectiveFrom:         request.EffectiveFrom,
 			ChangeReason:          request.ChangeReason,
 		})
@@ -249,6 +255,7 @@ func closeAccount(logger *slog.Logger, authService *app.AuthService, accountServ
 			OriginType:    "browser_api",
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
+			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -263,6 +270,7 @@ func reopenAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			OriginType:    "browser_api",
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
+			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -277,6 +285,7 @@ func archiveAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 			OriginType:    "browser_api",
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
+			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -291,6 +300,7 @@ func restoreAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 			OriginType:    "browser_api",
 			AccountID:     accountID,
 			EffectiveFrom: request.EffectiveFrom,
+			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -404,6 +414,8 @@ func toAccountResponse(account app.Account) accountResponse {
 		ExternalRefHint:       account.ExternalRefHint,
 		CommentMarkdown:       account.CommentMarkdown,
 		Metadata:              json.RawMessage(account.MetadataJSON),
+		OpenedOn:              account.OpenedOn,
+		ClosedOn:              account.ClosedOn,
 		EffectiveFrom:         account.EffectiveFrom,
 		ChangeReason:          account.ChangeReason,
 		CreatedAt:             account.CreatedAt,

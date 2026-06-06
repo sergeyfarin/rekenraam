@@ -28,6 +28,8 @@ type AccountRecord struct {
 	ChangedByUserID       int64
 	ChangeReason          string
 	Status                string
+	OpenedOn              string
+	ClosedOn              sql.NullString
 	Code                  sql.NullString
 	Name                  sql.NullString
 	AccountClass          string
@@ -59,6 +61,8 @@ type AccountSpec struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	OpenedOn              string
+	ClosedOn              sql.NullString
 }
 
 type ListAccountsParams struct {
@@ -581,6 +585,7 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 			AccountKind:    systemSpec.AccountKind,
 			AllowsPostings: true,
 			MetadataJSON:   `{"source":"system_account_seed"}`,
+			OpenedOn:       params.EffectiveFrom,
 		},
 	})
 }
@@ -610,6 +615,8 @@ func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountV
 			changed_by_user_id,
 			change_reason,
 			status,
+			opened_on,
+			closed_on,
 			code,
 			name,
 			account_class,
@@ -626,8 +633,8 @@ func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountV
 			metadata_json,
 			change_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
-	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
+	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.OpenedOn, nullableStringValue(params.Spec.ClosedOn), params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert account version: %w", err)
 	}
@@ -637,11 +644,21 @@ func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountV
 		return AccountRecord{}, fmt.Errorf("read account version id: %w", err)
 	}
 
-	record, err := currentAccountByID(ctx, tx, params.BookID, params.AccountID)
+	record, err := accountVersionByVersionID(ctx, tx, params.BookID, versionID)
 	if err != nil {
 		return AccountRecord{}, err
 	}
-	record.VersionID = versionID
+
+	return record, nil
+}
+
+func accountVersionByVersionID(ctx context.Context, tx *sql.Tx, bookID int64, versionID int64) (AccountRecord, error) {
+	var record AccountRecord
+	if err := scanAccountRecord(tx.QueryRowContext(ctx, accountSelect("account_versions", `
+		WHERE a.book_id = ? AND av.id = ?
+	`), bookID, versionID), &record); err != nil {
+		return AccountRecord{}, err
+	}
 
 	return record, nil
 }
@@ -689,6 +706,8 @@ func accountSelect(versionSource string, whereClause string) string {
 			av.changed_by_user_id,
 			av.change_reason,
 			av.status,
+			av.opened_on,
+			av.closed_on,
 			av.code,
 			av.name,
 			av.account_class,
@@ -723,6 +742,8 @@ func scanAccountRecord(row rowScanner, record *AccountRecord) error {
 		&record.ChangedByUserID,
 		&record.ChangeReason,
 		&record.Status,
+		&record.OpenedOn,
+		&record.ClosedOn,
 		&record.Code,
 		&record.Name,
 		&record.AccountClass,
@@ -777,4 +798,11 @@ func nullableInt64Value(value sql.NullInt64) any {
 		return nil
 	}
 	return value.Int64
+}
+
+func nullableStringValue(value sql.NullString) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.String
 }

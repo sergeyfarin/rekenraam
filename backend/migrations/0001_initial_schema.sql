@@ -130,13 +130,14 @@ CREATE INDEX IF NOT EXISTS commodity_versions_commodity_seq_idx
 CREATE VIEW IF NOT EXISTS current_commodity_versions AS
 SELECT cv.*
 FROM commodity_versions cv
-JOIN (
-  SELECT commodity_id, MAX(version_seq) AS version_seq
-  FROM commodity_versions
-  GROUP BY commodity_id
-) latest
-  ON latest.commodity_id = cv.commodity_id
- AND latest.version_seq = cv.version_seq;
+WHERE cv.id = (
+  SELECT current_cv.id
+  FROM commodity_versions current_cv
+  WHERE current_cv.commodity_id = cv.commodity_id
+    AND current_cv.effective_from <= date('now')
+  ORDER BY current_cv.effective_from DESC, current_cv.version_seq DESC
+  LIMIT 1
+);
 
 CREATE TABLE IF NOT EXISTS institutions (
   id INTEGER PRIMARY KEY,
@@ -176,13 +177,14 @@ CREATE INDEX IF NOT EXISTS institution_versions_institution_seq_idx
 CREATE VIEW IF NOT EXISTS current_institution_versions AS
 SELECT iv.*
 FROM institution_versions iv
-JOIN (
-  SELECT institution_id, MAX(version_seq) AS version_seq
-  FROM institution_versions
-  GROUP BY institution_id
-) latest
-  ON latest.institution_id = iv.institution_id
- AND latest.version_seq = iv.version_seq;
+WHERE iv.id = (
+  SELECT current_iv.id
+  FROM institution_versions current_iv
+  WHERE current_iv.institution_id = iv.institution_id
+    AND current_iv.effective_from <= date('now')
+  ORDER BY current_iv.effective_from DESC, current_iv.version_seq DESC
+  LIMIT 1
+);
 
 CREATE TABLE IF NOT EXISTS account_kinds (
   code TEXT PRIMARY KEY,
@@ -262,6 +264,8 @@ CREATE TABLE IF NOT EXISTS account_versions (
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'closed', 'archived')),
+  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
+  closed_on TEXT CHECK (closed_on IS NULL OR closed_on GLOB '????-??-??'),
   code TEXT,
   name TEXT,
   account_class TEXT NOT NULL CHECK (account_class IN ('asset', 'liability', 'equity', 'income', 'expense')),
@@ -278,6 +282,11 @@ CREATE TABLE IF NOT EXISTS account_versions (
   metadata_json TEXT NOT NULL DEFAULT '{}',
   change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   UNIQUE (account_id, version_seq),
+  CHECK (closed_on IS NULL OR closed_on >= opened_on),
+  CHECK (
+    (status = 'active' AND closed_on IS NULL)
+    OR (status IN ('closed', 'archived') AND closed_on IS NOT NULL)
+  ),
   FOREIGN KEY (account_kind, account_class) REFERENCES account_kinds(code, account_class) ON DELETE RESTRICT
 );
 
@@ -296,13 +305,14 @@ CREATE INDEX IF NOT EXISTS account_versions_default_commodity_idx
 CREATE VIEW IF NOT EXISTS current_account_versions AS
 SELECT av.*
 FROM account_versions av
-JOIN (
-  SELECT account_id, MAX(version_seq) AS version_seq
-  FROM account_versions
-  GROUP BY account_id
-) latest
-  ON latest.account_id = av.account_id
- AND latest.version_seq = av.version_seq;
+WHERE av.id = (
+  SELECT current_av.id
+  FROM account_versions current_av
+  WHERE current_av.account_id = av.account_id
+    AND current_av.effective_from <= date('now')
+  ORDER BY current_av.effective_from DESC, current_av.version_seq DESC
+  LIMIT 1
+);
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS books_default_currency_must_exist_on_insert

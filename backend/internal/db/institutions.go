@@ -329,11 +329,21 @@ func insertInstitutionVersion(ctx context.Context, tx *sql.Tx, params insertInst
 		return InstitutionRecord{}, fmt.Errorf("read institution version id: %w", err)
 	}
 
-	record, err := currentInstitutionByID(ctx, tx, params.BookID, params.InstitutionID)
+	record, err := institutionVersionByVersionID(ctx, tx, params.BookID, versionID)
 	if err != nil {
 		return InstitutionRecord{}, err
 	}
-	record.VersionID = versionID
+
+	return record, nil
+}
+
+func institutionVersionByVersionID(ctx context.Context, tx *sql.Tx, bookID int64, versionID int64) (InstitutionRecord, error) {
+	var record InstitutionRecord
+	if err := scanInstitutionRecord(tx.QueryRowContext(ctx, institutionSelect("institution_versions", `
+		WHERE i.book_id = ? AND iv.id = ?
+	`), bookID, versionID), &record); err != nil {
+		return InstitutionRecord{}, err
+	}
 
 	return record, nil
 }

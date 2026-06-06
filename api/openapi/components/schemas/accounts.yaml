@@ -58,6 +58,7 @@ AccountResponse:
     - allows_postings
     - comment_markdown
     - metadata
+    - opened_on
     - effective_from
     - change_reason
     - created_at
@@ -120,10 +121,18 @@ AccountResponse:
     metadata:
       type: object
       additionalProperties: true
+    opened_on:
+      type: string
+      format: date
+      description: First date on which postings are valid for this account. System accounts use an internal conventional date.
+    closed_on:
+      type: string
+      format: date
+      description: First date after which ordinary new postings should not target this account. Present for closed and archived accounts.
     effective_from:
       type: string
       format: date
-      description: Calendar date when this account version became effective.
+      description: Calendar date when this account attribute version became effective for as-of display and reporting.
     change_reason:
       type: string
       maxLength: 500
@@ -192,10 +201,14 @@ AccountRequest:
     metadata:
       type: object
       additionalProperties: true
+    opened_on:
+      type: string
+      format: date
+      description: Account opening date used for future transaction-date validation. Omit to default to the account version date.
     effective_from:
       type: string
       format: date
-      description: Advanced/import field for the account version date. Normal account creation should omit it. Future dates are rejected.
+      description: Account attribute version date for as-of display and reporting. Omit to use today's date. Future dates are rejected.
     change_reason:
       type: string
       maxLength: 500
@@ -207,7 +220,11 @@ AccountLifecycleRequest:
     effective_from:
       type: string
       format: date
-      description: Advanced/import field for the lifecycle version date. Normal lifecycle actions may omit it. Future dates are rejected.
+      description: Attribute version date for the lifecycle change. For close, omit to use closed_on. Future dates are rejected.
+    closed_on:
+      type: string
+      format: date
+      description: Account close date used for future transaction-date validation. Close defaults to this value when effective_from is omitted.
     change_reason:
       type: string
       maxLength: 500

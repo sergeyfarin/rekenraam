@@ -46,6 +46,7 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 		"quantity_scale_override":2,
 		"number_last4":"1234",
 		"metadata":{"statement_day":15},
+		"opened_on":"2019-12-01",
 		"effective_from":"2020-01-15",
 		"change_reason":"Imported from legacy account list"
 	}`)
@@ -63,6 +64,8 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	assert.Equal(t, 2, *account.QuantityScaleOverride)
 	assert.Equal(t, "1234", account.NumberLast4)
 	assert.Equal(t, `{"statement_day":15}`, string(account.Metadata))
+	assert.Equal(t, "2019-12-01", account.OpenedOn)
+	assert.Equal(t, "", account.ClosedOn)
 	assert.Equal(t, "2020-01-15", account.EffectiveFrom)
 	assert.Equal(t, "Imported from legacy account list", account.ChangeReason)
 
@@ -110,7 +113,8 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 		"quantity_scale_override":2,
 		"number_last4":"9876",
 		"comment_markdown":"old note",
-		"metadata":{"old":true}
+		"metadata":{"old":true},
+		"opened_on":"2020-01-01"
 	}`)
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/accounts/"+strconvFormatInt(account.ID), strings.NewReader(`{
@@ -139,6 +143,8 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 	assert.Equal(t, "", body.NumberLast4)
 	assert.Equal(t, "", body.CommentMarkdown)
 	assert.Equal(t, "{}", string(body.Metadata))
+	assert.Equal(t, account.OpenedOn, body.OpenedOn)
+	assert.Equal(t, "", body.ClosedOn)
 	assert.Equal(t, "2021-02-03", body.EffectiveFrom)
 	assert.Equal(t, "Corrected account name", body.ChangeReason)
 
@@ -179,21 +185,24 @@ func TestAccountLifecycleRequiresCloseBeforeArchiveAndRestoresClosed(t *testing.
 		"name":"Lifecycle Checking",
 		"account_class":"asset",
 		"account_kind":"checking",
-		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`,
+		"opened_on":"2020-01-01"
 	}`)
 
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/archive", http.StatusConflict)
 
 	closed := mutateAccountWithBody(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/close", `{
-		"effective_from":"2022-05-01",
+		"closed_on":"2022-05-01",
 		"change_reason":"Closed after card replacement"
 	}`, http.StatusOK)
 	assert.Equal(t, "closed", closed.Status)
 	assert.Equal(t, "2022-05-01", closed.EffectiveFrom)
+	assert.Equal(t, "2022-05-01", closed.ClosedOn)
 	assert.Equal(t, "Closed after card replacement", closed.ChangeReason)
 
 	archived := mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/archive", http.StatusOK)
 	assert.Equal(t, "archived", archived.Status)
+	assert.Equal(t, "2022-05-01", archived.ClosedOn)
 
 	defaultList := listAccountsForSession(t, handler, sessionCookie, "")
 	assert.Empty(t, defaultList.Accounts)
@@ -204,9 +213,29 @@ func TestAccountLifecycleRequiresCloseBeforeArchiveAndRestoresClosed(t *testing.
 
 	restored := mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/restore", http.StatusOK)
 	assert.Equal(t, "closed", restored.Status)
+	assert.Equal(t, "2022-05-01", restored.ClosedOn)
 
 	reopened := mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/reopen", http.StatusOK)
 	assert.Equal(t, "active", reopened.Status)
+	assert.Equal(t, "", reopened.ClosedOn)
+}
+
+func TestAccountCloseRejectsDateBeforeOpenedOn(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	account := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"New Account",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`,
+		"opened_on":"2024-01-01"
+	}`)
+
+	mutateAccountWithBody(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(account.ID)+"/close", `{
+		"closed_on":"2023-12-31"
+	}`, http.StatusBadRequest)
 }
 
 func TestAccountValidationRejectsPostingAssetWithoutCommodityAndNonObjectMetadata(t *testing.T) {
@@ -419,6 +448,8 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		assert.True(t, account.IsSystem)
 		assert.Equal(t, "active", account.Status)
 		assert.Nil(t, account.DefaultCommodityID)
+		assert.Equal(t, "0001-01-01", account.OpenedOn)
+		assert.Equal(t, "0001-01-01", account.EffectiveFrom)
 
 		expected, ok := expectedRoles[account.SystemRole]
 		require.True(t, ok, "unexpected system role %q", account.SystemRole)

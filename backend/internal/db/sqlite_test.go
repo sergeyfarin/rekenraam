@@ -133,15 +133,102 @@ func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {
 			changed_by_user_id,
 			change_reason,
 			status,
+			opened_on,
 			name,
 			account_class,
 			account_kind,
 			allows_postings
 		)
-		VALUES (1, 1, '2026-06-06T00:00:00Z', '2026-06-06T00:00:00Z', 1, 'test', 'active', 'Checking', 'asset', 'checking', 1);
+		VALUES (1, 1, '2026-06-06T00:00:00Z', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2026-06-06', 'Checking', 'asset', 'checking', 1);
 	`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
+}
+
+func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO account_versions (
+			account_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			opened_on,
+			closed_on,
+			name,
+			account_class,
+			account_kind,
+			allows_postings
+		)
+		VALUES (1, 1, '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2026-06-06', '2026-06-07', 'Checking', 'asset', 'checking', 1);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO account_versions (
+			account_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			opened_on,
+			closed_on,
+			name,
+			account_class,
+			account_kind,
+			allows_postings
+		)
+		VALUES (1, 1, '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test', 'closed', '2026-06-06', '2026-06-05', 'Checking', 'asset', 'checking', 1);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CHECK constraint failed")
+}
+
+func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO account_versions (
+			account_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			opened_on,
+			name,
+			account_class,
+			account_kind,
+			allows_postings
+		)
+		VALUES
+			(1, 1, '2024-01-01', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2024-01-01', 'Current Name', 'asset', 'checking', 1),
+			(1, 2, '2023-01-01', '2026-06-06T00:00:00Z', 1, 'historical correction', 'active', '2024-01-01', 'Old Name', 'asset', 'checking', 1);
+	`)
+	require.NoError(t, err)
+
+	var name string
+	err = database.QueryRowContext(context.Background(), `
+		SELECT name
+		FROM current_account_versions
+		WHERE account_id = 1
+	`).Scan(&name)
+	require.NoError(t, err)
+	assert.Equal(t, "Current Name", name)
 }
 
 func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
