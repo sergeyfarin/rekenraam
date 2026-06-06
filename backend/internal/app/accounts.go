@@ -42,10 +42,10 @@ var accountClasses = map[string]bool{
 
 var systemAccountSpecs = []db.SystemAccountSpec{
 	{Role: "opening_balance", AccountClass: "equity", AccountKind: "equity"},
-	{Role: "imbalance_import", AccountClass: "equity", AccountKind: "equity"},
+	{Role: "import_imbalance", AccountClass: "equity", AccountKind: "equity"},
 	{Role: "retained_earnings", AccountClass: "equity", AccountKind: "equity"},
-	{Role: "uncategorized_income", AccountClass: "income", AccountKind: "income"},
-	{Role: "uncategorized_expense", AccountClass: "expense", AccountKind: "expense"},
+	{Role: "unassigned_income", AccountClass: "income", AccountKind: "income"},
+	{Role: "unassigned_expense", AccountClass: "expense", AccountKind: "expense"},
 }
 
 type Account struct {
@@ -270,7 +270,6 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 		RequestID:       input.RequestID,
 		OriginType:      input.OriginType,
 		Operation:       input.Operation,
-		IsSystem:        false,
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		CreatedAt:       now.Format(time.RFC3339),
@@ -525,7 +524,7 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		}
 		return db.AccountSpec{}, fmt.Errorf("read account kind: %w", err)
 	}
-	if kind.AccountClass != accountClass || !kind.IsUserAssignable || kind.IsSystemOnly {
+	if kind.AccountClass != accountClass || !kind.IsUserAssignable {
 		return db.AccountSpec{}, ValidationError{Message: "account kind is invalid for account class"}
 	}
 

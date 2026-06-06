@@ -172,7 +172,6 @@ CREATE TABLE IF NOT EXISTS account_kinds (
   ui_profile TEXT NOT NULL,
   is_builtin INTEGER NOT NULL CHECK (is_builtin IN (0, 1)),
   is_user_assignable INTEGER NOT NULL CHECK (is_user_assignable IN (0, 1)),
-  is_system_only INTEGER NOT NULL CHECK (is_system_only IN (0, 1)),
   display_key TEXT NOT NULL,
   sort_order INTEGER NOT NULL,
   UNIQUE (code, account_class)
@@ -185,52 +184,49 @@ INSERT OR IGNORE INTO account_kinds (
   ui_profile,
   is_builtin,
   is_user_assignable,
-  is_system_only,
   display_key,
   sort_order
 ) VALUES
-  ('cash', 'asset', 'cash', 'cash', 1, 1, 0, 'account_kind_cash', 100),
-  ('checking', 'asset', 'bank_account', 'checking', 1, 1, 0, 'account_kind_checking', 120),
-  ('savings', 'asset', 'bank_account', 'savings', 1, 1, 0, 'account_kind_savings', 130),
-  ('term_deposit', 'asset', 'bank_account', 'term_deposit', 1, 1, 0, 'account_kind_term_deposit', 140),
-  ('brokerage', 'asset', 'investment_container', 'brokerage', 1, 1, 0, 'account_kind_brokerage', 200),
-  ('brokerage_cash', 'asset', 'investment_cash', 'brokerage_cash', 1, 1, 0, 'account_kind_brokerage_cash', 210),
-  ('security_holding', 'asset', 'security_holding', 'security_holding', 1, 1, 0, 'account_kind_security_holding', 220),
-  ('crypto_wallet', 'asset', 'digital_asset', 'crypto_wallet', 1, 1, 0, 'account_kind_crypto_wallet', 230),
-  ('property', 'asset', 'tangible_asset', 'property', 1, 1, 0, 'account_kind_property', 300),
-  ('vehicle', 'asset', 'tangible_asset', 'vehicle', 1, 1, 0, 'account_kind_vehicle', 310),
-  ('rewards_balance', 'asset', 'non_cash_balance', 'rewards_balance', 1, 1, 0, 'account_kind_rewards_balance', 400),
-  ('receivable', 'asset', 'receivable', 'receivable', 1, 1, 0, 'account_kind_receivable', 500),
-  ('other_asset', 'asset', 'other', 'other_asset', 1, 1, 0, 'account_kind_other_asset', 900),
-  ('credit_card', 'liability', 'revolving_credit', 'credit_card', 1, 1, 0, 'account_kind_credit_card', 100),
-  ('line_of_credit', 'liability', 'revolving_credit', 'line_of_credit', 1, 1, 0, 'account_kind_line_of_credit', 110),
-  ('loan', 'liability', 'loan', 'loan', 1, 1, 0, 'account_kind_loan', 200),
-  ('mortgage', 'liability', 'loan', 'mortgage', 1, 1, 0, 'account_kind_mortgage', 210),
-  ('tax_liability', 'liability', 'payable', 'tax_liability', 1, 1, 0, 'account_kind_tax_liability', 300),
-  ('payable', 'liability', 'payable', 'payable', 1, 1, 0, 'account_kind_payable', 310),
-  ('other_liability', 'liability', 'other', 'other_liability', 1, 1, 0, 'account_kind_other_liability', 900),
-  ('equity', 'equity', 'equity', 'equity', 1, 1, 0, 'account_kind_equity', 100),
-  ('income', 'income', 'income', 'income', 1, 1, 0, 'account_kind_income', 100),
-  ('expense', 'expense', 'expense', 'expense', 1, 1, 0, 'account_kind_expense', 100);
+  ('cash', 'asset', 'cash', 'cash', 1, 1, 'account_kind_cash', 100),
+  ('checking', 'asset', 'bank_account', 'checking', 1, 1, 'account_kind_checking', 120),
+  ('savings', 'asset', 'bank_account', 'savings', 1, 1, 'account_kind_savings', 130),
+  ('term_deposit', 'asset', 'bank_account', 'term_deposit', 1, 1, 'account_kind_term_deposit', 140),
+  ('brokerage', 'asset', 'investment_container', 'brokerage', 1, 1, 'account_kind_brokerage', 200),
+  ('brokerage_cash', 'asset', 'investment_cash', 'brokerage_cash', 1, 1, 'account_kind_brokerage_cash', 210),
+  ('security_holding', 'asset', 'security_holding', 'security_holding', 1, 1, 'account_kind_security_holding', 220),
+  ('crypto_wallet', 'asset', 'digital_asset', 'crypto_wallet', 1, 1, 'account_kind_crypto_wallet', 230),
+  ('property', 'asset', 'tangible_asset', 'property', 1, 1, 'account_kind_property', 300),
+  ('vehicle', 'asset', 'tangible_asset', 'vehicle', 1, 1, 'account_kind_vehicle', 310),
+  ('rewards_balance', 'asset', 'non_cash_balance', 'rewards_balance', 1, 1, 'account_kind_rewards_balance', 400),
+  ('receivable', 'asset', 'receivable', 'receivable', 1, 1, 'account_kind_receivable', 500),
+  ('other_asset', 'asset', 'other', 'other_asset', 1, 1, 'account_kind_other_asset', 900),
+  ('credit_card', 'liability', 'revolving_credit', 'credit_card', 1, 1, 'account_kind_credit_card', 100),
+  ('line_of_credit', 'liability', 'revolving_credit', 'line_of_credit', 1, 1, 'account_kind_line_of_credit', 110),
+  ('loan', 'liability', 'loan', 'loan', 1, 1, 'account_kind_loan', 200),
+  ('mortgage', 'liability', 'loan', 'mortgage', 1, 1, 'account_kind_mortgage', 210),
+  ('tax_liability', 'liability', 'payable', 'tax_liability', 1, 1, 'account_kind_tax_liability', 300),
+  ('payable', 'liability', 'payable', 'payable', 1, 1, 'account_kind_payable', 310),
+  ('other_liability', 'liability', 'other', 'other_liability', 1, 1, 'account_kind_other_liability', 900),
+  ('equity', 'equity', 'equity', 'equity', 1, 1, 'account_kind_equity', 100),
+  ('income', 'income', 'income', 'income', 1, 1, 'account_kind_income', 100),
+  ('expense', 'expense', 'expense', 'expense', 1, 1, 'account_kind_expense', 100);
 
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  is_system INTEGER NOT NULL CHECK (is_system IN (0, 1)),
   system_role TEXT CHECK (
     system_role IS NULL OR system_role IN (
       'opening_balance',
-      'imbalance_import',
+      'import_imbalance',
       'retained_earnings',
-      'uncategorized_income',
-      'uncategorized_expense'
+      'unassigned_income',
+      'unassigned_expense'
     )
   ),
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_request_id TEXT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  CHECK ((is_system = 1 AND system_role IS NOT NULL) OR (is_system = 0 AND system_role IS NULL))
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_system_role_idx
@@ -346,7 +342,7 @@ END;
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS accounts_system_fields_no_update
-BEFORE UPDATE OF is_system, system_role ON accounts
+BEFORE UPDATE OF system_role ON accounts
 BEGIN
   SELECT RAISE(ABORT, 'account system identity fields are immutable');
 END;

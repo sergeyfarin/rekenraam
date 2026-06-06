@@ -103,17 +103,18 @@ This belongs to the budget/planning slice, not the current account-kind catalog.
 
 ## System Accounts
 
-System accounts are ordinary accounts with `is_system=true`, `account_class`,
-and `account_kind`, plus a stable `system_role`. They are hidden from normal
-account lists unless the API caller explicitly asks for `include_system=true`.
+System accounts are ordinary accounts with `account_class` and `account_kind`,
+plus a stable `system_role`. A non-null `system_role` marks the account as
+system-owned. They are hidden from normal account lists unless the API caller
+explicitly asks for `include_system=true`.
 
 Current system roles:
 
 - `opening_balance`: equity/equity
-- `imbalance_import`: equity/equity
+- `import_imbalance`: equity/equity
 - `retained_earnings`: equity/equity
-- `uncategorized_income`: income/income
-- `uncategorized_expense`: expense/expense
+- `unassigned_income`: income/income
+- `unassigned_expense`: expense/expense
 
 The role, not the kind, identifies the workflow. System account labels come from
 translation keys based on `system_role`.
@@ -153,12 +154,12 @@ flowchart TD
   Liabilities --> Mortgage[Mortgage\nliability/mortgage]
 
   Equity --> Opening[Opening Balance\nsystem_role/opening_balance]
-  Equity --> Imbalance[Import Imbalance\nsystem_role/imbalance_import]
+  Equity --> Imbalance[Import Imbalance\nsystem_role/import_imbalance]
   Equity --> Retained[Retained Earnings\nsystem_role/retained_earnings]
 
-  Income --> UncategorizedIncome[Uncategorized Income\nsystem_role/uncategorized_income]
+  Income --> UncategorizedIncome[Uncategorized Income\nsystem_role/unassigned_income]
   Income --> IncomeCategory[Income Category Account\nincome/income]
-  Expenses --> UncategorizedExpense[Uncategorized Expense\nsystem_role/uncategorized_expense]
+  Expenses --> UncategorizedExpense[Uncategorized Expense\nsystem_role/unassigned_expense]
   Expenses --> ExpenseCategory[Expense Category Account\nexpense/expense]
 ```
 

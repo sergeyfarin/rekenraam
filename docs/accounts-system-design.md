@@ -208,18 +208,19 @@ into columns. Use a child table when this becomes UI scope:
 
 - `id`
 - `book_id`
-- `is_system`
 - `system_role`
 - `created_at`
 - `created_by_user_id`
 - `created_request_id`
 - `created_audit_event_id`
 
-`is_system` and `system_role` belong to the account identity, not to account
-versions. A system account cannot stop being a system account through a later
-attribute version. Enforce one system account identity per `book_id` and
-`system_role` with a unique partial index where `system_role IS NOT NULL`.
-Treat `is_system` and `system_role` as immutable after insert.
+`system_role` belongs to the account identity, not to account versions. A
+non-null `system_role` means the account is system-owned. A system account
+cannot stop being a system account through a later attribute version. Enforce
+one system account identity per `book_id` and `system_role` with a unique
+partial index where `system_role IS NOT NULL`. Treat `system_role` as immutable
+after insert. API responses may expose a derived `is_system` boolean for UI
+convenience, but the database should not store both values.
 
 `account_kinds` is the app-owned built-in catalog for behavior and UI profiles:
 
@@ -229,7 +230,6 @@ Treat `is_system` and `system_role` as immutable after insert.
 - `ui_profile`
 - `is_builtin`
 - `is_user_assignable`
-- `is_system_only`
 - `display_key`
 - `sort_order`
 
@@ -408,8 +408,7 @@ profiles. See `docs/account-hierarchy.md` for the readable taxonomy.
 
 The `income` and `expense` kinds are generic kind profiles for income and
 expense accounts. They are not system-only. Hidden fallback behavior belongs to
-`is_system` and `system_role`, and category-facing behavior belongs to the
-category layer.
+`system_role`, and category-facing behavior belongs to the category layer.
 
 User-facing labels should avoid business jargon for personal transient
 balances. The stable kind codes remain `receivable` and `payable`, but UI copy
@@ -631,19 +630,21 @@ Archiving rules:
 
 ## System Accounts
 
-System accounts are ordinary accounts with `is_system=true` and a stable
-`system_role`. They are seeded per book and localized by stable role keys.
+System accounts are ordinary accounts with a stable non-null `system_role`.
+They are seeded per book and localized by stable role keys. API responses may
+derive `is_system=true` for these rows, but `system_role` is the database source
+of truth.
 
 Required in Phase 1:
 
 - `opening_balance`: equity/equity, counterpart for explicit opening
   balance transactions.
-- `imbalance_import`: equity/equity, temporary counterpart for imported
+- `import_imbalance`: equity/equity, temporary counterpart for imported
   single-sided entries that need cleanup.
 - `retained_earnings`: equity/equity, future close-period target.
-- `uncategorized_income`: income/income, hidden fallback account for income
+- `unassigned_income`: income/income, hidden fallback account for income
   postings before the user chooses a proper income category.
-- `uncategorized_expense`: expense/expense, hidden fallback account for expense
+- `unassigned_expense`: expense/expense, hidden fallback account for expense
   postings before the user chooses a proper expense category.
 
 Recommended later roles:
@@ -830,7 +831,8 @@ Change:
 - Use `accounts` plus `account_versions` rather than a linked list of full
   account rows. This keeps permanent ids stable and makes current/history queries
   clearer.
-- Put `is_system` and `system_role` on account identity rows, not versions.
+- Put `system_role` on account identity rows, not versions. Derive API
+  `is_system` from whether `system_role` is present.
 - Do not store mutable institution attributes directly on `institutions`; use
   `institution_versions`.
 - Do not hard-delete institutions or accounts.

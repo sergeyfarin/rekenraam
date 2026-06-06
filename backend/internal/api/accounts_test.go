@@ -409,10 +409,10 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		accountKind  string
 	}{
 		"opening_balance":       {accountClass: "equity", accountKind: "equity"},
-		"imbalance_import":      {accountClass: "equity", accountKind: "equity"},
+		"import_imbalance":      {accountClass: "equity", accountKind: "equity"},
 		"retained_earnings":     {accountClass: "equity", accountKind: "equity"},
-		"uncategorized_income":  {accountClass: "income", accountKind: "income"},
-		"uncategorized_expense": {accountClass: "expense", accountKind: "expense"},
+		"unassigned_income":  {accountClass: "income", accountKind: "income"},
+		"unassigned_expense": {accountClass: "expense", accountKind: "expense"},
 	}
 	seenRoles := make(map[string]bool, len(body.Accounts))
 	for _, account := range body.Accounts {
@@ -428,10 +428,10 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	}
 	assert.Equal(t, map[string]bool{
 		"opening_balance":       true,
-		"imbalance_import":      true,
+		"import_imbalance":      true,
 		"retained_earnings":     true,
-		"uncategorized_income":  true,
-		"uncategorized_expense": true,
+		"unassigned_income":  true,
+		"unassigned_expense": true,
 	}, seenRoles)
 
 	patchAccount(t, handler, sessionCookie, csrfToken, body.Accounts[0].ID, `{}`, http.StatusConflict)

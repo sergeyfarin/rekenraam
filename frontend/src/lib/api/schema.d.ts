@@ -2479,6 +2479,7 @@ export interface components {
              * @description Current runtime always uses book id 1.
              */
             book_id: number;
+            /** @description Derived from whether system_role is present. System accounts are hidden from ordinary account lists by default. */
             is_system: boolean;
             system_role?: components["schemas"]["SystemAccountRole"];
             status: components["schemas"]["AccountStatus"];

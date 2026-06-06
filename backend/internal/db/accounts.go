@@ -78,8 +78,6 @@ type CreateAccountParams struct {
 	RequestID       string
 	OriginType      string
 	Operation       string
-	IsSystem        bool
-	SystemRole      string
 	Spec            AccountSpec
 	ChangeReason    string
 	CreatedAt       string
@@ -138,7 +136,6 @@ type AccountKindRecord struct {
 	UIProfile        string
 	IsBuiltin        bool
 	IsUserAssignable bool
-	IsSystemOnly     bool
 	DisplayKey       string
 	SortOrder        int
 }
@@ -164,7 +161,7 @@ func (r *AccountRepository) ListAccounts(ctx context.Context, params ListAccount
 	}
 
 	if !params.IncludeSystem {
-		where = append(where, "a.is_system = 0")
+		where = append(where, "a.system_role IS NULL")
 	}
 
 	query := strings.TrimSpace(params.Query)
@@ -262,9 +259,9 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 	}
 
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO accounts (book_id, is_system, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
-		VALUES (?, ?, NULLIF(?, ''), ?, ?, NULLIF(?, ''), ?)
-	`, params.BookID, boolToInt(params.IsSystem), params.SystemRole, params.CreatedAt, params.CreatedByUserID, params.RequestID, auditEventID)
+		INSERT INTO accounts (book_id, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, NULL, ?, ?, NULLIF(?, ''), ?)
+	`, params.BookID, params.CreatedAt, params.CreatedByUserID, params.RequestID, auditEventID)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert account: %w", err)
 	}
@@ -526,7 +523,6 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 	var record AccountKindRecord
 	var isBuiltin int
 	var isUserAssignable int
-	var isSystemOnly int
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT
 			code,
@@ -535,7 +531,6 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 			ui_profile,
 			is_builtin,
 			is_user_assignable,
-			is_system_only,
 			display_key,
 			sort_order
 		FROM account_kinds
@@ -547,7 +542,6 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 		&record.UIProfile,
 		&isBuiltin,
 		&isUserAssignable,
-		&isSystemOnly,
 		&record.DisplayKey,
 		&record.SortOrder,
 	); err != nil {
@@ -559,7 +553,6 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 
 	record.IsBuiltin = isBuiltin == 1
 	record.IsUserAssignable = isUserAssignable == 1
-	record.IsSystemOnly = isSystemOnly == 1
 	return record, nil
 }
 
@@ -573,8 +566,8 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 	}
 
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO accounts (book_id, is_system, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
-		VALUES (?, 1, ?, ?, ?, NULLIF(?, ''), ?)
+		INSERT INTO accounts (book_id, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, ?, ?, ?, NULLIF(?, ''), ?)
 	`, params.BookID, systemSpec.Role, params.CreatedAt, params.ChangedByUserID, params.RequestID, auditEventID)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert system account: %w", err)
@@ -707,7 +700,6 @@ func accountSelect(whereClause string) string {
 		SELECT
 			a.id,
 			a.book_id,
-			a.is_system,
 			a.system_role,
 			a.created_at,
 			a.created_by_user_id,
@@ -738,12 +730,10 @@ func accountSelect(whereClause string) string {
 }
 
 func scanAccountRecord(row rowScanner, record *AccountRecord) error {
-	var isSystem int
 	var allowsPostings int
 	if err := row.Scan(
 		&record.ID,
 		&record.BookID,
-		&isSystem,
 		&record.SystemRole,
 		&record.CreatedAt,
 		&record.CreatedByUserID,
@@ -775,7 +765,7 @@ func scanAccountRecord(row rowScanner, record *AccountRecord) error {
 		return fmt.Errorf("scan account: %w", err)
 	}
 
-	record.IsSystem = isSystem == 1
+	record.IsSystem = record.SystemRole.Valid
 	record.AllowsPostings = allowsPostings == 1
 	return nil
 }

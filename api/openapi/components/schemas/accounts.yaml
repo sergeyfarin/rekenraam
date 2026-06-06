@@ -42,10 +42,10 @@ SystemAccountRole:
   type: string
   enum:
     - opening_balance
-    - imbalance_import
+    - import_imbalance
     - retained_earnings
-    - uncategorized_income
-    - uncategorized_expense
+    - unassigned_income
+    - unassigned_expense
 AccountResponse:
   type: object
   required:
@@ -72,6 +72,7 @@ AccountResponse:
       description: Current runtime always uses book id 1.
     is_system:
       type: boolean
+      description: Derived from whether system_role is present. System accounts are hidden from ordinary account lists by default.
     system_role:
       $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
     status:

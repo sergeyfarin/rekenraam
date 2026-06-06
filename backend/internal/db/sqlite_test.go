@@ -74,7 +74,6 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 		"base_kind",
 		"ui_profile",
 		"is_user_assignable",
-		"is_system_only",
 	})
 	assert.Contains(t, readTableColumns(t, database, "accounts"), "created_audit_event_id")
 	assert.Contains(t, readTableColumns(t, database, "account_versions"), "change_audit_event_id")

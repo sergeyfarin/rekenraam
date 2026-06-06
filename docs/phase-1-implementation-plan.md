@@ -104,7 +104,8 @@ Backend schema:
 
 - Add `accounts` identity table.
 - Add append-only `account_versions` table.
-- Store `is_system` and `system_role` on identity rows.
+- Store nullable `system_role` on identity rows. A non-null role marks the
+  account as system-owned.
 - Do not store balances, `normal_balance`, `display_order`, `closed_on`, or
   `archived_on`.
 
@@ -135,10 +136,10 @@ Tree rules:
 Required roles:
 
 - `opening_balance`
-- `imbalance_import`
+- `import_imbalance`
 - `retained_earnings`
-- `uncategorized_income`
-- `uncategorized_expense`
+- `unassigned_income`
+- `unassigned_expense`
 
 Behavior:
 
