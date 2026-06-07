@@ -248,15 +248,15 @@ func TestTransactionCommonLedgerScenarios(t *testing.T) {
 	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Salary","category_type":"income"}`)
 	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Scenario Expense","category_type":"expense"}`)
 
-	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+	salaryTx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
 		posting(checking.ID, 100000, 2, usdID),
 		posting(salary.ID, -100000, 2, usdID),
 	), http.StatusCreated)
-	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+	cardPurchaseTx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
 		posting(card.ID, -5000, 2, usdID),
 		posting(expense.ID, 5000, 2, usdID),
 	), http.StatusCreated)
-	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+	cardPaymentTx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
 		posting(checking.ID, -5000, 2, usdID),
 		posting(card.ID, 5000, 2, usdID),
 	), http.StatusCreated)
@@ -283,7 +283,7 @@ func TestTransactionCommonLedgerScenarios(t *testing.T) {
 			]
 		}]
 	}`, http.StatusCreated)
-	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+	fxTx := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
 		"transaction_date":"2026-06-07",
 		"transaction_kind":"transfer",
 		"journal_entries":[{
@@ -321,6 +321,22 @@ func TestTransactionCommonLedgerScenarios(t *testing.T) {
 			]
 		}]
 	}`, http.StatusCreated)
+
+	checkingRegister := accountRegisterForSession(t, handler, sessionCookie, checking.ID, "?after_date=2026-06-07&before_date=2026-06-07")
+	assertRegisterPosting(t, checkingRegister, salaryTx.ID, checking.ID, usdID, 100000)
+	assertRegisterPosting(t, checkingRegister, cardPaymentTx.ID, checking.ID, usdID, -5000)
+	assertRegisterPosting(t, checkingRegister, fxTx.ID, checking.ID, usdID, -108000)
+
+	cardRegister := accountRegisterForSession(t, handler, sessionCookie, card.ID, "?after_date=2026-06-07&before_date=2026-06-07")
+	assertRegisterPosting(t, cardRegister, cardPurchaseTx.ID, card.ID, usdID, -5000)
+	assertRegisterPosting(t, cardRegister, cardPaymentTx.ID, card.ID, usdID, 5000)
+
+	eurRegister := accountRegisterForSession(t, handler, sessionCookie, eurChecking.ID, "?after_date=2026-06-07&before_date=2026-06-07")
+	assertRegisterPosting(t, eurRegister, fxTx.ID, eurChecking.ID, eur.ID, 100000)
+
+	tradingRegister := accountRegisterForSession(t, handler, sessionCookie, commodityTrading.ID, "?after_date=2026-06-07&before_date=2026-06-07")
+	assertRegisterPosting(t, tradingRegister, fxTx.ID, commodityTrading.ID, usdID, 108000)
+	assertRegisterPosting(t, tradingRegister, fxTx.ID, commodityTrading.ID, eur.ID, -100000)
 }
 
 func createLedgerAccount(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, name string, accountClass string, accountKind string, commodityID int64, scaleOverride int) accountResponse {
@@ -400,6 +416,32 @@ func balancedBody(transactionDate string, postings ...string) string {
 			"postings":[` + strings.Join(postings, ",") + `]
 		}]
 	}`
+}
+
+func assertRegisterPosting(t *testing.T, register transactionsResponse, transactionID int64, accountID int64, commodityID int64, quantityValue int64) {
+	t.Helper()
+
+	seen := make([]string, 0)
+	for _, transaction := range register.Transactions {
+		for _, entry := range transaction.JournalEntries {
+			for _, posting := range entry.Postings {
+				seen = append(seen, strconvFormatInt(transaction.ID)+":"+strconvFormatInt(posting.AccountID)+":"+strconvFormatInt(posting.CommodityID)+":"+strconv.FormatInt(posting.QuantityValue, 10))
+			}
+		}
+		if transaction.ID != transactionID {
+			continue
+		}
+		for _, entry := range transaction.JournalEntries {
+			for _, posting := range entry.Postings {
+				if posting.AccountID == accountID && posting.CommodityID == commodityID && posting.QuantityValue == quantityValue {
+					return
+				}
+			}
+		}
+		require.Failf(t, "register posting not found", "transaction=%d account=%d commodity=%d quantity=%d seen=%s", transactionID, accountID, commodityID, quantityValue, strings.Join(seen, ","))
+		return
+	}
+	require.Failf(t, "register transaction not found", "transaction=%d account=%d commodity=%d quantity=%d seen=%s", transactionID, accountID, commodityID, quantityValue, strings.Join(seen, ","))
 }
 
 func createPayeeForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, body string) payeeResponse {
