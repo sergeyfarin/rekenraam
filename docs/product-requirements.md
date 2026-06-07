@@ -92,7 +92,9 @@ These apply across all feature phases.
 ### Data Integrity
 
 - The financial model must remain double-entry capable.
-- Transactions with postings or splits are the canonical ledger primitive.
+- Transactions with postings are the canonical ledger primitive. "Split" may be
+  used as user-facing copy for split transaction entry, but "posting" is the
+  canonical schema and service term.
 - Transfers are ordinary balanced transactions.
 - Financial quantities must never use floating point storage.
 - Reconciled or closed-period data must prefer corrective workflows over silent in-place mutation.
@@ -173,7 +175,7 @@ Goal: create the durable accounting skeleton.
 
 Goal: make daily transaction entry useful.
 
-- Transactions with postings/splits.
+- Transactions with postings.
 - Transfers as ordinary balanced transactions.
 - Opening balances through explicit equity/opening-balance transactions.
 - Friendly category UI mapped to income/expense accounts.

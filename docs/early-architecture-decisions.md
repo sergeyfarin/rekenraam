@@ -51,6 +51,8 @@ Do not optimize the first schema around a hypothetical PostgreSQL migration. Avo
 ## Ledger Model
 
 Use a double-entry-capable ledger from the first real transaction schema.
+The detailed Phase 2 transaction ledger plan is maintained in
+`docs/transaction-ledger-core-plan.md`.
 
 Rules:
 
@@ -59,7 +61,9 @@ Rules:
 - Accounts form a tree.
 - Account classes should include asset, liability, equity, income, and expense.
 - Categories are presented in the UI as friendly budgeting/reporting concepts, but they should map to income or expense accounts instead of becoming a separate transaction primitive.
-- Transactions contain postings, also called splits, against accounts.
+- Transactions contain postings against accounts. "Split" is acceptable
+  user-facing copy for split transaction entry, but "posting" is the canonical
+  schema, service, API, and architecture term.
 - Transfers are ordinary transactions with postings to two or more accounts.
 - A posted transaction should balance by commodity/currency unless it is an explicit opening balance, equity adjustment, or other named system workflow.
 
@@ -81,6 +85,11 @@ Examples:
 
 - `12345` with scale `2` means `123.45`.
 - `125000` with scale `6` means `0.125000`.
+
+Posting quantities use debit-positive sign convention. Positive postings are
+debits; negative postings are credits. Asset and expense increases are usually
+positive. Liability, equity, and income increases are usually negative. This is
+a ledger invariant and must not be changed after transaction migrations land.
 
 Rules:
 
@@ -221,7 +230,9 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
 - Before accounts: account class and kind lists, account tree rules, opening-balance behavior, and default book setup.
 - Before commodities: currency metadata source, custom commodity codes, display scale, precision limits, maximum quantity scale, and commodity-code validation.
 - Before first frontend use of typed API clients: exact OpenAPI generation/check command and generated-client path.
-- Before transactions: posting schema, balancing rules, transfer representation, split editing, draft versus posted lifecycle, correction behavior, and import-source metadata.
+- Before transactions: posting schema, balancing rules, transfer representation,
+  posting editing, draft versus posted lifecycle, correction behavior, and
+  import-source metadata.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
 - Before budgets: period semantics, category/account mapping, rollover rules,
   whether budgets are book-wide or account-scoped, and the detailed UI for

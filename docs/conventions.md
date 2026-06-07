@@ -38,7 +38,11 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Categories are UI concepts mapped to income and expense accounts, not a separate ledger primitive.
 - Category API behavior, built-in metadata, lifecycle rules, and the starter
   taxonomy are documented in `docs/categories-design.md`.
-- Transactions contain postings or splits.
+- Transaction ledger schema planning is documented in
+  `docs/transaction-ledger-core-plan.md`.
+- Transactions contain postings. "Split" is acceptable user-facing copy for a
+  split transaction UI, but schema, service, API, and docs should use
+  "posting" as the canonical ledger term.
 - Transfers are ordinary transactions.
 - Reconciliation status belongs to posting or account-specific ledger state, not only a transaction header.
 
@@ -46,6 +50,10 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Never store money or quantities as floating point.
 - Store exact values as integer plus scale plus commodity code.
+- Ledger posting quantities use debit-positive sign convention. Positive
+  postings are debits; negative postings are credits. Asset and expense
+  increases are usually positive. Liability, equity, and income increases are
+  usually negative.
 - Use calendar dates for financial facts.
 - Use UTC timestamps for system facts.
 - Calendar dates travel over the wire as ISO 8601 strings (`YYYY-MM-DD`). UTC timestamps travel as RFC 3339 strings (`2025-01-15T14:30:00Z`). Go's `time.Time` marshals as RFC 3339 by default; use a plain `string` or a validated date type for calendar-date fields.
