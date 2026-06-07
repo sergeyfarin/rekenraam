@@ -1,0 +1,47 @@
+get:
+  summary: Read an account register
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AccountID"
+    - in: query
+      name: status
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+    - in: query
+      name: after_date
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: before_date
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+    - in: query
+      name: cursor
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Register transactions
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TransactionsResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -90,6 +90,49 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_account_versions"))
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_institution_versions"))
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_commodity_versions"))
+	assert.Subset(t, readTableColumns(t, database, "payees"), []string{
+		"id",
+		"book_id",
+		"created_audit_event_id",
+	})
+	assert.Subset(t, readTableColumns(t, database, "payee_versions"), []string{
+		"id",
+		"payee_id",
+		"version_seq",
+		"status",
+		"normalized_name",
+	})
+	assert.True(t, sqliteObjectExists(t, database, "view", "current_payee_versions"))
+	assert.Subset(t, readTableColumns(t, database, "transactions"), []string{
+		"id",
+		"book_id",
+		"correction_of_transaction_id",
+		"created_audit_event_id",
+	})
+	assert.Subset(t, readTableColumns(t, database, "transaction_versions"), []string{
+		"id",
+		"transaction_id",
+		"version_seq",
+		"status",
+		"transaction_date",
+	})
+	assert.Subset(t, readTableColumns(t, database, "journal_entries"), []string{
+		"id",
+		"transaction_version_id",
+		"entry_date",
+		"entry_kind",
+	})
+	assert.Subset(t, readTableColumns(t, database, "posting_versions"), []string{
+		"id",
+		"posting_line_id",
+		"account_id",
+		"quantity_value",
+		"quantity_scale",
+		"commodity_id",
+	})
+	assert.True(t, sqliteObjectExists(t, database, "view", "current_transaction_versions"))
+	assert.True(t, sqliteObjectExists(t, database, "table", "transaction_search"))
+	assert.True(t, sqliteObjectExists(t, database, "trigger", "transaction_versions_no_supersede_reconciled"))
 }
 
 func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {

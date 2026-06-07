@@ -1,0 +1,109 @@
+get:
+  summary: List transactions
+  parameters:
+    - in: query
+      name: account_id
+      schema:
+        type: integer
+        format: int64
+    - in: query
+      name: payee_id
+      schema:
+        type: integer
+        format: int64
+    - in: query
+      name: q
+      schema:
+        type: string
+    - in: query
+      name: status
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+    - in: query
+      name: kind
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/TransactionKind"
+    - in: query
+      name: after_date
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: before_date
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+    - in: query
+      name: cursor
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Transactions
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TransactionsResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Create a transaction
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/TransactionRequest"
+  responses:
+    "201":
+      description: Transaction created
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TransactionResponse"
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

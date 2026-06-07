@@ -47,6 +47,8 @@ var systemAccountSpecs = []db.SystemAccountSpec{
 	{Role: "retained_earnings", AccountClass: "equity", AccountKind: "equity"},
 	{Role: "unassigned_income", AccountClass: "income", AccountKind: "income"},
 	{Role: "unassigned_expense", AccountClass: "expense", AccountKind: "expense"},
+	{Role: "transfer_clearing", AccountClass: "asset", AccountKind: "receivable"},
+	{Role: "commodity_trading", AccountClass: "equity", AccountKind: "equity"},
 }
 
 type Account struct {

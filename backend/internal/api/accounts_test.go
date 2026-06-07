@@ -430,7 +430,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 
 	var body completeSystemAccountsSetupResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	require.Len(t, body.Accounts, 5)
+	require.Len(t, body.Accounts, 7)
 	assert.Equal(t, setupStepResponse{Key: "system_accounts", Status: "completed"}, body.Setup.Steps[3])
 
 	expectedRoles := map[string]struct {
@@ -442,6 +442,8 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		"retained_earnings":  {accountClass: "equity", accountKind: "equity"},
 		"unassigned_income":  {accountClass: "income", accountKind: "income"},
 		"unassigned_expense": {accountClass: "expense", accountKind: "expense"},
+		"transfer_clearing":  {accountClass: "asset", accountKind: "receivable"},
+		"commodity_trading":  {accountClass: "equity", accountKind: "equity"},
 	}
 	seenRoles := make(map[string]bool, len(body.Accounts))
 	for _, account := range body.Accounts {
@@ -463,6 +465,8 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		"retained_earnings":  true,
 		"unassigned_income":  true,
 		"unassigned_expense": true,
+		"transfer_clearing":  true,
+		"commodity_trading":  true,
 	}, seenRoles)
 
 	patchAccount(t, handler, sessionCookie, csrfToken, body.Accounts[0].ID, `{}`, http.StatusConflict)
@@ -471,7 +475,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	assert.Empty(t, defaultList.Accounts)
 
 	systemList := listAccountsForSession(t, handler, sessionCookie, "?include_system=true")
-	require.Len(t, systemList.Accounts, 5)
+	require.Len(t, systemList.Accounts, 7)
 	for _, account := range systemList.Accounts {
 		assert.True(t, account.IsSystem)
 		assert.NotEmpty(t, account.SystemRole)

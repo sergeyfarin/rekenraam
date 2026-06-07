@@ -46,6 +46,8 @@ SystemAccountRole:
     - retained_earnings
     - unassigned_income
     - unassigned_expense
+    - transfer_clearing
+    - commodity_trading
 AccountResponse:
   type: object
   required:

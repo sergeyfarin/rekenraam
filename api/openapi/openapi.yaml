@@ -51,6 +51,8 @@ paths:
     $ref: "./paths/account-restore.yaml"
   /api/v1/accounts/{account_id}/versions:
     $ref: "./paths/account-versions.yaml"
+  /api/v1/accounts/{account_id}/register:
+    $ref: "./paths/account-register.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -71,6 +73,24 @@ paths:
     $ref: "./paths/tag-archive.yaml"
   /api/v1/tags/{tag_id}/restore:
     $ref: "./paths/tag-restore.yaml"
+  /api/v1/payees:
+    $ref: "./paths/payees.yaml"
+  /api/v1/payees/{payee_id}:
+    $ref: "./paths/payee.yaml"
+  /api/v1/payees/{payee_id}/archive:
+    $ref: "./paths/payee-archive.yaml"
+  /api/v1/payees/{payee_id}/restore:
+    $ref: "./paths/payee-restore.yaml"
+  /api/v1/transactions:
+    $ref: "./paths/transactions.yaml"
+  /api/v1/transactions/{transaction_id}:
+    $ref: "./paths/transaction.yaml"
+  /api/v1/transactions/{transaction_id}/post:
+    $ref: "./paths/transaction-post.yaml"
+  /api/v1/transactions/{transaction_id}/void:
+    $ref: "./paths/transaction-void.yaml"
+  /api/v1/transactions/{transaction_id}/correct:
+    $ref: "./paths/transaction-correct.yaml"
 components:
   headers:
     XRequestID:
@@ -103,6 +123,20 @@ components:
     CategoryID:
       in: path
       name: category_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PayeeID:
+      in: path
+      name: payee_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TransactionID:
+      in: path
+      name: transaction_id
       required: true
       schema:
         type: integer
@@ -198,6 +232,40 @@ components:
       $ref: "./components/schemas/tags.yaml#/TagsResponse"
     TagRequest:
       $ref: "./components/schemas/tags.yaml#/TagRequest"
+    PayeeStatus:
+      $ref: "./components/schemas/payees.yaml#/PayeeStatus"
+    PayeeResponse:
+      $ref: "./components/schemas/payees.yaml#/PayeeResponse"
+    PayeesResponse:
+      $ref: "./components/schemas/payees.yaml#/PayeesResponse"
+    PayeeRequest:
+      $ref: "./components/schemas/payees.yaml#/PayeeRequest"
+    PayeeLifecycleRequest:
+      $ref: "./components/schemas/payees.yaml#/PayeeLifecycleRequest"
+    TransactionStatus:
+      $ref: "./components/schemas/transactions.yaml#/TransactionStatus"
+    TransactionKind:
+      $ref: "./components/schemas/transactions.yaml#/TransactionKind"
+    JournalEntryKind:
+      $ref: "./components/schemas/transactions.yaml#/JournalEntryKind"
+    ReconciliationStatus:
+      $ref: "./components/schemas/transactions.yaml#/ReconciliationStatus"
+    PostingResponse:
+      $ref: "./components/schemas/transactions.yaml#/PostingResponse"
+    JournalEntryResponse:
+      $ref: "./components/schemas/transactions.yaml#/JournalEntryResponse"
+    TransactionResponse:
+      $ref: "./components/schemas/transactions.yaml#/TransactionResponse"
+    TransactionsResponse:
+      $ref: "./components/schemas/transactions.yaml#/TransactionsResponse"
+    PostingRequest:
+      $ref: "./components/schemas/transactions.yaml#/PostingRequest"
+    JournalEntryRequest:
+      $ref: "./components/schemas/transactions.yaml#/JournalEntryRequest"
+    TransactionRequest:
+      $ref: "./components/schemas/transactions.yaml#/TransactionRequest"
+    TransactionLifecycleRequest:
+      $ref: "./components/schemas/transactions.yaml#/TransactionLifecycleRequest"
     AuthSessionResponse:
       $ref: "./components/schemas/auth-responses.yaml#/AuthSessionResponse"
     LoginResponse:

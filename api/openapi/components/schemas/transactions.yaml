@@ -1,0 +1,304 @@
+TransactionStatus:
+  type: string
+  enum:
+    - draft
+    - posted
+    - voided
+TransactionKind:
+  type: string
+  enum:
+    - ordinary
+    - transfer
+    - investment
+    - opening_balance
+    - adjustment
+JournalEntryKind:
+  type: string
+  enum:
+    - ordinary
+    - transfer_leg
+    - exchange
+    - investment
+    - opening_balance
+    - adjustment
+ReconciliationStatus:
+  type: string
+  enum:
+    - uncleared
+    - cleared
+    - reconciled
+PostingResponse:
+  type: object
+  required:
+    - id
+    - posting_line_id
+    - line_key
+    - line_seq
+    - account_id
+    - quantity_value
+    - quantity_scale
+    - commodity_id
+    - memo
+    - reconciliation_status
+    - metadata
+    - tag_ids
+  properties:
+    id:
+      type: integer
+      format: int64
+    posting_line_id:
+      type: integer
+      format: int64
+    line_key:
+      type: string
+    line_seq:
+      type: integer
+      format: int64
+    account_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    commodity_id:
+      type: integer
+      format: int64
+    memo:
+      type: string
+    reconciliation_status:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationStatus"
+    cleared_on:
+      type: string
+      format: date
+    metadata:
+      type: object
+      additionalProperties: true
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+JournalEntryResponse:
+  type: object
+  required:
+    - id
+    - entry_seq
+    - entry_date
+    - entry_kind
+    - memo
+    - metadata
+    - postings
+  properties:
+    id:
+      type: integer
+      format: int64
+    entry_seq:
+      type: integer
+      format: int64
+    entry_date:
+      type: string
+      format: date
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    memo:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    postings:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PostingResponse"
+TransactionResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - status
+    - transaction_kind
+    - transaction_date
+    - description
+    - note_markdown
+    - metadata
+    - version_id
+    - version_seq
+    - tag_ids
+    - journal_entries
+    - created_at
+    - updated_at
+    - change_reason
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    correction_of_transaction_id:
+      type: integer
+      format: int64
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    transaction_kind:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionKind"
+    transaction_date:
+      type: string
+      format: date
+      description: User-facing register display date.
+    payee_id:
+      type: integer
+      format: int64
+    payee_name:
+      type: string
+    description:
+      type: string
+    external_ref_hint:
+      type: string
+    note_markdown:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    version_id:
+      type: integer
+      format: int64
+    version_seq:
+      type: integer
+      format: int64
+    supersedes_version_id:
+      type: integer
+      format: int64
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    journal_entries:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/JournalEntryResponse"
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    change_reason:
+      type: string
+TransactionsResponse:
+  type: object
+  required:
+    - transactions
+  properties:
+    transactions:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/TransactionResponse"
+    next_cursor:
+      type: string
+PostingRequest:
+  type: object
+  required:
+    - account_id
+    - quantity_value
+    - quantity_scale
+    - commodity_id
+  properties:
+    line_key:
+      type: string
+      description: Server-generated line key from a previous response. Omit for new lines.
+    account_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    commodity_id:
+      type: integer
+      format: int64
+    memo:
+      type: string
+    reconciliation_status:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationStatus"
+    cleared_on:
+      type: string
+      format: date
+    metadata:
+      type: object
+      additionalProperties: true
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+  additionalProperties: false
+JournalEntryRequest:
+  type: object
+  properties:
+    entry_date:
+      type: string
+      format: date
+      description: Accounting effective date for this balanced journal entry.
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    memo:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    postings:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PostingRequest"
+  additionalProperties: false
+TransactionRequest:
+  type: object
+  properties:
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    transaction_kind:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionKind"
+    transaction_date:
+      type: string
+      format: date
+      description: User-facing register display date.
+    payee_id:
+      type: integer
+      format: int64
+    payee_name:
+      type: string
+    description:
+      type: string
+    external_ref_hint:
+      type: string
+    note_markdown:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    journal_entries:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/JournalEntryRequest"
+    change_reason:
+      type: string
+  additionalProperties: false
+TransactionLifecycleRequest:
+  type: object
+  properties:
+    change_reason:
+      type: string
+  additionalProperties: false

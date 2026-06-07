@@ -286,11 +286,15 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	currencyService := app.NewCurrencyService(db.NewCommodityRepository(database), setupService)
 	institutionRepository := db.NewInstitutionRepository(database)
 	institutionService := app.NewInstitutionService(institutionRepository)
-	accountService := app.NewAccountService(db.NewAccountRepository(database), institutionRepository, setupService)
+	accountRepository := db.NewAccountRepository(database)
+	accountService := app.NewAccountService(accountRepository, institutionRepository, setupService)
 	tagService := app.NewTagService(db.NewTagRepository(database))
 	categoryService := app.NewCategoryService(db.NewCategoryRepository(database), setupService)
+	payeeRepository := db.NewPayeeRepository(database)
+	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
+	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, options), database
 }
 
 func setSameOrigin(req *http.Request) {

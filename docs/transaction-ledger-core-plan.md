@@ -661,7 +661,8 @@ offsets over an append-only ledger.
 
 `PATCH /api/v1/transactions/{transaction_id}` semantics:
 
-- PATCH on a draft updates the draft version.
+- PATCH on a draft keeps the transaction in draft state, but still appends a
+  new draft `transaction_version`; transaction version rows remain append-only.
 - PATCH on a posted transaction creates a new posted version.
 - PATCH on a voided transaction is rejected; use a corrective transaction if
   further accounting is required.

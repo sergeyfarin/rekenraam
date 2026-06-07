@@ -1,0 +1,1008 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/google/uuid"
+
+	"rekenraam/backend/internal/db"
+)
+
+const (
+	transactionTextMaxBytes = 500
+	transactionNoteMaxBytes = 10000
+	ledgerJSONMaxBytes      = 10000
+	transactionListLimit    = 100
+	transactionMaxLimit     = 500
+)
+
+var (
+	ErrTransactionNotFound  = errors.New("transaction not found")
+	ErrTransactionProtected = errors.New("transaction requires corrective workflow")
+	ErrTransactionPosted    = errors.New("posted or voided transaction cannot be deleted")
+	ErrTransactionVoided    = errors.New("voided transaction cannot be edited")
+	ErrTransactionTag       = errors.New("transaction tag is invalid")
+)
+
+var transactionStatuses = map[string]bool{
+	"draft":  true,
+	"posted": true,
+	"voided": true,
+}
+
+var transactionKinds = map[string]bool{
+	"ordinary":        true,
+	"transfer":        true,
+	"investment":      true,
+	"opening_balance": true,
+	"adjustment":      true,
+}
+
+var entryKinds = map[string]bool{
+	"ordinary":        true,
+	"transfer_leg":    true,
+	"exchange":        true,
+	"investment":      true,
+	"opening_balance": true,
+	"adjustment":      true,
+}
+
+var reconciliationStatuses = map[string]bool{
+	"uncleared":  true,
+	"cleared":    true,
+	"reconciled": true,
+}
+
+type Transaction struct {
+	ID                        int64
+	BookID                    int64
+	CorrectionOfTransactionID *int64
+	Status                    string
+	TransactionKind           string
+	TransactionDate           string
+	PayeeID                   *int64
+	PayeeName                 string
+	Description               string
+	ExternalRefHint           string
+	NoteMarkdown              string
+	MetadataJSON              string
+	VersionID                 int64
+	VersionSeq                int64
+	SupersedesVersionID       *int64
+	TagIDs                    []int64
+	JournalEntries            []JournalEntry
+	CreatedAt                 string
+	UpdatedAt                 string
+	ChangeReason              string
+}
+
+type JournalEntry struct {
+	ID           int64
+	EntrySeq     int64
+	EntryDate    string
+	EntryKind    string
+	Memo         string
+	MetadataJSON string
+	Postings     []Posting
+}
+
+type Posting struct {
+	ID                   int64
+	PostingLineID        int64
+	LineKey              string
+	LineSeq              int64
+	AccountID            int64
+	QuantityValue        int64
+	QuantityScale        int
+	CommodityID          int64
+	Memo                 string
+	ReconciliationStatus string
+	ClearedOn            string
+	MetadataJSON         string
+	TagIDs               []int64
+}
+
+type ListTransactionsInput struct {
+	AccountID  int64
+	PayeeID    int64
+	Status     string
+	Kind       string
+	Query      string
+	AfterDate  string
+	BeforeDate string
+	Limit      int
+	Cursor     string
+}
+
+type ListTransactionsResult struct {
+	Transactions []Transaction
+	NextCursor   string
+}
+
+type CreateTransactionInput struct {
+	OwnerUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	OriginType                string
+	Operation                 string
+	CorrectionOfTransactionID *int64
+	Spec                      TransactionInput
+	ChangeReason              string
+}
+
+type UpdateTransactionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	TransactionID int64
+	Spec          TransactionInput
+	ChangeReason  string
+}
+
+type PostTransactionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	TransactionID int64
+	ChangeReason  string
+}
+
+type VoidTransactionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	TransactionID int64
+	ChangeReason  string
+}
+
+type DeleteDraftTransactionInput struct {
+	TransactionID int64
+}
+
+type TransactionInput struct {
+	Status          string
+	TransactionKind string
+	TransactionDate string
+	PayeeID         *int64
+	PayeeName       string
+	Description     string
+	ExternalRefHint string
+	NoteMarkdown    string
+	MetadataJSON    string
+	TagIDs          []int64
+	JournalEntries  []JournalEntryInput
+}
+
+type JournalEntryInput struct {
+	EntryDate    string
+	EntryKind    string
+	Memo         string
+	MetadataJSON string
+	Postings     []PostingInput
+}
+
+type PostingInput struct {
+	LineKey              string
+	AccountID            int64
+	QuantityValue        int64
+	QuantityScale        int
+	CommodityID          int64
+	Memo                 string
+	ReconciliationStatus string
+	ClearedOn            string
+	MetadataJSON         string
+	TagIDs               []int64
+}
+
+type TransactionService struct {
+	repository      *db.TransactionRepository
+	payeeRepository *db.PayeeRepository
+	now             func() time.Time
+	newLineKey      func() string
+}
+
+func NewTransactionService(repository *db.TransactionRepository, payeeRepository *db.PayeeRepository) *TransactionService {
+	return &TransactionService{
+		repository:      repository,
+		payeeRepository: payeeRepository,
+		now:             time.Now,
+		newLineKey:      uuid.NewString,
+	}
+}
+
+func (s *TransactionService) ListTransactions(ctx context.Context, input ListTransactionsInput) (ListTransactionsResult, error) {
+	params, err := s.listParams(input, false)
+	if err != nil {
+		return ListTransactionsResult{}, err
+	}
+
+	records, err := s.repository.ListTransactions(ctx, params)
+	if err != nil {
+		return ListTransactionsResult{}, fmt.Errorf("list transactions: %w", err)
+	}
+
+	nextCursor := ""
+	if len(records) == params.Limit {
+		last := records[len(records)-1]
+		nextCursor = db.EncodeTransactionCursor(last.TransactionDate, last.ID)
+	}
+
+	return ListTransactionsResult{
+		Transactions: toTransactions(records),
+		NextCursor:   nextCursor,
+	}, nil
+}
+
+func (s *TransactionService) Register(ctx context.Context, accountID int64, input ListTransactionsInput) (ListTransactionsResult, error) {
+	if accountID <= 0 {
+		return ListTransactionsResult{}, ValidationError{Message: "account id is required"}
+	}
+	input.AccountID = accountID
+	if strings.TrimSpace(input.Status) == "" {
+		input.Status = "posted"
+	}
+
+	params, err := s.listParams(input, true)
+	if err != nil {
+		return ListTransactionsResult{}, err
+	}
+
+	records, err := s.repository.ListTransactions(ctx, params)
+	if err != nil {
+		return ListTransactionsResult{}, fmt.Errorf("list register: %w", err)
+	}
+
+	nextCursor := ""
+	if len(records) == params.Limit {
+		last := records[len(records)-1]
+		nextCursor = db.EncodeTransactionCursor(last.TransactionDate, last.ID)
+	}
+
+	return ListTransactionsResult{
+		Transactions: toTransactions(records),
+		NextCursor:   nextCursor,
+	}, nil
+}
+
+func (s *TransactionService) Transaction(ctx context.Context, transactionID int64) (Transaction, error) {
+	if transactionID <= 0 {
+		return Transaction{}, ValidationError{Message: "transaction id is required"}
+	}
+
+	record, err := s.repository.TransactionByID(ctx, BookID, transactionID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return Transaction{}, ErrTransactionNotFound
+		}
+		return Transaction{}, fmt.Errorf("read transaction: %w", err)
+	}
+
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) CreateTransaction(ctx context.Context, input CreateTransactionInput) (Transaction, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, ValidationError{Message: "owner user is required"}
+	}
+
+	now := s.now().UTC()
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: "posted"})
+	if err != nil {
+		return Transaction{}, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, "created transaction")
+	if err != nil {
+		return Transaction{}, err
+	}
+	operation := strings.TrimSpace(input.Operation)
+	if operation == "" {
+		operation = "transaction.create"
+	}
+
+	record, err := s.repository.CreateTransaction(ctx, db.CreateTransactionParams{
+		BookID:                    BookID,
+		CorrectionOfTransactionID: nullableInt64(input.CorrectionOfTransactionID),
+		ActorUserID:               input.OwnerUserID,
+		AuthSessionID:             input.AuthSessionID,
+		RequestID:                 input.RequestID,
+		OriginType:                input.OriginType,
+		Operation:                 operation,
+		Spec:                      spec,
+		CreatedAt:                 now.Format(time.RFC3339),
+		ChangeReason:              changeReason,
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) UpdateTransaction(ctx context.Context, input UpdateTransactionInput) (Transaction, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, ValidationError{Message: "owner user is required"}
+	}
+	if input.TransactionID <= 0 {
+		return Transaction{}, ValidationError{Message: "transaction id is required"}
+	}
+
+	current, err := s.repository.TransactionByID(ctx, BookID, input.TransactionID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return Transaction{}, ErrTransactionNotFound
+		}
+		return Transaction{}, fmt.Errorf("read transaction: %w", err)
+	}
+	if current.Status == "voided" {
+		return Transaction{}, ErrTransactionVoided
+	}
+
+	defaultStatus := "posted"
+	if current.Status == "draft" {
+		defaultStatus = "draft"
+	}
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: defaultStatus, ExistingLineKeys: lineKeySet(current)})
+	if err != nil {
+		return Transaction{}, err
+	}
+	if current.Status == "draft" {
+		spec.Status = "draft"
+	} else {
+		spec.Status = "posted"
+	}
+
+	now := s.now().UTC()
+	changeReason, err := cleanChangeReason(input.ChangeReason, "updated transaction")
+	if err != nil {
+		return Transaction{}, err
+	}
+	operation := strings.TrimSpace(input.Operation)
+	if operation == "" {
+		operation = "transaction.update"
+	}
+
+	record, err := s.repository.UpdateTransaction(ctx, db.UpdateTransactionParams{
+		BookID:        BookID,
+		TransactionID: input.TransactionID,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		Operation:     operation,
+		Spec:          spec,
+		RecordedAt:    now.Format(time.RFC3339),
+		ChangeReason:  changeReason,
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) PostTransaction(ctx context.Context, input PostTransactionInput) (Transaction, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, ValidationError{Message: "owner user is required"}
+	}
+	current, err := s.Transaction(ctx, input.TransactionID)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if current.Status == "voided" {
+		return Transaction{}, ErrTransactionVoided
+	}
+	if current.Status == "posted" {
+		return current, nil
+	}
+
+	spec := transactionInputFromTransaction(current)
+	spec.Status = "posted"
+	return s.UpdateTransaction(ctx, UpdateTransactionInput{
+		OwnerUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		Operation:     "transaction.post",
+		TransactionID: input.TransactionID,
+		Spec:          spec,
+		ChangeReason:  input.ChangeReason,
+	})
+}
+
+func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTransactionInput) (Transaction, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, ValidationError{Message: "owner user is required"}
+	}
+	if input.TransactionID <= 0 {
+		return Transaction{}, ValidationError{Message: "transaction id is required"}
+	}
+
+	now := s.now().UTC()
+	changeReason, err := cleanChangeReason(input.ChangeReason, "")
+	if err != nil {
+		return Transaction{}, err
+	}
+	if changeReason == "" {
+		return Transaction{}, ValidationError{Message: "change reason is required"}
+	}
+
+	record, err := s.repository.VoidTransaction(ctx, db.VoidTransactionParams{
+		BookID:        BookID,
+		TransactionID: input.TransactionID,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		Operation:     "transaction.void",
+		RecordedAt:    now.Format(time.RFC3339),
+		ChangeReason:  changeReason,
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) DeleteDraftTransaction(ctx context.Context, input DeleteDraftTransactionInput) error {
+	if input.TransactionID <= 0 {
+		return ValidationError{Message: "transaction id is required"}
+	}
+
+	if err := s.repository.DeleteDraftTransaction(ctx, db.DeleteDraftTransactionParams{
+		BookID:        BookID,
+		TransactionID: input.TransactionID,
+	}); err != nil {
+		return mapTransactionDBError(err)
+	}
+
+	return nil
+}
+
+func (s *TransactionService) listParams(input ListTransactionsInput, filterEntryDate bool) (db.ListTransactionsParams, error) {
+	status := strings.TrimSpace(input.Status)
+	if status != "" && !transactionStatuses[status] {
+		return db.ListTransactionsParams{}, ValidationError{Message: "transaction status is invalid"}
+	}
+	kind := strings.TrimSpace(input.Kind)
+	if kind != "" && !transactionKinds[kind] {
+		return db.ListTransactionsParams{}, ValidationError{Message: "transaction kind is invalid"}
+	}
+	afterDate, err := cleanOptionalDate(input.AfterDate, "after date")
+	if err != nil {
+		return db.ListTransactionsParams{}, err
+	}
+	beforeDate, err := cleanOptionalDate(input.BeforeDate, "before date")
+	if err != nil {
+		return db.ListTransactionsParams{}, err
+	}
+	if afterDate != "" && beforeDate != "" && afterDate > beforeDate {
+		return db.ListTransactionsParams{}, ValidationError{Message: "after date must be on or before before date"}
+	}
+
+	cursorDate, cursorID, err := db.DecodeTransactionCursor(input.Cursor)
+	if err != nil {
+		return db.ListTransactionsParams{}, ValidationError{Message: "cursor is invalid"}
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = transactionListLimit
+	}
+	if limit > transactionMaxLimit {
+		limit = transactionMaxLimit
+	}
+
+	return db.ListTransactionsParams{
+		BookID:          BookID,
+		AccountID:       input.AccountID,
+		PayeeID:         input.PayeeID,
+		Status:          status,
+		Kind:            kind,
+		Query:           strings.TrimSpace(input.Query),
+		AfterDate:       afterDate,
+		BeforeDate:      beforeDate,
+		CursorDate:      cursorDate,
+		CursorID:        cursorID,
+		Limit:           limit,
+		FilterEntryDate: filterEntryDate,
+	}, nil
+}
+
+type cleanTransactionOptions struct {
+	DefaultStatus    string
+	ExistingLineKeys map[string]bool
+}
+
+func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input TransactionInput, options cleanTransactionOptions) (db.TransactionSpec, error) {
+	status := strings.TrimSpace(input.Status)
+	if status == "" {
+		status = options.DefaultStatus
+	}
+	if status == "" {
+		status = "posted"
+	}
+	if !transactionStatuses[status] || status == "voided" {
+		return db.TransactionSpec{}, ValidationError{Message: "transaction status is invalid"}
+	}
+
+	kind := strings.TrimSpace(input.TransactionKind)
+	if kind == "" {
+		kind = "ordinary"
+	}
+	if !transactionKinds[kind] {
+		return db.TransactionSpec{}, ValidationError{Message: "transaction kind is invalid"}
+	}
+
+	transactionDate := strings.TrimSpace(input.TransactionDate)
+	if transactionDate == "" && len(input.JournalEntries) > 0 {
+		transactionDate = strings.TrimSpace(input.JournalEntries[0].EntryDate)
+	}
+	if transactionDate == "" {
+		transactionDate = s.now().UTC().Format(time.DateOnly)
+	}
+	transactionDate, err := cleanRequiredDate(transactionDate, "transaction date")
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+
+	payeeID := nullableInt64(input.PayeeID)
+	payeeName := strings.TrimSpace(input.PayeeName)
+	if input.PayeeID != nil {
+		payee, err := s.payeeRepository.PayeeByID(ctx, BookID, *input.PayeeID)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return db.TransactionSpec{}, ValidationError{Message: "payee is invalid"}
+			}
+			return db.TransactionSpec{}, fmt.Errorf("read payee: %w", err)
+		}
+		if payee.Status != "active" {
+			return db.TransactionSpec{}, ValidationError{Message: "payee is archived"}
+		}
+		payeeName = payee.Name
+	}
+	cleanedPayeeName, err := cleanOptionalText(payeeName, "payee name", payeeNameMaxBytes)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+
+	description, err := cleanOptionalText(input.Description, "description", transactionTextMaxBytes)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+	externalRefHint, err := cleanOptionalText(input.ExternalRefHint, "external reference", transactionTextMaxBytes)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+	noteMarkdown, err := cleanOptionalText(input.NoteMarkdown, "note", transactionNoteMaxBytes)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", ledgerJSONMaxBytes)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+
+	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs)
+	if err != nil {
+		return db.TransactionSpec{}, err
+	}
+
+	entries := make([]db.JournalEntrySpec, 0, len(input.JournalEntries))
+	for entryIndex, entryInput := range input.JournalEntries {
+		entry, err := s.cleanJournalEntry(ctx, entryInput, transactionDate, status, options.ExistingLineKeys)
+		if err != nil {
+			return db.TransactionSpec{}, err
+		}
+		if status == "posted" && len(entry.Postings) < 2 {
+			return db.TransactionSpec{}, ValidationError{Message: fmt.Sprintf("journal entry %d must have at least two postings", entryIndex+1)}
+		}
+		entries = append(entries, entry)
+	}
+	if status == "posted" {
+		if len(entries) == 0 {
+			return db.TransactionSpec{}, ValidationError{Message: "posted transaction requires at least one journal entry"}
+		}
+		if err := validateBalanced(entries); err != nil {
+			return db.TransactionSpec{}, err
+		}
+	}
+
+	return db.TransactionSpec{
+		Status:          status,
+		TransactionKind: kind,
+		TransactionDate: transactionDate,
+		PayeeID:         payeeID,
+		PayeeName:       nullableSQLString(cleanedPayeeName),
+		Description:     description,
+		ExternalRefHint: externalRefHint,
+		NoteMarkdown:    noteMarkdown,
+		MetadataJSON:    metadataJSON,
+		TagIDs:          tagIDs,
+		JournalEntries:  entries,
+	}, nil
+}
+
+func (s *TransactionService) cleanJournalEntry(ctx context.Context, input JournalEntryInput, transactionDate string, status string, existingLineKeys map[string]bool) (db.JournalEntrySpec, error) {
+	entryDate := strings.TrimSpace(input.EntryDate)
+	if entryDate == "" {
+		entryDate = transactionDate
+	}
+	entryDate, err := cleanRequiredDate(entryDate, "entry date")
+	if err != nil {
+		return db.JournalEntrySpec{}, err
+	}
+	entryKind := strings.TrimSpace(input.EntryKind)
+	if entryKind == "" {
+		entryKind = "ordinary"
+	}
+	if !entryKinds[entryKind] {
+		return db.JournalEntrySpec{}, ValidationError{Message: "entry kind is invalid"}
+	}
+	memo, err := cleanOptionalText(input.Memo, "memo", transactionTextMaxBytes)
+	if err != nil {
+		return db.JournalEntrySpec{}, err
+	}
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "entry metadata", ledgerJSONMaxBytes)
+	if err != nil {
+		return db.JournalEntrySpec{}, err
+	}
+
+	postings := make([]db.PostingSpec, 0, len(input.Postings))
+	for _, postingInput := range input.Postings {
+		posting, err := s.cleanPosting(ctx, postingInput, entryDate, status, existingLineKeys)
+		if err != nil {
+			return db.JournalEntrySpec{}, err
+		}
+		postings = append(postings, posting)
+	}
+
+	return db.JournalEntrySpec{
+		EntryDate:    entryDate,
+		EntryKind:    entryKind,
+		Memo:         memo,
+		MetadataJSON: metadataJSON,
+		Postings:     postings,
+	}, nil
+}
+
+func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInput, entryDate string, status string, existingLineKeys map[string]bool) (db.PostingSpec, error) {
+	if input.AccountID <= 0 {
+		return db.PostingSpec{}, ValidationError{Message: "posting account is required"}
+	}
+	if input.CommodityID <= 0 {
+		return db.PostingSpec{}, ValidationError{Message: "posting commodity is required"}
+	}
+	if input.QuantityScale < 0 || input.QuantityScale > 12 {
+		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale is invalid"}
+	}
+
+	accountRule, err := s.repository.PostingAccountRule(ctx, BookID, input.AccountID, entryDate)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return db.PostingSpec{}, ValidationError{Message: "posting account is invalid"}
+		}
+		return db.PostingSpec{}, fmt.Errorf("read posting account rule: %w", err)
+	}
+	if accountRule.Status != "active" || !accountRule.AllowsPostings {
+		return db.PostingSpec{}, ValidationError{Message: "posting account is not active for postings"}
+	}
+	if entryDate < accountRule.OpenedOn {
+		return db.PostingSpec{}, ValidationError{Message: "posting date is before account opened date"}
+	}
+	if accountRule.ClosedOn.Valid && entryDate > accountRule.ClosedOn.String {
+		return db.PostingSpec{}, ValidationError{Message: "posting date is after account closed date"}
+	}
+	if accountRule.DefaultCommodityID.Valid && accountRule.DefaultCommodityID.Int64 != input.CommodityID {
+		return db.PostingSpec{}, ValidationError{Message: "posting commodity does not match account default commodity"}
+	}
+	if accountRule.QuantityScaleOverride.Valid && int64(input.QuantityScale) > accountRule.QuantityScaleOverride.Int64 {
+		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale exceeds account precision"}
+	}
+
+	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return db.PostingSpec{}, ValidationError{Message: "posting commodity is invalid"}
+		}
+		return db.PostingSpec{}, fmt.Errorf("read posting commodity rule: %w", err)
+	}
+	if commodityRule.Status != "active" {
+		return db.PostingSpec{}, ValidationError{Message: "posting commodity is archived"}
+	}
+	if input.QuantityScale > commodityRule.MaxQuantityScale {
+		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale exceeds commodity precision"}
+	}
+
+	reconciliationStatus := strings.TrimSpace(input.ReconciliationStatus)
+	if reconciliationStatus == "" {
+		reconciliationStatus = "uncleared"
+	}
+	if !reconciliationStatuses[reconciliationStatus] {
+		return db.PostingSpec{}, ValidationError{Message: "posting reconciliation status is invalid"}
+	}
+	clearedOn, err := cleanOptionalDate(input.ClearedOn, "cleared date")
+	if err != nil {
+		return db.PostingSpec{}, err
+	}
+	if clearedOn != "" && reconciliationStatus == "uncleared" {
+		return db.PostingSpec{}, ValidationError{Message: "cleared date requires a cleared or reconciled posting"}
+	}
+
+	memo, err := cleanOptionalText(input.Memo, "posting memo", transactionTextMaxBytes)
+	if err != nil {
+		return db.PostingSpec{}, err
+	}
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "posting metadata", ledgerJSONMaxBytes)
+	if err != nil {
+		return db.PostingSpec{}, err
+	}
+	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs)
+	if err != nil {
+		return db.PostingSpec{}, err
+	}
+
+	lineKey := strings.TrimSpace(input.LineKey)
+	if lineKey != "" && existingLineKeys != nil && !existingLineKeys[lineKey] {
+		return db.PostingSpec{}, ValidationError{Message: "posting line key is invalid"}
+	}
+	if lineKey == "" {
+		lineKey = s.newLineKey()
+	}
+
+	return db.PostingSpec{
+		LineKey:              lineKey,
+		AccountID:            input.AccountID,
+		QuantityValue:        input.QuantityValue,
+		QuantityScale:        input.QuantityScale,
+		CommodityID:          input.CommodityID,
+		Memo:                 memo,
+		ReconciliationStatus: reconciliationStatus,
+		ClearedOn:            nullableSQLString(clearedOn),
+		MetadataJSON:         metadataJSON,
+		TagIDs:               tagIDs,
+	}, nil
+}
+
+func (s *TransactionService) cleanTagIDs(ctx context.Context, tagIDs []int64) ([]int64, error) {
+	if len(tagIDs) == 0 {
+		return nil, nil
+	}
+	seen := make(map[int64]bool, len(tagIDs))
+	cleaned := make([]int64, 0, len(tagIDs))
+	for _, tagID := range tagIDs {
+		if tagID <= 0 {
+			return nil, ValidationError{Message: "tag id is invalid"}
+		}
+		if !seen[tagID] {
+			seen[tagID] = true
+			cleaned = append(cleaned, tagID)
+		}
+	}
+
+	active, err := s.repository.ActiveTagIDs(ctx, BookID, cleaned)
+	if err != nil {
+		return nil, fmt.Errorf("read active tags: %w", err)
+	}
+	for _, tagID := range cleaned {
+		if !active[tagID] {
+			return nil, ErrTransactionTag
+		}
+	}
+
+	return cleaned, nil
+}
+
+func validateBalanced(entries []db.JournalEntrySpec) error {
+	for entryIndex, entry := range entries {
+		sums := map[int64]*big.Int{}
+		maxScales := map[int64]int{}
+		for _, posting := range entry.Postings {
+			if posting.QuantityScale > maxScales[posting.CommodityID] {
+				maxScales[posting.CommodityID] = posting.QuantityScale
+			}
+		}
+		for _, posting := range entry.Postings {
+			sum := sums[posting.CommodityID]
+			if sum == nil {
+				sum = big.NewInt(0)
+				sums[posting.CommodityID] = sum
+			}
+			value := big.NewInt(posting.QuantityValue)
+			scaleDiff := maxScales[posting.CommodityID] - posting.QuantityScale
+			if scaleDiff > 0 {
+				value.Mul(value, pow10(scaleDiff))
+			}
+			sum.Add(sum, value)
+		}
+		for _, sum := range sums {
+			if sum.Sign() != 0 {
+				return ValidationError{Message: fmt.Sprintf("journal entry %d is not balanced by commodity", entryIndex+1)}
+			}
+		}
+	}
+
+	return nil
+}
+
+func pow10(scale int) *big.Int {
+	result := big.NewInt(1)
+	ten := big.NewInt(10)
+	for i := 0; i < scale; i++ {
+		result.Mul(result, ten)
+	}
+	return result
+}
+
+func cleanRequiredDate(value string, field string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "", ValidationError{Message: field + " is required"}
+	}
+	if _, err := time.Parse(time.DateOnly, cleaned); err != nil {
+		return "", ValidationError{Message: field + " must use YYYY-MM-DD"}
+	}
+	return cleaned, nil
+}
+
+func cleanOptionalDate(value string, field string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "", nil
+	}
+	return cleanRequiredDate(cleaned, field)
+}
+
+func cleanOptionalText(value string, field string, maxBytes int) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if len(cleaned) > maxBytes {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, maxBytes)}
+	}
+	for _, r := range cleaned {
+		if unicode.IsControl(r) {
+			return "", ValidationError{Message: field + " must not contain control characters"}
+		}
+	}
+	return cleaned, nil
+}
+
+func lineKeySet(record db.TransactionRecord) map[string]bool {
+	keys := map[string]bool{}
+	for _, entry := range record.JournalEntries {
+		for _, posting := range entry.Postings {
+			keys[posting.LineKey] = true
+		}
+	}
+	return keys
+}
+
+func transactionInputFromTransaction(transaction Transaction) TransactionInput {
+	entries := make([]JournalEntryInput, 0, len(transaction.JournalEntries))
+	for _, entry := range transaction.JournalEntries {
+		postings := make([]PostingInput, 0, len(entry.Postings))
+		for _, posting := range entry.Postings {
+			postings = append(postings, PostingInput{
+				LineKey:              posting.LineKey,
+				AccountID:            posting.AccountID,
+				QuantityValue:        posting.QuantityValue,
+				QuantityScale:        posting.QuantityScale,
+				CommodityID:          posting.CommodityID,
+				Memo:                 posting.Memo,
+				ReconciliationStatus: posting.ReconciliationStatus,
+				ClearedOn:            posting.ClearedOn,
+				MetadataJSON:         posting.MetadataJSON,
+				TagIDs:               posting.TagIDs,
+			})
+		}
+		entries = append(entries, JournalEntryInput{
+			EntryDate:    entry.EntryDate,
+			EntryKind:    entry.EntryKind,
+			Memo:         entry.Memo,
+			MetadataJSON: entry.MetadataJSON,
+			Postings:     postings,
+		})
+	}
+
+	return TransactionInput{
+		Status:          transaction.Status,
+		TransactionKind: transaction.TransactionKind,
+		TransactionDate: transaction.TransactionDate,
+		PayeeID:         transaction.PayeeID,
+		PayeeName:       transaction.PayeeName,
+		Description:     transaction.Description,
+		ExternalRefHint: transaction.ExternalRefHint,
+		NoteMarkdown:    transaction.NoteMarkdown,
+		MetadataJSON:    transaction.MetadataJSON,
+		TagIDs:          transaction.TagIDs,
+		JournalEntries:  entries,
+	}
+}
+
+func mapTransactionDBError(err error) error {
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		return ErrTransactionNotFound
+	case errors.Is(err, db.ErrTransactionHasPostedVersions):
+		return ErrTransactionPosted
+	case errors.Is(err, db.ErrTransactionReconciled):
+		return ErrTransactionProtected
+	case errors.Is(err, db.ErrArchivedTag):
+		return ErrTransactionTag
+	default:
+		return fmt.Errorf("transaction repository: %w", err)
+	}
+}
+
+func toTransactions(records []db.TransactionRecord) []Transaction {
+	transactions := make([]Transaction, 0, len(records))
+	for _, record := range records {
+		transactions = append(transactions, toTransaction(record))
+	}
+	return transactions
+}
+
+func toTransaction(record db.TransactionRecord) Transaction {
+	entries := make([]JournalEntry, 0, len(record.JournalEntries))
+	for _, entry := range record.JournalEntries {
+		postings := make([]Posting, 0, len(entry.Postings))
+		for _, posting := range entry.Postings {
+			postings = append(postings, Posting{
+				ID:                   posting.ID,
+				PostingLineID:        posting.PostingLineID,
+				LineKey:              posting.LineKey,
+				LineSeq:              posting.LineSeq,
+				AccountID:            posting.AccountID,
+				QuantityValue:        posting.QuantityValue,
+				QuantityScale:        posting.QuantityScale,
+				CommodityID:          posting.CommodityID,
+				Memo:                 posting.Memo,
+				ReconciliationStatus: posting.ReconciliationStatus,
+				ClearedOn:            nullableString(posting.ClearedOn),
+				MetadataJSON:         posting.MetadataJSON,
+				TagIDs:               posting.TagIDs,
+			})
+		}
+		entries = append(entries, JournalEntry{
+			ID:           entry.ID,
+			EntrySeq:     entry.EntrySeq,
+			EntryDate:    entry.EntryDate,
+			EntryKind:    entry.EntryKind,
+			Memo:         entry.Memo,
+			MetadataJSON: entry.MetadataJSON,
+			Postings:     postings,
+		})
+	}
+
+	return Transaction{
+		ID:                        record.ID,
+		BookID:                    record.BookID,
+		CorrectionOfTransactionID: nullableInt64FromSQL(record.CorrectionOfTransactionID),
+		Status:                    record.Status,
+		TransactionKind:           record.TransactionKind,
+		TransactionDate:           record.TransactionDate,
+		PayeeID:                   nullableInt64FromSQL(record.PayeeID),
+		PayeeName:                 nullableString(record.PayeeName),
+		Description:               record.Description,
+		ExternalRefHint:           nullableString(record.ExternalRefHint),
+		NoteMarkdown:              record.NoteMarkdown,
+		MetadataJSON:              record.MetadataJSON,
+		VersionID:                 record.VersionID,
+		VersionSeq:                record.VersionSeq,
+		SupersedesVersionID:       nullableInt64FromSQL(record.SupersedesVersionID),
+		TagIDs:                    record.TagIDs,
+		JournalEntries:            entries,
+		CreatedAt:                 record.CreatedAt,
+		UpdatedAt:                 record.RecordedAt,
+		ChangeReason:              record.ChangeReason,
+	}
+}
