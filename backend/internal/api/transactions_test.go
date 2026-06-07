@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -161,6 +162,58 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 	}`, http.StatusCreated)
 	require.NotNil(t, correction.CorrectionOfTransactionID)
 	assert.Equal(t, reconciled.ID, *correction.CorrectionOfTransactionID)
+}
+
+func TestTransactionTagReplacementSemantics(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	otherExpense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Other Expense","category_type":"expense"}`)
+	vacation := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Vacation","kind":"project"}`)
+	tax := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Tax","kind":"flag"}`)
+	reimbursable := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"Reimbursable","kind":"flag"}`)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"tag_ids":[`+strconvFormatInt(vacation.ID)+`,`+strconvFormatInt(tax.ID)+`],
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`,"tag_ids":[`+strconvFormatInt(reimbursable.ID)+`]}
+			]
+		}]
+	}`, http.StatusCreated)
+	assert.ElementsMatch(t, []int64{vacation.ID, tax.ID}, transaction.TagIDs)
+	oldTaggedPosting := transaction.JournalEntries[0].Postings[1]
+	assert.ElementsMatch(t, []int64{reimbursable.ID}, oldTaggedPosting.TagIDs)
+
+	updated := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(transaction.ID), `{
+		"transaction_date":"2026-06-07",
+		"tag_ids":[`+strconvFormatInt(tax.ID)+`],
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+transaction.JournalEntries[0].Postings[0].LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(otherExpense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`,"tag_ids":[`+strconvFormatInt(vacation.ID)+`]}
+			]
+		}]
+	}`, http.StatusOK)
+	assert.ElementsMatch(t, []int64{tax.ID}, updated.TagIDs)
+	require.Len(t, updated.JournalEntries, 1)
+	require.Len(t, updated.JournalEntries[0].Postings, 2)
+	assert.Empty(t, updated.JournalEntries[0].Postings[0].TagIDs)
+	assert.ElementsMatch(t, []int64{vacation.ID}, updated.JournalEntries[0].Postings[1].TagIDs)
+	assert.NotEqual(t, oldTaggedPosting.PostingLineID, updated.JournalEntries[0].Postings[1].PostingLineID)
+	assert.Equal(t, 0, countPostingTags(t, database, oldTaggedPosting.PostingLineID))
+
+	voided := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/void", `{"change_reason":"duplicate"}`, http.StatusOK)
+	assert.Equal(t, "voided", voided.Status)
+	assert.ElementsMatch(t, []int64{tax.ID}, voided.TagIDs)
+	assert.Equal(t, 1, countPostingTags(t, database, updated.JournalEntries[0].Postings[1].PostingLineID))
 }
 
 func TestTransactionPostingAccountDateAndCommodityValidation(t *testing.T) {
@@ -445,6 +498,18 @@ func assertRegisterPosting(t *testing.T, register accountRegisterResponse, trans
 		}
 	}
 	require.Failf(t, "register transaction not found", "transaction=%d account=%d commodity=%d quantity=%d seen=%s", transactionID, accountID, commodityID, quantityValue, strings.Join(seen, ","))
+}
+
+func countPostingTags(t *testing.T, database *sql.DB, postingLineID int64) int {
+	t.Helper()
+
+	var count int
+	require.NoError(t, database.QueryRow(`
+		SELECT COUNT(*)
+		FROM posting_tags
+		WHERE posting_line_id = ?
+	`, postingLineID).Scan(&count))
+	return count
 }
 
 func createPayeeForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, body string) payeeResponse {

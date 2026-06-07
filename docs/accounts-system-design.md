@@ -488,6 +488,13 @@ case-insensitive comparison. A tag rename changes the tag label everywhere it is
 used; if historical label preservation becomes necessary later, add tag
 versions then.
 
+Transaction and posting tag associations use replace-on-edit semantics. When a
+transaction is updated, the submitted `tag_ids` are the new current tag set for
+the transaction, and each submitted posting line's `tag_ids` are the new current
+tag set for that line. Associations for posting lines removed from the current
+version are cleared. Voiding a transaction does not clear tag associations,
+because they remain useful historical context.
+
 When transactions arrive, add join tables rather than embedding tag ids on the
 transaction row:
 

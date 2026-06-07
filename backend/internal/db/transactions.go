@@ -386,6 +386,7 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 		TransactionID:      transactionID,
 		VersionSeq:         1,
 		Spec:               params.Spec,
+		ReplaceTags:        true,
 		RecordedAt:         params.CreatedAt,
 		ChangedByUserID:    params.ActorUserID,
 		ChangeReason:       params.ChangeReason,
@@ -448,6 +449,7 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 		VersionSeq:          current.VersionSeq + 1,
 		SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
 		Spec:                params.Spec,
+		ReplaceTags:         true,
 		RecordedAt:          params.RecordedAt,
 		ChangedByUserID:     params.ActorUserID,
 		ChangeReason:        params.ChangeReason,
@@ -520,6 +522,7 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 		VersionSeq:          current.VersionSeq + 1,
 		SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
 		Spec:                spec,
+		ReplaceTags:         false,
 		RecordedAt:          params.RecordedAt,
 		ChangedByUserID:     params.ActorUserID,
 		ChangeReason:        params.ChangeReason,
@@ -752,6 +755,7 @@ type insertTransactionVersionParams struct {
 	VersionSeq          int64
 	SupersedesVersionID sql.NullInt64
 	Spec                TransactionSpec
+	ReplaceTags         bool
 	RecordedAt          string
 	ChangedByUserID     int64
 	ChangeReason        string
@@ -790,22 +794,13 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 		return TransactionRecord{}, fmt.Errorf("read transaction version id: %w", err)
 	}
 
-	for _, tagID := range params.Spec.TagIDs {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT OR IGNORE INTO transaction_tags (
-				book_id,
-				transaction_id,
-				tag_id,
-				created_at,
-				created_by_user_id,
-				created_audit_event_id
-			)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, params.BookID, params.TransactionID, tagID, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID); err != nil {
-			return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("insert transaction tag: %w", err))
+	if params.ReplaceTags {
+		if err := replaceTransactionTags(ctx, tx, params.BookID, params.TransactionID, params.Spec.TagIDs, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID); err != nil {
+			return TransactionRecord{}, err
 		}
 	}
 
+	postingLineIDs := make(map[int64]bool)
 	for entryIndex, entry := range params.Spec.JournalEntries {
 		entryResult, err := tx.ExecContext(ctx, `
 			INSERT INTO journal_entries (
@@ -832,6 +827,7 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 			if err != nil {
 				return TransactionRecord{}, err
 			}
+			postingLineIDs[postingLineID] = true
 
 			postingResult, err := tx.ExecContext(ctx, `
 				INSERT INTO posting_versions (
@@ -858,21 +854,16 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 				return TransactionRecord{}, fmt.Errorf("read posting version id: %w", err)
 			}
 
-			for _, tagID := range posting.TagIDs {
-				if _, err := tx.ExecContext(ctx, `
-					INSERT OR IGNORE INTO posting_tags (
-						book_id,
-						posting_line_id,
-						tag_id,
-						created_at,
-						created_by_user_id,
-						created_audit_event_id
-					)
-					VALUES (?, ?, ?, ?, ?, ?)
-				`, params.BookID, postingLineID, tagID, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID); err != nil {
-					return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("insert posting tag: %w", err))
+			if params.ReplaceTags {
+				if err := replacePostingTags(ctx, tx, params.BookID, postingLineID, posting.TagIDs, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID); err != nil {
+					return TransactionRecord{}, err
 				}
 			}
+		}
+	}
+	if params.ReplaceTags {
+		if err := clearUnusedPostingLineTags(ctx, tx, params.BookID, params.TransactionID, postingLineIDs); err != nil {
+			return TransactionRecord{}, err
 		}
 	}
 
@@ -886,6 +877,83 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 	}
 
 	return records[0], nil
+}
+
+func replaceTransactionTags(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, tagIDs []int64, recordedAt string, actorUserID int64, auditEventID int64) error {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_tags WHERE book_id = ? AND transaction_id = ?", bookID, transactionID); err != nil {
+		return fmt.Errorf("delete transaction tags: %w", err)
+	}
+	for _, tagID := range tagIDs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO transaction_tags (
+				book_id,
+				transaction_id,
+				tag_id,
+				created_at,
+				created_by_user_id,
+				created_audit_event_id
+			)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, bookID, transactionID, tagID, recordedAt, actorUserID, auditEventID); err != nil {
+			return mapTransactionConstraintError(fmt.Errorf("insert transaction tag: %w", err))
+		}
+	}
+	return nil
+}
+
+func replacePostingTags(ctx context.Context, tx *sql.Tx, bookID int64, postingLineID int64, tagIDs []int64, recordedAt string, actorUserID int64, auditEventID int64) error {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM posting_tags WHERE book_id = ? AND posting_line_id = ?", bookID, postingLineID); err != nil {
+		return fmt.Errorf("delete posting tags: %w", err)
+	}
+	for _, tagID := range tagIDs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO posting_tags (
+				book_id,
+				posting_line_id,
+				tag_id,
+				created_at,
+				created_by_user_id,
+				created_audit_event_id
+			)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, bookID, postingLineID, tagID, recordedAt, actorUserID, auditEventID); err != nil {
+			return mapTransactionConstraintError(fmt.Errorf("insert posting tag: %w", err))
+		}
+	}
+	return nil
+}
+
+func clearUnusedPostingLineTags(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, usedPostingLineIDs map[int64]bool) error {
+	if len(usedPostingLineIDs) == 0 {
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM posting_tags
+			WHERE book_id = ?
+				AND posting_line_id IN (
+					SELECT id FROM posting_lines WHERE transaction_id = ?
+				)
+		`, bookID, transactionID); err != nil {
+			return fmt.Errorf("delete all posting tags for transaction: %w", err)
+		}
+		return nil
+	}
+
+	placeholders := make([]string, 0, len(usedPostingLineIDs))
+	args := []any{bookID, transactionID}
+	for postingLineID := range usedPostingLineIDs {
+		placeholders = append(placeholders, "?")
+		args = append(args, postingLineID)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM posting_tags
+		WHERE book_id = ?
+			AND posting_line_id IN (
+				SELECT id FROM posting_lines WHERE transaction_id = ?
+			)
+			AND posting_line_id NOT IN (`+strings.Join(placeholders, ",")+`)
+	`, args...); err != nil {
+		return fmt.Errorf("delete unused posting line tags: %w", err)
+	}
+	return nil
 }
 
 func ensurePostingLine(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, lineKey string, createdAt string, actorUserID int64, requestID string, auditEventID int64) (int64, error) {

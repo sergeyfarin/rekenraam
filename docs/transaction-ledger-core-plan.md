@@ -518,6 +518,21 @@ because tags are user context and should usually follow the split line across
 edits. If immutable historical tag snapshots become necessary, add
 `posting_version_tags` later.
 
+Tag association write semantics:
+
+- Creating a transaction writes the submitted transaction and posting tag sets.
+- Updating or posting a draft transaction replaces the current transaction tag
+  set and each submitted posting line's tag set in the same write transaction
+  that appends the new `transaction_version`.
+- Posting lines that are removed from the new current version have their
+  `posting_tags` cleared so stale tags do not reappear in current register
+  views.
+- Voiding appends a `voided` transaction version but does not remove or rewrite
+  `transaction_tags` or `posting_tags`; those associations remain historical
+  context for audit/history views.
+- Tag rename/archive changes the tag record itself. Existing associations keep
+  pointing at the same tag id and display the tag's current label/status.
+
 At write time, reject associations to archived tags for both
 `transaction_tags` and `posting_tags`. Existing historical associations may
 continue to display after a tag is archived.
