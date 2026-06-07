@@ -152,6 +152,10 @@ versions. Provide a `DELETE /api/v1/transactions/{transaction_id}` or
 never-posted drafts. A later maintenance job may remove abandoned drafts, but
 the first slice should make draft discard explicit.
 
+Draft identity is lifecycle state, not reconciliation state. A bank-imported
+transaction can be draft while the user reviews it, and a manually entered
+transaction can be posted but still uncleared.
+
 ## Void And Correction Workflow
 
 Voiding should append a new `transaction_version` with `status='voided'`. Do
@@ -163,9 +167,17 @@ Current ledger views select the latest version per transaction:
 - latest `status='draft'`: exclude from posted ledger
 - latest `status='voided'`: exclude from posted ledger
 
-If any current posting version is reconciled or belongs to a closed period,
-ordinary superseding or voiding should be blocked. Use a corrective transaction
-instead.
+Implement now: if any current posting version is reconciled, ordinary
+superseding or voiding should be blocked. Use a corrective transaction instead.
+
+Defer: closed-period posting guards until period close exists. The transaction
+slice must not attempt to enforce closed periods because no closed-period model
+exists yet.
+
+`transaction_versions.change_reason` is also the void reason when the new
+version has `status='voided'`. Do not add a separate `void_reason` column unless
+the product later needs structured void metadata beyond the ordinary audit
+reason.
 
 Corrections are separate transactions linked back to the original:
 
@@ -290,12 +302,21 @@ Rules:
 - row is append-only
 - `book_id` must match `transactions.book_id`
 - `supersedes_version_id` must be from the same transaction
+- `transaction_date` is the user-facing register display date; `entry_date` on
+  each `journal_entry` is the accounting effective date
 - inserting a superseding version must be rejected when the superseded current
-  version has reconciled postings or closed-period postings
+  version has reconciled postings
 
 Attribution lives here. `posting_versions` do not carry independent
 `changed_by_user_id` or `change_reason` because a posting version is always
 created inside a transaction version.
+
+`transaction_date` is not the audit capture time; use `recorded_at` for that.
+For a single-entry bank import, map the bank's posted/booked date to both
+`transaction_date` and `journal_entries.entry_date` unless the import source
+separately provides a more precise accounting date. Store extra bank dates such
+as value date or authorization date in metadata until the product needs first
+class fields.
 
 ### journal_entries
 
@@ -363,6 +384,10 @@ metadata_json TEXT NOT NULL DEFAULT '{}'
 UNIQUE (journal_entry_id, line_seq)
 ```
 
+`line_seq` is unique within each journal entry, not across the whole transaction
+version. This is intentional: a delayed transfer can have two journal entries,
+each numbered from line `1`.
+
 `posting_line_id` should be NOT NULL. System-generated postings also receive
 server-generated posting lines. This keeps every posting traceable.
 
@@ -377,12 +402,26 @@ Rules:
 - `entry_date` must be on or before `closed_on` when `closed_on` is set
 - if account version has `default_commodity_id`, posting commodity must match
 - `quantity_scale` must not exceed commodity `max_quantity_scale`
+- if account version has `quantity_scale_override`, `quantity_scale` must not
+  exceed that override either
+
+Posting validation must load the account version as of
+`journal_entries.entry_date`, not the current account version as of today.
+`current_account_versions` is useful for current UI state, but it is tied to the
+current date and must not be used to validate backdated transactions. The
+service or trigger should perform a parameterized as-of lookup:
+
+```sql
+WHERE effective_from <= :entry_date
+ORDER BY effective_from DESC, version_seq DESC
+LIMIT 1
+```
 
 Use application service validation for all of the above. Add SQLite triggers
 for same-book, account posting eligibility, account date validity, and
-default-commodity matching if the trigger remains understandable. Balance
-checking should stay in the application service because it must validate a full
-set of postings atomically.
+default-commodity/scale matching if the trigger remains understandable.
+Balance checking should stay in the application service because it must
+validate a full set of postings atomically.
 
 ## Balancing Rule
 
@@ -409,6 +448,7 @@ Because posting versions are immutable, the practical guard is:
   version has any `posting_versions.reconciliation_status='reconciled'`
 - require a separate corrective transaction linked through
   `correction_of_transaction_id`
+- defer closed-period guards until the period-close feature is designed
 
 Implement this in application service first. If feasible, add a trigger on
 `transaction_versions` insert that rejects `supersedes_version_id` when the
@@ -447,6 +487,10 @@ because tags are user context and should usually follow the split line across
 edits. If immutable historical tag snapshots become necessary, add
 `posting_version_tags` later.
 
+At write time, reject associations to archived tags for both
+`transaction_tags` and `posting_tags`. Existing historical associations may
+continue to display after a tag is archived.
+
 ## System Accounts
 
 Current system roles should be extended in the transaction slice.
@@ -470,6 +514,10 @@ It is an asset because the user still controls or expects the value.
 `commodity_trading` is an equity-style hidden counterparty used to make
 multi-commodity exchanges balance per commodity. It should not be an account
 kind and should not be user-facing ordinary equity.
+
+The `commodity_trading` balance represents cumulative FX and commodity exchange
+differences. It is not ordinary net-worth equity and should be excluded from
+net-worth reports by default through the system-role reporting filter.
 
 Defer:
 
@@ -582,6 +630,46 @@ Minimum transaction endpoints:
 - `DELETE /api/v1/transactions/{transaction_id}` for never-posted drafts only
 - `GET /api/v1/accounts/{account_id}/register`
 
+Minimum query parameters:
+
+`GET /api/v1/transactions`:
+
+- `account_id` optional
+- `payee_id` optional
+- `q` optional free-text search over `payee_name`, `description`, and external
+  reference hints
+- `status` optional, one of `draft`, `posted`, `voided`
+- `kind` optional, one of the `transaction_kind` values
+- `after_date` optional, inclusive `YYYY-MM-DD` filter on `transaction_date`
+- `before_date` optional, inclusive `YYYY-MM-DD` filter on `transaction_date`
+- `limit` optional with a bounded default
+- `cursor` optional opaque pagination cursor
+
+`GET /api/v1/accounts/{account_id}/register`:
+
+- `after_date` optional, inclusive `YYYY-MM-DD` filter on accounting
+  `entry_date`
+- `before_date` optional, inclusive `YYYY-MM-DD` filter on accounting
+  `entry_date`
+- `status` optional, default `posted`; drafts are included only when requested
+- `limit` optional with a bounded default
+- `cursor` optional opaque pagination cursor
+
+Use cursor pagination in the OpenAPI contract. Offset can be kept as an
+internal development fallback, but the public API should not require stable
+offsets over an append-only ledger.
+
+`PATCH /api/v1/transactions/{transaction_id}` semantics:
+
+- PATCH on a draft updates the draft version.
+- PATCH on a posted transaction creates a new posted version.
+- PATCH on a voided transaction is rejected; use a corrective transaction if
+  further accounting is required.
+
+`POST /api/v1/transactions/{transaction_id}/void` must accept a JSON request
+body with `change_reason` so the appended `status='voided'` transaction version
+has audit attribution.
+
 Payee endpoints are listed in the Payees section and should land before or with
 transaction entry UI.
 
@@ -611,6 +699,10 @@ Required backend tests:
 - superseding reconciled posting rejected
 - draft delete allowed only for never-posted drafts
 - posted financial records are not hard-deleted
+- payee create, update, archive, restore
+- transaction stores `payee_name` snapshot
+- payee rename/archive does not rewrite historical transaction snapshots
+- archived tag rejected when creating `transaction_tags` or `posting_tags`
 
 Frontend/API validation:
 
@@ -620,4 +712,3 @@ Frontend/API validation:
 - typed API helpers
 - later UI screens must use "posting" internally and may use "split" only in
   user-facing copy where clearer
-
