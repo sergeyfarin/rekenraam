@@ -218,6 +218,7 @@ AccountRegisterEntryResponse:
     - entry_kind
     - entry_memo
     - posting
+    - running_balance
     - created_at
     - updated_at
     - change_reason
@@ -278,6 +279,8 @@ AccountRegisterEntryResponse:
       type: string
     posting:
       $ref: "../../openapi.yaml#/components/schemas/PostingResponse"
+    running_balance:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
     created_at:
       type: string
       format: date-time

@@ -70,29 +70,30 @@ type accountRegisterResponse struct {
 }
 
 type accountRegisterEntryResponse struct {
-	TransactionID             int64           `json:"transaction_id"`
-	BookID                    int64           `json:"book_id"`
-	CorrectionOfTransactionID *int64          `json:"correction_of_transaction_id,omitempty"`
-	Status                    string          `json:"status"`
-	TransactionKind           string          `json:"transaction_kind"`
-	TransactionDate           string          `json:"transaction_date"`
-	PayeeID                   *int64          `json:"payee_id,omitempty"`
-	PayeeName                 string          `json:"payee_name,omitempty"`
-	Description               string          `json:"description"`
-	ExternalRefHint           string          `json:"external_ref_hint,omitempty"`
-	VersionID                 int64           `json:"version_id"`
-	VersionSeq                int64           `json:"version_seq"`
-	SupersedesVersionID       *int64          `json:"supersedes_version_id,omitempty"`
-	TransactionTagIDs         []int64         `json:"transaction_tag_ids"`
-	JournalEntryID            int64           `json:"journal_entry_id"`
-	EntrySeq                  int64           `json:"entry_seq"`
-	EntryDate                 string          `json:"entry_date"`
-	EntryKind                 string          `json:"entry_kind"`
-	EntryMemo                 string          `json:"entry_memo"`
-	Posting                   postingResponse `json:"posting"`
-	CreatedAt                 string          `json:"created_at"`
-	UpdatedAt                 string          `json:"updated_at"`
-	ChangeReason              string          `json:"change_reason"`
+	TransactionID             int64                   `json:"transaction_id"`
+	BookID                    int64                   `json:"book_id"`
+	CorrectionOfTransactionID *int64                  `json:"correction_of_transaction_id,omitempty"`
+	Status                    string                  `json:"status"`
+	TransactionKind           string                  `json:"transaction_kind"`
+	TransactionDate           string                  `json:"transaction_date"`
+	PayeeID                   *int64                  `json:"payee_id,omitempty"`
+	PayeeName                 string                  `json:"payee_name,omitempty"`
+	Description               string                  `json:"description"`
+	ExternalRefHint           string                  `json:"external_ref_hint,omitempty"`
+	VersionID                 int64                   `json:"version_id"`
+	VersionSeq                int64                   `json:"version_seq"`
+	SupersedesVersionID       *int64                  `json:"supersedes_version_id,omitempty"`
+	TransactionTagIDs         []int64                 `json:"transaction_tag_ids"`
+	JournalEntryID            int64                   `json:"journal_entry_id"`
+	EntrySeq                  int64                   `json:"entry_seq"`
+	EntryDate                 string                  `json:"entry_date"`
+	EntryKind                 string                  `json:"entry_kind"`
+	EntryMemo                 string                  `json:"entry_memo"`
+	Posting                   postingResponse         `json:"posting"`
+	RunningBalance            balanceQuantityResponse `json:"running_balance"`
+	CreatedAt                 string                  `json:"created_at"`
+	UpdatedAt                 string                  `json:"updated_at"`
+	ChangeReason              string                  `json:"change_reason"`
 }
 
 type transactionRequest struct {
@@ -615,9 +616,10 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 				Metadata:             json.RawMessage(entry.Posting.MetadataJSON),
 				TagIDs:               entry.Posting.TagIDs,
 			},
-			CreatedAt:    entry.CreatedAt,
-			UpdatedAt:    entry.UpdatedAt,
-			ChangeReason: entry.ChangeReason,
+			RunningBalance: toBalanceQuantityResponse(entry.RunningBalance),
+			CreatedAt:      entry.CreatedAt,
+			UpdatedAt:      entry.UpdatedAt,
+			ChangeReason:   entry.ChangeReason,
 		})
 	}
 	return responses

@@ -1,0 +1,163 @@
+BalanceQuantity:
+  type: object
+  required:
+    - commodity_id
+    - quantity_value
+    - quantity_scale
+    - normal_quantity_value
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+      description: Debit-positive ledger quantity normalized to quantity_scale.
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    normal_quantity_value:
+      type: integer
+      format: int64
+      description: Class-normalized quantity. Liability, equity, and income balances are sign-flipped for display/reporting.
+AccountBalance:
+  type: object
+  required:
+    - account_id
+    - book_id
+    - is_system
+    - status
+    - account_class
+    - account_kind
+    - allows_postings
+    - direct_balances
+    - subtree_balances
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    is_system:
+      type: boolean
+    system_role:
+      $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/AccountStatus"
+    code:
+      type: string
+    name:
+      type: string
+    account_class:
+      $ref: "../../openapi.yaml#/components/schemas/AccountClass"
+    account_kind:
+      $ref: "../../openapi.yaml#/components/schemas/AccountKind"
+    parent_account_id:
+      type: integer
+      format: int64
+    allows_postings:
+      type: boolean
+    direct_balances:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    subtree_balances:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+AccountBalancesResponse:
+  type: object
+  required:
+    - as_of
+    - status
+    - accounts
+  properties:
+    as_of:
+      type: string
+      format: date
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AccountBalance"
+CategoryTotal:
+  type: object
+  required:
+    - category_id
+    - book_id
+    - status
+    - category_type
+    - allows_postings
+    - direct_totals
+    - subtree_totals
+  properties:
+    category_id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/AccountStatus"
+    code:
+      type: string
+    name:
+      type: string
+    category_type:
+      $ref: "../../openapi.yaml#/components/schemas/CategoryType"
+    parent_category_id:
+      type: integer
+      format: int64
+    allows_postings:
+      type: boolean
+    direct_totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    subtree_totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+CategoryTotalsResponse:
+  type: object
+  required:
+    - before_date
+    - status
+    - categories
+  properties:
+    after_date:
+      type: string
+      format: date
+    before_date:
+      type: string
+      format: date
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    categories:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CategoryTotal"
+NetWorthResponse:
+  type: object
+  required:
+    - as_of
+    - status
+    - totals
+    - excluded_system_roles
+  properties:
+    as_of:
+      type: string
+      format: date
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    excluded_system_roles:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"

@@ -1,0 +1,31 @@
+get:
+  summary: Read net worth totals
+  parameters:
+    - in: query
+      name: as_of
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: status
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+  responses:
+    "200":
+      description: Net worth totals grouped by commodity
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/NetWorthResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

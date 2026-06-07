@@ -129,6 +129,7 @@ type AccountRegisterEntry struct {
 	EntryKind                 string
 	EntryMemo                 string
 	Posting                   Posting
+	RunningBalance            BalanceQuantity
 	CreatedAt                 string
 	UpdatedAt                 string
 	ChangeReason              string
@@ -292,6 +293,10 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	if err != nil {
 		return AccountRegisterResult{}, fmt.Errorf("list register: %w", err)
 	}
+	runningBalances, err := s.accountRegisterRunningBalances(ctx, params, records)
+	if err != nil {
+		return AccountRegisterResult{}, err
+	}
 
 	nextCursor := ""
 	if len(records) == params.Limit {
@@ -300,7 +305,7 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	}
 
 	return AccountRegisterResult{
-		Entries:    toAccountRegisterEntries(records),
+		Entries:    toAccountRegisterEntries(records, runningBalances),
 		NextCursor: nextCursor,
 	}, nil
 }
@@ -984,7 +989,7 @@ func toTransactions(records []db.TransactionRecord) []Transaction {
 	return transactions
 }
 
-func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord) []AccountRegisterEntry {
+func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord, runningBalances map[int64]BalanceQuantity) []AccountRegisterEntry {
 	entries := make([]AccountRegisterEntry, 0, len(records))
 	for _, record := range records {
 		transaction := toTransaction(record.Transaction)
@@ -1024,6 +1029,7 @@ func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord) []Account
 			EntryKind:                 record.JournalEntry.EntryKind,
 			EntryMemo:                 record.JournalEntry.Memo,
 			Posting:                   posting,
+			RunningBalance:            runningBalances[record.Posting.ID],
 			CreatedAt:                 transaction.CreatedAt,
 			UpdatedAt:                 transaction.UpdatedAt,
 			ChangeReason:              transaction.ChangeReason,

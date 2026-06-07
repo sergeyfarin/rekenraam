@@ -53,6 +53,12 @@ paths:
     $ref: "./paths/account-versions.yaml"
   /api/v1/accounts/{account_id}/register:
     $ref: "./paths/account-register.yaml"
+  /api/v1/ledger/account-balances:
+    $ref: "./paths/ledger-account-balances.yaml"
+  /api/v1/ledger/category-totals:
+    $ref: "./paths/ledger-category-totals.yaml"
+  /api/v1/ledger/net-worth:
+    $ref: "./paths/ledger-net-worth.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -250,6 +256,18 @@ components:
       $ref: "./components/schemas/transactions.yaml#/JournalEntryKind"
     ReconciliationStatus:
       $ref: "./components/schemas/transactions.yaml#/ReconciliationStatus"
+    BalanceQuantity:
+      $ref: "./components/schemas/ledger.yaml#/BalanceQuantity"
+    AccountBalance:
+      $ref: "./components/schemas/ledger.yaml#/AccountBalance"
+    AccountBalancesResponse:
+      $ref: "./components/schemas/ledger.yaml#/AccountBalancesResponse"
+    CategoryTotal:
+      $ref: "./components/schemas/ledger.yaml#/CategoryTotal"
+    CategoryTotalsResponse:
+      $ref: "./components/schemas/ledger.yaml#/CategoryTotalsResponse"
+    NetWorthResponse:
+      $ref: "./components/schemas/ledger.yaml#/NetWorthResponse"
     PostingResponse:
       $ref: "./components/schemas/transactions.yaml#/PostingResponse"
     JournalEntryResponse:

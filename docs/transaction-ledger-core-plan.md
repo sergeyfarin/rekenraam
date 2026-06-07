@@ -444,6 +444,31 @@ Service algorithm:
 This supports currencies, securities, crypto, reward points, and physical
 commodities without floating point.
 
+## Ledger Read Model
+
+Balances are computed from the current transaction versions and posting
+versions. Do not maintain account balance columns in the first implementation;
+cached balances or reconciliation checkpoints can be added later when a concrete
+performance or locking need appears.
+
+Backend read-model endpoints:
+
+- `GET /api/v1/ledger/account-balances`: account direct balances and subtree
+  rollups as of a date, grouped by commodity.
+- `GET /api/v1/ledger/category-totals`: income/expense category direct totals
+  and subtree rollups for a date range, grouped by commodity.
+- `GET /api/v1/ledger/net-worth`: asset/liability net-worth totals as of a
+  date, grouped by commodity. `transfer_clearing` remains included so delayed
+  transfers do not temporarily reduce net worth; `commodity_trading` is listed
+  as an excluded system role and must not inflate ordinary net-worth reports.
+- `GET /api/v1/accounts/{account_id}/register`: posting-shaped account
+  register rows with per-commodity running balances.
+
+Read-model quantities keep the debit-positive ledger sign in `quantity_value`.
+Responses also include `normal_quantity_value`; liability, equity, and income
+balances are sign-flipped there for display and reporting. Values are normalized
+exactly in Go using integer quantity plus scale, not floating point.
+
 ## Reconciliation Guard
 
 A reconciled posting version must not be silently changed by a later edit.

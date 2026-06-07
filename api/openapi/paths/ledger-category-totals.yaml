@@ -1,0 +1,40 @@
+get:
+  summary: Read category totals
+  parameters:
+    - in: query
+      name: after_date
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: before_date
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: status
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+    - in: query
+      name: category_type
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/CategoryType"
+  responses:
+    "200":
+      description: Category totals grouped by commodity
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CategoryTotalsResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

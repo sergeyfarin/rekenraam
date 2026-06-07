@@ -2236,6 +2236,180 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ledger/account-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read account balances */
+        get: {
+            parameters: {
+                query?: {
+                    as_of?: string;
+                    status?: components["schemas"]["TransactionStatus"];
+                    include_system?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Account balances grouped by commodity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountBalancesResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/category-totals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read category totals */
+        get: {
+            parameters: {
+                query?: {
+                    after_date?: string;
+                    before_date?: string;
+                    status?: components["schemas"]["TransactionStatus"];
+                    category_type?: components["schemas"]["CategoryType"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Category totals grouped by commodity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CategoryTotalsResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/net-worth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read net worth totals */
+        get: {
+            parameters: {
+                query?: {
+                    as_of?: string;
+                    status?: components["schemas"]["TransactionStatus"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Net worth totals grouped by commodity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NetWorthResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -4969,6 +5143,75 @@ export interface components {
         JournalEntryKind: "ordinary" | "transfer_leg" | "exchange" | "investment" | "opening_balance" | "adjustment";
         /** @enum {string} */
         ReconciliationStatus: "uncleared" | "cleared" | "reconciled";
+        BalanceQuantity: {
+            /** Format: int64 */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description Debit-positive ledger quantity normalized to quantity_scale.
+             */
+            quantity_value: number;
+            quantity_scale: number;
+            /**
+             * Format: int64
+             * @description Class-normalized quantity. Liability, equity, and income balances are sign-flipped for display/reporting.
+             */
+            normal_quantity_value: number;
+        };
+        AccountBalance: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            book_id: number;
+            is_system: boolean;
+            system_role?: components["schemas"]["SystemAccountRole"];
+            status: components["schemas"]["AccountStatus"];
+            code?: string;
+            name?: string;
+            account_class: components["schemas"]["AccountClass"];
+            account_kind: components["schemas"]["AccountKind"];
+            /** Format: int64 */
+            parent_account_id?: number;
+            allows_postings: boolean;
+            direct_balances: components["schemas"]["BalanceQuantity"][];
+            subtree_balances: components["schemas"]["BalanceQuantity"][];
+        };
+        AccountBalancesResponse: {
+            /** Format: date */
+            as_of: string;
+            status: components["schemas"]["TransactionStatus"];
+            accounts: components["schemas"]["AccountBalance"][];
+        };
+        CategoryTotal: {
+            /** Format: int64 */
+            category_id: number;
+            /** Format: int64 */
+            book_id: number;
+            status: components["schemas"]["AccountStatus"];
+            code?: string;
+            name?: string;
+            category_type: components["schemas"]["CategoryType"];
+            /** Format: int64 */
+            parent_category_id?: number;
+            allows_postings: boolean;
+            direct_totals: components["schemas"]["BalanceQuantity"][];
+            subtree_totals: components["schemas"]["BalanceQuantity"][];
+        };
+        CategoryTotalsResponse: {
+            /** Format: date */
+            after_date?: string;
+            /** Format: date */
+            before_date: string;
+            status: components["schemas"]["TransactionStatus"];
+            categories: components["schemas"]["CategoryTotal"][];
+        };
+        NetWorthResponse: {
+            /** Format: date */
+            as_of: string;
+            status: components["schemas"]["TransactionStatus"];
+            totals: components["schemas"]["BalanceQuantity"][];
+            excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
         PostingResponse: {
             /** Format: int64 */
             id: number;
@@ -5086,6 +5329,7 @@ export interface components {
             entry_kind: components["schemas"]["JournalEntryKind"];
             entry_memo: string;
             posting: components["schemas"]["PostingResponse"];
+            running_balance: components["schemas"]["BalanceQuantity"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

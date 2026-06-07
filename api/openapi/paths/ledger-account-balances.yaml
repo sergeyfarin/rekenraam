@@ -1,0 +1,36 @@
+get:
+  summary: Read account balances
+  parameters:
+    - in: query
+      name: as_of
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: status
+      schema:
+        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+    - in: query
+      name: include_system
+      schema:
+        type: boolean
+        default: false
+  responses:
+    "200":
+      description: Account balances grouped by commodity
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/AccountBalancesResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

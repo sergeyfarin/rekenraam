@@ -93,6 +93,9 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/payees/{payee_id}/restore", restorePayee(logger, authService, payeeService, options))
 	}
 	if authService != nil && transactionService != nil {
+		mux.HandleFunc("GET /api/v1/ledger/account-balances", accountBalances(logger, authService, transactionService))
+		mux.HandleFunc("GET /api/v1/ledger/category-totals", categoryTotals(logger, authService, transactionService))
+		mux.HandleFunc("GET /api/v1/ledger/net-worth", netWorth(logger, authService, transactionService))
 		mux.HandleFunc("GET /api/v1/transactions", listTransactions(logger, authService, transactionService))
 		mux.HandleFunc("POST /api/v1/transactions", createTransaction(logger, authService, transactionService, options))
 		mux.HandleFunc("GET /api/v1/transactions/{transaction_id}", readTransaction(logger, authService, transactionService))
