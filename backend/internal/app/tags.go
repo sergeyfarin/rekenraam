@@ -1,9 +1,7 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -309,30 +307,6 @@ func tagSpec(input tagSpecInput) (db.TagSpec, error) {
 		Icon:         icon,
 		MetadataJSON: metadataJSON,
 	}, nil
-}
-
-func cleanSizedJSONObject(value string, field string, maxBytes int) (string, error) {
-	cleaned := strings.TrimSpace(value)
-	if cleaned == "" {
-		return "{}", nil
-	}
-	if !json.Valid([]byte(cleaned)) {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
-	}
-
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, []byte(cleaned)); err != nil {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
-	}
-	cleaned = compact.String()
-	if cleaned[0] != '{' {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be a JSON object", field)}
-	}
-	if len(cleaned) > maxBytes {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, maxBytes)}
-	}
-
-	return cleaned, nil
 }
 
 func tagRepositoryError(action string, err error) error {

@@ -273,6 +273,95 @@ func TestMigrationsEnforceTagIconFormat(t *testing.T) {
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
 }
 
+func TestPostingCommodityScaleTriggerUsesEntryDate(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO commodity_versions (
+			commodity_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			symbol,
+			display_symbol,
+			name,
+			standard_scale,
+			max_quantity_scale
+		)
+		VALUES
+			(1, 1, '2026-01-01', '2026-06-01T00:00:00Z', 1, 'initial', 'active', 'USD', '$', 'US Dollar', 2, 2),
+			(1, 2, '2026-06-07', '2026-06-07T00:00:00Z', 1, 'more precision', 'active', 'USD', '$', 'US Dollar', 2, 4);
+
+		INSERT INTO account_versions (
+			account_id,
+			version_seq,
+			effective_from,
+			recorded_at,
+			changed_by_user_id,
+			change_reason,
+			status,
+			opened_on,
+			name,
+			account_class,
+			account_kind,
+			default_commodity_id,
+			quantity_scale_override,
+			allows_postings
+		)
+		VALUES (1, 1, '2026-01-01', '2026-06-01T00:00:00Z', 1, 'test', 'active', '2026-01-01', 'Checking', 'asset', 'checking', 1, 4, 1);
+
+		INSERT INTO transactions (id, book_id, created_at, created_by_user_id)
+		VALUES (1, 1, '2026-06-01T00:00:00Z', 1);
+
+		INSERT INTO transaction_versions (
+			id,
+			book_id,
+			transaction_id,
+			version_seq,
+			status,
+			transaction_kind,
+			transaction_date,
+			description,
+			note_markdown,
+			recorded_at,
+			changed_by_user_id,
+			change_reason
+		)
+		VALUES (1, 1, 1, 1, 'posted', 'ordinary', '2026-06-06', '', '', '2026-06-06T00:00:00Z', 1, 'test');
+
+		INSERT INTO journal_entries (id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind)
+		VALUES (1, 1, 1, 1, '2026-06-06', 'ordinary');
+
+		INSERT INTO posting_lines (id, book_id, transaction_id, line_key, created_at, created_by_user_id)
+		VALUES (1, 1, 1, 'line-1', '2026-06-06T00:00:00Z', 1);
+	`)
+	require.NoError(t, err)
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO posting_versions (
+			book_id,
+			transaction_version_id,
+			journal_entry_id,
+			posting_line_id,
+			line_seq,
+			account_id,
+			quantity_value,
+			quantity_scale,
+			commodity_id,
+			reconciliation_status
+		)
+		VALUES (1, 1, 1, 1, 1, 1, 1000, 3, 1, 'uncleared');
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "posting commodity scale is invalid")
+}
+
 func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) {
 	database := openTestDatabase(t)
 

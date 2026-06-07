@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -40,6 +42,30 @@ func cleanChangeReason(value string, fallback string) (string, error) {
 		if unicode.IsControl(r) {
 			return "", ValidationError{Message: "change reason must not contain control characters"}
 		}
+	}
+
+	return cleaned, nil
+}
+
+func cleanSizedJSONObject(value string, field string, maxBytes int) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "{}", nil
+	}
+	if !json.Valid([]byte(cleaned)) {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
+	}
+
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte(cleaned)); err != nil {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
+	}
+	cleaned = compact.String()
+	if cleaned[0] != '{' {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be a JSON object", field)}
+	}
+	if len(cleaned) > maxBytes {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, maxBytes)}
 	}
 
 	return cleaned, nil

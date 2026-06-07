@@ -167,6 +167,12 @@ Current ledger views select the latest version per transaction:
 - latest `status='draft'`: exclude from posted ledger
 - latest `status='voided'`: exclude from posted ledger
 
+Voiding does not remove or rewrite `transaction_tags` or `posting_tags`.
+Transaction tags are identity-level context and continue to describe the
+historical transaction after voiding. Posting tags are keyed to posting lines;
+the voided version has no current postings, but historical posting-line context
+remains available for audit/history views.
+
 Implement now: if any current posting version is reconciled, ordinary
 superseding or voiding should be blocked. Use a corrective transaction instead.
 

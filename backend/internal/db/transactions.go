@@ -12,6 +12,7 @@ import (
 var (
 	ErrTransactionHasPostedVersions = errors.New("transaction has posted or voided versions")
 	ErrTransactionReconciled        = errors.New("transaction has reconciled postings")
+	ErrTransactionVoided            = errors.New("voided transaction cannot be updated")
 	ErrArchivedTag                  = errors.New("archived tag cannot be assigned")
 )
 
@@ -375,7 +376,7 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 		return TransactionRecord{}, err
 	}
 	if current.Status == "voided" {
-		return TransactionRecord{}, ErrTransactionHasPostedVersions
+		return TransactionRecord{}, ErrTransactionVoided
 	}
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -625,7 +626,7 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 	return rule, nil
 }
 
-func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID int64, commodityID int64) (PostingCommodityRule, error) {
+func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID int64, commodityID int64, entryDate string) (PostingCommodityRule, error) {
 	var rule PostingCommodityRule
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT
@@ -636,10 +637,18 @@ func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID
 			cv.standard_scale,
 			cv.max_quantity_scale
 		FROM commodities c
-		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		JOIN commodity_versions cv ON cv.commodity_id = c.id
 		WHERE c.book_id = ?
 			AND c.id = ?
-	`, bookID, commodityID).Scan(&rule.CommodityID, &rule.CommodityBookID, &rule.CommodityKind, &rule.Status, &rule.StandardScale, &rule.MaxQuantityScale); err != nil {
+			AND cv.id = (
+				SELECT asof_cv.id
+				FROM commodity_versions asof_cv
+				WHERE asof_cv.commodity_id = c.id
+					AND asof_cv.effective_from <= ?
+				ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC
+				LIMIT 1
+			)
+	`, bookID, commodityID, entryDate).Scan(&rule.CommodityID, &rule.CommodityBookID, &rule.CommodityKind, &rule.Status, &rule.StandardScale, &rule.MaxQuantityScale); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PostingCommodityRule{}, ErrNotFound
 		}

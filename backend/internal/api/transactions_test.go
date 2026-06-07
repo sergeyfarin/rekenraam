@@ -162,7 +162,174 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 	assert.Equal(t, reconciled.ID, *correction.CorrectionOfTransactionID)
 }
 
+func TestTransactionPostingAccountDateAndCommodityValidation(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, usdID := setupAccountAPITest(t, handler)
+	eur := createCurrencyForSession(t, handler, sessionCookie, csrfToken, `{"code":"EUR","name":"Euro"}`)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Validation Expense",
+		"category_type":"expense"
+	}`)
+	laterAccount := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Later Checking", "asset", "checking", usdID, 2, "2026-06-06")
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-05",
+		"journal_entries":[{
+			"entry_date":"2026-06-05",
+			"postings":[
+				{"account_id":`+strconvFormatInt(laterAccount.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
+	closedAccount := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Closed Checking", "asset", "checking", usdID, 2, "2026-01-01")
+	mutateAccountWithBody(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(closedAccount.ID)+"/close", `{
+		"closed_on":"2026-06-06",
+		"effective_from":"2026-06-06",
+		"change_reason":"closed for test"
+	}`, http.StatusOK)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(closedAccount.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "USD Checking", "asset", "checking", usdID, 2)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(eur.ID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(eur.ID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(eur.ID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+}
+
+func TestTransactionCommonLedgerScenarios(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, usdID := setupAccountAPITest(t, handler)
+	eur := createCurrencyForSession(t, handler, sessionCookie, csrfToken, `{"code":"EUR","name":"Euro"}`)
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
+	systemAccounts := listAccountsForSession(t, handler, sessionCookie, "?include_system=true")
+	openingBalance := accountBySystemRole(t, systemAccounts.Accounts, "opening_balance")
+	transferClearing := accountBySystemRole(t, systemAccounts.Accounts, "transfer_clearing")
+	commodityTrading := accountBySystemRole(t, systemAccounts.Accounts, "commodity_trading")
+
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", usdID, 2)
+	savings := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Savings", "asset", "savings", usdID, 2)
+	card := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Credit Card", "liability", "credit_card", usdID, 2)
+	eurChecking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "EUR Checking", "asset", "checking", eur.ID, 2)
+	receivable := createLedgerAccountNoCommodity(t, handler, sessionCookie, csrfToken, "Receivable", "asset", "receivable")
+	payable := createLedgerAccountNoCommodity(t, handler, sessionCookie, csrfToken, "Payable", "liability", "payable")
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Salary","category_type":"income"}`)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Scenario Expense","category_type":"expense"}`)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, 100000, 2, usdID),
+		posting(salary.ID, -100000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(card.ID, -5000, 2, usdID),
+		posting(expense.ID, 5000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -5000, 2, usdID),
+		posting(card.ID, 5000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, usdID),
+		posting(savings.ID, 10000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"transaction_kind":"transfer",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"entry_kind":"transfer_leg",
+			"postings":[
+				`+posting(checking.ID, -10000, 2, usdID)+`,
+				`+posting(transferClearing.ID, 10000, 2, usdID)+`
+			]
+		},{
+			"entry_date":"2026-06-08",
+			"entry_kind":"transfer_leg",
+			"postings":[
+				`+posting(transferClearing.ID, -10000, 2, usdID)+`,
+				`+posting(savings.ID, 10000, 2, usdID)+`
+			]
+		}]
+	}`, http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"transaction_kind":"transfer",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"entry_kind":"exchange",
+			"postings":[
+				`+posting(checking.ID, -108000, 2, usdID)+`,
+				`+posting(commodityTrading.ID, 108000, 2, usdID)+`,
+				`+posting(eurChecking.ID, 100000, 2, eur.ID)+`,
+				`+posting(commodityTrading.ID, -100000, 2, eur.ID)+`
+			]
+		}]
+	}`, http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -8000, 2, usdID),
+		posting(receivable.ID, 8000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(expense.ID, 4000, 2, usdID),
+		posting(payable.ID, -4000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(receivable.ID, 4000, 2, usdID),
+		posting(expense.ID, -4000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"transaction_kind":"opening_balance",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"entry_kind":"opening_balance",
+			"postings":[
+				`+posting(checking.ID, 50000, 2, usdID)+`,
+				`+posting(openingBalance.ID, -50000, 2, usdID)+`
+			]
+		}]
+	}`, http.StatusCreated)
+}
+
 func createLedgerAccount(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, name string, accountClass string, accountKind string, commodityID int64, scaleOverride int) accountResponse {
+	t.Helper()
+
+	return createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, name, accountClass, accountKind, commodityID, scaleOverride, "2026-01-01")
+}
+
+func createLedgerAccountOpenedOn(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, name string, accountClass string, accountKind string, commodityID int64, scaleOverride int, openedOn string) accountResponse {
 	t.Helper()
 
 	return createAccountForSession(t, handler, sessionCookie, csrfToken, `{
@@ -172,9 +339,67 @@ func createLedgerAccount(t *testing.T, handler http.Handler, sessionCookie *http
 		"default_commodity_id":`+strconvFormatInt(commodityID)+`,
 		"quantity_scale_override":`+strconv.Itoa(scaleOverride)+`,
 		"allows_postings":true,
+		"opened_on":"`+openedOn+`",
+		"effective_from":"`+openedOn+`"
+	}`)
+}
+
+func createLedgerAccountNoCommodity(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, name string, accountClass string, accountKind string) accountResponse {
+	t.Helper()
+
+	return createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"`+name+`",
+		"account_class":"`+accountClass+`",
+		"account_kind":"`+accountKind+`",
+		"allows_postings":true,
 		"opened_on":"2026-01-01",
 		"effective_from":"2026-01-01"
 	}`)
+}
+
+func createCurrencyForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, body string) currencyResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/currencies", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusCreated, res.Code)
+
+	var response currencyResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func accountBySystemRole(t *testing.T, accounts []accountResponse, role string) accountResponse {
+	t.Helper()
+
+	for _, account := range accounts {
+		if account.SystemRole == role {
+			return account
+		}
+	}
+	require.Failf(t, "system account not found", "role %s", role)
+	return accountResponse{}
+}
+
+func posting(accountID int64, quantityValue int64, quantityScale int, commodityID int64) string {
+	return `{"account_id":` + strconvFormatInt(accountID) + `,"quantity_value":` + strconv.FormatInt(quantityValue, 10) + `,"quantity_scale":` + strconv.Itoa(quantityScale) + `,"commodity_id":` + strconvFormatInt(commodityID) + `}`
+}
+
+func balancedBody(transactionDate string, postings ...string) string {
+	return `{
+		"transaction_date":"` + transactionDate + `",
+		"journal_entries":[{
+			"entry_date":"` + transactionDate + `",
+			"postings":[` + strings.Join(postings, ",") + `]
+		}]
+	}`
 }
 
 func createPayeeForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, body string) payeeResponse {

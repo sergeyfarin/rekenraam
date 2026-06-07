@@ -1,10 +1,8 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -684,7 +682,7 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		return db.AccountSpec{}, ValidationError{Message: fmt.Sprintf("account comment must be at most %d bytes", accountCommentMaxBytes)}
 	}
 
-	metadataJSON, err := cleanAccountJSONObject(input.MetadataJSON, "account metadata")
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "account metadata", accountJSONMaxBytes)
 	if err != nil {
 		return db.AccountSpec{}, err
 	}
@@ -782,30 +780,6 @@ func cleanOptionalAccountDate(value string, fallback string, now time.Time, fiel
 	today, _ := time.Parse(time.DateOnly, now.UTC().Format(time.DateOnly))
 	if parsed.After(today) {
 		return "", ValidationError{Message: field + " must not be in the future"}
-	}
-
-	return cleaned, nil
-}
-
-func cleanAccountJSONObject(value string, field string) (string, error) {
-	cleaned := strings.TrimSpace(value)
-	if cleaned == "" {
-		return "{}", nil
-	}
-	if !json.Valid([]byte(cleaned)) {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
-	}
-
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, []byte(cleaned)); err != nil {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be valid JSON", field)}
-	}
-	cleaned = compact.String()
-	if cleaned[0] != '{' {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be a JSON object", field)}
-	}
-	if len(cleaned) > accountJSONMaxBytes {
-		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, accountJSONMaxBytes)}
 	}
 
 	return cleaned, nil

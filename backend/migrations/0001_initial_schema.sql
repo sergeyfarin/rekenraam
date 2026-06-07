@@ -454,7 +454,7 @@ WHERE tv.id = (
   SELECT current_tv.id
   FROM transaction_versions current_tv
   WHERE current_tv.transaction_id = tv.transaction_id
-  ORDER BY current_tv.version_seq DESC
+  ORDER BY current_tv.version_seq DESC, current_tv.id DESC
   LIMIT 1
 );
 
@@ -912,14 +912,15 @@ CREATE TRIGGER IF NOT EXISTS posting_versions_commodity_scale_valid
 BEFORE INSERT ON posting_versions
 WHEN NOT EXISTS (
   SELECT 1
-  FROM commodity_versions cv
-  WHERE cv.commodity_id = NEW.commodity_id
+  FROM journal_entries je
+  JOIN commodity_versions cv ON cv.commodity_id = NEW.commodity_id
+  WHERE je.id = NEW.journal_entry_id
     AND cv.id = (
-      SELECT current_cv.id
-      FROM commodity_versions current_cv
-      WHERE current_cv.commodity_id = NEW.commodity_id
-        AND current_cv.effective_from <= date('now')
-      ORDER BY current_cv.effective_from DESC, current_cv.version_seq DESC
+      SELECT asof_cv.id
+      FROM commodity_versions asof_cv
+      WHERE asof_cv.commodity_id = NEW.commodity_id
+        AND asof_cv.effective_from <= je.entry_date
+      ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC
       LIMIT 1
     )
     AND cv.status = 'active'

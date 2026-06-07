@@ -710,7 +710,7 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale exceeds account precision"}
 	}
 
-	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID)
+	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID, entryDate)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return db.PostingSpec{}, ValidationError{Message: "posting commodity is invalid"}
@@ -934,6 +934,8 @@ func mapTransactionDBError(err error) error {
 		return ErrTransactionNotFound
 	case errors.Is(err, db.ErrTransactionHasPostedVersions):
 		return ErrTransactionPosted
+	case errors.Is(err, db.ErrTransactionVoided):
+		return ErrTransactionVoided
 	case errors.Is(err, db.ErrTransactionReconciled):
 		return ErrTransactionProtected
 	case errors.Is(err, db.ErrArchivedTag):
