@@ -1,0 +1,268 @@
+ReconciliationSessionStatus:
+  type: string
+  enum:
+    - open
+    - finished
+    - voided
+ReconciliationCheckpointStatus:
+  type: string
+  enum:
+    - active
+    - invalidated
+    - voided
+ReconciliationSourceKind:
+  type: string
+  enum:
+    - statement
+    - online_balance
+    - manual_cash_count
+    - asset_valuation
+    - other
+ReconciliationPostingResponse:
+  type: object
+  required:
+    - posting_id
+    - transaction_id
+    - transaction_version_id
+    - posting_line_id
+    - account_id
+    - commodity_id
+    - entry_date
+    - quantity_value
+    - quantity_scale
+    - reconciliation_status
+    - selected
+  properties:
+    posting_id:
+      type: integer
+      format: int64
+    transaction_id:
+      type: integer
+      format: int64
+    transaction_version_id:
+      type: integer
+      format: int64
+    posting_line_id:
+      type: integer
+      format: int64
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    entry_date:
+      type: string
+      format: date
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    reconciliation_status:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationStatus"
+    payee_name:
+      type: string
+    description:
+      type: string
+    selected:
+      type: boolean
+ReconciliationSessionResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - account_id
+    - commodity_id
+    - status
+    - source_kind
+    - statement_date
+    - statement_balance
+    - starting_balance
+    - selected_balance
+    - difference
+    - metadata
+    - created_at
+    - updated_at
+    - change_reason
+    - candidates
+    - selected_postings
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationSessionStatus"
+    source_kind:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationSourceKind"
+    statement_date:
+      type: string
+      format: date
+    statement_balance:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    starting_checkpoint_id:
+      type: integer
+      format: int64
+    starting_balance:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    selected_balance:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    difference:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    finished_at:
+      type: string
+      format: date-time
+    voided_at:
+      type: string
+      format: date-time
+    change_reason:
+      type: string
+    candidates:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ReconciliationPostingResponse"
+    selected_postings:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ReconciliationPostingResponse"
+ReconciliationCheckpointResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - account_id
+    - commodity_id
+    - status
+    - statement_date
+    - statement_balance
+    - created_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    session_id:
+      type: integer
+      format: int64
+    previous_checkpoint_id:
+      type: integer
+      format: int64
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationCheckpointStatus"
+    statement_date:
+      type: string
+      format: date
+    statement_balance:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    created_at:
+      type: string
+      format: date-time
+    invalidated_at:
+      type: string
+      format: date-time
+    invalidation_reason:
+      type: string
+    voided_at:
+      type: string
+      format: date-time
+    void_reason:
+      type: string
+ReconciliationCheckpointsResponse:
+  type: object
+  required:
+    - checkpoints
+  properties:
+    checkpoints:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ReconciliationCheckpointResponse"
+StartReconciliationRequest:
+  type: object
+  required:
+    - commodity_id
+    - statement_date
+    - statement_balance_value
+    - statement_balance_scale
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    source_kind:
+      $ref: "../../openapi.yaml#/components/schemas/ReconciliationSourceKind"
+    statement_date:
+      type: string
+      format: date
+    statement_balance_value:
+      type: integer
+      format: int64
+    statement_balance_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    metadata:
+      type: object
+      additionalProperties: true
+    change_reason:
+      type: string
+  additionalProperties: false
+ReconciliationSelectionRequest:
+  type: object
+  properties:
+    posting_version_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    change_reason:
+      type: string
+  additionalProperties: false
+PostingReconciliationStatusRequest:
+  type: object
+  required:
+    - posting_version_ids
+    - status
+  properties:
+    posting_version_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    status:
+      type: string
+      enum:
+        - cleared
+        - uncleared
+    cleared_on:
+      type: string
+      format: date
+    change_reason:
+      type: string
+  additionalProperties: false

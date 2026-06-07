@@ -216,6 +216,112 @@ func TestTransactionTagReplacementSemantics(t *testing.T) {
 	assert.Equal(t, 1, countPostingTags(t, database, updated.JournalEntries[0].Postings[1].PostingLineID))
 }
 
+func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Reconcile Checking", "asset", "checking", commodityID, 2)
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Reconcile Salary","category_type":"income"}`)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"description":"Salary",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":100000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(salary.ID)+`,"quantity_value":-100000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusCreated)
+	checkingPosting := transaction.JournalEntries[0].Postings[0]
+
+	clearedTransactions := changePostingReconciliationStatusForSession(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"posting_version_ids":[`+strconvFormatInt(checkingPosting.ID)+`],
+		"status":"cleared",
+		"cleared_on":"2026-06-07"
+	}`, http.StatusOK)
+	require.Len(t, clearedTransactions.Transactions, 1)
+	cleared := clearedTransactions.Transactions[0]
+	require.Len(t, cleared.JournalEntries, 1)
+	clearedPosting := cleared.JournalEntries[0].Postings[0]
+	assert.Equal(t, "cleared", clearedPosting.ReconciliationStatus)
+
+	started := startReconciliationForSession(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"commodity_id":`+strconvFormatInt(commodityID)+`,
+		"source_kind":"statement",
+		"statement_date":"2026-06-07",
+		"statement_balance_value":100000,
+		"statement_balance_scale":2
+	}`, http.StatusCreated)
+	assert.Equal(t, "open", started.Status)
+	require.Len(t, started.Candidates, 1)
+	assert.Equal(t, clearedPosting.ID, started.Candidates[0].PostingID)
+	require.Len(t, started.SelectedPostings, 1)
+	assert.Equal(t, clearedPosting.ID, started.SelectedPostings[0].PostingID)
+
+	preview := previewReconciliationForSession(t, handler, sessionCookie, csrfToken, started.ID, `{
+		"posting_version_ids":[`+strconvFormatInt(clearedPosting.ID)+`]
+	}`, http.StatusOK)
+	assert.Equal(t, int64(0), preview.Difference.QuantityValue)
+	assert.Equal(t, int64(100000), preview.SelectedBalance.QuantityValue)
+
+	finished := finishReconciliationForSession(t, handler, sessionCookie, csrfToken, started.ID, `{"change_reason":"matched statement"}`, http.StatusOK)
+	assert.Equal(t, "finished", finished.Status)
+	require.Len(t, finished.SelectedPostings, 1)
+	assert.Equal(t, "reconciled", finished.SelectedPostings[0].ReconciliationStatus)
+
+	checkpoints := listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
+	require.Len(t, checkpoints.Checkpoints, 1)
+	assert.Equal(t, "active", checkpoints.Checkpoints[0].Status)
+
+	reconciled := readTransactionForSession(t, handler, sessionCookie, transaction.ID, http.StatusOK)
+	metadataEdited := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(transaction.ID), `{
+		"transaction_date":"2026-06-07",
+		"description":"Salary corrected memo only",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[0].LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":100000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[1].LineKey+`","account_id":`+strconvFormatInt(salary.ID)+`,"quantity_value":-100000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusOK)
+	assert.Empty(t, metadataEdited.InvalidatedCheckpointIDs)
+	assert.Equal(t, "reconciled", metadataEdited.JournalEntries[0].Postings[0].ReconciliationStatus)
+
+	reconciled = metadataEdited
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(transaction.ID), `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[0].LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":99000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[1].LineKey+`","account_id":`+strconvFormatInt(salary.ID)+`,"quantity_value":-99000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusConflict)
+
+	updated := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(transaction.ID), `{
+		"transaction_date":"2026-06-07",
+		"change_reason":"corrected reconciled salary",
+		"reconciliation_override":true,
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[0].LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":99000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[1].LineKey+`","account_id":`+strconvFormatInt(salary.ID)+`,"quantity_value":-99000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusOK)
+	assert.NotEmpty(t, updated.InvalidatedCheckpointIDs)
+
+	checkpoints = listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
+	require.Len(t, checkpoints.Checkpoints, 1)
+	assert.Equal(t, "invalidated", checkpoints.Checkpoints[0].Status)
+}
+
 func TestTransactionPostingAccountDateAndCommodityValidation(t *testing.T) {
 	t.Parallel()
 
@@ -624,6 +730,76 @@ func accountRegisterForSession(t *testing.T, handler http.Handler, sessionCookie
 	require.Equal(t, http.StatusOK, res.Code)
 
 	var response accountRegisterResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func changePostingReconciliationStatusForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, accountID int64, body string, wantStatus int) transactionsResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(accountID)+"/postings/reconciliation-status", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, wantStatus, res.Code)
+	var response transactionsResponse
+	if wantStatus >= 200 && wantStatus < 300 {
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	}
+	return response
+}
+
+func startReconciliationForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, accountID int64, body string, wantStatus int) reconciliationSessionResponse {
+	t.Helper()
+	return mutateReconciliationForSession(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(accountID)+"/reconciliations/start", body, wantStatus)
+}
+
+func previewReconciliationForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, reconciliationID int64, body string, wantStatus int) reconciliationSessionResponse {
+	t.Helper()
+	return mutateReconciliationForSession(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/reconciliations/"+strconvFormatInt(reconciliationID)+"/preview", body, wantStatus)
+}
+
+func finishReconciliationForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, reconciliationID int64, body string, wantStatus int) reconciliationSessionResponse {
+	t.Helper()
+	return mutateReconciliationForSession(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/reconciliations/"+strconvFormatInt(reconciliationID)+"/finish", body, wantStatus)
+}
+
+func mutateReconciliationForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, body string, wantStatus int) reconciliationSessionResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, wantStatus, res.Code)
+	var response reconciliationSessionResponse
+	if wantStatus >= 200 && wantStatus < 300 {
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	}
+	return response
+}
+
+func listReconciliationCheckpointsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, accountID int64, suffix string) reconciliationCheckpointsResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/accounts/"+strconvFormatInt(accountID)+"/reconciliation-checkpoints"+suffix, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+	var response reconciliationCheckpointsResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 	return response
 }

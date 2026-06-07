@@ -43,6 +43,7 @@ type TransactionRecord struct {
 	ChangeReason              string
 	TagIDs                    []int64
 	JournalEntries            []JournalEntryRecord
+	InvalidatedCheckpointIDs  []int64
 }
 
 type AccountRegisterEntryRecord struct {
@@ -146,28 +147,32 @@ type CreateTransactionParams struct {
 }
 
 type UpdateTransactionParams struct {
-	BookID        int64
-	TransactionID int64
-	ActorUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	Operation     string
-	Spec          TransactionSpec
-	RecordedAt    string
-	ChangeReason  string
+	BookID                     int64
+	TransactionID              int64
+	ActorUserID                int64
+	AuthSessionID              int64
+	RequestID                  string
+	OriginType                 string
+	Operation                  string
+	Spec                       TransactionSpec
+	RecordedAt                 string
+	ChangeReason               string
+	InvalidateCheckpointRefs   []CheckpointInvalidationRef
+	InvalidateCheckpointReason string
 }
 
 type VoidTransactionParams struct {
-	BookID        int64
-	TransactionID int64
-	ActorUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	Operation     string
-	RecordedAt    string
-	ChangeReason  string
+	BookID                     int64
+	TransactionID              int64
+	ActorUserID                int64
+	AuthSessionID              int64
+	RequestID                  string
+	OriginType                 string
+	Operation                  string
+	RecordedAt                 string
+	ChangeReason               string
+	InvalidateCheckpointRefs   []CheckpointInvalidationRef
+	InvalidateCheckpointReason string
 }
 
 type DeleteDraftTransactionParams struct {
@@ -194,6 +199,12 @@ type PostingCommodityRule struct {
 	StandardScale    int
 	CommodityBookID  int64
 	CommodityKind    string
+}
+
+type CheckpointInvalidationRef struct {
+	AccountID   int64
+	CommodityID int64
+	EntryDate   string
 }
 
 func NewTransactionRepository(database *sql.DB) *TransactionRepository {
@@ -459,6 +470,18 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 	if err != nil {
 		return TransactionRecord{}, mapTransactionConstraintError(err)
 	}
+	invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+		BookID:       params.BookID,
+		Refs:         params.InvalidateCheckpointRefs,
+		ActorUserID:  params.ActorUserID,
+		AuditEventID: auditEventID,
+		OccurredAt:   params.RecordedAt,
+		Reason:       params.InvalidateCheckpointReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	record.InvalidatedCheckpointIDs = invalidatedCheckpointIDs
 
 	if err := tx.Commit(); err != nil {
 		return TransactionRecord{}, fmt.Errorf("commit update transaction: %w", err)
@@ -532,6 +555,18 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 	if err != nil {
 		return TransactionRecord{}, mapTransactionConstraintError(err)
 	}
+	invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+		BookID:       params.BookID,
+		Refs:         params.InvalidateCheckpointRefs,
+		ActorUserID:  params.ActorUserID,
+		AuditEventID: auditEventID,
+		OccurredAt:   params.RecordedAt,
+		Reason:       params.InvalidateCheckpointReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	record.InvalidatedCheckpointIDs = invalidatedCheckpointIDs
 
 	if err := tx.Commit(); err != nil {
 		return TransactionRecord{}, fmt.Errorf("commit void transaction: %w", err)

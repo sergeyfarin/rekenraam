@@ -53,6 +53,12 @@ paths:
     $ref: "./paths/account-versions.yaml"
   /api/v1/accounts/{account_id}/register:
     $ref: "./paths/account-register.yaml"
+  /api/v1/accounts/{account_id}/reconciliations/start:
+    $ref: "./paths/account-reconciliation-start.yaml"
+  /api/v1/accounts/{account_id}/reconciliation-checkpoints:
+    $ref: "./paths/account-reconciliation-checkpoints.yaml"
+  /api/v1/accounts/{account_id}/postings/reconciliation-status:
+    $ref: "./paths/account-posting-reconciliation-status.yaml"
   /api/v1/ledger/account-balances:
     $ref: "./paths/ledger-account-balances.yaml"
   /api/v1/ledger/category-totals:
@@ -97,6 +103,16 @@ paths:
     $ref: "./paths/transaction-void.yaml"
   /api/v1/transactions/{transaction_id}/correct:
     $ref: "./paths/transaction-correct.yaml"
+  /api/v1/reconciliations/{reconciliation_id}:
+    $ref: "./paths/reconciliation.yaml"
+  /api/v1/reconciliations/{reconciliation_id}/preview:
+    $ref: "./paths/reconciliation-preview.yaml"
+  /api/v1/reconciliations/{reconciliation_id}/finish:
+    $ref: "./paths/reconciliation-finish.yaml"
+  /api/v1/reconciliations/{reconciliation_id}/void:
+    $ref: "./paths/reconciliation-void.yaml"
+  /api/v1/reconciliation-checkpoints/{checkpoint_id}/void:
+    $ref: "./paths/reconciliation-checkpoint-void.yaml"
 components:
   headers:
     XRequestID:
@@ -143,6 +159,20 @@ components:
     TransactionID:
       in: path
       name: transaction_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ReconciliationID:
+      in: path
+      name: reconciliation_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ReconciliationCheckpointID:
+      in: path
+      name: checkpoint_id
       required: true
       schema:
         type: integer
@@ -256,6 +286,12 @@ components:
       $ref: "./components/schemas/transactions.yaml#/JournalEntryKind"
     ReconciliationStatus:
       $ref: "./components/schemas/transactions.yaml#/ReconciliationStatus"
+    ReconciliationSessionStatus:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationSessionStatus"
+    ReconciliationCheckpointStatus:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationCheckpointStatus"
+    ReconciliationSourceKind:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationSourceKind"
     BalanceQuantity:
       $ref: "./components/schemas/ledger.yaml#/BalanceQuantity"
     AccountBalance:
@@ -288,6 +324,20 @@ components:
       $ref: "./components/schemas/transactions.yaml#/TransactionRequest"
     TransactionLifecycleRequest:
       $ref: "./components/schemas/transactions.yaml#/TransactionLifecycleRequest"
+    ReconciliationPostingResponse:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPostingResponse"
+    ReconciliationSessionResponse:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationSessionResponse"
+    ReconciliationCheckpointResponse:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationCheckpointResponse"
+    ReconciliationCheckpointsResponse:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationCheckpointsResponse"
+    StartReconciliationRequest:
+      $ref: "./components/schemas/reconciliation.yaml#/StartReconciliationRequest"
+    ReconciliationSelectionRequest:
+      $ref: "./components/schemas/reconciliation.yaml#/ReconciliationSelectionRequest"
+    PostingReconciliationStatusRequest:
+      $ref: "./components/schemas/reconciliation.yaml#/PostingReconciliationStatusRequest"
     AuthSessionResponse:
       $ref: "./components/schemas/auth-responses.yaml#/AuthSessionResponse"
     LoginResponse:

@@ -189,6 +189,11 @@ TransactionResponse:
       format: date-time
     change_reason:
       type: string
+    invalidated_checkpoint_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
 TransactionsResponse:
   type: object
   required:
@@ -395,10 +400,15 @@ TransactionRequest:
         $ref: "../../openapi.yaml#/components/schemas/JournalEntryRequest"
     change_reason:
       type: string
+    reconciliation_override:
+      type: boolean
+      description: Required when editing reconciled account-side posting facts and accepting checkpoint invalidation.
   additionalProperties: false
 TransactionLifecycleRequest:
   type: object
   properties:
     change_reason:
       type: string
+    reconciliation_override:
+      type: boolean
   additionalProperties: false

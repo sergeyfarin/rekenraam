@@ -23,11 +23,16 @@ const (
 )
 
 var (
-	ErrTransactionNotFound  = errors.New("transaction not found")
-	ErrTransactionProtected = errors.New("transaction requires corrective workflow")
-	ErrTransactionPosted    = errors.New("posted or voided transaction cannot be deleted")
-	ErrTransactionVoided    = errors.New("voided transaction cannot be edited")
-	ErrTransactionTag       = errors.New("transaction tag is invalid")
+	ErrTransactionNotFound            = errors.New("transaction not found")
+	ErrTransactionProtected           = errors.New("transaction requires corrective workflow")
+	ErrTransactionPosted              = errors.New("posted or voided transaction cannot be deleted")
+	ErrTransactionVoided              = errors.New("voided transaction cannot be edited")
+	ErrTransactionTag                 = errors.New("transaction tag is invalid")
+	ErrReconciliationOverrideRequired = errors.New("reconciliation override is required")
+	ErrReconciliationNotFound         = errors.New("reconciliation not found")
+	ErrReconciliationClosed           = errors.New("reconciliation is not open")
+	ErrReconciliationNotBalanced      = errors.New("reconciliation difference must be zero")
+	ErrReconciliationPosting          = errors.New("reconciliation posting is invalid")
 )
 
 var transactionStatuses = map[string]bool{
@@ -80,6 +85,7 @@ type Transaction struct {
 	CreatedAt                 string
 	UpdatedAt                 string
 	ChangeReason              string
+	InvalidatedCheckpointIDs  []int64
 }
 
 type JournalEntry struct {
@@ -169,14 +175,15 @@ type CreateTransactionInput struct {
 }
 
 type UpdateTransactionInput struct {
-	OwnerUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	Operation     string
-	TransactionID int64
-	Spec          TransactionInput
-	ChangeReason  string
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	OriginType             string
+	Operation              string
+	TransactionID          int64
+	Spec                   TransactionInput
+	ChangeReason           string
+	ReconciliationOverride bool
 }
 
 type PostTransactionInput struct {
@@ -189,12 +196,13 @@ type PostTransactionInput struct {
 }
 
 type VoidTransactionInput struct {
-	OwnerUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	TransactionID int64
-	ChangeReason  string
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	OriginType             string
+	TransactionID          int64
+	ChangeReason           string
+	ReconciliationOverride bool
 }
 
 type DeleteDraftTransactionInput struct {
@@ -387,7 +395,11 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	if current.Status == "draft" {
 		defaultStatus = "draft"
 	}
-	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: defaultStatus, ExistingLineKeys: lineKeySet(current)})
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{
+		DefaultStatus:    defaultStatus,
+		ExistingLineKeys: lineKeySet(current),
+		ExistingPostings: existingPostingStateSet(current),
+	})
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -395,6 +407,13 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		spec.Status = "draft"
 	} else {
 		spec.Status = "posted"
+	}
+	invalidationRefs, err := reconciliationInvalidationRefs(current, spec)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if len(invalidationRefs) > 0 && !input.ReconciliationOverride {
+		return Transaction{}, ErrReconciliationOverrideRequired
 	}
 
 	now := s.now().UTC()
@@ -408,16 +427,18 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	}
 
 	record, err := s.repository.UpdateTransaction(ctx, db.UpdateTransactionParams{
-		BookID:        BookID,
-		TransactionID: input.TransactionID,
-		ActorUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    input.OriginType,
-		Operation:     operation,
-		Spec:          spec,
-		RecordedAt:    now.Format(time.RFC3339),
-		ChangeReason:  changeReason,
+		BookID:                     BookID,
+		TransactionID:              input.TransactionID,
+		ActorUserID:                input.OwnerUserID,
+		AuthSessionID:              input.AuthSessionID,
+		RequestID:                  input.RequestID,
+		OriginType:                 input.OriginType,
+		Operation:                  operation,
+		Spec:                       spec,
+		RecordedAt:                 now.Format(time.RFC3339),
+		ChangeReason:               changeReason,
+		InvalidateCheckpointRefs:   invalidationRefs,
+		InvalidateCheckpointReason: changeReason,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -471,17 +492,30 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 	if changeReason == "" {
 		return Transaction{}, ValidationError{Message: "change reason is required"}
 	}
+	current, err := s.repository.TransactionByID(ctx, BookID, input.TransactionID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return Transaction{}, ErrTransactionNotFound
+		}
+		return Transaction{}, fmt.Errorf("read transaction: %w", err)
+	}
+	invalidationRefs := reconciliationRefsFromRecord(current)
+	if len(invalidationRefs) > 0 && !input.ReconciliationOverride {
+		return Transaction{}, ErrReconciliationOverrideRequired
+	}
 
 	record, err := s.repository.VoidTransaction(ctx, db.VoidTransactionParams{
-		BookID:        BookID,
-		TransactionID: input.TransactionID,
-		ActorUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    input.OriginType,
-		Operation:     "transaction.void",
-		RecordedAt:    now.Format(time.RFC3339),
-		ChangeReason:  changeReason,
+		BookID:                     BookID,
+		TransactionID:              input.TransactionID,
+		ActorUserID:                input.OwnerUserID,
+		AuthSessionID:              input.AuthSessionID,
+		RequestID:                  input.RequestID,
+		OriginType:                 input.OriginType,
+		Operation:                  "transaction.void",
+		RecordedAt:                 now.Format(time.RFC3339),
+		ChangeReason:               changeReason,
+		InvalidateCheckpointRefs:   invalidationRefs,
+		InvalidateCheckpointReason: changeReason,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -558,6 +592,12 @@ func (s *TransactionService) listParams(input ListTransactionsInput, filterEntry
 type cleanTransactionOptions struct {
 	DefaultStatus    string
 	ExistingLineKeys map[string]bool
+	ExistingPostings map[string]existingPostingState
+}
+
+type existingPostingState struct {
+	ReconciliationStatus string
+	ClearedOn            string
 }
 
 func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input TransactionInput, options cleanTransactionOptions) (db.TransactionSpec, error) {
@@ -636,7 +676,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 
 	entries := make([]db.JournalEntrySpec, 0, len(input.JournalEntries))
 	for entryIndex, entryInput := range input.JournalEntries {
-		entry, err := s.cleanJournalEntry(ctx, entryInput, transactionDate, status, options.ExistingLineKeys)
+		entry, err := s.cleanJournalEntry(ctx, entryInput, transactionDate, status, options.ExistingLineKeys, options.ExistingPostings)
 		if err != nil {
 			return db.TransactionSpec{}, err
 		}
@@ -669,7 +709,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 	}, nil
 }
 
-func (s *TransactionService) cleanJournalEntry(ctx context.Context, input JournalEntryInput, transactionDate string, status string, existingLineKeys map[string]bool) (db.JournalEntrySpec, error) {
+func (s *TransactionService) cleanJournalEntry(ctx context.Context, input JournalEntryInput, transactionDate string, status string, existingLineKeys map[string]bool, existingPostings map[string]existingPostingState) (db.JournalEntrySpec, error) {
 	entryDate := strings.TrimSpace(input.EntryDate)
 	if entryDate == "" {
 		entryDate = transactionDate
@@ -696,7 +736,7 @@ func (s *TransactionService) cleanJournalEntry(ctx context.Context, input Journa
 
 	postings := make([]db.PostingSpec, 0, len(input.Postings))
 	for _, postingInput := range input.Postings {
-		posting, err := s.cleanPosting(ctx, postingInput, entryDate, status, existingLineKeys)
+		posting, err := s.cleanPosting(ctx, postingInput, entryDate, status, existingLineKeys, existingPostings)
 		if err != nil {
 			return db.JournalEntrySpec{}, err
 		}
@@ -712,7 +752,7 @@ func (s *TransactionService) cleanJournalEntry(ctx context.Context, input Journa
 	}, nil
 }
 
-func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInput, entryDate string, status string, existingLineKeys map[string]bool) (db.PostingSpec, error) {
+func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInput, entryDate string, status string, existingLineKeys map[string]bool, existingPostings map[string]existingPostingState) (db.PostingSpec, error) {
 	if input.AccountID <= 0 {
 		return db.PostingSpec{}, ValidationError{Message: "posting account is required"}
 	}
@@ -760,14 +800,31 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale exceeds commodity precision"}
 	}
 
+	lineKey := strings.TrimSpace(input.LineKey)
+	if lineKey != "" && existingLineKeys != nil && !existingLineKeys[lineKey] {
+		return db.PostingSpec{}, ValidationError{Message: "posting line key is invalid"}
+	}
+	if lineKey == "" {
+		lineKey = s.newLineKey()
+	}
+
+	existingState, hasExistingState := existingPostings[lineKey]
 	reconciliationStatus := strings.TrimSpace(input.ReconciliationStatus)
 	if reconciliationStatus == "" {
-		reconciliationStatus = "uncleared"
+		if hasExistingState {
+			reconciliationStatus = existingState.ReconciliationStatus
+		} else {
+			reconciliationStatus = "uncleared"
+		}
 	}
 	if !reconciliationStatuses[reconciliationStatus] {
 		return db.PostingSpec{}, ValidationError{Message: "posting reconciliation status is invalid"}
 	}
-	clearedOn, err := cleanOptionalDate(input.ClearedOn, "cleared date")
+	clearedOnInput := input.ClearedOn
+	if strings.TrimSpace(clearedOnInput) == "" && hasExistingState && reconciliationStatus == existingState.ReconciliationStatus {
+		clearedOnInput = existingState.ClearedOn
+	}
+	clearedOn, err := cleanOptionalDate(clearedOnInput, "cleared date")
 	if err != nil {
 		return db.PostingSpec{}, err
 	}
@@ -786,14 +843,6 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	tagIDs, err := s.cleanTagIDs(ctx, input.TagIDs)
 	if err != nil {
 		return db.PostingSpec{}, err
-	}
-
-	lineKey := strings.TrimSpace(input.LineKey)
-	if lineKey != "" && existingLineKeys != nil && !existingLineKeys[lineKey] {
-		return db.PostingSpec{}, ValidationError{Message: "posting line key is invalid"}
-	}
-	if lineKey == "" {
-		lineKey = s.newLineKey()
 	}
 
 	return db.PostingSpec{
@@ -922,6 +971,89 @@ func lineKeySet(record db.TransactionRecord) map[string]bool {
 	return keys
 }
 
+func existingPostingStateSet(record db.TransactionRecord) map[string]existingPostingState {
+	states := map[string]existingPostingState{}
+	for _, entry := range record.JournalEntries {
+		for _, posting := range entry.Postings {
+			states[posting.LineKey] = existingPostingState{
+				ReconciliationStatus: posting.ReconciliationStatus,
+				ClearedOn:            nullableString(posting.ClearedOn),
+			}
+		}
+	}
+	return states
+}
+
+func reconciliationInvalidationRefs(current db.TransactionRecord, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+	currentByLineKey := map[string]struct {
+		entryDate string
+		posting   db.PostingRecord
+	}{}
+	for _, entry := range current.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.ReconciliationStatus == "reconciled" {
+				currentByLineKey[posting.LineKey] = struct {
+					entryDate string
+					posting   db.PostingRecord
+				}{entryDate: entry.EntryDate, posting: posting}
+			}
+		}
+	}
+	if len(currentByLineKey) == 0 {
+		return nil, nil
+	}
+
+	nextByLineKey := map[string]struct {
+		entryDate string
+		posting   db.PostingSpec
+	}{}
+	for _, entry := range spec.JournalEntries {
+		for _, posting := range entry.Postings {
+			nextByLineKey[posting.LineKey] = struct {
+				entryDate string
+				posting   db.PostingSpec
+			}{entryDate: entry.EntryDate, posting: posting}
+		}
+	}
+
+	refs := make([]db.CheckpointInvalidationRef, 0)
+	for lineKey, currentPosting := range currentByLineKey {
+		nextPosting, ok := nextByLineKey[lineKey]
+		if !ok || reconciliationAffectingPostingChange(currentPosting.entryDate, currentPosting.posting, nextPosting.entryDate, nextPosting.posting) {
+			refs = append(refs, db.CheckpointInvalidationRef{
+				AccountID:   currentPosting.posting.AccountID,
+				CommodityID: currentPosting.posting.CommodityID,
+				EntryDate:   currentPosting.entryDate,
+			})
+		}
+	}
+	return refs, nil
+}
+
+func reconciliationAffectingPostingChange(currentEntryDate string, current db.PostingRecord, nextEntryDate string, next db.PostingSpec) bool {
+	return currentEntryDate != nextEntryDate ||
+		current.AccountID != next.AccountID ||
+		current.CommodityID != next.CommodityID ||
+		current.QuantityValue != next.QuantityValue ||
+		current.QuantityScale != next.QuantityScale
+}
+
+func reconciliationRefsFromRecord(record db.TransactionRecord) []db.CheckpointInvalidationRef {
+	refs := make([]db.CheckpointInvalidationRef, 0)
+	for _, entry := range record.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.ReconciliationStatus == "reconciled" {
+				refs = append(refs, db.CheckpointInvalidationRef{
+					AccountID:   posting.AccountID,
+					CommodityID: posting.CommodityID,
+					EntryDate:   entry.EntryDate,
+				})
+			}
+		}
+	}
+	return refs
+}
+
 func transactionInputFromTransaction(transaction Transaction) TransactionInput {
 	entries := make([]JournalEntryInput, 0, len(transaction.JournalEntries))
 	for _, entry := range transaction.JournalEntries {
@@ -976,6 +1108,14 @@ func mapTransactionDBError(err error) error {
 		return ErrTransactionProtected
 	case errors.Is(err, db.ErrArchivedTag):
 		return ErrTransactionTag
+	case errors.Is(err, db.ErrReconciliationNotFound):
+		return ErrReconciliationNotFound
+	case errors.Is(err, db.ErrReconciliationClosed):
+		return ErrReconciliationClosed
+	case errors.Is(err, db.ErrReconciliationNotBalanced):
+		return ErrReconciliationNotBalanced
+	case errors.Is(err, db.ErrReconciliationPosting), errors.Is(err, db.ErrReconciliationCheckpoint):
+		return ErrReconciliationPosting
 	default:
 		return fmt.Errorf("transaction repository: %w", err)
 	}
@@ -1091,5 +1231,6 @@ func toTransaction(record db.TransactionRecord) Transaction {
 		CreatedAt:                 record.CreatedAt,
 		UpdatedAt:                 record.RecordedAt,
 		ChangeReason:              record.ChangeReason,
+		InvalidatedCheckpointIDs:  record.InvalidatedCheckpointIDs,
 	}
 }

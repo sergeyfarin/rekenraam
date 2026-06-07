@@ -104,6 +104,15 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/transactions/{transaction_id}/void", voidTransaction(logger, authService, transactionService, options))
 		mux.HandleFunc("POST /api/v1/transactions/{transaction_id}/correct", correctTransaction(logger, authService, transactionService, options))
 		mux.HandleFunc("DELETE /api/v1/transactions/{transaction_id}", deleteDraftTransaction(logger, authService, transactionService, options))
+		mux.HandleFunc("POST /api/v1/accounts/{account_id}/reconciliations/start", startReconciliation(logger, authService, transactionService, options))
+		mux.HandleFunc("GET /api/v1/reconciliations/{reconciliation_id}", readReconciliation(logger, authService, transactionService))
+		mux.HandleFunc("PATCH /api/v1/reconciliations/{reconciliation_id}", updateReconciliationSelection(logger, authService, transactionService, options))
+		mux.HandleFunc("POST /api/v1/reconciliations/{reconciliation_id}/preview", previewReconciliation(logger, authService, transactionService, options))
+		mux.HandleFunc("POST /api/v1/reconciliations/{reconciliation_id}/finish", finishReconciliation(logger, authService, transactionService, options))
+		mux.HandleFunc("POST /api/v1/reconciliations/{reconciliation_id}/void", voidReconciliation(logger, authService, transactionService, options))
+		mux.HandleFunc("GET /api/v1/accounts/{account_id}/reconciliation-checkpoints", listReconciliationCheckpoints(logger, authService, transactionService))
+		mux.HandleFunc("POST /api/v1/reconciliation-checkpoints/{checkpoint_id}/void", voidReconciliationCheckpoint(logger, authService, transactionService, options))
+		mux.HandleFunc("POST /api/v1/accounts/{account_id}/postings/reconciliation-status", changePostingReconciliationStatus(logger, authService, transactionService, options))
 	}
 }
 

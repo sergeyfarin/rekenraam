@@ -1,0 +1,46 @@
+post:
+  summary: Change account posting reconciliation status
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AccountID"
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/PostingReconciliationStatusRequest"
+  responses:
+    "200":
+      description: Updated transactions
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TransactionsResponse"
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Posting cannot have reconciliation status changed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

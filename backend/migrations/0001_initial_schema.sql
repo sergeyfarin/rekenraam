@@ -554,6 +554,103 @@ CREATE TABLE IF NOT EXISTS posting_tags (
 CREATE INDEX IF NOT EXISTS posting_tags_tag_idx
   ON posting_tags (tag_id);
 
+CREATE TABLE IF NOT EXISTS reconciliation_sessions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL CHECK (status IN ('open', 'finished', 'voided')),
+  source_kind TEXT NOT NULL CHECK (source_kind IN ('statement', 'online_balance', 'manual_cash_count', 'asset_valuation', 'other')),
+  statement_date TEXT NOT NULL CHECK (statement_date GLOB '????-??-??'),
+  statement_balance_value INTEGER NOT NULL,
+  statement_balance_scale INTEGER NOT NULL CHECK (statement_balance_scale BETWEEN 0 AND 12),
+  starting_checkpoint_id INTEGER REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
+  starting_balance_value INTEGER NOT NULL,
+  starting_balance_scale INTEGER NOT NULL CHECK (starting_balance_scale BETWEEN 0 AND 12),
+  selected_balance_value INTEGER NOT NULL DEFAULT 0,
+  selected_balance_scale INTEGER NOT NULL DEFAULT 0 CHECK (selected_balance_scale BETWEEN 0 AND 12),
+  difference_value INTEGER NOT NULL DEFAULT 0,
+  difference_scale INTEGER NOT NULL DEFAULT 0 CHECK (difference_scale BETWEEN 0 AND 12),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  finished_at TEXT,
+  voided_at TEXT,
+  change_reason TEXT NOT NULL DEFAULT '',
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS reconciliation_sessions_account_idx
+  ON reconciliation_sessions (book_id, account_id, commodity_id, status, statement_date DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS reconciliation_session_postings (
+  session_id INTEGER NOT NULL REFERENCES reconciliation_sessions(id) ON DELETE RESTRICT,
+  posting_version_id INTEGER NOT NULL REFERENCES posting_versions(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
+  posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
+  quantity_value INTEGER NOT NULL,
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  payee_name TEXT,
+  description TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  PRIMARY KEY (session_id, posting_version_id)
+);
+
+CREATE INDEX IF NOT EXISTS reconciliation_session_postings_posting_idx
+  ON reconciliation_session_postings (posting_version_id);
+
+CREATE TABLE IF NOT EXISTS reconciliation_checkpoints (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  session_id INTEGER REFERENCES reconciliation_sessions(id) ON DELETE RESTRICT,
+  previous_checkpoint_id INTEGER REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'invalidated', 'voided')),
+  statement_date TEXT NOT NULL CHECK (statement_date GLOB '????-??-??'),
+  statement_balance_value INTEGER NOT NULL,
+  statement_balance_scale INTEGER NOT NULL CHECK (statement_balance_scale BETWEEN 0 AND 12),
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  invalidated_at TEXT,
+  invalidated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  invalidation_reason TEXT NOT NULL DEFAULT '',
+  voided_at TEXT,
+  voided_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  void_reason TEXT NOT NULL DEFAULT '',
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  invalidated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  voided_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS reconciliation_checkpoints_account_idx
+  ON reconciliation_checkpoints (book_id, account_id, commodity_id, status, statement_date DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS reconciliation_checkpoint_postings (
+  checkpoint_id INTEGER NOT NULL REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
+  posting_version_id INTEGER NOT NULL REFERENCES posting_versions(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
+  quantity_value INTEGER NOT NULL,
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  PRIMARY KEY (checkpoint_id, posting_version_id)
+);
+
+CREATE INDEX IF NOT EXISTS reconciliation_checkpoint_postings_posting_idx
+  ON reconciliation_checkpoint_postings (posting_version_id);
+
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS books_default_currency_must_exist_on_insert
 BEFORE INSERT ON books
@@ -775,21 +872,6 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS transaction_versions_no_supersede_reconciled
-BEFORE INSERT ON transaction_versions
-WHEN NEW.supersedes_version_id IS NOT NULL
-  AND EXISTS (
-    SELECT 1
-    FROM posting_versions pv
-    WHERE pv.transaction_version_id = NEW.supersedes_version_id
-      AND pv.reconciliation_status = 'reconciled'
-  )
-BEGIN
-  SELECT RAISE(ABORT, 'reconciled postings require a corrective transaction');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS transaction_search_insert
 AFTER INSERT ON transaction_versions
 BEGIN
@@ -975,7 +1057,6 @@ DROP TRIGGER IF EXISTS posting_lines_same_book;
 DROP TRIGGER IF EXISTS journal_entries_same_book;
 DROP TRIGGER IF EXISTS transactions_correction_same_book;
 DROP TRIGGER IF EXISTS transaction_search_insert;
-DROP TRIGGER IF EXISTS transaction_versions_no_supersede_reconciled;
 DROP TRIGGER IF EXISTS transaction_versions_supersedes_same_transaction;
 DROP TRIGGER IF EXISTS transaction_versions_same_book;
 DROP TRIGGER IF EXISTS transaction_versions_no_delete;
@@ -1001,6 +1082,14 @@ DROP INDEX IF EXISTS account_versions_institution_idx;
 DROP INDEX IF EXISTS account_versions_parent_idx;
 DROP INDEX IF EXISTS account_versions_account_seq_idx;
 DROP VIEW IF EXISTS current_account_versions;
+DROP INDEX IF EXISTS reconciliation_checkpoint_postings_posting_idx;
+DROP TABLE IF EXISTS reconciliation_checkpoint_postings;
+DROP INDEX IF EXISTS reconciliation_checkpoints_account_idx;
+DROP TABLE IF EXISTS reconciliation_checkpoints;
+DROP INDEX IF EXISTS reconciliation_session_postings_posting_idx;
+DROP TABLE IF EXISTS reconciliation_session_postings;
+DROP INDEX IF EXISTS reconciliation_sessions_account_idx;
+DROP TABLE IF EXISTS reconciliation_sessions;
 DROP INDEX IF EXISTS posting_tags_tag_idx;
 DROP TABLE IF EXISTS posting_tags;
 DROP INDEX IF EXISTS transaction_tags_tag_idx;

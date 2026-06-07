@@ -186,6 +186,9 @@ Decisions:
 - Accounts can be reconciled against statement balances.
 - Reconciliation status belongs to postings or account-specific ledger state, not only to the transaction header.
 - A reconciled posting should not be silently changed by a later edit.
+- Reconciliation checkpoints are per account and commodity. A finished checkpoint records statement date, statement balance, and the posting versions selected into that reconciliation.
+- Editing a reconciled posting's account, commodity, amount, or entry date requires explicit user override and invalidates that checkpoint plus later active checkpoints for the affected account/commodity. Metadata-only edits such as payee, description, note, external reference, and tags do not invalidate checkpoints.
+- Cash reconciliation uses the same checkpoint model with a manual count source. Differences should be resolved by an ordinary adjustment transaction before finishing; finishing a reconciliation requires zero difference.
 - Period close is deferred, but the transaction schema should leave room for closed-period correction workflows.
 
 ## Import, Export, And Portability

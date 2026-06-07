@@ -2236,6 +2236,215 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{account_id}/reconciliations/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start account reconciliation */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    account_id: components["parameters"]["AccountID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StartReconciliationRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation session started */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationSessionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{account_id}/reconciliation-checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List account reconciliation checkpoints */
+        get: {
+            parameters: {
+                query?: {
+                    commodity_id?: number;
+                };
+                header?: never;
+                path: {
+                    account_id: components["parameters"]["AccountID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reconciliation checkpoints */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationCheckpointsResponse"];
+                    };
+                };
+                /** @description Invalid query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{account_id}/postings/reconciliation-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change account posting reconciliation status */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    account_id: components["parameters"]["AccountID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PostingReconciliationStatusRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated transactions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransactionsResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posting cannot have reconciliation status changed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/account-balances": {
         parameters: {
             query?: never;
@@ -4628,6 +4837,437 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reconciliations/{reconciliation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read reconciliation session */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    reconciliation_id: components["parameters"]["ReconciliationID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reconciliation session */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationSessionResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update reconciliation selection */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    reconciliation_id: components["parameters"]["ReconciliationID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReconciliationSelectionRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation selection updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationSessionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation is closed or posting selection is invalid */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/reconciliations/{reconciliation_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview reconciliation selection */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    reconciliation_id: components["parameters"]["ReconciliationID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReconciliationSelectionRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationSessionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation is closed or posting selection is invalid */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reconciliations/{reconciliation_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish reconciliation session */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    reconciliation_id: components["parameters"]["ReconciliationID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TransactionLifecycleRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation finished */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationSessionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation is closed, unbalanced, or posting selection is invalid */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reconciliations/{reconciliation_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void reconciliation session */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    reconciliation_id: components["parameters"]["ReconciliationID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TransactionLifecycleRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation voided */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationSessionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reconciliation-checkpoints/{checkpoint_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void reconciliation checkpoint */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    checkpoint_id: components["parameters"]["ReconciliationCheckpointID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TransactionLifecycleRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation checkpoint voided */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationCheckpointResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Checkpoint not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5143,6 +5783,12 @@ export interface components {
         JournalEntryKind: "ordinary" | "transfer_leg" | "exchange" | "investment" | "opening_balance" | "adjustment";
         /** @enum {string} */
         ReconciliationStatus: "uncleared" | "cleared" | "reconciled";
+        /** @enum {string} */
+        ReconciliationSessionStatus: "open" | "finished" | "voided";
+        /** @enum {string} */
+        ReconciliationCheckpointStatus: "active" | "invalidated" | "voided";
+        /** @enum {string} */
+        ReconciliationSourceKind: "statement" | "online_balance" | "manual_cash_count" | "asset_valuation" | "other";
         BalanceQuantity: {
             /** Format: int64 */
             commodity_id: number;
@@ -5286,6 +5932,7 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             change_reason: string;
+            invalidated_checkpoint_ids?: number[];
         };
         TransactionsResponse: {
             transactions: components["schemas"]["TransactionResponse"][];
@@ -5392,8 +6039,123 @@ export interface components {
             tag_ids?: number[];
             journal_entries?: components["schemas"]["JournalEntryRequest"][];
             change_reason?: string;
+            /** @description Required when editing reconciled account-side posting facts and accepting checkpoint invalidation. */
+            reconciliation_override?: boolean;
         };
         TransactionLifecycleRequest: {
+            change_reason?: string;
+            reconciliation_override?: boolean;
+        };
+        ReconciliationPostingResponse: {
+            /** Format: int64 */
+            posting_id: number;
+            /** Format: int64 */
+            transaction_id: number;
+            /** Format: int64 */
+            transaction_version_id: number;
+            /** Format: int64 */
+            posting_line_id: number;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: date */
+            entry_date: string;
+            /** Format: int64 */
+            quantity_value: number;
+            quantity_scale: number;
+            reconciliation_status: components["schemas"]["ReconciliationStatus"];
+            payee_name?: string;
+            description?: string;
+            selected: boolean;
+        };
+        ReconciliationSessionResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            book_id: number;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            status: components["schemas"]["ReconciliationSessionStatus"];
+            source_kind: components["schemas"]["ReconciliationSourceKind"];
+            /** Format: date */
+            statement_date: string;
+            statement_balance: components["schemas"]["BalanceQuantity"];
+            /** Format: int64 */
+            starting_checkpoint_id?: number;
+            starting_balance: components["schemas"]["BalanceQuantity"];
+            selected_balance: components["schemas"]["BalanceQuantity"];
+            difference: components["schemas"]["BalanceQuantity"];
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            change_reason: string;
+            candidates: components["schemas"]["ReconciliationPostingResponse"][];
+            selected_postings: components["schemas"]["ReconciliationPostingResponse"][];
+        };
+        ReconciliationCheckpointResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            book_id: number;
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            session_id?: number;
+            /** Format: int64 */
+            previous_checkpoint_id?: number;
+            status: components["schemas"]["ReconciliationCheckpointStatus"];
+            /** Format: date */
+            statement_date: string;
+            statement_balance: components["schemas"]["BalanceQuantity"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            invalidated_at?: string;
+            invalidation_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            void_reason?: string;
+        };
+        ReconciliationCheckpointsResponse: {
+            checkpoints: components["schemas"]["ReconciliationCheckpointResponse"][];
+        };
+        StartReconciliationRequest: {
+            /** Format: int64 */
+            commodity_id: number;
+            source_kind?: components["schemas"]["ReconciliationSourceKind"];
+            /** Format: date */
+            statement_date: string;
+            /** Format: int64 */
+            statement_balance_value: number;
+            statement_balance_scale: number;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            change_reason?: string;
+        };
+        ReconciliationSelectionRequest: {
+            posting_version_ids?: number[];
+            change_reason?: string;
+        };
+        PostingReconciliationStatusRequest: {
+            posting_version_ids: number[];
+            /** @enum {string} */
+            status: "cleared" | "uncleared";
+            /** Format: date */
+            cleared_on?: string;
             change_reason?: string;
         };
         AuthSessionResponse: {
@@ -5426,6 +6188,8 @@ export interface components {
         CategoryID: number;
         PayeeID: number;
         TransactionID: number;
+        ReconciliationID: number;
+        ReconciliationCheckpointID: number;
     };
     requestBodies: never;
     headers: {

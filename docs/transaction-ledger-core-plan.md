@@ -473,17 +473,35 @@ exactly in Go using integer quantity plus scale, not floating point.
 
 A reconciled posting version must not be silently changed by a later edit.
 
-Because posting versions are immutable, the practical guard is:
+Reconciliation is account- and commodity-scoped. Finished reconciliation
+sessions create checkpoint rows containing statement date, statement balance,
+and the posting versions selected into the reconciliation. These checkpoints
+act as the trust/lock floor for account registers, reports, cash counts, and
+statement-backed balances.
 
-- reject insertion of a superseding `transaction_version` when the current
-  version has any `posting_versions.reconciliation_status='reconciled'`
-- require a separate corrective transaction linked through
-  `correction_of_transaction_id`
+Because posting versions are immutable, reconciliation status changes are
+implemented by appending transaction versions:
+
+- marking postings `cleared`, `uncleared`, or `reconciled` creates a new
+  transaction version containing the same financial postings with updated
+  posting reconciliation status
+- finishing a reconciliation requires zero difference and appends reconciled
+  posting versions for the selected current postings
+- cash reconciliation uses `source_kind='manual_cash_count'`; remaining
+  differences are resolved by ordinary adjustment transactions before finish
+
+The edit guard is:
+
+- allow metadata-only edits such as payee, description, note, external
+  reference, and tags
+- require explicit reconciliation override when changing account, commodity,
+  amount, or entry date for a reconciled posting
+- when the user confirms such an edit, invalidate the affected active
+  reconciliation checkpoint and all later active checkpoints for the same
+  account/commodity
+- keep invalidated checkpoints visible for warning/history; do not physically
+  delete checkpoint history
 - defer closed-period guards until the period-close feature is designed
-
-Implement this in application service first. If feasible, add a trigger on
-`transaction_versions` insert that rejects `supersedes_version_id` when the
-superseded version contains reconciled postings.
 
 ## Tags
 

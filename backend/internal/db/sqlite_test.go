@@ -133,7 +133,10 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	})
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_transaction_versions"))
 	assert.True(t, sqliteObjectExists(t, database, "table", "transaction_search"))
-	assert.True(t, sqliteObjectExists(t, database, "trigger", "transaction_versions_no_supersede_reconciled"))
+	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_sessions"))
+	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_session_postings"))
+	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoints"))
+	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
 func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {

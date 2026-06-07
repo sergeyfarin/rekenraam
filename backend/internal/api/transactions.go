@@ -31,6 +31,7 @@ type transactionResponse struct {
 	CreatedAt                 string                 `json:"created_at"`
 	UpdatedAt                 string                 `json:"updated_at"`
 	ChangeReason              string                 `json:"change_reason"`
+	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids,omitempty"`
 }
 
 type journalEntryResponse struct {
@@ -97,18 +98,19 @@ type accountRegisterEntryResponse struct {
 }
 
 type transactionRequest struct {
-	Status          string                `json:"status"`
-	TransactionKind string                `json:"transaction_kind"`
-	TransactionDate string                `json:"transaction_date"`
-	PayeeID         *int64                `json:"payee_id"`
-	PayeeName       string                `json:"payee_name"`
-	Description     string                `json:"description"`
-	ExternalRefHint string                `json:"external_ref_hint"`
-	NoteMarkdown    string                `json:"note_markdown"`
-	Metadata        json.RawMessage       `json:"metadata"`
-	TagIDs          []int64               `json:"tag_ids"`
-	JournalEntries  []journalEntryRequest `json:"journal_entries"`
-	ChangeReason    string                `json:"change_reason"`
+	Status                 string                `json:"status"`
+	TransactionKind        string                `json:"transaction_kind"`
+	TransactionDate        string                `json:"transaction_date"`
+	PayeeID                *int64                `json:"payee_id"`
+	PayeeName              string                `json:"payee_name"`
+	Description            string                `json:"description"`
+	ExternalRefHint        string                `json:"external_ref_hint"`
+	NoteMarkdown           string                `json:"note_markdown"`
+	Metadata               json.RawMessage       `json:"metadata"`
+	TagIDs                 []int64               `json:"tag_ids"`
+	JournalEntries         []journalEntryRequest `json:"journal_entries"`
+	ChangeReason           string                `json:"change_reason"`
+	ReconciliationOverride bool                  `json:"reconciliation_override"`
 }
 
 type journalEntryRequest struct {
@@ -133,7 +135,8 @@ type postingRequest struct {
 }
 
 type voidTransactionRequest struct {
-	ChangeReason string `json:"change_reason"`
+	ChangeReason           string `json:"change_reason"`
+	ReconciliationOverride bool   `json:"reconciliation_override"`
 }
 
 func listTransactions(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
@@ -229,14 +232,15 @@ func updateTransaction(logger *slog.Logger, authService *app.AuthService, transa
 		}
 
 		transaction, err := transactionService.UpdateTransaction(r.Context(), app.UpdateTransactionInput{
-			OwnerUserID:   owner.ID,
-			AuthSessionID: authenticatedSessionID(r),
-			RequestID:     RequestIDFromContext(r.Context()),
-			OriginType:    "browser_api",
-			Operation:     "transaction.update",
-			TransactionID: transactionID,
-			Spec:          toTransactionInput(request),
-			ChangeReason:  request.ChangeReason,
+			OwnerUserID:            owner.ID,
+			AuthSessionID:          authenticatedSessionID(r),
+			RequestID:              RequestIDFromContext(r.Context()),
+			OriginType:             "browser_api",
+			Operation:              "transaction.update",
+			TransactionID:          transactionID,
+			Spec:                   toTransactionInput(request),
+			ChangeReason:           request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "update transaction", err)
@@ -466,6 +470,16 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "voided transaction cannot be edited")
 	case errors.Is(err, app.ErrTransactionTag):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "transaction tag is invalid")
+	case errors.Is(err, app.ErrReconciliationOverrideRequired):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "reconciliation override is required")
+	case errors.Is(err, app.ErrReconciliationNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "reconciliation not found")
+	case errors.Is(err, app.ErrReconciliationClosed):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "reconciliation is not open")
+	case errors.Is(err, app.ErrReconciliationNotBalanced):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "reconciliation difference must be zero")
+	case errors.Is(err, app.ErrReconciliationPosting):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "reconciliation posting is invalid")
 	default:
 		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
 		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
@@ -567,6 +581,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		CreatedAt:                 transaction.CreatedAt,
 		UpdatedAt:                 transaction.UpdatedAt,
 		ChangeReason:              transaction.ChangeReason,
+		InvalidatedCheckpointIDs:  transaction.InvalidatedCheckpointIDs,
 	}
 }
 

@@ -1,0 +1,28 @@
+get:
+  summary: List account reconciliation checkpoints
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AccountID"
+    - in: query
+      name: commodity_id
+      schema:
+        type: integer
+        format: int64
+  responses:
+    "200":
+      description: Reconciliation checkpoints
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationCheckpointsResponse"
+    "400":
+      description: Invalid query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
