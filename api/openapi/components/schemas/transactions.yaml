@@ -200,6 +200,103 @@ TransactionsResponse:
         $ref: "../../openapi.yaml#/components/schemas/TransactionResponse"
     next_cursor:
       type: string
+AccountRegisterEntryResponse:
+  type: object
+  required:
+    - transaction_id
+    - book_id
+    - status
+    - transaction_kind
+    - transaction_date
+    - description
+    - version_id
+    - version_seq
+    - transaction_tag_ids
+    - journal_entry_id
+    - entry_seq
+    - entry_date
+    - entry_kind
+    - entry_memo
+    - posting
+    - created_at
+    - updated_at
+    - change_reason
+  properties:
+    transaction_id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    correction_of_transaction_id:
+      type: integer
+      format: int64
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    transaction_kind:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionKind"
+    transaction_date:
+      type: string
+      format: date
+      description: User-facing register display date for the parent transaction.
+    payee_id:
+      type: integer
+      format: int64
+    payee_name:
+      type: string
+    description:
+      type: string
+    external_ref_hint:
+      type: string
+    version_id:
+      type: integer
+      format: int64
+    version_seq:
+      type: integer
+      format: int64
+    supersedes_version_id:
+      type: integer
+      format: int64
+    transaction_tag_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    journal_entry_id:
+      type: integer
+      format: int64
+    entry_seq:
+      type: integer
+      format: int64
+    entry_date:
+      type: string
+      format: date
+      description: Accounting effective date for this register posting.
+    entry_kind:
+      $ref: "../../openapi.yaml#/components/schemas/JournalEntryKind"
+    entry_memo:
+      type: string
+    posting:
+      $ref: "../../openapi.yaml#/components/schemas/PostingResponse"
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    change_reason:
+      type: string
+AccountRegisterResponse:
+  type: object
+  required:
+    - entries
+  properties:
+    entries:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AccountRegisterEntryResponse"
+    next_cursor:
+      type: string
 PostingRequest:
   type: object
   required:

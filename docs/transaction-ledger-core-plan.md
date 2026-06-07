@@ -661,6 +661,13 @@ Minimum query parameters:
 - `limit` optional with a bounded default
 - `cursor` optional opaque pagination cursor
 
+The account register response is posting-shaped, not transaction-shaped. Each
+row represents one posting to the requested account, ordered by that posting's
+`journal_entries.entry_date` and a stable posting tie-breaker. The row also
+carries transaction and journal-entry context. This matters for delayed
+transfers and clearing accounts where one UI transaction can produce multiple
+dated register rows for the same account.
+
 Use cursor pagination in the OpenAPI contract. Offset can be kept as an
 internal development fallback, but the public API should not require stable
 offsets over an append-only ledger.

@@ -108,6 +108,32 @@ type Posting struct {
 	TagIDs               []int64
 }
 
+type AccountRegisterEntry struct {
+	TransactionID             int64
+	BookID                    int64
+	CorrectionOfTransactionID *int64
+	Status                    string
+	TransactionKind           string
+	TransactionDate           string
+	PayeeID                   *int64
+	PayeeName                 string
+	Description               string
+	ExternalRefHint           string
+	VersionID                 int64
+	VersionSeq                int64
+	SupersedesVersionID       *int64
+	TransactionTagIDs         []int64
+	JournalEntryID            int64
+	EntrySeq                  int64
+	EntryDate                 string
+	EntryKind                 string
+	EntryMemo                 string
+	Posting                   Posting
+	CreatedAt                 string
+	UpdatedAt                 string
+	ChangeReason              string
+}
+
 type ListTransactionsInput struct {
 	AccountID  int64
 	PayeeID    int64
@@ -123,6 +149,11 @@ type ListTransactionsInput struct {
 type ListTransactionsResult struct {
 	Transactions []Transaction
 	NextCursor   string
+}
+
+type AccountRegisterResult struct {
+	Entries    []AccountRegisterEntry
+	NextCursor string
 }
 
 type CreateTransactionInput struct {
@@ -243,9 +274,9 @@ func (s *TransactionService) ListTransactions(ctx context.Context, input ListTra
 	}, nil
 }
 
-func (s *TransactionService) Register(ctx context.Context, accountID int64, input ListTransactionsInput) (ListTransactionsResult, error) {
+func (s *TransactionService) Register(ctx context.Context, accountID int64, input ListTransactionsInput) (AccountRegisterResult, error) {
 	if accountID <= 0 {
-		return ListTransactionsResult{}, ValidationError{Message: "account id is required"}
+		return AccountRegisterResult{}, ValidationError{Message: "account id is required"}
 	}
 	input.AccountID = accountID
 	if strings.TrimSpace(input.Status) == "" {
@@ -254,23 +285,23 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 
 	params, err := s.listParams(input, true)
 	if err != nil {
-		return ListTransactionsResult{}, err
+		return AccountRegisterResult{}, err
 	}
 
-	records, err := s.repository.ListTransactions(ctx, params)
+	records, err := s.repository.AccountRegister(ctx, params)
 	if err != nil {
-		return ListTransactionsResult{}, fmt.Errorf("list register: %w", err)
+		return AccountRegisterResult{}, fmt.Errorf("list register: %w", err)
 	}
 
 	nextCursor := ""
 	if len(records) == params.Limit {
 		last := records[len(records)-1]
-		nextCursor = db.EncodeTransactionCursor(last.TransactionDate, last.ID)
+		nextCursor = db.EncodeTransactionCursor(last.JournalEntry.EntryDate, last.Posting.ID)
 	}
 
-	return ListTransactionsResult{
-		Transactions: toTransactions(records),
-		NextCursor:   nextCursor,
+	return AccountRegisterResult{
+		Entries:    toAccountRegisterEntries(records),
+		NextCursor: nextCursor,
 	}, nil
 }
 
@@ -951,6 +982,54 @@ func toTransactions(records []db.TransactionRecord) []Transaction {
 		transactions = append(transactions, toTransaction(record))
 	}
 	return transactions
+}
+
+func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord) []AccountRegisterEntry {
+	entries := make([]AccountRegisterEntry, 0, len(records))
+	for _, record := range records {
+		transaction := toTransaction(record.Transaction)
+		posting := Posting{
+			ID:                   record.Posting.ID,
+			PostingLineID:        record.Posting.PostingLineID,
+			LineKey:              record.Posting.LineKey,
+			LineSeq:              record.Posting.LineSeq,
+			AccountID:            record.Posting.AccountID,
+			QuantityValue:        record.Posting.QuantityValue,
+			QuantityScale:        record.Posting.QuantityScale,
+			CommodityID:          record.Posting.CommodityID,
+			Memo:                 record.Posting.Memo,
+			ReconciliationStatus: record.Posting.ReconciliationStatus,
+			ClearedOn:            nullableString(record.Posting.ClearedOn),
+			MetadataJSON:         record.Posting.MetadataJSON,
+			TagIDs:               record.Posting.TagIDs,
+		}
+		entries = append(entries, AccountRegisterEntry{
+			TransactionID:             transaction.ID,
+			BookID:                    transaction.BookID,
+			CorrectionOfTransactionID: transaction.CorrectionOfTransactionID,
+			Status:                    transaction.Status,
+			TransactionKind:           transaction.TransactionKind,
+			TransactionDate:           transaction.TransactionDate,
+			PayeeID:                   transaction.PayeeID,
+			PayeeName:                 transaction.PayeeName,
+			Description:               transaction.Description,
+			ExternalRefHint:           transaction.ExternalRefHint,
+			VersionID:                 transaction.VersionID,
+			VersionSeq:                transaction.VersionSeq,
+			SupersedesVersionID:       transaction.SupersedesVersionID,
+			TransactionTagIDs:         transaction.TagIDs,
+			JournalEntryID:            record.JournalEntry.ID,
+			EntrySeq:                  record.JournalEntry.EntrySeq,
+			EntryDate:                 record.JournalEntry.EntryDate,
+			EntryKind:                 record.JournalEntry.EntryKind,
+			EntryMemo:                 record.JournalEntry.Memo,
+			Posting:                   posting,
+			CreatedAt:                 transaction.CreatedAt,
+			UpdatedAt:                 transaction.UpdatedAt,
+			ChangeReason:              transaction.ChangeReason,
+		})
+	}
+	return entries
 }
 
 func toTransaction(record db.TransactionRecord) Transaction {

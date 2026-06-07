@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,6 +134,31 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "view", "current_transaction_versions"))
 	assert.True(t, sqliteObjectExists(t, database, "table", "transaction_search"))
 	assert.True(t, sqliteObjectExists(t, database, "trigger", "transaction_versions_no_supersede_reconciled"))
+}
+
+func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+
+	for _, viewName := range []string{
+		"current_commodity_versions",
+		"current_institution_versions",
+		"current_account_versions",
+		"current_payee_versions",
+	} {
+		viewSQL := readSQLiteObjectSQL(t, database, "view", viewName)
+		assert.Contains(t, viewSQL, "effective_from <= date('now')", viewName)
+		assert.Contains(t, viewSQL, "ORDER BY", viewName)
+		assert.Contains(t, viewSQL, "effective_from DESC", viewName)
+		assert.Contains(t, viewSQL, "version_seq DESC", viewName)
+	}
+
+	transactionViewSQL := readSQLiteObjectSQL(t, database, "view", "current_transaction_versions")
+	assert.NotContains(t, transactionViewSQL, "effective_from", "transaction versions are sequence-only and not effective-dated")
+	assert.Contains(t, transactionViewSQL, "ORDER BY", "current_transaction_versions")
+	assert.Contains(t, transactionViewSQL, "version_seq DESC", "current_transaction_versions")
+	assert.Contains(t, transactionViewSQL, "id DESC", "current_transaction_versions")
 }
 
 func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {
@@ -542,4 +568,19 @@ func sqliteObjectExists(t *testing.T, database *sql.DB, objectType string, objec
 	require.NoError(t, err)
 
 	return exists == 1
+}
+
+func readSQLiteObjectSQL(t *testing.T, database *sql.DB, objectType string, objectName string) string {
+	t.Helper()
+
+	var objectSQL string
+	err := database.QueryRowContext(
+		context.Background(),
+		`SELECT sql FROM sqlite_master WHERE type = ? AND name = ?`,
+		objectType,
+		objectName,
+	).Scan(&objectSQL)
+	require.NoError(t, err)
+
+	return strings.Join(strings.Fields(objectSQL), " ")
 }

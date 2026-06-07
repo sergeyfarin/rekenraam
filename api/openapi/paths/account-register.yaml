@@ -28,11 +28,11 @@ get:
         type: string
   responses:
     "200":
-      description: Register transactions
+      description: Account register entries
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/TransactionsResponse"
+            $ref: "../openapi.yaml#/components/schemas/AccountRegisterResponse"
     "400":
       description: Invalid query
       content:

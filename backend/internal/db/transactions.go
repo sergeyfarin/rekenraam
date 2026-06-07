@@ -45,6 +45,12 @@ type TransactionRecord struct {
 	JournalEntries            []JournalEntryRecord
 }
 
+type AccountRegisterEntryRecord struct {
+	Transaction  TransactionRecord
+	JournalEntry JournalEntryRecord
+	Posting      PostingRecord
+}
+
 type JournalEntryRecord struct {
 	ID                   int64
 	BookID               int64
@@ -265,6 +271,49 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 	}
 
 	return records, nil
+}
+
+func (r *TransactionRepository) AccountRegister(ctx context.Context, params ListTransactionsParams) ([]AccountRegisterEntryRecord, error) {
+	where := []string{"t.book_id = ?", "pv.account_id = ?"}
+	args := []any{params.BookID, params.AccountID}
+
+	if params.Status != "" {
+		where = append(where, "tv.status = ?")
+		args = append(args, params.Status)
+	}
+	if params.AfterDate != "" {
+		where = append(where, "je.entry_date >= ?")
+		args = append(args, params.AfterDate)
+	}
+	if params.BeforeDate != "" {
+		where = append(where, "je.entry_date <= ?")
+		args = append(args, params.BeforeDate)
+	}
+	if params.CursorDate != "" && params.CursorID > 0 {
+		where = append(where, "(je.entry_date < ? OR (je.entry_date = ? AND pv.id < ?))")
+		args = append(args, params.CursorDate, params.CursorDate, params.CursorID)
+	}
+
+	args = append(args, params.Limit)
+	rows, err := r.database.QueryContext(ctx, accountRegisterSelect(`
+		WHERE `+strings.Join(where, " AND ")+`
+		ORDER BY je.entry_date DESC, pv.id DESC
+		LIMIT ?
+	`), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list account register: %w", err)
+	}
+	defer rows.Close()
+
+	entries, err := scanAccountRegisterEntries(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.loadAccountRegisterTags(ctx, entries); err != nil {
+		return nil, err
+	}
+
+	return entries, nil
 }
 
 func (r *TransactionRepository) TransactionByID(ctx context.Context, bookID int64, transactionID int64) (TransactionRecord, error) {
@@ -883,6 +932,24 @@ func (r *TransactionRepository) loadTransactionChildren(ctx context.Context, rec
 	return loadTransactionChildrenQuery(ctx, r.database, records)
 }
 
+func (r *TransactionRepository) loadAccountRegisterTags(ctx context.Context, entries []AccountRegisterEntryRecord) error {
+	for index := range entries {
+		tagIDs, err := transactionTagIDs(ctx, r.database, entries[index].Transaction.ID)
+		if err != nil {
+			return err
+		}
+		entries[index].Transaction.TagIDs = tagIDs
+
+		postingTagIDs, err := postingTagIDs(ctx, r.database, entries[index].Posting.PostingLineID)
+		if err != nil {
+			return err
+		}
+		entries[index].Posting.TagIDs = postingTagIDs
+	}
+
+	return nil
+}
+
 func loadTransactionChildrenTx(ctx context.Context, tx *sql.Tx, records []TransactionRecord) error {
 	return loadTransactionChildrenQuery(ctx, tx, records)
 }
@@ -1099,6 +1166,60 @@ func transactionSelect(extraConditions string) string {
 	` + extraConditions
 }
 
+func accountRegisterSelect(extraConditions string) string {
+	return `
+		SELECT
+			t.id,
+			t.book_id,
+			t.correction_of_transaction_id,
+			t.created_at,
+			t.created_by_user_id,
+			tv.id,
+			tv.version_seq,
+			tv.supersedes_version_id,
+			tv.status,
+			tv.transaction_kind,
+			tv.transaction_date,
+			tv.payee_id,
+			tv.payee_name,
+			tv.description,
+			tv.external_ref_hint,
+			tv.note_markdown,
+			tv.metadata_json,
+			tv.recorded_at,
+			tv.changed_by_user_id,
+			tv.change_reason,
+			je.id,
+			je.book_id,
+			je.transaction_version_id,
+			je.entry_seq,
+			je.entry_date,
+			je.entry_kind,
+			je.memo,
+			je.metadata_json,
+			pv.id,
+			pv.book_id,
+			pv.transaction_version_id,
+			pv.journal_entry_id,
+			pv.posting_line_id,
+			pl.line_key,
+			pv.line_seq,
+			pv.account_id,
+			pv.quantity_value,
+			pv.quantity_scale,
+			pv.commodity_id,
+			pv.memo,
+			pv.reconciliation_status,
+			pv.cleared_on,
+			pv.metadata_json
+		FROM transactions t
+		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
+		JOIN journal_entries je ON je.transaction_version_id = tv.id
+		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		JOIN posting_lines pl ON pl.id = pv.posting_line_id
+	` + extraConditions
+}
+
 func scanTransactionRecords(rows *sql.Rows) ([]TransactionRecord, error) {
 	var records []TransactionRecord
 	for rows.Next() {
@@ -1113,6 +1234,22 @@ func scanTransactionRecords(rows *sql.Rows) ([]TransactionRecord, error) {
 	}
 
 	return records, nil
+}
+
+func scanAccountRegisterEntries(rows *sql.Rows) ([]AccountRegisterEntryRecord, error) {
+	var entries []AccountRegisterEntryRecord
+	for rows.Next() {
+		var entry AccountRegisterEntryRecord
+		if err := scanAccountRegisterEntry(rows, &entry); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate account register: %w", err)
+	}
+
+	return entries, nil
 }
 
 func scanTransactionRecord(scanner interface{ Scan(dest ...any) error }, record *TransactionRecord) error {
@@ -1142,6 +1279,58 @@ func scanTransactionRecord(scanner interface{ Scan(dest ...any) error }, record 
 			return ErrNotFound
 		}
 		return fmt.Errorf("scan transaction: %w", err)
+	}
+
+	return nil
+}
+
+func scanAccountRegisterEntry(scanner interface{ Scan(dest ...any) error }, entry *AccountRegisterEntryRecord) error {
+	if err := scanner.Scan(
+		&entry.Transaction.ID,
+		&entry.Transaction.BookID,
+		&entry.Transaction.CorrectionOfTransactionID,
+		&entry.Transaction.CreatedAt,
+		&entry.Transaction.CreatedByUserID,
+		&entry.Transaction.VersionID,
+		&entry.Transaction.VersionSeq,
+		&entry.Transaction.SupersedesVersionID,
+		&entry.Transaction.Status,
+		&entry.Transaction.TransactionKind,
+		&entry.Transaction.TransactionDate,
+		&entry.Transaction.PayeeID,
+		&entry.Transaction.PayeeName,
+		&entry.Transaction.Description,
+		&entry.Transaction.ExternalRefHint,
+		&entry.Transaction.NoteMarkdown,
+		&entry.Transaction.MetadataJSON,
+		&entry.Transaction.RecordedAt,
+		&entry.Transaction.ChangedByUserID,
+		&entry.Transaction.ChangeReason,
+		&entry.JournalEntry.ID,
+		&entry.JournalEntry.BookID,
+		&entry.JournalEntry.TransactionVersionID,
+		&entry.JournalEntry.EntrySeq,
+		&entry.JournalEntry.EntryDate,
+		&entry.JournalEntry.EntryKind,
+		&entry.JournalEntry.Memo,
+		&entry.JournalEntry.MetadataJSON,
+		&entry.Posting.ID,
+		&entry.Posting.BookID,
+		&entry.Posting.TransactionVersionID,
+		&entry.Posting.JournalEntryID,
+		&entry.Posting.PostingLineID,
+		&entry.Posting.LineKey,
+		&entry.Posting.LineSeq,
+		&entry.Posting.AccountID,
+		&entry.Posting.QuantityValue,
+		&entry.Posting.QuantityScale,
+		&entry.Posting.CommodityID,
+		&entry.Posting.Memo,
+		&entry.Posting.ReconciliationStatus,
+		&entry.Posting.ClearedOn,
+		&entry.Posting.MetadataJSON,
+	); err != nil {
+		return fmt.Errorf("scan account register entry: %w", err)
 	}
 
 	return nil

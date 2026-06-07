@@ -2199,13 +2199,13 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Register transactions */
+                /** @description Account register entries */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TransactionsResponse"];
+                        "application/json": components["schemas"]["AccountRegisterResponse"];
                     };
                 };
                 /** @description Invalid query */
@@ -5046,6 +5046,54 @@ export interface components {
         };
         TransactionsResponse: {
             transactions: components["schemas"]["TransactionResponse"][];
+            next_cursor?: string;
+        };
+        AccountRegisterEntryResponse: {
+            /** Format: int64 */
+            transaction_id: number;
+            /** Format: int64 */
+            book_id: number;
+            /** Format: int64 */
+            correction_of_transaction_id?: number;
+            status: components["schemas"]["TransactionStatus"];
+            transaction_kind: components["schemas"]["TransactionKind"];
+            /**
+             * Format: date
+             * @description User-facing register display date for the parent transaction.
+             */
+            transaction_date: string;
+            /** Format: int64 */
+            payee_id?: number;
+            payee_name?: string;
+            description: string;
+            external_ref_hint?: string;
+            /** Format: int64 */
+            version_id: number;
+            /** Format: int64 */
+            version_seq: number;
+            /** Format: int64 */
+            supersedes_version_id?: number;
+            transaction_tag_ids: number[];
+            /** Format: int64 */
+            journal_entry_id: number;
+            /** Format: int64 */
+            entry_seq: number;
+            /**
+             * Format: date
+             * @description Accounting effective date for this register posting.
+             */
+            entry_date: string;
+            entry_kind: components["schemas"]["JournalEntryKind"];
+            entry_memo: string;
+            posting: components["schemas"]["PostingResponse"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            change_reason: string;
+        };
+        AccountRegisterResponse: {
+            entries: components["schemas"]["AccountRegisterEntryResponse"][];
             next_cursor?: string;
         };
         PostingRequest: {

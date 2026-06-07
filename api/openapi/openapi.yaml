@@ -258,6 +258,10 @@ components:
       $ref: "./components/schemas/transactions.yaml#/TransactionResponse"
     TransactionsResponse:
       $ref: "./components/schemas/transactions.yaml#/TransactionsResponse"
+    AccountRegisterEntryResponse:
+      $ref: "./components/schemas/transactions.yaml#/AccountRegisterEntryResponse"
+    AccountRegisterResponse:
+      $ref: "./components/schemas/transactions.yaml#/AccountRegisterResponse"
     PostingRequest:
       $ref: "./components/schemas/transactions.yaml#/PostingRequest"
     JournalEntryRequest:

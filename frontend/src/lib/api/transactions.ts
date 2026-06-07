@@ -3,6 +3,7 @@ import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$li
 
 export type TransactionResponse = components['schemas']['TransactionResponse'];
 export type TransactionsResponse = components['schemas']['TransactionsResponse'];
+export type AccountRegisterResponse = components['schemas']['AccountRegisterResponse'];
 export type TransactionRequest = components['schemas']['TransactionRequest'];
 export type TransactionLifecycleRequest = components['schemas']['TransactionLifecycleRequest'];
 
@@ -60,7 +61,7 @@ export async function getTransactions(options: TransactionListOptions = {}): Pro
   }
 }
 
-export async function getAccountRegister(accountID: number, options: Omit<TransactionListOptions, 'accountID' | 'payeeID' | 'q' | 'kind'> = {}): Promise<TransactionsResponse> {
+export async function getAccountRegister(accountID: number, options: Omit<TransactionListOptions, 'accountID' | 'payeeID' | 'q' | 'kind'> = {}): Promise<AccountRegisterResponse> {
   try {
     const { data, error, response } = await apiClient.GET('/api/v1/accounts/{account_id}/register', {
       params: {

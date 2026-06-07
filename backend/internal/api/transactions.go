@@ -64,6 +64,37 @@ type transactionsResponse struct {
 	NextCursor   string                `json:"next_cursor,omitempty"`
 }
 
+type accountRegisterResponse struct {
+	Entries    []accountRegisterEntryResponse `json:"entries"`
+	NextCursor string                         `json:"next_cursor,omitempty"`
+}
+
+type accountRegisterEntryResponse struct {
+	TransactionID             int64           `json:"transaction_id"`
+	BookID                    int64           `json:"book_id"`
+	CorrectionOfTransactionID *int64          `json:"correction_of_transaction_id,omitempty"`
+	Status                    string          `json:"status"`
+	TransactionKind           string          `json:"transaction_kind"`
+	TransactionDate           string          `json:"transaction_date"`
+	PayeeID                   *int64          `json:"payee_id,omitempty"`
+	PayeeName                 string          `json:"payee_name,omitempty"`
+	Description               string          `json:"description"`
+	ExternalRefHint           string          `json:"external_ref_hint,omitempty"`
+	VersionID                 int64           `json:"version_id"`
+	VersionSeq                int64           `json:"version_seq"`
+	SupersedesVersionID       *int64          `json:"supersedes_version_id,omitempty"`
+	TransactionTagIDs         []int64         `json:"transaction_tag_ids"`
+	JournalEntryID            int64           `json:"journal_entry_id"`
+	EntrySeq                  int64           `json:"entry_seq"`
+	EntryDate                 string          `json:"entry_date"`
+	EntryKind                 string          `json:"entry_kind"`
+	EntryMemo                 string          `json:"entry_memo"`
+	Posting                   postingResponse `json:"posting"`
+	CreatedAt                 string          `json:"created_at"`
+	UpdatedAt                 string          `json:"updated_at"`
+	ChangeReason              string          `json:"change_reason"`
+}
+
 type transactionRequest struct {
 	Status          string                `json:"status"`
 	TransactionKind string                `json:"transaction_kind"`
@@ -358,9 +389,9 @@ func accountRegister(logger *slog.Logger, authService *app.AuthService, transact
 			return
 		}
 
-		writeJSON(w, http.StatusOK, transactionsResponse{
-			Transactions: toTransactionResponses(result.Transactions),
-			NextCursor:   result.NextCursor,
+		writeJSON(w, http.StatusOK, accountRegisterResponse{
+			Entries:    toAccountRegisterEntryResponses(result.Entries),
+			NextCursor: result.NextCursor,
 		})
 	}
 }
@@ -542,6 +573,52 @@ func toTransactionResponses(transactions []app.Transaction) []transactionRespons
 	responses := make([]transactionResponse, 0, len(transactions))
 	for _, transaction := range transactions {
 		responses = append(responses, toTransactionResponse(transaction))
+	}
+	return responses
+}
+
+func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accountRegisterEntryResponse {
+	responses := make([]accountRegisterEntryResponse, 0, len(entries))
+	for _, entry := range entries {
+		responses = append(responses, accountRegisterEntryResponse{
+			TransactionID:             entry.TransactionID,
+			BookID:                    entry.BookID,
+			CorrectionOfTransactionID: entry.CorrectionOfTransactionID,
+			Status:                    entry.Status,
+			TransactionKind:           entry.TransactionKind,
+			TransactionDate:           entry.TransactionDate,
+			PayeeID:                   entry.PayeeID,
+			PayeeName:                 entry.PayeeName,
+			Description:               entry.Description,
+			ExternalRefHint:           entry.ExternalRefHint,
+			VersionID:                 entry.VersionID,
+			VersionSeq:                entry.VersionSeq,
+			SupersedesVersionID:       entry.SupersedesVersionID,
+			TransactionTagIDs:         entry.TransactionTagIDs,
+			JournalEntryID:            entry.JournalEntryID,
+			EntrySeq:                  entry.EntrySeq,
+			EntryDate:                 entry.EntryDate,
+			EntryKind:                 entry.EntryKind,
+			EntryMemo:                 entry.EntryMemo,
+			Posting: postingResponse{
+				ID:                   entry.Posting.ID,
+				PostingLineID:        entry.Posting.PostingLineID,
+				LineKey:              entry.Posting.LineKey,
+				LineSeq:              entry.Posting.LineSeq,
+				AccountID:            entry.Posting.AccountID,
+				QuantityValue:        entry.Posting.QuantityValue,
+				QuantityScale:        entry.Posting.QuantityScale,
+				CommodityID:          entry.Posting.CommodityID,
+				Memo:                 entry.Posting.Memo,
+				ReconciliationStatus: entry.Posting.ReconciliationStatus,
+				ClearedOn:            entry.Posting.ClearedOn,
+				Metadata:             json.RawMessage(entry.Posting.MetadataJSON),
+				TagIDs:               entry.Posting.TagIDs,
+			},
+			CreatedAt:    entry.CreatedAt,
+			UpdatedAt:    entry.UpdatedAt,
+			ChangeReason: entry.ChangeReason,
+		})
 	}
 	return responses
 }
