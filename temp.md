@@ -231,7 +231,7 @@ This is correct. But where does the 80 USD realized gain figure come from in the
 
 --- 
 
-### Summary
+### Summary 
 
 | Area | Assessment |
 |---|---|
