@@ -229,7 +229,7 @@ This is correct. But where does the 80 USD realized gain figure come from in the
 
 5. **Version ordering constraint.** `transaction_versions.version_seq` should have a DB CHECK `version_seq > 0` and a UNIQUE constraint on `(transaction_id, version_seq)`, matching the pattern for `account_versions` and `commodity_versions`.
 
----
+--- 
 
 ### Summary
 
