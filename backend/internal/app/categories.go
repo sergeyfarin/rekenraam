@@ -492,14 +492,19 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 		}
 	}
 
-	openedOn, err := cleanAccountOpenedOn(input.OpenedOn, input.EffectiveFrom, input.Now)
+	openedInput := input.OpenedOn
+	effectiveInput := input.EffectiveFrom
+	if input.Current == nil && strings.TrimSpace(openedInput) == "" && strings.TrimSpace(effectiveInput) == "" {
+		openedInput = systemAccountDate
+		effectiveInput = systemAccountDate
+	}
+	openedOn, err := cleanAccountOpenedOn(openedInput, effectiveInput, input.Now)
 	if err != nil {
 		return db.AccountSpec{}, err
 	}
 	if input.Current != nil && strings.TrimSpace(input.OpenedOn) == "" {
 		openedOn = input.Current.OpenedOn
 	}
-	effectiveInput := input.EffectiveFrom
 	if strings.TrimSpace(effectiveInput) == "" {
 		effectiveInput = openedOn
 	}

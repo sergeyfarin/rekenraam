@@ -24,7 +24,6 @@ type categoryResponse struct {
 	Metadata         json.RawMessage `json:"metadata"`
 	OpenedOn         string          `json:"opened_on"`
 	ClosedOn         string          `json:"closed_on,omitempty"`
-	EffectiveFrom    string          `json:"effective_from"`
 	ChangeReason     string          `json:"change_reason"`
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
@@ -46,7 +45,6 @@ type createCategoryRequest struct {
 	ParentCategoryID *int64 `json:"parent_category_id"`
 	AllowsPostings   *bool  `json:"allows_postings"`
 	OpenedOn         string `json:"opened_on"`
-	EffectiveFrom    string `json:"effective_from"`
 	ChangeReason     string `json:"change_reason"`
 }
 
@@ -58,12 +56,10 @@ type updateCategoryRequest struct {
 	ClearParent      bool    `json:"clear_parent"`
 	AllowsPostings   *bool   `json:"allows_postings"`
 	OpenedOn         string  `json:"opened_on"`
-	EffectiveFrom    string  `json:"effective_from"`
 	ChangeReason     string  `json:"change_reason"`
 }
 
 type categoryLifecycleRequest struct {
-	EffectiveFrom string `json:"effective_from"`
 	ChangeReason  string `json:"change_reason"`
 }
 
@@ -140,7 +136,6 @@ func createCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 			ParentCategoryID: request.ParentCategoryID,
 			AllowsPostings:   request.AllowsPostings,
 			OpenedOn:         request.OpenedOn,
-			EffectiveFrom:    request.EffectiveFrom,
 			ChangeReason:     request.ChangeReason,
 		})
 		if err != nil {
@@ -184,7 +179,6 @@ func updateCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 			ClearParent:      request.ClearParent,
 			AllowsPostings:   request.AllowsPostings,
 			OpenedOn:         request.OpenedOn,
-			EffectiveFrom:    request.EffectiveFrom,
 			ChangeReason:     request.ChangeReason,
 		})
 		if err != nil {
@@ -204,7 +198,6 @@ func disableCategory(logger *slog.Logger, authService *app.AuthService, category
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			CategoryID:    categoryID,
-			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -218,7 +211,6 @@ func restoreCategory(logger *slog.Logger, authService *app.AuthService, category
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			CategoryID:    categoryID,
-			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -356,7 +348,6 @@ func toCategoryResponse(category app.Category) categoryResponse {
 		Metadata:         json.RawMessage(category.MetadataJSON),
 		OpenedOn:         category.OpenedOn,
 		ClosedOn:         category.ClosedOn,
-		EffectiveFrom:    category.EffectiveFrom,
 		ChangeReason:     category.ChangeReason,
 		CreatedAt:        category.CreatedAt,
 		UpdatedAt:        category.UpdatedAt,

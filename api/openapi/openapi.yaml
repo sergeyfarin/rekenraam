@@ -33,8 +33,6 @@ paths:
     $ref: "./paths/institution-archive.yaml"
   /api/v1/institutions/{institution_id}/restore:
     $ref: "./paths/institution-restore.yaml"
-  /api/v1/institutions/{institution_id}/versions:
-    $ref: "./paths/institution-versions.yaml"
   /api/v1/setup/currencies:
     $ref: "./paths/setup-currencies.yaml"
   /api/v1/accounts:
@@ -49,8 +47,6 @@ paths:
     $ref: "./paths/account-archive.yaml"
   /api/v1/accounts/{account_id}/restore:
     $ref: "./paths/account-restore.yaml"
-  /api/v1/accounts/{account_id}/versions:
-    $ref: "./paths/account-versions.yaml"
   /api/v1/accounts/{account_id}/register:
     $ref: "./paths/account-register.yaml"
   /api/v1/accounts/{account_id}/reconciliations/start:
@@ -113,6 +109,8 @@ paths:
     $ref: "./paths/reconciliation-void.yaml"
   /api/v1/reconciliation-checkpoints/{checkpoint_id}/void:
     $ref: "./paths/reconciliation-checkpoint-void.yaml"
+  /api/v1/audit-events:
+    $ref: "./paths/audit-events.yaml"
 components:
   headers:
     XRequestID:
@@ -338,6 +336,14 @@ components:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationSelectionRequest"
     PostingReconciliationStatusRequest:
       $ref: "./components/schemas/reconciliation.yaml#/PostingReconciliationStatusRequest"
+    AuditEventResponse:
+      $ref: "./components/schemas/audit.yaml#/AuditEventResponse"
+    AuditTargetResponse:
+      $ref: "./components/schemas/audit.yaml#/AuditTargetResponse"
+    AuditChangeResponse:
+      $ref: "./components/schemas/audit.yaml#/AuditChangeResponse"
+    AuditEventsResponse:
+      $ref: "./components/schemas/audit.yaml#/AuditEventsResponse"
     AuthSessionResponse:
       $ref: "./components/schemas/auth-responses.yaml#/AuthSessionResponse"
     LoginResponse:

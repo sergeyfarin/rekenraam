@@ -54,14 +54,14 @@ func TestCreateInstitutionPersistsMetadata(t *testing.T) {
 	assert.Equal(t, `{"images":{"logo_url":"https://example.test/logo.svg","logo_small_url":"/institution-assets/example-small.svg","backdrop_url":"https://example.test/backdrop.jpg"}}`, string(institution.Metadata))
 	assert.Equal(t, "Primary bank", institution.CommentMarkdown)
 
-	var versionCount int
+	var institutionCount int
 	err := database.QueryRowContext(context.Background(), `
 		SELECT COUNT(1)
-		FROM institution_versions
-		WHERE institution_id = ?
-	`, institution.ID).Scan(&versionCount)
+		FROM institutions
+		WHERE id = ?
+	`, institution.ID).Scan(&institutionCount)
 	require.NoError(t, err)
-	assert.Equal(t, 1, versionCount)
+	assert.Equal(t, 1, institutionCount)
 }
 
 func TestReadInstitutionReturnsSingleInstitution(t *testing.T) {
@@ -85,7 +85,7 @@ func TestReadInstitutionReturnsSingleInstitution(t *testing.T) {
 	assert.Equal(t, `{"source":"manual"}`, string(read.Metadata))
 }
 
-func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
+func TestUpdateInstitutionUpdatesCurrentRowAndAudits(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
@@ -97,7 +97,6 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 		"name": "Renamed Bank",
 		"kind": "credit_union",
 		"country_code": "US",
-		"effective_from": "2021-04-05",
 		"change_reason": "Imported corrected institution details"
 	}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -116,23 +115,26 @@ func TestUpdateInstitutionCreatesAppendOnlyVersion(t *testing.T) {
 	assert.Equal(t, "Renamed Bank", body.Name)
 	assert.Equal(t, "credit_union", body.Kind)
 	assert.Equal(t, "US", body.CountryCode)
-	assert.Equal(t, "2021-04-05", body.EffectiveFrom)
 	assert.Equal(t, "Imported corrected institution details", body.ChangeReason)
 
-	var versionCount int
+	var institutionCount int
 	err := database.QueryRowContext(context.Background(), `
 		SELECT COUNT(1)
-		FROM institution_versions
-		WHERE institution_id = ?
-	`, institution.ID).Scan(&versionCount)
+		FROM institutions
+		WHERE id = ?
+	`, institution.ID).Scan(&institutionCount)
 	require.NoError(t, err)
-	assert.Equal(t, 2, versionCount)
+	assert.Equal(t, 1, institutionCount)
 
-	versions := listInstitutionsForSession(t, handler, sessionCookie, "/"+strconvFormatInt(institution.ID)+"/versions")
-	require.Len(t, versions.Institutions, 2)
-	assert.Equal(t, "Renamed Bank", versions.Institutions[0].Name)
-	assert.Equal(t, "Imported corrected institution details", versions.Institutions[0].ChangeReason)
-	assert.Equal(t, "Old Bank", versions.Institutions[1].Name)
+	var operation string
+	err = database.QueryRowContext(context.Background(), `
+		SELECT audit_events.operation
+		FROM institutions
+		JOIN audit_events ON audit_events.id = institutions.updated_audit_event_id
+		WHERE institutions.id = ?
+	`, institution.ID).Scan(&operation)
+	require.NoError(t, err)
+	assert.Equal(t, "institution.update", operation)
 }
 
 func TestUpdateInstitutionCanClearOptionalFields(t *testing.T) {
@@ -327,7 +329,7 @@ func createInstitutionForSession(t *testing.T, handler http.Handler, sessionCook
 
 	handler.ServeHTTP(res, req)
 
-	require.Equal(t, http.StatusCreated, res.Code)
+	require.Equalf(t, http.StatusCreated, res.Code, "response body: %s", res.Body.String())
 
 	var response institutionResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))

@@ -140,13 +140,13 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 		}]
 	}`, http.StatusConflict)
 
-	var versionCount int
+	var transactionCount int
 	require.NoError(t, database.QueryRow(`
 		SELECT COUNT(*)
-		FROM transaction_versions
-		WHERE transaction_id = ?
-	`, reconciled.ID).Scan(&versionCount))
-	assert.Equal(t, 1, versionCount)
+		FROM transactions
+		WHERE id = ?
+	`, reconciled.ID).Scan(&transactionCount))
+	assert.Equal(t, 1, transactionCount)
 
 	correction := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID)+"/correct", `{
 		"transaction_date":"2026-06-08",
@@ -238,7 +238,7 @@ func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
 	checkingPosting := transaction.JournalEntries[0].Postings[0]
 
 	clearedTransactions := changePostingReconciliationStatusForSession(t, handler, sessionCookie, csrfToken, checking.ID, `{
-		"posting_version_ids":[`+strconvFormatInt(checkingPosting.ID)+`],
+		"posting_ids":[`+strconvFormatInt(checkingPosting.ID)+`],
 		"status":"cleared",
 		"cleared_on":"2026-06-07"
 	}`, http.StatusOK)
@@ -262,7 +262,7 @@ func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
 	assert.Equal(t, clearedPosting.ID, started.SelectedPostings[0].PostingID)
 
 	preview := previewReconciliationForSession(t, handler, sessionCookie, csrfToken, started.ID, `{
-		"posting_version_ids":[`+strconvFormatInt(clearedPosting.ID)+`]
+		"posting_ids":[`+strconvFormatInt(clearedPosting.ID)+`]
 	}`, http.StatusOK)
 	assert.Equal(t, int64(0), preview.Difference.QuantityValue)
 	assert.Equal(t, int64(100000), preview.SelectedBalance.QuantityValue)
@@ -348,7 +348,6 @@ func TestTransactionPostingAccountDateAndCommodityValidation(t *testing.T) {
 	closedAccount := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Closed Checking", "asset", "checking", usdID, 2, "2026-01-01")
 	mutateAccountWithBody(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(closedAccount.ID)+"/close", `{
 		"closed_on":"2026-06-06",
-		"effective_from":"2026-06-06",
 		"change_reason":"closed for test"
 	}`, http.StatusOK)
 	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
@@ -526,8 +525,7 @@ func createLedgerAccountOpenedOn(t *testing.T, handler http.Handler, sessionCook
 		"default_commodity_id":`+strconvFormatInt(commodityID)+`,
 		"quantity_scale_override":`+strconv.Itoa(scaleOverride)+`,
 		"allows_postings":true,
-		"opened_on":"`+openedOn+`",
-		"effective_from":"`+openedOn+`"
+		"opened_on":"`+openedOn+`"
 	}`)
 }
 
@@ -539,8 +537,7 @@ func createLedgerAccountNoCommodity(t *testing.T, handler http.Handler, sessionC
 		"account_class":"`+accountClass+`",
 		"account_kind":"`+accountKind+`",
 		"allows_postings":true,
-		"opened_on":"2026-01-01",
-		"effective_from":"2026-01-01"
+		"opened_on":"2026-01-01"
 	}`)
 }
 
@@ -635,7 +632,7 @@ func mutatePayee(t *testing.T, handler http.Handler, sessionCookie *http.Cookie,
 
 	handler.ServeHTTP(res, req)
 
-	require.Equal(t, wantStatus, res.Code)
+	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
 
 	var response payeeResponse
 	if wantStatus >= 200 && wantStatus < 300 {
@@ -661,7 +658,7 @@ func mutateTransaction(t *testing.T, handler http.Handler, sessionCookie *http.C
 
 	handler.ServeHTTP(res, req)
 
-	require.Equal(t, wantStatus, res.Code)
+	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
 
 	var response transactionResponse
 	if wantStatus >= 200 && wantStatus < 300 {

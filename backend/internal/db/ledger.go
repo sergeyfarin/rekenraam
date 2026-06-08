@@ -30,31 +30,23 @@ type LedgerPostingRecord struct {
 }
 
 func (r *TransactionRepository) LedgerAccountsAsOf(ctx context.Context, bookID int64, asOf string) ([]LedgerAccountRecord, error) {
+	_ = asOf
 	rows, err := r.database.QueryContext(ctx, `
 		SELECT
 			a.id,
 			a.book_id,
 			a.system_role,
-			av.status,
-			av.code,
-			av.name,
-			av.account_class,
-			av.account_kind,
-			av.parent_account_id,
-			av.allows_postings
+			a.status,
+			a.code,
+			a.name,
+			a.account_class,
+			a.account_kind,
+			a.parent_account_id,
+			a.allows_postings
 		FROM accounts a
-		JOIN account_versions av ON av.account_id = a.id
 		WHERE a.book_id = ?
-			AND av.id = (
-				SELECT asof_av.id
-				FROM account_versions asof_av
-				WHERE asof_av.account_id = a.id
-					AND asof_av.effective_from <= ?
-				ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC
-				LIMIT 1
-			)
-		ORDER BY av.account_class, av.name COLLATE NOCASE, a.id
-	`, bookID, asOf)
+		ORDER BY a.account_class, a.name COLLATE NOCASE, a.id
+	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read ledger accounts: %w", err)
 	}
@@ -150,40 +142,22 @@ func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledger
 		where = append(where, `EXISTS (
 			SELECT 1
 			FROM accounts category_account
-			JOIN account_versions category_av ON category_av.account_id = category_account.id
 			WHERE category_account.id = pv.account_id
 				AND category_account.book_id = tv.book_id
 				AND category_account.system_role IS NULL
-				AND category_av.id = (
-					SELECT asof_category_av.id
-					FROM account_versions asof_category_av
-					WHERE asof_category_av.account_id = category_account.id
-						AND asof_category_av.effective_from <= je.entry_date
-					ORDER BY asof_category_av.effective_from DESC, asof_category_av.version_seq DESC
-					LIMIT 1
-				)
-				AND category_av.account_class = ?
-				AND category_av.account_kind = category_av.account_class
+				AND category_account.account_class = ?
+				AND category_account.account_kind = category_account.account_class
 		)`)
 		args = append(args, query.CategoryType)
 	} else if query.CategoryOnly {
 		where = append(where, `EXISTS (
 			SELECT 1
 			FROM accounts category_account
-			JOIN account_versions category_av ON category_av.account_id = category_account.id
 			WHERE category_account.id = pv.account_id
 				AND category_account.book_id = tv.book_id
 				AND category_account.system_role IS NULL
-				AND category_av.id = (
-					SELECT asof_category_av.id
-					FROM account_versions asof_category_av
-					WHERE asof_category_av.account_id = category_account.id
-						AND asof_category_av.effective_from <= je.entry_date
-					ORDER BY asof_category_av.effective_from DESC, asof_category_av.version_seq DESC
-					LIMIT 1
-				)
-				AND category_av.account_class IN ('income', 'expense')
-				AND category_av.account_kind = category_av.account_class
+				AND category_account.account_class IN ('income', 'expense')
+				AND category_account.account_kind = category_account.account_class
 		)`)
 	}
 
@@ -195,9 +169,9 @@ func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledger
 			pv.quantity_value,
 			pv.quantity_scale,
 			je.entry_date
-		FROM current_transaction_versions tv
-		JOIN journal_entries je ON je.transaction_version_id = tv.id
-		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		FROM transactions tv
+		JOIN journal_entries je ON je.transaction_id = tv.id
+		JOIN postings pv ON pv.journal_entry_id = je.id
 		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY je.entry_date, pv.id
 	`, args...)

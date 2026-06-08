@@ -427,7 +427,7 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO reconciliation_checkpoint_postings (
 				checkpoint_id,
-				posting_version_id,
+				posting_id,
 				book_id,
 				account_id,
 				commodity_id,
@@ -693,77 +693,21 @@ type appendReconciliationStatusParams struct {
 }
 
 func (r *TransactionRepository) appendReconciliationStatusVersions(ctx context.Context, tx *sql.Tx, params appendReconciliationStatusParams) ([]ReconciliationPostingRecord, error) {
-	byTransaction := map[int64]map[int64]bool{}
-	for _, posting := range params.Postings {
-		lineIDs := byTransaction[posting.TransactionID]
-		if lineIDs == nil {
-			lineIDs = map[int64]bool{}
-			byTransaction[posting.TransactionID] = lineIDs
-		}
-		lineIDs[posting.PostingLineID] = true
-	}
 	reconciled := make([]ReconciliationPostingRecord, 0, len(params.Postings))
-	for transactionID, lineIDs := range byTransaction {
-		current, err := transactionByID(ctx, tx, params.BookID, transactionID)
+	for _, posting := range params.Postings {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE postings
+			SET reconciliation_status = ?,
+				cleared_on = ?
+			WHERE book_id = ? AND id = ?
+		`, params.Status, nullableStringValue(params.ClearedOn), params.BookID, posting.PostingID); err != nil {
+			return nil, fmt.Errorf("update posting reconciliation status: %w", err)
+		}
+		current, err := reconciliationPostingByID(ctx, tx, params.BookID, posting.PostingID)
 		if err != nil {
 			return nil, err
 		}
-		records := []TransactionRecord{current}
-		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
-			return nil, err
-		}
-		current = records[0]
-		spec := transactionSpecFromRecord(current)
-		for entryIndex := range spec.JournalEntries {
-			for postingIndex := range spec.JournalEntries[entryIndex].Postings {
-				posting := &spec.JournalEntries[entryIndex].Postings[postingIndex]
-				if lineIDs[postingLineIDByKey(current, posting.LineKey)] {
-					posting.ReconciliationStatus = params.Status
-					if params.Status == "uncleared" {
-						posting.ClearedOn = sql.NullString{}
-					} else {
-						posting.ClearedOn = params.ClearedOn
-					}
-				}
-			}
-		}
-		newRecord, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
-			BookID:              params.BookID,
-			TransactionID:       transactionID,
-			VersionSeq:          current.VersionSeq + 1,
-			SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
-			Spec:                spec,
-			ReplaceTags:         false,
-			RecordedAt:          params.RecordedAt,
-			ChangedByUserID:     params.ActorUserID,
-			ChangeReason:        params.ChangeReason,
-			ChangeAuditEventID:  params.ChangeAuditEventID,
-			RequestID:           params.RequestID,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range newRecord.JournalEntries {
-			for _, posting := range entry.Postings {
-				if lineIDs[posting.PostingLineID] {
-					reconciled = append(reconciled, ReconciliationPostingRecord{
-						PostingID:            posting.ID,
-						BookID:               posting.BookID,
-						TransactionID:        newRecord.ID,
-						TransactionVersionID: posting.TransactionVersionID,
-						PostingLineID:        posting.PostingLineID,
-						AccountID:            posting.AccountID,
-						CommodityID:          posting.CommodityID,
-						EntryDate:            entry.EntryDate,
-						QuantityValue:        posting.QuantityValue,
-						QuantityScale:        posting.QuantityScale,
-						ReconciliationStatus: posting.ReconciliationStatus,
-						PayeeName:            newRecord.PayeeName,
-						Description:          newRecord.Description,
-					})
-				}
-			}
-		}
+		reconciled = append(reconciled, current)
 	}
 	return reconciled, nil
 }
@@ -1002,16 +946,35 @@ func reconciliationCandidates(ctx context.Context, queryer queryer, session Reco
 	return scanReconciliationPostings(rows)
 }
 
+func reconciliationPostingByID(ctx context.Context, queryer queryer, bookID int64, postingID int64) (ReconciliationPostingRecord, error) {
+	rows, err := queryer.QueryContext(ctx, reconciliationPostingSelect(`
+		WHERE tv.book_id = ?
+			AND pv.id = ?
+	`), bookID, postingID)
+	if err != nil {
+		return ReconciliationPostingRecord{}, fmt.Errorf("read reconciliation posting: %w", err)
+	}
+	defer rows.Close()
+	postings, err := scanReconciliationPostings(rows)
+	if err != nil {
+		return ReconciliationPostingRecord{}, err
+	}
+	if len(postings) != 1 {
+		return ReconciliationPostingRecord{}, ErrReconciliationPosting
+	}
+	return postings[0], nil
+}
+
 func reconciliationSessionPostings(ctx context.Context, queryer queryer, bookID int64, sessionID int64) ([]ReconciliationPostingRecord, error) {
 	rows, err := queryer.QueryContext(ctx, `
 		SELECT
-			posting_version_id, book_id, transaction_id, transaction_version_id,
+			posting_id, book_id, transaction_id, transaction_id,
 			posting_line_id, account_id, commodity_id, entry_date,
 			quantity_value, quantity_scale, '' AS reconciliation_status,
 			payee_name, description
 		FROM reconciliation_session_postings
 		WHERE book_id = ? AND session_id = ?
-		ORDER BY entry_date, posting_version_id
+		ORDER BY entry_date, posting_id
 	`, bookID, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("read reconciliation session postings: %w", err)
@@ -1100,10 +1063,9 @@ func replaceSessionPostings(ctx context.Context, tx *sql.Tx, sessionID int64, po
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO reconciliation_session_postings (
 				session_id,
-				posting_version_id,
+				posting_id,
 				book_id,
 				transaction_id,
-				transaction_version_id,
 				posting_line_id,
 				account_id,
 				commodity_id,
@@ -1116,8 +1078,8 @@ func replaceSessionPostings(ctx context.Context, tx *sql.Tx, sessionID int64, po
 				created_by_user_id,
 				created_audit_event_id
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, sessionID, posting.PostingID, posting.BookID, posting.TransactionID, posting.TransactionVersionID, posting.PostingLineID, posting.AccountID, posting.CommodityID, posting.EntryDate, posting.QuantityValue, posting.QuantityScale, nullableStringValue(posting.PayeeName), posting.Description, occurredAt, actorUserID, auditEventID); err != nil {
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, sessionID, posting.PostingID, posting.BookID, posting.TransactionID, posting.PostingLineID, posting.AccountID, posting.CommodityID, posting.EntryDate, posting.QuantityValue, posting.QuantityScale, nullableStringValue(posting.PayeeName), posting.Description, occurredAt, actorUserID, auditEventID); err != nil {
 			return fmt.Errorf("insert reconciliation session posting: %w", err)
 		}
 	}
@@ -1141,9 +1103,9 @@ func reconciliationPostingSelect(extra string) string {
 			tv.payee_name,
 			tv.description
 		FROM transactions t
-		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
-		JOIN journal_entries je ON je.transaction_version_id = tv.id
-		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		JOIN transactions tv ON tv.id = t.id
+		JOIN journal_entries je ON je.transaction_id = tv.id
+		JOIN postings pv ON pv.journal_entry_id = je.id
 	` + extra
 }
 

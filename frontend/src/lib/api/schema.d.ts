@@ -1348,85 +1348,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/institutions/{institution_id}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List institution versions */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    institution_id: components["parameters"]["InstitutionID"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Institution versions, newest first */
-                200: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InstitutionsResponse"];
-                    };
-                };
-                /** @description Invalid request */
-                400: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Authentication is required */
-                401: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Institution not found */
-                404: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/setup/currencies": {
         parameters: {
             query?: never;
@@ -2109,65 +2030,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/accounts/{account_id}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List account versions */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    account_id: components["parameters"]["AccountID"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Account versions, newest first */
-                200: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AccountsResponse"];
-                    };
-                };
-                /** @description Authentication is required */
-                401: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Account not found */
-                404: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5268,6 +5130,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List audit events */
+        get: {
+            parameters: {
+                query?: {
+                    target_type?: string;
+                    target_id?: number;
+                    table_name?: string;
+                    operation?: string;
+                    actor_user_id?: number;
+                    after?: string;
+                    before?: string;
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Audit events. */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditEventsResponse"];
+                    };
+                };
+                /** @description Invalid filter. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5431,12 +5358,7 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /**
-             * Format: date
-             * @description Calendar date when this institution version became effective.
-             */
-            effective_from: string;
-            /** @description Audit reason recorded for this institution version. */
+            /** @description Audit reason recorded for the latest institution change. */
             change_reason: string;
             /** Format: date-time */
             created_at: string;
@@ -5461,20 +5383,10 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
-            /**
-             * Format: date
-             * @description Omit to use today's date. Future dates are rejected.
-             */
-            effective_from?: string;
             /** @description Omit to use the default reason for the operation. */
             change_reason?: string;
         };
         InstitutionLifecycleRequest: {
-            /**
-             * Format: date
-             * @description Omit to use today's date. Future dates are rejected.
-             */
-            effective_from?: string;
             /** @description Omit to use the default reason for the lifecycle transition. */
             change_reason?: string;
         };
@@ -5531,12 +5443,7 @@ export interface components {
              * @description First date after which ordinary new postings should not target this account. Present for closed and archived accounts.
              */
             closed_on?: string;
-            /**
-             * Format: date
-             * @description Calendar date when this account attribute version became effective for as-of display and reporting.
-             */
-            effective_from: string;
-            /** @description Audit reason recorded for this account version. */
+            /** @description Audit reason recorded for the latest account change. */
             change_reason: string;
             /** Format: date-time */
             created_at: string;
@@ -5572,26 +5479,16 @@ export interface components {
             };
             /**
              * Format: date
-             * @description Account opening date used for future transaction-date validation. Omit to default to the account version date.
+             * @description Account opening date used for future transaction-date validation.
              */
             opened_on?: string;
-            /**
-             * Format: date
-             * @description Account attribute version date for as-of display and reporting. Omit to use today's date. Future dates are rejected.
-             */
-            effective_from?: string;
             /** @description Omit to use the default reason for the operation. */
             change_reason?: string;
         };
         AccountLifecycleRequest: {
             /**
              * Format: date
-             * @description Attribute version date for the lifecycle change. For close, omit to use closed_on. Future dates are rejected.
-             */
-            effective_from?: string;
-            /**
-             * Format: date
-             * @description Account close date used for future transaction-date validation. Close defaults to this value when effective_from is omitted.
+             * @description Account close date used for future transaction-date validation.
              */
             closed_on?: string;
             /** @description Omit to use the default reason for the lifecycle transition. */
@@ -5636,8 +5533,6 @@ export interface components {
             opened_on: string;
             /** Format: date */
             closed_on?: string;
-            /** Format: date */
-            effective_from: string;
             change_reason: string;
             /** Format: date-time */
             created_at: string;
@@ -5657,8 +5552,6 @@ export interface components {
             allows_postings?: boolean;
             /** Format: date */
             opened_on?: string;
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         UpdateCategoryRequest: {
@@ -5673,13 +5566,9 @@ export interface components {
             allows_postings?: boolean;
             /** Format: date */
             opened_on?: string;
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         CategoryLifecycleRequest: {
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         CompleteCategoriesSetupResponse: {
@@ -5744,8 +5633,6 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /** Format: date */
-            effective_from: string;
             change_reason: string;
             /** Format: date-time */
             created_at: string;
@@ -5766,13 +5653,9 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         PayeeLifecycleRequest: {
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         /** @enum {string} */
@@ -5919,12 +5802,6 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /** Format: int64 */
-            version_id: number;
-            /** Format: int64 */
-            version_seq: number;
-            /** Format: int64 */
-            supersedes_version_id?: number;
             tag_ids: number[];
             journal_entries: components["schemas"]["JournalEntryResponse"][];
             /** Format: date-time */
@@ -5957,12 +5834,6 @@ export interface components {
             payee_name?: string;
             description: string;
             external_ref_hint?: string;
-            /** Format: int64 */
-            version_id: number;
-            /** Format: int64 */
-            version_seq: number;
-            /** Format: int64 */
-            supersedes_version_id?: number;
             transaction_tag_ids: number[];
             /** Format: int64 */
             journal_entry_id: number;
@@ -6051,8 +5922,6 @@ export interface components {
             posting_id: number;
             /** Format: int64 */
             transaction_id: number;
-            /** Format: int64 */
-            transaction_version_id: number;
             /** Format: int64 */
             posting_line_id: number;
             /** Format: int64 */
@@ -6147,16 +6016,69 @@ export interface components {
             change_reason?: string;
         };
         ReconciliationSelectionRequest: {
-            posting_version_ids?: number[];
+            posting_ids?: number[];
             change_reason?: string;
         };
         PostingReconciliationStatusRequest: {
-            posting_version_ids: number[];
+            posting_ids: number[];
             /** @enum {string} */
             status: "cleared" | "uncleared";
             /** Format: date */
             cleared_on?: string;
             change_reason?: string;
+        };
+        AuditEventResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            book_id?: number;
+            /** Format: int64 */
+            actor_user_id?: number;
+            /** Format: int64 */
+            auth_session_id?: number;
+            /** Format: date-time */
+            occurred_at: string;
+            request_id?: string;
+            origin_type: string;
+            operation: string;
+            reason: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            targets: components["schemas"]["AuditTargetResponse"][];
+            changes: components["schemas"]["AuditChangeResponse"][];
+        };
+        AuditTargetResponse: {
+            /** Format: int64 */
+            book_id?: number;
+            /** @description Domain target type, such as account, transaction, payee, tag, commodity, or institution. */
+            target_type: string;
+            /** Format: int64 */
+            target_id: number;
+            /** @description Role of this target in the operation. Primary targets use primary. */
+            target_role: string;
+        };
+        AuditChangeResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            book_id?: number;
+            table_name: string;
+            /** Format: int64 */
+            row_id: number;
+            /** @enum {string} */
+            operation: "insert" | "update" | "delete";
+            before?: {
+                [key: string]: unknown;
+            } | null;
+            after?: {
+                [key: string]: unknown;
+            } | null;
+            changed_fields: string[];
+        };
+        AuditEventsResponse: {
+            events: components["schemas"]["AuditEventResponse"][];
+            next_cursor?: string;
         };
         AuthSessionResponse: {
             authenticated: boolean;

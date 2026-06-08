@@ -341,11 +341,15 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 	}
 
 	now := s.now().UTC()
-	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
+	openedOn, err := cleanAccountOpenedOn(input.OpenedOn, current.OpenedOn, now)
 	if err != nil {
 		return Account{}, err
 	}
-	openedOn, err := cleanAccountOpenedOn(input.OpenedOn, current.OpenedOn, now)
+	effectiveInput := input.EffectiveFrom
+	if strings.TrimSpace(effectiveInput) == "" {
+		effectiveInput = openedOn
+	}
+	effectiveFrom, err := cleanEffectiveFrom(effectiveInput, now)
 	if err != nil {
 		return Account{}, err
 	}
@@ -481,6 +485,9 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 		}
 	} else if status == "active" {
 		closedOn = ""
+	}
+	if strings.TrimSpace(effectiveInput) == "" {
+		effectiveInput = current.OpenedOn
 	}
 	effectiveFrom, err := cleanEffectiveFrom(effectiveInput, now)
 	if err != nil {

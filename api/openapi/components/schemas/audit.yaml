@@ -1,0 +1,114 @@
+AuditTargetResponse:
+  type: object
+  required:
+    - target_type
+    - target_id
+    - target_role
+  properties:
+    book_id:
+      type: integer
+      format: int64
+    target_type:
+      type: string
+      description: Domain target type, such as account, transaction, payee, tag, commodity, or institution.
+    target_id:
+      type: integer
+      format: int64
+    target_role:
+      type: string
+      description: Role of this target in the operation. Primary targets use primary.
+AuditChangeResponse:
+  type: object
+  required:
+    - id
+    - table_name
+    - row_id
+    - operation
+    - changed_fields
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    table_name:
+      type: string
+    row_id:
+      type: integer
+      format: int64
+    operation:
+      type: string
+      enum:
+        - insert
+        - update
+        - delete
+    before:
+      type: object
+      additionalProperties: true
+      nullable: true
+    after:
+      type: object
+      additionalProperties: true
+      nullable: true
+    changed_fields:
+      type: array
+      items:
+        type: string
+AuditEventResponse:
+  type: object
+  required:
+    - id
+    - occurred_at
+    - origin_type
+    - operation
+    - reason
+    - metadata
+    - targets
+    - changes
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    actor_user_id:
+      type: integer
+      format: int64
+    auth_session_id:
+      type: integer
+      format: int64
+    occurred_at:
+      type: string
+      format: date-time
+    request_id:
+      type: string
+    origin_type:
+      type: string
+    operation:
+      type: string
+    reason:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    targets:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AuditTargetResponse"
+    changes:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AuditChangeResponse"
+AuditEventsResponse:
+  type: object
+  required:
+    - events
+  properties:
+    events:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/AuditEventResponse"
+    next_cursor:
+      type: string

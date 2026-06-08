@@ -357,32 +357,22 @@ func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, pa
 		return CommodityRecord{}, fmt.Errorf("read currency commodity id: %w", err)
 	}
 
-	result, err = tx.ExecContext(ctx, `
-		INSERT INTO commodity_versions (
-			commodity_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			symbol,
-			display_symbol,
-			name,
-			standard_scale,
-			max_quantity_scale,
-			metadata_json,
-			change_audit_event_id
-		)
-		VALUES (?, 1, ?, ?, ?, 'created from embedded currency catalog', 'active', ?, ?, ?, ?, ?, '{"source":"embedded_currency_catalog"}', ?)
-	`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, auditEventID)
+	_, err = tx.ExecContext(ctx, `
+		UPDATE commodities
+		SET status = 'active',
+			symbol = ?,
+			display_symbol = ?,
+			name = ?,
+			standard_scale = ?,
+			max_quantity_scale = ?,
+			metadata_json = '{"source":"embedded_currency_catalog"}',
+			updated_at = ?,
+			updated_by_user_id = ?,
+			updated_audit_event_id = ?
+		WHERE id = ? AND book_id = ?
+	`, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, params.CreatedAt, params.CreatedByUserID, auditEventID, commodityID, params.BookID)
 	if err != nil {
-		return CommodityRecord{}, fmt.Errorf("insert currency version: %w", err)
-	}
-
-	versionID, err := result.LastInsertId()
-	if err != nil {
-		return CommodityRecord{}, fmt.Errorf("read currency version id: %w", err)
+		return CommodityRecord{}, fmt.Errorf("update currency commodity: %w", err)
 	}
 
 	return CommodityRecord{
@@ -393,7 +383,7 @@ func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, pa
 		IsBuiltin:        true,
 		CreatedAt:        params.CreatedAt,
 		CreatedByUserID:  params.CreatedByUserID,
-		VersionID:        versionID,
+		VersionID:        commodityID,
 		VersionSeq:       1,
 		EffectiveFrom:    params.EffectiveFrom,
 		RecordedAt:       params.CreatedAt,
@@ -441,21 +431,20 @@ func currentCurrencySelect(whereClause string) string {
 			c.is_builtin,
 			c.created_at,
 			c.created_by_user_id,
-			cv.id,
-			cv.version_seq,
-			cv.effective_from,
-			cv.recorded_at,
-			cv.changed_by_user_id,
-			cv.change_reason,
-			cv.status,
-			cv.symbol,
-			cv.display_symbol,
-			cv.name,
-			cv.standard_scale,
-			cv.max_quantity_scale,
-			cv.metadata_json
+			c.id,
+			1,
+			c.created_at,
+			c.updated_at,
+			COALESCE(c.updated_by_user_id, c.created_by_user_id),
+			'',
+			c.status,
+			c.symbol,
+			c.display_symbol,
+			c.name,
+			c.standard_scale,
+			c.max_quantity_scale,
+			c.metadata_json
 		FROM commodities c
-		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
 		WHERE 1 = 1
 	` + whereClause
 }

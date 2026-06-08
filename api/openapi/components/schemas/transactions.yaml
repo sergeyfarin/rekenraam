@@ -124,8 +124,6 @@ TransactionResponse:
     - description
     - note_markdown
     - metadata
-    - version_id
-    - version_seq
     - tag_ids
     - journal_entries
     - created_at
@@ -163,15 +161,6 @@ TransactionResponse:
     metadata:
       type: object
       additionalProperties: true
-    version_id:
-      type: integer
-      format: int64
-    version_seq:
-      type: integer
-      format: int64
-    supersedes_version_id:
-      type: integer
-      format: int64
     tag_ids:
       type: array
       items:
@@ -214,8 +203,6 @@ AccountRegisterEntryResponse:
     - transaction_kind
     - transaction_date
     - description
-    - version_id
-    - version_seq
     - transaction_tag_ids
     - journal_entry_id
     - entry_seq
@@ -254,15 +241,6 @@ AccountRegisterEntryResponse:
       type: string
     external_ref_hint:
       type: string
-    version_id:
-      type: integer
-      format: int64
-    version_seq:
-      type: integer
-      format: int64
-    supersedes_version_id:
-      type: integer
-      format: int64
     transaction_tag_ids:
       type: array
       items:

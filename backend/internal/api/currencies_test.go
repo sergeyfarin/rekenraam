@@ -276,17 +276,13 @@ func TestCreateCurrencyAddsCatalogCurrencyAfterSetup(t *testing.T) {
 	assert.True(t, body.IsBuiltin)
 
 	var createdByUserID int64
-	var versionCount int
 	err := database.QueryRowContext(context.Background(), `
-		SELECT c.created_by_user_id, COUNT(cv.id)
-		FROM commodities c
-		JOIN commodity_versions cv ON cv.commodity_id = c.id
-		WHERE c.id = ?
-		GROUP BY c.created_by_user_id
-	`, body.ID).Scan(&createdByUserID, &versionCount)
+		SELECT created_by_user_id
+		FROM commodities
+		WHERE id = ?
+	`, body.ID).Scan(&createdByUserID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), createdByUserID)
-	assert.Equal(t, 1, versionCount)
 }
 
 func TestCreateCurrencyRejectsDuplicateAndUnknownCatalogCode(t *testing.T) {
@@ -434,28 +430,23 @@ func TestSetDefaultCurrencyValidatesID(t *testing.T) {
 	}
 }
 
-func TestCommodityVersionsAreAppendOnly(t *testing.T) {
+func TestCommodityVersionTablesDoNotExist(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken := createOwnerSession(t, handler)
 	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
-	setup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "USD", Name: "US Dollar"}})
+	completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "USD", Name: "US Dollar"}})
 
-	_, err := database.ExecContext(context.Background(), `
-		UPDATE commodity_versions
-		SET name = 'Changed'
-		WHERE commodity_id = ?
-	`, setup.DefaultCurrency.ID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "append-only")
-
-	_, err = database.ExecContext(context.Background(), `
-		DELETE FROM commodity_versions
-		WHERE commodity_id = ?
-	`, setup.DefaultCurrency.ID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "append-only")
+	var tableCount int
+	err := database.QueryRowContext(context.Background(), `
+		SELECT COUNT(1)
+		FROM sqlite_master
+		WHERE type = 'table'
+		  AND name = 'commodity_versions'
+	`).Scan(&tableCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, tableCount)
 }
 
 func completeCurrencySetupForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, defaultCode string, currencies []setupCurrencySelectionRequest) completeCurrencySetupResponse {

@@ -61,7 +61,6 @@ AccountResponse:
     - comment_markdown
     - metadata
     - opened_on
-    - effective_from
     - change_reason
     - created_at
     - updated_at
@@ -131,14 +130,10 @@ AccountResponse:
       type: string
       format: date
       description: First date after which ordinary new postings should not target this account. Present for closed and archived accounts.
-    effective_from:
-      type: string
-      format: date
-      description: Calendar date when this account attribute version became effective for as-of display and reporting.
     change_reason:
       type: string
       maxLength: 500
-      description: Audit reason recorded for this account version.
+      description: Audit reason recorded for the latest account change.
     created_at:
       type: string
       format: date-time
@@ -206,11 +201,7 @@ AccountRequest:
     opened_on:
       type: string
       format: date
-      description: Account opening date used for future transaction-date validation. Omit to default to the account version date.
-    effective_from:
-      type: string
-      format: date
-      description: Account attribute version date for as-of display and reporting. Omit to use today's date. Future dates are rejected.
+      description: Account opening date used for future transaction-date validation.
     change_reason:
       type: string
       maxLength: 500
@@ -219,14 +210,10 @@ AccountRequest:
 AccountLifecycleRequest:
   type: object
   properties:
-    effective_from:
-      type: string
-      format: date
-      description: Attribute version date for the lifecycle change. For close, omit to use closed_on. Future dates are rejected.
     closed_on:
       type: string
       format: date
-      description: Account close date used for future transaction-date validation. Close defaults to this value when effective_from is omitted.
+      description: Account close date used for future transaction-date validation.
     change_reason:
       type: string
       maxLength: 500

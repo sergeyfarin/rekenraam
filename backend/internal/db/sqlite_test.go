@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,16 +25,13 @@ func TestOpenAppliesRequiredPragmas(t *testing.T) {
 	assert.Equal(t, 1, database.Stats().MaxOpenConnections)
 }
 
-func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
+func TestMigrateAppliesCurrentRowSchemaAndAuditTables(t *testing.T) {
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
 	require.NoError(t, Migrate(context.Background(), database))
 
-	rows, err := database.QueryContext(
-		context.Background(),
-		"SELECT step_key FROM setup_steps ORDER BY step_key",
-	)
+	rows, err := database.QueryContext(context.Background(), "SELECT step_key FROM setup_steps ORDER BY step_key")
 	require.NoError(t, err)
 	defer rows.Close()
 
@@ -47,9 +43,7 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
-	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
-	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
-	assert.Contains(t, readTableColumns(t, database, "setup_steps"), "completed_audit_event_id")
+
 	assert.Subset(t, readTableColumns(t, database, "audit_events"), []string{
 		"id",
 		"book_id",
@@ -62,170 +56,56 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 		"reason",
 		"metadata_json",
 	})
-	assert.Contains(t, readTableColumns(t, database, "books"), "updated_by_user_id")
-	assert.Contains(t, readTableColumns(t, database, "books"), "created_audit_event_id")
-	assert.Contains(t, readTableColumns(t, database, "books"), "updated_audit_event_id")
-	assert.Subset(t, readTableColumns(t, database, "tags"), []string{
-		"id",
+	assert.Subset(t, readTableColumns(t, database, "audit_event_targets"), []string{
+		"audit_event_id",
 		"book_id",
-		"name",
-		"kind",
-		"status",
-		"metadata_json",
-		"created_audit_event_id",
-		"updated_audit_event_id",
+		"target_type",
+		"target_id",
+		"target_role",
 	})
-	assert.True(t, sqliteObjectExists(t, database, "index", "tags_active_name_kind_idx"))
-	assert.Contains(t, readTableColumns(t, database, "commodities"), "created_audit_event_id")
-	assert.Contains(t, readTableColumns(t, database, "commodity_versions"), "change_audit_event_id")
-	assert.Contains(t, readTableColumns(t, database, "institutions"), "created_audit_event_id")
-	assert.Contains(t, readTableColumns(t, database, "institution_versions"), "change_audit_event_id")
-	assert.Subset(t, readTableColumns(t, database, "account_kinds"), []string{
-		"code",
-		"account_class",
-		"base_kind",
-		"is_user_assignable",
-	})
-	assert.Contains(t, readTableColumns(t, database, "accounts"), "created_audit_event_id")
-	assert.Contains(t, readTableColumns(t, database, "account_versions"), "change_audit_event_id")
-	assert.True(t, sqliteObjectExists(t, database, "view", "current_account_versions"))
-	assert.True(t, sqliteObjectExists(t, database, "view", "current_institution_versions"))
-	assert.True(t, sqliteObjectExists(t, database, "view", "current_commodity_versions"))
-	assert.Subset(t, readTableColumns(t, database, "payees"), []string{
-		"id",
+	assert.Subset(t, readTableColumns(t, database, "audit_event_changes"), []string{
+		"audit_event_id",
 		"book_id",
-		"created_audit_event_id",
+		"table_name",
+		"row_id",
+		"operation",
+		"before_json",
+		"after_json",
+		"changed_fields_json",
 	})
-	assert.Subset(t, readTableColumns(t, database, "payee_versions"), []string{
-		"id",
-		"payee_id",
-		"version_seq",
-		"status",
-		"normalized_name",
-	})
-	assert.True(t, sqliteObjectExists(t, database, "view", "current_payee_versions"))
-	assert.Subset(t, readTableColumns(t, database, "transactions"), []string{
-		"id",
-		"book_id",
-		"correction_of_transaction_id",
-		"created_audit_event_id",
-	})
-	assert.Subset(t, readTableColumns(t, database, "transaction_versions"), []string{
-		"id",
-		"transaction_id",
-		"version_seq",
-		"status",
-		"transaction_date",
-	})
-	assert.Subset(t, readTableColumns(t, database, "journal_entries"), []string{
-		"id",
-		"transaction_version_id",
-		"entry_date",
-		"entry_kind",
-	})
-	assert.Subset(t, readTableColumns(t, database, "posting_versions"), []string{
-		"id",
-		"posting_line_id",
-		"account_id",
-		"quantity_value",
-		"quantity_scale",
-		"commodity_id",
-	})
-	assert.True(t, sqliteObjectExists(t, database, "view", "current_transaction_versions"))
-	assert.True(t, sqliteObjectExists(t, database, "table", "transaction_search"))
-	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_sessions"))
-	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_session_postings"))
-	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoints"))
-	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
-}
 
-func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {
-	database := openTestDatabase(t)
+	assert.Subset(t, readTableColumns(t, database, "commodities"), []string{"status", "symbol", "display_symbol", "name", "standard_scale", "max_quantity_scale", "updated_audit_event_id"})
+	assert.Subset(t, readTableColumns(t, database, "institutions"), []string{"status", "name", "kind", "metadata_json", "change_reason", "updated_audit_event_id"})
+	assert.Subset(t, readTableColumns(t, database, "accounts"), []string{"status", "opened_on", "closed_on", "account_class", "account_kind", "allows_postings", "change_reason", "updated_audit_event_id"})
+	assert.Subset(t, readTableColumns(t, database, "payees"), []string{"status", "name", "normalized_name", "default_account_id", "change_reason", "updated_audit_event_id"})
+	assert.Subset(t, readTableColumns(t, database, "transactions"), []string{"status", "transaction_kind", "transaction_date", "payee_id", "description", "change_reason", "updated_audit_event_id"})
+	assert.Subset(t, readTableColumns(t, database, "journal_entries"), []string{"id", "book_id", "transaction_id", "entry_date", "entry_kind"})
+	assert.Subset(t, readTableColumns(t, database, "postings"), []string{"id", "transaction_id", "posting_line_id", "account_id", "quantity_value", "quantity_scale", "commodity_id", "reconciliation_status"})
+	assert.Subset(t, readTableColumns(t, database, "reconciliation_session_postings"), []string{"session_id", "posting_id", "transaction_id", "posting_line_id"})
+	assert.Subset(t, readTableColumns(t, database, "reconciliation_checkpoint_postings"), []string{"checkpoint_id", "posting_id", "account_id", "commodity_id"})
 
-	require.NoError(t, Migrate(context.Background(), database))
-
+	for _, tableName := range []string{
+		"commodity_versions",
+		"institution_versions",
+		"account_versions",
+		"payee_versions",
+		"transaction_versions",
+		"posting_versions",
+	} {
+		assert.False(t, sqliteObjectExists(t, database, "table", tableName), tableName)
+	}
 	for _, viewName := range []string{
 		"current_commodity_versions",
 		"current_institution_versions",
 		"current_account_versions",
 		"current_payee_versions",
+		"current_transaction_versions",
 	} {
-		viewSQL := readSQLiteObjectSQL(t, database, "view", viewName)
-		assert.Contains(t, viewSQL, "effective_from <= date('now')", viewName)
-		assert.Contains(t, viewSQL, "ORDER BY", viewName)
-		assert.Contains(t, viewSQL, "effective_from DESC", viewName)
-		assert.Contains(t, viewSQL, "version_seq DESC", viewName)
+		assert.False(t, sqliteObjectExists(t, database, "view", viewName), viewName)
 	}
 
-	transactionViewSQL := readSQLiteObjectSQL(t, database, "view", "current_transaction_versions")
-	assert.NotContains(t, transactionViewSQL, "effective_from", "transaction versions are sequence-only and not effective-dated")
-	assert.Contains(t, transactionViewSQL, "ORDER BY", "current_transaction_versions")
-	assert.Contains(t, transactionViewSQL, "version_seq DESC", "current_transaction_versions")
-	assert.Contains(t, transactionViewSQL, "id DESC", "current_transaction_versions")
-}
-
-func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {
-	database := openTestDatabase(t)
-
-	require.NoError(t, Migrate(context.Background(), database))
-	insertMinimalFinancialFixture(t, database)
-
-	_, err := database.ExecContext(context.Background(), `
-		INSERT INTO commodity_versions (
-			commodity_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			symbol,
-			display_symbol,
-			name,
-			standard_scale,
-			max_quantity_scale
-		)
-		VALUES (1, 1, '2026-06-06T00:00:00Z', '2026-06-06T00:00:00Z', 1, 'test', 'active', 'USD', '$', 'US Dollar', 2, 2);
-	`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CHECK constraint failed")
-
-	_, err = database.ExecContext(context.Background(), `
-		INSERT INTO institution_versions (
-			institution_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			name,
-			kind
-		)
-		VALUES (1, 0, '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test', 'active', 'Bank', 'bank');
-	`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CHECK constraint failed")
-
-	_, err = database.ExecContext(context.Background(), `
-		INSERT INTO account_versions (
-			account_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			opened_on,
-			name,
-			account_class,
-			account_kind,
-			allows_postings
-		)
-		VALUES (1, 1, '2026-06-06T00:00:00Z', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2026-06-06', 'Checking', 'asset', 'checking', 1);
-	`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CHECK constraint failed")
+	assert.True(t, sqliteObjectExists(t, database, "table", "transaction_search"))
+	assert.True(t, sqliteObjectExists(t, database, "index", "tags_active_name_kind_idx"))
 }
 
 func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
@@ -235,43 +115,10 @@ func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
 	insertMinimalFinancialFixture(t, database)
 
 	_, err := database.ExecContext(context.Background(), `
-		INSERT INTO account_versions (
-			account_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			opened_on,
-			closed_on,
-			name,
-			account_class,
-			account_kind,
-			allows_postings
-		)
-		VALUES (1, 1, '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2026-06-06', '2026-06-07', 'Checking', 'asset', 'checking', 1);
-	`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CHECK constraint failed")
-
-	_, err = database.ExecContext(context.Background(), `
-		INSERT INTO account_versions (
-			account_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			opened_on,
-			closed_on,
-			name,
-			account_class,
-			account_kind,
-			allows_postings
-		)
-		VALUES (1, 1, '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test', 'closed', '2026-06-06', '2026-06-05', 'Checking', 'asset', 'checking', 1);
+		UPDATE accounts
+		SET opened_on = '2026-06-06',
+			closed_on = '2026-06-05'
+		WHERE id = 1;
 	`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
@@ -302,80 +149,17 @@ func TestMigrationsEnforceTagIconFormat(t *testing.T) {
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
 }
 
-func TestPostingCommodityScaleTriggerUsesEntryDate(t *testing.T) {
+func TestPostingCommodityScaleTriggersValidateInsertAndUpdate(t *testing.T) {
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
 	insertMinimalFinancialFixture(t, database)
+	insertMinimalPostedTransactionFixture(t, database)
 
 	_, err := database.ExecContext(context.Background(), `
-		INSERT INTO commodity_versions (
-			commodity_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			symbol,
-			display_symbol,
-			name,
-			standard_scale,
-			max_quantity_scale
-		)
-		VALUES
-			(1, 1, '2026-01-01', '2026-06-01T00:00:00Z', 1, 'initial', 'active', 'USD', '$', 'US Dollar', 2, 2),
-			(1, 2, '2026-06-07', '2026-06-07T00:00:00Z', 1, 'more precision', 'active', 'USD', '$', 'US Dollar', 2, 4);
-
-		INSERT INTO account_versions (
-			account_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			opened_on,
-			name,
-			account_class,
-			account_kind,
-			default_commodity_id,
-			quantity_scale_override,
-			allows_postings
-		)
-		VALUES (1, 1, '2026-01-01', '2026-06-01T00:00:00Z', 1, 'test', 'active', '2026-01-01', 'Checking', 'asset', 'checking', 1, 4, 1);
-
-		INSERT INTO transactions (id, book_id, created_at, created_by_user_id)
-		VALUES (1, 1, '2026-06-01T00:00:00Z', 1);
-
-		INSERT INTO transaction_versions (
-			id,
+		INSERT INTO postings (
 			book_id,
 			transaction_id,
-			version_seq,
-			status,
-			transaction_kind,
-			transaction_date,
-			description,
-			note_markdown,
-			recorded_at,
-			changed_by_user_id,
-			change_reason
-		)
-		VALUES (1, 1, 1, 1, 'posted', 'ordinary', '2026-06-06', '', '', '2026-06-06T00:00:00Z', 1, 'test');
-
-		INSERT INTO journal_entries (id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind)
-		VALUES (1, 1, 1, 1, '2026-06-06', 'ordinary');
-
-		INSERT INTO posting_lines (id, book_id, transaction_id, line_key, created_at, created_by_user_id)
-		VALUES (1, 1, 1, 'line-1', '2026-06-06T00:00:00Z', 1);
-	`)
-	require.NoError(t, err)
-
-	_, err = database.ExecContext(context.Background(), `
-		INSERT INTO posting_versions (
-			book_id,
-			transaction_version_id,
 			journal_entry_id,
 			posting_line_id,
 			line_seq,
@@ -389,43 +173,31 @@ func TestPostingCommodityScaleTriggerUsesEntryDate(t *testing.T) {
 	`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "posting commodity scale is invalid")
-}
 
-func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) {
-	database := openTestDatabase(t)
-
-	require.NoError(t, Migrate(context.Background(), database))
-	insertMinimalFinancialFixture(t, database)
-
-	_, err := database.ExecContext(context.Background(), `
-		INSERT INTO account_versions (
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO postings (
+			book_id,
+			transaction_id,
+			journal_entry_id,
+			posting_line_id,
+			line_seq,
 			account_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			opened_on,
-			name,
-			account_class,
-			account_kind,
-			allows_postings
+			quantity_value,
+			quantity_scale,
+			commodity_id,
+			reconciliation_status
 		)
-		VALUES
-			(1, 1, '2024-01-01', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2024-01-01', 'Current Name', 'asset', 'checking', 1),
-			(1, 2, '2023-01-01', '2026-06-06T00:00:00Z', 1, 'historical correction', 'active', '2024-01-01', 'Old Name', 'asset', 'checking', 1);
+		VALUES (1, 1, 1, 1, 1, 1, 1000, 2, 1, 'uncleared');
 	`)
 	require.NoError(t, err)
 
-	var name string
-	err = database.QueryRowContext(context.Background(), `
-		SELECT name
-		FROM current_account_versions
-		WHERE account_id = 1
-	`).Scan(&name)
-	require.NoError(t, err)
-	assert.Equal(t, "Current Name", name)
+	_, err = database.ExecContext(context.Background(), `
+		UPDATE postings
+		SET quantity_scale = 3
+		WHERE id = 1;
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "posting commodity scale is invalid")
 }
 
 func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
@@ -455,7 +227,7 @@ func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
 }
 
-func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
+func TestBookDefaultCurrencyMustReferenceExistingCurrency(t *testing.T) {
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -477,7 +249,18 @@ func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
 		VALUES (1, 1, 'personal', 'Personal', 999, 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
 	`)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "book default currency must reference a currency in the same book")
+	assert.Contains(t, err.Error(), "FOREIGN KEY constraint failed")
+}
+
+func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {
+	got := withRequiredPragmas("file:var/dev.sqlite?mode=rwc")
+
+	assert.Contains(t, got, "mode=rwc")
+	assert.Contains(t, got, "_pragma=busy_timeout(5000)")
+	assert.Contains(t, got, "_pragma=foreign_keys(1)")
+	assert.Contains(t, got, "_pragma=journal_mode(WAL)")
+	assert.Contains(t, got, "_pragma=synchronous(NORMAL)")
+	assert.Contains(t, got, "_pragma=wal_autocheckpoint(1000)")
 }
 
 func insertMinimalFinancialFixture(t *testing.T, database *sql.DB) {
@@ -498,27 +281,72 @@ func insertMinimalFinancialFixture(t *testing.T, database *sql.DB) {
 		)
 		VALUES (1, 1, 'personal', 'Personal', 1, '2026-06-01T00:00:00Z', '2026-06-01T00:00:00Z');
 
-		INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
-		VALUES (1, 1, 'USD', 'currency', 1, '2026-06-01T00:00:00Z', 1);
+		INSERT INTO commodities (
+			id,
+			book_id,
+			code,
+			kind,
+			is_builtin,
+			status,
+			symbol,
+			display_symbol,
+			name,
+			standard_scale,
+			max_quantity_scale,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id
+		)
+		VALUES (1, 1, 'USD', 'currency', 1, 'active', '$', '$', 'US Dollar', 2, 2, '2026-06-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
 
-		INSERT INTO institutions (id, book_id, created_at, created_by_user_id)
-		VALUES (1, 1, '2026-06-01T00:00:00Z', 1);
-
-		INSERT INTO accounts (id, book_id, created_at, created_by_user_id)
-		VALUES (1, 1, '2026-06-01T00:00:00Z', 1);
+		INSERT INTO accounts (
+			id,
+			book_id,
+			status,
+			opened_on,
+			name,
+			account_class,
+			account_kind,
+			default_commodity_id,
+			quantity_scale_override,
+			allows_postings,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id
+		)
+		VALUES (1, 1, 'active', '2026-01-01', 'Checking', 'asset', 'checking', 1, 4, 1, '2026-06-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
 	`)
 	require.NoError(t, err)
 }
 
-func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {
-	got := withRequiredPragmas("file:var/dev.sqlite?mode=rwc")
+func insertMinimalPostedTransactionFixture(t *testing.T, database *sql.DB) {
+	t.Helper()
 
-	assert.Contains(t, got, "mode=rwc")
-	assert.Contains(t, got, "_pragma=busy_timeout(5000)")
-	assert.Contains(t, got, "_pragma=foreign_keys(1)")
-	assert.Contains(t, got, "_pragma=journal_mode(WAL)")
-	assert.Contains(t, got, "_pragma=synchronous(NORMAL)")
-	assert.Contains(t, got, "_pragma=wal_autocheckpoint(1000)")
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO transactions (
+			id,
+			book_id,
+			status,
+			transaction_kind,
+			transaction_date,
+			description,
+			note_markdown,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id
+		)
+		VALUES (1, 1, 'posted', 'ordinary', '2026-06-06', '', '', '2026-06-06T00:00:00Z', 1, '2026-06-06T00:00:00Z', 1);
+
+		INSERT INTO journal_entries (id, book_id, transaction_id, entry_seq, entry_date, entry_kind)
+		VALUES (1, 1, 1, 1, '2026-06-06', 'ordinary');
+
+		INSERT INTO posting_lines (id, book_id, transaction_id, line_key, created_at, created_by_user_id)
+		VALUES (1, 1, 1, 'line-1', '2026-06-06T00:00:00Z', 1);
+	`)
+	require.NoError(t, err)
 }
 
 func openTestDatabase(t *testing.T) *sql.DB {
@@ -571,19 +399,4 @@ func sqliteObjectExists(t *testing.T, database *sql.DB, objectType string, objec
 	require.NoError(t, err)
 
 	return exists == 1
-}
-
-func readSQLiteObjectSQL(t *testing.T, database *sql.DB, objectType string, objectName string) string {
-	t.Helper()
-
-	var objectSQL string
-	err := database.QueryRowContext(
-		context.Background(),
-		`SELECT sql FROM sqlite_master WHERE type = ? AND name = ?`,
-		objectType,
-		objectName,
-	).Scan(&objectSQL)
-	require.NoError(t, err)
-
-	return strings.Join(strings.Fields(objectSQL), " ")
 }

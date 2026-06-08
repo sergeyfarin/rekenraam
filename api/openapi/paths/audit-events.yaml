@@ -1,0 +1,67 @@
+get:
+  summary: List audit events
+  parameters:
+    - name: target_type
+      in: query
+      schema:
+        type: string
+    - name: target_id
+      in: query
+      schema:
+        type: integer
+        format: int64
+    - name: table_name
+      in: query
+      schema:
+        type: string
+    - name: operation
+      in: query
+      schema:
+        type: string
+    - name: actor_user_id
+      in: query
+      schema:
+        type: integer
+        format: int64
+    - name: after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: before
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+    - name: cursor
+      in: query
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Audit events.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/AuditEventsResponse"
+    "400":
+      description: Invalid filter.
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required.
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

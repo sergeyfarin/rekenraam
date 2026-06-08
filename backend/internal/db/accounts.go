@@ -210,24 +210,11 @@ func (r *AccountRepository) CurrentAccountByID(ctx context.Context, bookID int64
 }
 
 func (r *AccountRepository) ListAccountVersions(ctx context.Context, bookID int64, accountID int64) ([]AccountRecord, error) {
-	rows, err := r.database.QueryContext(ctx, accountSelect("account_versions", `
-		WHERE a.book_id = ? AND a.id = ?
-		ORDER BY av.version_seq DESC
-	`), bookID, accountID)
-	if err != nil {
-		return nil, fmt.Errorf("list account versions: %w", err)
-	}
-	defer rows.Close()
-
-	records, err := scanAccountRecords(rows)
+	record, err := r.CurrentAccountByID(ctx, bookID, accountID)
 	if err != nil {
 		return nil, err
 	}
-	if len(records) == 0 {
-		return nil, ErrNotFound
-	}
-
-	return records, nil
+	return []AccountRecord{record}, nil
 }
 
 func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAccountParams) (AccountRecord, error) {
@@ -455,13 +442,13 @@ func (r *AccountRepository) WouldCreateCycle(ctx context.Context, bookID int64, 
 		WITH RECURSIVE ancestors(id, parent_id) AS (
 			SELECT a.id, av.parent_account_id
 			FROM accounts a
-			JOIN current_account_versions av ON av.account_id = a.id
+			JOIN accounts av ON av.id = a.id
 			WHERE a.book_id = ?
 				AND a.id = ?
 			UNION ALL
 			SELECT parent.id, parent_version.parent_account_id
 			FROM accounts parent
-			JOIN current_account_versions parent_version ON parent_version.account_id = parent.id
+			JOIN accounts parent_version ON parent_version.id = parent.id
 			JOIN ancestors ON ancestors.parent_id = parent.id
 			WHERE parent.book_id = ?
 		)
@@ -492,9 +479,8 @@ func (r *AccountRepository) WouldCreateCycle(ctx context.Context, bookID int64, 
 func (r *AccountRepository) CurrentCommodityByID(ctx context.Context, bookID int64, commodityID int64) (AccountCommodityRecord, error) {
 	var record AccountCommodityRecord
 	if err := r.database.QueryRowContext(ctx, `
-		SELECT c.id, c.book_id, c.kind, cv.status, cv.max_quantity_scale
+		SELECT c.id, c.book_id, c.kind, c.status, c.max_quantity_scale
 		FROM commodities c
-		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
 		WHERE 1 = 1
 			AND c.book_id = ?
 			AND c.id = ?
@@ -606,45 +592,36 @@ type insertAccountVersionParams struct {
 }
 
 func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountVersionParams) (AccountRecord, error) {
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO account_versions (
-			account_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			opened_on,
-			closed_on,
-			code,
-			name,
-			account_class,
-			account_kind,
-			parent_account_id,
-			institution_id,
-			country_code,
-			default_commodity_id,
-			quantity_scale_override,
-			allows_postings,
-			number_last4,
-			external_ref_hint,
-			comment_markdown,
-			metadata_json,
-			change_audit_event_id
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
-	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.OpenedOn, nullableStringValue(params.Spec.ClosedOn), params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
+	_, err := tx.ExecContext(ctx, `
+		UPDATE accounts
+		SET status = ?,
+			opened_on = ?,
+			closed_on = ?,
+			code = NULLIF(?, ''),
+			name = NULLIF(?, ''),
+			account_class = ?,
+			account_kind = ?,
+			parent_account_id = ?,
+			institution_id = ?,
+			country_code = NULLIF(?, ''),
+			default_commodity_id = ?,
+			quantity_scale_override = ?,
+			allows_postings = ?,
+			number_last4 = NULLIF(?, ''),
+			external_ref_hint = NULLIF(?, ''),
+			comment_markdown = ?,
+			metadata_json = ?,
+			updated_at = ?,
+			updated_by_user_id = ?,
+			updated_audit_event_id = ?,
+			change_reason = ?
+		WHERE book_id = ? AND id = ?
+	`, params.Status, params.Spec.OpenedOn, nullableStringValue(params.Spec.ClosedOn), params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID, params.ChangeReason, params.BookID, params.AccountID)
 	if err != nil {
-		return AccountRecord{}, fmt.Errorf("insert account version: %w", err)
+		return AccountRecord{}, fmt.Errorf("update account: %w", err)
 	}
 
-	versionID, err := result.LastInsertId()
-	if err != nil {
-		return AccountRecord{}, fmt.Errorf("read account version id: %w", err)
-	}
-
-	record, err := accountVersionByVersionID(ctx, tx, params.BookID, versionID)
+	record, err := currentAccountByID(ctx, tx, params.BookID, params.AccountID)
 	if err != nil {
 		return AccountRecord{}, err
 	}
@@ -653,14 +630,7 @@ func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountV
 }
 
 func accountVersionByVersionID(ctx context.Context, tx *sql.Tx, bookID int64, versionID int64) (AccountRecord, error) {
-	var record AccountRecord
-	if err := scanAccountRecord(tx.QueryRowContext(ctx, accountSelect("account_versions", `
-		WHERE a.book_id = ? AND av.id = ?
-	`), bookID, versionID), &record); err != nil {
-		return AccountRecord{}, err
-	}
-
-	return record, nil
+	return currentAccountByID(ctx, tx, bookID, versionID)
 }
 
 func currentAccountByID(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64) (AccountRecord, error) {
@@ -686,12 +656,13 @@ func currentSystemAccountByRole(ctx context.Context, tx *sql.Tx, bookID int64, r
 }
 
 func currentAccountSelect(extraConditions string) string {
-	return accountSelect("current_account_versions", `
+	return accountSelect("accounts", `
 		WHERE 1 = 1
 	`+extraConditions)
 }
 
 func accountSelect(versionSource string, whereClause string) string {
+	_ = versionSource
 	return `
 		SELECT
 			a.id,
@@ -699,11 +670,11 @@ func accountSelect(versionSource string, whereClause string) string {
 			a.system_role,
 			a.created_at,
 			a.created_by_user_id,
-			av.id,
-			av.version_seq,
-			av.effective_from,
-			av.recorded_at,
-			av.changed_by_user_id,
+			a.id,
+			1,
+			a.opened_on,
+			a.updated_at,
+			COALESCE(a.updated_by_user_id, a.created_by_user_id),
 			av.change_reason,
 			av.status,
 			av.opened_on,
@@ -723,7 +694,7 @@ func accountSelect(versionSource string, whereClause string) string {
 			av.comment_markdown,
 			av.metadata_json
 		FROM accounts a
-		JOIN ` + versionSource + ` av ON av.account_id = a.id
+		JOIN accounts av ON av.id = a.id
 	` + whereClause
 }
 

@@ -23,9 +23,6 @@ type transactionResponse struct {
 	ExternalRefHint           string                 `json:"external_ref_hint,omitempty"`
 	NoteMarkdown              string                 `json:"note_markdown"`
 	Metadata                  json.RawMessage        `json:"metadata"`
-	VersionID                 int64                  `json:"version_id"`
-	VersionSeq                int64                  `json:"version_seq"`
-	SupersedesVersionID       *int64                 `json:"supersedes_version_id,omitempty"`
 	TagIDs                    []int64                `json:"tag_ids"`
 	JournalEntries            []journalEntryResponse `json:"journal_entries"`
 	CreatedAt                 string                 `json:"created_at"`
@@ -81,9 +78,6 @@ type accountRegisterEntryResponse struct {
 	PayeeName                 string                  `json:"payee_name,omitempty"`
 	Description               string                  `json:"description"`
 	ExternalRefHint           string                  `json:"external_ref_hint,omitempty"`
-	VersionID                 int64                   `json:"version_id"`
-	VersionSeq                int64                   `json:"version_seq"`
-	SupersedesVersionID       *int64                  `json:"supersedes_version_id,omitempty"`
 	TransactionTagIDs         []int64                 `json:"transaction_tag_ids"`
 	JournalEntryID            int64                   `json:"journal_entry_id"`
 	EntrySeq                  int64                   `json:"entry_seq"`
@@ -573,9 +567,6 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		ExternalRefHint:           transaction.ExternalRefHint,
 		NoteMarkdown:              transaction.NoteMarkdown,
 		Metadata:                  json.RawMessage(transaction.MetadataJSON),
-		VersionID:                 transaction.VersionID,
-		VersionSeq:                transaction.VersionSeq,
-		SupersedesVersionID:       transaction.SupersedesVersionID,
 		TagIDs:                    transaction.TagIDs,
 		JournalEntries:            entries,
 		CreatedAt:                 transaction.CreatedAt,
@@ -607,9 +598,6 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 			PayeeName:                 entry.PayeeName,
 			Description:               entry.Description,
 			ExternalRefHint:           entry.ExternalRefHint,
-			VersionID:                 entry.VersionID,
-			VersionSeq:                entry.VersionSeq,
-			SupersedesVersionID:       entry.SupersedesVersionID,
 			TransactionTagIDs:         entry.TransactionTagIDs,
 			JournalEntryID:            entry.JournalEntryID,
 			EntrySeq:                  entry.EntrySeq,

@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, payeeService *app.PayeeService, transactionService *app.TransactionService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, payeeService *app.PayeeService, transactionService *app.TransactionService, auditService *app.AuditService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -49,7 +49,6 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("PATCH /api/v1/institutions/{institution_id}", updateInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/archive", archiveInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/restore", restoreInstitution(logger, authService, institutionService, options))
-		mux.HandleFunc("GET /api/v1/institutions/{institution_id}/versions", listInstitutionVersions(logger, authService, institutionService))
 	}
 	if authService != nil && accountService != nil {
 		mux.HandleFunc("GET /api/v1/accounts", listAccounts(logger, authService, accountService))
@@ -63,7 +62,6 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/reopen", reopenAccount(logger, authService, accountService, options))
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/archive", archiveAccount(logger, authService, accountService, options))
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/restore", restoreAccount(logger, authService, accountService, options))
-		mux.HandleFunc("GET /api/v1/accounts/{account_id}/versions", listAccountVersions(logger, authService, accountService))
 		mux.HandleFunc("POST /api/v1/setup/system-accounts", completeSystemAccountsSetup(logger, authService, accountService, options))
 	}
 	if authService != nil && tagService != nil {
@@ -93,6 +91,9 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/payees/{payee_id}/restore", restorePayee(logger, authService, payeeService, options))
 	}
 	if authService != nil && transactionService != nil {
+		if auditService != nil {
+			mux.HandleFunc("GET /api/v1/audit-events", listAuditEvents(logger, authService, auditService))
+		}
 		mux.HandleFunc("GET /api/v1/ledger/account-balances", accountBalances(logger, authService, transactionService))
 		mux.HandleFunc("GET /api/v1/ledger/category-totals", categoryTotals(logger, authService, transactionService))
 		mux.HandleFunc("GET /api/v1/ledger/net-worth", netWorth(logger, authService, transactionService))

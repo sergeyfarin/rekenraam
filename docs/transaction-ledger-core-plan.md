@@ -1,5 +1,14 @@
 # Transaction Ledger Core Plan
 
+> Supersession note: the current ledger implementation no longer uses
+> `transaction_versions` or `posting_versions`. `transactions`,
+> `journal_entries`, and `postings` store current state directly, while
+> `posting_lines` preserve stable split-line identity. Historical explanation is
+> stored in the centralized audit trail. Reconciliation locks apply at
+> posting/account/commodity scope; metadata-only edits do not invalidate
+> checkpoints, while financial edits to reconciled posting facts require
+> explicit override and checkpoint invalidation.
+
 Status: planning document for the Phase 2 ledger transaction slice.
 
 This document updates the transaction schema proposal after the tags,

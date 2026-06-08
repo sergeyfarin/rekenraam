@@ -11,7 +11,6 @@ PayeeResponse:
     - status
     - name
     - metadata
-    - effective_from
     - change_reason
     - created_at
     - updated_at
@@ -36,9 +35,6 @@ PayeeResponse:
     metadata:
       type: object
       additionalProperties: true
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
     created_at:
@@ -75,18 +71,12 @@ PayeeRequest:
     metadata:
       type: object
       additionalProperties: true
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
   additionalProperties: false
 PayeeLifecycleRequest:
   type: object
   properties:
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
   additionalProperties: false

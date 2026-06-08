@@ -170,9 +170,9 @@ Early rules:
 - Once a transaction is reconciled or belongs to a closed period, prefer corrective transactions over in-place mutation.
 - Preserve import source metadata for imported transactions.
 - Track `created_at` and `updated_at` on mutable records.
-- Use a hybrid audit model. Append-only domain version, lifecycle, correction, import, and reconciliation tables explain the financial or reference-data state change. The `audit_events` table explains the initiating operation: actor, timestamp, request id, optional session id, origin type, operation code, reason, and structured metadata.
-- Create audit events in the same database transaction as the domain rows they explain. One event may be referenced by many rows when the user/system action is a multi-row workflow, such as setup, import commit, system account seeding, transaction correction, or reconciliation. Setup-step completion rows also reference their completion audit event so setup events remain explainable even if a retry finds already-created domain rows.
-- Keep row-local attribution such as `created_at`, `created_by_user_id`, `created_request_id`, `recorded_at`, `changed_by_user_id`, and `change_reason` where it makes history/export queries clear. Treat those fields as denormalized snapshots; do not replace domain history with generic JSON before/after audit blobs.
+- Use current mutable domain rows plus centralized audit history. Domain tables store current state directly; do not add domain `*_versions` tables or `current_*_versions` views for routine entity history.
+- Create audit events in the same database transaction as the domain rows they explain. One event may have many `audit_event_targets` and many `audit_event_changes` rows when the user/system action is a multi-row workflow, such as setup, import commit, system account seeding, transaction correction, or reconciliation. Setup-step completion rows also reference their completion audit event so setup events remain explainable even if a retry finds already-created domain rows.
+- Keep row-local attribution such as `created_at`, `updated_at`, `created_by_user_id`, `updated_by_user_id`, `created_request_id`, and `change_reason` where it makes current-state queries and exports clear. Treat those fields as denormalized snapshots; `audit_event_changes.before_json` and `after_json` are the canonical row-history source.
 - Plan for actor, request, session, origin, and reason fields before multi-user or public deployment features are added.
 
 The first implementation can be modest, but table names and APIs should not assume destructive rewriting is the normal long-term behavior.
@@ -186,7 +186,7 @@ Decisions:
 - Accounts can be reconciled against statement balances.
 - Reconciliation status belongs to postings or account-specific ledger state, not only to the transaction header.
 - A reconciled posting should not be silently changed by a later edit.
-- Reconciliation checkpoints are per account and commodity. A finished checkpoint records statement date, statement balance, and the posting versions selected into that reconciliation.
+- Reconciliation checkpoints are per account and commodity. A finished checkpoint records statement date, statement balance, and the posting rows selected into that reconciliation.
 - Editing a reconciled posting's account, commodity, amount, or entry date requires explicit user override and invalidates that checkpoint plus later active checkpoints for the affected account/commodity. Metadata-only edits such as payee, description, note, external reference, and tags do not invalidate checkpoints.
 - Cash reconciliation uses the same checkpoint model with a manual count source. Differences should be resolved by an ordinary adjustment transaction before finishing; finishing a reconciliation requires zero difference.
 - Period close is deferred, but the transaction schema should leave room for closed-period correction workflows.

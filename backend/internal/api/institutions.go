@@ -21,7 +21,6 @@ type institutionResponse struct {
 	Address         json.RawMessage `json:"address"`
 	CommentMarkdown string          `json:"comment_markdown"`
 	Metadata        json.RawMessage `json:"metadata"`
-	EffectiveFrom   string          `json:"effective_from"`
 	ChangeReason    string          `json:"change_reason"`
 	CreatedAt       string          `json:"created_at"`
 	UpdatedAt       string          `json:"updated_at"`
@@ -39,12 +38,10 @@ type institutionRequest struct {
 	Address         json.RawMessage `json:"address"`
 	CommentMarkdown string          `json:"comment_markdown"`
 	Metadata        json.RawMessage `json:"metadata"`
-	EffectiveFrom   string          `json:"effective_from"`
 	ChangeReason    string          `json:"change_reason"`
 }
 
 type institutionLifecycleRequest struct {
-	EffectiveFrom string `json:"effective_from"`
 	ChangeReason  string `json:"change_reason"`
 }
 
@@ -142,7 +139,6 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
 			MetadataJSON:    rawJSONText(request.Metadata),
-			EffectiveFrom:   request.EffectiveFrom,
 			ChangeReason:    request.ChangeReason,
 		})
 		if err != nil {
@@ -186,7 +182,6 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 			AddressJSON:     rawJSONText(request.Address),
 			CommentMarkdown: request.CommentMarkdown,
 			MetadataJSON:    rawJSONText(request.Metadata),
-			EffectiveFrom:   request.EffectiveFrom,
 			ChangeReason:    request.ChangeReason,
 		})
 		if err != nil {
@@ -206,7 +201,6 @@ func archiveInstitution(logger *slog.Logger, authService *app.AuthService, insti
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			InstitutionID: institutionID,
-			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -220,7 +214,6 @@ func restoreInstitution(logger *slog.Logger, authService *app.AuthService, insti
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			InstitutionID: institutionID,
-			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -305,7 +298,6 @@ func toInstitutionResponse(institution app.Institution) institutionResponse {
 		Address:         json.RawMessage(institution.AddressJSON),
 		CommentMarkdown: institution.CommentMarkdown,
 		Metadata:        json.RawMessage(institution.MetadataJSON),
-		EffectiveFrom:   institution.EffectiveFrom,
 		ChangeReason:    institution.ChangeReason,
 		CreatedAt:       institution.CreatedAt,
 		UpdatedAt:       institution.UpdatedAt,

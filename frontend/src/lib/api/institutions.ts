@@ -63,30 +63,6 @@ export async function getInstitution(institutionID: number): Promise<Institution
   }
 }
 
-export async function getInstitutionVersions(institutionID: number): Promise<InstitutionsResponse> {
-  try {
-    const { data, error, response } = await apiClient.GET('/api/v1/institutions/{institution_id}/versions', {
-      params: {
-        path: {
-          institution_id: institutionID
-        }
-      }
-    });
-
-    if (data !== undefined) {
-      return data;
-    }
-
-    throw toAPIClientError(response, error);
-  } catch (error) {
-    if (error instanceof APIClientError) {
-      throw error;
-    }
-
-    throw toNetworkError(error);
-  }
-}
-
 export async function createInstitution(input: InstitutionRequest, csrfToken: string): Promise<InstitutionResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/institutions', {

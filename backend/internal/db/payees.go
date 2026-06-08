@@ -276,37 +276,28 @@ type insertPayeeVersionParams struct {
 }
 
 func insertPayeeVersion(ctx context.Context, tx *sql.Tx, params insertPayeeVersionParams) (PayeeRecord, error) {
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO payee_versions (
-			payee_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			name,
-			normalized_name,
-			default_account_id,
-			default_category_account_id,
-			metadata_json,
-			change_audit_event_id
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.PayeeID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Name, params.Spec.NormalizedName, nullableInt64Value(params.Spec.DefaultAccountID), nullableInt64Value(params.Spec.DefaultCategoryAccountID), params.Spec.MetadataJSON, params.ChangeAuditEventID)
+	_, err := tx.ExecContext(ctx, `
+		UPDATE payees
+		SET status = ?,
+			name = ?,
+			normalized_name = ?,
+			default_account_id = ?,
+			default_category_account_id = ?,
+			metadata_json = ?,
+			updated_at = ?,
+			updated_by_user_id = ?,
+			updated_audit_event_id = ?,
+			change_reason = ?
+		WHERE id = ?
+	`, params.Status, params.Spec.Name, params.Spec.NormalizedName, nullableInt64Value(params.Spec.DefaultAccountID), nullableInt64Value(params.Spec.DefaultCategoryAccountID), params.Spec.MetadataJSON, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID, params.ChangeReason, params.PayeeID)
 	if err != nil {
-		return PayeeRecord{}, fmt.Errorf("insert payee version: %w", err)
-	}
-
-	versionID, err := result.LastInsertId()
-	if err != nil {
-		return PayeeRecord{}, fmt.Errorf("read payee version id: %w", err)
+		return PayeeRecord{}, fmt.Errorf("update payee: %w", err)
 	}
 
 	var record PayeeRecord
-	if err := scanPayeeRecord(tx.QueryRowContext(ctx, payeeSelect("payee_versions", `
-		WHERE pv.id = ?
-	`), versionID), &record); err != nil {
+	if err := scanPayeeRecord(tx.QueryRowContext(ctx, currentPayeeSelect(`
+		AND p.id = ?
+	`), params.PayeeID), &record); err != nil {
 		return PayeeRecord{}, err
 	}
 
@@ -318,10 +309,9 @@ func ensurePayeeNameAvailable(ctx context.Context, tx *sql.Tx, bookID int64, nor
 	err := tx.QueryRowContext(ctx, `
 		SELECT p.id
 		FROM payees p
-		JOIN current_payee_versions pv ON pv.payee_id = p.id
 		WHERE p.book_id = ?
-			AND pv.status = 'active'
-			AND pv.normalized_name = ?
+			AND p.status = 'active'
+			AND p.normalized_name = ?
 			AND p.id <> ?
 		LIMIT 1
 	`, bookID, normalizedName, excludePayeeID).Scan(&existingID)
@@ -347,24 +337,25 @@ func payeeByID(ctx context.Context, tx *sql.Tx, bookID int64, payeeID int64) (Pa
 }
 
 func currentPayeeSelect(extraConditions string) string {
-	return payeeSelect("current_payee_versions", `
+	return payeeSelect("payees", `
 		WHERE 1 = 1
 	`+extraConditions)
 }
 
 func payeeSelect(versionTable string, extraConditions string) string {
+	_ = versionTable
 	return `
 		SELECT
 			p.id,
 			p.book_id,
 			p.created_at,
 			p.created_by_user_id,
-			pv.id,
-			pv.version_seq,
-			pv.effective_from,
-			pv.recorded_at,
-			pv.changed_by_user_id,
-			pv.change_reason,
+			p.id,
+			1,
+			p.created_at,
+			p.updated_at,
+			COALESCE(p.updated_by_user_id, p.created_by_user_id),
+			p.change_reason,
 			pv.status,
 			pv.name,
 			pv.normalized_name,
@@ -372,7 +363,7 @@ func payeeSelect(versionTable string, extraConditions string) string {
 			pv.default_category_account_id,
 			pv.metadata_json
 		FROM payees p
-		JOIN ` + versionTable + ` pv ON pv.payee_id = p.id
+		JOIN payees pv ON pv.id = p.id
 	` + extraConditions
 }
 

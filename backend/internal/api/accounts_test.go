@@ -47,7 +47,6 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 		"number_last4":"1234",
 		"metadata":{"statement_day":15},
 		"opened_on":"2019-12-01",
-		"effective_from":"2020-01-15",
 		"change_reason":"Imported from legacy account list"
 	}`)
 
@@ -66,7 +65,6 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	assert.Equal(t, `{"statement_day":15}`, string(account.Metadata))
 	assert.Equal(t, "2019-12-01", account.OpenedOn)
 	assert.Equal(t, "", account.ClosedOn)
-	assert.Equal(t, "2020-01-15", account.EffectiveFrom)
 	assert.Equal(t, "Imported from legacy account list", account.ChangeReason)
 
 	var (
@@ -86,10 +84,9 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 			ae.request_id IS NOT NULL,
 			ae.reason
 		FROM accounts a
-		JOIN account_versions av ON av.account_id = a.id
-		JOIN audit_events ae ON ae.id = av.change_audit_event_id
+		JOIN audit_events ae ON ae.id = a.updated_audit_event_id
 		WHERE a.id = ?
-		  AND a.created_audit_event_id = av.change_audit_event_id
+		  AND a.created_audit_event_id = a.updated_audit_event_id
 	`, account.ID).Scan(&operation, &originType, &actorUserID, &hasAuthSessionID, &hasRequestID, &reason)
 	require.NoError(t, err)
 	assert.Equal(t, "account.create", operation)
@@ -100,7 +97,7 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	assert.Equal(t, "Imported from legacy account list", reason)
 }
 
-func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing.T) {
+func TestUpdateAccountUpdatesCurrentRowAndClearsOptionalFields(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
@@ -122,7 +119,6 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 		"account_class":"asset",
 		"account_kind":"savings",
 		"default_commodity_id":`+strconvFormatInt(currencyID)+`,
-		"effective_from":"2021-02-03",
 		"change_reason":"Corrected account name"
 	}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -145,35 +141,27 @@ func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing
 	assert.Equal(t, "{}", string(body.Metadata))
 	assert.Equal(t, account.OpenedOn, body.OpenedOn)
 	assert.Equal(t, "", body.ClosedOn)
-	assert.Equal(t, "2021-02-03", body.EffectiveFrom)
 	assert.Equal(t, "Corrected account name", body.ChangeReason)
 
-	var versionCount int
+	var accountCount int
 	err := database.QueryRowContext(context.Background(), `
 		SELECT COUNT(1)
-		FROM account_versions
-		WHERE account_id = ?
-	`, account.ID).Scan(&versionCount)
+		FROM accounts
+		WHERE id = ?
+	`, account.ID).Scan(&accountCount)
 	require.NoError(t, err)
-	assert.Equal(t, 2, versionCount)
+	assert.Equal(t, 1, accountCount)
 
 	var operation string
 	err = database.QueryRowContext(context.Background(), `
 		SELECT audit_events.operation
-		FROM account_versions
-		JOIN audit_events ON audit_events.id = account_versions.change_audit_event_id
-		WHERE account_versions.account_id = ?
-		ORDER BY account_versions.version_seq DESC
+		FROM accounts
+		JOIN audit_events ON audit_events.id = accounts.updated_audit_event_id
+		WHERE accounts.id = ?
 		LIMIT 1
 	`, account.ID).Scan(&operation)
 	require.NoError(t, err)
 	assert.Equal(t, "account.update", operation)
-
-	versions := listAccountsForSession(t, handler, sessionCookie, "/"+strconvFormatInt(account.ID)+"/versions")
-	require.Len(t, versions.Accounts, 2)
-	assert.Equal(t, "Renamed Savings", versions.Accounts[0].Name)
-	assert.Equal(t, "Corrected account name", versions.Accounts[0].ChangeReason)
-	assert.Equal(t, "Old Savings", versions.Accounts[1].Name)
 }
 
 func TestAccountLifecycleRequiresCloseBeforeArchiveAndRestoresClosed(t *testing.T) {
@@ -196,7 +184,6 @@ func TestAccountLifecycleRequiresCloseBeforeArchiveAndRestoresClosed(t *testing.
 		"change_reason":"Closed after card replacement"
 	}`, http.StatusOK)
 	assert.Equal(t, "closed", closed.Status)
-	assert.Equal(t, "2022-05-01", closed.EffectiveFrom)
 	assert.Equal(t, "2022-05-01", closed.ClosedOn)
 	assert.Equal(t, "Closed after card replacement", closed.ChangeReason)
 
@@ -426,7 +413,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 
 	handler.ServeHTTP(res, req)
 
-	require.Equal(t, http.StatusCreated, res.Code)
+	require.Equalf(t, http.StatusCreated, res.Code, "response body: %s", res.Body.String())
 
 	var body completeSystemAccountsSetupResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
@@ -451,7 +438,6 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		assert.Equal(t, "active", account.Status)
 		assert.Nil(t, account.DefaultCommodityID)
 		assert.Equal(t, "0001-01-01", account.OpenedOn)
-		assert.Equal(t, "0001-01-01", account.EffectiveFrom)
 
 		expected, ok := expectedRoles[account.SystemRole]
 		require.True(t, ok, "unexpected system role %q", account.SystemRole)
@@ -535,9 +521,9 @@ func TestSystemAccountSetupRerunWithoutCompletedStepKeepsAuditEventReferenced(t 
 			WHERE completed_audit_event_id IS NOT NULL
 		  )
 		  AND id NOT IN (
-			SELECT change_audit_event_id
-			FROM account_versions
-			WHERE change_audit_event_id IS NOT NULL
+			SELECT updated_audit_event_id
+			FROM accounts
+			WHERE updated_audit_event_id IS NOT NULL
 		  )
 	`).Scan(&unreferencedSetupEvents)
 	require.NoError(t, err)
@@ -602,7 +588,7 @@ func createAccountForSession(t *testing.T, handler http.Handler, sessionCookie *
 
 	handler.ServeHTTP(res, req)
 
-	require.Equal(t, http.StatusCreated, res.Code)
+	require.Equalf(t, http.StatusCreated, res.Code, "response body: %s", res.Body.String())
 
 	var response accountResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))

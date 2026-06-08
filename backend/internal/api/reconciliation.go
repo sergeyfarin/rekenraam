@@ -52,7 +52,6 @@ type reconciliationCheckpointResponse struct {
 type reconciliationPostingResponse struct {
 	PostingID            int64  `json:"posting_id"`
 	TransactionID        int64  `json:"transaction_id"`
-	TransactionVersionID int64  `json:"transaction_version_id"`
 	PostingLineID        int64  `json:"posting_line_id"`
 	AccountID            int64  `json:"account_id"`
 	CommodityID          int64  `json:"commodity_id"`
@@ -80,15 +79,15 @@ type startReconciliationRequest struct {
 }
 
 type reconciliationSelectionRequest struct {
-	PostingVersionIDs []int64 `json:"posting_version_ids"`
-	ChangeReason      string  `json:"change_reason"`
+	PostingIDs   []int64 `json:"posting_ids"`
+	ChangeReason string  `json:"change_reason"`
 }
 
 type changePostingReconciliationStatusRequest struct {
-	PostingVersionIDs []int64 `json:"posting_version_ids"`
-	Status            string  `json:"status"`
-	ClearedOn         string  `json:"cleared_on"`
-	ChangeReason      string  `json:"change_reason"`
+	PostingIDs   []int64 `json:"posting_ids"`
+	Status       string  `json:"status"`
+	ClearedOn    string  `json:"cleared_on"`
+	ChangeReason string  `json:"change_reason"`
 }
 
 func startReconciliation(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
@@ -175,7 +174,7 @@ func reconciliationSelectionMutation(logger *slog.Logger, authService *app.AuthS
 			RequestID:         RequestIDFromContext(r.Context()),
 			OriginType:        "browser_api",
 			SessionID:         sessionID,
-			PostingVersionIDs: request.PostingVersionIDs,
+			PostingVersionIDs: request.PostingIDs,
 			ChangeReason:      request.ChangeReason,
 		}
 		var (
@@ -338,7 +337,7 @@ func changePostingReconciliationStatus(logger *slog.Logger, authService *app.Aut
 			RequestID:         RequestIDFromContext(r.Context()),
 			OriginType:        "browser_api",
 			AccountID:         accountID,
-			PostingVersionIDs: request.PostingVersionIDs,
+			PostingVersionIDs: request.PostingIDs,
 			Status:            request.Status,
 			ClearedOn:         request.ClearedOn,
 			ChangeReason:      request.ChangeReason,
@@ -419,7 +418,6 @@ func toReconciliationPostingResponses(postings []app.ReconciliationPosting) []re
 		responses = append(responses, reconciliationPostingResponse{
 			PostingID:            posting.PostingID,
 			TransactionID:        posting.TransactionID,
-			TransactionVersionID: posting.TransactionVersionID,
 			PostingLineID:        posting.PostingLineID,
 			AccountID:            posting.AccountID,
 			CommodityID:          posting.CommodityID,

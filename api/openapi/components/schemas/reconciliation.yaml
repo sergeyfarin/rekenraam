@@ -23,7 +23,6 @@ ReconciliationPostingResponse:
   required:
     - posting_id
     - transaction_id
-    - transaction_version_id
     - posting_line_id
     - account_id
     - commodity_id
@@ -37,9 +36,6 @@ ReconciliationPostingResponse:
       type: integer
       format: int64
     transaction_id:
-      type: integer
-      format: int64
-    transaction_version_id:
       type: integer
       format: int64
     posting_line_id:
@@ -236,7 +232,7 @@ StartReconciliationRequest:
 ReconciliationSelectionRequest:
   type: object
   properties:
-    posting_version_ids:
+    posting_ids:
       type: array
       items:
         type: integer
@@ -247,10 +243,10 @@ ReconciliationSelectionRequest:
 PostingReconciliationStatusRequest:
   type: object
   required:
-    - posting_version_ids
+    - posting_ids
     - status
   properties:
-    posting_version_ids:
+    posting_ids:
       type: array
       items:
         type: integer

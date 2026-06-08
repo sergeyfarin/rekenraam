@@ -19,7 +19,6 @@ CategoryResponse:
     - is_builtin
     - metadata
     - opened_on
-    - effective_from
     - change_reason
     - created_at
     - updated_at
@@ -64,9 +63,6 @@ CategoryResponse:
     closed_on:
       type: string
       format: date
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
     created_at:
@@ -107,9 +103,6 @@ CreateCategoryRequest:
     opened_on:
       type: string
       format: date
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
   additionalProperties: false
@@ -136,18 +129,12 @@ UpdateCategoryRequest:
     opened_on:
       type: string
       format: date
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
   additionalProperties: false
 CategoryLifecycleRequest:
   type: object
   properties:
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
   additionalProperties: false

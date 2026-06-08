@@ -32,7 +32,6 @@ type accountResponse struct {
 	Metadata              json.RawMessage `json:"metadata"`
 	OpenedOn              string          `json:"opened_on"`
 	ClosedOn              string          `json:"closed_on,omitempty"`
-	EffectiveFrom         string          `json:"effective_from"`
 	ChangeReason          string          `json:"change_reason"`
 	CreatedAt             string          `json:"created_at"`
 	UpdatedAt             string          `json:"updated_at"`
@@ -58,12 +57,10 @@ type accountRequest struct {
 	CommentMarkdown       string          `json:"comment_markdown"`
 	Metadata              json.RawMessage `json:"metadata"`
 	OpenedOn              string          `json:"opened_on"`
-	EffectiveFrom         string          `json:"effective_from"`
 	ChangeReason          string          `json:"change_reason"`
 }
 
 type accountLifecycleRequest struct {
-	EffectiveFrom string `json:"effective_from"`
 	ClosedOn      string `json:"closed_on"`
 	ChangeReason  string `json:"change_reason"`
 }
@@ -182,7 +179,6 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			CommentMarkdown:       request.CommentMarkdown,
 			MetadataJSON:          rawJSONText(request.Metadata),
 			OpenedOn:              request.OpenedOn,
-			EffectiveFrom:         request.EffectiveFrom,
 			ChangeReason:          request.ChangeReason,
 		})
 		if err != nil {
@@ -234,7 +230,6 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			CommentMarkdown:       request.CommentMarkdown,
 			MetadataJSON:          rawJSONText(request.Metadata),
 			OpenedOn:              request.OpenedOn,
-			EffectiveFrom:         request.EffectiveFrom,
 			ChangeReason:          request.ChangeReason,
 		})
 		if err != nil {
@@ -254,7 +249,6 @@ func closeAccount(logger *slog.Logger, authService *app.AuthService, accountServ
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			AccountID:     accountID,
-			EffectiveFrom: request.EffectiveFrom,
 			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
@@ -269,7 +263,6 @@ func reopenAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			AccountID:     accountID,
-			EffectiveFrom: request.EffectiveFrom,
 			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
@@ -284,7 +277,6 @@ func archiveAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			AccountID:     accountID,
-			EffectiveFrom: request.EffectiveFrom,
 			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
@@ -299,7 +291,6 @@ func restoreAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			AccountID:     accountID,
-			EffectiveFrom: request.EffectiveFrom,
 			ClosedOn:      request.ClosedOn,
 			ChangeReason:  request.ChangeReason,
 		})
@@ -416,7 +407,6 @@ func toAccountResponse(account app.Account) accountResponse {
 		Metadata:              json.RawMessage(account.MetadataJSON),
 		OpenedOn:              account.OpenedOn,
 		ClosedOn:              account.ClosedOn,
-		EffectiveFrom:         account.EffectiveFrom,
 		ChangeReason:          account.ChangeReason,
 		CreatedAt:             account.CreatedAt,
 		UpdatedAt:             account.UpdatedAt,

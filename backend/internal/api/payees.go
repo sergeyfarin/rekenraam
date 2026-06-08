@@ -18,7 +18,6 @@ type payeeResponse struct {
 	DefaultAccountID         *int64          `json:"default_account_id,omitempty"`
 	DefaultCategoryAccountID *int64          `json:"default_category_account_id,omitempty"`
 	Metadata                 json.RawMessage `json:"metadata"`
-	EffectiveFrom            string          `json:"effective_from"`
 	ChangeReason             string          `json:"change_reason"`
 	CreatedAt                string          `json:"created_at"`
 	UpdatedAt                string          `json:"updated_at"`
@@ -35,12 +34,10 @@ type payeeRequest struct {
 	DefaultCategoryAccountID *int64          `json:"default_category_account_id"`
 	ClearDefaultCategory     bool            `json:"clear_default_category"`
 	Metadata                 json.RawMessage `json:"metadata"`
-	EffectiveFrom            string          `json:"effective_from"`
 	ChangeReason             string          `json:"change_reason"`
 }
 
 type payeeLifecycleRequest struct {
-	EffectiveFrom string `json:"effective_from"`
 	ChangeReason  string `json:"change_reason"`
 }
 
@@ -118,7 +115,6 @@ func createPayee(logger *slog.Logger, authService *app.AuthService, payeeService
 			DefaultAccountID:         request.DefaultAccountID,
 			DefaultCategoryAccountID: request.DefaultCategoryAccountID,
 			MetadataJSON:             rawJSONText(request.Metadata),
-			EffectiveFrom:            request.EffectiveFrom,
 			ChangeReason:             request.ChangeReason,
 		})
 		if err != nil {
@@ -167,7 +163,6 @@ func updatePayee(logger *slog.Logger, authService *app.AuthService, payeeService
 			DefaultCategoryAccountID: request.DefaultCategoryAccountID,
 			ClearDefaultCategory:     request.ClearDefaultCategory,
 			MetadataJSON:             metadata,
-			EffectiveFrom:            request.EffectiveFrom,
 			ChangeReason:             request.ChangeReason,
 		})
 		if err != nil {
@@ -187,7 +182,6 @@ func archivePayee(logger *slog.Logger, authService *app.AuthService, payeeServic
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			PayeeID:       payeeID,
-			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -201,7 +195,6 @@ func restorePayee(logger *slog.Logger, authService *app.AuthService, payeeServic
 			RequestID:     RequestIDFromContext(r.Context()),
 			OriginType:    "browser_api",
 			PayeeID:       payeeID,
-			EffectiveFrom: request.EffectiveFrom,
 			ChangeReason:  request.ChangeReason,
 		})
 	})
@@ -268,7 +261,6 @@ func toPayeeResponse(payee app.Payee) payeeResponse {
 		DefaultAccountID:         payee.DefaultAccountID,
 		DefaultCategoryAccountID: payee.DefaultCategoryAccountID,
 		Metadata:                 json.RawMessage(payee.MetadataJSON),
-		EffectiveFrom:            payee.EffectiveFrom,
 		ChangeReason:             payee.ChangeReason,
 		CreatedAt:                payee.CreatedAt,
 		UpdatedAt:                payee.UpdatedAt,

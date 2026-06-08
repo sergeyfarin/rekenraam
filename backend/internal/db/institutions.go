@@ -127,24 +127,11 @@ func (r *InstitutionRepository) CurrentInstitutionByID(ctx context.Context, book
 }
 
 func (r *InstitutionRepository) ListInstitutionVersions(ctx context.Context, bookID int64, institutionID int64) ([]InstitutionRecord, error) {
-	rows, err := r.database.QueryContext(ctx, institutionSelect("institution_versions", `
-		WHERE i.book_id = ? AND i.id = ?
-		ORDER BY iv.version_seq DESC
-	`), bookID, institutionID)
-	if err != nil {
-		return nil, fmt.Errorf("list institution versions: %w", err)
-	}
-	defer rows.Close()
-
-	records, err := scanInstitutionRecords(rows)
+	record, err := r.CurrentInstitutionByID(ctx, bookID, institutionID)
 	if err != nil {
 		return nil, err
 	}
-	if len(records) == 0 {
-		return nil, ErrNotFound
-	}
-
-	return records, nil
+	return []InstitutionRecord{record}, nil
 }
 
 func (r *InstitutionRepository) CreateInstitution(ctx context.Context, params CreateInstitutionParams) (InstitutionRecord, error) {
@@ -300,36 +287,27 @@ type insertInstitutionVersionParams struct {
 }
 
 func insertInstitutionVersion(ctx context.Context, tx *sql.Tx, params insertInstitutionVersionParams) (InstitutionRecord, error) {
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO institution_versions (
-			institution_id,
-			version_seq,
-			effective_from,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			status,
-			name,
-			kind,
-			country_code,
-			website,
-			address_json,
-			comment_markdown,
-			metadata_json,
-			change_audit_event_id
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
-	`, params.InstitutionID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.Name, params.Spec.Kind, params.Spec.CountryCode, params.Spec.Website, params.Spec.AddressJSON, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
+	_, err := tx.ExecContext(ctx, `
+		UPDATE institutions
+		SET status = ?,
+			name = ?,
+			kind = ?,
+			country_code = NULLIF(?, ''),
+			website = NULLIF(?, ''),
+			address_json = ?,
+			comment_markdown = ?,
+			metadata_json = ?,
+			change_reason = ?,
+			updated_at = ?,
+			updated_by_user_id = ?,
+			updated_audit_event_id = ?
+		WHERE book_id = ? AND id = ?
+	`, params.Status, params.Spec.Name, params.Spec.Kind, params.Spec.CountryCode, params.Spec.Website, params.Spec.AddressJSON, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeReason, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID, params.BookID, params.InstitutionID)
 	if err != nil {
-		return InstitutionRecord{}, fmt.Errorf("insert institution version: %w", err)
+		return InstitutionRecord{}, fmt.Errorf("update institution: %w", err)
 	}
 
-	versionID, err := result.LastInsertId()
-	if err != nil {
-		return InstitutionRecord{}, fmt.Errorf("read institution version id: %w", err)
-	}
-
-	record, err := institutionVersionByVersionID(ctx, tx, params.BookID, versionID)
+	record, err := currentInstitutionByID(ctx, tx, params.BookID, params.InstitutionID)
 	if err != nil {
 		return InstitutionRecord{}, err
 	}
@@ -338,14 +316,7 @@ func insertInstitutionVersion(ctx context.Context, tx *sql.Tx, params insertInst
 }
 
 func institutionVersionByVersionID(ctx context.Context, tx *sql.Tx, bookID int64, versionID int64) (InstitutionRecord, error) {
-	var record InstitutionRecord
-	if err := scanInstitutionRecord(tx.QueryRowContext(ctx, institutionSelect("institution_versions", `
-		WHERE i.book_id = ? AND iv.id = ?
-	`), bookID, versionID), &record); err != nil {
-		return InstitutionRecord{}, err
-	}
-
-	return record, nil
+	return currentInstitutionByID(ctx, tx, bookID, versionID)
 }
 
 func readBookForUpdate(ctx context.Context, tx *sql.Tx, bookID int64) (int64, error) {
@@ -376,23 +347,24 @@ func currentInstitutionByID(ctx context.Context, tx *sql.Tx, bookID int64, insti
 }
 
 func currentInstitutionSelect(whereClause string) string {
-	return institutionSelect("current_institution_versions", `
+	return institutionSelect("institutions", `
 		WHERE 1 = 1
 	`+whereClause)
 }
 
 func institutionSelect(versionSource string, whereClause string) string {
+	_ = versionSource
 	return `
 		SELECT
 			i.id,
 			i.book_id,
 			i.created_at,
 			i.created_by_user_id,
-			iv.id,
-			iv.version_seq,
-			iv.effective_from,
-			iv.recorded_at,
-			iv.changed_by_user_id,
+			i.id,
+			1,
+			i.created_at,
+			i.updated_at,
+			COALESCE(i.updated_by_user_id, i.created_by_user_id),
 			iv.change_reason,
 			iv.status,
 			iv.name,
@@ -403,7 +375,7 @@ func institutionSelect(versionSource string, whereClause string) string {
 			iv.comment_markdown,
 			iv.metadata_json
 		FROM institutions i
-		JOIN ` + versionSource + ` iv ON iv.institution_id = i.id
+		JOIN institutions iv ON iv.id = i.id
 	` + whereClause
 }
 

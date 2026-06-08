@@ -1,5 +1,10 @@
 # Categories Design
 
+> Supersession note: category rows are current-state account rows. Category
+> changes update those rows in place with audit events and row-level audit
+> changes; they no longer append `account_versions` rows or use
+> `effective_from` for routine display/report grouping.
+
 Categories are the user-facing budgeting and reporting layer over income and
 expense accounts. They are not a separate ledger primitive and do not get a
 separate version table. This preserves double-entry accounting while keeping

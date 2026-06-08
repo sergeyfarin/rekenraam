@@ -39,10 +39,9 @@ func TestCategoriesSetupSeedsBuiltInsWithoutEnglishCanonicalNames(t *testing.T) 
 
 	var storedName sql.NullString
 	require.NoError(t, database.QueryRow(`
-		SELECT av.name
-		FROM accounts a
-		JOIN current_account_versions av ON av.account_id = a.id
-		WHERE av.code = 'expense_food'
+		SELECT name
+		FROM accounts
+		WHERE code = 'expense_food'
 	`).Scan(&storedName))
 	assert.False(t, storedName.Valid)
 

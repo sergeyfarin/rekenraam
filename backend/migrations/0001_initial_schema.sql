@@ -53,6 +53,33 @@ CREATE INDEX IF NOT EXISTS audit_events_request_idx
   ON audit_events (request_id)
   WHERE request_id IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS audit_event_targets (
+  audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE CASCADE,
+  book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
+  target_type TEXT NOT NULL CHECK (length(trim(target_type)) > 0 AND target_type = trim(target_type)),
+  target_id INTEGER NOT NULL,
+  target_role TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (audit_event_id, target_type, target_id, target_role)
+);
+
+CREATE INDEX IF NOT EXISTS audit_event_targets_target_idx
+  ON audit_event_targets (book_id, target_type, target_id, audit_event_id DESC);
+
+CREATE TABLE IF NOT EXISTS audit_event_changes (
+  id INTEGER PRIMARY KEY,
+  audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE CASCADE,
+  book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
+  table_name TEXT NOT NULL CHECK (length(trim(table_name)) > 0 AND table_name = trim(table_name)),
+  row_id INTEGER NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
+  before_json TEXT CHECK (before_json IS NULL OR json_valid(before_json)),
+  after_json TEXT CHECK (after_json IS NULL OR json_valid(after_json)),
+  changed_fields_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(changed_fields_json))
+);
+
+CREATE INDEX IF NOT EXISTS audit_event_changes_row_idx
+  ON audit_event_changes (book_id, table_name, row_id, audit_event_id DESC);
+
 CREATE TABLE IF NOT EXISTS setup_steps (
   step_key TEXT PRIMARY KEY,
   completed_at TEXT,
@@ -81,7 +108,7 @@ CREATE TABLE IF NOT EXISTS books (
   owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
-  default_currency_commodity_id INTEGER,
+  default_currency_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
   updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -128,96 +155,50 @@ CREATE TABLE IF NOT EXISTS commodities (
   code TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('currency', 'security', 'crypto', 'reward', 'commodity')),
   is_builtin INTEGER NOT NULL CHECK (is_builtin IN (0, 1)),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  symbol TEXT NOT NULL DEFAULT '',
+  display_symbol TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  standard_scale INTEGER NOT NULL DEFAULT 2 CHECK (standard_scale BETWEEN 0 AND 12),
+  max_quantity_scale INTEGER NOT NULL DEFAULT 2 CHECK (max_quantity_scale BETWEEN 0 AND 12 AND max_quantity_scale >= standard_scale),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL DEFAULT '',
   created_request_id TEXT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   UNIQUE (book_id, code)
 );
 
 CREATE INDEX IF NOT EXISTS commodities_book_kind_idx
   ON commodities (book_id, kind, code);
 
-CREATE TABLE IF NOT EXISTS commodity_versions (
-  id INTEGER PRIMARY KEY,
-  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  recorded_at TEXT NOT NULL,
-  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  change_reason TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
-  symbol TEXT NOT NULL,
-  display_symbol TEXT NOT NULL,
-  name TEXT NOT NULL,
-  standard_scale INTEGER NOT NULL CHECK (standard_scale BETWEEN 0 AND 12),
-  max_quantity_scale INTEGER NOT NULL CHECK (max_quantity_scale BETWEEN 0 AND 12 AND max_quantity_scale >= standard_scale),
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  UNIQUE (commodity_id, version_seq)
-);
-
-CREATE INDEX IF NOT EXISTS commodity_versions_commodity_seq_idx
-  ON commodity_versions (commodity_id, version_seq DESC);
-
-CREATE VIEW IF NOT EXISTS current_commodity_versions AS
-SELECT cv.*
-FROM commodity_versions cv
-WHERE cv.id = (
-  SELECT current_cv.id
-  FROM commodity_versions current_cv
-  WHERE current_cv.commodity_id = cv.commodity_id
-    AND current_cv.effective_from <= date('now')
-  ORDER BY current_cv.effective_from DESC, current_cv.version_seq DESC
-  LIMIT 1
-);
-
 CREATE TABLE IF NOT EXISTS institutions (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  created_at TEXT NOT NULL,
-  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_request_id TEXT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
-);
-
-CREATE INDEX IF NOT EXISTS institutions_book_idx
-  ON institutions (book_id);
-
-CREATE TABLE IF NOT EXISTS institution_versions (
-  id INTEGER PRIMARY KEY,
-  institution_id INTEGER NOT NULL REFERENCES institutions(id) ON DELETE RESTRICT,
-  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  recorded_at TEXT NOT NULL,
-  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  change_reason TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
-  name TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('bank', 'credit_union', 'brokerage', 'card_issuer', 'lender', 'insurance', 'employer', 'rewards_program', 'government', 'other')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  name TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'other' CHECK (kind IN ('bank', 'credit_union', 'brokerage', 'card_issuer', 'lender', 'insurance', 'employer', 'rewards_program', 'government', 'other')),
   country_code TEXT,
   website TEXT,
   address_json TEXT NOT NULL DEFAULT '{}',
   comment_markdown TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
-  change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  UNIQUE (institution_id, version_seq)
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL DEFAULT '',
+  created_request_id TEXT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
 );
 
-CREATE INDEX IF NOT EXISTS institution_versions_institution_seq_idx
-  ON institution_versions (institution_id, version_seq DESC);
-
-CREATE VIEW IF NOT EXISTS current_institution_versions AS
-SELECT iv.*
-FROM institution_versions iv
-WHERE iv.id = (
-  SELECT current_iv.id
-  FROM institution_versions current_iv
-  WHERE current_iv.institution_id = iv.institution_id
-    AND current_iv.effective_from <= date('now')
-  ORDER BY current_iv.effective_from DESC, current_iv.version_seq DESC
-  LIMIT 1
-);
+CREATE INDEX IF NOT EXISTS institutions_book_idx
+  ON institutions (book_id, status, name COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS account_kinds (
   code TEXT PRIMARY KEY,
@@ -277,190 +258,112 @@ CREATE TABLE IF NOT EXISTS accounts (
       'commodity_trading'
     )
   ),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed', 'archived')),
+  opened_on TEXT NOT NULL DEFAULT '0001-01-01' CHECK (opened_on GLOB '????-??-??'),
+  closed_on TEXT CHECK (closed_on IS NULL OR closed_on GLOB '????-??-??'),
+  code TEXT,
+  name TEXT,
+  account_class TEXT NOT NULL DEFAULT 'asset' CHECK (account_class IN ('asset', 'liability', 'equity', 'income', 'expense')),
+  account_kind TEXT NOT NULL DEFAULT 'cash' REFERENCES account_kinds(code) ON DELETE RESTRICT,
+  parent_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  institution_id INTEGER REFERENCES institutions(id) ON DELETE RESTRICT,
+  country_code TEXT,
+  default_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  quantity_scale_override INTEGER CHECK (quantity_scale_override IS NULL OR quantity_scale_override BETWEEN 0 AND 12),
+  allows_postings INTEGER NOT NULL DEFAULT 0 CHECK (allows_postings IN (0, 1)),
+  number_last4 TEXT,
+  external_ref_hint TEXT,
+  comment_markdown TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL DEFAULT '',
   created_request_id TEXT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (closed_on IS NULL OR closed_on >= opened_on)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_system_role_idx
   ON accounts (book_id, system_role)
   WHERE system_role IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS accounts_book_idx
-  ON accounts (book_id);
+CREATE INDEX IF NOT EXISTS accounts_book_status_class_idx
+  ON accounts (book_id, status, account_class, name COLLATE NOCASE);
 
-CREATE TABLE IF NOT EXISTS account_versions (
-  id INTEGER PRIMARY KEY,
-  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  recorded_at TEXT NOT NULL,
-  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  change_reason TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'closed', 'archived')),
-  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
-  closed_on TEXT CHECK (closed_on IS NULL OR closed_on GLOB '????-??-??'),
-  code TEXT,
-  name TEXT,
-  account_class TEXT NOT NULL CHECK (account_class IN ('asset', 'liability', 'equity', 'income', 'expense')),
-  account_kind TEXT NOT NULL,
-  parent_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
-  institution_id INTEGER REFERENCES institutions(id) ON DELETE RESTRICT,
-  country_code TEXT,
-  default_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
-  quantity_scale_override INTEGER CHECK (quantity_scale_override IS NULL OR quantity_scale_override BETWEEN 0 AND 12),
-  allows_postings INTEGER NOT NULL CHECK (allows_postings IN (0, 1)),
-  number_last4 TEXT,
-  external_ref_hint TEXT,
-  comment_markdown TEXT NOT NULL DEFAULT '',
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  UNIQUE (account_id, version_seq),
-  CHECK (closed_on IS NULL OR closed_on >= opened_on),
-  CHECK (
-    (status = 'active' AND closed_on IS NULL)
-    OR (status IN ('closed', 'archived') AND closed_on IS NOT NULL)
-  ),
-  FOREIGN KEY (account_kind, account_class) REFERENCES account_kinds(code, account_class) ON DELETE RESTRICT
-);
+CREATE INDEX IF NOT EXISTS accounts_parent_idx
+  ON accounts (parent_account_id)
+  WHERE parent_account_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS account_versions_account_seq_idx
-  ON account_versions (account_id, version_seq DESC);
-
-CREATE INDEX IF NOT EXISTS account_versions_parent_idx
-  ON account_versions (parent_account_id);
-
-CREATE INDEX IF NOT EXISTS account_versions_institution_idx
-  ON account_versions (institution_id);
-
-CREATE INDEX IF NOT EXISTS account_versions_default_commodity_idx
-  ON account_versions (default_commodity_id);
-
-CREATE VIEW IF NOT EXISTS current_account_versions AS
-SELECT av.*
-FROM account_versions av
-WHERE av.id = (
-  SELECT current_av.id
-  FROM account_versions current_av
-  WHERE current_av.account_id = av.account_id
-    AND current_av.effective_from <= date('now')
-  ORDER BY current_av.effective_from DESC, current_av.version_seq DESC
-  LIMIT 1
-);
+CREATE INDEX IF NOT EXISTS accounts_institution_idx
+  ON accounts (institution_id)
+  WHERE institution_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS payees (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  created_at TEXT NOT NULL,
-  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_request_id TEXT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
-);
-
-CREATE INDEX IF NOT EXISTS payees_book_idx
-  ON payees (book_id);
-
-CREATE TABLE IF NOT EXISTS payee_versions (
-  id INTEGER PRIMARY KEY,
-  payee_id INTEGER NOT NULL REFERENCES payees(id) ON DELETE RESTRICT,
-  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
-  recorded_at TEXT NOT NULL,
-  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  change_reason TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
-  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
-  normalized_name TEXT NOT NULL CHECK (length(trim(normalized_name)) > 0 AND normalized_name = trim(normalized_name)),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  name TEXT NOT NULL DEFAULT '',
+  normalized_name TEXT NOT NULL DEFAULT '',
   default_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   default_category_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   metadata_json TEXT NOT NULL DEFAULT '{}',
-  change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  UNIQUE (payee_id, version_seq)
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL DEFAULT '',
+  created_request_id TEXT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
 );
 
-CREATE INDEX IF NOT EXISTS payee_versions_payee_seq_idx
-  ON payee_versions (payee_id, version_seq DESC);
+CREATE INDEX IF NOT EXISTS payees_book_status_name_idx
+  ON payees (book_id, status, name COLLATE NOCASE);
 
-CREATE INDEX IF NOT EXISTS payee_versions_name_idx
-  ON payee_versions (normalized_name, status);
-
-CREATE VIEW IF NOT EXISTS current_payee_versions AS
-SELECT pv.*
-FROM payee_versions pv
-WHERE pv.id = (
-  SELECT current_pv.id
-  FROM payee_versions current_pv
-  WHERE current_pv.payee_id = pv.payee_id
-    AND current_pv.effective_from <= date('now')
-  ORDER BY current_pv.effective_from DESC, current_pv.version_seq DESC
-  LIMIT 1
-);
+CREATE UNIQUE INDEX IF NOT EXISTS payees_active_normalized_name_idx
+  ON payees (book_id, normalized_name)
+  WHERE status = 'active';
 
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   correction_of_transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
-  created_at TEXT NOT NULL,
-  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_request_id TEXT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  CHECK (correction_of_transaction_id IS NULL OR correction_of_transaction_id <> id)
-);
-
-CREATE INDEX IF NOT EXISTS transactions_book_idx
-  ON transactions (book_id, id);
-
-CREATE INDEX IF NOT EXISTS transactions_correction_idx
-  ON transactions (correction_of_transaction_id)
-  WHERE correction_of_transaction_id IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS transaction_versions (
-  id INTEGER PRIMARY KEY,
-  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
-  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
-  supersedes_version_id INTEGER REFERENCES transaction_versions(id) ON DELETE RESTRICT,
-  status TEXT NOT NULL CHECK (status IN ('draft', 'posted', 'voided')),
-  transaction_kind TEXT NOT NULL CHECK (transaction_kind IN ('ordinary', 'transfer', 'investment', 'opening_balance', 'adjustment')),
-  transaction_date TEXT NOT NULL CHECK (transaction_date GLOB '????-??-??'),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'posted', 'voided')),
+  transaction_kind TEXT NOT NULL DEFAULT 'ordinary' CHECK (transaction_kind IN ('ordinary', 'transfer', 'investment', 'opening_balance', 'adjustment')),
+  transaction_date TEXT NOT NULL DEFAULT '0001-01-01' CHECK (transaction_date GLOB '????-??-??'),
   payee_id INTEGER REFERENCES payees(id) ON DELETE RESTRICT,
   payee_name TEXT,
   description TEXT NOT NULL DEFAULT '',
   external_ref_hint TEXT,
   note_markdown TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
-  recorded_at TEXT NOT NULL,
-  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  change_reason TEXT NOT NULL,
-  change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  UNIQUE (transaction_id, version_seq)
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  created_request_id TEXT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL DEFAULT '',
+  CHECK (correction_of_transaction_id IS NULL OR correction_of_transaction_id <> id)
 );
 
-CREATE INDEX IF NOT EXISTS transaction_versions_transaction_seq_idx
-  ON transaction_versions (transaction_id, version_seq DESC);
+CREATE INDEX IF NOT EXISTS transactions_book_date_idx
+  ON transactions (book_id, transaction_date DESC, id DESC);
 
-CREATE INDEX IF NOT EXISTS transaction_versions_book_date_idx
-  ON transaction_versions (book_id, transaction_date DESC, id DESC);
+CREATE INDEX IF NOT EXISTS transactions_correction_idx
+  ON transactions (correction_of_transaction_id)
+  WHERE correction_of_transaction_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS transaction_versions_payee_idx
-  ON transaction_versions (payee_id)
+CREATE INDEX IF NOT EXISTS transactions_payee_idx
+  ON transactions (payee_id)
   WHERE payee_id IS NOT NULL;
-
-CREATE VIEW IF NOT EXISTS current_transaction_versions AS
-SELECT tv.*
-FROM transaction_versions tv
-WHERE tv.id = (
-  SELECT current_tv.id
-  FROM transaction_versions current_tv
-  WHERE current_tv.transaction_id = tv.transaction_id
-  ORDER BY current_tv.version_seq DESC, current_tv.id DESC
-  LIMIT 1
-);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS transaction_search
 USING fts5(
-  transaction_version_id UNINDEXED,
   transaction_id UNINDEXED,
   payee_name,
   description,
@@ -471,17 +374,17 @@ USING fts5(
 CREATE TABLE IF NOT EXISTS journal_entries (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   entry_seq INTEGER NOT NULL CHECK (entry_seq > 0),
   entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
   entry_kind TEXT NOT NULL CHECK (entry_kind IN ('ordinary', 'transfer_leg', 'exchange', 'investment', 'opening_balance', 'adjustment')),
   memo TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
-  UNIQUE (transaction_version_id, entry_seq)
+  UNIQUE (transaction_id, entry_seq)
 );
 
-CREATE INDEX IF NOT EXISTS journal_entries_version_idx
-  ON journal_entries (transaction_version_id, entry_seq);
+CREATE INDEX IF NOT EXISTS journal_entries_transaction_idx
+  ON journal_entries (transaction_id, entry_seq);
 
 CREATE INDEX IF NOT EXISTS journal_entries_book_date_idx
   ON journal_entries (book_id, entry_date DESC, id DESC);
@@ -489,7 +392,7 @@ CREATE INDEX IF NOT EXISTS journal_entries_book_date_idx
 CREATE TABLE IF NOT EXISTS posting_lines (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   line_key TEXT NOT NULL CHECK (length(trim(line_key)) > 0 AND line_key = trim(line_key)),
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -501,11 +404,11 @@ CREATE TABLE IF NOT EXISTS posting_lines (
 CREATE INDEX IF NOT EXISTS posting_lines_transaction_idx
   ON posting_lines (transaction_id);
 
-CREATE TABLE IF NOT EXISTS posting_versions (
+CREATE TABLE IF NOT EXISTS postings (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
-  journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
   posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE RESTRICT,
   line_seq INTEGER NOT NULL CHECK (line_seq > 0),
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
@@ -516,21 +419,22 @@ CREATE TABLE IF NOT EXISTS posting_versions (
   reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN ('uncleared', 'cleared', 'reconciled')),
   cleared_on TEXT CHECK (cleared_on IS NULL OR cleared_on GLOB '????-??-??'),
   metadata_json TEXT NOT NULL DEFAULT '{}',
-  UNIQUE (journal_entry_id, line_seq)
+  UNIQUE (journal_entry_id, line_seq),
+  UNIQUE (transaction_id, posting_line_id)
 );
 
-CREATE INDEX IF NOT EXISTS posting_versions_version_idx
-  ON posting_versions (transaction_version_id);
+CREATE INDEX IF NOT EXISTS postings_transaction_idx
+  ON postings (transaction_id);
 
-CREATE INDEX IF NOT EXISTS posting_versions_account_idx
-  ON posting_versions (account_id, id);
+CREATE INDEX IF NOT EXISTS postings_account_idx
+  ON postings (account_id, id);
 
-CREATE INDEX IF NOT EXISTS posting_versions_journal_idx
-  ON posting_versions (journal_entry_id, line_seq);
+CREATE INDEX IF NOT EXISTS postings_journal_idx
+  ON postings (journal_entry_id, line_seq);
 
 CREATE TABLE IF NOT EXISTS transaction_tags (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -543,7 +447,7 @@ CREATE INDEX IF NOT EXISTS transaction_tags_tag_idx
 
 CREATE TABLE IF NOT EXISTS posting_tags (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE RESTRICT,
+  posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE CASCADE,
   tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -587,11 +491,10 @@ CREATE INDEX IF NOT EXISTS reconciliation_sessions_account_idx
   ON reconciliation_sessions (book_id, account_id, commodity_id, status, statement_date DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS reconciliation_session_postings (
-  session_id INTEGER NOT NULL REFERENCES reconciliation_sessions(id) ON DELETE RESTRICT,
-  posting_version_id INTEGER NOT NULL REFERENCES posting_versions(id) ON DELETE RESTRICT,
+  session_id INTEGER NOT NULL REFERENCES reconciliation_sessions(id) ON DELETE CASCADE,
+  posting_id INTEGER NOT NULL REFERENCES postings(id) ON DELETE RESTRICT,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
-  transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
   posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE RESTRICT,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
@@ -603,11 +506,11 @@ CREATE TABLE IF NOT EXISTS reconciliation_session_postings (
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  PRIMARY KEY (session_id, posting_version_id)
+  PRIMARY KEY (session_id, posting_id)
 );
 
 CREATE INDEX IF NOT EXISTS reconciliation_session_postings_posting_idx
-  ON reconciliation_session_postings (posting_version_id);
+  ON reconciliation_session_postings (posting_id);
 
 CREATE TABLE IF NOT EXISTS reconciliation_checkpoints (
   id INTEGER PRIMARY KEY,
@@ -637,246 +540,25 @@ CREATE INDEX IF NOT EXISTS reconciliation_checkpoints_account_idx
   ON reconciliation_checkpoints (book_id, account_id, commodity_id, status, statement_date DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS reconciliation_checkpoint_postings (
-  checkpoint_id INTEGER NOT NULL REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
-  posting_version_id INTEGER NOT NULL REFERENCES posting_versions(id) ON DELETE RESTRICT,
+  checkpoint_id INTEGER NOT NULL REFERENCES reconciliation_checkpoints(id) ON DELETE CASCADE,
+  posting_id INTEGER NOT NULL REFERENCES postings(id) ON DELETE RESTRICT,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
   quantity_value INTEGER NOT NULL,
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
-  PRIMARY KEY (checkpoint_id, posting_version_id)
+  PRIMARY KEY (checkpoint_id, posting_id)
 );
 
 CREATE INDEX IF NOT EXISTS reconciliation_checkpoint_postings_posting_idx
-  ON reconciliation_checkpoint_postings (posting_version_id);
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS books_default_currency_must_exist_on_insert
-BEFORE INSERT ON books
-WHEN NEW.default_currency_commodity_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM commodities
-    WHERE id = NEW.default_currency_commodity_id
-      AND book_id = NEW.id
-      AND kind = 'currency'
-  )
-BEGIN
-  SELECT RAISE(ABORT, 'book default currency must reference a currency in the same book');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS books_default_currency_must_exist
-BEFORE UPDATE OF default_currency_commodity_id ON books
-WHEN NEW.default_currency_commodity_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM commodities
-    WHERE id = NEW.default_currency_commodity_id
-      AND book_id = NEW.id
-      AND kind = 'currency'
-  )
-BEGIN
-  SELECT RAISE(ABORT, 'book default currency must reference a currency in the same book');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS commodity_versions_no_update
-BEFORE UPDATE ON commodity_versions
-BEGIN
-  SELECT RAISE(ABORT, 'commodity_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS commodity_versions_no_delete
-BEFORE DELETE ON commodity_versions
-BEGIN
-  SELECT RAISE(ABORT, 'commodity_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS institution_versions_no_update
-BEFORE UPDATE ON institution_versions
-BEGIN
-  SELECT RAISE(ABORT, 'institution_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS institution_versions_no_delete
-BEFORE DELETE ON institution_versions
-BEGIN
-  SELECT RAISE(ABORT, 'institution_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS accounts_system_fields_no_update
-BEFORE UPDATE OF system_role ON accounts
-BEGIN
-  SELECT RAISE(ABORT, 'account system identity fields are immutable');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS account_versions_no_update
-BEFORE UPDATE ON account_versions
-BEGIN
-  SELECT RAISE(ABORT, 'account_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS account_versions_no_delete
-BEFORE DELETE ON account_versions
-WHEN NOT (
-  OLD.account_class IN ('income', 'expense')
-  AND OLD.account_kind = OLD.account_class
-  AND json_extract(OLD.metadata_json, '$.category.type') = OLD.account_class
-  AND json_extract(OLD.metadata_json, '$.category.is_builtin') = 0
-)
-BEGIN
-  SELECT RAISE(ABORT, 'account_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS payee_versions_no_update
-BEFORE UPDATE ON payee_versions
-BEGIN
-  SELECT RAISE(ABORT, 'payee_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS payee_versions_no_delete
-BEFORE DELETE ON payee_versions
-BEGIN
-  SELECT RAISE(ABORT, 'payee_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS transaction_versions_no_update
-BEFORE UPDATE ON transaction_versions
-BEGIN
-  SELECT RAISE(ABORT, 'transaction_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS transaction_versions_no_delete
-BEFORE DELETE ON transaction_versions
-WHEN NOT (
-  OLD.status = 'draft'
-  AND NOT EXISTS (
-    SELECT 1
-    FROM transaction_versions tv
-    WHERE tv.transaction_id = OLD.transaction_id
-      AND tv.status IN ('posted', 'voided')
-  )
-)
-BEGIN
-  SELECT RAISE(ABORT, 'transaction_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS journal_entries_no_update
-BEFORE UPDATE ON journal_entries
-BEGIN
-  SELECT RAISE(ABORT, 'journal_entries rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS journal_entries_no_delete
-BEFORE DELETE ON journal_entries
-WHEN NOT EXISTS (
-  SELECT 1
-  FROM transaction_versions tv
-  WHERE tv.id = OLD.transaction_version_id
-    AND tv.status = 'draft'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM transaction_versions any_tv
-      WHERE any_tv.transaction_id = tv.transaction_id
-        AND any_tv.status IN ('posted', 'voided')
-    )
-)
-BEGIN
-  SELECT RAISE(ABORT, 'journal_entries rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS posting_versions_no_update
-BEFORE UPDATE ON posting_versions
-BEGIN
-  SELECT RAISE(ABORT, 'posting_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS posting_versions_no_delete
-BEFORE DELETE ON posting_versions
-WHEN NOT EXISTS (
-  SELECT 1
-  FROM transaction_versions tv
-  WHERE tv.id = OLD.transaction_version_id
-    AND tv.status = 'draft'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM transaction_versions any_tv
-      WHERE any_tv.transaction_id = tv.transaction_id
-        AND any_tv.status IN ('posted', 'voided')
-    )
-)
-BEGIN
-  SELECT RAISE(ABORT, 'posting_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS transaction_versions_same_book
-BEFORE INSERT ON transaction_versions
-WHEN NOT EXISTS (
-  SELECT 1
-  FROM transactions t
-  WHERE t.id = NEW.transaction_id
-    AND t.book_id = NEW.book_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'transaction version book must match transaction book');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS transaction_versions_supersedes_same_transaction
-BEFORE INSERT ON transaction_versions
-WHEN NEW.supersedes_version_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM transaction_versions superseded
-    WHERE superseded.id = NEW.supersedes_version_id
-      AND superseded.transaction_id = NEW.transaction_id
-  )
-BEGIN
-  SELECT RAISE(ABORT, 'superseded transaction version must belong to the same transaction');
-END;
--- +goose StatementEnd
+  ON reconciliation_checkpoint_postings (posting_id);
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS transaction_search_insert
-AFTER INSERT ON transaction_versions
+AFTER INSERT ON transactions
 BEGIN
   INSERT INTO transaction_search (
-    transaction_version_id,
     transaction_id,
     payee_name,
     description,
@@ -885,11 +567,250 @@ BEGIN
   )
   VALUES (
     NEW.id,
-    NEW.transaction_id,
     COALESCE(NEW.payee_name, ''),
     COALESCE(NEW.description, ''),
     COALESCE(NEW.external_ref_hint, ''),
     COALESCE(NEW.note_markdown, '')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS transaction_search_update
+AFTER UPDATE OF payee_name, description, external_ref_hint, note_markdown ON transactions
+BEGIN
+  DELETE FROM transaction_search WHERE transaction_id = OLD.id;
+  INSERT INTO transaction_search (
+    transaction_id,
+    payee_name,
+    description,
+    external_ref_hint,
+    note_markdown
+  )
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.payee_name, ''),
+    COALESCE(NEW.description, ''),
+    COALESCE(NEW.external_ref_hint, ''),
+    COALESCE(NEW.note_markdown, '')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS transaction_search_delete
+AFTER DELETE ON transactions
+BEGIN
+  DELETE FROM transaction_search WHERE transaction_id = OLD.id;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_accounts_insert
+AFTER INSERT ON accounts
+WHEN NEW.created_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.created_audit_event_id, NEW.book_id, 'account', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.created_audit_event_id,
+    NEW.book_id,
+    'accounts',
+    NEW.id,
+    'insert',
+    NULL,
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'opened_on', NEW.opened_on, 'closed_on', NEW.closed_on, 'code', NEW.code, 'name', NEW.name, 'account_class', NEW.account_class, 'account_kind', NEW.account_kind, 'parent_account_id', NEW.parent_account_id, 'institution_id', NEW.institution_id, 'default_commodity_id', NEW.default_commodity_id, 'allows_postings', NEW.allows_postings),
+    json_array('id', 'book_id', 'status', 'opened_on', 'closed_on', 'code', 'name', 'account_class', 'account_kind', 'parent_account_id', 'institution_id', 'default_commodity_id', 'allows_postings')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_accounts_update
+AFTER UPDATE ON accounts
+WHEN NEW.updated_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.updated_audit_event_id, NEW.book_id, 'account', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.updated_audit_event_id,
+    NEW.book_id,
+    'accounts',
+    NEW.id,
+    'update',
+    json_object('id', OLD.id, 'book_id', OLD.book_id, 'status', OLD.status, 'opened_on', OLD.opened_on, 'closed_on', OLD.closed_on, 'code', OLD.code, 'name', OLD.name, 'account_class', OLD.account_class, 'account_kind', OLD.account_kind, 'parent_account_id', OLD.parent_account_id, 'institution_id', OLD.institution_id, 'default_commodity_id', OLD.default_commodity_id, 'allows_postings', OLD.allows_postings),
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'opened_on', NEW.opened_on, 'closed_on', NEW.closed_on, 'code', NEW.code, 'name', NEW.name, 'account_class', NEW.account_class, 'account_kind', NEW.account_kind, 'parent_account_id', NEW.parent_account_id, 'institution_id', NEW.institution_id, 'default_commodity_id', NEW.default_commodity_id, 'allows_postings', NEW.allows_postings),
+    json_array('status', 'opened_on', 'closed_on', 'code', 'name', 'account_class', 'account_kind', 'parent_account_id', 'institution_id', 'default_commodity_id', 'allows_postings')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_institutions_insert
+AFTER INSERT ON institutions
+WHEN NEW.created_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.created_audit_event_id, NEW.book_id, 'institution', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.created_audit_event_id,
+    NEW.book_id,
+    'institutions',
+    NEW.id,
+    'insert',
+    NULL,
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'name', NEW.name, 'kind', NEW.kind, 'country_code', NEW.country_code, 'website', NEW.website),
+    json_array('id', 'book_id', 'status', 'name', 'kind', 'country_code', 'website')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_institutions_update
+AFTER UPDATE ON institutions
+WHEN NEW.updated_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.updated_audit_event_id, NEW.book_id, 'institution', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.updated_audit_event_id,
+    NEW.book_id,
+    'institutions',
+    NEW.id,
+    'update',
+    json_object('id', OLD.id, 'book_id', OLD.book_id, 'status', OLD.status, 'name', OLD.name, 'kind', OLD.kind, 'country_code', OLD.country_code, 'website', OLD.website),
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'name', NEW.name, 'kind', NEW.kind, 'country_code', NEW.country_code, 'website', NEW.website),
+    json_array('status', 'name', 'kind', 'country_code', 'website', 'address_json', 'comment_markdown', 'metadata_json')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_commodities_insert
+AFTER INSERT ON commodities
+WHEN NEW.created_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.created_audit_event_id, NEW.book_id, 'commodity', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.created_audit_event_id,
+    NEW.book_id,
+    'commodities',
+    NEW.id,
+    'insert',
+    NULL,
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'code', NEW.code, 'kind', NEW.kind, 'status', NEW.status, 'symbol', NEW.symbol, 'display_symbol', NEW.display_symbol, 'name', NEW.name, 'standard_scale', NEW.standard_scale, 'max_quantity_scale', NEW.max_quantity_scale),
+    json_array('id', 'book_id', 'code', 'kind', 'status', 'symbol', 'display_symbol', 'name', 'standard_scale', 'max_quantity_scale')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_commodities_update
+AFTER UPDATE ON commodities
+WHEN NEW.updated_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.updated_audit_event_id, NEW.book_id, 'commodity', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.updated_audit_event_id,
+    NEW.book_id,
+    'commodities',
+    NEW.id,
+    'update',
+    json_object('id', OLD.id, 'book_id', OLD.book_id, 'code', OLD.code, 'kind', OLD.kind, 'status', OLD.status, 'symbol', OLD.symbol, 'display_symbol', OLD.display_symbol, 'name', OLD.name, 'standard_scale', OLD.standard_scale, 'max_quantity_scale', OLD.max_quantity_scale),
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'code', NEW.code, 'kind', NEW.kind, 'status', NEW.status, 'symbol', NEW.symbol, 'display_symbol', NEW.display_symbol, 'name', NEW.name, 'standard_scale', NEW.standard_scale, 'max_quantity_scale', NEW.max_quantity_scale),
+    json_array('status', 'symbol', 'display_symbol', 'name', 'standard_scale', 'max_quantity_scale', 'metadata_json')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_payees_insert
+AFTER INSERT ON payees
+WHEN NEW.created_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.created_audit_event_id, NEW.book_id, 'payee', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.created_audit_event_id,
+    NEW.book_id,
+    'payees',
+    NEW.id,
+    'insert',
+    NULL,
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'name', NEW.name, 'default_account_id', NEW.default_account_id, 'default_category_account_id', NEW.default_category_account_id),
+    json_array('id', 'book_id', 'status', 'name', 'default_account_id', 'default_category_account_id')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_payees_update
+AFTER UPDATE ON payees
+WHEN NEW.updated_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.updated_audit_event_id, NEW.book_id, 'payee', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.updated_audit_event_id,
+    NEW.book_id,
+    'payees',
+    NEW.id,
+    'update',
+    json_object('id', OLD.id, 'book_id', OLD.book_id, 'status', OLD.status, 'name', OLD.name, 'default_account_id', OLD.default_account_id, 'default_category_account_id', OLD.default_category_account_id),
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'name', NEW.name, 'default_account_id', NEW.default_account_id, 'default_category_account_id', NEW.default_category_account_id),
+    json_array('status', 'name', 'default_account_id', 'default_category_account_id', 'metadata_json')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_transactions_insert
+AFTER INSERT ON transactions
+WHEN NEW.created_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.created_audit_event_id, NEW.book_id, 'transaction', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.created_audit_event_id,
+    NEW.book_id,
+    'transactions',
+    NEW.id,
+    'insert',
+    NULL,
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'transaction_kind', NEW.transaction_kind, 'transaction_date', NEW.transaction_date, 'payee_id', NEW.payee_id, 'payee_name', NEW.payee_name, 'description', NEW.description),
+    json_array('id', 'book_id', 'status', 'transaction_kind', 'transaction_date', 'payee_id', 'payee_name', 'description')
+  );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS audit_transactions_update
+AFTER UPDATE ON transactions
+WHEN NEW.updated_audit_event_id IS NOT NULL
+BEGIN
+  INSERT OR IGNORE INTO audit_event_targets (audit_event_id, book_id, target_type, target_id, target_role)
+  VALUES (NEW.updated_audit_event_id, NEW.book_id, 'transaction', NEW.id, 'primary');
+  INSERT INTO audit_event_changes (audit_event_id, book_id, table_name, row_id, operation, before_json, after_json, changed_fields_json)
+  VALUES (
+    NEW.updated_audit_event_id,
+    NEW.book_id,
+    'transactions',
+    NEW.id,
+    'update',
+    json_object('id', OLD.id, 'book_id', OLD.book_id, 'status', OLD.status, 'transaction_kind', OLD.transaction_kind, 'transaction_date', OLD.transaction_date, 'payee_id', OLD.payee_id, 'payee_name', OLD.payee_name, 'description', OLD.description),
+    json_object('id', NEW.id, 'book_id', NEW.book_id, 'status', NEW.status, 'transaction_kind', NEW.transaction_kind, 'transaction_date', NEW.transaction_date, 'payee_id', NEW.payee_id, 'payee_name', NEW.payee_name, 'description', NEW.description),
+    json_array('status', 'transaction_kind', 'transaction_date', 'payee_id', 'payee_name', 'description', 'external_ref_hint', 'note_markdown', 'metadata_json')
   );
 END;
 -- +goose StatementEnd
@@ -910,79 +831,73 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS journal_entries_same_book
-BEFORE INSERT ON journal_entries
-WHEN NOT EXISTS (
-  SELECT 1
-  FROM transaction_versions tv
-  WHERE tv.id = NEW.transaction_version_id
-    AND tv.book_id = NEW.book_id
-)
+CREATE TRIGGER IF NOT EXISTS accounts_parent_same_book
+BEFORE INSERT ON accounts
+WHEN NEW.parent_account_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM accounts parent
+    WHERE parent.id = NEW.parent_account_id
+      AND parent.book_id = NEW.book_id
+  )
 BEGIN
-  SELECT RAISE(ABORT, 'journal entry book must match transaction version book');
+  SELECT RAISE(ABORT, 'parent account must belong to the same book');
 END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS posting_lines_same_book
-BEFORE INSERT ON posting_lines
+CREATE TRIGGER IF NOT EXISTS accounts_parent_same_book_update
+BEFORE UPDATE OF parent_account_id ON accounts
+WHEN NEW.parent_account_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM accounts parent
+    WHERE parent.id = NEW.parent_account_id
+      AND parent.book_id = NEW.book_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'parent account must belong to the same book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS postings_same_book_and_lineage
+BEFORE INSERT ON postings
 WHEN NOT EXISTS (
   SELECT 1
   FROM transactions t
-  WHERE t.id = NEW.transaction_id
-    AND t.book_id = NEW.book_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'posting line book must match transaction book');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS posting_versions_same_book_and_lineage
-BEFORE INSERT ON posting_versions
-WHEN NOT EXISTS (
-  SELECT 1
-  FROM transaction_versions tv
   JOIN journal_entries je ON je.id = NEW.journal_entry_id
   JOIN posting_lines pl ON pl.id = NEW.posting_line_id
   JOIN accounts a ON a.id = NEW.account_id
   JOIN commodities c ON c.id = NEW.commodity_id
-  WHERE tv.id = NEW.transaction_version_id
-    AND tv.book_id = NEW.book_id
-    AND je.transaction_version_id = tv.id
+  WHERE t.id = NEW.transaction_id
+    AND t.book_id = NEW.book_id
+    AND je.transaction_id = t.id
     AND je.book_id = NEW.book_id
     AND pl.book_id = NEW.book_id
-    AND pl.transaction_id = tv.transaction_id
+    AND pl.transaction_id = t.id
     AND a.book_id = NEW.book_id
     AND c.book_id = NEW.book_id
 )
 BEGIN
-  SELECT RAISE(ABORT, 'posting version references must belong to one transaction book');
+  SELECT RAISE(ABORT, 'posting references must belong to one transaction book');
 END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS posting_versions_account_version_valid
-BEFORE INSERT ON posting_versions
+CREATE TRIGGER IF NOT EXISTS postings_account_valid
+BEFORE INSERT ON postings
 WHEN NOT EXISTS (
   SELECT 1
   FROM journal_entries je
-  JOIN account_versions av ON av.account_id = NEW.account_id
+  JOIN accounts a ON a.id = NEW.account_id
   WHERE je.id = NEW.journal_entry_id
-    AND av.id = (
-      SELECT asof_av.id
-      FROM account_versions asof_av
-      WHERE asof_av.account_id = NEW.account_id
-        AND asof_av.effective_from <= je.entry_date
-      ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC
-      LIMIT 1
-    )
-    AND av.status = 'active'
-    AND av.allows_postings = 1
-    AND je.entry_date >= av.opened_on
-    AND (av.closed_on IS NULL OR je.entry_date <= av.closed_on)
-    AND (av.default_commodity_id IS NULL OR av.default_commodity_id = NEW.commodity_id)
-    AND (av.quantity_scale_override IS NULL OR NEW.quantity_scale <= av.quantity_scale_override)
+    AND a.status = 'active'
+    AND a.allows_postings = 1
+    AND je.entry_date >= a.opened_on
+    AND (a.closed_on IS NULL OR je.entry_date <= a.closed_on)
+    AND (a.default_commodity_id IS NULL OR a.default_commodity_id = NEW.commodity_id)
+    AND (a.quantity_scale_override IS NULL OR NEW.quantity_scale <= a.quantity_scale_override)
 )
 BEGIN
   SELECT RAISE(ABORT, 'posting account is not eligible on entry date');
@@ -990,23 +905,73 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS posting_versions_commodity_scale_valid
-BEFORE INSERT ON posting_versions
+CREATE TRIGGER IF NOT EXISTS postings_commodity_scale_valid
+BEFORE INSERT ON postings
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities c
+  WHERE c.id = NEW.commodity_id
+    AND c.status = 'active'
+    AND NEW.quantity_scale <= c.max_quantity_scale
+)
+BEGIN
+  SELECT RAISE(ABORT, 'posting commodity scale is invalid');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS postings_same_book_and_lineage_update
+BEFORE UPDATE OF journal_entry_id, posting_line_id, account_id, commodity_id ON postings
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM transactions t
+  JOIN journal_entries je ON je.id = NEW.journal_entry_id
+  JOIN posting_lines pl ON pl.id = NEW.posting_line_id
+  JOIN accounts a ON a.id = NEW.account_id
+  JOIN commodities c ON c.id = NEW.commodity_id
+  WHERE t.id = NEW.transaction_id
+    AND t.book_id = NEW.book_id
+    AND je.transaction_id = t.id
+    AND je.book_id = NEW.book_id
+    AND pl.book_id = NEW.book_id
+    AND pl.transaction_id = t.id
+    AND a.book_id = NEW.book_id
+    AND c.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'posting references must belong to one transaction book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS postings_account_valid_update
+BEFORE UPDATE OF journal_entry_id, account_id, commodity_id, quantity_scale ON postings
 WHEN NOT EXISTS (
   SELECT 1
   FROM journal_entries je
-  JOIN commodity_versions cv ON cv.commodity_id = NEW.commodity_id
+  JOIN accounts a ON a.id = NEW.account_id
   WHERE je.id = NEW.journal_entry_id
-    AND cv.id = (
-      SELECT asof_cv.id
-      FROM commodity_versions asof_cv
-      WHERE asof_cv.commodity_id = NEW.commodity_id
-        AND asof_cv.effective_from <= je.entry_date
-      ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC
-      LIMIT 1
-    )
-    AND cv.status = 'active'
-    AND NEW.quantity_scale <= cv.max_quantity_scale
+    AND a.status = 'active'
+    AND a.allows_postings = 1
+    AND je.entry_date >= a.opened_on
+    AND (a.closed_on IS NULL OR je.entry_date <= a.closed_on)
+    AND (a.default_commodity_id IS NULL OR a.default_commodity_id = NEW.commodity_id)
+    AND (a.quantity_scale_override IS NULL OR NEW.quantity_scale <= a.quantity_scale_override)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'posting account is not eligible on entry date');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS postings_commodity_scale_valid_update
+BEFORE UPDATE OF commodity_id, quantity_scale ON postings
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities c
+  WHERE c.id = NEW.commodity_id
+    AND c.status = 'active'
+    AND NEW.quantity_scale <= c.max_quantity_scale
 )
 BEGIN
   SELECT RAISE(ABORT, 'posting commodity scale is invalid');
@@ -1050,38 +1015,28 @@ END;
 -- +goose Down
 DROP TRIGGER IF EXISTS posting_tags_same_book_and_active_tag;
 DROP TRIGGER IF EXISTS transaction_tags_same_book_and_active_tag;
-DROP TRIGGER IF EXISTS posting_versions_commodity_scale_valid;
-DROP TRIGGER IF EXISTS posting_versions_account_version_valid;
-DROP TRIGGER IF EXISTS posting_versions_same_book_and_lineage;
-DROP TRIGGER IF EXISTS posting_lines_same_book;
-DROP TRIGGER IF EXISTS journal_entries_same_book;
+DROP TRIGGER IF EXISTS postings_commodity_scale_valid_update;
+DROP TRIGGER IF EXISTS postings_account_valid_update;
+DROP TRIGGER IF EXISTS postings_same_book_and_lineage_update;
+DROP TRIGGER IF EXISTS postings_commodity_scale_valid;
+DROP TRIGGER IF EXISTS postings_account_valid;
+DROP TRIGGER IF EXISTS postings_same_book_and_lineage;
+DROP TRIGGER IF EXISTS accounts_parent_same_book_update;
+DROP TRIGGER IF EXISTS accounts_parent_same_book;
 DROP TRIGGER IF EXISTS transactions_correction_same_book;
+DROP TRIGGER IF EXISTS audit_transactions_update;
+DROP TRIGGER IF EXISTS audit_transactions_insert;
+DROP TRIGGER IF EXISTS audit_payees_update;
+DROP TRIGGER IF EXISTS audit_payees_insert;
+DROP TRIGGER IF EXISTS audit_commodities_update;
+DROP TRIGGER IF EXISTS audit_commodities_insert;
+DROP TRIGGER IF EXISTS audit_institutions_update;
+DROP TRIGGER IF EXISTS audit_institutions_insert;
+DROP TRIGGER IF EXISTS audit_accounts_update;
+DROP TRIGGER IF EXISTS audit_accounts_insert;
+DROP TRIGGER IF EXISTS transaction_search_delete;
+DROP TRIGGER IF EXISTS transaction_search_update;
 DROP TRIGGER IF EXISTS transaction_search_insert;
-DROP TRIGGER IF EXISTS transaction_versions_supersedes_same_transaction;
-DROP TRIGGER IF EXISTS transaction_versions_same_book;
-DROP TRIGGER IF EXISTS transaction_versions_no_delete;
-DROP TRIGGER IF EXISTS transaction_versions_no_update;
-DROP TRIGGER IF EXISTS journal_entries_no_delete;
-DROP TRIGGER IF EXISTS journal_entries_no_update;
-DROP TRIGGER IF EXISTS posting_versions_no_delete;
-DROP TRIGGER IF EXISTS posting_versions_no_update;
-DROP TRIGGER IF EXISTS payee_versions_no_delete;
-DROP TRIGGER IF EXISTS payee_versions_no_update;
-DROP TRIGGER IF EXISTS account_versions_no_delete;
-DROP TRIGGER IF EXISTS account_versions_no_update;
-DROP TRIGGER IF EXISTS accounts_system_fields_no_update;
-DROP TRIGGER IF EXISTS institution_versions_no_delete;
-DROP TRIGGER IF EXISTS institution_versions_no_update;
-DROP TRIGGER IF EXISTS commodity_versions_no_delete;
-DROP TRIGGER IF EXISTS commodity_versions_no_update;
-DROP TRIGGER IF EXISTS books_default_currency_must_exist;
-DROP TRIGGER IF EXISTS books_default_currency_must_exist_on_insert;
-
-DROP INDEX IF EXISTS account_versions_default_commodity_idx;
-DROP INDEX IF EXISTS account_versions_institution_idx;
-DROP INDEX IF EXISTS account_versions_parent_idx;
-DROP INDEX IF EXISTS account_versions_account_seq_idx;
-DROP VIEW IF EXISTS current_account_versions;
 DROP INDEX IF EXISTS reconciliation_checkpoint_postings_posting_idx;
 DROP TABLE IF EXISTS reconciliation_checkpoint_postings;
 DROP INDEX IF EXISTS reconciliation_checkpoints_account_idx;
@@ -1094,68 +1049,49 @@ DROP INDEX IF EXISTS posting_tags_tag_idx;
 DROP TABLE IF EXISTS posting_tags;
 DROP INDEX IF EXISTS transaction_tags_tag_idx;
 DROP TABLE IF EXISTS transaction_tags;
-DROP INDEX IF EXISTS posting_versions_journal_idx;
-DROP INDEX IF EXISTS posting_versions_account_idx;
-DROP INDEX IF EXISTS posting_versions_version_idx;
-DROP TABLE IF EXISTS posting_versions;
+DROP INDEX IF EXISTS postings_journal_idx;
+DROP INDEX IF EXISTS postings_account_idx;
+DROP INDEX IF EXISTS postings_transaction_idx;
+DROP TABLE IF EXISTS postings;
 DROP INDEX IF EXISTS posting_lines_transaction_idx;
 DROP TABLE IF EXISTS posting_lines;
 DROP INDEX IF EXISTS journal_entries_book_date_idx;
-DROP INDEX IF EXISTS journal_entries_version_idx;
+DROP INDEX IF EXISTS journal_entries_transaction_idx;
 DROP TABLE IF EXISTS journal_entries;
 DROP TABLE IF EXISTS transaction_search;
-DROP VIEW IF EXISTS current_transaction_versions;
-DROP INDEX IF EXISTS transaction_versions_payee_idx;
-DROP INDEX IF EXISTS transaction_versions_book_date_idx;
-DROP INDEX IF EXISTS transaction_versions_transaction_seq_idx;
-DROP TABLE IF EXISTS transaction_versions;
+DROP INDEX IF EXISTS transactions_payee_idx;
 DROP INDEX IF EXISTS transactions_correction_idx;
-DROP INDEX IF EXISTS transactions_book_idx;
+DROP INDEX IF EXISTS transactions_book_date_idx;
 DROP TABLE IF EXISTS transactions;
-DROP VIEW IF EXISTS current_payee_versions;
-DROP INDEX IF EXISTS payee_versions_name_idx;
-DROP INDEX IF EXISTS payee_versions_payee_seq_idx;
-DROP TABLE IF EXISTS payee_versions;
-DROP INDEX IF EXISTS payees_book_idx;
+DROP INDEX IF EXISTS payees_active_normalized_name_idx;
+DROP INDEX IF EXISTS payees_book_status_name_idx;
 DROP TABLE IF EXISTS payees;
-DROP TABLE IF EXISTS account_versions;
-
-DROP INDEX IF EXISTS accounts_book_idx;
+DROP INDEX IF EXISTS accounts_institution_idx;
+DROP INDEX IF EXISTS accounts_parent_idx;
+DROP INDEX IF EXISTS accounts_book_status_class_idx;
 DROP INDEX IF EXISTS accounts_system_role_idx;
 DROP TABLE IF EXISTS accounts;
-
 DROP TABLE IF EXISTS account_kinds;
-
-DROP INDEX IF EXISTS institution_versions_institution_seq_idx;
-DROP VIEW IF EXISTS current_institution_versions;
-DROP TABLE IF EXISTS institution_versions;
-
 DROP INDEX IF EXISTS institutions_book_idx;
 DROP TABLE IF EXISTS institutions;
-
-DROP INDEX IF EXISTS commodity_versions_commodity_seq_idx;
-DROP VIEW IF EXISTS current_commodity_versions;
-DROP TABLE IF EXISTS commodity_versions;
-
 DROP INDEX IF EXISTS commodities_book_kind_idx;
 DROP TABLE IF EXISTS commodities;
-
 DROP INDEX IF EXISTS tags_active_name_kind_idx;
 DROP INDEX IF EXISTS tags_book_status_kind_idx;
 DROP TABLE IF EXISTS tags;
-
 DROP TABLE IF EXISTS books;
 DROP TABLE IF EXISTS login_throttles;
 DROP TABLE IF EXISTS setup_steps;
-
+DROP INDEX IF EXISTS audit_event_changes_row_idx;
+DROP TABLE IF EXISTS audit_event_changes;
+DROP INDEX IF EXISTS audit_event_targets_target_idx;
+DROP TABLE IF EXISTS audit_event_targets;
 DROP INDEX IF EXISTS audit_events_request_idx;
 DROP INDEX IF EXISTS audit_events_actor_occurred_idx;
 DROP INDEX IF EXISTS audit_events_book_occurred_idx;
 DROP TABLE IF EXISTS audit_events;
-
 DROP INDEX IF EXISTS auth_sessions_expires_revoked_idx;
 DROP INDEX IF EXISTS auth_sessions_user_id_idx;
 DROP TABLE IF EXISTS auth_sessions;
-
 DROP INDEX IF EXISTS users_one_owner_idx;
 DROP TABLE IF EXISTS users;

@@ -1,6 +1,14 @@
 # Accounts And Institutions System Draft
 
-Status: active Phase 1 design guidance for implemented institution and account
+> Supersession note: the current implementation no longer uses domain
+> `*_versions` tables or `current_*_versions` views. Accounts, categories,
+> institutions, commodities, payees, transactions, and postings store current
+> state directly. Historical explanation belongs to `audit_events`,
+> `audit_event_targets`, and `audit_event_changes`. The older version-table
+> sections below are retained as design history only and must not be used as
+> implementation guidance.
+
+Status: historical Phase 1 design guidance for implemented institution and account
 backend slices; still open for later transaction, reconciliation, investment,
 and household-context extensions.
 

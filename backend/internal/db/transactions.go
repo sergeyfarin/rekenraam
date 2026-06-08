@@ -231,15 +231,15 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 		where = append(where, `EXISTS (
 			SELECT 1
 			FROM journal_entries account_je
-			JOIN posting_versions account_pv ON account_pv.journal_entry_id = account_je.id
-			WHERE account_je.transaction_version_id = tv.id
+			JOIN postings account_pv ON account_pv.journal_entry_id = account_je.id
+			WHERE account_je.transaction_id = tv.id
 				AND account_pv.account_id = ?
 		)`)
 		args = append(args, params.AccountID)
 	}
 	dateColumn := "tv.transaction_date"
 	if params.FilterEntryDate {
-		dateColumn = `(SELECT MAX(date_je.entry_date) FROM journal_entries date_je WHERE date_je.transaction_version_id = tv.id)`
+		dateColumn = `(SELECT MAX(date_je.entry_date) FROM journal_entries date_je WHERE date_je.transaction_id = tv.id)`
 	}
 	if params.AfterDate != "" {
 		where = append(where, dateColumn+" >= ?")
@@ -255,7 +255,7 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 	}
 	if strings.TrimSpace(params.Query) != "" {
 		where = append(where, `tv.id IN (
-			SELECT CAST(transaction_version_id AS INTEGER)
+			SELECT CAST(transaction_id AS INTEGER)
 			FROM transaction_search
 			WHERE transaction_search MATCH ?
 		)`)
@@ -598,8 +598,8 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 	var durableCount int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(*)
-		FROM transaction_versions
-		WHERE transaction_id = ?
+		FROM transactions
+		WHERE id = ?
 			AND status IN ('posted', 'voided')
 	`, params.TransactionID).Scan(&durableCount); err != nil {
 		return fmt.Errorf("count durable transaction versions: %w", err)
@@ -620,26 +620,19 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 		return fmt.Errorf("delete transaction tags: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		DELETE FROM posting_versions
-		WHERE transaction_version_id IN (
-			SELECT id FROM transaction_versions WHERE transaction_id = ?
-		)
+		DELETE FROM postings
+		WHERE transaction_id = ?
 	`, params.TransactionID); err != nil {
-		return fmt.Errorf("delete posting versions: %w", err)
+		return fmt.Errorf("delete postings: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM journal_entries
-		WHERE transaction_version_id IN (
-			SELECT id FROM transaction_versions WHERE transaction_id = ?
-		)
+		WHERE transaction_id = ?
 	`, params.TransactionID); err != nil {
 		return fmt.Errorf("delete journal entries: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_search WHERE transaction_id = ?", params.TransactionID); err != nil {
 		return fmt.Errorf("delete transaction search rows: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_versions WHERE transaction_id = ?", params.TransactionID); err != nil {
-		return fmt.Errorf("delete transaction versions: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM posting_lines WHERE transaction_id = ?", params.TransactionID); err != nil {
 		return fmt.Errorf("delete posting lines: %w", err)
@@ -665,33 +658,25 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 }
 
 func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID int64, accountID int64, entryDate string) (PostingAccountRule, error) {
+	_ = entryDate
 	var rule PostingAccountRule
 	var systemRole sql.NullString
 	var allowsPostings int
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT
 			a.id,
-			av.account_class,
-			av.status,
-			av.opened_on,
-			av.closed_on,
-			av.default_commodity_id,
-			av.quantity_scale_override,
-			av.allows_postings,
+			a.account_class,
+			a.status,
+			a.opened_on,
+			a.closed_on,
+			a.default_commodity_id,
+			a.quantity_scale_override,
+			a.allows_postings,
 			a.system_role
 		FROM accounts a
-		JOIN account_versions av ON av.account_id = a.id
 		WHERE a.book_id = ?
 			AND a.id = ?
-			AND av.id = (
-				SELECT asof_av.id
-				FROM account_versions asof_av
-				WHERE asof_av.account_id = a.id
-					AND asof_av.effective_from <= ?
-				ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC
-				LIMIT 1
-			)
-	`, bookID, accountID, entryDate).Scan(
+	`, bookID, accountID).Scan(
 		&rule.AccountID,
 		&rule.AccountClass,
 		&rule.Status,
@@ -714,28 +699,20 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 }
 
 func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID int64, commodityID int64, entryDate string) (PostingCommodityRule, error) {
+	_ = entryDate
 	var rule PostingCommodityRule
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT
 			c.id,
 			c.book_id,
 			c.kind,
-			cv.status,
-			cv.standard_scale,
-			cv.max_quantity_scale
+			c.status,
+			c.standard_scale,
+			c.max_quantity_scale
 		FROM commodities c
-		JOIN commodity_versions cv ON cv.commodity_id = c.id
 		WHERE c.book_id = ?
 			AND c.id = ?
-			AND cv.id = (
-				SELECT asof_cv.id
-				FROM commodity_versions asof_cv
-				WHERE asof_cv.commodity_id = c.id
-					AND asof_cv.effective_from <= ?
-				ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC
-				LIMIT 1
-			)
-	`, bookID, commodityID, entryDate).Scan(&rule.CommodityID, &rule.CommodityBookID, &rule.CommodityKind, &rule.Status, &rule.StandardScale, &rule.MaxQuantityScale); err != nil {
+	`, bookID, commodityID).Scan(&rule.CommodityID, &rule.CommodityBookID, &rule.CommodityKind, &rule.Status, &rule.StandardScale, &rule.MaxQuantityScale); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PostingCommodityRule{}, ErrNotFound
 		}
@@ -799,34 +776,25 @@ type insertTransactionVersionParams struct {
 }
 
 func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx *sql.Tx, params insertTransactionVersionParams) (TransactionRecord, error) {
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO transaction_versions (
-			book_id,
-			transaction_id,
-			version_seq,
-			supersedes_version_id,
-			status,
-			transaction_kind,
-			transaction_date,
-			payee_id,
-			payee_name,
-			description,
-			external_ref_hint,
-			note_markdown,
-			metadata_json,
-			recorded_at,
-			changed_by_user_id,
-			change_reason,
-			change_audit_event_id
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.TransactionID, params.VersionSeq, nullableInt64Value(params.SupersedesVersionID), params.Spec.Status, params.Spec.TransactionKind, params.Spec.TransactionDate, nullableInt64Value(params.Spec.PayeeID), nullableStringValue(params.Spec.PayeeName), params.Spec.Description, params.Spec.ExternalRefHint, params.Spec.NoteMarkdown, params.Spec.MetadataJSON, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.ChangeAuditEventID)
+	_, err := tx.ExecContext(ctx, `
+		UPDATE transactions
+		SET status = ?,
+			transaction_kind = ?,
+			transaction_date = ?,
+			payee_id = ?,
+			payee_name = ?,
+			description = ?,
+			external_ref_hint = NULLIF(?, ''),
+			note_markdown = ?,
+			metadata_json = ?,
+			updated_at = ?,
+			updated_by_user_id = ?,
+			updated_audit_event_id = ?,
+			change_reason = ?
+		WHERE book_id = ? AND id = ?
+	`, params.Spec.Status, params.Spec.TransactionKind, params.Spec.TransactionDate, nullableInt64Value(params.Spec.PayeeID), nullableStringValue(params.Spec.PayeeName), params.Spec.Description, params.Spec.ExternalRefHint, params.Spec.NoteMarkdown, params.Spec.MetadataJSON, params.RecordedAt, params.ChangedByUserID, params.ChangeAuditEventID, params.ChangeReason, params.BookID, params.TransactionID)
 	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("insert transaction version: %w", err)
-	}
-	transactionVersionID, err := result.LastInsertId()
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("read transaction version id: %w", err)
+		return TransactionRecord{}, fmt.Errorf("update transaction: %w", err)
 	}
 
 	if params.ReplaceTags {
@@ -835,26 +803,24 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 		}
 	}
 
-	postingLineIDs := make(map[int64]bool)
-	for entryIndex, entry := range params.Spec.JournalEntries {
-		entryResult, err := tx.ExecContext(ctx, `
-			INSERT INTO journal_entries (
-				book_id,
-				transaction_version_id,
-				entry_seq,
-				entry_date,
-				entry_kind,
-				memo,
-				metadata_json
-			)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, transactionVersionID, entryIndex+1, entry.EntryDate, entry.EntryKind, entry.Memo, entry.MetadataJSON)
-		if err != nil {
-			return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("insert journal entry: %w", err))
+	usedLineKeys := make(map[string]bool)
+	for _, entry := range params.Spec.JournalEntries {
+		for _, posting := range entry.Postings {
+			usedLineKeys[posting.LineKey] = true
 		}
-		journalEntryID, err := entryResult.LastInsertId()
+	}
+	if err := deleteUnusedPostingsBeforeUpsert(ctx, tx, params.BookID, params.TransactionID, usedLineKeys); err != nil {
+		return TransactionRecord{}, err
+	}
+
+	postingLineIDs := make(map[int64]bool)
+	usedEntrySeqs := make(map[int]bool)
+	for entryIndex, entry := range params.Spec.JournalEntries {
+		entrySeq := entryIndex + 1
+		usedEntrySeqs[entrySeq] = true
+		journalEntryID, err := upsertJournalEntry(ctx, tx, params.BookID, params.TransactionID, entrySeq, entry)
 		if err != nil {
-			return TransactionRecord{}, fmt.Errorf("read journal entry id: %w", err)
+			return TransactionRecord{}, err
 		}
 
 		for postingIndex, posting := range entry.Postings {
@@ -864,10 +830,36 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 			}
 			postingLineIDs[postingLineID] = true
 
-			postingResult, err := tx.ExecContext(ctx, `
-				INSERT INTO posting_versions (
+			var existingPostingID int64
+			err = tx.QueryRowContext(ctx, `
+				SELECT id
+				FROM postings
+				WHERE book_id = ?
+					AND transaction_id = ?
+					AND posting_line_id = ?
+			`, params.BookID, params.TransactionID, postingLineID).Scan(&existingPostingID)
+			if err == nil {
+				if _, err := tx.ExecContext(ctx, `
+					UPDATE postings
+					SET journal_entry_id = ?,
+						line_seq = ?,
+						account_id = ?,
+						quantity_value = ?,
+						quantity_scale = ?,
+						commodity_id = ?,
+						memo = ?,
+						reconciliation_status = ?,
+						cleared_on = ?,
+						metadata_json = ?
+					WHERE id = ?
+				`, journalEntryID, postingIndex+1, posting.AccountID, posting.QuantityValue, posting.QuantityScale, posting.CommodityID, posting.Memo, posting.ReconciliationStatus, nullableStringValue(posting.ClearedOn), posting.MetadataJSON, existingPostingID); err != nil {
+					return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("update posting: %w", err))
+				}
+			} else if errors.Is(err, sql.ErrNoRows) {
+				postingResult, err := tx.ExecContext(ctx, `
+					INSERT INTO postings (
 					book_id,
-					transaction_version_id,
+					transaction_id,
 					journal_entry_id,
 					posting_line_id,
 					line_seq,
@@ -881,12 +873,15 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 					metadata_json
 				)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			`, params.BookID, transactionVersionID, journalEntryID, postingLineID, postingIndex+1, posting.AccountID, posting.QuantityValue, posting.QuantityScale, posting.CommodityID, posting.Memo, posting.ReconciliationStatus, nullableStringValue(posting.ClearedOn), posting.MetadataJSON)
-			if err != nil {
-				return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("insert posting version: %w", err))
-			}
-			if _, err := postingResult.LastInsertId(); err != nil {
-				return TransactionRecord{}, fmt.Errorf("read posting version id: %w", err)
+				`, params.BookID, params.TransactionID, journalEntryID, postingLineID, postingIndex+1, posting.AccountID, posting.QuantityValue, posting.QuantityScale, posting.CommodityID, posting.Memo, posting.ReconciliationStatus, nullableStringValue(posting.ClearedOn), posting.MetadataJSON)
+				if err != nil {
+					return TransactionRecord{}, mapTransactionConstraintError(fmt.Errorf("insert posting: %w", err))
+				}
+				if _, err := postingResult.LastInsertId(); err != nil {
+					return TransactionRecord{}, fmt.Errorf("read posting id: %w", err)
+				}
+			} else {
+				return TransactionRecord{}, fmt.Errorf("read posting: %w", err)
 			}
 
 			if params.ReplaceTags {
@@ -896,13 +891,16 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 			}
 		}
 	}
+	if err := deleteUnusedTransactionChildren(ctx, tx, params.BookID, params.TransactionID, postingLineIDs, usedEntrySeqs); err != nil {
+		return TransactionRecord{}, err
+	}
 	if params.ReplaceTags {
 		if err := clearUnusedPostingLineTags(ctx, tx, params.BookID, params.TransactionID, postingLineIDs); err != nil {
 			return TransactionRecord{}, err
 		}
 	}
 
-	record, err := transactionVersionByID(ctx, tx, transactionVersionID)
+	record, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
 	if err != nil {
 		return TransactionRecord{}, err
 	}
@@ -912,6 +910,133 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 	}
 
 	return records[0], nil
+}
+
+func deleteUnusedPostingsBeforeUpsert(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, usedLineKeys map[string]bool) error {
+	if len(usedLineKeys) == 0 {
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM postings
+			WHERE book_id = ? AND transaction_id = ?
+		`, bookID, transactionID); err != nil {
+			return fmt.Errorf("delete all replaced postings: %w", err)
+		}
+		return nil
+	}
+
+	placeholders := make([]string, 0, len(usedLineKeys))
+	args := []any{bookID, transactionID}
+	for lineKey := range usedLineKeys {
+		placeholders = append(placeholders, "?")
+		args = append(args, lineKey)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM postings
+		WHERE book_id = ?
+			AND transaction_id = ?
+			AND posting_line_id NOT IN (
+				SELECT id
+				FROM posting_lines
+				WHERE book_id = ?
+					AND transaction_id = ?
+					AND line_key IN (`+strings.Join(placeholders, ",")+`)
+			)
+	`, append([]any{bookID, transactionID, bookID, transactionID}, args[2:]...)...); err != nil {
+		return fmt.Errorf("delete replaced postings: %w", err)
+	}
+	return nil
+}
+
+func upsertJournalEntry(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, entrySeq int, entry JournalEntrySpec) (int64, error) {
+	var journalEntryID int64
+	err := tx.QueryRowContext(ctx, `
+		SELECT id
+		FROM journal_entries
+		WHERE book_id = ?
+			AND transaction_id = ?
+			AND entry_seq = ?
+	`, bookID, transactionID, entrySeq).Scan(&journalEntryID)
+	if err == nil {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE journal_entries
+			SET entry_date = ?,
+				entry_kind = ?,
+				memo = ?,
+				metadata_json = ?
+			WHERE id = ?
+		`, entry.EntryDate, entry.EntryKind, entry.Memo, entry.MetadataJSON, journalEntryID); err != nil {
+			return 0, mapTransactionConstraintError(fmt.Errorf("update journal entry: %w", err))
+		}
+		return journalEntryID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("read journal entry: %w", err)
+	}
+
+	entryResult, err := tx.ExecContext(ctx, `
+		INSERT INTO journal_entries (
+			book_id,
+			transaction_id,
+			entry_seq,
+			entry_date,
+			entry_kind,
+			memo,
+			metadata_json
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, bookID, transactionID, entrySeq, entry.EntryDate, entry.EntryKind, entry.Memo, entry.MetadataJSON)
+	if err != nil {
+		return 0, mapTransactionConstraintError(fmt.Errorf("insert journal entry: %w", err))
+	}
+	journalEntryID, err = entryResult.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("read journal entry id: %w", err)
+	}
+	return journalEntryID, nil
+}
+
+func deleteUnusedTransactionChildren(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, usedPostingLineIDs map[int64]bool, usedEntrySeqs map[int]bool) error {
+	if len(usedPostingLineIDs) == 0 {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM postings WHERE book_id = ? AND transaction_id = ?", bookID, transactionID); err != nil {
+			return fmt.Errorf("delete transaction postings: %w", err)
+		}
+	} else {
+		placeholders := make([]string, 0, len(usedPostingLineIDs))
+		args := []any{bookID, transactionID}
+		for postingLineID := range usedPostingLineIDs {
+			placeholders = append(placeholders, "?")
+			args = append(args, postingLineID)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM postings
+			WHERE book_id = ?
+				AND transaction_id = ?
+				AND posting_line_id NOT IN (`+strings.Join(placeholders, ",")+`)
+		`, args...); err != nil {
+			return fmt.Errorf("delete unused postings: %w", err)
+		}
+	}
+
+	if len(usedEntrySeqs) == 0 {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM journal_entries WHERE book_id = ? AND transaction_id = ?", bookID, transactionID); err != nil {
+			return fmt.Errorf("delete transaction journal entries: %w", err)
+		}
+		return nil
+	}
+	placeholders := make([]string, 0, len(usedEntrySeqs))
+	args := []any{bookID, transactionID}
+	for entrySeq := range usedEntrySeqs {
+		placeholders = append(placeholders, "?")
+		args = append(args, entrySeq)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM journal_entries
+		WHERE book_id = ?
+			AND transaction_id = ?
+			AND entry_seq NOT IN (`+strings.Join(placeholders, ",")+`)
+	`, args...); err != nil {
+		return fmt.Errorf("delete unused journal entries: %w", err)
+	}
+	return nil
 }
 
 func replaceTransactionTags(ctx context.Context, tx *sql.Tx, bookID int64, transactionID int64, tagIDs []int64, recordedAt string, actorUserID int64, auditEventID int64) error {
@@ -1069,7 +1194,7 @@ func loadTransactionChildrenQuery(ctx context.Context, queryer queryer, records 
 		}
 		records[index].TagIDs = tagIDs
 
-		entries, err := journalEntriesForVersion(ctx, queryer, records[index].VersionID)
+		entries, err := journalEntriesForVersion(ctx, queryer, records[index].ID)
 		if err != nil {
 			return err
 		}
@@ -1106,13 +1231,13 @@ func transactionTagIDs(ctx context.Context, queryer queryer, transactionID int64
 	return tagIDs, nil
 }
 
-func journalEntriesForVersion(ctx context.Context, queryer queryer, transactionVersionID int64) ([]JournalEntryRecord, error) {
+func journalEntriesForVersion(ctx context.Context, queryer queryer, transactionID int64) ([]JournalEntryRecord, error) {
 	rows, err := queryer.QueryContext(ctx, `
-		SELECT id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind, memo, metadata_json
+		SELECT id, book_id, transaction_id, entry_seq, entry_date, entry_kind, memo, metadata_json
 		FROM journal_entries
-		WHERE transaction_version_id = ?
+		WHERE transaction_id = ?
 		ORDER BY entry_seq
-	`, transactionVersionID)
+	`, transactionID)
 	if err != nil {
 		return nil, fmt.Errorf("read journal entries: %w", err)
 	}
@@ -1146,7 +1271,7 @@ func postingsForJournalEntry(ctx context.Context, queryer queryer, journalEntryI
 		SELECT
 			pv.id,
 			pv.book_id,
-			pv.transaction_version_id,
+			pv.transaction_id,
 			pv.journal_entry_id,
 			pv.posting_line_id,
 			pl.line_key,
@@ -1159,13 +1284,13 @@ func postingsForJournalEntry(ctx context.Context, queryer queryer, journalEntryI
 			pv.reconciliation_status,
 			pv.cleared_on,
 			pv.metadata_json
-		FROM posting_versions pv
+		FROM postings pv
 		JOIN posting_lines pl ON pl.id = pv.posting_line_id
 		WHERE pv.journal_entry_id = ?
 		ORDER BY pv.line_seq
 	`, journalEntryID)
 	if err != nil {
-		return nil, fmt.Errorf("read posting versions: %w", err)
+		return nil, fmt.Errorf("read postings: %w", err)
 	}
 	defer rows.Close()
 
@@ -1173,12 +1298,12 @@ func postingsForJournalEntry(ctx context.Context, queryer queryer, journalEntryI
 	for rows.Next() {
 		var posting PostingRecord
 		if err := rows.Scan(&posting.ID, &posting.BookID, &posting.TransactionVersionID, &posting.JournalEntryID, &posting.PostingLineID, &posting.LineKey, &posting.LineSeq, &posting.AccountID, &posting.QuantityValue, &posting.QuantityScale, &posting.CommodityID, &posting.Memo, &posting.ReconciliationStatus, &posting.ClearedOn, &posting.MetadataJSON); err != nil {
-			return nil, fmt.Errorf("scan posting version: %w", err)
+			return nil, fmt.Errorf("scan posting: %w", err)
 		}
 		postings = append(postings, posting)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate posting versions: %w", err)
+		return nil, fmt.Errorf("iterate postings: %w", err)
 	}
 
 	for index := range postings {
@@ -1233,7 +1358,7 @@ func transactionByID(ctx context.Context, tx *sql.Tx, bookID int64, transactionI
 func transactionVersionByID(ctx context.Context, tx *sql.Tx, transactionVersionID int64) (TransactionRecord, error) {
 	var record TransactionRecord
 	if err := scanTransactionRecord(tx.QueryRowContext(ctx, transactionSelect(`
-		WHERE tv.id = ?
+		WHERE t.id = ?
 	`), transactionVersionID), &record); err != nil {
 		return TransactionRecord{}, err
 	}
@@ -1249,23 +1374,23 @@ func transactionSelect(extraConditions string) string {
 			t.correction_of_transaction_id,
 			t.created_at,
 			t.created_by_user_id,
-			tv.id,
-			tv.version_seq,
-			tv.supersedes_version_id,
-			tv.status,
-			tv.transaction_kind,
-			tv.transaction_date,
-			tv.payee_id,
-			tv.payee_name,
-			tv.description,
-			tv.external_ref_hint,
-			tv.note_markdown,
-			tv.metadata_json,
-			tv.recorded_at,
-			tv.changed_by_user_id,
-			tv.change_reason
+			t.id,
+			1,
+			NULL,
+			t.status,
+			t.transaction_kind,
+			t.transaction_date,
+			t.payee_id,
+			t.payee_name,
+			t.description,
+			t.external_ref_hint,
+			t.note_markdown,
+			t.metadata_json,
+			t.updated_at,
+			COALESCE(t.updated_by_user_id, t.created_by_user_id),
+			t.change_reason
 		FROM transactions t
-		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
+		JOIN transactions tv ON tv.id = t.id
 	` + extraConditions
 }
 
@@ -1277,24 +1402,24 @@ func accountRegisterSelect(extraConditions string) string {
 			t.correction_of_transaction_id,
 			t.created_at,
 			t.created_by_user_id,
-			tv.id,
-			tv.version_seq,
-			tv.supersedes_version_id,
-			tv.status,
-			tv.transaction_kind,
-			tv.transaction_date,
-			tv.payee_id,
-			tv.payee_name,
-			tv.description,
-			tv.external_ref_hint,
-			tv.note_markdown,
-			tv.metadata_json,
-			tv.recorded_at,
-			tv.changed_by_user_id,
-			tv.change_reason,
+			t.id,
+			1,
+			NULL,
+			t.status,
+			t.transaction_kind,
+			t.transaction_date,
+			t.payee_id,
+			t.payee_name,
+			t.description,
+			t.external_ref_hint,
+			t.note_markdown,
+			t.metadata_json,
+			t.updated_at,
+			COALESCE(t.updated_by_user_id, t.created_by_user_id),
+			t.change_reason,
 			je.id,
 			je.book_id,
-			je.transaction_version_id,
+			je.transaction_id,
 			je.entry_seq,
 			je.entry_date,
 			je.entry_kind,
@@ -1302,7 +1427,7 @@ func accountRegisterSelect(extraConditions string) string {
 			je.metadata_json,
 			pv.id,
 			pv.book_id,
-			pv.transaction_version_id,
+			pv.transaction_id,
 			pv.journal_entry_id,
 			pv.posting_line_id,
 			pl.line_key,
@@ -1316,9 +1441,9 @@ func accountRegisterSelect(extraConditions string) string {
 			pv.cleared_on,
 			pv.metadata_json
 		FROM transactions t
-		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
-		JOIN journal_entries je ON je.transaction_version_id = tv.id
-		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		JOIN transactions tv ON tv.id = t.id
+		JOIN journal_entries je ON je.transaction_id = tv.id
+		JOIN postings pv ON pv.journal_entry_id = je.id
 		JOIN posting_lines pl ON pl.id = pv.posting_line_id
 	` + extraConditions
 }

@@ -25,8 +25,7 @@ func TestLedgerReadModelBalancesTotalsAndRunningRegister(t *testing.T) {
 		"account_class":"asset",
 		"account_kind":"other_asset",
 		"allows_postings":false,
-		"opened_on":"2026-01-01",
-		"effective_from":"2026-01-01"
+		"opened_on":"2026-01-01"
 	}`)
 	checking := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Checking",
@@ -36,8 +35,7 @@ func TestLedgerReadModelBalancesTotalsAndRunningRegister(t *testing.T) {
 		"default_commodity_id":`+strconvFormatInt(usdID)+`,
 		"quantity_scale_override":2,
 		"allows_postings":true,
-		"opened_on":"2026-01-01",
-		"effective_from":"2026-01-01"
+		"opened_on":"2026-01-01"
 	}`)
 	card := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Credit Card", "liability", "credit_card", usdID, 2)
 	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)

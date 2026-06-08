@@ -179,14 +179,14 @@ func (r *CategoryRepository) WouldCreateCycle(ctx context.Context, bookID int64,
 		WITH RECURSIVE ancestors(id, parent_id) AS (
 			SELECT a.id, av.parent_account_id
 			FROM accounts a
-			JOIN current_account_versions av ON av.account_id = a.id
+			JOIN accounts av ON av.id = a.id
 			WHERE a.book_id = ?
 				AND a.id = ?
 				AND `+categoryAccountPredicate("av")+`
 			UNION ALL
 			SELECT parent.id, parent_version.parent_account_id
 			FROM accounts parent
-			JOIN current_account_versions parent_version ON parent_version.account_id = parent.id
+			JOIN accounts parent_version ON parent_version.id = parent.id
 			JOIN ancestors ON ancestors.parent_id = parent.id
 			WHERE parent.book_id = ?
 				AND `+categoryAccountPredicate("parent_version")+`
@@ -495,21 +495,6 @@ func (r *CategoryRepository) DeleteUnusedCategory(ctx context.Context, params De
 		return err
 	}
 
-	versions, err := tx.ExecContext(ctx, `
-		DELETE FROM account_versions
-		WHERE account_id = ?
-	`, params.CategoryID)
-	if err != nil {
-		return fmt.Errorf("delete category versions: %w", err)
-	}
-	versionRows, err := versions.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read deleted category versions: %w", err)
-	}
-	if versionRows == 0 {
-		return ErrNotFound
-	}
-
 	result, err := tx.ExecContext(ctx, `
 		DELETE FROM accounts
 		WHERE id = ?
@@ -703,7 +688,7 @@ func ensureActiveCategoryNameAvailable(ctx context.Context, tx *sql.Tx, bookID i
 	query := `
 		SELECT a.id
 		FROM accounts a
-		JOIN current_account_versions av ON av.account_id = a.id
+		JOIN accounts av ON av.id = a.id
 		WHERE a.book_id = ?
 			AND a.id != ?
 			AND a.system_role IS NULL
@@ -737,7 +722,7 @@ func categoryHasActiveChildren(ctx context.Context, tx *sql.Tx, bookID int64, ca
 	err := tx.QueryRowContext(ctx, `
 		SELECT child.id
 		FROM accounts child
-		JOIN current_account_versions child_av ON child_av.account_id = child.id
+		JOIN accounts child_av ON child_av.id = child.id
 		WHERE child.book_id = ?
 			AND child_av.parent_account_id = ?
 			AND child.system_role IS NULL
@@ -759,7 +744,7 @@ func categoryHasAnyChildren(ctx context.Context, tx *sql.Tx, bookID int64, categ
 	err := tx.QueryRowContext(ctx, `
 		SELECT child.id
 		FROM accounts child
-		JOIN account_versions child_av ON child_av.account_id = child.id
+		JOIN accounts child_av ON child_av.id = child.id
 		WHERE child.book_id = ?
 			AND child_av.parent_account_id = ?
 			AND child.system_role IS NULL

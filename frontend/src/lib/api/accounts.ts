@@ -6,12 +6,6 @@ export type AccountsResponse = components['schemas']['AccountsResponse'];
 export type AccountRequest = components['schemas']['AccountRequest'];
 export type AccountLifecycleRequest = components['schemas']['AccountLifecycleRequest'];
 
-export type BasicAccountRequest = Omit<AccountRequest, 'effective_from'> & {
-  effective_from?: never;
-};
-
-export type AdvancedAccountRequest = AccountRequest;
-
 export const accountsQueryKey = ['api', 'accounts'] as const;
 
 export function accountsQueryOptions(includeArchived = false, includeSystem = false) {
@@ -71,38 +65,7 @@ export async function getAccount(accountID: number): Promise<AccountResponse> {
   }
 }
 
-export async function getAccountVersions(accountID: number): Promise<AccountsResponse> {
-  try {
-    const { data, error, response } = await apiClient.GET('/api/v1/accounts/{account_id}/versions', {
-      params: {
-        path: {
-          account_id: accountID
-        }
-      }
-    });
-
-    if (data !== undefined) {
-      return data;
-    }
-
-    throw toAPIClientError(response, error);
-  } catch (error) {
-    if (error instanceof APIClientError) {
-      throw error;
-    }
-
-    throw toNetworkError(error);
-  }
-}
-
-export async function createAccount(input: BasicAccountRequest, csrfToken: string): Promise<AccountResponse> {
-  return createAccountAdvanced(input, csrfToken);
-}
-
-export async function createAccountAdvanced(
-  input: AdvancedAccountRequest,
-  csrfToken: string
-): Promise<AccountResponse> {
+export async function createAccount(input: AccountRequest, csrfToken: string): Promise<AccountResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/accounts', {
       params: {
