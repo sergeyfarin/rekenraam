@@ -256,6 +256,10 @@ func TestTransactionTagReplacementSemantics(t *testing.T) {
 	assert.Equal(t, "voided", voided.Status)
 	assert.ElementsMatch(t, []int64{tax.ID}, voided.TagIDs)
 	assert.Equal(t, 1, countPostingTags(t, database, updated.JournalEntries[0].Postings[1].PostingLineID))
+
+	repeatedVoid := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/void", `{"change_reason":"duplicate"}`, http.StatusOK)
+	assert.Equal(t, "voided", repeatedVoid.Status)
+	assert.ElementsMatch(t, []int64{tax.ID}, repeatedVoid.TagIDs)
 }
 
 func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
@@ -362,6 +366,81 @@ func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
 	checkpoints = listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
 	require.Len(t, checkpoints.Checkpoints, 1)
 	assert.Equal(t, "invalidated", checkpoints.Checkpoints[0].Status)
+}
+
+func TestVoidReconciliationIdempotencyReturnsCompleteRecords(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Void Reconciliation Checking", "asset", "checking", commodityID, 2)
+	income := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Void Reconciliation Income","category_type":"income"}`)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, 10000, 2, commodityID),
+		posting(income.ID, -10000, 2, commodityID),
+	), http.StatusCreated)
+	checkingPosting := transaction.JournalEntries[0].Postings[0]
+	clearedTransactions := changePostingReconciliationStatusForSession(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"posting_version_ids":[`+strconvFormatInt(checkingPosting.ID)+`],
+		"status":"cleared",
+		"cleared_on":"2026-06-07"
+	}`, http.StatusOK)
+	clearedPosting := postingByLineKey(t, clearedTransactions.Transactions[0], checkingPosting.LineKey)
+
+	session := startReconciliationForSession(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"commodity_id":`+strconvFormatInt(commodityID)+`,
+		"source_kind":"statement",
+		"statement_date":"2026-06-07",
+		"statement_balance_value":10000,
+		"statement_balance_scale":2
+	}`, http.StatusCreated)
+	require.Len(t, session.Candidates, 1)
+	require.Len(t, session.SelectedPostings, 1)
+	assert.Equal(t, clearedPosting.ID, session.SelectedPostings[0].PostingID)
+
+	voided := voidReconciliationForSession(t, handler, sessionCookie, csrfToken, session.ID, `{"change_reason":"entered in error"}`, http.StatusOK)
+	assert.Equal(t, "voided", voided.Status)
+	require.Len(t, voided.Candidates, 1)
+	require.Len(t, voided.SelectedPostings, 1)
+	assert.Equal(t, clearedPosting.ID, voided.SelectedPostings[0].PostingID)
+
+	repeatedVoid := voidReconciliationForSession(t, handler, sessionCookie, csrfToken, session.ID, `{"change_reason":"entered in error"}`, http.StatusOK)
+	assert.Equal(t, "voided", repeatedVoid.Status)
+	require.Len(t, repeatedVoid.Candidates, 1)
+	require.Len(t, repeatedVoid.SelectedPostings, 1)
+	assert.Equal(t, clearedPosting.ID, repeatedVoid.SelectedPostings[0].PostingID)
+}
+
+func TestVoidReconciliationCheckpointIdempotencyReturnsRecord(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Void Checkpoint Checking", "asset", "checking", commodityID, 2)
+	income := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Void Checkpoint Income","category_type":"income"}`)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, 10000, 2, commodityID),
+		posting(income.ID, -10000, 2, commodityID),
+	), http.StatusCreated)
+	reconciled := reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, transaction.JournalEntries[0].Postings[0], "2026-06-07")
+	assert.Equal(t, "reconciled", reconciled.JournalEntries[0].Postings[0].ReconciliationStatus)
+
+	checkpoints := listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
+	require.Len(t, checkpoints.Checkpoints, 1)
+	checkpoint := checkpoints.Checkpoints[0]
+	assert.Equal(t, "active", checkpoint.Status)
+
+	voided := voidReconciliationCheckpointForSession(t, handler, sessionCookie, csrfToken, checkpoint.ID, `{"change_reason":"bad statement"}`, http.StatusOK)
+	assert.Equal(t, checkpoint.ID, voided.ID)
+	assert.Equal(t, "voided", voided.Status)
+	assert.Equal(t, "bad statement", voided.VoidReason)
+
+	repeatedVoid := voidReconciliationCheckpointForSession(t, handler, sessionCookie, csrfToken, checkpoint.ID, `{"change_reason":"bad statement"}`, http.StatusOK)
+	assert.Equal(t, checkpoint.ID, repeatedVoid.ID)
+	assert.Equal(t, "voided", repeatedVoid.Status)
+	assert.Equal(t, "bad statement", repeatedVoid.VoidReason)
 }
 
 func TestPostingScopedReconciliationAllowsCategoryEditsAndSplits(t *testing.T) {
@@ -1003,6 +1082,11 @@ func finishReconciliationForSession(t *testing.T, handler http.Handler, sessionC
 	return mutateReconciliationForSession(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/reconciliations/"+strconvFormatInt(reconciliationID)+"/finish", body, wantStatus)
 }
 
+func voidReconciliationForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, reconciliationID int64, body string, wantStatus int) reconciliationSessionResponse {
+	t.Helper()
+	return mutateReconciliationForSession(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/reconciliations/"+strconvFormatInt(reconciliationID)+"/void", body, wantStatus)
+}
+
 func mutateReconciliationForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, body string, wantStatus int) reconciliationSessionResponse {
 	t.Helper()
 
@@ -1035,5 +1119,25 @@ func listReconciliationCheckpointsForSession(t *testing.T, handler http.Handler,
 	require.Equal(t, http.StatusOK, res.Code)
 	var response reconciliationCheckpointsResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func voidReconciliationCheckpointForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, checkpointID int64, body string, wantStatus int) reconciliationCheckpointResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/reconciliation-checkpoints/"+strconvFormatInt(checkpointID)+"/void", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, wantStatus, res.Code)
+	var response reconciliationCheckpointResponse
+	if wantStatus >= 200 && wantStatus < 300 {
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	}
 	return response
 }

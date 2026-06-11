@@ -485,8 +485,13 @@ func (r *TransactionRepository) VoidReconciliationSession(ctx context.Context, p
 		return ReconciliationSessionRecord{}, err
 	}
 	if session.Status == "voided" {
+		if err := loadReconciliationSessionChildren(ctx, tx, &session); err != nil {
+			return ReconciliationSessionRecord{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return ReconciliationSessionRecord{}, fmt.Errorf("commit void reconciliation session: %w", err)
+		}
 		committed = true
-		_ = tx.Commit()
 		return session, nil
 	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -516,6 +521,9 @@ func (r *TransactionRepository) VoidReconciliationSession(ctx context.Context, p
 	}
 	session, err = reconciliationSessionByID(ctx, tx, params.BookID, params.ID)
 	if err != nil {
+		return ReconciliationSessionRecord{}, err
+	}
+	if err := loadReconciliationSessionChildren(ctx, tx, &session); err != nil {
 		return ReconciliationSessionRecord{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -568,8 +576,10 @@ func (r *TransactionRepository) VoidReconciliationCheckpoint(ctx context.Context
 		return ReconciliationCheckpointRecord{}, err
 	}
 	if checkpoint.Status == "voided" {
+		if err := tx.Commit(); err != nil {
+			return ReconciliationCheckpointRecord{}, fmt.Errorf("commit void reconciliation checkpoint: %w", err)
+		}
 		committed = true
-		_ = tx.Commit()
 		return checkpoint, nil
 	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -965,6 +975,20 @@ func latestActiveReconciliationCheckpoint(ctx context.Context, queryer interface
 		return ReconciliationCheckpointRecord{}, err
 	}
 	return checkpoint, nil
+}
+
+func loadReconciliationSessionChildren(ctx context.Context, queryer queryer, session *ReconciliationSessionRecord) error {
+	candidates, err := reconciliationCandidates(ctx, queryer, *session)
+	if err != nil {
+		return err
+	}
+	selected, err := reconciliationSessionPostings(ctx, queryer, session.BookID, session.ID)
+	if err != nil {
+		return err
+	}
+	session.Candidates = candidates
+	session.SelectedPostings = selected
+	return nil
 }
 
 func reconciliationCheckpointByID(ctx context.Context, queryer interface {

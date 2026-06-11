@@ -511,7 +511,15 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 		return TransactionRecord{}, err
 	}
 	if current.Status == "voided" {
-		return current, nil
+		records := []TransactionRecord{current}
+		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return TransactionRecord{}, fmt.Errorf("commit void transaction: %w", err)
+		}
+		committed = true
+		return records[0], nil
 	}
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
