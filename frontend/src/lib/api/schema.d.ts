@@ -5998,9 +5998,6 @@ export interface components {
             /** Format: int64 */
             commodity_id: number;
             memo?: string;
-            reconciliation_status?: components["schemas"]["ReconciliationStatus"];
-            /** Format: date */
-            cleared_on?: string;
             metadata?: {
                 [key: string]: unknown;
             };

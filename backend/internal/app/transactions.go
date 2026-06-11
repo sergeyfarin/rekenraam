@@ -232,16 +232,14 @@ type JournalEntryInput struct {
 }
 
 type PostingInput struct {
-	LineKey              string
-	AccountID            int64
-	QuantityValue        int64
-	QuantityScale        int
-	CommodityID          int64
-	Memo                 string
-	ReconciliationStatus string
-	ClearedOn            string
-	MetadataJSON         string
-	TagIDs               []int64
+	LineKey       string
+	AccountID     int64
+	QuantityValue int64
+	QuantityScale int
+	CommodityID   int64
+	Memo          string
+	MetadataJSON  string
+	TagIDs        []int64
 }
 
 type TransactionService struct {
@@ -809,22 +807,14 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	}
 
 	existingState, hasExistingState := existingPostings[lineKey]
-	reconciliationStatus := strings.TrimSpace(input.ReconciliationStatus)
-	if reconciliationStatus == "" {
-		if hasExistingState {
-			reconciliationStatus = existingState.ReconciliationStatus
-		} else {
-			reconciliationStatus = "uncleared"
-		}
+	reconciliationStatus := "uncleared"
+	if hasExistingState {
+		reconciliationStatus = existingState.ReconciliationStatus
 	}
 	if !reconciliationStatuses[reconciliationStatus] {
 		return db.PostingSpec{}, ValidationError{Message: "posting reconciliation status is invalid"}
 	}
-	clearedOnInput := input.ClearedOn
-	if strings.TrimSpace(clearedOnInput) == "" && hasExistingState && reconciliationStatus == existingState.ReconciliationStatus {
-		clearedOnInput = existingState.ClearedOn
-	}
-	clearedOn, err := cleanOptionalDate(clearedOnInput, "cleared date")
+	clearedOn, err := cleanOptionalDate(existingState.ClearedOn, "cleared date")
 	if err != nil {
 		return db.PostingSpec{}, err
 	}
@@ -1060,16 +1050,14 @@ func transactionInputFromTransaction(transaction Transaction) TransactionInput {
 		postings := make([]PostingInput, 0, len(entry.Postings))
 		for _, posting := range entry.Postings {
 			postings = append(postings, PostingInput{
-				LineKey:              posting.LineKey,
-				AccountID:            posting.AccountID,
-				QuantityValue:        posting.QuantityValue,
-				QuantityScale:        posting.QuantityScale,
-				CommodityID:          posting.CommodityID,
-				Memo:                 posting.Memo,
-				ReconciliationStatus: posting.ReconciliationStatus,
-				ClearedOn:            posting.ClearedOn,
-				MetadataJSON:         posting.MetadataJSON,
-				TagIDs:               posting.TagIDs,
+				LineKey:       posting.LineKey,
+				AccountID:     posting.AccountID,
+				QuantityValue: posting.QuantityValue,
+				QuantityScale: posting.QuantityScale,
+				CommodityID:   posting.CommodityID,
+				Memo:          posting.Memo,
+				MetadataJSON:  posting.MetadataJSON,
+				TagIDs:        posting.TagIDs,
 			})
 		}
 		entries = append(entries, JournalEntryInput{

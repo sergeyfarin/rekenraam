@@ -119,7 +119,7 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 	mutateTransactionNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/transactions/"+strconvFormatInt(draft.ID), http.StatusNoContent)
 	readTransactionForSession(t, handler, sessionCookie, draft.ID, http.StatusNotFound)
 
-	reconciled := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
 		"transaction_date":"2026-06-07",
 		"journal_entries":[{
 			"entry_date":"2026-06-07",
@@ -128,7 +128,42 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
 			]
 		}]
+	}`, http.StatusBadRequest)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`,"cleared_on":"2026-06-07"},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
+	base := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
 	}`, http.StatusCreated)
+	reconciled := reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, base.JournalEntries[0].Postings[0], "2026-06-07")
+
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID), `{
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[0].LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`,"reconciliation_status":"uncleared"},
+				{"line_key":"`+reconciled.JournalEntries[0].Postings[1].LineKey+`","account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
 	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID), `{
 		"transaction_date":"2026-06-07",
 		"journal_entries":[{
@@ -140,13 +175,20 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 		}]
 	}`, http.StatusConflict)
 
-	var versionCount int
-	require.NoError(t, database.QueryRow(`
-		SELECT COUNT(*)
-		FROM transaction_versions
-		WHERE transaction_id = ?
-	`, reconciled.ID).Scan(&versionCount))
-	assert.Equal(t, 1, versionCount)
+	assert.Equal(t, int64(3), countTransactionVersions(t, database, reconciled.ID))
+
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID)+"/correct", `{
+		"transaction_date":"2026-06-08",
+		"transaction_kind":"adjustment",
+		"journal_entries":[{
+			"entry_date":"2026-06-08",
+			"entry_kind":"adjustment",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`,"reconciliation_status":"reconciled"},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
 
 	correction := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID)+"/correct", `{
 		"transaction_date":"2026-06-08",
@@ -318,6 +360,145 @@ func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
 	assert.NotEmpty(t, updated.InvalidatedCheckpointIDs)
 
 	checkpoints = listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
+	require.Len(t, checkpoints.Checkpoints, 1)
+	assert.Equal(t, "invalidated", checkpoints.Checkpoints[0].Status)
+}
+
+func TestPostingScopedReconciliationAllowsCategoryEditsAndSplits(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Category Edit Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Category Edit Groceries","category_type":"expense"}`)
+	dining := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Category Edit Dining","category_type":"expense"}`)
+	household := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Category Edit Household","category_type":"expense"}`)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, commodityID),
+		posting(groceries.ID, 10000, 2, commodityID),
+	), http.StatusCreated)
+	reconciled := reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, transaction.JournalEntries[0].Postings[0], "2026-06-07")
+	checkingPosting := reconciled.JournalEntries[0].Postings[0]
+	categoryPosting := reconciled.JournalEntries[0].Postings[1]
+	require.Equal(t, "reconciled", checkingPosting.ReconciliationStatus)
+
+	categoryEdited := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID), `{
+		"transaction_date":"2026-06-07",
+		"description":"category changed only",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+checkingPosting.LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+categoryPosting.LineKey+`","account_id":`+strconvFormatInt(dining.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusOK)
+	assert.Empty(t, categoryEdited.InvalidatedCheckpointIDs)
+	require.Equal(t, "reconciled", postingByLineKey(t, categoryEdited, checkingPosting.LineKey).ReconciliationStatus)
+
+	categoryPosting = postingByLineKey(t, categoryEdited, categoryPosting.LineKey)
+	split := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(categoryEdited.ID), `{
+		"transaction_date":"2026-06-07",
+		"description":"split category only",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+checkingPosting.LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+categoryPosting.LineKey+`","account_id":`+strconvFormatInt(dining.ID)+`,"quantity_value":6000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(household.ID)+`,"quantity_value":4000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusOK)
+	assert.Empty(t, split.InvalidatedCheckpointIDs)
+	assert.Equal(t, "reconciled", postingByLineKey(t, split, checkingPosting.LineKey).ReconciliationStatus)
+	require.Len(t, split.JournalEntries[0].Postings, 3)
+
+	checkpoints := listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
+	require.Len(t, checkpoints.Checkpoints, 1)
+	assert.Equal(t, "active", checkpoints.Checkpoints[0].Status)
+}
+
+func TestPostingScopedReconciliationAllowsUnreconciledTransferLegEdit(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Transfer Lock Checking", "asset", "checking", commodityID, 2)
+	savings := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Transfer Lock Savings", "asset", "savings", commodityID, 2)
+	otherSavings := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Transfer Lock Other Savings", "asset", "savings", commodityID, 2)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-07",
+		"transaction_kind":"transfer",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"entry_kind":"transfer_leg",
+			"postings":[
+				`+posting(checking.ID, -10000, 2, commodityID)+`,
+				`+posting(savings.ID, 10000, 2, commodityID)+`
+			]
+		}]
+	}`, http.StatusCreated)
+	reconciled := reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, transaction.JournalEntries[0].Postings[0], "2026-06-07")
+	checkingPosting := reconciled.JournalEntries[0].Postings[0]
+	savingsPosting := reconciled.JournalEntries[0].Postings[1]
+
+	unreconciledLegEdited := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID), `{
+		"transaction_date":"2026-06-07",
+		"transaction_kind":"transfer",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"entry_kind":"transfer_leg",
+			"postings":[
+				{"line_key":"`+checkingPosting.LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+savingsPosting.LineKey+`","account_id":`+strconvFormatInt(otherSavings.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusOK)
+	assert.Empty(t, unreconciledLegEdited.InvalidatedCheckpointIDs)
+	assert.Equal(t, "reconciled", postingByLineKey(t, unreconciledLegEdited, checkingPosting.LineKey).ReconciliationStatus)
+
+	checkingPosting = postingByLineKey(t, unreconciledLegEdited, checkingPosting.LineKey)
+	savingsPosting = postingByLineKey(t, unreconciledLegEdited, savingsPosting.LineKey)
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(unreconciledLegEdited.ID), `{
+		"transaction_date":"2026-06-07",
+		"transaction_kind":"transfer",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"entry_kind":"transfer_leg",
+			"postings":[
+				{"line_key":"`+checkingPosting.LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-9000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+savingsPosting.LineKey+`","account_id":`+strconvFormatInt(otherSavings.ID)+`,"quantity_value":9000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusConflict)
+}
+
+func TestVoidReconciledTransactionRequiresOverrideAndInvalidatesCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Void Reconciled Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Void Reconciled Expense","category_type":"expense"}`)
+
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, commodityID),
+		posting(expense.ID, 10000, 2, commodityID),
+	), http.StatusCreated)
+	reconciled := reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, transaction.JournalEntries[0].Postings[0], "2026-06-07")
+
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID)+"/void", `{"change_reason":"duplicate statement item"}`, http.StatusConflict)
+
+	voided := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(reconciled.ID)+"/void", `{
+		"change_reason":"duplicate statement item",
+		"reconciliation_override":true
+	}`, http.StatusOK)
+	assert.Equal(t, "voided", voided.Status)
+	assert.NotEmpty(t, voided.InvalidatedCheckpointIDs)
+
+	checkpoints := listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
 	require.Len(t, checkpoints.Checkpoints, 1)
 	assert.Equal(t, "invalidated", checkpoints.Checkpoints[0].Status)
 }
@@ -618,6 +799,59 @@ func countPostingTags(t *testing.T, database *sql.DB, postingLineID int64) int {
 	return count
 }
 
+func countTransactionVersions(t *testing.T, database *sql.DB, transactionID int64) int64 {
+	t.Helper()
+
+	var count int64
+	require.NoError(t, database.QueryRow(`
+		SELECT COUNT(*)
+		FROM transaction_versions
+		WHERE transaction_id = ?
+	`, transactionID).Scan(&count))
+	return count
+}
+
+func reconcilePostingForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, accountID int64, commodityID int64, posting postingResponse, statementDate string) transactionResponse {
+	t.Helper()
+
+	clearedTransactions := changePostingReconciliationStatusForSession(t, handler, sessionCookie, csrfToken, accountID, `{
+		"posting_version_ids":[`+strconvFormatInt(posting.ID)+`],
+		"status":"cleared",
+		"cleared_on":"`+statementDate+`"
+	}`, http.StatusOK)
+	require.Len(t, clearedTransactions.Transactions, 1)
+	cleared := clearedTransactions.Transactions[0]
+	clearedPosting := postingByLineKey(t, cleared, posting.LineKey)
+	require.Equal(t, "cleared", clearedPosting.ReconciliationStatus)
+
+	started := startReconciliationForSession(t, handler, sessionCookie, csrfToken, accountID, `{
+		"commodity_id":`+strconvFormatInt(commodityID)+`,
+		"source_kind":"statement",
+		"statement_date":"`+statementDate+`",
+		"statement_balance_value":`+strconv.FormatInt(clearedPosting.QuantityValue, 10)+`,
+		"statement_balance_scale":`+strconv.Itoa(clearedPosting.QuantityScale)+`
+	}`, http.StatusCreated)
+
+	finished := finishReconciliationForSession(t, handler, sessionCookie, csrfToken, started.ID, `{"change_reason":"matched statement"}`, http.StatusOK)
+	require.Equal(t, "finished", finished.Status)
+
+	return readTransactionForSession(t, handler, sessionCookie, cleared.ID, http.StatusOK)
+}
+
+func postingByLineKey(t *testing.T, transaction transactionResponse, lineKey string) postingResponse {
+	t.Helper()
+
+	for _, entry := range transaction.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.LineKey == lineKey {
+				return posting
+			}
+		}
+	}
+	require.Failf(t, "posting not found", "line_key=%s", lineKey)
+	return postingResponse{}
+}
+
 func createPayeeForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, body string) payeeResponse {
 	t.Helper()
 	return mutatePayee(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/payees", body, http.StatusCreated)
@@ -661,7 +895,7 @@ func mutateTransaction(t *testing.T, handler http.Handler, sessionCookie *http.C
 
 	handler.ServeHTTP(res, req)
 
-	require.Equal(t, wantStatus, res.Code)
+	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
 
 	var response transactionResponse
 	if wantStatus >= 200 && wantStatus < 300 {

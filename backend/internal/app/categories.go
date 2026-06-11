@@ -130,6 +130,10 @@ func NewCategoryService(repository *db.CategoryRepository, setupService *SetupSe
 	}
 }
 
+func (s *CategoryService) SetNowForTest(now func() time.Time) {
+	s.now = now
+}
+
 func (s *CategoryService) ListCategories(ctx context.Context, input ListCategoriesInput) ([]Category, error) {
 	status := strings.TrimSpace(input.Status)
 	if status != "" && status != "active" && status != "archived" {

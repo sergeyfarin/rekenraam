@@ -120,6 +120,10 @@ func NewCurrencyService(repository *db.CommodityRepository, setupService *SetupS
 	}
 }
 
+func (s *CurrencyService) SetNowForTest(now func() time.Time) {
+	s.now = now
+}
+
 func (s *CurrencyService) Catalog() []CurrencyCatalogEntry {
 	return append([]CurrencyCatalogEntry(nil), s.catalogList...)
 }

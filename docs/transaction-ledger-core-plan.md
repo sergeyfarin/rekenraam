@@ -173,8 +173,18 @@ historical transaction after voiding. Posting tags are keyed to posting lines;
 the voided version has no current postings, but historical posting-line context
 remains available for audit/history views.
 
-Implement now: if any current posting version is reconciled, ordinary
-superseding or voiding should be blocked. Use a corrective transaction instead.
+Implement now: reconciliation locks the affected account posting facts, not the
+whole UI transaction. Ordinary superseding is allowed when every reconciled
+posting keeps the same account, commodity, quantity value, quantity scale, and
+entry date. This lets a user recategorize or split the income/expense side of a
+transaction after the bank-side posting has been reconciled, as long as the
+reconciled bank posting is unchanged and the transaction remains balanced.
+
+Changing or removing a reconciled posting requires explicit reconciliation
+override and must invalidate the affected active checkpoint plus later active
+checkpoints for that account/commodity. Voiding a transaction with reconciled
+postings follows the same rule: either use override and invalidate checkpoints,
+or use a corrective transaction that preserves the original reconciled record.
 
 Defer: closed-period posting guards until period close exists. The transaction
 slice must not attempt to enforce closed periods because no closed-period model
@@ -310,8 +320,9 @@ Rules:
 - `supersedes_version_id` must be from the same transaction
 - `transaction_date` is the user-facing register display date; `entry_date` on
   each `journal_entry` is the accounting effective date
-- inserting a superseding version must be rejected when the superseded current
-  version has reconciled postings
+- inserting a superseding version must preserve reconciled posting account,
+  commodity, amount, scale, and entry date unless the operation explicitly uses
+  reconciliation override and invalidates the affected checkpoints
 
 Attribution lives here. `posting_versions` do not carry independent
 `changed_by_user_id` or `change_reason` because a posting version is always
@@ -502,6 +513,16 @@ The edit guard is:
 - keep invalidated checkpoints visible for warning/history; do not physically
   delete checkpoint history
 - defer closed-period guards until the period-close feature is designed
+
+Examples:
+
+- reconciled checking posting unchanged, expense category changed: allowed
+- reconciled checking posting unchanged, expense side split across categories
+  with the same total: allowed
+- reconciled checking posting amount, account, commodity, or entry date changed:
+  requires override and checkpoint invalidation
+- transaction void with reconciled postings: requires override and checkpoint
+  invalidation, or an explicit corrective transaction instead
 
 ## Tags
 
@@ -768,7 +789,10 @@ Required backend tests:
 - `version_seq > 0` and unique sequence enforced
 - cross-transaction `supersedes_version_id` rejected
 - self-correction rejected
-- superseding reconciled posting rejected
+- superseding reconciled posting facts requires override and checkpoint
+  invalidation
+- category edit and category split allowed when reconciled account posting is
+  unchanged
 - draft delete allowed only for never-posted drafts
 - posted financial records are not hard-deleted
 - payee create, update, archive, restore

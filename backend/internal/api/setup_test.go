@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -284,12 +285,18 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	authService := app.NewAuthService(authRepository, logger)
 	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
 	currencyService := app.NewCurrencyService(db.NewCommodityRepository(database), setupService)
+	currencyService.SetNowForTest(func() time.Time {
+		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	})
 	institutionRepository := db.NewInstitutionRepository(database)
 	institutionService := app.NewInstitutionService(institutionRepository)
 	accountRepository := db.NewAccountRepository(database)
 	accountService := app.NewAccountService(accountRepository, institutionRepository, setupService)
 	tagService := app.NewTagService(db.NewTagRepository(database))
 	categoryService := app.NewCategoryService(db.NewCategoryRepository(database), setupService)
+	categoryService.SetNowForTest(func() time.Time {
+		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	})
 	payeeRepository := db.NewPayeeRepository(database)
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)

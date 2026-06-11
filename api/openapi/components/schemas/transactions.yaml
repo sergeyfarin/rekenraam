@@ -331,11 +331,6 @@ PostingRequest:
       format: int64
     memo:
       type: string
-    reconciliation_status:
-      $ref: "../../openapi.yaml#/components/schemas/ReconciliationStatus"
-    cleared_on:
-      type: string
-      format: date
     metadata:
       type: object
       additionalProperties: true

@@ -248,3 +248,7 @@ This is correct. But where does the 80 USD realized gain figure come from in the
 | Missing | `transaction_tags`, `posting_tags`, void workflow mechanics, draft cleanup, `entry_date` format constraint, `version_seq` uniqueness |
 
 The proposal is production-quality thinking. Address the `book_id` omissions, nail down `transaction_kind`/`entry_kind`/`action` semantics (consolidate or constrain), define the void workflow, and add the two new system roles to the existing CHECK constraint before writing the migration.
+
+
+Please review transactions and reconciliation approach, it's potentially too complex with 3 tables: journal, postings, transactions. 
+Furhtermore, if an account is reconciled it should lock postings in that account but transactions itself could be edited. For example if it is expense then posting to bank account is locked, but categories still possible to edit or even split the expense into several categories as long as posting to bank account unchanged and total value unchanged. Please review the approach - identify gaps, issues, mistakes, refactor opportunities

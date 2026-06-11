@@ -122,16 +122,14 @@ type journalEntryRequest struct {
 }
 
 type postingRequest struct {
-	LineKey              string          `json:"line_key"`
-	AccountID            int64           `json:"account_id"`
-	QuantityValue        int64           `json:"quantity_value"`
-	QuantityScale        int             `json:"quantity_scale"`
-	CommodityID          int64           `json:"commodity_id"`
-	Memo                 string          `json:"memo"`
-	ReconciliationStatus string          `json:"reconciliation_status"`
-	ClearedOn            string          `json:"cleared_on"`
-	Metadata             json.RawMessage `json:"metadata"`
-	TagIDs               []int64         `json:"tag_ids"`
+	LineKey       string          `json:"line_key"`
+	AccountID     int64           `json:"account_id"`
+	QuantityValue int64           `json:"quantity_value"`
+	QuantityScale int             `json:"quantity_scale"`
+	CommodityID   int64           `json:"commodity_id"`
+	Memo          string          `json:"memo"`
+	Metadata      json.RawMessage `json:"metadata"`
+	TagIDs        []int64         `json:"tag_ids"`
 }
 
 type voidTransactionRequest struct {
@@ -303,12 +301,13 @@ func voidTransaction(logger *slog.Logger, authService *app.AuthService, transact
 		}
 
 		transaction, err := transactionService.VoidTransaction(r.Context(), app.VoidTransactionInput{
-			OwnerUserID:   owner.ID,
-			AuthSessionID: authenticatedSessionID(r),
-			RequestID:     RequestIDFromContext(r.Context()),
-			OriginType:    "browser_api",
-			TransactionID: transactionID,
-			ChangeReason:  request.ChangeReason,
+			OwnerUserID:            owner.ID,
+			AuthSessionID:          authenticatedSessionID(r),
+			RequestID:              RequestIDFromContext(r.Context()),
+			OriginType:             "browser_api",
+			TransactionID:          transactionID,
+			ChangeReason:           request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "void transaction", err)
@@ -492,16 +491,14 @@ func toTransactionInput(request transactionRequest) app.TransactionInput {
 		postings := make([]app.PostingInput, 0, len(entry.Postings))
 		for _, posting := range entry.Postings {
 			postings = append(postings, app.PostingInput{
-				LineKey:              posting.LineKey,
-				AccountID:            posting.AccountID,
-				QuantityValue:        posting.QuantityValue,
-				QuantityScale:        posting.QuantityScale,
-				CommodityID:          posting.CommodityID,
-				Memo:                 posting.Memo,
-				ReconciliationStatus: posting.ReconciliationStatus,
-				ClearedOn:            posting.ClearedOn,
-				MetadataJSON:         rawJSONText(posting.Metadata),
-				TagIDs:               posting.TagIDs,
+				LineKey:       posting.LineKey,
+				AccountID:     posting.AccountID,
+				QuantityValue: posting.QuantityValue,
+				QuantityScale: posting.QuantityScale,
+				CommodityID:   posting.CommodityID,
+				Memo:          posting.Memo,
+				MetadataJSON:  rawJSONText(posting.Metadata),
+				TagIDs:        posting.TagIDs,
 			})
 		}
 		entries = append(entries, app.JournalEntryInput{
