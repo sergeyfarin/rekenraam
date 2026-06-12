@@ -1,25 +1,37 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
+  import { Building2, Edit3, Plus, RefreshCw, Trash2, WalletCards } from '@lucide/svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
+  import { authSessionQueryOptions } from '$lib/api/auth';
+  import {
+    accountsQueryOptions,
+    archiveAccount,
+    closeAccount,
+    deleteAccount,
+    type AccountResponse
+  } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { institutionsQueryOptions, type InstitutionResponse } from '$lib/api/institutions';
+  import {
+    deleteInstitution,
+    institutionsQueryOptions,
+    type InstitutionResponse
+  } from '$lib/api/institutions';
   import { m } from '$lib/paraglide/messages.js';
+  import AccountEditor from './account-editor.svelte';
   import AccountFilterBar from './account-filter-bar.svelte';
   import AccountGroupSection from './account-group-section.svelte';
   import AccountSummaryStats from './account-summary-stats.svelte';
+  import InstitutionEditor from './institution-editor.svelte';
   import {
     accountClassLabel,
     accountClassRank,
-    accountCommodityLabel,
     accountCountryLabel,
     accountDisplayName,
     accountInstitutionLabel,
     accountKindLabel,
-    accountStatusLabel,
-    type AccountClass
+    accountStatusLabel
   } from './account-labels';
   import type { ClassFilter, GroupMode, SortMode, StatusFilter } from './account-list-options';
 
@@ -30,15 +42,26 @@
     rank: number;
   };
 
-  const accountsQuery = createQuery(() => accountsQueryOptions(false));
+  type EditorState =
+    | { type: 'none' }
+    | { type: 'account-create' }
+    | { type: 'account-edit'; account: AccountResponse }
+    | { type: 'institution-create' }
+    | { type: 'institution-edit'; institution: InstitutionResponse };
+
+  const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
   const institutionsQuery = createQuery(() => institutionsQueryOptions(false));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
+  const sessionQuery = createQuery(() => authSessionQueryOptions());
 
-  let groupMode = $state<GroupMode>('class');
-  let sortMode = $state<SortMode>('name');
-  let statusFilter = $state<StatusFilter>('active');
+  let groupMode = $state<GroupMode>('institution');
+  let sortMode = $state<SortMode>('institution');
+  let statusFilter = $state<StatusFilter>('all');
   let classFilter = $state<ClassFilter>('all');
   let query = $state('');
+  let editor = $state<EditorState>({ type: 'none' });
+  let actionError = $state<unknown>(undefined);
+  let actionPendingKey = $state('');
 
   const countryNames = new Intl.DisplayNames(undefined, { type: 'region' });
   const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
@@ -59,12 +82,36 @@
     return accountsQuery.data?.accounts.filter((account) => !account.is_system) ?? [];
   });
 
+  const manageableAccounts = $derived.by(() => {
+    return userAccounts.filter((account) => account.status !== 'archived');
+  });
+
+  const activeInstitutions = $derived.by(() => {
+    return institutionsQuery.data?.institutions.filter((institution) => institution.status === 'active') ?? [];
+  });
+
+  const institutionAccountCounts = $derived.by(() => {
+    const counts = new Map<number, number>();
+
+    for (const account of userAccounts) {
+      if (account.institution_id) {
+        counts.set(account.institution_id, (counts.get(account.institution_id) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  });
+
   const visibleAccounts = $derived.by(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
 
-    return userAccounts
+    return manageableAccounts
       .filter((account) => {
         if (statusFilter !== 'all' && account.status !== statusFilter) {
+          return false;
+        }
+
+        if (statusFilter === 'all' && account.status === 'archived') {
           return false;
         }
 
@@ -122,18 +169,19 @@
   const visibleCount = $derived(visibleAccounts.length);
   const activeCount = $derived(userAccounts.filter((account) => account.status === 'active').length);
   const closedCount = $derived(userAccounts.filter((account) => account.status === 'closed').length);
-  const shellError = $derived(accountsQuery.error ?? institutionsQuery.error ?? currenciesQuery.error);
+  const shellError = $derived(accountsQuery.error ?? institutionsQuery.error ?? currenciesQuery.error ?? sessionQuery.error);
+  const csrfToken = $derived(sessionQuery.data?.csrf_token);
 
   const screenState = $derived.by<'loading' | 'error' | 'empty' | 'ready'>(() => {
-    if (accountsQuery.isPending || institutionsQuery.isPending || currenciesQuery.isPending) {
+    if (accountsQuery.isPending || institutionsQuery.isPending || currenciesQuery.isPending || sessionQuery.isPending) {
       return 'loading';
     }
 
-    if (accountsQuery.isError || institutionsQuery.isError || currenciesQuery.isError) {
+    if (accountsQuery.isError || institutionsQuery.isError || currenciesQuery.isError || sessionQuery.isError) {
       return 'error';
     }
 
-    if (userAccounts.length === 0) {
+    if (manageableAccounts.length === 0) {
       return 'empty';
     }
 
@@ -179,11 +227,11 @@
 
   function groupDescriptor(account: AccountResponse): Omit<AccountGroup, 'accounts'> {
     switch (groupMode) {
-      case 'institution':
+      case 'class':
         return {
-          key: account.institution_id ? `institution:${account.institution_id}` : 'institution:none',
-          label: accountInstitutionLabel(account, institutionsByID),
-          rank: account.institution_id ? 1 : 99
+          key: `class:${account.account_class}`,
+          label: accountClassLabel(account.account_class),
+          rank: accountClassRank(account.account_class)
         };
       case 'country':
         return {
@@ -211,54 +259,274 @@
         };
       default:
         return {
-          key: `class:${account.account_class}`,
-          label: accountClassLabel(account.account_class),
-          rank: accountClassRank(account.account_class)
+          key: account.institution_id ? `institution:${account.institution_id}` : 'institution:none',
+          label: accountInstitutionLabel(account, institutionsByID),
+          rank: account.institution_id ? 1 : 99
         };
     }
   }
 
   async function refreshAccounts() {
-    await Promise.all([accountsQuery.refetch(), institutionsQuery.refetch(), currenciesQuery.refetch()]);
+    await Promise.all([
+      accountsQuery.refetch(),
+      institutionsQuery.refetch(),
+      currenciesQuery.refetch(),
+      sessionQuery.refetch()
+    ]);
+  }
+
+  async function getCSRFToken(): Promise<string> {
+    if (csrfToken) {
+      return csrfToken;
+    }
+
+    const refreshedSession = await sessionQuery.refetch();
+    const token = refreshedSession.data?.csrf_token;
+    if (!token) {
+      throw new Error(m.accounts_form_missing_session());
+    }
+
+    return token;
+  }
+
+  async function handleSaved() {
+    editor = { type: 'none' };
+    await refreshAccounts();
+  }
+
+  async function handleInstitutionSaved(institution: InstitutionResponse) {
+    await refreshAccounts();
+    editor = { type: 'none' };
+
+    if (manageableAccounts.length === 0) {
+      editor = { type: 'account-create' };
+    }
+  }
+
+  async function handleCloseAccount(account: AccountResponse) {
+    await runAccountAction(`close:${account.id}`, async (token) => {
+      await closeAccount(account.id, token);
+    });
+  }
+
+  async function handleArchiveAccount(account: AccountResponse) {
+    await runAccountAction(`archive:${account.id}`, async (token) => {
+      await archiveAccount(account.id, token);
+    });
+  }
+
+  async function handleDeleteAccount(account: AccountResponse) {
+    if (!confirm(m.accounts_delete_confirm({ name: accountDisplayName(account) }))) {
+      return;
+    }
+
+    await runAccountAction(`delete:${account.id}`, async (token) => {
+      await deleteAccount(account.id, token);
+    });
+  }
+
+  async function handleDeleteInstitution(institution: InstitutionResponse) {
+    if (!confirm(m.institutions_delete_confirm({ name: institution.name }))) {
+      return;
+    }
+
+    await runAccountAction(`institution-delete:${institution.id}`, async (token) => {
+      await deleteInstitution(institution.id, token);
+    });
+  }
+
+  async function runAccountAction(key: string, action: (csrfToken: string) => Promise<void>) {
+    actionPendingKey = key;
+    actionError = undefined;
+
+    try {
+      const token = await getCSRFToken();
+      await action(token);
+      await refreshAccounts();
+    } catch (error) {
+      actionError = error;
+    } finally {
+      actionPendingKey = '';
+    }
   }
 </script>
 
-<Panel variant="toolbar">
-  <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-    <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
-    <div class="min-w-0 flex-1">
-      <AccountFilterBar bind:query bind:statusFilter bind:classFilter bind:groupMode bind:sortMode />
+<div class="space-y-4">
+  <Panel variant="toolbar">
+    <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
+      <div class="min-w-0 flex-1">
+        <AccountFilterBar bind:query bind:statusFilter bind:classFilter bind:groupMode bind:sortMode />
+      </div>
+      <div class="flex flex-wrap gap-2 xl:justify-end">
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+          onclick={() => (editor = { type: 'account-create' })}
+        >
+          <Plus size={16} aria-hidden="true" />
+          {m.accounts_add_account()}
+        </button>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+          onclick={() => (editor = { type: 'institution-create' })}
+        >
+          <Building2 size={16} aria-hidden="true" />
+          {m.institutions_add_institution()}
+        </button>
+      </div>
     </div>
-  </div>
-</Panel>
+  </Panel>
 
-{#if screenState === 'loading'}
-  <StatePanel title={m.accounts_loading_title()} copy={m.accounts_loading_copy()} />
-{:else if screenState === 'error'}
-  <StatePanel title={m.accounts_error_title()} copy={m.accounts_error_copy()}>
-    <APIFormError error={shellError} id="accounts-error" />
-    <button
-      type="button"
-      class="inline-flex items-center rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
-      onclick={refreshAccounts}
-    >
-      {m.accounts_retry()}
-    </button>
-  </StatePanel>
-{:else if screenState === 'empty'}
-  <StatePanel title={m.accounts_empty_title()} copy={m.accounts_empty_copy()} />
-{:else if visibleAccounts.length === 0}
-  <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
-{:else}
-  <div class="mt-4 space-y-4">
-    {#each groupedAccounts as group (group.key)}
-      <AccountGroupSection
-        label={group.label}
-        accounts={group.accounts}
-        {institutionsByID}
-        {currenciesByID}
-        {countryNames}
-      />
-    {/each}
-  </div>
-{/if}
+  <APIFormError error={actionError} id="accounts-action-error" />
+
+  {#if editor.type !== 'none'}
+    <Panel>
+      {#if editor.type === 'account-create'}
+        <AccountEditor
+          mode="create"
+          accounts={manageableAccounts}
+          institutions={activeInstitutions}
+          currencies={currenciesQuery.data?.currencies ?? []}
+          {csrfToken}
+          onSaved={handleSaved}
+          onCancel={() => (editor = { type: 'none' })}
+          onQuickInstitution={() => (editor = { type: 'institution-create' })}
+        />
+      {:else if editor.type === 'account-edit'}
+        <AccountEditor
+          mode="edit"
+          account={editor.account}
+          accounts={manageableAccounts}
+          institutions={activeInstitutions}
+          currencies={currenciesQuery.data?.currencies ?? []}
+          {csrfToken}
+          onSaved={handleSaved}
+          onCancel={() => (editor = { type: 'none' })}
+          onQuickInstitution={() => (editor = { type: 'institution-create' })}
+        />
+      {:else if editor.type === 'institution-create'}
+        <InstitutionEditor
+          mode="create"
+          {csrfToken}
+          onSaved={handleInstitutionSaved}
+          onCancel={() => (editor = { type: 'none' })}
+        />
+      {:else if editor.type === 'institution-edit'}
+        <InstitutionEditor
+          mode="edit"
+          institution={editor.institution}
+          {csrfToken}
+          onSaved={handleInstitutionSaved}
+          onCancel={() => (editor = { type: 'none' })}
+        />
+      {/if}
+    </Panel>
+  {/if}
+
+  <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div class="min-w-0">
+      {#if screenState === 'loading'}
+        <StatePanel title={m.accounts_loading_title()} copy={m.accounts_loading_copy()} />
+      {:else if screenState === 'error'}
+        <StatePanel title={m.accounts_error_title()} copy={m.accounts_error_copy()}>
+          <APIFormError error={shellError} id="accounts-error" />
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+            onclick={refreshAccounts}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            {m.accounts_retry()}
+          </button>
+        </StatePanel>
+      {:else if screenState === 'empty'}
+        <StatePanel title={m.accounts_empty_title()} copy={m.accounts_empty_copy()}>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+            onclick={() => (editor = { type: 'account-create' })}
+          >
+            <WalletCards size={16} aria-hidden="true" />
+            {m.accounts_add_account()}
+          </button>
+        </StatePanel>
+      {:else if visibleAccounts.length === 0}
+        <StatePanel title={m.accounts_no_results_title()} copy={m.accounts_no_results_copy()} />
+      {:else}
+        <div class="space-y-4">
+          {#each groupedAccounts as group (group.key)}
+            <AccountGroupSection
+              label={group.label}
+              accounts={group.accounts}
+              {institutionsByID}
+              {currenciesByID}
+              {countryNames}
+              onEdit={(account) => (editor = { type: 'account-edit', account })}
+              onClose={handleCloseAccount}
+              onArchive={handleArchiveAccount}
+              onDelete={handleDeleteAccount}
+            />
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <Panel>
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-base font-semibold text-foreground">{m.institutions_panel_title()}</h2>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+          onclick={() => (editor = { type: 'institution-create' })}
+          aria-label={m.institutions_add_institution()}
+          title={m.institutions_add_institution()}
+        >
+          <Plus size={16} aria-hidden="true" />
+        </button>
+      </div>
+
+      {#if activeInstitutions.length === 0}
+        <p class="mt-3 text-sm leading-6 text-muted">{m.institutions_empty()}</p>
+      {:else}
+        <div class="mt-4 divide-y divide-border">
+          {#each activeInstitutions as institution (institution.id)}
+            <article class="flex items-center justify-between gap-3 py-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-foreground">{institution.name}</p>
+                <p class="mt-1 text-xs text-muted">
+                  {m.institutions_account_count({
+                    count: institutionAccountCounts.get(institution.id) ?? 0
+                  })}
+                </p>
+              </div>
+
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+                  onclick={() => (editor = { type: 'institution-edit', institution })}
+                  aria-label={m.institutions_action_edit({ name: institution.name })}
+                  title={m.institutions_action_edit({ name: institution.name })}
+                >
+                  <Edit3 size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  onclick={() => handleDeleteInstitution(institution)}
+                  disabled={(institutionAccountCounts.get(institution.id) ?? 0) > 0 || actionPendingKey === `institution-delete:${institution.id}`}
+                  aria-label={m.institutions_action_delete({ name: institution.name })}
+                  title={m.institutions_action_delete({ name: institution.name })}
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </Panel>
+  </section>
+</div>

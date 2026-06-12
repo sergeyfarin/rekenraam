@@ -219,6 +219,40 @@ func TestListInstitutionsFiltersByStatus(t *testing.T) {
 	assert.Equal(t, "archived", archivedList.Institutions[0].Status)
 }
 
+func TestDeleteUnusedInstitutionRemovesErroneousInstitution(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Typo Bank","kind":"bank"}`)
+
+	mutateInstitutionNoResponse(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/institutions/"+strconvFormatInt(institution.ID), http.StatusNoContent)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/institutions/"+strconvFormatInt(institution.ID), nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusNotFound, res.Code)
+}
+
+func TestDeleteInstitutionRejectsAccountReferences(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	institution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{"name":"Referenced Bank","kind":"bank"}`)
+	createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Checking",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"institution_id":`+strconvFormatInt(institution.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+
+	mutateInstitutionNoResponse(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/institutions/"+strconvFormatInt(institution.ID), http.StatusConflict)
+}
+
 func TestInstitutionMutationsRequireAuthentication(t *testing.T) {
 	t.Parallel()
 
@@ -249,6 +283,11 @@ func TestInstitutionMutationsRequireAuthentication(t *testing.T) {
 			name:   "restore",
 			method: http.MethodPost,
 			path:   "/api/v1/institutions/1/restore",
+		},
+		{
+			name:   "delete",
+			method: http.MethodDelete,
+			path:   "/api/v1/institutions/1",
 		},
 	}
 
@@ -386,4 +425,18 @@ func mutateInstitution(t *testing.T, handler http.Handler, sessionCookie *http.C
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 
 	return response
+}
+
+func mutateInstitutionNoResponse(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, wantStatus int) {
+	t.Helper()
+
+	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
 }

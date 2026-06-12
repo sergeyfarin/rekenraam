@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Archive, Edit3, Lock, Trash2 } from '@lucide/svelte';
   import type { AccountResponse } from '$lib/api/accounts';
   import type { CurrencyResponse } from '$lib/api/currencies';
   import type { InstitutionResponse } from '$lib/api/institutions';
@@ -14,12 +15,26 @@
     accountStatusLabel
   } from './account-labels';
 
-  let { label, accounts, institutionsByID, currenciesByID, countryNames } = $props<{
+  let {
+    label,
+    accounts,
+    institutionsByID,
+    currenciesByID,
+    countryNames,
+    onEdit,
+    onClose,
+    onArchive,
+    onDelete
+  } = $props<{
     label: string;
     accounts: AccountResponse[];
     institutionsByID: ReadonlyMap<number, InstitutionResponse>;
     currenciesByID: ReadonlyMap<number, CurrencyResponse>;
     countryNames: Intl.DisplayNames;
+    onEdit: (account: AccountResponse) => void;
+    onClose: (account: AccountResponse) => void;
+    onArchive: (account: AccountResponse) => void;
+    onDelete: (account: AccountResponse) => void;
   }>();
 </script>
 
@@ -33,7 +48,7 @@
 
   <div class="divide-y divide-border">
     {#each accounts as account (account.id)}
-      <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover sm:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.8fr)_minmax(8rem,0.8fr)_auto] sm:items-center">
+      <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover sm:grid-cols-[minmax(10rem,1fr)_minmax(8rem,0.8fr)_minmax(8rem,0.8fr)_auto_auto] sm:items-center">
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
           <p class="mt-1 text-xs text-muted">
@@ -62,6 +77,50 @@
           <StatusBadge tone={account.status === 'closed' ? 'danger' : 'accent'}>
             {accountStatusLabel(account.status)}
           </StatusBadge>
+        </div>
+
+        <div class="flex items-center justify-start gap-1 sm:justify-end">
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+            onclick={() => onEdit(account)}
+            aria-label={m.accounts_action_edit({ name: accountDisplayName(account) })}
+            title={m.accounts_action_edit({ name: accountDisplayName(account) })}
+          >
+            <Edit3 size={15} aria-hidden="true" />
+          </button>
+
+          {#if account.status === 'active'}
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+              onclick={() => onClose(account)}
+              aria-label={m.accounts_action_close({ name: accountDisplayName(account) })}
+              title={m.accounts_action_close({ name: accountDisplayName(account) })}
+            >
+              <Lock size={15} aria-hidden="true" />
+            </button>
+          {:else if account.status === 'closed'}
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+              onclick={() => onArchive(account)}
+              aria-label={m.accounts_action_archive({ name: accountDisplayName(account) })}
+              title={m.accounts_action_archive({ name: accountDisplayName(account) })}
+            >
+              <Archive size={15} aria-hidden="true" />
+            </button>
+          {/if}
+
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90"
+            onclick={() => onDelete(account)}
+            aria-label={m.accounts_action_delete({ name: accountDisplayName(account) })}
+            title={m.accounts_action_delete({ name: accountDisplayName(account) })}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+          </button>
         </div>
       </article>
     {/each}

@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-var ErrSystemAccountsSetupComplete = errors.New("system accounts setup already complete")
+var (
+	ErrSystemAccountsSetupComplete = errors.New("system accounts setup already complete")
+	ErrAccountDeleteNotPermitted   = errors.New("account cannot be deleted")
+)
 
 type AccountRepository struct {
 	database *sql.DB
@@ -101,6 +104,11 @@ type UpdateAccountParams struct {
 	ChangeReason    string
 	RecordedAt      string
 	EffectiveFrom   string
+}
+
+type DeleteAccountParams struct {
+	BookID    int64
+	AccountID int64
 }
 
 type SystemAccountSpec struct {
@@ -365,6 +373,85 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 	committed = true
 
 	return record, nil
+}
+
+func (r *AccountRepository) DeleteUnusedAccount(ctx context.Context, params DeleteAccountParams) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete account transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	current, err := currentAccountByID(ctx, tx, params.BookID, params.AccountID)
+	if err != nil {
+		return err
+	}
+	if current.IsSystem {
+		return ErrAccountDeleteNotPermitted
+	}
+
+	var referenceCount int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(1) FROM posting_versions WHERE account_id = ?)
+			+ (SELECT COUNT(1) FROM account_versions WHERE parent_account_id = ?)
+			+ (SELECT COUNT(1) FROM payee_versions WHERE default_account_id = ?)
+			+ (SELECT COUNT(1) FROM payee_versions WHERE default_category_account_id = ?)
+			+ (SELECT COUNT(1) FROM reconciliation_sessions WHERE account_id = ?)
+			+ (SELECT COUNT(1) FROM reconciliation_session_postings WHERE account_id = ?)
+			+ (SELECT COUNT(1) FROM reconciliation_checkpoints WHERE account_id = ?)
+			+ (SELECT COUNT(1) FROM reconciliation_checkpoint_postings WHERE account_id = ?)
+	`, params.AccountID, params.AccountID, params.AccountID, params.AccountID, params.AccountID, params.AccountID, params.AccountID, params.AccountID).Scan(&referenceCount); err != nil {
+		return fmt.Errorf("read account reference count: %w", err)
+	}
+	if referenceCount > 0 {
+		return ErrAccountDeleteNotPermitted
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		DELETE FROM account_versions
+		WHERE account_id = ?
+	`, params.AccountID)
+	if err != nil {
+		return mapAccountDeleteError(fmt.Errorf("delete account versions: %w", err))
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read deleted account version rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	result, err = tx.ExecContext(ctx, `
+		DELETE FROM accounts
+		WHERE book_id = ?
+			AND id = ?
+			AND system_role IS NULL
+	`, params.BookID, params.AccountID)
+	if err != nil {
+		return mapAccountDeleteError(fmt.Errorf("delete account: %w", err))
+	}
+	rowsAffected, err = result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read deleted account rows: %w", err)
+	}
+	if rowsAffected != 1 {
+		return ErrAccountDeleteNotPermitted
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete account transaction: %w", err)
+	}
+	committed = true
+
+	return nil
 }
 
 func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params EnsureSystemAccountsParams) (EnsureSystemAccountsRecord, error) {
@@ -784,6 +871,16 @@ func scanAccountRecords(rows *sql.Rows) ([]AccountRecord, error) {
 	}
 
 	return records, nil
+}
+
+func mapAccountDeleteError(err error) error {
+	message := err.Error()
+	if strings.Contains(message, "account_versions rows are append-only") ||
+		strings.Contains(message, "FOREIGN KEY constraint failed") {
+		return fmt.Errorf("%w: %v", ErrAccountDeleteNotPermitted, err)
+	}
+
+	return err
 }
 
 func boolToInt(value bool) int {

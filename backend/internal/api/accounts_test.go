@@ -544,6 +544,66 @@ func TestSystemAccountSetupRerunWithoutCompletedStepKeepsAuditEventReferenced(t 
 	assert.Equal(t, 0, unreferencedSetupEvents)
 }
 
+func TestDeleteUnusedAccountRemovesErroneousAccount(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	account := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Typo Checking",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+
+	mutateAccountNoResponse(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/accounts/"+strconvFormatInt(account.ID), http.StatusNoContent)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/accounts/"+strconvFormatInt(account.ID), nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusNotFound, res.Code)
+}
+
+func TestDeleteAccountRejectsPostingAndChildReferences(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	checking := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Checking With Posting",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+	income := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Salary",
+		"account_class":"income"
+	}`)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-12",
+		posting(checking.ID, 10000, 2, currencyID),
+		posting(income.ID, -10000, 2, currencyID),
+	), http.StatusCreated)
+
+	mutateAccountNoResponse(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/accounts/"+strconvFormatInt(checking.ID), http.StatusConflict)
+
+	parent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Parent",
+		"account_class":"asset",
+		"account_kind":"brokerage",
+		"allows_postings":false
+	}`)
+	createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Child",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"parent_account_id":`+strconvFormatInt(parent.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+
+	mutateAccountNoResponse(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/accounts/"+strconvFormatInt(parent.ID), http.StatusConflict)
+}
+
 func TestAccountMutationsRequireAuthentication(t *testing.T) {
 	t.Parallel()
 
@@ -559,6 +619,7 @@ func TestAccountMutationsRequireAuthentication(t *testing.T) {
 		{name: "reopen", method: http.MethodPost, path: "/api/v1/accounts/1/reopen"},
 		{name: "archive", method: http.MethodPost, path: "/api/v1/accounts/1/archive"},
 		{name: "restore", method: http.MethodPost, path: "/api/v1/accounts/1/restore"},
+		{name: "delete", method: http.MethodDelete, path: "/api/v1/accounts/1"},
 		{name: "system setup", method: http.MethodPost, path: "/api/v1/setup/system-accounts"},
 	}
 
@@ -576,6 +637,20 @@ func TestAccountMutationsRequireAuthentication(t *testing.T) {
 			require.Equal(t, http.StatusUnauthorized, res.Code)
 		})
 	}
+}
+
+func mutateAccountNoResponse(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, method string, path string, wantStatus int) {
+	t.Helper()
+
+	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
 }
 
 func setupAccountAPITest(t *testing.T, handler http.Handler) (*http.Cookie, string, int64) {

@@ -152,6 +152,33 @@ export async function restoreInstitution(institutionID: number, csrfToken: strin
   return institutionLifecycleMutation('/api/v1/institutions/{institution_id}/restore', institutionID, csrfToken);
 }
 
+export async function deleteInstitution(institutionID: number, csrfToken: string): Promise<void> {
+  try {
+    const { error, response } = await apiClient.DELETE('/api/v1/institutions/{institution_id}', {
+      params: {
+        path: {
+          institution_id: institutionID
+        },
+        header: {
+          'X-CSRF-Token': csrfToken
+        }
+      }
+    });
+
+    if (response?.ok) {
+      return;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
 async function institutionLifecycleMutation(
   path: '/api/v1/institutions/{institution_id}/archive' | '/api/v1/institutions/{institution_id}/restore',
   institutionID: number,

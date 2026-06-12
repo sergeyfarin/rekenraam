@@ -191,6 +191,33 @@ export async function restoreAccount(
   return accountLifecycleMutation('/api/v1/accounts/{account_id}/restore', accountID, csrfToken, input);
 }
 
+export async function deleteAccount(accountID: number, csrfToken: string): Promise<void> {
+  try {
+    const { error, response } = await apiClient.DELETE('/api/v1/accounts/{account_id}', {
+      params: {
+        path: {
+          account_id: accountID
+        },
+        header: {
+          'X-CSRF-Token': csrfToken
+        }
+      }
+    });
+
+    if (response?.ok) {
+      return;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
 async function accountLifecycleMutation(
   path:
     | '/api/v1/accounts/{account_id}/close'

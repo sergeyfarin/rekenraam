@@ -47,6 +47,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/institutions", createInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("GET /api/v1/institutions/{institution_id}", readInstitution(logger, authService, institutionService))
 		mux.HandleFunc("PATCH /api/v1/institutions/{institution_id}", updateInstitution(logger, authService, institutionService, options))
+		mux.HandleFunc("DELETE /api/v1/institutions/{institution_id}", deleteInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/archive", archiveInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("POST /api/v1/institutions/{institution_id}/restore", restoreInstitution(logger, authService, institutionService, options))
 		mux.HandleFunc("GET /api/v1/institutions/{institution_id}/versions", listInstitutionVersions(logger, authService, institutionService))
@@ -59,6 +60,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 			mux.HandleFunc("GET /api/v1/accounts/{account_id}/register", accountRegister(logger, authService, transactionService))
 		}
 		mux.HandleFunc("PATCH /api/v1/accounts/{account_id}", updateAccount(logger, authService, accountService, options))
+		mux.HandleFunc("DELETE /api/v1/accounts/{account_id}", deleteAccount(logger, authService, accountService, options))
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/close", closeAccount(logger, authService, accountService, options))
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/reopen", reopenAccount(logger, authService, accountService, options))
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/archive", archiveAccount(logger, authService, accountService, options))

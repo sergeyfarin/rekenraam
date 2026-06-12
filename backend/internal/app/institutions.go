@@ -22,7 +22,10 @@ const (
 	institutionListLimit       = 2000
 )
 
-var ErrInstitutionNotFound = errors.New("institution not found")
+var (
+	ErrInstitutionNotFound         = errors.New("institution not found")
+	ErrInstitutionDeleteNotAllowed = errors.New("institution cannot be deleted")
+)
 
 var institutionKinds = map[string]bool{
 	"bank":            true,
@@ -103,6 +106,11 @@ type InstitutionLifecycleInput struct {
 	InstitutionID int64
 	EffectiveFrom string
 	ChangeReason  string
+}
+
+type DeleteInstitutionInput struct {
+	OwnerUserID   int64
+	InstitutionID int64
 }
 
 type InstitutionService struct {
@@ -277,6 +285,35 @@ func (s *InstitutionService) ArchiveInstitution(ctx context.Context, input Insti
 
 func (s *InstitutionService) RestoreInstitution(ctx context.Context, input InstitutionLifecycleInput) (Institution, error) {
 	return s.changeInstitutionStatus(ctx, input, "active", "restored institution", "institution.restore")
+}
+
+func (s *InstitutionService) DeleteUnusedInstitution(ctx context.Context, input DeleteInstitutionInput) error {
+	if input.OwnerUserID <= 0 {
+		return ValidationError{Message: "owner user is required"}
+	}
+	if input.InstitutionID <= 0 {
+		return ValidationError{Message: "institution id is required"}
+	}
+
+	if _, err := s.Institution(ctx, input.InstitutionID); err != nil {
+		return err
+	}
+
+	if err := s.repository.DeleteUnusedInstitution(ctx, db.DeleteInstitutionParams{
+		BookID:        BookID,
+		InstitutionID: input.InstitutionID,
+	}); err != nil {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			return ErrInstitutionNotFound
+		case errors.Is(err, db.ErrInstitutionDeleteNotPermitted):
+			return ErrInstitutionDeleteNotAllowed
+		default:
+			return fmt.Errorf("delete institution: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *InstitutionService) changeInstitutionStatus(ctx context.Context, input InstitutionLifecycleInput, status string, reason string, operation string) (Institution, error) {

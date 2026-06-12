@@ -48,6 +48,68 @@ get:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+delete:
+  summary: Delete an unused institution
+  description: Institutions referenced by any account history cannot be hard deleted.
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/InstitutionID"
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
+  responses:
+    "204":
+      description: Institution deleted
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+    "400":
+      description: Invalid institution id
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Institution not found
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Institution has account references
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 patch:
   summary: Update an institution by creating a new version
   parameters:

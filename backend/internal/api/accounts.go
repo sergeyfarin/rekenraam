@@ -306,6 +306,30 @@ func restoreAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 	})
 }
 
+func deleteAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+
+		accountID, ok := readAccountID(w, r)
+		if !ok {
+			return
+		}
+
+		if err := accountService.DeleteUnusedAccount(r.Context(), app.DeleteAccountInput{
+			OwnerUserID: owner.ID,
+			AccountID:   accountID,
+		}); err != nil {
+			writeAccountServiceError(w, r, logger, "delete account", err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}
+
 func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions, action string, mutate func(app.Owner, int64, accountLifecycleRequest, *http.Request) (app.Account, error)) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -383,6 +407,8 @@ func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "account reference is invalid")
 	case errors.Is(err, app.ErrAccountInvalidLifecycle):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account lifecycle transition is invalid")
+	case errors.Is(err, app.ErrAccountDeleteNotAllowed):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "account cannot be deleted while it has postings or references")
 	case errors.Is(err, app.ErrSystemAccountProtected):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "system account cannot be changed")
 	case errors.Is(err, app.ErrSetupAlreadyComplete):

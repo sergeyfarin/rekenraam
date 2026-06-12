@@ -29,6 +29,7 @@ var (
 	ErrAccountInvalidLifecycle = errors.New("account lifecycle transition is invalid")
 	ErrAccountParentInvalid    = errors.New("account parent is invalid")
 	ErrAccountReferenceInvalid = errors.New("account reference is invalid")
+	ErrAccountDeleteNotAllowed = errors.New("account cannot be deleted")
 )
 
 var accountClasses = map[string]bool{
@@ -145,6 +146,11 @@ type AccountLifecycleInput struct {
 	EffectiveFrom string
 	ClosedOn      string
 	ChangeReason  string
+}
+
+type DeleteAccountInput struct {
+	OwnerUserID int64
+	AccountID   int64
 }
 
 type EnsureSystemAccountsInput struct {
@@ -398,6 +404,39 @@ func (s *AccountService) ArchiveAccount(ctx context.Context, input AccountLifecy
 
 func (s *AccountService) RestoreAccount(ctx context.Context, input AccountLifecycleInput) (Account, error) {
 	return s.changeAccountStatus(ctx, input, "closed", "restored account", "account.restore", "archived")
+}
+
+func (s *AccountService) DeleteUnusedAccount(ctx context.Context, input DeleteAccountInput) error {
+	if input.OwnerUserID <= 0 {
+		return ValidationError{Message: "owner user is required"}
+	}
+	if input.AccountID <= 0 {
+		return ValidationError{Message: "account id is required"}
+	}
+
+	current, err := s.Account(ctx, input.AccountID)
+	if err != nil {
+		return err
+	}
+	if current.IsSystem {
+		return ErrSystemAccountProtected
+	}
+
+	if err := s.repository.DeleteUnusedAccount(ctx, db.DeleteAccountParams{
+		BookID:    BookID,
+		AccountID: input.AccountID,
+	}); err != nil {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			return ErrAccountNotFound
+		case errors.Is(err, db.ErrAccountDeleteNotPermitted):
+			return ErrAccountDeleteNotAllowed
+		default:
+			return fmt.Errorf("delete account: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureSystemAccountsInput) (EnsureSystemAccountsResult, error) {

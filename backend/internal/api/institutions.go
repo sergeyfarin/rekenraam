@@ -226,6 +226,30 @@ func restoreInstitution(logger *slog.Logger, authService *app.AuthService, insti
 	})
 }
 
+func deleteInstitution(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+
+		institutionID, ok := readInstitutionID(w, r)
+		if !ok {
+			return
+		}
+
+		if err := institutionService.DeleteUnusedInstitution(r.Context(), app.DeleteInstitutionInput{
+			OwnerUserID:   owner.ID,
+			InstitutionID: institutionID,
+		}); err != nil {
+			writeInstitutionServiceError(w, r, logger, "delete institution", err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}
+
 func institutionLifecycleMutation(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions, action string, mutate func(app.Owner, int64, institutionLifecycleRequest, *http.Request) (app.Institution, error)) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -271,6 +295,8 @@ func writeInstitutionServiceError(w http.ResponseWriter, r *http.Request, logger
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
 	case errors.Is(err, app.ErrInstitutionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "institution not found")
+	case errors.Is(err, app.ErrInstitutionDeleteNotAllowed):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "institution cannot be deleted while accounts reference it")
 	default:
 		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
 		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")

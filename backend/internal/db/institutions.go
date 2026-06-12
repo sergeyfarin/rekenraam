@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var ErrInstitutionDeleteNotPermitted = errors.New("institution cannot be deleted")
+
 type InstitutionRepository struct {
 	database *sql.DB
 }
@@ -77,6 +79,11 @@ type UpdateInstitutionParams struct {
 	ChangeReason    string
 	RecordedAt      string
 	EffectiveFrom   string
+}
+
+type DeleteInstitutionParams struct {
+	BookID        int64
+	InstitutionID int64
 }
 
 func NewInstitutionRepository(database *sql.DB) *InstitutionRepository {
@@ -284,6 +291,74 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	return record, nil
 }
 
+func (r *InstitutionRepository) DeleteUnusedInstitution(ctx context.Context, params DeleteInstitutionParams) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete institution transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err := currentInstitutionByID(ctx, tx, params.BookID, params.InstitutionID); err != nil {
+		return err
+	}
+
+	var accountReferenceCount int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(1)
+		FROM account_versions
+		WHERE institution_id = ?
+	`, params.InstitutionID).Scan(&accountReferenceCount); err != nil {
+		return fmt.Errorf("read institution account references: %w", err)
+	}
+	if accountReferenceCount > 0 {
+		return ErrInstitutionDeleteNotPermitted
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		DELETE FROM institution_versions
+		WHERE institution_id = ?
+	`, params.InstitutionID)
+	if err != nil {
+		return mapInstitutionDeleteError(fmt.Errorf("delete institution versions: %w", err))
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read deleted institution version rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	result, err = tx.ExecContext(ctx, `
+		DELETE FROM institutions
+		WHERE book_id = ?
+			AND id = ?
+	`, params.BookID, params.InstitutionID)
+	if err != nil {
+		return mapInstitutionDeleteError(fmt.Errorf("delete institution: %w", err))
+	}
+	rowsAffected, err = result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read deleted institution rows: %w", err)
+	}
+	if rowsAffected != 1 {
+		return ErrInstitutionDeleteNotPermitted
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete institution transaction: %w", err)
+	}
+	committed = true
+
+	return nil
+}
+
 type insertInstitutionVersionParams struct {
 	BookID             int64
 	InstitutionID      int64
@@ -451,4 +526,14 @@ func scanInstitutionRecords(rows *sql.Rows) ([]InstitutionRecord, error) {
 	}
 
 	return records, nil
+}
+
+func mapInstitutionDeleteError(err error) error {
+	message := err.Error()
+	if strings.Contains(message, "institution_versions rows are append-only") ||
+		strings.Contains(message, "FOREIGN KEY constraint failed") {
+		return fmt.Errorf("%w: %v", ErrInstitutionDeleteNotPermitted, err)
+	}
+
+	return err
 }
