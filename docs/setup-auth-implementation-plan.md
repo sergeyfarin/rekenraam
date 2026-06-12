@@ -1,6 +1,11 @@
 # Phase 0 Setup And Auth Completion Plan
 
-This document records the completed Phase 0 setup/auth baseline and the remaining handoff constraints for the next domain slice. It is an implementation checklist, not a replacement for accepted ADRs or product requirements.
+Status: historical completed Phase 0 implementation plan. It is not the active
+next-step tracker.
+
+This document records the completed Phase 0 setup/auth baseline and the original
+handoff constraints for the next domain slice. It is an implementation
+checklist, not a replacement for accepted ADRs or product requirements.
 
 Current note: Phase 0 is complete. Later slices have since implemented book,
 currency, institution, account, system-account, category, and audit/current-state
@@ -78,6 +83,10 @@ Build:
 - Integrated single-binary build is covered by `pnpm build`.
 
 ## Phase 1 Handoff
+
+Historical handoff note: these items have since been implemented or superseded
+by the current Phase 1 tracker. See `docs/phase-1-implementation-plan.md` before
+starting new work.
 
 1. Add the single owner book setup step. The `books` table remains the future extension point, but current runtime creates only book `1`.
 2. Add commodity and currency identity/version tables before account tables.

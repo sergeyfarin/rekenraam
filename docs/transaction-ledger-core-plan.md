@@ -1,12 +1,16 @@
 # Transaction Ledger Core Plan
 
-Status: planning document for the Phase 2 ledger transaction slice.
+Status: transaction-ledger design reference. It is not the immediate
+implementation focus until the Phase 1 UI contract closeout in
+`docs/phase-1-implementation-plan.md` is complete.
 
 This document updates the transaction schema proposal after the tags,
-categories, accounts, commodities, and system-account discussions. It is not an
-implementation migration yet. Before coding the slice, accept or update this
-plan, then keep the migration, OpenAPI, backend services, frontend API helpers,
-and tests aligned with it.
+categories, accounts, commodities, and system-account discussions. Backend
+transaction and reconciliation foundations have started, but the next product
+focus remains Phase 1 account/institution UI and API-client contract closeout.
+Before expanding transaction UI or reporting work, accept or update this plan,
+then keep migrations, OpenAPI, backend services, frontend API helpers, and tests
+aligned with it.
 
 ## Source Of Truth Updates Already Locked
 

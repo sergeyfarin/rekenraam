@@ -1,13 +1,14 @@
-# Accounts And Institutions System Draft
+# Accounts And Institutions System Design Reference
 
-Status: active Phase 1 design guidance for implemented institution and account
-backend slices; still open for later transaction, reconciliation, investment,
-and household-context extensions.
+Status: design reference for account and institution behavior. It is not the
+active next-step tracker; current sequencing lives in
+`docs/phase-1-implementation-plan.md`.
 
-This document proposes the Phase 1 account and institution system before any schema,
-backend, or frontend implementation. It translates the active requirements, the
-archived FastAPI implementation, and patterns from mature finance applications
-into the current Go/SvelteKit/SQLite shape.
+This document records the account and institution design that guided the
+implemented backend slices and remains useful for later transaction,
+reconciliation, investment, and household-context extensions. It translates the
+active requirements, the archived FastAPI implementation, and patterns from
+mature finance applications into the current Go/SvelteKit/SQLite shape.
 
 ## Goals
 
@@ -70,18 +71,21 @@ Phase 1 should ship the accounting skeleton only:
 - accounts and system accounts
 - account and institution management UI
 
-Phase 1 must not create balances. Opening balances require posted transactions,
-and transactions arrive in Phase 2. The `opening_balance` system account may be
-seeded in Phase 1 so setup is complete, but there should be no opening-balance
-endpoint or UI until the transaction/posting schema exists.
+Phase 1 account setup must not create balances. Opening balances require posted
+transactions. The `opening_balance` system account may be seeded in Phase 1 so
+setup is complete, but there should be no opening-balance endpoint or UI until
+transaction posting workflows are ready for users.
 
-The implementation order should be:
+The original implementation order was:
 
 1. Books.
 2. Commodities and currencies.
 3. Institutions.
 4. Accounts and account tree.
 5. System account seeding.
+
+Current implementation sequencing and completion criteria live in
+`docs/phase-1-implementation-plan.md`.
 
 ## Commodity Prerequisite
 
@@ -495,8 +499,7 @@ tag set for that line. Associations for posting lines removed from the current
 version are cleared. Voiding a transaction does not clear tag associations,
 because they remain useful historical context.
 
-When transactions arrive, add join tables rather than embedding tag ids on the
-transaction row:
+Use join tables rather than embedding tag ids on the transaction row:
 
 ```text
 transaction_tags
@@ -795,22 +798,21 @@ Phase 1 implementation rule:
 
 ## API Surface Proposal
 
-Stable endpoints should be OpenAPI-first under `/api/v1`.
+Reference note: this section records the design proposal that informed the
+backend work. The checked OpenAPI document is authoritative for implemented API
+surface, and `docs/phase-1-implementation-plan.md` is authoritative for current
+next steps.
 
-Commodities and currencies:
+Implemented commodity and currency setup surface:
 
-- `GET /api/v1/commodities` returns current commodities for the active book.
-- `POST /api/v1/commodities` creates a custom non-currency commodity such as a
-  security, crypto asset, reward point, or physical commodity.
-- `GET /api/v1/commodities/{commodity_id}`
-- `PATCH /api/v1/commodities/{commodity_id}` creates a new commodity version.
-- `GET /api/v1/commodities/{commodity_id}/versions`
 - `GET /api/v1/currencies` returns current currency commodities.
 - `POST /api/v1/currencies` creates or activates a currency commodity.
 - `POST /api/v1/currencies/{commodity_id}/default` sets the book default
-  currency when book setup allows that.
+  currency preference.
+- `GET /api/v1/currencies/catalog`
+- `POST /api/v1/setup/currencies`
 
-Institutions:
+Implemented institution surface:
 
 - `GET /api/v1/institutions` returns current institutions without cursor
   pagination in Phase 1. It accepts `status`, `q`, and `include_archived` query
@@ -822,13 +824,11 @@ Institutions:
 - `POST /api/v1/institutions/{institution_id}/restore`
 - `GET /api/v1/institutions/{institution_id}/versions`
 
-Accounts:
+Implemented account surface:
 
 - `GET /api/v1/accounts` returns current accounts without cursor pagination in
   Phase 1. It accepts `status`, `account_class`, `q`, and `include_archived`
   query parameters and enforces a hard server cap.
-- `GET /api/v1/accounts/tree` returns the current account tree, active and
-  closed accounts by default, archived accounts only when requested.
 - `POST /api/v1/accounts`
 - `GET /api/v1/accounts/{account_id}`
 - `PATCH /api/v1/accounts/{account_id}`
@@ -837,13 +837,18 @@ Accounts:
 - `POST /api/v1/accounts/{account_id}/archive`
 - `POST /api/v1/accounts/{account_id}/restore`
 - `GET /api/v1/accounts/{account_id}/versions`
-- `GET /api/v1/accounts/{account_id}/closing-validation`
-
-Later, when transactions exist:
-
-- `POST /api/v1/accounts/{account_id}/opening-balance`
 - `GET /api/v1/accounts/{account_id}/register`
 - `GET /api/v1/accounts/{account_id}/reconciliation-checkpoints`
+- `POST /api/v1/accounts/{account_id}/reconciliations/start`
+- `POST /api/v1/accounts/{account_id}/postings/reconciliation-status`
+
+Deferred or product-decision candidates:
+
+- Generic non-currency commodity CRUD, such as custom securities, crypto assets,
+  reward points, or physical commodities.
+- `GET /api/v1/accounts/tree`
+- `GET /api/v1/accounts/{account_id}/closing-validation`
+- `POST /api/v1/accounts/{account_id}/opening-balance`
 
 Pagination rule:
 
