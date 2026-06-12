@@ -2,6 +2,11 @@
 
 This document records the completed Phase 0 setup/auth baseline and the remaining handoff constraints for the next domain slice. It is an implementation checklist, not a replacement for accepted ADRs or product requirements.
 
+Current note: Phase 0 is complete. Later slices have since implemented book,
+currency, institution, account, system-account, category, and audit/current-state
+foundations; see `docs/phase-1-implementation-plan.md` for current Phase 1
+status.
+
 ## Locked Decisions
 
 - Keep `setup_steps` as durable backend progress state.

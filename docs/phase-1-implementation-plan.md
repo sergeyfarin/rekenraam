@@ -1,6 +1,8 @@
 # Phase 1 Implementation Plan
 
-Status: implementation plan for the Phase 1 accounting skeleton.
+Status: active Phase 1 status tracker. Early backend slices have landed in the
+consolidated initial schema and services; this document now records what is
+done, what remains, and the constraints that must not drift.
 
 ## Phase 1 Goal
 
@@ -14,10 +16,53 @@ Create the durable accounting skeleton:
 6. Tags for transaction/posting context.
 7. Account/institution UI.
 
-No transaction posting yet. No opening balances yet. No balances created by
-account setup.
+Account setup must not create balances. Opening balances require posted
+transactions. Transaction and reconciliation work has started in code, but it is
+tracked separately from the Phase 1 accounting-skeleton acceptance criteria.
+
+## Current Status
+
+Implemented backend foundation:
+
+- Single runtime book guarded by `books.id CHECK (id = 1)`.
+- Embedded currency catalog plus currency/default-currency setup.
+- Commodity, institution, account, payee, transaction, posting, tag, category,
+  and reconciliation schema in the consolidated initial migration.
+- Current-state SQL views for commodity, institution, account, payee, and
+  transaction versions.
+- Hybrid audit model with `audit_events` rows referenced by setup, identity,
+  version, lifecycle, transaction, and reconciliation rows.
+- Backend APIs and tests for books, currencies, institutions, accounts, system
+  accounts, tags, categories, payees, transactions, ledger summaries, and
+  reconciliation.
+
+Remaining Phase 1/product cleanup:
+
+- Confirm OpenAPI and generated frontend API types match the current backend
+  surface.
+- Finish or verify the account and institution UI on desktop and mobile.
+- Keep user-facing copy and built-in labels behind Paraglide/localization
+  boundaries.
+- Run full backend, frontend, and integrated build validation before declaring
+  Phase 1 complete.
+
+## Audit And Current-State Rules
+
+- Domain version/lifecycle tables remain the source of truth for state history.
+- `audit_events` explains the initiating operation: actor, session/request,
+  origin, operation code, reason, and grouped workflow metadata.
+- Create one audit event inside the same database transaction as the domain
+  changes it explains.
+- Repository current-state helpers should query current-state views instead of
+  repeating latest-version logic in handlers.
+- Effective-dated current views choose the greatest `(effective_from,
+  version_seq)` where `effective_from <= today`.
+- Multiple versions on the same `effective_from` are allowed for correction or
+  reseeding; the greatest `version_seq` is canonical for current/as-of queries.
 
 ## Slice 1: Book Setup
+
+Status: implemented.
 
 Backend schema:
 
@@ -51,6 +96,10 @@ Tests:
 
 ## Slice 2: Commodities And Currencies
 
+Status: implemented for currencies/default-currency setup and commodity
+identity/version storage. Generic non-currency commodity UX/API can remain a
+later expansion unless a current product flow needs it.
+
 This must come before accounts.
 
 Backend schema:
@@ -60,7 +109,7 @@ Backend schema:
 - Validate `standard_scale`, `max_quantity_scale`, and version ordering.
 - Reject `UPDATE` and `DELETE` on commodity versions.
 
-Backend APIs:
+Planned generic commodity APIs:
 
 - `GET /api/v1/commodities`
 - `POST /api/v1/commodities`
@@ -71,7 +120,7 @@ Backend APIs:
 - `POST /api/v1/currencies`
 - `POST /api/v1/currencies/{commodity_id}/default`
 
-Setup behavior:
+Implemented setup behavior:
 
 - Currency setup selects a default currency preference from the embedded
   currency catalog and may add optional additional currencies.
@@ -81,6 +130,8 @@ Setup behavior:
   reporting currency and FX method later without changing the book.
 
 ## Slice 3: Institutions
+
+Status: implemented on the backend.
 
 Backend schema:
 
@@ -101,6 +152,8 @@ Backend APIs:
 
 ## Slice 4: Accounts
 
+Status: implemented on the backend.
+
 Backend schema:
 
 - Add `accounts` identity table.
@@ -114,7 +167,6 @@ Backend schema:
 Backend APIs:
 
 - `GET /api/v1/accounts`
-- `GET /api/v1/accounts/tree`
 - `POST /api/v1/accounts`
 - `GET /api/v1/accounts/{account_id}`
 - `PATCH /api/v1/accounts/{account_id}`
@@ -123,7 +175,6 @@ Backend APIs:
 - `POST /api/v1/accounts/{account_id}/archive`
 - `POST /api/v1/accounts/{account_id}/restore`
 - `GET /api/v1/accounts/{account_id}/versions`
-- `GET /api/v1/accounts/{account_id}/closing-validation`
 
 Tree rules:
 
@@ -134,6 +185,8 @@ Tree rules:
 - Phase 1 default: enforce same `account_class` under parent.
 
 ## Slice 5: System Account Seeding
+
+Status: implemented on the backend.
 
 Required roles:
 
@@ -156,6 +209,9 @@ Behavior:
 
 ## Slice 6: Tags
 
+Status: implemented on the backend. Transaction/posting tag junctions now exist
+with transaction/posting schema.
+
 Backend schema:
 
 - Add book-scoped `tags` table.
@@ -163,9 +219,6 @@ Backend schema:
   `metadata_json`.
 - Enforce active tag uniqueness per `(book_id, kind, name)`.
 - Archive tags instead of hard deleting them.
-- Do not add `transaction_tags` or `posting_tags` until transaction and posting
-  tables exist.
-
 Backend APIs:
 
 - `GET /api/v1/tags`
@@ -176,6 +229,9 @@ Backend APIs:
 - `POST /api/v1/tags/{tag_id}/restore`
 
 ## Slice 7: Frontend Account/Institution Experience
+
+Status: remaining Phase 1 acceptance item unless verified complete in the
+current frontend.
 
 Suggested routes:
 
@@ -225,7 +281,8 @@ Also verify:
 
 - Fresh setup can create owner, book, default currency preference, optional
   additional currencies, and system accounts.
-- Future categories step remains pending but non-blocking if not implemented.
+- Categories are implemented as a later setup step; keep them non-blocking
+  unless the setup gate explicitly requires them.
 - Account creation never creates balances.
 - Current runtime uses only book `1`; future multi-book support must be a
   deliberate extension rather than an accidental UI affordance.

@@ -52,10 +52,29 @@ func TestInsertAuditEventValidatesOperationAndTimestamp(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "audit occurred_at")
 
+	_, err = insertAuditEvent(context.Background(), tx, AuditEventParams{
+		OccurredAt:   "2026-06-04T12:00:00Z",
+		OriginType:   "browser_api",
+		Operation:    "account.create",
+		MetadataJSON: "[]",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "audit metadata_json")
+
+	_, err = insertAuditEvent(context.Background(), tx, AuditEventParams{
+		OccurredAt:   "2026-06-04T12:00:00Z",
+		OriginType:   "browser_api",
+		Operation:    "account.create",
+		MetadataJSON: "{",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "audit metadata_json")
+
 	auditEventID, err := insertAuditEvent(context.Background(), tx, AuditEventParams{
-		OccurredAt: "2026-06-04T12:00:00Z",
-		OriginType: "browser_api",
-		Operation:  "account.create",
+		OccurredAt:   "2026-06-04T12:00:00Z",
+		OriginType:   "browser_api",
+		Operation:    "account.create",
+		MetadataJSON: `{"field":"name"}`,
 	})
 	require.NoError(t, err)
 	assert.Positive(t, auditEventID)

@@ -414,7 +414,8 @@ func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) 
 		)
 		VALUES
 			(1, 1, '2024-01-01', '2026-06-06T00:00:00Z', 1, 'test', 'active', '2024-01-01', 'Current Name', 'asset', 'checking', 1),
-			(1, 2, '2023-01-01', '2026-06-06T00:00:00Z', 1, 'historical correction', 'active', '2024-01-01', 'Old Name', 'asset', 'checking', 1);
+			(1, 2, '2023-01-01', '2026-06-06T00:00:00Z', 1, 'historical correction', 'active', '2024-01-01', 'Old Name', 'asset', 'checking', 1),
+			(1, 3, '2024-01-01', '2026-06-06T00:01:00Z', 1, 'same-date correction', 'active', '2024-01-01', 'Corrected Current Name', 'asset', 'checking', 1);
 	`)
 	require.NoError(t, err)
 
@@ -425,7 +426,7 @@ func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) 
 		WHERE account_id = 1
 	`).Scan(&name)
 	require.NoError(t, err)
-	assert.Equal(t, "Current Name", name)
+	assert.Equal(t, "Corrected Current Name", name)
 }
 
 func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
