@@ -65,6 +65,7 @@
   "install_gate_recovery_backup_note": "Recovery creates a verified backup first unless you explicitly use the emergency override.",
   "install_gate_username_label": "Username",
   "install_gate_password_label": "Password",
+  "install_gate_password_hint": "Use at least 12 characters.",
   "install_gate_default_currency_label": "Default currency",
   "install_gate_quick_currencies_label": "Common currencies",
   "install_gate_add_currency_label": "Add currency",

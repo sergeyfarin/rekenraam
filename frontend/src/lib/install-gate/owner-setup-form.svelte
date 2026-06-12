@@ -28,6 +28,7 @@
       autocomplete="username"
       class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
       required
+      maxlength="64"
     />
   </label>
 
@@ -40,7 +41,10 @@
       autocomplete="new-password"
       class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
       required
+      minlength="12"
+      maxlength="1024"
     />
+    <span class="block text-xs leading-5 text-muted">{m.install_gate_password_hint()}</span>
   </label>
 
   <button

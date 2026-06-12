@@ -114,11 +114,12 @@
 
     const catalogCodes = new Set(catalog.map((currency) => currency.code));
     const fallbackCode = [localeCode, 'USD', catalog[0]?.code].find((code) => code !== undefined && catalogCodes.has(code));
+    const validSelectedCodes = selectedCurrencyCodes.filter((code) => catalogCodes.has(code));
 
     if (selectedCurrencyCodes.length === 0 && fallbackCode) {
       selectedCurrencyCodes = [fallbackCode];
-    } else {
-      selectedCurrencyCodes = selectedCurrencyCodes.filter((code) => catalogCodes.has(code));
+    } else if (!stringArraysEqual(selectedCurrencyCodes, validSelectedCodes)) {
+      selectedCurrencyCodes = validSelectedCodes;
     }
 
     if (!currencyDefaultCode || !selectedCurrencyCodes.includes(currencyDefaultCode)) {
@@ -210,6 +211,10 @@
     } finally {
       currencyPending = false;
     }
+  }
+
+  function stringArraysEqual(left: string[], right: string[]): boolean {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
   }
 </script>
 
