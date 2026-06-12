@@ -14,6 +14,7 @@ import (
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/config"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/marketdata"
 	"rekenraam/backend/internal/web"
 )
 
@@ -70,7 +71,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	payeeRepository := db.NewPayeeRepository(database)
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
-	pricingService := app.NewPricingService(db.NewPricingRepository(database))
+	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, investmentService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,

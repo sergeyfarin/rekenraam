@@ -123,6 +123,13 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 		"entry_date",
 		"entry_kind",
 	})
+	assert.Subset(t, readMarketDataSourceCodes(t, database), []string{
+		"manual",
+		"ecb_euro_reference_rates",
+		"frankfurter",
+		"exchangerate_api_open_access",
+		"open_exchange_rates_free",
+	})
 	assert.Subset(t, readTableColumns(t, database, "posting_versions"), []string{
 		"id",
 		"posting_line_id",
@@ -557,6 +564,23 @@ func readTableColumns(t *testing.T, database *sql.DB, tableName string) []string
 	require.NoError(t, rows.Err())
 
 	return columnNames
+}
+
+func readMarketDataSourceCodes(t *testing.T, database *sql.DB) []string {
+	t.Helper()
+
+	rows, err := database.QueryContext(context.Background(), `SELECT code FROM market_data_sources ORDER BY code`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var codes []string
+	for rows.Next() {
+		var code string
+		require.NoError(t, rows.Scan(&code))
+		codes = append(codes, code)
+	}
+	require.NoError(t, rows.Err())
+	return codes
 }
 
 func sqliteObjectExists(t *testing.T, database *sql.DB, objectType string, objectName string) bool {

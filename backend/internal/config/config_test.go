@@ -53,3 +53,12 @@ func TestLoadRejectsInvalidAppEnv(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "APP_ENV must be development or production")
 }
+
+func TestLoadReadsOpenExchangeRatesAppID(t *testing.T) {
+	t.Setenv("OPEN_EXCHANGE_RATES_APP_ID", " secret ")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "secret", cfg.OpenExchangeRatesAppID)
+}

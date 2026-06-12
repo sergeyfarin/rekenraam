@@ -243,6 +243,9 @@ Goal: add power-user workflows after the core ledger is stable.
   of capital, and other corporate actions.
 - Explicit automation rules are required before trusted provider events may
   auto-post; otherwise provider data remains a suggestion.
+- Market-data extensibility starts with built-in adapters for trusted sources,
+  then declarative HTTP adapters for simple source mappings, and only later
+  external process plugins for complex/community providers.
 - Realized gain/loss reporting.
 - Report snapshots where reproducibility matters.
 

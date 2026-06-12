@@ -8,11 +8,12 @@ import (
 )
 
 type Config struct {
-	AppEnv            string
-	HTTPAddr          string
-	DatabaseURL       string
-	TrustProxyHeaders bool
-	TrustedProxyCIDRs []netip.Prefix
+	AppEnv                 string
+	HTTPAddr               string
+	DatabaseURL            string
+	TrustProxyHeaders      bool
+	TrustedProxyCIDRs      []netip.Prefix
+	OpenExchangeRatesAppID string
 }
 
 func Load() (Config, error) {
@@ -40,11 +41,12 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		AppEnv:            appEnv,
-		HTTPAddr:          env("HTTP_ADDR", ":16888"),
-		DatabaseURL:       env("DATABASE_URL", "file:var/dev.sqlite"),
-		TrustProxyHeaders: trustProxyHeaders,
-		TrustedProxyCIDRs: trustedProxyCIDRs,
+		AppEnv:                 appEnv,
+		HTTPAddr:               env("HTTP_ADDR", ":16888"),
+		DatabaseURL:            env("DATABASE_URL", "file:var/dev.sqlite"),
+		TrustProxyHeaders:      trustProxyHeaders,
+		TrustedProxyCIDRs:      trustedProxyCIDRs,
+		OpenExchangeRatesAppID: strings.TrimSpace(os.Getenv("OPEN_EXCHANGE_RATES_APP_ID")),
 	}, nil
 }
 

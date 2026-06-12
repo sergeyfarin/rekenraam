@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/marketdata"
 )
 
 var (
@@ -188,12 +189,17 @@ type PricingSourceHealth struct {
 }
 
 type PricingService struct {
-	repository *db.PricingRepository
-	now        func() time.Time
+	repository       *db.PricingRepository
+	providerRegistry *marketdata.Registry
+	now              func() time.Time
 }
 
-func NewPricingService(repository *db.PricingRepository) *PricingService {
-	return &PricingService{repository: repository, now: time.Now}
+func NewPricingService(repository *db.PricingRepository, registries ...*marketdata.Registry) *PricingService {
+	registry := marketdata.DefaultRegistry("")
+	if len(registries) > 0 && registries[0] != nil {
+		registry = registries[0]
+	}
+	return &PricingService{repository: repository, providerRegistry: registry, now: time.Now}
 }
 
 func (s *PricingService) SetNowForTest(now func() time.Time) {

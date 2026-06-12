@@ -73,6 +73,13 @@ When a feature introduces a durable new rule, update one of those documents in t
   auto-posting with required account mappings and audit attribution.
 - Market-data provider secrets belong in operator configuration, not SQLite
   business tables.
+- Market-data providers should be added in this order: built-in Go adapters for
+  trusted/high-value sources first, declarative HTTP adapters for simple
+  source mappings second, and external process plugins only after the provider
+  model has settled. In-process scripting is not a first-choice provider
+  extension mechanism.
+- Provider adapters must return normalized facts only. They must not directly
+  mutate ledger, pricing, lot, dividend, or corporate-action tables.
 
 ## Data And Persistence Conventions
 

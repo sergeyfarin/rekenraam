@@ -50,6 +50,15 @@ model.
   `fifo`, `lifo`, `average_cost`, and `specific_lot`.
 - Provider adapters are pluggable. Provider secrets live in operator
   configuration, not SQLite business rows.
+- Provider extensibility is staged. First-party built-in Go adapters are the
+  first implementation path for trusted/high-value sources. Declarative HTTP
+  adapters may come next for simple REST, CSV, JSON, or XML mappings. External
+  process plugins are deferred until the provider model and trust boundaries
+  have settled.
+- Built-in FX adapters start with ECB euro reference rates, Frankfurter,
+  ExchangeRate-API Open Access, and Open Exchange Rates Free. Open Exchange
+  Rates requires an operator-provided `OPEN_EXCHANGE_RATES_APP_ID` and is
+  disabled as a seeded source until configured.
 - Provider events become reviewable suggestions by default. Trusted sources may
   auto-post only through explicit automation rules with source/instrument/event
   scope, confidence threshold, required account mappings, effective dates, and
@@ -65,6 +74,10 @@ model.
 - Future realized-gain reports can derive from lot events without
   reinterpreting historical buys and sells.
 - Provider ingestion requires careful idempotency and suggestion review tests.
+- Adding a new market-data source should not bypass the normalized ingestion
+  pipeline. Adapters return normalized facts; repositories and services decide
+  whether to persist observations, create suggestions, or auto-post through an
+  explicit automation rule.
 - OpenAPI contracts, frontend workflows, and provider adapters can evolve in
   slices, but must preserve the trust boundary that external data is not posted
   silently unless an explicit automation rule allows it.

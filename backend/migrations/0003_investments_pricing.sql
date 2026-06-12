@@ -24,6 +24,50 @@ INSERT OR IGNORE INTO market_data_sources (
   1, 'manual', 'Manual', 'manual', 'active', '{}', '0001-01-01T00:00:00Z'
 );
 
+INSERT OR IGNORE INTO market_data_sources (
+  code, name, kind, provider_key, base_url, status, metadata_json, created_at
+) VALUES
+  (
+    'ecb_euro_reference_rates',
+    'ECB euro foreign exchange reference rates',
+    'provider',
+    'ecb_euro_reference_rates',
+    'https://www.ecb.europa.eu/stats/eurofxref/',
+    'active',
+    '{"capabilities":["fx_rates"],"quote_type":"official_fixing","requires_secret":false}',
+    '0001-01-01T00:00:00Z'
+  ),
+  (
+    'frankfurter',
+    'Frankfurter',
+    'provider',
+    'frankfurter',
+    'https://api.frankfurter.dev/v2/',
+    'active',
+    '{"capabilities":["fx_rates","fx_currencies"],"quote_type":"official_fixing","requires_secret":false,"supports_provider_filter":true}',
+    '0001-01-01T00:00:00Z'
+  ),
+  (
+    'exchangerate_api_open_access',
+    'ExchangeRate-API Open Access',
+    'provider',
+    'exchangerate_api_open_access',
+    'https://open.er-api.com/v6/',
+    'active',
+    '{"capabilities":["fx_rates"],"quote_type":"official_fixing","requires_secret":false,"attribution_required":true}',
+    '0001-01-01T00:00:00Z'
+  ),
+  (
+    'open_exchange_rates_free',
+    'Open Exchange Rates Free',
+    'provider',
+    'open_exchange_rates_free',
+    'https://openexchangerates.org/api/',
+    'disabled',
+    '{"capabilities":["fx_rates"],"quote_type":"official_fixing","requires_secret":true,"secret_ref":"OPEN_EXCHANGE_RATES_APP_ID"}',
+    '0001-01-01T00:00:00Z'
+  );
+
 CREATE TABLE IF NOT EXISTS investment_instruments (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
