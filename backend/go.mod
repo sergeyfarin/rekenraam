@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/crypto v0.52.0
+	golang.org/x/crypto v0.53.0
 	modernc.org/sqlite v1.52.0
 )
 
@@ -20,10 +20,10 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.72.5 // indirect
+	modernc.org/libc v1.73.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
