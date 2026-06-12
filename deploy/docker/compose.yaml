@@ -1,12 +1,13 @@
 services:
-  rekenraam:
-    build:
-      context: ../..
-      dockerfile: deploy/docker/Dockerfile
-    ports:
-      - "16888:16888"
-    volumes:
-      - rekenraam-data:/app/data
+    rekenraam:
+        build:
+            context: ../..
+            dockerfile: deploy/docker/Dockerfile
+        ports:
+            - "16888:16888"
+            - "1888:1888"
+        volumes:
+            - rekenraam-data:/app/data
 
 volumes:
-  rekenraam-data:
+    rekenraam-data:
