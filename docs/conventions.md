@@ -58,9 +58,15 @@ When a feature introduces a durable new rule, update one of those documents in t
   default disposal method until a user-selected cost-basis policy says
   otherwise; never infer cost basis from current holdings alone.
 - Market prices, FX rates, manual prices, provider prices, and trade-implied
-  prices must be stored as exact integer-plus-scale observations. Correct a
-  price by superseding or voiding the observation, not by overwriting the old
-  value.
+  prices must use the generic commodity-pair pricing model: `price_series`
+  identifies the source/quote-type/adjustment-basis stream, and
+  `price_observations` stores exact integer-plus-scale observations.
+- Price observations must distinguish the valuation date from system recording
+  time, and should also preserve provider observation and publication
+  timestamps when available. Historical valuation queries must be able to
+  filter by both valuation date and recorded-at time.
+- Correct a price by superseding or voiding the observation, not by overwriting
+  the old value.
 - External market data is untrusted input by default. Provider dividends,
   distributions, and corporate actions become suggestions unless an explicit
   automation rule scopes the source/instrument/event family and permits

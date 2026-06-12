@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type PricingRepository struct {
@@ -23,40 +24,82 @@ type MarketDataSourceRecord struct {
 	CreatedAt    string
 }
 
+type PriceSeriesRecord struct {
+	ID               int64
+	BookID           int64
+	BaseCommodityID  int64
+	QuoteCommodityID int64
+	SourceID         sql.NullInt64
+	QuoteType        string
+	AdjustmentBasis  string
+	MarketCode       sql.NullString
+	ProviderSeriesID sql.NullString
+	Status           string
+	MetadataJSON     string
+	CreatedAt        string
+	CreatedByUserID  int64
+}
+
+type PriceSeriesSpec struct {
+	BaseCommodityID  int64
+	QuoteCommodityID int64
+	SourceID         sql.NullInt64
+	QuoteType        string
+	AdjustmentBasis  string
+	MarketCode       string
+	ProviderSeriesID string
+	MetadataJSON     string
+}
+
 type PriceObservationRecord struct {
 	ID                      int64
 	BookID                  int64
-	CommodityID             int64
+	SeriesID                int64
+	BaseCommodityID         int64
 	QuoteCommodityID        int64
-	ObservationKind         string
+	QuoteType               string
+	AdjustmentBasis         string
 	PriceValue              int64
 	PriceScale              int
-	PriceDate               string
+	BaseQuantityValue       int64
+	BaseQuantityScale       int
+	ValuationDate           string
+	ObservedAt              sql.NullString
+	SourcePublishedAt       sql.NullString
 	SourceID                sql.NullInt64
 	ProviderObservationID   sql.NullString
-	Mode                    string
 	IsManual                bool
 	IsDerived               bool
 	SupersedesObservationID sql.NullInt64
+	DerivationJSON          string
 	MetadataJSON            string
 	VoidedAt                sql.NullString
-	CreatedAt               string
+	RecordedAt              string
 	CreatedByUserID         int64
 }
 
 type PriceObservationSpec struct {
-	CommodityID             int64
+	SeriesID                sql.NullInt64
+	BaseCommodityID         int64
 	QuoteCommodityID        int64
-	ObservationKind         string
+	QuoteType               string
+	AdjustmentBasis         string
 	PriceValue              int64
 	PriceScale              int
-	PriceDate               string
+	BaseQuantityValue       int64
+	BaseQuantityScale       int
+	ValuationDate           string
+	ObservedAt              sql.NullString
+	SourcePublishedAt       sql.NullString
 	SourceID                sql.NullInt64
+	MarketCode              string
+	ProviderSeriesID        string
 	ProviderObservationID   string
-	Mode                    string
 	IsManual                bool
 	IsDerived               bool
 	SupersedesObservationID sql.NullInt64
+	DerivationJSON          string
+	SeriesMetadataJSON      string
 	MetadataJSON            string
 }
 
@@ -121,7 +164,7 @@ type SavePricingPolicyParams struct {
 type PricingSourceAssignmentRecord struct {
 	ID               int64
 	BookID           int64
-	CommodityID      int64
+	BaseCommodityID  int64
 	QuoteCommodityID int64
 	SourceID         int64
 	Priority         int
@@ -133,7 +176,7 @@ type PricingSourceAssignmentRecord struct {
 }
 
 type PricingSourceAssignmentSpec struct {
-	CommodityID      int64
+	BaseCommodityID  int64
 	QuoteCommodityID int64
 	SourceID         int64
 	Priority         int
@@ -172,7 +215,7 @@ type PricingRefreshRunRecord struct {
 type PricingRefreshStateRecord struct {
 	ID               int64
 	BookID           int64
-	CommodityID      int64
+	BaseCommodityID  int64
 	QuoteCommodityID int64
 	SourceID         int64
 	LastSuccessDate  sql.NullString
@@ -245,14 +288,33 @@ func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params C
 	if err != nil {
 		return PriceObservationRecord{}, err
 	}
+	seriesID := params.Spec.SeriesID.Int64
+	if seriesID == 0 {
+		series, err := ensurePriceSeriesTx(ctx, tx, params.BookID, PriceSeriesSpec{
+			BaseCommodityID:  params.Spec.BaseCommodityID,
+			QuoteCommodityID: params.Spec.QuoteCommodityID,
+			SourceID:         params.Spec.SourceID,
+			QuoteType:        params.Spec.QuoteType,
+			AdjustmentBasis:  params.Spec.AdjustmentBasis,
+			MarketCode:       params.Spec.MarketCode,
+			ProviderSeriesID: params.Spec.ProviderSeriesID,
+			MetadataJSON:     params.Spec.SeriesMetadataJSON,
+		}, params.ActorUserID, params.CreatedAt, auditEventID)
+		if err != nil {
+			return PriceObservationRecord{}, err
+		}
+		seriesID = series.ID
+	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO price_observations (
-			book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_scale,
-			price_date, source_id, provider_observation_id, mode, is_manual, is_derived,
-			supersedes_observation_id, metadata_json, created_at, created_by_user_id, created_audit_event_id
+			book_id, series_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis,
+			price_value, price_scale, base_quantity_value, base_quantity_scale, valuation_date,
+			observed_at, source_published_at, source_id, provider_observation_id, is_manual, is_derived,
+			supersedes_observation_id, derivation_json, metadata_json, recorded_at, created_by_user_id,
+			created_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.Spec.CommodityID, params.Spec.QuoteCommodityID, params.Spec.ObservationKind, params.Spec.PriceValue, params.Spec.PriceScale, params.Spec.PriceDate, nullableInt64Value(params.Spec.SourceID), params.Spec.ProviderObservationID, params.Spec.Mode, boolInt(params.Spec.IsManual), boolInt(params.Spec.IsDerived), nullableInt64Value(params.Spec.SupersedesObservationID), params.Spec.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, seriesID, params.Spec.BaseCommodityID, params.Spec.QuoteCommodityID, params.Spec.QuoteType, params.Spec.AdjustmentBasis, params.Spec.PriceValue, params.Spec.PriceScale, params.Spec.BaseQuantityValue, params.Spec.BaseQuantityScale, params.Spec.ValuationDate, nullableStringValue(params.Spec.ObservedAt), nullableStringValue(params.Spec.SourcePublishedAt), nullableInt64Value(params.Spec.SourceID), params.Spec.ProviderObservationID, boolInt(params.Spec.IsManual), boolInt(params.Spec.IsDerived), nullableInt64Value(params.Spec.SupersedesObservationID), params.Spec.DerivationJSON, params.Spec.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
 	if err != nil {
 		return PriceObservationRecord{}, fmt.Errorf("insert price observation: %w", err)
 	}
@@ -271,12 +333,12 @@ func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params C
 	return record, nil
 }
 
-func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, commodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
+func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
 	where := "book_id = ? AND voided_at IS NULL"
 	args := []any{bookID}
-	if commodityID > 0 {
-		where += " AND commodity_id = ?"
-		args = append(args, commodityID)
+	if baseCommodityID > 0 {
+		where += " AND base_commodity_id = ?"
+		args = append(args, baseCommodityID)
 	}
 	if quoteCommodityID > 0 {
 		where += " AND quote_commodity_id = ?"
@@ -285,7 +347,7 @@ func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID in
 	args = append(args, limit)
 	rows, err := r.database.QueryContext(ctx, priceObservationSelect(`
 		WHERE `+where+`
-		ORDER BY price_date DESC, id DESC
+		ORDER BY valuation_date DESC, recorded_at DESC, id DESC
 		LIMIT ?
 	`), args...)
 	if err != nil {
@@ -365,7 +427,7 @@ func (r *PricingRepository) SavePricingPolicy(ctx context.Context, params SavePr
 func (r *PricingRepository) ListSourceAssignments(ctx context.Context, bookID int64) ([]PricingSourceAssignmentRecord, error) {
 	rows, err := r.database.QueryContext(ctx, pricingSourceAssignmentSelect(`
 		WHERE book_id = ?
-		ORDER BY status, priority, commodity_id, quote_commodity_id, id
+		ORDER BY status, priority, base_commodity_id, quote_commodity_id, id
 	`), bookID)
 	if err != nil {
 		return nil, fmt.Errorf("list pricing source assignments: %w", err)
@@ -402,10 +464,10 @@ func (r *PricingRepository) SaveSourceAssignment(ctx context.Context, params Sav
 	if params.AssignmentID > 0 {
 		result, err := tx.ExecContext(ctx, `
 			UPDATE pricing_source_assignments
-			SET commodity_id = ?, quote_commodity_id = ?, source_id = ?, priority = ?, status = ?,
+			SET base_commodity_id = ?, quote_commodity_id = ?, source_id = ?, priority = ?, status = ?,
 				effective_from = ?, effective_to = ?
 			WHERE book_id = ? AND id = ?
-		`, params.Spec.CommodityID, params.Spec.QuoteCommodityID, params.Spec.SourceID, params.Spec.Priority, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.BookID, params.AssignmentID)
+		`, params.Spec.BaseCommodityID, params.Spec.QuoteCommodityID, params.Spec.SourceID, params.Spec.Priority, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.BookID, params.AssignmentID)
 		if err != nil {
 			return PricingSourceAssignmentRecord{}, fmt.Errorf("update pricing source assignment: %w", err)
 		}
@@ -420,11 +482,11 @@ func (r *PricingRepository) SaveSourceAssignment(ctx context.Context, params Sav
 	} else {
 		result, err := tx.ExecContext(ctx, `
 			INSERT INTO pricing_source_assignments (
-				book_id, commodity_id, quote_commodity_id, source_id, priority, status,
+				book_id, base_commodity_id, quote_commodity_id, source_id, priority, status,
 				effective_from, effective_to, created_at, created_by_user_id, created_audit_event_id
 			)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, params.Spec.CommodityID, params.Spec.QuoteCommodityID, params.Spec.SourceID, params.Spec.Priority, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.RecordedAt, params.ActorUserID, auditEventID)
+		`, params.BookID, params.Spec.BaseCommodityID, params.Spec.QuoteCommodityID, params.Spec.SourceID, params.Spec.Priority, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.RecordedAt, params.ActorUserID, auditEventID)
 		if err != nil {
 			return PricingSourceAssignmentRecord{}, fmt.Errorf("insert pricing source assignment: %w", err)
 		}
@@ -493,7 +555,7 @@ func (r *PricingRepository) RefreshRunByID(ctx context.Context, bookID int64, ru
 
 func (r *PricingRepository) ListRefreshState(ctx context.Context, bookID int64) ([]PricingRefreshStateRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `
-		SELECT id, book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error, updated_at
+		SELECT id, book_id, base_commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error, updated_at
 		FROM pricing_refresh_state
 		WHERE book_id = ?
 		ORDER BY updated_at DESC, id DESC
@@ -505,7 +567,7 @@ func (r *PricingRepository) ListRefreshState(ctx context.Context, bookID int64) 
 	var records []PricingRefreshStateRecord
 	for rows.Next() {
 		var record PricingRefreshStateRecord
-		if err := rows.Scan(&record.ID, &record.BookID, &record.CommodityID, &record.QuoteCommodityID, &record.SourceID, &record.LastSuccessDate, &record.LastAttemptAt, &record.LastError, &record.UpdatedAt); err != nil {
+		if err := rows.Scan(&record.ID, &record.BookID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.SourceID, &record.LastSuccessDate, &record.LastAttemptAt, &record.LastError, &record.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan pricing refresh state: %w", err)
 		}
 		records = append(records, record)
@@ -516,6 +578,69 @@ func (r *PricingRepository) ListRefreshState(ctx context.Context, bookID int64) 
 	return records, nil
 }
 
+func ensurePriceSeriesTx(ctx context.Context, tx *sql.Tx, bookID int64, spec PriceSeriesSpec, actorUserID int64, createdAt string, auditEventID int64) (PriceSeriesRecord, error) {
+	sourceIDValue := int64(0)
+	if spec.SourceID.Valid {
+		sourceIDValue = spec.SourceID.Int64
+	}
+	var seriesID int64
+	err := tx.QueryRowContext(ctx, `
+		SELECT id
+		FROM price_series
+		WHERE book_id = ?
+			AND base_commodity_id = ?
+			AND quote_commodity_id = ?
+			AND IFNULL(source_id, 0) = ?
+			AND quote_type = ?
+			AND adjustment_basis = ?
+			AND IFNULL(market_code, '') = ?
+			AND IFNULL(provider_series_id, '') = ?
+			AND status = 'active'
+		ORDER BY id
+		LIMIT 1
+	`, bookID, spec.BaseCommodityID, spec.QuoteCommodityID, sourceIDValue, spec.QuoteType, spec.AdjustmentBasis, strings.TrimSpace(spec.MarketCode), strings.TrimSpace(spec.ProviderSeriesID)).Scan(&seriesID)
+	if err == nil {
+		return priceSeriesByIDTx(ctx, tx, bookID, seriesID)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return PriceSeriesRecord{}, fmt.Errorf("find price series: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO price_series (
+			book_id, base_commodity_id, quote_commodity_id, source_id, quote_type,
+			adjustment_basis, market_code, provider_series_id, status, metadata_json,
+			created_at, created_by_user_id, created_audit_event_id
+		)
+		VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), 'active', ?, ?, ?, ?)
+	`, bookID, spec.BaseCommodityID, spec.QuoteCommodityID, nullableInt64Value(spec.SourceID), spec.QuoteType, spec.AdjustmentBasis, strings.TrimSpace(spec.MarketCode), strings.TrimSpace(spec.ProviderSeriesID), spec.MetadataJSON, createdAt, actorUserID, auditEventID)
+	if err != nil {
+		return PriceSeriesRecord{}, fmt.Errorf("insert price series: %w", err)
+	}
+	seriesID, err = result.LastInsertId()
+	if err != nil {
+		return PriceSeriesRecord{}, fmt.Errorf("read price series id: %w", err)
+	}
+	return priceSeriesByIDTx(ctx, tx, bookID, seriesID)
+}
+
+func priceSeriesByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, seriesID int64) (PriceSeriesRecord, error) {
+	var record PriceSeriesRecord
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id, book_id, base_commodity_id, quote_commodity_id, source_id, quote_type,
+			adjustment_basis, market_code, provider_series_id, status, metadata_json,
+			created_at, created_by_user_id
+		FROM price_series
+		WHERE book_id = ? AND id = ?
+	`, bookID, seriesID).Scan(&record.ID, &record.BookID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.SourceID, &record.QuoteType, &record.AdjustmentBasis, &record.MarketCode, &record.ProviderSeriesID, &record.Status, &record.MetadataJSON, &record.CreatedAt, &record.CreatedByUserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PriceSeriesRecord{}, ErrNotFound
+		}
+		return PriceSeriesRecord{}, fmt.Errorf("scan price series: %w", err)
+	}
+	return record, nil
+}
+
 func priceObservationByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, observationID int64) (PriceObservationRecord, error) {
 	return scanPriceObservationRow(tx.QueryRowContext(ctx, priceObservationSelect(`
 		WHERE book_id = ? AND id = ?
@@ -524,9 +649,11 @@ func priceObservationByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, obser
 
 func priceObservationSelect(whereClause string) string {
 	return `
-		SELECT id, book_id, commodity_id, quote_commodity_id, observation_kind, price_value,
-			price_scale, price_date, source_id, provider_observation_id, mode, is_manual,
-			is_derived, supersedes_observation_id, metadata_json, voided_at, created_at, created_by_user_id
+		SELECT id, book_id, series_id, base_commodity_id, quote_commodity_id, quote_type,
+			adjustment_basis, price_value, price_scale, base_quantity_value, base_quantity_scale,
+			valuation_date, observed_at, source_published_at, source_id, provider_observation_id,
+			is_manual, is_derived, supersedes_observation_id, derivation_json, metadata_json,
+			voided_at, recorded_at, created_by_user_id
 		FROM price_observations
 	` + whereClause
 }
@@ -535,7 +662,7 @@ func scanPriceObservationRow(row rowScanner) (PriceObservationRecord, error) {
 	var record PriceObservationRecord
 	var isManual int
 	var isDerived int
-	if err := row.Scan(&record.ID, &record.BookID, &record.CommodityID, &record.QuoteCommodityID, &record.ObservationKind, &record.PriceValue, &record.PriceScale, &record.PriceDate, &record.SourceID, &record.ProviderObservationID, &record.Mode, &isManual, &isDerived, &record.SupersedesObservationID, &record.MetadataJSON, &record.VoidedAt, &record.CreatedAt, &record.CreatedByUserID); err != nil {
+	if err := row.Scan(&record.ID, &record.BookID, &record.SeriesID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.QuoteType, &record.AdjustmentBasis, &record.PriceValue, &record.PriceScale, &record.BaseQuantityValue, &record.BaseQuantityScale, &record.ValuationDate, &record.ObservedAt, &record.SourcePublishedAt, &record.SourceID, &record.ProviderObservationID, &isManual, &isDerived, &record.SupersedesObservationID, &record.DerivationJSON, &record.MetadataJSON, &record.VoidedAt, &record.RecordedAt, &record.CreatedByUserID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PriceObservationRecord{}, ErrNotFound
 		}
@@ -588,7 +715,7 @@ func scanPricingPolicyRow(row rowScanner) (PricingPolicyRecord, error) {
 
 func pricingSourceAssignmentSelect(whereClause string) string {
 	return `
-		SELECT id, book_id, commodity_id, quote_commodity_id, source_id, priority, status,
+		SELECT id, book_id, base_commodity_id, quote_commodity_id, source_id, priority, status,
 			effective_from, effective_to, created_at, created_by_user_id
 		FROM pricing_source_assignments
 	` + whereClause
@@ -602,7 +729,7 @@ func pricingSourceAssignmentByIDTx(ctx context.Context, tx *sql.Tx, bookID int64
 
 func scanPricingSourceAssignmentRow(row rowScanner) (PricingSourceAssignmentRecord, error) {
 	var record PricingSourceAssignmentRecord
-	if err := row.Scan(&record.ID, &record.BookID, &record.CommodityID, &record.QuoteCommodityID, &record.SourceID, &record.Priority, &record.Status, &record.EffectiveFrom, &record.EffectiveTo, &record.CreatedAt, &record.CreatedByUserID); err != nil {
+	if err := row.Scan(&record.ID, &record.BookID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.SourceID, &record.Priority, &record.Status, &record.EffectiveFrom, &record.EffectiveTo, &record.CreatedAt, &record.CreatedByUserID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PricingSourceAssignmentRecord{}, ErrNotFound
 		}

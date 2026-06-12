@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS pricing_policies (
 CREATE TABLE IF NOT EXISTS pricing_source_assignments (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
   priority INTEGER NOT NULL DEFAULT 100 CHECK (priority >= 0),
@@ -169,35 +169,65 @@ CREATE TABLE IF NOT EXISTS pricing_source_assignments (
 );
 
 CREATE INDEX IF NOT EXISTS pricing_source_assignments_lookup_idx
-  ON pricing_source_assignments (book_id, commodity_id, quote_commodity_id, status, effective_from DESC, priority);
+  ON pricing_source_assignments (book_id, base_commodity_id, quote_commodity_id, status, effective_from DESC, priority);
 
-CREATE TABLE IF NOT EXISTS price_observations (
+CREATE TABLE IF NOT EXISTS price_series (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  observation_kind TEXT NOT NULL CHECK (observation_kind IN ('market_price', 'fx_daily', 'fx_official', 'trade_implied', 'valuation_override')),
-  price_value INTEGER NOT NULL,
-  price_scale INTEGER NOT NULL CHECK (price_scale BETWEEN 0 AND 12),
-  price_date TEXT NOT NULL CHECK (price_date GLOB '????-??-??'),
   source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
-  provider_observation_id TEXT,
-  mode TEXT NOT NULL DEFAULT 'market' CHECK (mode IN ('market', 'daily', 'official', 'transaction_implied', 'manual')),
-  is_manual INTEGER NOT NULL DEFAULT 0 CHECK (is_manual IN (0, 1)),
-  is_derived INTEGER NOT NULL DEFAULT 0 CHECK (is_derived IN (0, 1)),
-  supersedes_observation_id INTEGER REFERENCES price_observations(id) ON DELETE RESTRICT,
-  ingest_run_id INTEGER,
+  quote_type TEXT NOT NULL CHECK (quote_type IN ('close', 'adjusted_close', 'nav', 'official_fixing', 'spot_mid', 'bid', 'ask', 'manual', 'trade_implied', 'valuation_override')),
+  adjustment_basis TEXT NOT NULL DEFAULT 'raw' CHECK (adjustment_basis IN ('raw', 'split_adjusted', 'dividend_adjusted', 'total_return', 'not_applicable')),
+  market_code TEXT,
+  provider_series_id TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
   metadata_json TEXT NOT NULL DEFAULT '{}',
-  voided_at TEXT,
-  voided_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
-  void_reason TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
 );
 
+CREATE INDEX IF NOT EXISTS price_series_lookup_idx
+  ON price_series (book_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, status, source_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS price_series_provider_idx
+  ON price_series (book_id, source_id, provider_series_id)
+  WHERE source_id IS NOT NULL AND provider_series_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS price_observations (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  series_id INTEGER NOT NULL REFERENCES price_series(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_type TEXT NOT NULL CHECK (quote_type IN ('close', 'adjusted_close', 'nav', 'official_fixing', 'spot_mid', 'bid', 'ask', 'manual', 'trade_implied', 'valuation_override')),
+  adjustment_basis TEXT NOT NULL DEFAULT 'raw' CHECK (adjustment_basis IN ('raw', 'split_adjusted', 'dividend_adjusted', 'total_return', 'not_applicable')),
+  price_value INTEGER NOT NULL,
+  price_scale INTEGER NOT NULL CHECK (price_scale BETWEEN 0 AND 18),
+  base_quantity_value INTEGER NOT NULL DEFAULT 1 CHECK (base_quantity_value > 0),
+  base_quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (base_quantity_scale BETWEEN 0 AND 18),
+  valuation_date TEXT NOT NULL CHECK (valuation_date GLOB '????-??-??'),
+  observed_at TEXT,
+  source_published_at TEXT,
+  source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  provider_observation_id TEXT,
+  is_manual INTEGER NOT NULL DEFAULT 0 CHECK (is_manual IN (0, 1)),
+  is_derived INTEGER NOT NULL DEFAULT 0 CHECK (is_derived IN (0, 1)),
+  supersedes_observation_id INTEGER REFERENCES price_observations(id) ON DELETE RESTRICT,
+  ingest_run_id INTEGER,
+  derivation_json TEXT NOT NULL DEFAULT '{}',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  voided_at TEXT,
+  voided_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  void_reason TEXT NOT NULL DEFAULT '',
+  recorded_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
 CREATE INDEX IF NOT EXISTS price_observations_lookup_idx
-  ON price_observations (book_id, commodity_id, quote_commodity_id, observation_kind, price_date DESC, id DESC);
+  ON price_observations (book_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, valuation_date DESC, recorded_at DESC, id DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS price_observations_provider_event_idx
   ON price_observations (source_id, provider_observation_id)
@@ -241,14 +271,14 @@ CREATE INDEX IF NOT EXISTS market_data_ingest_items_run_idx
 CREATE TABLE IF NOT EXISTS pricing_refresh_state (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
   last_success_date TEXT CHECK (last_success_date IS NULL OR last_success_date GLOB '????-??-??'),
   last_attempt_at TEXT,
   last_error TEXT,
   updated_at TEXT NOT NULL,
-  UNIQUE (book_id, commodity_id, quote_commodity_id, source_id)
+  UNIQUE (book_id, base_commodity_id, quote_commodity_id, source_id)
 );
 
 CREATE TABLE IF NOT EXISTS cost_basis_profiles (
@@ -482,23 +512,61 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS pricing_source_assignments_same_book
+BEFORE INSERT ON pricing_source_assignments
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities b
+  JOIN commodities q ON q.id = NEW.quote_commodity_id
+  WHERE b.id = NEW.base_commodity_id
+    AND b.book_id = NEW.book_id
+    AND q.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'pricing source assignment commodities must belong to one book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS price_series_same_book
+BEFORE INSERT ON price_series
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities b
+  JOIN commodities q ON q.id = NEW.quote_commodity_id
+  WHERE b.id = NEW.base_commodity_id
+    AND b.book_id = NEW.book_id
+    AND q.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'price series commodities must belong to one book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS price_observations_same_book
 BEFORE INSERT ON price_observations
 WHEN NOT EXISTS (
   SELECT 1
-  FROM commodities c
+  FROM price_series ps
+  JOIN commodities c ON c.id = NEW.base_commodity_id
   JOIN commodities q ON q.id = NEW.quote_commodity_id
-  WHERE c.id = NEW.commodity_id
+  WHERE ps.id = NEW.series_id
+    AND ps.book_id = NEW.book_id
+    AND ps.base_commodity_id = NEW.base_commodity_id
+    AND ps.quote_commodity_id = NEW.quote_commodity_id
     AND c.book_id = NEW.book_id
     AND q.book_id = NEW.book_id
 )
 BEGIN
-  SELECT RAISE(ABORT, 'price observation commodities must belong to one book');
+  SELECT RAISE(ABORT, 'price observation series and commodities must belong to one book');
 END;
 -- +goose StatementEnd
 
 -- +goose Down
 DROP TRIGGER IF EXISTS price_observations_same_book;
+DROP TRIGGER IF EXISTS price_series_same_book;
+DROP TRIGGER IF EXISTS pricing_source_assignments_same_book;
 DROP TRIGGER IF EXISTS investment_lot_events_same_book;
 DROP TRIGGER IF EXISTS investment_lots_same_book;
 DROP TRIGGER IF EXISTS investment_instruments_commodity_must_be_security;
@@ -528,6 +596,9 @@ DROP TABLE IF EXISTS market_data_ingest_runs;
 DROP INDEX IF EXISTS price_observations_provider_event_idx;
 DROP INDEX IF EXISTS price_observations_lookup_idx;
 DROP TABLE IF EXISTS price_observations;
+DROP INDEX IF EXISTS price_series_provider_idx;
+DROP INDEX IF EXISTS price_series_lookup_idx;
+DROP TABLE IF EXISTS price_series;
 DROP INDEX IF EXISTS pricing_source_assignments_lookup_idx;
 DROP TABLE IF EXISTS pricing_source_assignments;
 DROP TABLE IF EXISTS pricing_policies;

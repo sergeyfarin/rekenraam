@@ -32,38 +32,52 @@ type MarketDataSource struct {
 type PriceObservation struct {
 	ID                      int64
 	BookID                  int64
-	CommodityID             int64
+	SeriesID                int64
+	BaseCommodityID         int64
 	QuoteCommodityID        int64
-	ObservationKind         string
+	QuoteType               string
+	AdjustmentBasis         string
 	PriceValue              int64
 	PriceScale              int
-	PriceDate               string
+	BaseQuantityValue       int64
+	BaseQuantityScale       int
+	ValuationDate           string
+	ObservedAt              string
+	SourcePublishedAt       string
 	SourceID                *int64
 	ProviderObservationID   string
-	Mode                    string
 	IsManual                bool
 	IsDerived               bool
 	SupersedesObservationID *int64
+	DerivationJSON          string
 	MetadataJSON            string
-	CreatedAt               string
+	RecordedAt              string
 }
 
 type PriceObservationInput struct {
 	OwnerUserID             int64
 	AuthSessionID           int64
 	RequestID               string
-	CommodityID             int64
+	BaseCommodityID         int64
 	QuoteCommodityID        int64
-	ObservationKind         string
+	QuoteType               string
+	AdjustmentBasis         string
 	PriceValue              int64
 	PriceScale              int
-	PriceDate               string
+	BaseQuantityValue       int64
+	BaseQuantityScale       int
+	ValuationDate           string
+	ObservedAt              string
+	SourcePublishedAt       string
 	SourceID                *int64
+	MarketCode              string
+	ProviderSeriesID        string
 	ProviderObservationID   string
-	Mode                    string
 	IsManual                bool
 	IsDerived               bool
 	SupersedesObservationID *int64
+	DerivationJSON          string
+	SeriesMetadataJSON      string
 	MetadataJSON            string
 	ChangeReason            string
 }
@@ -264,17 +278,21 @@ func (s *PricingService) CreateTradeImpliedPrice(ctx context.Context, input Crea
 		CreatedAt:     s.now().UTC().Format(time.RFC3339),
 		ChangeReason:  "created trade-implied price observation",
 		Spec: db.PriceObservationSpec{
-			CommodityID:      input.CommodityID,
-			QuoteCommodityID: input.QuoteCommodityID,
-			ObservationKind:  "trade_implied",
-			PriceValue:       priceValue,
-			PriceScale:       priceScale,
-			PriceDate:        input.PriceDate,
-			SourceID:         sql.NullInt64{Int64: sourceID, Valid: true},
-			Mode:             "transaction_implied",
-			IsManual:         false,
-			IsDerived:        true,
-			MetadataJSON:     "{}",
+			BaseCommodityID:    input.CommodityID,
+			QuoteCommodityID:   input.QuoteCommodityID,
+			QuoteType:          "trade_implied",
+			AdjustmentBasis:    "not_applicable",
+			PriceValue:         priceValue,
+			PriceScale:         priceScale,
+			BaseQuantityValue:  1,
+			BaseQuantityScale:  0,
+			ValuationDate:      input.PriceDate,
+			SourceID:           sql.NullInt64{Int64: sourceID, Valid: true},
+			IsManual:           false,
+			IsDerived:          true,
+			DerivationJSON:     "{}",
+			SeriesMetadataJSON: "{}",
+			MetadataJSON:       "{}",
 		},
 	})
 	return err
@@ -418,7 +436,7 @@ func (s *PricingService) SourceHealth(ctx context.Context) ([]PricingSourceHealt
 		health = append(health, PricingSourceHealth{
 			ID:               record.ID,
 			BookID:           record.BookID,
-			CommodityID:      record.CommodityID,
+			CommodityID:      record.BaseCommodityID,
 			QuoteCommodityID: record.QuoteCommodityID,
 			SourceID:         record.SourceID,
 			LastSuccessDate:  nullableString(record.LastSuccessDate),
@@ -432,52 +450,100 @@ func (s *PricingService) SourceHealth(ctx context.Context) ([]PricingSourceHealt
 }
 
 func cleanPriceObservationSpec(input PriceObservationInput) (db.PriceObservationSpec, error) {
-	if input.CommodityID <= 0 || input.QuoteCommodityID <= 0 {
+	if input.BaseCommodityID <= 0 || input.QuoteCommodityID <= 0 {
 		return db.PriceObservationSpec{}, ValidationError{Message: "price commodities are required"}
 	}
 	if input.PriceValue <= 0 {
 		return db.PriceObservationSpec{}, ValidationError{Message: "price value is required"}
 	}
-	if input.PriceScale < 0 || input.PriceScale > 12 {
+	if input.PriceScale < 0 || input.PriceScale > 18 {
 		return db.PriceObservationSpec{}, ValidationError{Message: "price scale is invalid"}
 	}
-	priceDate, err := cleanRequiredDate(input.PriceDate, "price date")
+	valuationDate, err := cleanRequiredDate(input.ValuationDate, "valuation date")
 	if err != nil {
 		return db.PriceObservationSpec{}, err
 	}
-	kind := strings.TrimSpace(input.ObservationKind)
-	if kind == "" {
-		kind = "market_price"
+	quoteType := strings.TrimSpace(input.QuoteType)
+	if quoteType == "" {
+		quoteType = "manual"
 	}
-	if !map[string]bool{"market_price": true, "fx_daily": true, "fx_official": true, "trade_implied": true, "valuation_override": true}[kind] {
-		return db.PriceObservationSpec{}, ValidationError{Message: "price observation kind is invalid"}
+	if !map[string]bool{"close": true, "adjusted_close": true, "nav": true, "official_fixing": true, "spot_mid": true, "bid": true, "ask": true, "manual": true, "trade_implied": true, "valuation_override": true}[quoteType] {
+		return db.PriceObservationSpec{}, ValidationError{Message: "quote type is invalid"}
 	}
-	mode := strings.TrimSpace(input.Mode)
-	if mode == "" {
-		mode = "manual"
+	adjustmentBasis := strings.TrimSpace(input.AdjustmentBasis)
+	if adjustmentBasis == "" {
+		adjustmentBasis = "raw"
 	}
-	if !map[string]bool{"market": true, "daily": true, "official": true, "transaction_implied": true, "manual": true}[mode] {
-		return db.PriceObservationSpec{}, ValidationError{Message: "price mode is invalid"}
+	if !map[string]bool{"raw": true, "split_adjusted": true, "dividend_adjusted": true, "total_return": true, "not_applicable": true}[adjustmentBasis] {
+		return db.PriceObservationSpec{}, ValidationError{Message: "adjustment basis is invalid"}
+	}
+	baseQuantityValue := input.BaseQuantityValue
+	baseQuantityScale := input.BaseQuantityScale
+	if baseQuantityValue == 0 {
+		baseQuantityValue = 1
+		baseQuantityScale = 0
+	}
+	if baseQuantityValue <= 0 {
+		return db.PriceObservationSpec{}, ValidationError{Message: "base quantity value is invalid"}
+	}
+	if baseQuantityScale < 0 || baseQuantityScale > 18 {
+		return db.PriceObservationSpec{}, ValidationError{Message: "base quantity scale is invalid"}
+	}
+	observedAt, err := cleanOptionalRFC3339(input.ObservedAt, "observed at")
+	if err != nil {
+		return db.PriceObservationSpec{}, err
+	}
+	sourcePublishedAt, err := cleanOptionalRFC3339(input.SourcePublishedAt, "source published at")
+	if err != nil {
+		return db.PriceObservationSpec{}, err
+	}
+	derivationJSON, err := cleanSizedJSONObject(input.DerivationJSON, "derivation", investmentJSONMaxBytes)
+	if err != nil {
+		return db.PriceObservationSpec{}, err
+	}
+	seriesMetadataJSON, err := cleanSizedJSONObject(input.SeriesMetadataJSON, "series metadata", investmentJSONMaxBytes)
+	if err != nil {
+		return db.PriceObservationSpec{}, err
 	}
 	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", investmentJSONMaxBytes)
 	if err != nil {
 		return db.PriceObservationSpec{}, err
 	}
 	return db.PriceObservationSpec{
-		CommodityID:             input.CommodityID,
+		BaseCommodityID:         input.BaseCommodityID,
 		QuoteCommodityID:        input.QuoteCommodityID,
-		ObservationKind:         kind,
+		QuoteType:               quoteType,
+		AdjustmentBasis:         adjustmentBasis,
 		PriceValue:              input.PriceValue,
 		PriceScale:              input.PriceScale,
-		PriceDate:               priceDate,
+		BaseQuantityValue:       baseQuantityValue,
+		BaseQuantityScale:       baseQuantityScale,
+		ValuationDate:           valuationDate,
+		ObservedAt:              nullableSQLString(observedAt),
+		SourcePublishedAt:       nullableSQLString(sourcePublishedAt),
 		SourceID:                nullableInt64(input.SourceID),
+		MarketCode:              strings.TrimSpace(input.MarketCode),
+		ProviderSeriesID:        strings.TrimSpace(input.ProviderSeriesID),
 		ProviderObservationID:   strings.TrimSpace(input.ProviderObservationID),
-		Mode:                    mode,
 		IsManual:                input.IsManual,
 		IsDerived:               input.IsDerived,
 		SupersedesObservationID: nullableInt64(input.SupersedesObservationID),
+		DerivationJSON:          derivationJSON,
+		SeriesMetadataJSON:      seriesMetadataJSON,
 		MetadataJSON:            metadataJSON,
 	}, nil
+}
+
+func cleanOptionalRFC3339(value string, field string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "", nil
+	}
+	parsed, err := time.Parse(time.RFC3339, cleaned)
+	if err != nil || parsed.Location() != time.UTC || parsed.Format(time.RFC3339) != cleaned {
+		return "", ValidationError{Message: field + " must be UTC RFC3339 without fractional seconds"}
+	}
+	return cleaned, nil
 }
 
 func cleanPricingPolicySpec(input PricingPolicyInput) (db.PricingPolicySpec, error) {
@@ -552,7 +618,7 @@ func cleanPricingSourceAssignmentSpec(input PricingSourceAssignmentInput, now ti
 		return db.PricingSourceAssignmentSpec{}, ValidationError{Message: "effective to must be on or after effective from"}
 	}
 	return db.PricingSourceAssignmentSpec{
-		CommodityID:      input.CommodityID,
+		BaseCommodityID:  input.CommodityID,
 		QuoteCommodityID: input.QuoteCommodityID,
 		SourceID:         input.SourceID,
 		Priority:         priority,
@@ -578,20 +644,26 @@ func toPriceObservation(record db.PriceObservationRecord) PriceObservation {
 	return PriceObservation{
 		ID:                      record.ID,
 		BookID:                  record.BookID,
-		CommodityID:             record.CommodityID,
+		SeriesID:                record.SeriesID,
+		BaseCommodityID:         record.BaseCommodityID,
 		QuoteCommodityID:        record.QuoteCommodityID,
-		ObservationKind:         record.ObservationKind,
+		QuoteType:               record.QuoteType,
+		AdjustmentBasis:         record.AdjustmentBasis,
 		PriceValue:              record.PriceValue,
 		PriceScale:              record.PriceScale,
-		PriceDate:               record.PriceDate,
+		BaseQuantityValue:       record.BaseQuantityValue,
+		BaseQuantityScale:       record.BaseQuantityScale,
+		ValuationDate:           record.ValuationDate,
+		ObservedAt:              nullableString(record.ObservedAt),
+		SourcePublishedAt:       nullableString(record.SourcePublishedAt),
 		SourceID:                nullableSQLInt64Ptr(record.SourceID),
 		ProviderObservationID:   nullableString(record.ProviderObservationID),
-		Mode:                    record.Mode,
 		IsManual:                record.IsManual,
 		IsDerived:               record.IsDerived,
 		SupersedesObservationID: nullableSQLInt64Ptr(record.SupersedesObservationID),
+		DerivationJSON:          record.DerivationJSON,
 		MetadataJSON:            record.MetadataJSON,
-		CreatedAt:               record.CreatedAt,
+		RecordedAt:              record.RecordedAt,
 	}
 }
 
@@ -608,7 +680,7 @@ func toPricingPolicy(record db.PricingPolicyRecord) PricingPolicy {
 }
 
 func toPricingSourceAssignment(record db.PricingSourceAssignmentRecord) PricingSourceAssignment {
-	return PricingSourceAssignment{ID: record.ID, BookID: record.BookID, CommodityID: record.CommodityID, QuoteCommodityID: record.QuoteCommodityID, SourceID: record.SourceID, Priority: record.Priority, Status: record.Status, EffectiveFrom: record.EffectiveFrom, EffectiveTo: nullableString(record.EffectiveTo), CreatedAt: record.CreatedAt}
+	return PricingSourceAssignment{ID: record.ID, BookID: record.BookID, CommodityID: record.BaseCommodityID, QuoteCommodityID: record.QuoteCommodityID, SourceID: record.SourceID, Priority: record.Priority, Status: record.Status, EffectiveFrom: record.EffectiveFrom, EffectiveTo: nullableString(record.EffectiveTo), CreatedAt: record.CreatedAt}
 }
 
 func toPricingSourceAssignments(records []db.PricingSourceAssignmentRecord) []PricingSourceAssignment {

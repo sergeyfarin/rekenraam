@@ -36,8 +36,15 @@ model.
   transactions. Security trades use the `commodity_trading` system account so
   each commodity remains balanced.
 - Prices, FX rates, provider prices, manual prices, and trade-implied prices
-  are exact integer-plus-scale observations. Observations are superseded or
-  voided rather than overwritten.
+  use a generic commodity-pair market data model. `price_series` identifies a
+  stream such as "base commodity in quote commodity from this source, quote
+  type, and adjustment basis"; `price_observations` stores immutable exact
+  integer-plus-scale observations in that stream.
+- Price observations keep separate valuation, observation, publication, and
+  recording times. Historical reports can ask "what was the value on this
+  valuation date using what Rekenraam knew at this recorded time" rather than
+  silently changing old reports when late or corrected market data arrives.
+- Observations are superseded or voided rather than overwritten.
 - Lots are first-class from the first investment slice. FIFO is the default
   implemented disposal method, while the schema preserves policy values for
   `fifo`, `lifo`, `average_cost`, and `specific_lot`.

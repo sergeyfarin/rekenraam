@@ -29,20 +29,26 @@ type marketDataSourcesResponse struct {
 type priceObservationResponse struct {
 	ID                      int64           `json:"id"`
 	BookID                  int64           `json:"book_id"`
-	CommodityID             int64           `json:"commodity_id"`
+	SeriesID                int64           `json:"series_id"`
+	BaseCommodityID         int64           `json:"base_commodity_id"`
 	QuoteCommodityID        int64           `json:"quote_commodity_id"`
-	ObservationKind         string          `json:"observation_kind"`
+	QuoteType               string          `json:"quote_type"`
+	AdjustmentBasis         string          `json:"adjustment_basis"`
 	PriceValue              int64           `json:"price_value"`
 	PriceScale              int             `json:"price_scale"`
-	PriceDate               string          `json:"price_date"`
+	BaseQuantityValue       int64           `json:"base_quantity_value"`
+	BaseQuantityScale       int             `json:"base_quantity_scale"`
+	ValuationDate           string          `json:"valuation_date"`
+	ObservedAt              string          `json:"observed_at,omitempty"`
+	SourcePublishedAt       string          `json:"source_published_at,omitempty"`
 	SourceID                *int64          `json:"source_id,omitempty"`
 	ProviderObservationID   string          `json:"provider_observation_id,omitempty"`
-	Mode                    string          `json:"mode"`
 	IsManual                bool            `json:"is_manual"`
 	IsDerived               bool            `json:"is_derived"`
 	SupersedesObservationID *int64          `json:"supersedes_observation_id,omitempty"`
+	Derivation              json.RawMessage `json:"derivation"`
 	Metadata                json.RawMessage `json:"metadata"`
-	CreatedAt               string          `json:"created_at"`
+	RecordedAt              string          `json:"recorded_at"`
 }
 
 type priceObservationsResponse struct {
@@ -50,18 +56,28 @@ type priceObservationsResponse struct {
 }
 
 type priceObservationRequest struct {
+	BaseCommodityID         int64           `json:"base_commodity_id"`
 	CommodityID             int64           `json:"commodity_id"`
 	QuoteCommodityID        int64           `json:"quote_commodity_id"`
-	ObservationKind         string          `json:"observation_kind"`
+	QuoteType               string          `json:"quote_type"`
+	AdjustmentBasis         string          `json:"adjustment_basis"`
 	PriceValue              int64           `json:"price_value"`
 	PriceScale              int             `json:"price_scale"`
+	BaseQuantityValue       int64           `json:"base_quantity_value"`
+	BaseQuantityScale       int             `json:"base_quantity_scale"`
+	ValuationDate           string          `json:"valuation_date"`
 	PriceDate               string          `json:"price_date"`
+	ObservedAt              string          `json:"observed_at"`
+	SourcePublishedAt       string          `json:"source_published_at"`
 	SourceID                *int64          `json:"source_id"`
+	MarketCode              string          `json:"market_code"`
+	ProviderSeriesID        string          `json:"provider_series_id"`
 	ProviderObservationID   string          `json:"provider_observation_id"`
-	Mode                    string          `json:"mode"`
 	IsManual                bool            `json:"is_manual"`
 	IsDerived               bool            `json:"is_derived"`
 	SupersedesObservationID *int64          `json:"supersedes_observation_id"`
+	Derivation              json.RawMessage `json:"derivation"`
+	SeriesMetadata          json.RawMessage `json:"series_metadata"`
 	Metadata                json.RawMessage `json:"metadata"`
 	ChangeReason            string          `json:"change_reason"`
 }
@@ -186,7 +202,11 @@ func listPrices(logger *slog.Logger, authService *app.AuthService, pricingServic
 		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
 			return
 		}
-		commodityID, ok := parseOptionalPositiveInt64(w, r.URL.Query().Get("commodity_id"), "commodity id")
+		baseCommodityValue := r.URL.Query().Get("base_commodity_id")
+		if baseCommodityValue == "" {
+			baseCommodityValue = r.URL.Query().Get("commodity_id")
+		}
+		baseCommodityID, ok := parseOptionalPositiveInt64(w, baseCommodityValue, "base commodity id")
 		if !ok {
 			return
 		}
@@ -203,7 +223,7 @@ func listPrices(logger *slog.Logger, authService *app.AuthService, pricingServic
 			}
 			limit = parsed
 		}
-		prices, err := pricingService.ListPrices(r.Context(), commodityID, quoteCommodityID, limit)
+		prices, err := pricingService.ListPrices(r.Context(), baseCommodityID, quoteCommodityID, limit)
 		if err != nil {
 			writePricingServiceError(w, r, logger, "list prices", err)
 			return
@@ -223,12 +243,24 @@ func createPrice(logger *slog.Logger, authService *app.AuthService, pricingServi
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
 			return
 		}
+		baseCommodityID := request.BaseCommodityID
+		if baseCommodityID == 0 {
+			baseCommodityID = request.CommodityID
+		}
+		valuationDate := request.ValuationDate
+		if valuationDate == "" {
+			valuationDate = request.PriceDate
+		}
 		price, err := pricingService.CreatePrice(r.Context(), app.PriceObservationInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
-			CommodityID: request.CommodityID, QuoteCommodityID: request.QuoteCommodityID, ObservationKind: request.ObservationKind,
-			PriceValue: request.PriceValue, PriceScale: request.PriceScale, PriceDate: request.PriceDate, SourceID: request.SourceID,
-			ProviderObservationID: request.ProviderObservationID, Mode: request.Mode, IsManual: request.IsManual,
-			IsDerived: request.IsDerived, SupersedesObservationID: request.SupersedesObservationID, MetadataJSON: rawJSONText(request.Metadata),
+			BaseCommodityID: baseCommodityID, QuoteCommodityID: request.QuoteCommodityID, QuoteType: request.QuoteType,
+			AdjustmentBasis: request.AdjustmentBasis, PriceValue: request.PriceValue, PriceScale: request.PriceScale,
+			BaseQuantityValue: request.BaseQuantityValue, BaseQuantityScale: request.BaseQuantityScale, ValuationDate: valuationDate,
+			ObservedAt: request.ObservedAt, SourcePublishedAt: request.SourcePublishedAt, SourceID: request.SourceID,
+			MarketCode: request.MarketCode, ProviderSeriesID: request.ProviderSeriesID, ProviderObservationID: request.ProviderObservationID,
+			IsManual: request.IsManual, IsDerived: request.IsDerived, SupersedesObservationID: request.SupersedesObservationID,
+			DerivationJSON: rawJSONText(request.Derivation), SeriesMetadataJSON: rawJSONText(request.SeriesMetadata),
+			MetadataJSON: rawJSONText(request.Metadata),
 			ChangeReason: request.ChangeReason,
 		})
 		if err != nil {
@@ -403,7 +435,30 @@ func toMarketDataSourceResponses(sources []app.MarketDataSource) []marketDataSou
 }
 
 func toPriceObservationResponse(price app.PriceObservation) priceObservationResponse {
-	return priceObservationResponse{ID: price.ID, BookID: price.BookID, CommodityID: price.CommodityID, QuoteCommodityID: price.QuoteCommodityID, ObservationKind: price.ObservationKind, PriceValue: price.PriceValue, PriceScale: price.PriceScale, PriceDate: price.PriceDate, SourceID: price.SourceID, ProviderObservationID: price.ProviderObservationID, Mode: price.Mode, IsManual: price.IsManual, IsDerived: price.IsDerived, SupersedesObservationID: price.SupersedesObservationID, Metadata: json.RawMessage(price.MetadataJSON), CreatedAt: price.CreatedAt}
+	return priceObservationResponse{
+		ID:                      price.ID,
+		BookID:                  price.BookID,
+		SeriesID:                price.SeriesID,
+		BaseCommodityID:         price.BaseCommodityID,
+		QuoteCommodityID:        price.QuoteCommodityID,
+		QuoteType:               price.QuoteType,
+		AdjustmentBasis:         price.AdjustmentBasis,
+		PriceValue:              price.PriceValue,
+		PriceScale:              price.PriceScale,
+		BaseQuantityValue:       price.BaseQuantityValue,
+		BaseQuantityScale:       price.BaseQuantityScale,
+		ValuationDate:           price.ValuationDate,
+		ObservedAt:              price.ObservedAt,
+		SourcePublishedAt:       price.SourcePublishedAt,
+		SourceID:                price.SourceID,
+		ProviderObservationID:   price.ProviderObservationID,
+		IsManual:                price.IsManual,
+		IsDerived:               price.IsDerived,
+		SupersedesObservationID: price.SupersedesObservationID,
+		Derivation:              json.RawMessage(price.DerivationJSON),
+		Metadata:                json.RawMessage(price.MetadataJSON),
+		RecordedAt:              price.RecordedAt,
+	}
 }
 
 func toPriceObservationResponses(prices []app.PriceObservation) []priceObservationResponse {

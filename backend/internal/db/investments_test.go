@@ -178,22 +178,35 @@ func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
 		CreatedAt:    "2026-06-12T12:00:00Z",
 		ChangeReason: "manual quote",
 		Spec: PriceObservationSpec{
-			CommodityID:      instrument.CommodityID,
-			QuoteCommodityID: currencyID,
-			ObservationKind:  "market_price",
-			PriceValue:       123456789,
-			PriceScale:       6,
-			PriceDate:        "2026-06-12",
-			SourceID:         sql.NullInt64{Int64: manualSourceID, Valid: true},
-			Mode:             "manual",
-			IsManual:         true,
-			MetadataJSON:     `{"source":"test"}`,
+			BaseCommodityID:    instrument.CommodityID,
+			QuoteCommodityID:   currencyID,
+			QuoteType:          "manual",
+			AdjustmentBasis:    "raw",
+			PriceValue:         123456789,
+			PriceScale:         6,
+			BaseQuantityValue:  1,
+			BaseQuantityScale:  0,
+			ValuationDate:      "2026-06-12",
+			ObservedAt:         sql.NullString{String: "2026-06-12T11:59:00Z", Valid: true},
+			SourcePublishedAt:  sql.NullString{String: "2026-06-12T12:00:00Z", Valid: true},
+			SourceID:           sql.NullInt64{Int64: manualSourceID, Valid: true},
+			IsManual:           true,
+			DerivationJSON:     `{}`,
+			SeriesMetadataJSON: `{"series":"manual-test"}`,
+			MetadataJSON:       `{"source":"test"}`,
 		},
 	})
 	require.NoError(t, err)
 
+	assert.NotZero(t, price.SeriesID)
 	assert.Equal(t, int64(123456789), price.PriceValue)
 	assert.Equal(t, 6, price.PriceScale)
+	assert.Equal(t, int64(1), price.BaseQuantityValue)
+	assert.Equal(t, "manual", price.QuoteType)
+	assert.Equal(t, "raw", price.AdjustmentBasis)
+	assert.Equal(t, "2026-06-12", price.ValuationDate)
+	assert.Equal(t, "2026-06-12T11:59:00Z", price.ObservedAt.String)
+	assert.Equal(t, "2026-06-12T12:00:00Z", price.SourcePublishedAt.String)
 	assert.True(t, price.IsManual)
 	assert.False(t, price.IsDerived)
 
@@ -201,6 +214,7 @@ func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, prices, 1)
 	assert.Equal(t, price.ID, prices[0].ID)
+	assert.Equal(t, 1, countRows(t, database, "price_series"))
 }
 
 func TestDefaultCostBasisProfileIsCreatedOnce(t *testing.T) {

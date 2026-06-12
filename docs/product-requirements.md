@@ -222,9 +222,12 @@ Goal: support forward-looking personal finance.
 Goal: add power-user workflows after the core ledger is stable.
 
 - Multi-currency reporting.
-- Price history with exact manual, provider, FX, and trade-implied observations;
-  price corrections supersede or void prior observations rather than mutating
-  them in place.
+- Price history with exact manual, provider, FX, and trade-implied observations
+  grouped into source/quote-type/adjustment-basis series. Price observations
+  preserve valuation date separately from recorded-at time so historical reports
+  can be reproduced with the price knowledge available at report time.
+  Corrections supersede or void prior observations rather than mutating them in
+  place.
 - Investment accounts for stocks and ETFs using the existing commodity,
   account, and ledger model.
 - Security identity and provider matching for listed instruments, including

@@ -965,30 +965,30 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 				SELECT po.price_value
 				FROM price_observations po
 				WHERE po.book_id = lot.book_id
-					AND po.commodity_id = lot.commodity_id
+					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.price_date DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_value,
 			(
 				SELECT po.price_scale
 				FROM price_observations po
 				WHERE po.book_id = lot.book_id
-					AND po.commodity_id = lot.commodity_id
+					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.price_date DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_scale,
 			(
-				SELECT po.price_date
+				SELECT po.valuation_date
 				FROM price_observations po
 				WHERE po.book_id = lot.book_id
-					AND po.commodity_id = lot.commodity_id
+					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.price_date DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_date
 		FROM investment_lots lot
