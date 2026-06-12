@@ -67,9 +67,8 @@ Category type is immutable after creation.
   disabled or moved.
 - Built-in categories are never hard deleted. They can be renamed or disabled.
 - User-created categories can be hard deleted only when they have no child
-  categories and no financial references. Until transaction/posting tables
-  exist, the delete policy helper treats categories as unused; it must be
-  extended when postings are added.
+  categories and no financial references. Posting history and durable defaults
+  such as payee category defaults block physical deletion.
 - Duplicate active names are rejected among siblings in the same income or
   expense tree. The same label may exist under different parents.
 

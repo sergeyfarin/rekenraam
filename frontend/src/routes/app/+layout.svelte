@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { createQuery } from '@tanstack/svelte-query';
-  import { LayoutDashboard, LogOut, RefreshCw, WalletCards } from '@lucide/svelte';
+  import { LayoutDashboard, LogOut, RefreshCw, Tags, WalletCards } from '@lucide/svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -72,9 +72,18 @@
 
   const isOverviewRoute = $derived($page.url.pathname === '/app');
   const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
+  const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
 
-  const headerTitle = $derived(isAccountsRoute ? m.accounts_title() : m.app_shell_header_title());
-  const headerCopy = $derived(isAccountsRoute ? m.accounts_shell_copy() : m.app_shell_header_copy());
+  const headerTitle = $derived(
+    isAccountsRoute ? m.accounts_title() : isCategoriesRoute ? m.categories_title() : m.app_shell_header_title()
+  );
+  const headerCopy = $derived(
+    isAccountsRoute
+      ? m.accounts_shell_copy()
+      : isCategoriesRoute
+        ? m.categories_shell_copy()
+        : m.app_shell_header_copy()
+  );
 
   $effect(() => {
     if (browser && shouldRedirectHome) {
@@ -184,6 +193,18 @@
         >
           <WalletCards size={16} aria-hidden="true" />
           {m.app_shell_nav_accounts()}
+        </a>
+        <a
+          href="/app/categories"
+          aria-current={isCategoriesRoute ? 'page' : undefined}
+          class:bg-selected={isCategoriesRoute}
+          class:text-selected-foreground={isCategoriesRoute}
+          class:bg-transparent={!isCategoriesRoute}
+          class:text-foreground={!isCategoriesRoute}
+          class="flex min-w-fit items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <Tags size={16} aria-hidden="true" />
+          {m.app_shell_nav_categories()}
         </a>
       </nav>
 

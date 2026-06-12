@@ -776,12 +776,18 @@ func categoryHasAnyChildren(ctx context.Context, tx *sql.Tx, bookID int64, categ
 }
 
 func categoryHasFinancialReferences(ctx context.Context, tx *sql.Tx, bookID int64, categoryID int64) (bool, error) {
-	// TODO(transactions): once postings exist, check current and historical posting
-	// references before allowing physical deletion of unused user categories.
-	_ = tx
-	_ = bookID
-	_ = categoryID
-	return false, nil
+	var referenceCount int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(1) FROM posting_versions WHERE book_id = ? AND account_id = ?)
+			+ (SELECT COUNT(1) FROM payee_versions pv JOIN payees p ON p.id = pv.payee_id WHERE p.book_id = ? AND pv.default_category_account_id = ?)
+			+ (SELECT COUNT(1) FROM reconciliation_session_postings WHERE book_id = ? AND account_id = ?)
+			+ (SELECT COUNT(1) FROM reconciliation_checkpoint_postings WHERE book_id = ? AND account_id = ?)
+	`, bookID, categoryID, bookID, categoryID, bookID, categoryID, bookID, categoryID).Scan(&referenceCount); err != nil {
+		return false, fmt.Errorf("read category reference count: %w", err)
+	}
+
+	return referenceCount > 0, nil
 }
 
 func categoryAccountPredicate(alias string) string {

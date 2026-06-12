@@ -99,6 +99,27 @@ func TestCategoryCreateUpdateDisableRestoreAndDeleteUnused(t *testing.T) {
 	readCategoryForSession(t, handler, sessionCookie, child.ID, http.StatusNotFound)
 }
 
+func TestCategoryDeleteRejectsCategoryUsedByPosting(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", currencyID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Groceries",
+		"category_type":"expense"
+	}`)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-12",
+		posting(checking.ID, -10000, 2, currencyID),
+		posting(expense.ID, 10000, 2, currencyID),
+	), http.StatusCreated)
+
+	mutateCategoryNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/categories/"+strconvFormatInt(expense.ID), http.StatusConflict)
+	read := readCategoryForSession(t, handler, sessionCookie, expense.ID, http.StatusOK)
+	assert.Equal(t, expense.ID, read.ID)
+}
+
 func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing.T) {
 	t.Parallel()
 
