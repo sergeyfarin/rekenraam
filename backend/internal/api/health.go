@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, payeeService *app.PayeeService, transactionService *app.TransactionService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, payeeService *app.PayeeService, transactionService *app.TransactionService, pricingService *app.PricingService, investmentService *app.InvestmentService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -115,6 +115,44 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("GET /api/v1/accounts/{account_id}/reconciliation-checkpoints", listReconciliationCheckpoints(logger, authService, transactionService))
 		mux.HandleFunc("POST /api/v1/reconciliation-checkpoints/{checkpoint_id}/void", voidReconciliationCheckpoint(logger, authService, transactionService, options))
 		mux.HandleFunc("POST /api/v1/accounts/{account_id}/postings/reconciliation-status", changePostingReconciliationStatus(logger, authService, transactionService, options))
+	}
+	if authService != nil && pricingService != nil {
+		mux.HandleFunc("GET /api/v1/pricing/sources", listMarketDataSources(logger, authService, pricingService))
+		mux.HandleFunc("GET /api/v1/pricing/prices", listPrices(logger, authService, pricingService))
+		mux.HandleFunc("POST /api/v1/pricing/prices", createPrice(logger, authService, pricingService, options))
+		mux.HandleFunc("GET /api/v1/pricing/policy", getPricingPolicy(logger, authService, pricingService))
+		mux.HandleFunc("PUT /api/v1/pricing/policy", savePricingPolicy(logger, authService, pricingService, options))
+		mux.HandleFunc("GET /api/v1/pricing/source-assignments", listPricingSourceAssignments(logger, authService, pricingService))
+		mux.HandleFunc("POST /api/v1/pricing/source-assignments", savePricingSourceAssignment(logger, authService, pricingService, options, false))
+		mux.HandleFunc("PATCH /api/v1/pricing/source-assignments/{assignment_id}", savePricingSourceAssignment(logger, authService, pricingService, options, true))
+		mux.HandleFunc("POST /api/v1/pricing/refresh/run", runPricingRefresh(logger, authService, pricingService, options))
+		mux.HandleFunc("GET /api/v1/pricing/refresh/runs", listPricingRefreshRuns(logger, authService, pricingService))
+		mux.HandleFunc("GET /api/v1/pricing/source-health", pricingSourceHealth(logger, authService, pricingService))
+	}
+	if authService != nil && investmentService != nil {
+		mux.HandleFunc("GET /api/v1/investments/search", searchInvestments(logger, authService, investmentService))
+		mux.HandleFunc("GET /api/v1/investments/instruments", listInvestmentInstruments(logger, authService, investmentService))
+		mux.HandleFunc("POST /api/v1/investments/instruments", createInvestmentInstrument(logger, authService, investmentService, options))
+		mux.HandleFunc("GET /api/v1/investments/instruments/{instrument_id}", readInvestmentInstrument(logger, authService, investmentService))
+		mux.HandleFunc("PATCH /api/v1/investments/instruments/{instrument_id}", updateInvestmentInstrument(logger, authService, investmentService, options))
+		mux.HandleFunc("POST /api/v1/investments/holding-accounts", createHoldingAccount(logger, authService, investmentService, options))
+		mux.HandleFunc("GET /api/v1/investments/positions", listInvestmentPositions(logger, authService, investmentService))
+		mux.HandleFunc("GET /api/v1/investments/lots", listInvestmentLots(logger, authService, investmentService))
+		mux.HandleFunc("GET /api/v1/investments/cost-basis-profiles", listCostBasisProfiles(logger, authService, investmentService))
+		mux.HandleFunc("POST /api/v1/investments/cost-basis-profiles", saveCostBasisProfile(logger, authService, investmentService, options, false))
+		mux.HandleFunc("PATCH /api/v1/investments/cost-basis-profiles/{profile_id}", saveCostBasisProfile(logger, authService, investmentService, options, true))
+		mux.HandleFunc("GET /api/v1/investments/dividend-defaults", listDividendDefaults(logger, authService, investmentService))
+		mux.HandleFunc("POST /api/v1/investments/dividend-defaults", saveDividendDefault(logger, authService, investmentService, options, false))
+		mux.HandleFunc("PATCH /api/v1/investments/dividend-defaults/{default_id}", saveDividendDefault(logger, authService, investmentService, options, true))
+		mux.HandleFunc("POST /api/v1/investments/buy", buyInvestment(logger, authService, investmentService, options))
+		mux.HandleFunc("POST /api/v1/investments/sell", sellInvestment(logger, authService, investmentService, options))
+		mux.HandleFunc("POST /api/v1/investments/dividend", createDividend(logger, authService, investmentService, options))
+		mux.HandleFunc("POST /api/v1/investments/reinvested-dividend", createReinvestedDividend(logger, authService, investmentService, options))
+		mux.HandleFunc("GET /api/v1/investments/events", listInvestmentEvents(logger, authService, investmentService))
+		mux.HandleFunc("GET /api/v1/investments/event-suggestions", listInvestmentEventSuggestions(logger, authService, investmentService))
+		mux.HandleFunc("POST /api/v1/investments/event-suggestions/{suggestion_id}/accept", acceptInvestmentEventSuggestion(logger, authService, investmentService, options))
+		mux.HandleFunc("POST /api/v1/investments/event-suggestions/{suggestion_id}/ignore", ignoreInvestmentEventSuggestion(logger, authService, investmentService, options))
+		mux.HandleFunc("PUT /api/v1/investments/automation-rules", saveInvestmentAutomationRules(logger, authService, investmentService, options))
 	}
 }
 

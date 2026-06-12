@@ -1,0 +1,642 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+)
+
+type PricingRepository struct {
+	database *sql.DB
+}
+
+type MarketDataSourceRecord struct {
+	ID           int64
+	Code         string
+	Name         string
+	Kind         string
+	ProviderKey  sql.NullString
+	BaseURL      sql.NullString
+	Status       string
+	MetadataJSON string
+	CreatedAt    string
+}
+
+type PriceObservationRecord struct {
+	ID                      int64
+	BookID                  int64
+	CommodityID             int64
+	QuoteCommodityID        int64
+	ObservationKind         string
+	PriceValue              int64
+	PriceScale              int
+	PriceDate               string
+	SourceID                sql.NullInt64
+	ProviderObservationID   sql.NullString
+	Mode                    string
+	IsManual                bool
+	IsDerived               bool
+	SupersedesObservationID sql.NullInt64
+	MetadataJSON            string
+	VoidedAt                sql.NullString
+	CreatedAt               string
+	CreatedByUserID         int64
+}
+
+type PriceObservationSpec struct {
+	CommodityID             int64
+	QuoteCommodityID        int64
+	ObservationKind         string
+	PriceValue              int64
+	PriceScale              int
+	PriceDate               string
+	SourceID                sql.NullInt64
+	ProviderObservationID   string
+	Mode                    string
+	IsManual                bool
+	IsDerived               bool
+	SupersedesObservationID sql.NullInt64
+	MetadataJSON            string
+}
+
+type CreatePriceObservationParams struct {
+	BookID        int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	Spec          PriceObservationSpec
+	CreatedAt     string
+	ChangeReason  string
+}
+
+type PricingPolicyRecord struct {
+	ID                   int64
+	BookID               int64
+	BaseCommodityID      sql.NullInt64
+	DefaultSourceID      sql.NullInt64
+	RefreshEnabled       bool
+	RefreshHourUTC       int
+	RefreshMinuteUTC     int
+	MaxBackfillDays      int
+	StalenessMaxDays     int
+	TriangulationMaxHops int
+	RoundingMode         string
+	PreferOfficialFX     bool
+	WeekendPolicy        string
+	CreatedAt            string
+	CreatedByUserID      int64
+	UpdatedAt            string
+	UpdatedByUserID      int64
+}
+
+type PricingPolicySpec struct {
+	BaseCommodityID      sql.NullInt64
+	DefaultSourceID      sql.NullInt64
+	RefreshEnabled       bool
+	RefreshHourUTC       int
+	RefreshMinuteUTC     int
+	MaxBackfillDays      int
+	StalenessMaxDays     int
+	TriangulationMaxHops int
+	RoundingMode         string
+	PreferOfficialFX     bool
+	WeekendPolicy        string
+}
+
+type SavePricingPolicyParams struct {
+	BookID        int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	Spec          PricingPolicySpec
+	RecordedAt    string
+	ChangeReason  string
+}
+
+type PricingSourceAssignmentRecord struct {
+	ID               int64
+	BookID           int64
+	CommodityID      int64
+	QuoteCommodityID int64
+	SourceID         int64
+	Priority         int
+	Status           string
+	EffectiveFrom    string
+	EffectiveTo      sql.NullString
+	CreatedAt        string
+	CreatedByUserID  int64
+}
+
+type PricingSourceAssignmentSpec struct {
+	CommodityID      int64
+	QuoteCommodityID int64
+	SourceID         int64
+	Priority         int
+	Status           string
+	EffectiveFrom    string
+	EffectiveTo      sql.NullString
+}
+
+type SavePricingSourceAssignmentParams struct {
+	BookID        int64
+	AssignmentID  int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	Spec          PricingSourceAssignmentSpec
+	RecordedAt    string
+	ChangeReason  string
+}
+
+type PricingRefreshRunRecord struct {
+	ID             int64
+	BookID         int64
+	SourceID       int64
+	Trigger        string
+	Status         string
+	StartedAt      string
+	FinishedAt     sql.NullString
+	ItemsTotal     int
+	ItemsSucceeded int
+	ItemsFailed    int
+	LastError      sql.NullString
+}
+
+type PricingRefreshStateRecord struct {
+	ID               int64
+	BookID           int64
+	CommodityID      int64
+	QuoteCommodityID int64
+	SourceID         int64
+	LastSuccessDate  sql.NullString
+	LastAttemptAt    sql.NullString
+	LastError        sql.NullString
+	UpdatedAt        string
+}
+
+func NewPricingRepository(database *sql.DB) *PricingRepository {
+	return &PricingRepository{database: database}
+}
+
+func (r *PricingRepository) ListSources(ctx context.Context) ([]MarketDataSourceRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, code, name, kind, provider_key, base_url, status, metadata_json, created_at
+		FROM market_data_sources
+		ORDER BY kind, name COLLATE NOCASE
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list market data sources: %w", err)
+	}
+	defer rows.Close()
+
+	var records []MarketDataSourceRecord
+	for rows.Next() {
+		var record MarketDataSourceRecord
+		if err := rows.Scan(&record.ID, &record.Code, &record.Name, &record.Kind, &record.ProviderKey, &record.BaseURL, &record.Status, &record.MetadataJSON, &record.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan market data source: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate market data sources: %w", err)
+	}
+	return records, nil
+}
+
+func (r *PricingRepository) ManualSourceID(ctx context.Context) (int64, error) {
+	var sourceID int64
+	if err := r.database.QueryRowContext(ctx, `SELECT id FROM market_data_sources WHERE code = 'manual'`).Scan(&sourceID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, fmt.Errorf("read manual market data source: %w", err)
+	}
+	return sourceID, nil
+}
+
+func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params CreatePriceObservationParams) (PriceObservationRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("begin create price observation: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return PriceObservationRecord{}, err
+	}
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO price_observations (
+			book_id, commodity_id, quote_commodity_id, observation_kind, price_value, price_scale,
+			price_date, source_id, provider_observation_id, mode, is_manual, is_derived,
+			supersedes_observation_id, metadata_json, created_at, created_by_user_id, created_audit_event_id
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.Spec.CommodityID, params.Spec.QuoteCommodityID, params.Spec.ObservationKind, params.Spec.PriceValue, params.Spec.PriceScale, params.Spec.PriceDate, nullableInt64Value(params.Spec.SourceID), params.Spec.ProviderObservationID, params.Spec.Mode, boolInt(params.Spec.IsManual), boolInt(params.Spec.IsDerived), nullableInt64Value(params.Spec.SupersedesObservationID), params.Spec.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
+	if err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("insert price observation: %w", err)
+	}
+	observationID, err := result.LastInsertId()
+	if err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("read price observation id: %w", err)
+	}
+	record, err := priceObservationByIDTx(ctx, tx, params.BookID, observationID)
+	if err != nil {
+		return PriceObservationRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("commit create price observation: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, commodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
+	where := "book_id = ? AND voided_at IS NULL"
+	args := []any{bookID}
+	if commodityID > 0 {
+		where += " AND commodity_id = ?"
+		args = append(args, commodityID)
+	}
+	if quoteCommodityID > 0 {
+		where += " AND quote_commodity_id = ?"
+		args = append(args, quoteCommodityID)
+	}
+	args = append(args, limit)
+	rows, err := r.database.QueryContext(ctx, priceObservationSelect(`
+		WHERE `+where+`
+		ORDER BY price_date DESC, id DESC
+		LIMIT ?
+	`), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list price observations: %w", err)
+	}
+	defer rows.Close()
+	return scanPriceObservations(rows)
+}
+
+func (r *PricingRepository) GetPricingPolicy(ctx context.Context, bookID int64) (PricingPolicyRecord, error) {
+	return scanPricingPolicyRow(r.database.QueryRowContext(ctx, pricingPolicySelect(`WHERE book_id = ?`), bookID))
+}
+
+func (r *PricingRepository) SavePricingPolicy(ctx context.Context, params SavePricingPolicyParams) (PricingPolicyRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return PricingPolicyRecord{}, fmt.Errorf("begin save pricing policy: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.RecordedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return PricingPolicyRecord{}, err
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pricing_policies WHERE book_id = ?)`, params.BookID).Scan(&exists); err != nil {
+		return PricingPolicyRecord{}, fmt.Errorf("check pricing policy exists: %w", err)
+	}
+	if exists == 1 {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE pricing_policies
+			SET base_commodity_id = ?, default_source_id = ?, refresh_enabled = ?, refresh_hour_utc = ?,
+				refresh_minute_utc = ?, max_backfill_days = ?, staleness_max_days = ?, triangulation_max_hops = ?,
+				rounding_mode = ?, prefer_official_fx = ?, weekend_policy = ?, updated_at = ?,
+				updated_by_user_id = ?, updated_audit_event_id = ?
+			WHERE book_id = ?
+		`, nullableInt64Value(params.Spec.BaseCommodityID), nullableInt64Value(params.Spec.DefaultSourceID), boolInt(params.Spec.RefreshEnabled), params.Spec.RefreshHourUTC, params.Spec.RefreshMinuteUTC, params.Spec.MaxBackfillDays, params.Spec.StalenessMaxDays, params.Spec.TriangulationMaxHops, params.Spec.RoundingMode, boolInt(params.Spec.PreferOfficialFX), params.Spec.WeekendPolicy, params.RecordedAt, params.ActorUserID, auditEventID, params.BookID); err != nil {
+			return PricingPolicyRecord{}, fmt.Errorf("update pricing policy: %w", err)
+		}
+	} else {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO pricing_policies (
+				book_id, base_commodity_id, default_source_id, refresh_enabled, refresh_hour_utc,
+				refresh_minute_utc, max_backfill_days, staleness_max_days, triangulation_max_hops,
+				rounding_mode, prefer_official_fx, weekend_policy, created_at, created_by_user_id,
+				updated_at, updated_by_user_id, created_audit_event_id, updated_audit_event_id
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, params.BookID, nullableInt64Value(params.Spec.BaseCommodityID), nullableInt64Value(params.Spec.DefaultSourceID), boolInt(params.Spec.RefreshEnabled), params.Spec.RefreshHourUTC, params.Spec.RefreshMinuteUTC, params.Spec.MaxBackfillDays, params.Spec.StalenessMaxDays, params.Spec.TriangulationMaxHops, params.Spec.RoundingMode, boolInt(params.Spec.PreferOfficialFX), params.Spec.WeekendPolicy, params.RecordedAt, params.ActorUserID, params.RecordedAt, params.ActorUserID, auditEventID, auditEventID); err != nil {
+			return PricingPolicyRecord{}, fmt.Errorf("insert pricing policy: %w", err)
+		}
+	}
+	record, err := scanPricingPolicyRow(tx.QueryRowContext(ctx, pricingPolicySelect(`WHERE book_id = ?`), params.BookID))
+	if err != nil {
+		return PricingPolicyRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return PricingPolicyRecord{}, fmt.Errorf("commit save pricing policy: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+func (r *PricingRepository) ListSourceAssignments(ctx context.Context, bookID int64) ([]PricingSourceAssignmentRecord, error) {
+	rows, err := r.database.QueryContext(ctx, pricingSourceAssignmentSelect(`
+		WHERE book_id = ?
+		ORDER BY status, priority, commodity_id, quote_commodity_id, id
+	`), bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list pricing source assignments: %w", err)
+	}
+	defer rows.Close()
+	return scanPricingSourceAssignments(rows)
+}
+
+func (r *PricingRepository) SaveSourceAssignment(ctx context.Context, params SavePricingSourceAssignmentParams) (PricingSourceAssignmentRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return PricingSourceAssignmentRecord{}, fmt.Errorf("begin save pricing source assignment: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.RecordedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return PricingSourceAssignmentRecord{}, err
+	}
+	var assignmentID int64
+	if params.AssignmentID > 0 {
+		result, err := tx.ExecContext(ctx, `
+			UPDATE pricing_source_assignments
+			SET commodity_id = ?, quote_commodity_id = ?, source_id = ?, priority = ?, status = ?,
+				effective_from = ?, effective_to = ?
+			WHERE book_id = ? AND id = ?
+		`, params.Spec.CommodityID, params.Spec.QuoteCommodityID, params.Spec.SourceID, params.Spec.Priority, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.BookID, params.AssignmentID)
+		if err != nil {
+			return PricingSourceAssignmentRecord{}, fmt.Errorf("update pricing source assignment: %w", err)
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return PricingSourceAssignmentRecord{}, fmt.Errorf("read pricing source assignment update rows: %w", err)
+		}
+		if rowsAffected == 0 {
+			return PricingSourceAssignmentRecord{}, ErrNotFound
+		}
+		assignmentID = params.AssignmentID
+	} else {
+		result, err := tx.ExecContext(ctx, `
+			INSERT INTO pricing_source_assignments (
+				book_id, commodity_id, quote_commodity_id, source_id, priority, status,
+				effective_from, effective_to, created_at, created_by_user_id, created_audit_event_id
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, params.BookID, params.Spec.CommodityID, params.Spec.QuoteCommodityID, params.Spec.SourceID, params.Spec.Priority, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.RecordedAt, params.ActorUserID, auditEventID)
+		if err != nil {
+			return PricingSourceAssignmentRecord{}, fmt.Errorf("insert pricing source assignment: %w", err)
+		}
+		assignmentID, err = result.LastInsertId()
+		if err != nil {
+			return PricingSourceAssignmentRecord{}, fmt.Errorf("read pricing source assignment id: %w", err)
+		}
+	}
+	record, err := pricingSourceAssignmentByIDTx(ctx, tx, params.BookID, assignmentID)
+	if err != nil {
+		return PricingSourceAssignmentRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return PricingSourceAssignmentRecord{}, fmt.Errorf("commit save pricing source assignment: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+func (r *PricingRepository) RecordRefreshRun(ctx context.Context, bookID int64, sourceID int64, trigger string, status string, startedAt string, finishedAt string, itemsTotal int, itemsSucceeded int, itemsFailed int, lastError string) (PricingRefreshRunRecord, error) {
+	result, err := r.database.ExecContext(ctx, `
+		INSERT INTO market_data_ingest_runs (
+			book_id, source_id, trigger, status, started_at, finished_at, items_total, items_succeeded, items_failed, last_error
+		)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''))
+	`, bookID, sourceID, trigger, status, startedAt, finishedAt, itemsTotal, itemsSucceeded, itemsFailed, lastError)
+	if err != nil {
+		return PricingRefreshRunRecord{}, fmt.Errorf("insert pricing refresh run: %w", err)
+	}
+	runID, err := result.LastInsertId()
+	if err != nil {
+		return PricingRefreshRunRecord{}, fmt.Errorf("read pricing refresh run id: %w", err)
+	}
+	return r.RefreshRunByID(ctx, bookID, runID)
+}
+
+func (r *PricingRepository) ListRefreshRuns(ctx context.Context, bookID int64, limit int) ([]PricingRefreshRunRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, book_id, source_id, trigger, status, started_at, finished_at, items_total, items_succeeded, items_failed, last_error
+		FROM market_data_ingest_runs
+		WHERE book_id = ?
+		ORDER BY started_at DESC, id DESC
+		LIMIT ?
+	`, bookID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list pricing refresh runs: %w", err)
+	}
+	defer rows.Close()
+	return scanRefreshRuns(rows)
+}
+
+func (r *PricingRepository) RefreshRunByID(ctx context.Context, bookID int64, runID int64) (PricingRefreshRunRecord, error) {
+	var record PricingRefreshRunRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT id, book_id, source_id, trigger, status, started_at, finished_at, items_total, items_succeeded, items_failed, last_error
+		FROM market_data_ingest_runs
+		WHERE book_id = ? AND id = ?
+	`, bookID, runID).Scan(&record.ID, &record.BookID, &record.SourceID, &record.Trigger, &record.Status, &record.StartedAt, &record.FinishedAt, &record.ItemsTotal, &record.ItemsSucceeded, &record.ItemsFailed, &record.LastError); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PricingRefreshRunRecord{}, ErrNotFound
+		}
+		return PricingRefreshRunRecord{}, fmt.Errorf("scan pricing refresh run: %w", err)
+	}
+	return record, nil
+}
+
+func (r *PricingRepository) ListRefreshState(ctx context.Context, bookID int64) ([]PricingRefreshStateRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, book_id, commodity_id, quote_commodity_id, source_id, last_success_date, last_attempt_at, last_error, updated_at
+		FROM pricing_refresh_state
+		WHERE book_id = ?
+		ORDER BY updated_at DESC, id DESC
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list pricing refresh state: %w", err)
+	}
+	defer rows.Close()
+	var records []PricingRefreshStateRecord
+	for rows.Next() {
+		var record PricingRefreshStateRecord
+		if err := rows.Scan(&record.ID, &record.BookID, &record.CommodityID, &record.QuoteCommodityID, &record.SourceID, &record.LastSuccessDate, &record.LastAttemptAt, &record.LastError, &record.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan pricing refresh state: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pricing refresh state: %w", err)
+	}
+	return records, nil
+}
+
+func priceObservationByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, observationID int64) (PriceObservationRecord, error) {
+	return scanPriceObservationRow(tx.QueryRowContext(ctx, priceObservationSelect(`
+		WHERE book_id = ? AND id = ?
+	`), bookID, observationID))
+}
+
+func priceObservationSelect(whereClause string) string {
+	return `
+		SELECT id, book_id, commodity_id, quote_commodity_id, observation_kind, price_value,
+			price_scale, price_date, source_id, provider_observation_id, mode, is_manual,
+			is_derived, supersedes_observation_id, metadata_json, voided_at, created_at, created_by_user_id
+		FROM price_observations
+	` + whereClause
+}
+
+func scanPriceObservationRow(row rowScanner) (PriceObservationRecord, error) {
+	var record PriceObservationRecord
+	var isManual int
+	var isDerived int
+	if err := row.Scan(&record.ID, &record.BookID, &record.CommodityID, &record.QuoteCommodityID, &record.ObservationKind, &record.PriceValue, &record.PriceScale, &record.PriceDate, &record.SourceID, &record.ProviderObservationID, &record.Mode, &isManual, &isDerived, &record.SupersedesObservationID, &record.MetadataJSON, &record.VoidedAt, &record.CreatedAt, &record.CreatedByUserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PriceObservationRecord{}, ErrNotFound
+		}
+		return PriceObservationRecord{}, fmt.Errorf("scan price observation: %w", err)
+	}
+	record.IsManual = isManual == 1
+	record.IsDerived = isDerived == 1
+	return record, nil
+}
+
+func scanPriceObservations(rows *sql.Rows) ([]PriceObservationRecord, error) {
+	var records []PriceObservationRecord
+	for rows.Next() {
+		record, err := scanPriceObservationRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate price observations: %w", err)
+	}
+	return records, nil
+}
+
+func pricingPolicySelect(whereClause string) string {
+	return `
+		SELECT id, book_id, base_commodity_id, default_source_id, refresh_enabled, refresh_hour_utc,
+			refresh_minute_utc, max_backfill_days, staleness_max_days, triangulation_max_hops,
+			rounding_mode, prefer_official_fx, weekend_policy, created_at, created_by_user_id,
+			updated_at, updated_by_user_id
+		FROM pricing_policies
+	` + whereClause
+}
+
+func scanPricingPolicyRow(row rowScanner) (PricingPolicyRecord, error) {
+	var record PricingPolicyRecord
+	var refreshEnabled int
+	var preferOfficialFX int
+	if err := row.Scan(&record.ID, &record.BookID, &record.BaseCommodityID, &record.DefaultSourceID, &refreshEnabled, &record.RefreshHourUTC, &record.RefreshMinuteUTC, &record.MaxBackfillDays, &record.StalenessMaxDays, &record.TriangulationMaxHops, &record.RoundingMode, &preferOfficialFX, &record.WeekendPolicy, &record.CreatedAt, &record.CreatedByUserID, &record.UpdatedAt, &record.UpdatedByUserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PricingPolicyRecord{}, ErrNotFound
+		}
+		return PricingPolicyRecord{}, fmt.Errorf("scan pricing policy: %w", err)
+	}
+	record.RefreshEnabled = refreshEnabled == 1
+	record.PreferOfficialFX = preferOfficialFX == 1
+	return record, nil
+}
+
+func pricingSourceAssignmentSelect(whereClause string) string {
+	return `
+		SELECT id, book_id, commodity_id, quote_commodity_id, source_id, priority, status,
+			effective_from, effective_to, created_at, created_by_user_id
+		FROM pricing_source_assignments
+	` + whereClause
+}
+
+func pricingSourceAssignmentByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, assignmentID int64) (PricingSourceAssignmentRecord, error) {
+	return scanPricingSourceAssignmentRow(tx.QueryRowContext(ctx, pricingSourceAssignmentSelect(`
+		WHERE book_id = ? AND id = ?
+	`), bookID, assignmentID))
+}
+
+func scanPricingSourceAssignmentRow(row rowScanner) (PricingSourceAssignmentRecord, error) {
+	var record PricingSourceAssignmentRecord
+	if err := row.Scan(&record.ID, &record.BookID, &record.CommodityID, &record.QuoteCommodityID, &record.SourceID, &record.Priority, &record.Status, &record.EffectiveFrom, &record.EffectiveTo, &record.CreatedAt, &record.CreatedByUserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PricingSourceAssignmentRecord{}, ErrNotFound
+		}
+		return PricingSourceAssignmentRecord{}, fmt.Errorf("scan pricing source assignment: %w", err)
+	}
+	return record, nil
+}
+
+func scanPricingSourceAssignments(rows *sql.Rows) ([]PricingSourceAssignmentRecord, error) {
+	var records []PricingSourceAssignmentRecord
+	for rows.Next() {
+		record, err := scanPricingSourceAssignmentRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pricing source assignments: %w", err)
+	}
+	return records, nil
+}
+
+func scanRefreshRuns(rows *sql.Rows) ([]PricingRefreshRunRecord, error) {
+	var records []PricingRefreshRunRecord
+	for rows.Next() {
+		var record PricingRefreshRunRecord
+		if err := rows.Scan(&record.ID, &record.BookID, &record.SourceID, &record.Trigger, &record.Status, &record.StartedAt, &record.FinishedAt, &record.ItemsTotal, &record.ItemsSucceeded, &record.ItemsFailed, &record.LastError); err != nil {
+			return nil, fmt.Errorf("scan pricing refresh run: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pricing refresh runs: %w", err)
+	}
+	return records, nil
+}

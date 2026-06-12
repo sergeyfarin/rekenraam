@@ -45,6 +45,28 @@ When a feature introduces a durable new rule, update one of those documents in t
   "posting" as the canonical ledger term.
 - Transfers are ordinary transactions.
 - Reconciliation status belongs to posting or account-specific ledger state, not only a transaction header.
+- Investment securities are commodities with `kind = 'security'`; security
+  identity, symbols, identifiers, provider links, and corporate-action metadata
+  live in investment-specific tables rather than in account names or ad hoc
+  transaction metadata.
+- Security holding accounts are asset accounts with
+  `account_kind = 'security_holding'`. Brokerage cash accounts remain ordinary
+  currency-denominated asset accounts.
+- Investment trades use the `commodity_trading` system account to keep posted
+  transactions balanced by commodity.
+- Investment lots and lot events are durable accounting facts. FIFO is the
+  default disposal method until a user-selected cost-basis policy says
+  otherwise; never infer cost basis from current holdings alone.
+- Market prices, FX rates, manual prices, provider prices, and trade-implied
+  prices must be stored as exact integer-plus-scale observations. Correct a
+  price by superseding or voiding the observation, not by overwriting the old
+  value.
+- External market data is untrusted input by default. Provider dividends,
+  distributions, and corporate actions become suggestions unless an explicit
+  automation rule scopes the source/instrument/event family and permits
+  auto-posting with required account mappings and audit attribution.
+- Market-data provider secrets belong in operator configuration, not SQLite
+  business tables.
 
 ## Data And Persistence Conventions
 

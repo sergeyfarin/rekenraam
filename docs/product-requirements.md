@@ -82,7 +82,6 @@ These can wait until the related feature slice:
 - Attachment storage.
 - Report snapshots.
 - Import formats beyond CSV.
-- Investment, pricing, and price-correction semantics.
 - Multi-user or household model.
 
 ## Must-Have Cross-Cutting Requirements
@@ -223,9 +222,25 @@ Goal: support forward-looking personal finance.
 Goal: add power-user workflows after the core ledger is stable.
 
 - Multi-currency reporting.
-- Price history.
-- Investment accounts.
-- Lots and realized gain/loss reporting.
+- Price history with exact manual, provider, FX, and trade-implied observations;
+  price corrections supersede or void prior observations rather than mutating
+  them in place.
+- Investment accounts for stocks and ETFs using the existing commodity,
+  account, and ledger model.
+- Security identity and provider matching for listed instruments, including
+  symbol, exchange/MIC, identifiers, issuer, quote/trading commodity, provider
+  metadata, and effective-dated version history.
+- Lots and cost-basis foundations from the first investment slice. FIFO is the
+  first implemented default, but durable policy values include FIFO, LIFO,
+  average cost, and specific lot.
+- Dividend and reinvested-dividend workflows with optional per-security income
+  and withholding defaults.
+- Provider events and reviewable suggestions for dividends, distributions,
+  splits, mergers, spin-offs, ticker changes, delistings, cash-in-lieu, return
+  of capital, and other corporate actions.
+- Explicit automation rules are required before trusted provider events may
+  auto-post; otherwise provider data remains a suggestion.
+- Realized gain/loss reporting.
 - Report snapshots where reproducibility matters.
 
 ### Later

@@ -70,7 +70,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	payeeRepository := db.NewPayeeRepository(database)
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
-	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, api.HandlerOptions{
+	pricingService := app.NewPricingService(db.NewPricingRepository(database))
+	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
+	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, investmentService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
 	})

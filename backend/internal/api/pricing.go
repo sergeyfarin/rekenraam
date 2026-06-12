@@ -1,0 +1,451 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"strconv"
+
+	"rekenraam/backend/internal/app"
+)
+
+type marketDataSourceResponse struct {
+	ID          int64           `json:"id"`
+	Code        string          `json:"code"`
+	Name        string          `json:"name"`
+	Kind        string          `json:"kind"`
+	ProviderKey string          `json:"provider_key,omitempty"`
+	BaseURL     string          `json:"base_url,omitempty"`
+	Status      string          `json:"status"`
+	Metadata    json.RawMessage `json:"metadata"`
+	CreatedAt   string          `json:"created_at"`
+}
+
+type marketDataSourcesResponse struct {
+	Sources []marketDataSourceResponse `json:"sources"`
+}
+
+type priceObservationResponse struct {
+	ID                      int64           `json:"id"`
+	BookID                  int64           `json:"book_id"`
+	CommodityID             int64           `json:"commodity_id"`
+	QuoteCommodityID        int64           `json:"quote_commodity_id"`
+	ObservationKind         string          `json:"observation_kind"`
+	PriceValue              int64           `json:"price_value"`
+	PriceScale              int             `json:"price_scale"`
+	PriceDate               string          `json:"price_date"`
+	SourceID                *int64          `json:"source_id,omitempty"`
+	ProviderObservationID   string          `json:"provider_observation_id,omitempty"`
+	Mode                    string          `json:"mode"`
+	IsManual                bool            `json:"is_manual"`
+	IsDerived               bool            `json:"is_derived"`
+	SupersedesObservationID *int64          `json:"supersedes_observation_id,omitempty"`
+	Metadata                json.RawMessage `json:"metadata"`
+	CreatedAt               string          `json:"created_at"`
+}
+
+type priceObservationsResponse struct {
+	Prices []priceObservationResponse `json:"prices"`
+}
+
+type priceObservationRequest struct {
+	CommodityID             int64           `json:"commodity_id"`
+	QuoteCommodityID        int64           `json:"quote_commodity_id"`
+	ObservationKind         string          `json:"observation_kind"`
+	PriceValue              int64           `json:"price_value"`
+	PriceScale              int             `json:"price_scale"`
+	PriceDate               string          `json:"price_date"`
+	SourceID                *int64          `json:"source_id"`
+	ProviderObservationID   string          `json:"provider_observation_id"`
+	Mode                    string          `json:"mode"`
+	IsManual                bool            `json:"is_manual"`
+	IsDerived               bool            `json:"is_derived"`
+	SupersedesObservationID *int64          `json:"supersedes_observation_id"`
+	Metadata                json.RawMessage `json:"metadata"`
+	ChangeReason            string          `json:"change_reason"`
+}
+
+type pricingPolicyResponse struct {
+	ID                   int64  `json:"id"`
+	BookID               int64  `json:"book_id"`
+	BaseCommodityID      *int64 `json:"base_commodity_id,omitempty"`
+	DefaultSourceID      *int64 `json:"default_source_id,omitempty"`
+	RefreshEnabled       bool   `json:"refresh_enabled"`
+	RefreshHourUTC       int    `json:"refresh_hour_utc"`
+	RefreshMinuteUTC     int    `json:"refresh_minute_utc"`
+	MaxBackfillDays      int    `json:"max_backfill_days"`
+	StalenessMaxDays     int    `json:"staleness_max_days"`
+	TriangulationMaxHops int    `json:"triangulation_max_hops"`
+	RoundingMode         string `json:"rounding_mode"`
+	PreferOfficialFX     bool   `json:"prefer_official_fx"`
+	WeekendPolicy        string `json:"weekend_policy"`
+	CreatedAt            string `json:"created_at"`
+	UpdatedAt            string `json:"updated_at"`
+}
+
+type pricingPolicyRequest struct {
+	BaseCommodityID      *int64 `json:"base_commodity_id"`
+	DefaultSourceID      *int64 `json:"default_source_id"`
+	RefreshEnabled       bool   `json:"refresh_enabled"`
+	RefreshHourUTC       int    `json:"refresh_hour_utc"`
+	RefreshMinuteUTC     int    `json:"refresh_minute_utc"`
+	MaxBackfillDays      int    `json:"max_backfill_days"`
+	StalenessMaxDays     int    `json:"staleness_max_days"`
+	TriangulationMaxHops int    `json:"triangulation_max_hops"`
+	RoundingMode         string `json:"rounding_mode"`
+	PreferOfficialFX     bool   `json:"prefer_official_fx"`
+	WeekendPolicy        string `json:"weekend_policy"`
+	ChangeReason         string `json:"change_reason"`
+}
+
+type pricingSourceAssignmentResponse struct {
+	ID               int64  `json:"id"`
+	BookID           int64  `json:"book_id"`
+	CommodityID      int64  `json:"commodity_id"`
+	QuoteCommodityID int64  `json:"quote_commodity_id"`
+	SourceID         int64  `json:"source_id"`
+	Priority         int    `json:"priority"`
+	Status           string `json:"status"`
+	EffectiveFrom    string `json:"effective_from"`
+	EffectiveTo      string `json:"effective_to,omitempty"`
+	CreatedAt        string `json:"created_at"`
+}
+
+type pricingSourceAssignmentsResponse struct {
+	Assignments []pricingSourceAssignmentResponse `json:"assignments"`
+}
+
+type pricingSourceAssignmentRequest struct {
+	CommodityID      int64  `json:"commodity_id"`
+	QuoteCommodityID int64  `json:"quote_commodity_id"`
+	SourceID         int64  `json:"source_id"`
+	Priority         int    `json:"priority"`
+	Status           string `json:"status"`
+	EffectiveFrom    string `json:"effective_from"`
+	EffectiveTo      string `json:"effective_to"`
+	ChangeReason     string `json:"change_reason"`
+}
+
+type pricingRefreshRunResponse struct {
+	ID             int64  `json:"id"`
+	BookID         int64  `json:"book_id"`
+	SourceID       int64  `json:"source_id"`
+	Trigger        string `json:"trigger"`
+	Status         string `json:"status"`
+	StartedAt      string `json:"started_at"`
+	FinishedAt     string `json:"finished_at,omitempty"`
+	ItemsTotal     int    `json:"items_total"`
+	ItemsSucceeded int    `json:"items_succeeded"`
+	ItemsFailed    int    `json:"items_failed"`
+	LastError      string `json:"last_error,omitempty"`
+}
+
+type pricingRefreshRunsResponse struct {
+	Runs []pricingRefreshRunResponse `json:"runs"`
+}
+
+type pricingRefreshRunRequest struct {
+	SourceID int64  `json:"source_id"`
+	Trigger  string `json:"trigger"`
+}
+
+type pricingSourceHealthResponse struct {
+	ID               int64  `json:"id"`
+	BookID           int64  `json:"book_id"`
+	CommodityID      int64  `json:"commodity_id"`
+	QuoteCommodityID int64  `json:"quote_commodity_id"`
+	SourceID         int64  `json:"source_id"`
+	LastSuccessDate  string `json:"last_success_date,omitempty"`
+	LastAttemptAt    string `json:"last_attempt_at,omitempty"`
+	LastError        string `json:"last_error,omitempty"`
+	UpdatedAt        string `json:"updated_at"`
+	Status           string `json:"status"`
+}
+
+type pricingSourceHealthListResponse struct {
+	Sources []pricingSourceHealthResponse `json:"sources"`
+}
+
+func listMarketDataSources(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		sources, err := pricingService.ListSources(r.Context())
+		if err != nil {
+			writePricingServiceError(w, r, logger, "list market data sources", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, marketDataSourcesResponse{Sources: toMarketDataSourceResponses(sources)})
+	}
+}
+
+func listPrices(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		commodityID, ok := parseOptionalPositiveInt64(w, r.URL.Query().Get("commodity_id"), "commodity id")
+		if !ok {
+			return
+		}
+		quoteCommodityID, ok := parseOptionalPositiveInt64(w, r.URL.Query().Get("quote_commodity_id"), "quote commodity id")
+		if !ok {
+			return
+		}
+		limit := 100
+		if r.URL.Query().Get("limit") != "" {
+			parsed, err := strconv.Atoi(r.URL.Query().Get("limit"))
+			if err != nil || parsed <= 0 {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "limit is invalid")
+				return
+			}
+			limit = parsed
+		}
+		prices, err := pricingService.ListPrices(r.Context(), commodityID, quoteCommodityID, limit)
+		if err != nil {
+			writePricingServiceError(w, r, logger, "list prices", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, priceObservationsResponse{Prices: toPriceObservationResponses(prices)})
+	}
+}
+
+func createPrice(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request priceObservationRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		price, err := pricingService.CreatePrice(r.Context(), app.PriceObservationInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			CommodityID: request.CommodityID, QuoteCommodityID: request.QuoteCommodityID, ObservationKind: request.ObservationKind,
+			PriceValue: request.PriceValue, PriceScale: request.PriceScale, PriceDate: request.PriceDate, SourceID: request.SourceID,
+			ProviderObservationID: request.ProviderObservationID, Mode: request.Mode, IsManual: request.IsManual,
+			IsDerived: request.IsDerived, SupersedesObservationID: request.SupersedesObservationID, MetadataJSON: rawJSONText(request.Metadata),
+			ChangeReason: request.ChangeReason,
+		})
+		if err != nil {
+			writePricingServiceError(w, r, logger, "create price", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, toPriceObservationResponse(price))
+	}))
+}
+
+func getPricingPolicy(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		policy, err := pricingService.GetPolicy(r.Context())
+		if err != nil {
+			writePricingServiceError(w, r, logger, "get pricing policy", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toPricingPolicyResponse(policy))
+	}
+}
+
+func savePricingPolicy(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request pricingPolicyRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		policy, err := pricingService.SavePolicy(r.Context(), app.PricingPolicyInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			BaseCommodityID: request.BaseCommodityID, DefaultSourceID: request.DefaultSourceID, RefreshEnabled: request.RefreshEnabled,
+			RefreshHourUTC: request.RefreshHourUTC, RefreshMinuteUTC: request.RefreshMinuteUTC, MaxBackfillDays: request.MaxBackfillDays,
+			StalenessMaxDays: request.StalenessMaxDays, TriangulationMaxHops: request.TriangulationMaxHops,
+			RoundingMode: request.RoundingMode, PreferOfficialFX: request.PreferOfficialFX, WeekendPolicy: request.WeekendPolicy,
+			ChangeReason: request.ChangeReason,
+		})
+		if err != nil {
+			writePricingServiceError(w, r, logger, "save pricing policy", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toPricingPolicyResponse(policy))
+	}))
+}
+
+func listPricingSourceAssignments(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		assignments, err := pricingService.ListSourceAssignments(r.Context())
+		if err != nil {
+			writePricingServiceError(w, r, logger, "list pricing source assignments", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, pricingSourceAssignmentsResponse{Assignments: toPricingSourceAssignmentResponses(assignments)})
+	}
+}
+
+func savePricingSourceAssignment(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions, assignmentIDFromPath bool) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		assignmentID := int64(0)
+		if assignmentIDFromPath {
+			var parsedOK bool
+			assignmentID, parsedOK = readPathInt64(w, r, "assignment_id", "assignment id")
+			if !parsedOK {
+				return
+			}
+		}
+		var request pricingSourceAssignmentRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		assignment, err := pricingService.SaveSourceAssignment(r.Context(), app.PricingSourceAssignmentInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			AssignmentID: assignmentID, CommodityID: request.CommodityID, QuoteCommodityID: request.QuoteCommodityID,
+			SourceID: request.SourceID, Priority: request.Priority, Status: request.Status, EffectiveFrom: request.EffectiveFrom,
+			EffectiveTo: request.EffectiveTo, ChangeReason: request.ChangeReason,
+		})
+		if err != nil {
+			writePricingServiceError(w, r, logger, "save pricing source assignment", err)
+			return
+		}
+		status := http.StatusOK
+		if !assignmentIDFromPath {
+			status = http.StatusCreated
+		}
+		writeJSON(w, status, toPricingSourceAssignmentResponse(assignment))
+	}))
+}
+
+func runPricingRefresh(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request pricingRefreshRunRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		run, err := pricingService.RunRefresh(r.Context(), owner.ID, request.SourceID, request.Trigger)
+		if err != nil {
+			writePricingServiceError(w, r, logger, "run pricing refresh", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, toPricingRefreshRunResponse(run))
+	}))
+}
+
+func listPricingRefreshRuns(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		runs, err := pricingService.ListRefreshRuns(r.Context(), 50)
+		if err != nil {
+			writePricingServiceError(w, r, logger, "list pricing refresh runs", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, pricingRefreshRunsResponse{Runs: toPricingRefreshRunResponses(runs)})
+	}
+}
+
+func pricingSourceHealth(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		sources, err := pricingService.SourceHealth(r.Context())
+		if err != nil {
+			writePricingServiceError(w, r, logger, "pricing source health", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, pricingSourceHealthListResponse{Sources: toPricingSourceHealthResponses(sources)})
+	}
+}
+
+func writePricingServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	var validationError app.ValidationError
+	switch {
+	case errors.As(err, &validationError):
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.Is(err, app.ErrPricingPolicyNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing policy not found")
+	case errors.Is(err, app.ErrPricingAssignmentNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing source assignment not found")
+	default:
+		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+	}
+}
+
+func toMarketDataSourceResponses(sources []app.MarketDataSource) []marketDataSourceResponse {
+	responses := make([]marketDataSourceResponse, 0, len(sources))
+	for _, source := range sources {
+		responses = append(responses, marketDataSourceResponse{ID: source.ID, Code: source.Code, Name: source.Name, Kind: source.Kind, ProviderKey: source.ProviderKey, BaseURL: source.BaseURL, Status: source.Status, Metadata: json.RawMessage(source.MetadataJSON), CreatedAt: source.CreatedAt})
+	}
+	return responses
+}
+
+func toPriceObservationResponse(price app.PriceObservation) priceObservationResponse {
+	return priceObservationResponse{ID: price.ID, BookID: price.BookID, CommodityID: price.CommodityID, QuoteCommodityID: price.QuoteCommodityID, ObservationKind: price.ObservationKind, PriceValue: price.PriceValue, PriceScale: price.PriceScale, PriceDate: price.PriceDate, SourceID: price.SourceID, ProviderObservationID: price.ProviderObservationID, Mode: price.Mode, IsManual: price.IsManual, IsDerived: price.IsDerived, SupersedesObservationID: price.SupersedesObservationID, Metadata: json.RawMessage(price.MetadataJSON), CreatedAt: price.CreatedAt}
+}
+
+func toPriceObservationResponses(prices []app.PriceObservation) []priceObservationResponse {
+	responses := make([]priceObservationResponse, 0, len(prices))
+	for _, price := range prices {
+		responses = append(responses, toPriceObservationResponse(price))
+	}
+	return responses
+}
+
+func toPricingPolicyResponse(policy app.PricingPolicy) pricingPolicyResponse {
+	return pricingPolicyResponse{ID: policy.ID, BookID: policy.BookID, BaseCommodityID: policy.BaseCommodityID, DefaultSourceID: policy.DefaultSourceID, RefreshEnabled: policy.RefreshEnabled, RefreshHourUTC: policy.RefreshHourUTC, RefreshMinuteUTC: policy.RefreshMinuteUTC, MaxBackfillDays: policy.MaxBackfillDays, StalenessMaxDays: policy.StalenessMaxDays, TriangulationMaxHops: policy.TriangulationMaxHops, RoundingMode: policy.RoundingMode, PreferOfficialFX: policy.PreferOfficialFX, WeekendPolicy: policy.WeekendPolicy, CreatedAt: policy.CreatedAt, UpdatedAt: policy.UpdatedAt}
+}
+
+func toPricingSourceAssignmentResponse(assignment app.PricingSourceAssignment) pricingSourceAssignmentResponse {
+	return pricingSourceAssignmentResponse{ID: assignment.ID, BookID: assignment.BookID, CommodityID: assignment.CommodityID, QuoteCommodityID: assignment.QuoteCommodityID, SourceID: assignment.SourceID, Priority: assignment.Priority, Status: assignment.Status, EffectiveFrom: assignment.EffectiveFrom, EffectiveTo: assignment.EffectiveTo, CreatedAt: assignment.CreatedAt}
+}
+
+func toPricingSourceAssignmentResponses(assignments []app.PricingSourceAssignment) []pricingSourceAssignmentResponse {
+	responses := make([]pricingSourceAssignmentResponse, 0, len(assignments))
+	for _, assignment := range assignments {
+		responses = append(responses, toPricingSourceAssignmentResponse(assignment))
+	}
+	return responses
+}
+
+func toPricingRefreshRunResponse(run app.PricingRefreshRun) pricingRefreshRunResponse {
+	return pricingRefreshRunResponse{ID: run.ID, BookID: run.BookID, SourceID: run.SourceID, Trigger: run.Trigger, Status: run.Status, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, ItemsTotal: run.ItemsTotal, ItemsSucceeded: run.ItemsSucceeded, ItemsFailed: run.ItemsFailed, LastError: run.LastError}
+}
+
+func toPricingRefreshRunResponses(runs []app.PricingRefreshRun) []pricingRefreshRunResponse {
+	responses := make([]pricingRefreshRunResponse, 0, len(runs))
+	for _, run := range runs {
+		responses = append(responses, toPricingRefreshRunResponse(run))
+	}
+	return responses
+}
+
+func toPricingSourceHealthResponses(sources []app.PricingSourceHealth) []pricingSourceHealthResponse {
+	responses := make([]pricingSourceHealthResponse, 0, len(sources))
+	for _, source := range sources {
+		responses = append(responses, pricingSourceHealthResponse{ID: source.ID, BookID: source.BookID, CommodityID: source.CommodityID, QuoteCommodityID: source.QuoteCommodityID, SourceID: source.SourceID, LastSuccessDate: source.LastSuccessDate, LastAttemptAt: source.LastAttemptAt, LastError: source.LastError, UpdatedAt: source.UpdatedAt, Status: source.Status})
+	}
+	return responses
+}

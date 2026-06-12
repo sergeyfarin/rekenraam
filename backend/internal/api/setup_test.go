@@ -301,7 +301,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, nil, nil, options), database
 }
 
 func setSameOrigin(req *http.Request) {

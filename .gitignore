@@ -43,6 +43,11 @@ vite.config.ts.timestamp-*
 *.db
 *.db-shm
 *.db-wal
+# Go build/cache
+.gocache/
+bin/
+*.test
+*.out
 
 # Embedded frontend build copied for Go embed.
 /backend/internal/web/dist/*
