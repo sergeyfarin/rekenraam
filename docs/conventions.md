@@ -164,6 +164,11 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Themes start with light and dark only.
 - Theme names and token roles must stay stable even if visual styling evolves.
 - Define semantic theme tokens as CSS custom properties before the first non-placeholder user-facing screen. Persist theme preference only after a real user-facing theme control exists; until then, respect system preference where practical.
+- Appearance color preferences may be stored as local browser preferences while
+  runtime scope remains single-user and no durable user-settings API exists.
+  Keep these preferences expressed as semantic token variants rather than
+  route-local color values; move them behind a backend settings model only when
+  broader user preferences are introduced.
 - New screens must define loading, empty, error, and success states.
 - New interactions must be keyboard-usable and accessible.
 - Responsive behavior must be deliberate on both desktop and mobile.

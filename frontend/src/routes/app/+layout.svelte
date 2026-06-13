@@ -6,6 +6,7 @@
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import LogOut from '@lucide/svelte/icons/log-out';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import Settings from '@lucide/svelte/icons/settings';
   import Tags from '@lucide/svelte/icons/tags';
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import APIFormError from '$lib/components/api-form-error.svelte';
@@ -77,16 +78,25 @@
   const isOverviewRoute = $derived($page.url.pathname === '/app');
   const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
   const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
+  const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
 
   const headerTitle = $derived(
-    isAccountsRoute ? m.accounts_title() : isCategoriesRoute ? m.categories_title() : m.app_shell_header_title()
+    isAccountsRoute
+      ? m.accounts_title()
+      : isCategoriesRoute
+        ? m.categories_title()
+        : isSettingsRoute
+          ? m.settings_title()
+          : m.app_shell_header_title()
   );
   const headerCopy = $derived(
     isAccountsRoute
       ? m.accounts_shell_copy()
       : isCategoriesRoute
         ? m.categories_shell_copy()
-        : m.app_shell_header_copy()
+        : isSettingsRoute
+          ? m.settings_shell_copy()
+          : m.app_shell_header_copy()
   );
 
   $effect(() => {
@@ -209,6 +219,18 @@
         >
           <Tags size={16} aria-hidden="true" />
           {m.app_shell_nav_categories()}
+        </a>
+        <a
+          href="/app/settings"
+          aria-current={isSettingsRoute ? 'page' : undefined}
+          class:bg-selected={isSettingsRoute}
+          class:text-selected-foreground={isSettingsRoute}
+          class:bg-transparent={!isSettingsRoute}
+          class:text-foreground={!isSettingsRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <Settings size={16} aria-hidden="true" />
+          {m.app_shell_nav_settings()}
         </a>
       </nav>
 
