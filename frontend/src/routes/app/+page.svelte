@@ -1,6 +1,10 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { Activity, CheckCircle2, GitBranch, Route, ShieldCheck } from '@lucide/svelte';
+  import Activity from '@lucide/svelte/icons/activity';
+  import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
+  import GitBranch from '@lucide/svelte/icons/git-branch';
+  import Route from '@lucide/svelte/icons/route';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import { healthQueryOptions } from '$lib/api/health';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import Panel from '$lib/components/panel.svelte';

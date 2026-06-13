@@ -37,7 +37,7 @@ export function categoryDisplayName(category: CategoryResponse): string {
     return userName;
   }
 
-  if (category.is_builtin && category.builtin_key) {
+  if ((category.is_builtin || category.is_starter) && category.builtin_key) {
     return builtinCategoryLabel(category.builtin_key);
   }
 

@@ -576,7 +576,7 @@ func (r *CategoryRepository) EnsureCategories(ctx context.Context, params Ensure
 		RequestID:     params.RequestID,
 		OriginType:    params.OriginType,
 		Operation:     params.Operation,
-		Reason:        "seeded built-in categories",
+		Reason:        "seeded categories",
 	})
 	if err != nil {
 		return EnsureCategoriesRecord{}, err
@@ -656,7 +656,7 @@ func ensureBuiltinCategory(ctx context.Context, tx *sql.Tx, params EnsureCategor
 		EffectiveFrom:      params.EffectiveFrom,
 		RecordedAt:         params.CreatedAt,
 		ChangedByUserID:    params.ChangedByUserID,
-		ChangeReason:       "seeded built-in category",
+		ChangeReason:       "seeded category",
 		ChangeAuditEventID: auditEventID,
 		Status:             "active",
 		Spec: AccountSpec{

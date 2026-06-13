@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Plus, Save, X } from '@lucide/svelte';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Save from '@lucide/svelte/icons/save';
+  import X from '@lucide/svelte/icons/x';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import {
     createAccountAdvanced,

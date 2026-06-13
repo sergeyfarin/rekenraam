@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCategoriesSetupSeedsBuiltInsWithoutEnglishCanonicalNames(t *testing.T) {
+func TestCategoriesSetupSeedsBuiltInsAndStarterSuggestionsWithoutEnglishCanonicalNames(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
@@ -26,16 +26,27 @@ func TestCategoriesSetupSeedsBuiltInsWithoutEnglishCanonicalNames(t *testing.T) 
 	food := categoryByCode(t, response.Categories, "expense_food")
 	groceries := categoryByCode(t, response.Categories, "expense_food_groceries")
 	salary := categoryByCode(t, response.Categories, "income_salary_wages")
+	otherExpense := categoryByCode(t, response.Categories, "expense_other")
+	otherIncome := categoryByCode(t, response.Categories, "income_other")
 
-	assert.True(t, food.IsBuiltin)
+	assert.False(t, food.IsBuiltin)
+	assert.True(t, food.IsStarter)
 	assert.Equal(t, "expense.food", food.BuiltinKey)
 	assert.Empty(t, food.Name)
 	assert.False(t, food.AllowsPostings)
+	assert.False(t, groceries.IsBuiltin)
+	assert.True(t, groceries.IsStarter)
 	assert.True(t, groceries.AllowsPostings)
 	require.NotNil(t, groceries.ParentCategoryID)
 	assert.Equal(t, food.ID, *groceries.ParentCategoryID)
+	assert.False(t, salary.IsBuiltin)
+	assert.True(t, salary.IsStarter)
 	assert.Equal(t, "income", salary.CategoryType)
 	assert.Nil(t, salary.ParentCategoryID)
+	assert.True(t, otherExpense.IsBuiltin)
+	assert.False(t, otherExpense.IsStarter)
+	assert.True(t, otherIncome.IsBuiltin)
+	assert.False(t, otherIncome.IsStarter)
 
 	var storedName sql.NullString
 	require.NoError(t, database.QueryRow(`
@@ -164,7 +175,41 @@ func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing
 	}`, http.StatusBadRequest)
 }
 
-func TestBuiltInCategoryCanBeRenamedDisabledButNotDeleted(t *testing.T) {
+func TestStarterCategoryCanBeRenamedDisabledAndDeleted(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+	setup := mutateCategoriesSetup(t, handler, sessionCookie, csrfToken, http.StatusCreated)
+	bonus := categoryByCode(t, setup.Categories, "income_bonus")
+
+	renamed := patchCategory(t, handler, sessionCookie, csrfToken, bonus.ID, `{
+		"name":"Annual bonus"
+	}`, http.StatusOK)
+	assert.False(t, renamed.IsBuiltin)
+	assert.True(t, renamed.IsStarter)
+	assert.Equal(t, "income.bonus", renamed.BuiltinKey)
+	assert.Equal(t, "Annual bonus", renamed.Name)
+	cleared := patchCategory(t, handler, sessionCookie, csrfToken, bonus.ID, `{
+		"name":""
+	}`, http.StatusOK)
+	assert.False(t, cleared.IsBuiltin)
+	assert.True(t, cleared.IsStarter)
+	assert.Equal(t, "income.bonus", cleared.BuiltinKey)
+	assert.Empty(t, cleared.Name)
+
+	disabled := mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(bonus.ID)+"/disable", `{}`, http.StatusOK)
+	assert.Equal(t, "archived", disabled.Status)
+	list := listCategoriesForSession(t, handler, sessionCookie, "")
+	assert.NotContains(t, categoryCodes(list.Categories), "income_bonus")
+	list = listCategoriesForSession(t, handler, sessionCookie, "?include_archived=true")
+	assert.Contains(t, categoryCodes(list.Categories), "income_bonus")
+	mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(bonus.ID)+"/restore", `{}`, http.StatusOK)
+	mutateCategoryNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/categories/"+strconvFormatInt(bonus.ID), http.StatusNoContent)
+	readCategoryForSession(t, handler, sessionCookie, bonus.ID, http.StatusNotFound)
+}
+
+func TestBuiltInCategoryCannotBeEditedDisabledOrDeleted(t *testing.T) {
 	t.Parallel()
 
 	handler, _ := newSetupTestHandler(t)
@@ -172,26 +217,15 @@ func TestBuiltInCategoryCanBeRenamedDisabledButNotDeleted(t *testing.T) {
 	setup := mutateCategoriesSetup(t, handler, sessionCookie, csrfToken, http.StatusCreated)
 	other := categoryByCode(t, setup.Categories, "expense_other")
 
-	renamed := patchCategory(t, handler, sessionCookie, csrfToken, other.ID, `{
-		"name":"Miscellaneous"
-	}`, http.StatusOK)
-	assert.True(t, renamed.IsBuiltin)
-	assert.Equal(t, "expense.other", renamed.BuiltinKey)
-	assert.Equal(t, "Miscellaneous", renamed.Name)
-	cleared := patchCategory(t, handler, sessionCookie, csrfToken, other.ID, `{
-		"name":""
-	}`, http.StatusOK)
-	assert.True(t, cleared.IsBuiltin)
-	assert.Equal(t, "expense.other", cleared.BuiltinKey)
-	assert.Empty(t, cleared.Name)
+	assert.True(t, other.IsBuiltin)
+	assert.False(t, other.IsStarter)
+	assert.Equal(t, "expense.other", other.BuiltinKey)
 
+	patchCategory(t, handler, sessionCookie, csrfToken, other.ID, `{
+		"name":"Miscellaneous"
+	}`, http.StatusConflict)
+	mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(other.ID)+"/disable", `{}`, http.StatusConflict)
 	mutateCategoryNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/categories/"+strconvFormatInt(other.ID), http.StatusConflict)
-	disabled := mutateCategory(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/categories/"+strconvFormatInt(other.ID)+"/disable", `{}`, http.StatusOK)
-	assert.Equal(t, "archived", disabled.Status)
-	list := listCategoriesForSession(t, handler, sessionCookie, "")
-	assert.NotContains(t, categoryCodes(list.Categories), "expense_other")
-	list = listCategoriesForSession(t, handler, sessionCookie, "?include_archived=true")
-	assert.Contains(t, categoryCodes(list.Categories), "expense_other")
 }
 
 func TestCategoryMutationsRequireAuthentication(t *testing.T) {

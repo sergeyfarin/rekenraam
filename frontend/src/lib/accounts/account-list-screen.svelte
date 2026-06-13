@@ -1,6 +1,11 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { Building2, Edit3, Plus, RefreshCw, Trash2, WalletCards } from '@lucide/svelte';
+  import Building2 from '@lucide/svelte/icons/building-2';
+  import Edit3 from '@lucide/svelte/icons/edit-3';
+  import Plus from '@lucide/svelte/icons/plus';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';

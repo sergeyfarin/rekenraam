@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { MoonStar, SunMedium } from "@lucide/svelte";
+    import MoonStar from '@lucide/svelte/icons/moon-star';
+    import SunMedium from '@lucide/svelte/icons/sun-medium';
     import { m } from "$lib/paraglide/messages.js";
     import { themeState, toggleTheme } from "$lib/theme.svelte";
 

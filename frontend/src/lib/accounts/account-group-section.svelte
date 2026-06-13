@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { Archive, Edit3, Lock, Trash2 } from '@lucide/svelte';
+  import Archive from '@lucide/svelte/icons/archive';
+  import Edit3 from '@lucide/svelte/icons/edit-3';
+  import Lock from '@lucide/svelte/icons/lock';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import type { AccountResponse } from '$lib/api/accounts';
   import type { CurrencyResponse } from '$lib/api/currencies';
   import type { InstitutionResponse } from '$lib/api/institutions';

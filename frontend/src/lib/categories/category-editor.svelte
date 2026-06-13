@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Save, X } from '@lucide/svelte';
+  import Save from '@lucide/svelte/icons/save';
+  import X from '@lucide/svelte/icons/x';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import {
     createCategory,
@@ -63,8 +64,9 @@
   });
 
   const title = $derived(mode === 'edit' ? m.categories_form_edit_title() : m.categories_form_create_title());
-  const nameLabel = $derived(category?.is_builtin ? m.categories_field_name_override() : m.categories_field_name());
-  const namePlaceholder = $derived(category?.is_builtin ? categoryDisplayName({ ...category, name: undefined }) : '');
+  const isAppDefined = $derived(category?.is_builtin || category?.is_starter);
+  const nameLabel = $derived(isAppDefined ? m.categories_field_name_override() : m.categories_field_name());
+  const namePlaceholder = $derived(isAppDefined && category ? categoryDisplayName({ ...category, name: undefined }) : '');
   const submitLabel = $derived(
     pending
       ? mode === 'edit'
@@ -198,7 +200,7 @@
   <div class="grid gap-3 sm:grid-cols-2">
     <label>
       <span class={labelClass}>{nameLabel}</span>
-      <input bind:value={name} class={inputClass} required={!category?.is_builtin} maxlength="200" placeholder={namePlaceholder} />
+      <input bind:value={name} class={inputClass} required={!isAppDefined} maxlength="200" placeholder={namePlaceholder} />
     </label>
 
     <label>

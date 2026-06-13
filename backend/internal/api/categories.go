@@ -20,6 +20,7 @@ type categoryResponse struct {
 	ParentCategoryID *int64          `json:"parent_category_id,omitempty"`
 	AllowsPostings   bool            `json:"allows_postings"`
 	IsBuiltin        bool            `json:"is_builtin"`
+	IsStarter        bool            `json:"is_starter"`
 	BuiltinKey       string          `json:"builtin_key,omitempty"`
 	Metadata         json.RawMessage `json:"metadata"`
 	OpenedOn         string          `json:"opened_on"`
@@ -352,6 +353,7 @@ func toCategoryResponse(category app.Category) categoryResponse {
 		ParentCategoryID: category.ParentCategoryID,
 		AllowsPostings:   category.AllowsPostings,
 		IsBuiltin:        category.IsBuiltin,
+		IsStarter:        category.IsStarter,
 		BuiltinKey:       category.BuiltinKey,
 		Metadata:         json.RawMessage(category.MetadataJSON),
 		OpenedOn:         category.OpenedOn,

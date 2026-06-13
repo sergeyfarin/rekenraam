@@ -9,7 +9,7 @@ post:
       description: Session-bound CSRF token for authenticated mutating requests.
   responses:
     "201":
-      description: Built-in categories seeded
+      description: Required built-in categories and editable starter suggestions seeded
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

@@ -17,6 +17,7 @@ CategoryResponse:
     - category_type
     - allows_postings
     - is_builtin
+    - is_starter
     - metadata
     - opened_on
     - effective_from
@@ -52,9 +53,13 @@ CategoryResponse:
       description: Parent groups usually disallow postings; leaf categories usually allow them.
     is_builtin:
       type: boolean
+      description: True only for protected app-required categories that cannot be edited, disabled, or deleted.
+    is_starter:
+      type: boolean
+      description: True for editable setup suggestions seeded by the app.
     builtin_key:
       type: string
-      description: Stable frontend translation key suffix for built-in categories.
+      description: Stable frontend translation key suffix for app-defined built-in and starter categories.
     metadata:
       type: object
       additionalProperties: true

@@ -3,7 +3,11 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { createQuery } from '@tanstack/svelte-query';
-  import { LayoutDashboard, LogOut, RefreshCw, Tags, WalletCards } from '@lucide/svelte';
+  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+  import LogOut from '@lucide/svelte/icons/log-out';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import Tags from '@lucide/svelte/icons/tags';
+  import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';

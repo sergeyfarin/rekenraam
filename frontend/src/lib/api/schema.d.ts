@@ -2865,7 +2865,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Built-in categories seeded */
+                /** @description Required built-in categories and editable starter suggestions seeded */
                 201: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -3150,7 +3150,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an unused user-created category
-         * @description Built-in categories and categories with financial references or child categories cannot be hard deleted.
+         * @description Protected built-in categories and categories with financial references or child categories cannot be hard deleted.
          */
         delete: {
             parameters: {
@@ -5780,8 +5780,11 @@ export interface components {
             parent_category_id?: number;
             /** @description Parent groups usually disallow postings; leaf categories usually allow them. */
             allows_postings: boolean;
+            /** @description True only for protected app-required categories that cannot be edited, disabled, or deleted. */
             is_builtin: boolean;
-            /** @description Stable frontend translation key suffix for built-in categories. */
+            /** @description True for editable setup suggestions seeded by the app. */
+            is_starter: boolean;
+            /** @description Stable frontend translation key suffix for app-defined built-in and starter categories. */
             builtin_key?: string;
             metadata: {
                 [key: string]: unknown;

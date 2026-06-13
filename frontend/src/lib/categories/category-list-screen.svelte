@@ -1,6 +1,12 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { Archive, Edit3, Plus, RefreshCw, RotateCcw, Tags, Trash2 } from '@lucide/svelte';
+  import Archive from '@lucide/svelte/icons/archive';
+  import Edit3 from '@lucide/svelte/icons/edit-3';
+  import Plus from '@lucide/svelte/icons/plus';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import Tags from '@lucide/svelte/icons/tags';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
@@ -8,11 +14,13 @@
   import { authSessionQueryOptions } from '$lib/api/auth';
   import {
     categoriesQueryOptions,
+    completeCategoriesSetup,
     deleteCategory,
     disableCategory,
     restoreCategory,
     type CategoryResponse
   } from '$lib/api/categories';
+  import { setupStatusQueryOptions } from '$lib/api/setup';
   import { m } from '$lib/paraglide/messages.js';
   import CategoryEditor from './category-editor.svelte';
   import {
@@ -37,6 +45,7 @@
 
   const categoriesQuery = createQuery(() => categoriesQueryOptions({ includeArchived: true }));
   const sessionQuery = createQuery(() => authSessionQueryOptions());
+  const setupQuery = createQuery(() => setupStatusQueryOptions());
   const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
   let query = $state('');
@@ -45,6 +54,8 @@
   let editor = $state<EditorState>({ type: 'none' });
   let actionError = $state<unknown>(undefined);
   let actionPendingKey = $state('');
+  let setupPending = $state(false);
+  let setupError = $state<unknown>(undefined);
 
   const allCategories = $derived(categoriesQuery.data?.categories ?? []);
   const activeCategories = $derived(allCategories.filter((category) => category.status === 'active'));
@@ -52,7 +63,10 @@
   const activeChildCounts = $derived.by(() => countChildren(allCategories.filter((category) => category.status === 'active')));
   const anyChildCounts = $derived.by(() => countChildren(allCategories));
   const csrfToken = $derived(sessionQuery.data?.csrf_token);
-  const shellError = $derived(categoriesQuery.error ?? sessionQuery.error);
+  const shellError = $derived(categoriesQuery.error ?? sessionQuery.error ?? setupQuery.error ?? setupError);
+  const categorySetupPending = $derived(
+    setupQuery.data?.steps.some((step) => step.key === 'categories' && step.status === 'pending') ?? false
+  );
 
   const visibleCategories = $derived.by(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -108,14 +122,16 @@
 
   const activeCount = $derived(allCategories.filter((category) => category.status === 'active').length);
   const archivedCount = $derived(allCategories.filter((category) => category.status === 'archived').length);
-  const userCount = $derived(allCategories.filter((category) => !category.is_builtin).length);
+  const builtInCount = $derived(allCategories.filter((category) => category.is_builtin).length);
+  const starterCount = $derived(allCategories.filter((category) => category.is_starter).length);
+  const customCount = $derived(allCategories.filter((category) => !category.is_builtin && !category.is_starter).length);
 
   const screenState = $derived.by<'loading' | 'error' | 'empty' | 'ready'>(() => {
-    if (categoriesQuery.isPending || sessionQuery.isPending) {
+    if (categoriesQuery.isPending || sessionQuery.isPending || setupQuery.isPending || setupPending) {
       return 'loading';
     }
 
-    if (categoriesQuery.isError || sessionQuery.isError) {
+    if (categoriesQuery.isError || sessionQuery.isError || setupQuery.isError || setupError) {
       return 'error';
     }
 
@@ -124,6 +140,14 @@
     }
 
     return 'ready';
+  });
+
+  $effect(() => {
+    if (!categorySetupPending || setupPending || setupError || !csrfToken) {
+      return;
+    }
+
+    void seedStarterCategories();
   });
 
   function compareCategories(left: CategoryResponse, right: CategoryResponse): number {
@@ -158,7 +182,21 @@
   }
 
   async function refreshCategories() {
-    await Promise.all([categoriesQuery.refetch(), sessionQuery.refetch()]);
+    await Promise.all([categoriesQuery.refetch(), sessionQuery.refetch(), setupQuery.refetch()]);
+  }
+
+  async function seedStarterCategories() {
+    setupPending = true;
+    setupError = undefined;
+
+    try {
+      await completeCategoriesSetup(csrfToken ?? '');
+      await refreshCategories();
+    } catch (error) {
+      setupError = error;
+    } finally {
+      setupPending = false;
+    }
   }
 
   async function getCSRFToken(): Promise<string> {
@@ -221,7 +259,7 @@
 <div class="space-y-4">
   <Panel variant="toolbar">
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-      <div class="grid min-w-fit grid-cols-3 gap-2 text-sm">
+      <div class="grid min-w-fit grid-cols-2 gap-2 text-sm sm:grid-cols-5">
         <div class="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2">
           <p class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.categories_stat_active()}</p>
           <p class="mt-1 text-lg font-semibold text-foreground">{activeCount}</p>
@@ -231,8 +269,16 @@
           <p class="mt-1 text-lg font-semibold text-foreground">{archivedCount}</p>
         </div>
         <div class="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2">
+          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.categories_stat_builtin()}</p>
+          <p class="mt-1 text-lg font-semibold text-foreground">{builtInCount}</p>
+        </div>
+        <div class="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2">
+          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.categories_stat_starter()}</p>
+          <p class="mt-1 text-lg font-semibold text-foreground">{starterCount}</p>
+        </div>
+        <div class="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2">
           <p class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.categories_stat_custom()}</p>
-          <p class="mt-1 text-lg font-semibold text-foreground">{userCount}</p>
+          <p class="mt-1 text-lg font-semibold text-foreground">{customCount}</p>
         </div>
       </div>
 
@@ -292,7 +338,7 @@
   {/if}
 
   {#if screenState === 'loading'}
-    <StatePanel title={m.categories_loading_title()} copy={m.categories_loading_copy()} />
+    <StatePanel title={m.categories_loading_title()} copy={categorySetupPending || setupPending ? m.categories_setup_loading_copy() : m.categories_loading_copy()} />
   {:else if screenState === 'error'}
     <StatePanel title={m.categories_error_title()} copy={m.categories_error_copy()}>
       <APIFormError error={shellError} id="categories-error" />
@@ -337,6 +383,8 @@
                   <p class="mt-1 truncate text-xs text-muted">
                     {#if category.is_builtin}
                       {m.categories_builtin_marker()}
+                    {:else if category.is_starter}
+                      {m.categories_starter_marker()}
                     {:else}
                       {m.categories_custom_marker()}
                     {/if}
@@ -370,8 +418,9 @@
                 <div class="flex items-center justify-start gap-1 lg:justify-end">
                   <button
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                     onclick={() => (editor = { type: 'edit', category })}
+                    disabled={category.is_builtin}
                     aria-label={m.categories_action_edit({ name: categoryDisplayName(category) })}
                     title={m.categories_action_edit({ name: categoryDisplayName(category) })}
                   >
@@ -383,7 +432,7 @@
                       type="button"
                       class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                       onclick={() => handleArchiveCategory(category)}
-                      disabled={(activeChildCounts.get(category.id) ?? 0) > 0 || actionPendingKey === `archive:${category.id}`}
+                      disabled={category.is_builtin || (activeChildCounts.get(category.id) ?? 0) > 0 || actionPendingKey === `archive:${category.id}`}
                       aria-label={m.categories_action_archive({ name: categoryDisplayName(category) })}
                       title={m.categories_action_archive({ name: categoryDisplayName(category) })}
                     >
@@ -394,7 +443,7 @@
                       type="button"
                       class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                       onclick={() => handleRestoreCategory(category)}
-                      disabled={actionPendingKey === `restore:${category.id}`}
+                      disabled={category.is_builtin || actionPendingKey === `restore:${category.id}`}
                       aria-label={m.categories_action_restore({ name: categoryDisplayName(category) })}
                       title={m.categories_action_restore({ name: categoryDisplayName(category) })}
                     >

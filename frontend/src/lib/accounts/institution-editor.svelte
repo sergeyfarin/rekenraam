@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Save, X } from '@lucide/svelte';
+  import Save from '@lucide/svelte/icons/save';
+  import X from '@lucide/svelte/icons/x';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import {
     createInstitution,

@@ -130,7 +130,7 @@ patch:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 delete:
   summary: Delete an unused user-created category
-  description: Built-in categories and categories with financial references or child categories cannot be hard deleted.
+  description: Protected built-in categories and categories with financial references or child categories cannot be hard deleted.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/CategoryID"
     - in: header

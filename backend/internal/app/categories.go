@@ -42,6 +42,7 @@ type Category struct {
 	ParentCategoryID *int64
 	AllowsPostings   bool
 	IsBuiltin        bool
+	IsStarter        bool
 	BuiltinKey       string
 	MetadataJSON     string
 	OpenedOn         string
@@ -238,6 +239,9 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 	if err != nil {
 		return Category{}, err
 	}
+	if current.IsBuiltin {
+		return Category{}, ErrCategoryBuiltInProtected
+	}
 
 	code := current.Code
 	if input.Code != nil {
@@ -391,6 +395,9 @@ func (s *CategoryService) changeCategoryStatus(ctx context.Context, input Catego
 	if err != nil {
 		return Category{}, err
 	}
+	if current.IsBuiltin && status == "archived" {
+		return Category{}, ErrCategoryBuiltInProtected
+	}
 
 	now := s.now().UTC()
 	effectiveFrom, err := cleanEffectiveFrom(input.EffectiveFrom, now)
@@ -452,7 +459,8 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 
 	name := strings.TrimSpace(input.Name)
 	isBuiltin := input.Current != nil && input.Current.IsBuiltin
-	if name == "" && !isBuiltin {
+	isStarter := input.Current != nil && input.Current.IsStarter
+	if name == "" && !isBuiltin && !isStarter {
 		return db.AccountSpec{}, ValidationError{Message: "category name is required"}
 	}
 	if len(name) > categoryNameMaxBytes {
@@ -518,6 +526,8 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 	metadata, err := categoryMetadataJSON(categoryMetadata{
 		Type:         categoryType,
 		IsBuiltin:    false,
+		IsStarter:    isStarter,
+		BuiltinKey:   builtinKeyForStarter(input.Current),
 		NameOverride: "",
 	})
 	if err != nil {
@@ -527,6 +537,7 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 		metadata, err = categoryMetadataJSON(categoryMetadata{
 			Type:         categoryType,
 			IsBuiltin:    true,
+			IsStarter:    false,
 			BuiltinKey:   input.Current.BuiltinKey,
 			NameOverride: name,
 		})
@@ -554,6 +565,7 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 type categoryMetadata struct {
 	Type         string
 	IsBuiltin    bool
+	IsStarter    bool
 	BuiltinKey   string
 	NameOverride string
 }
@@ -563,12 +575,14 @@ func categoryMetadataJSON(metadata categoryMetadata) (string, error) {
 		Category struct {
 			Type         string `json:"type"`
 			IsBuiltin    bool   `json:"is_builtin"`
+			IsStarter    bool   `json:"is_starter,omitempty"`
 			BuiltinKey   string `json:"builtin_key,omitempty"`
 			NameOverride string `json:"name_override,omitempty"`
 		} `json:"category"`
 	}{}
 	envelope.Category.Type = metadata.Type
 	envelope.Category.IsBuiltin = metadata.IsBuiltin
+	envelope.Category.IsStarter = metadata.IsStarter
 	envelope.Category.BuiltinKey = metadata.BuiltinKey
 	envelope.Category.NameOverride = metadata.NameOverride
 
@@ -584,6 +598,7 @@ func parseCategoryMetadata(jsonText string) categoryMetadata {
 		Category struct {
 			Type         string `json:"type"`
 			IsBuiltin    bool   `json:"is_builtin"`
+			IsStarter    bool   `json:"is_starter"`
 			BuiltinKey   string `json:"builtin_key"`
 			NameOverride string `json:"name_override"`
 		} `json:"category"`
@@ -592,17 +607,26 @@ func parseCategoryMetadata(jsonText string) categoryMetadata {
 	return categoryMetadata{
 		Type:         envelope.Category.Type,
 		IsBuiltin:    envelope.Category.IsBuiltin,
+		IsStarter:    envelope.Category.IsStarter,
 		BuiltinKey:   envelope.Category.BuiltinKey,
 		NameOverride: envelope.Category.NameOverride,
 	}
 }
 
+func builtinKeyForStarter(category *Category) string {
+	if category == nil || !category.IsStarter {
+		return ""
+	}
+	return category.BuiltinKey
+}
+
 func builtinCategorySpecs() []db.CategorySeedSpec {
 	specs := []db.CategorySeedSpec{}
-	add := func(code string, categoryType string, builtinKey string, parentCode string, allowsPostings bool) {
+	add := func(code string, categoryType string, builtinKey string, parentCode string, allowsPostings bool, protected bool) {
 		metadata, _ := categoryMetadataJSON(categoryMetadata{
 			Type:       categoryType,
-			IsBuiltin:  true,
+			IsBuiltin:  protected,
+			IsStarter:  !protected,
 			BuiltinKey: builtinKey,
 		})
 		specs = append(specs, db.CategorySeedSpec{
@@ -614,9 +638,11 @@ func builtinCategorySpecs() []db.CategorySeedSpec {
 			MetadataJSON:   metadata,
 		})
 	}
-	addExpenseGroup := func(code string, key string) { add(code, "expense", key, "", false) }
-	addExpense := func(code string, key string, parent string) { add(code, "expense", key, parent, true) }
-	addIncome := func(code string, key string) { add(code, "income", key, "", true) }
+	addExpenseGroup := func(code string, key string) { add(code, "expense", key, "", false, false) }
+	addExpense := func(code string, key string, parent string) { add(code, "expense", key, parent, true, false) }
+	addBuiltinExpense := func(code string, key string) { add(code, "expense", key, "", true, true) }
+	addIncome := func(code string, key string) { add(code, "income", key, "", true, false) }
+	addBuiltinIncome := func(code string, key string) { add(code, "income", key, "", true, true) }
 
 	addExpenseGroup("expense_housing", "expense.housing")
 	addExpense("expense_housing_rent_mortgage", "expense.housing.rent_mortgage", "expense_housing")
@@ -664,7 +690,7 @@ func builtinCategorySpecs() []db.CategorySeedSpec {
 	addExpenseGroup("expense_giving", "expense.giving")
 	addExpense("expense_giving_charity", "expense.giving.charity", "expense_giving")
 	addExpense("expense_giving_religious", "expense.giving.religious", "expense_giving")
-	addExpense("expense_other", "expense.other", "")
+	addBuiltinExpense("expense_other", "expense.other")
 
 	addIncome("income_salary_wages", "income.salary_wages")
 	addIncome("income_bonus", "income.bonus")
@@ -673,7 +699,7 @@ func builtinCategorySpecs() []db.CategorySeedSpec {
 	addIncome("income_business_freelance", "income.business_freelance")
 	addIncome("income_gifts_received", "income.gifts_received")
 	addIncome("income_refunds_reimbursements", "income.refunds_reimbursements")
-	addIncome("income_other", "income.other")
+	addBuiltinIncome("income_other", "income.other")
 
 	return specs
 }
@@ -707,6 +733,7 @@ func toCategory(record db.AccountRecord) Category {
 		ParentCategoryID: int64Ptr(record.ParentAccountID),
 		AllowsPostings:   record.AllowsPostings,
 		IsBuiltin:        metadata.IsBuiltin,
+		IsStarter:        metadata.IsStarter,
 		BuiltinKey:       metadata.BuiltinKey,
 		MetadataJSON:     record.MetadataJSON,
 		OpenedOn:         record.OpenedOn,
