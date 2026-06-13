@@ -17,7 +17,7 @@
 
 <button
     type="button"
-    class="inline-flex h-7 items-center gap-2 rounded-[var(--radius-control)] border border-topbar-border bg-topbar-control px-3 text-left text-topbar-foreground transition hover:bg-topbar-control-hover"
+    class="inline-flex h-7 items-center gap-2 rounded-(--radius-control) border border-topbar-border bg-topbar-control px-3 text-left text-topbar-foreground transition hover:bg-topbar-control-hover"
     aria-label={switchThemeLabel}
     title={switchThemeLabel}
     onclick={toggleTheme}

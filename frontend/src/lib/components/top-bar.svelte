@@ -20,7 +20,7 @@
         </a>
 
         <label
-            class="relative order-3 col-span-2 min-w-0 lg:order-none lg:col-span-1"
+            class="relative order-3 col-span-2 min-w-0 lg:order-0 lg:col-span-1"
             for="global-search"
         >
             <span class="sr-only">{m.top_bar_search_label()}</span>
@@ -33,7 +33,7 @@
                 type="search"
                 bind:value={searchTerm}
                 placeholder={m.top_bar_search_placeholder()}
-                class="h-7 w-full rounded-[var(--radius-control)] border border-topbar-border bg-topbar-control py-2 pl-9 pr-3 text-sm text-topbar-foreground outline-none transition placeholder:text-topbar-muted hover:bg-topbar-control-hover focus:bg-topbar-control-hover"
+                class="h-7 w-full rounded-(--radius-control) border border-topbar-border bg-topbar-control py-2 pl-9 pr-3 text-sm text-topbar-foreground outline-none transition placeholder:text-topbar-muted hover:bg-topbar-control-hover focus:bg-topbar-control-hover"
             />
         </label>
 
@@ -43,7 +43,7 @@
                 href="https://github.com/sergeyfarin/rekenraam"
                 target="_blank"
                 rel="noreferrer"
-                class="inline-flex h-7 items-center gap-2 rounded-[var(--radius-control)] border border-topbar-border bg-topbar-control px-3 text-sm font-semibold text-topbar-foreground transition hover:bg-topbar-control-hover"
+                class="inline-flex h-7 items-center gap-2 rounded-(--radius-control) border border-topbar-border bg-topbar-control px-3 text-sm font-semibold text-topbar-foreground transition hover:bg-topbar-control-hover"
                 aria-label={m.top_bar_github_label()}
                 title={m.top_bar_github_label()}
             >
