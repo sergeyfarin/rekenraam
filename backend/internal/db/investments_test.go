@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,6 +162,126 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 	assert.Equal(t, int64(75000), lots[1].RemainingCostBasisValue)
 }
 
+func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repository := NewInvestmentRepository(database)
+	_, err := repository.CreateLot(ctx, CreateInvestmentLotParams{
+		BookID:          1,
+		AccountID:       accountID,
+		CommodityID:     instrument.CommodityID,
+		OpenedOn:        "2026-01-01",
+		QuantityValue:   10000000,
+		QuantityScale:   6,
+		CostBasisValue:  25000,
+		CostBasisScale:  2,
+		CostCommodityID: currencyID,
+		MetadataJSON:    `{}`,
+		CreatedAt:       "2026-01-01T09:00:00Z",
+		CreatedByUserID: ownerID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.acquire",
+		ChangeReason:    "first lot",
+		EventKind:       "acquisition",
+	})
+	require.NoError(t, err)
+
+	_, err = repository.DisposeLots(ctx, DisposeLotsParams{
+		BookID:        1,
+		AccountID:     accountID,
+		CommodityID:   instrument.CommodityID,
+		EventDate:     "2026-03-01",
+		QuantityValue: 15000000,
+		QuantityScale: 6,
+		CreatedAt:     "2026-03-01T09:00:00Z",
+		ActorUserID:   ownerID,
+		OriginType:    "browser_api",
+		Operation:     "investment.lot.dispose",
+		ChangeReason:  "oversell",
+	})
+	require.ErrorIs(t, err, ErrInsufficientLots)
+
+	lots, err := repository.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	assert.Equal(t, "open", lots[0].Status)
+	assert.Equal(t, int64(10000000), lots[0].RemainingQuantityValue)
+	assert.Equal(t, int64(25000), lots[0].RemainingCostBasisValue)
+	assert.Equal(t, 1, countRows(t, database, "investment_lot_events"))
+}
+
+func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repository := NewInvestmentRepository(database)
+	lot, err := repository.CreateLot(ctx, CreateInvestmentLotParams{
+		BookID:          1,
+		AccountID:       accountID,
+		CommodityID:     instrument.CommodityID,
+		OpenedOn:        "2026-01-01",
+		QuantityValue:   3,
+		QuantityScale:   0,
+		CostBasisValue:  100,
+		CostBasisScale:  2,
+		CostCommodityID: currencyID,
+		MetadataJSON:    `{}`,
+		CreatedAt:       "2026-01-01T09:00:00Z",
+		CreatedByUserID: ownerID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.acquire",
+		ChangeReason:    "fractional rounding test",
+		EventKind:       "acquisition",
+	})
+	require.NoError(t, err)
+
+	first, err := repository.DisposeLots(ctx, DisposeLotsParams{
+		BookID:        1,
+		AccountID:     accountID,
+		CommodityID:   instrument.CommodityID,
+		EventDate:     "2026-03-01",
+		QuantityValue: 1,
+		QuantityScale: 0,
+		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: 1, QuantityScale: 0}},
+		CreatedAt:     "2026-03-01T09:00:00Z",
+		ActorUserID:   ownerID,
+		OriginType:    "browser_api",
+		Operation:     "investment.lot.dispose",
+		ChangeReason:  "first sale",
+	})
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	assert.Equal(t, int64(33), first[0].CostBasisValue)
+
+	second, err := repository.DisposeLots(ctx, DisposeLotsParams{
+		BookID:        1,
+		AccountID:     accountID,
+		CommodityID:   instrument.CommodityID,
+		EventDate:     "2026-04-01",
+		QuantityValue: 2,
+		QuantityScale: 0,
+		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: 2, QuantityScale: 0}},
+		CreatedAt:     "2026-04-01T09:00:00Z",
+		ActorUserID:   ownerID,
+		OriginType:    "browser_api",
+		Operation:     "investment.lot.dispose",
+		ChangeReason:  "final sale",
+	})
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+	assert.Equal(t, int64(67), second[0].CostBasisValue)
+
+	lots, err := repository.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	assert.Equal(t, "closed", lots[0].Status)
+	assert.Equal(t, int64(0), lots[0].RemainingQuantityValue)
+	assert.Equal(t, int64(0), lots[0].RemainingCostBasisValue)
+}
+
 func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
@@ -215,6 +336,47 @@ func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
 	require.Len(t, prices, 1)
 	assert.Equal(t, price.ID, prices[0].ID)
 	assert.Equal(t, 1, countRows(t, database, "price_series"))
+}
+
+func TestPricingObservationRejectsNonPositivePriceAtStorage(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repository := NewPricingRepository(database)
+	manualSourceID, err := repository.ManualSourceID(ctx)
+	require.NoError(t, err)
+
+	for _, priceValue := range []int64{0, -1} {
+		t.Run(strconv.FormatInt(priceValue, 10), func(t *testing.T) {
+			_, err := repository.CreatePriceObservation(ctx, CreatePriceObservationParams{
+				BookID:       1,
+				ActorUserID:  ownerID,
+				RequestID:    "request-price-invalid",
+				OriginType:   "browser_api",
+				Operation:    "pricing.price.create",
+				CreatedAt:    "2026-06-12T12:00:00Z",
+				ChangeReason: "invalid quote",
+				Spec: PriceObservationSpec{
+					BaseCommodityID:    instrument.CommodityID,
+					QuoteCommodityID:   currencyID,
+					QuoteType:          "manual",
+					AdjustmentBasis:    "raw",
+					PriceValue:         priceValue,
+					PriceScale:         6,
+					BaseQuantityValue:  1,
+					BaseQuantityScale:  0,
+					ValuationDate:      "2026-06-12",
+					SourceID:           sql.NullInt64{Int64: manualSourceID, Valid: true},
+					IsManual:           true,
+					DerivationJSON:     `{}`,
+					SeriesMetadataJSON: `{}`,
+					MetadataJSON:       `{}`,
+				},
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "price observation value must be positive")
+		})
+	}
 }
 
 func TestDefaultCostBasisProfileIsCreatedOnce(t *testing.T) {
