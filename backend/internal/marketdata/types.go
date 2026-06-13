@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 )
@@ -174,4 +175,10 @@ func quoteSet(quoteCodes []string) map[string]bool {
 		}
 	}
 	return set
+}
+
+func sortFXRateObservations(observations []FXRateObservation) {
+	slices.SortFunc(observations, func(left FXRateObservation, right FXRateObservation) int {
+		return strings.Compare(left.QuoteCode, right.QuoteCode)
+	})
 }

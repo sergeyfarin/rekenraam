@@ -114,5 +114,6 @@ func parseOpenExchangeRates(body []byte, quoteCodes []string) ([]FXRateObservati
 			RawJSON:               "{}",
 		})
 	}
+	sortFXRateObservations(observations)
 	return observations, nil
 }

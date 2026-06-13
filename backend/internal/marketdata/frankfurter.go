@@ -99,5 +99,6 @@ func parseFrankfurterRates(body []byte, fallbackBase string) ([]FXRateObservatio
 			RawJSON:               "{}",
 		})
 	}
+	sortFXRateObservations(observations)
 	return observations, nil
 }
