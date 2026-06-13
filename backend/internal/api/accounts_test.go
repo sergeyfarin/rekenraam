@@ -570,16 +570,8 @@ func TestDeleteAccountRejectsPostingAndChildReferences(t *testing.T) {
 
 	handler, _ := newSetupTestHandler(t)
 	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
-	checking := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
-		"name":"Checking With Posting",
-		"account_class":"asset",
-		"account_kind":"checking",
-		"default_commodity_id":`+strconvFormatInt(currencyID)+`
-	}`)
-	income := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
-		"name":"Salary",
-		"account_class":"income"
-	}`)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking With Posting", "asset", "checking", currencyID, 2)
+	income := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Salary", "income", "income", currencyID, 2)
 	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-12",
 		posting(checking.ID, 10000, 2, currencyID),
 		posting(income.ID, -10000, 2, currencyID),

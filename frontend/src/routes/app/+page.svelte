@@ -39,7 +39,7 @@
     <h2 class="text-lg font-semibold tracking-tight text-balance">{m.app_shell_overview_title()}</h2>
     <p class="mt-3 max-w-3xl text-sm leading-6 text-muted">{m.app_shell_overview_copy()}</p>
 
-    <div class="mt-5 divide-y divide-border overflow-hidden rounded-[var(--radius-panel)] border border-border">
+    <div class="mt-5 divide-y divide-border overflow-hidden rounded-(--radius-panel) border border-border">
       <article class="grid gap-3 bg-surface px-4 py-3 sm:grid-cols-[1.5rem_minmax(10rem,0.35fr)_1fr] sm:items-start">
         <ShieldCheck size={18} class="mt-0.5 text-accent" aria-hidden="true" />
         <p class="text-sm font-semibold text-foreground">{m.app_shell_card_auth_title()}</p>
@@ -80,7 +80,7 @@
       <h2 class="text-lg font-semibold tracking-tight text-balance">{m.app_shell_next_title()}</h2>
     </div>
 
-    <div class="mt-5 grid gap-px overflow-hidden rounded-[var(--radius-panel)] border border-border bg-border md:grid-cols-2">
+    <div class="mt-5 grid gap-px overflow-hidden rounded-(--radius-panel) border border-border bg-border md:grid-cols-2">
       <article class="bg-surface p-4">
         <p class="text-sm font-semibold text-foreground">{m.app_shell_next_books_title()}</p>
         <p class="mt-2 text-sm leading-6 text-muted">{m.app_shell_next_books_copy()}</p>

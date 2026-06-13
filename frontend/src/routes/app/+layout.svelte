@@ -142,7 +142,7 @@
           <APIFormError error={shellError} id="app-shell-error" />
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+            class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
             onclick={refreshShell}
           >
             <RefreshCw size={16} aria-hidden="true" />
@@ -177,7 +177,7 @@
           class:text-selected-foreground={isOverviewRoute}
           class:bg-transparent={!isOverviewRoute}
           class:text-foreground={!isOverviewRoute}
-          class="flex min-w-fit items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
         >
           <LayoutDashboard size={16} aria-hidden="true" />
           {m.app_shell_nav_overview()}
@@ -189,7 +189,7 @@
           class:text-selected-foreground={isAccountsRoute}
           class:bg-transparent={!isAccountsRoute}
           class:text-foreground={!isAccountsRoute}
-          class="flex min-w-fit items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
         >
           <WalletCards size={16} aria-hidden="true" />
           {m.app_shell_nav_accounts()}
@@ -201,14 +201,14 @@
           class:text-selected-foreground={isCategoriesRoute}
           class:bg-transparent={!isCategoriesRoute}
           class:text-foreground={!isCategoriesRoute}
-          class="flex min-w-fit items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
         >
           <Tags size={16} aria-hidden="true" />
           {m.app_shell_nav_categories()}
         </a>
       </nav>
 
-      <div class="mt-5 hidden rounded-[var(--radius-panel)] border border-border bg-surface/70 p-3 lg:block">
+      <div class="mt-5 hidden rounded-(--radius-panel) border border-border bg-surface/70 p-3 lg:block">
         <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{m.app_shell_status_title()}</p>
         <div class="mt-3 space-y-2 text-sm leading-5">
           <p class="text-foreground">
@@ -228,7 +228,7 @@
         <APIFormError error={logoutError} id="app-shell-logout-error" />
         <button
           type="button"
-          class="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
+          class="inline-flex w-full items-center justify-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
           onclick={handleLogout}
           disabled={logoutPending}
         >
