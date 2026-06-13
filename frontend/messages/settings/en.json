@@ -320,6 +320,8 @@
   "categories_unnamed_category": "Category {id}",
   "categories_parent_root": "Root category",
   "categories_parent_unknown": "Unknown parent",
+  "categories_tree_expand": "Show children of {name}",
+  "categories_tree_collapse": "Hide children of {name}",
   "categories_builtin_marker": "Built-in",
   "categories_starter_marker": "Starter",
   "categories_custom_marker": "Custom",

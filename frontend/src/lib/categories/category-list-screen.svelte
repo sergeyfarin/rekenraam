@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import Archive from '@lucide/svelte/icons/archive';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Edit3 from '@lucide/svelte/icons/edit-3';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -40,7 +42,12 @@
   type CategoryGroup = {
     key: CategoryType;
     label: string;
-    categories: CategoryResponse[];
+    rows: CategoryTreeRow[];
+  };
+
+  type CategoryTreeRow = {
+    category: CategoryResponse;
+    depth: number;
   };
 
   const categoriesQuery = createQuery(() => categoriesQueryOptions({ includeArchived: true }));
@@ -56,6 +63,7 @@
   let actionPendingKey = $state('');
   let setupPending = $state(false);
   let setupError = $state<unknown>(undefined);
+  let collapsedCategoryIDs = $state<Set<number>>(new Set());
 
   const allCategories = $derived(categoriesQuery.data?.categories ?? []);
   const activeCategories = $derived(allCategories.filter((category) => category.status === 'active'));
@@ -68,7 +76,7 @@
     setupQuery.data?.steps.some((step) => step.key === 'categories' && step.status === 'pending') ?? false
   );
 
-  const visibleCategories = $derived.by(() => {
+  const matchedCategories = $derived.by(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
 
     return allCategories
@@ -103,22 +111,24 @@
 
   const groupedCategories = $derived.by<CategoryGroup[]>(() => {
     const groups = new Map<CategoryType, CategoryGroup>();
+    const visibleTreeRows = buildVisibleTreeRows(matchedCategories);
 
-    for (const category of visibleCategories) {
-      const group = groups.get(category.category_type);
+    for (const row of visibleTreeRows) {
+      const group = groups.get(row.category.category_type);
       if (group) {
-        group.categories.push(category);
+        group.rows.push(row);
       } else {
-        groups.set(category.category_type, {
-          key: category.category_type,
-          label: categoryTypeLabel(category.category_type),
-          categories: [category]
+        groups.set(row.category.category_type, {
+          key: row.category.category_type,
+          label: categoryTypeLabel(row.category.category_type),
+          rows: [row]
         });
       }
     }
 
     return Array.from(groups.values()).toSorted((left, right) => categoryTypeRank(left.key) - categoryTypeRank(right.key));
   });
+  const treeChildCounts = $derived.by(() => countVisibleTreeChildren(buildVisibleCategoryMap(matchedCategories)));
 
   const activeCount = $derived(allCategories.filter((category) => category.status === 'active').length);
   const archivedCount = $derived(allCategories.filter((category) => category.status === 'archived').length);
@@ -156,17 +166,114 @@
       return typeComparison;
     }
 
-    const parentComparison = compareParent(left, right);
-    return parentComparison || collator.compare(categoryDisplayName(left), categoryDisplayName(right)) || left.id - right.id;
+    return collator.compare(categoryDisplayName(left), categoryDisplayName(right)) || left.id - right.id;
   }
 
-  function compareParent(left: CategoryResponse, right: CategoryResponse): number {
-    const leftParent = left.parent_category_id ? categoriesByID.get(left.parent_category_id) : undefined;
-    const rightParent = right.parent_category_id ? categoriesByID.get(right.parent_category_id) : undefined;
-    const leftParentLabel = leftParent ? categoryDisplayName(leftParent) : '';
-    const rightParentLabel = rightParent ? categoryDisplayName(rightParent) : '';
+  function buildVisibleTreeRows(categories: CategoryResponse[]): CategoryTreeRow[] {
+    const visibleByID = buildVisibleCategoryMap(categories);
 
-    return collator.compare(leftParentLabel, rightParentLabel);
+    const childrenByParentID = new Map<number, CategoryResponse[]>();
+    const roots: CategoryResponse[] = [];
+
+    for (const category of visibleByID.values()) {
+      const parentID = category.parent_category_id;
+      const parent = parentID ? visibleByID.get(parentID) : undefined;
+
+      if (parent && parent.category_type === category.category_type) {
+        const siblings = childrenByParentID.get(parent.id) ?? [];
+        siblings.push(category);
+        childrenByParentID.set(parent.id, siblings);
+      } else {
+        roots.push(category);
+      }
+    }
+
+    for (const siblings of childrenByParentID.values()) {
+      siblings.sort(compareCategories);
+    }
+    roots.sort(compareCategories);
+
+    const rows: CategoryTreeRow[] = [];
+    for (const root of roots) {
+      appendTreeRows(root, 0, childrenByParentID, rows);
+    }
+
+    return rows;
+  }
+
+  function buildVisibleCategoryMap(categories: CategoryResponse[]): Map<number, CategoryResponse> {
+    const visibleByID = new Map<number, CategoryResponse>();
+    const normalizedQuery = query.trim();
+
+    for (const category of categories) {
+      visibleByID.set(category.id, category);
+
+      if (normalizedQuery !== '') {
+        addVisibleAncestors(category, visibleByID);
+      }
+    }
+
+    return visibleByID;
+  }
+
+  function countVisibleTreeChildren(categoriesByID: ReadonlyMap<number, CategoryResponse>): Map<number, number> {
+    const counts = new Map<number, number>();
+
+    for (const category of categoriesByID.values()) {
+      const parentID = category.parent_category_id;
+      const parent = parentID ? categoriesByID.get(parentID) : undefined;
+
+      if (parent && parent.category_type === category.category_type) {
+        counts.set(parent.id, (counts.get(parent.id) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  }
+
+  function addVisibleAncestors(category: CategoryResponse, visibleByID: Map<number, CategoryResponse>) {
+    let parentID = category.parent_category_id;
+    const seen = new Set<number>([category.id]);
+
+    while (parentID) {
+      if (seen.has(parentID)) {
+        break;
+      }
+      seen.add(parentID);
+
+      const parent = categoriesByID.get(parentID);
+      if (!parent || parent.category_type !== category.category_type) {
+        break;
+      }
+
+      if (typeFilter !== 'all' && parent.category_type !== typeFilter) {
+        break;
+      }
+      if (statusFilter !== 'all' && parent.status !== statusFilter) {
+        break;
+      }
+
+      visibleByID.set(parent.id, parent);
+      parentID = parent.parent_category_id;
+    }
+  }
+
+  function appendTreeRows(
+    category: CategoryResponse,
+    depth: number,
+    childrenByParentID: ReadonlyMap<number, CategoryResponse[]>,
+    rows: CategoryTreeRow[]
+  ) {
+    rows.push({ category, depth });
+
+    if (collapsedCategoryIDs.has(category.id)) {
+      return;
+    }
+
+    const children = childrenByParentID.get(category.id) ?? [];
+    for (const child of children) {
+      appendTreeRows(child, depth + 1, childrenByParentID, rows);
+    }
   }
 
   function countChildren(categories: CategoryResponse[]): Map<number, number> {
@@ -179,6 +286,16 @@
     }
 
     return counts;
+  }
+
+  function toggleCategory(categoryID: number) {
+    const next = new Set(collapsedCategoryIDs);
+    if (next.has(categoryID)) {
+      next.delete(categoryID);
+    } else {
+      next.add(categoryID);
+    }
+    collapsedCategoryIDs = next;
   }
 
   async function refreshCategories() {
@@ -362,7 +479,7 @@
         {m.categories_add_category()}
       </button>
     </StatePanel>
-  {:else if visibleCategories.length === 0}
+  {:else if matchedCategories.length === 0}
     <StatePanel title={m.categories_no_results_title()} copy={m.categories_no_results_copy()} />
   {:else}
     <div class="space-y-4">
@@ -371,27 +488,53 @@
           <div class="flex items-center justify-between gap-4 border-b border-border bg-toolbar px-4 py-3">
             <h2 class="truncate text-sm font-semibold tracking-tight text-foreground">{group.label}</h2>
             <span class="rounded-[var(--radius-control)] bg-surface-strong px-2.5 py-1 text-xs font-semibold text-muted">
-              {m.categories_group_count({ count: group.categories.length })}
+              {m.categories_group_count({ count: group.rows.length })}
             </span>
           </div>
 
           <div class="divide-y divide-border">
-            {#each group.categories as category (category.id)}
+            {#each group.rows as row (row.category.id)}
+              {@const category = row.category}
+              {@const hasTreeChildren = (treeChildCounts.get(category.id) ?? 0) > 0}
+              {@const isCollapsed = collapsedCategoryIDs.has(category.id)}
               <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.8fr)_minmax(8rem,0.55fr)_auto_auto] lg:items-center">
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
-                  <p class="mt-1 truncate text-xs text-muted">
-                    {#if category.is_builtin}
-                      {m.categories_builtin_marker()}
-                    {:else if category.is_starter}
-                      {m.categories_starter_marker()}
+                <div class="min-w-0" style={`padding-left: ${Math.min(row.depth, 6) * 1.25}rem`}>
+                  <div class="flex min-w-0 items-start gap-2">
+                    {#if hasTreeChildren}
+                      <button
+                        type="button"
+                        class="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-muted transition hover:bg-control-hover hover:text-foreground"
+                        aria-expanded={!isCollapsed}
+                        aria-label={isCollapsed ? m.categories_tree_expand({ name: categoryDisplayName(category) }) : m.categories_tree_collapse({ name: categoryDisplayName(category) })}
+                        title={isCollapsed ? m.categories_tree_expand({ name: categoryDisplayName(category) }) : m.categories_tree_collapse({ name: categoryDisplayName(category) })}
+                        onclick={() => toggleCategory(category.id)}
+                      >
+                        {#if isCollapsed}
+                          <ChevronRight size={14} aria-hidden="true" />
+                        {:else}
+                          <ChevronDown size={14} aria-hidden="true" />
+                        {/if}
+                      </button>
                     {:else}
-                      {m.categories_custom_marker()}
+                      <span class="size-6 shrink-0" aria-hidden="true"></span>
                     {/if}
-                    {#if category.code}
-                      <span aria-hidden="true"> · </span>{category.code}
-                    {/if}
-                  </p>
+
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
+                      <p class="mt-1 truncate text-xs text-muted">
+                        {#if category.is_builtin}
+                          {m.categories_builtin_marker()}
+                        {:else if category.is_starter}
+                          {m.categories_starter_marker()}
+                        {:else}
+                          {m.categories_custom_marker()}
+                        {/if}
+                        {#if category.code}
+                          <span aria-hidden="true"> · </span>{category.code}
+                        {/if}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="min-w-0 text-sm">
