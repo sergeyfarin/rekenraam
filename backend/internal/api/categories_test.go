@@ -81,20 +81,24 @@ func TestCategoryCreateUpdateDisableRestoreAndDeleteUnused(t *testing.T) {
 	child := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Dairy",
 		"category_type":"expense",
-		"parent_category_id":`+strconvFormatInt(parent.ID)+`
+		"parent_category_id":`+strconvFormatInt(parent.ID)+`,
+		"icon":"shopping-cart"
 	}`)
 
 	assert.Equal(t, "active", child.Status)
 	require.NotNil(t, child.ParentCategoryID)
 	assert.Equal(t, parent.ID, *child.ParentCategoryID)
 	assert.True(t, child.AllowsPostings)
+	assert.Equal(t, "shopping-cart", child.Icon)
 	assert.False(t, child.IsBuiltin)
 
 	read := readCategoryForSession(t, handler, sessionCookie, child.ID, http.StatusOK)
 	assert.Equal(t, child.ID, read.ID)
 	assert.Equal(t, "Dairy", read.Name)
+	assert.Equal(t, "shopping-cart", read.Icon)
 
-	patchCategory(t, handler, sessionCookie, csrfToken, child.ID, `{"name":"Bread"}`, http.StatusOK)
+	updated := patchCategory(t, handler, sessionCookie, csrfToken, child.ID, `{"name":"Bread","icon":"receipt"}`, http.StatusOK)
+	assert.Equal(t, "receipt", updated.Icon)
 	createCategoryForSessionStatus(t, handler, sessionCookie, csrfToken, `{
 		"name":"Bread",
 		"category_type":"expense",
@@ -166,6 +170,11 @@ func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing
 		"name":"Bank-ish",
 		"category_type":"expense",
 		"default_commodity_id":1
+	}`, http.StatusBadRequest)
+	createCategoryForSessionStatus(t, handler, sessionCookie, csrfToken, `{
+		"name":"Bad Icon",
+		"category_type":"expense",
+		"icon":"No Spaces"
 	}`, http.StatusBadRequest)
 	patchCategory(t, handler, sessionCookie, csrfToken, expenseParent.ID, `{
 		"parent_category_id":`+strconvFormatInt(expenseChild.ID)+`

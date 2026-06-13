@@ -5780,6 +5780,8 @@ export interface components {
             parent_category_id?: number;
             /** @description Parent groups usually disallow postings; leaf categories usually allow them. */
             allows_postings: boolean;
+            /** @description Optional stable icon token for category UI. */
+            icon?: string;
             /** @description True only for protected app-required categories that cannot be edited, disabled, or deleted. */
             is_builtin: boolean;
             /** @description True for editable setup suggestions seeded by the app. */
@@ -5812,6 +5814,8 @@ export interface components {
             parent_category_id?: number;
             /** @description Defaults to true. */
             allows_postings?: boolean;
+            /** @description Optional stable icon token for category UI. */
+            icon?: string;
             /** Format: date */
             opened_on?: string;
             /** Format: date */
@@ -5828,6 +5832,8 @@ export interface components {
             /** @description Move the category to the income or expense root. */
             clear_parent?: boolean;
             allows_postings?: boolean;
+            /** @description Optional stable icon token for category UI. */
+            icon?: string;
             /** Format: date */
             opened_on?: string;
             /** Format: date */

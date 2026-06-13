@@ -24,7 +24,9 @@
   } from '$lib/api/categories';
   import { setupStatusQueryOptions } from '$lib/api/setup';
   import { m } from '$lib/paraglide/messages.js';
+  import CategoryIcon from './category-icon.svelte';
   import CategoryEditor from './category-editor.svelte';
+  import { categoryIconName } from './category-icons';
   import {
     categoryDisplayName,
     categoryParentLabel,
@@ -520,7 +522,12 @@
                     {/if}
 
                     <div class="min-w-0">
-                      <p class="truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
+                          <CategoryIcon icon={categoryIconName(category)} className="size-4" />
+                        </span>
+                        <p class="min-w-0 truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
+                      </div>
                       <p class="mt-1 truncate text-xs text-muted">
                         {#if category.is_builtin}
                           {m.categories_builtin_marker()}

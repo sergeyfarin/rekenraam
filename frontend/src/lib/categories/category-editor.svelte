@@ -10,6 +10,13 @@
     type UpdateCategoryRequest
   } from '$lib/api/categories';
   import { m } from '$lib/paraglide/messages.js';
+  import CategoryIcon from './category-icon.svelte';
+  import {
+    categoryIconLabel,
+    categoryIconName,
+    categoryIconOptions,
+    type CategoryIconName
+  } from './category-icons';
   import {
     categoryDisplayName,
     categoryTypeLabel,
@@ -44,6 +51,7 @@
   let categoryType = $state<CategoryType>('expense');
   let parentCategoryID = $state('');
   let allowsPostings = $state(true);
+  let icon = $state<CategoryIconName>('tags');
   let openedOn = $state('');
   let effectiveFrom = $state('');
   let changeReason = $state('');
@@ -84,6 +92,7 @@
     categoryType = category?.category_type ?? 'expense';
     parentCategoryID = category?.parent_category_id ? String(category.parent_category_id) : '';
     allowsPostings = category?.allows_postings ?? true;
+    icon = categoryIconName(category);
     openedOn = category?.opened_on ?? '';
     effectiveFrom = '';
     changeReason = '';
@@ -126,7 +135,8 @@
     const request: CreateCategoryRequest = {
       name: name.trim(),
       category_type: categoryType,
-      allows_postings: allowsPostings
+      allows_postings: allowsPostings,
+      icon
     };
 
     assignString(request, 'code', code);
@@ -142,7 +152,8 @@
     const request: UpdateCategoryRequest = {
       name: name.trim(),
       category_type: categoryType,
-      allows_postings: allowsPostings
+      allows_postings: allowsPostings,
+      icon
     };
 
     if (!category?.is_builtin) {
@@ -221,7 +232,7 @@
       <select bind:value={parentCategoryID} class={inputClass}>
         <option value="">{m.categories_field_no_parent()}</option>
         {#each parentOptions as parent (parent.id)}
-          <option value={parent.id}>{categoryDisplayName(parent)}</option>
+          <option value={String(parent.id)}>{categoryDisplayName(parent)}</option>
         {/each}
       </select>
     </label>
@@ -240,6 +251,27 @@
       <span class={labelClass}>{m.categories_field_reason()}</span>
       <input bind:value={changeReason} class={inputClass} maxlength="500" />
     </label>
+
+    <fieldset class="sm:col-span-2">
+      <legend class={labelClass}>{m.categories_field_icon()}</legend>
+      <div class="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {#each categoryIconOptions as option (option)}
+          <button
+            type="button"
+            class={`inline-flex min-h-10 items-center gap-2 rounded-[var(--radius-control)] border px-3 py-2 text-left text-sm transition ${
+              icon === option
+                ? 'border-accent bg-accent-soft text-foreground shadow-sm'
+                : 'border-border bg-control text-muted hover:bg-control-hover hover:text-foreground'
+            }`}
+            aria-pressed={icon === option}
+            onclick={() => (icon = option)}
+          >
+            <CategoryIcon icon={option} className="size-4 shrink-0" />
+            <span class="min-w-0 truncate">{categoryIconLabel(option)}</span>
+          </button>
+        {/each}
+      </div>
+    </fieldset>
   </div>
 
   <label class="flex items-center gap-3 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground">

@@ -51,6 +51,11 @@ CategoryResponse:
     allows_postings:
       type: boolean
       description: Parent groups usually disallow postings; leaf categories usually allow them.
+    icon:
+      type: string
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9_-]*$"
+      description: Optional stable icon token for category UI.
     is_builtin:
       type: boolean
       description: True only for protected app-required categories that cannot be edited, disabled, or deleted.
@@ -109,6 +114,11 @@ CreateCategoryRequest:
     allows_postings:
       type: boolean
       description: Defaults to true.
+    icon:
+      type: string
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9_-]*$"
+      description: Optional stable icon token for category UI.
     opened_on:
       type: string
       format: date
@@ -138,6 +148,11 @@ UpdateCategoryRequest:
       description: Move the category to the income or expense root.
     allows_postings:
       type: boolean
+    icon:
+      type: string
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9_-]*$"
+      description: Optional stable icon token for category UI.
     opened_on:
       type: string
       format: date

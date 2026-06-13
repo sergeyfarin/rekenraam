@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 const (
 	categoryNameMaxBytes = 200
 	categoryCodeMaxBytes = 100
+	categoryIconMaxBytes = 64
 	categoryListLimit    = 2000
 )
 
@@ -25,6 +27,7 @@ var (
 	ErrCategoryHasChildren      = errors.New("category has active child categories")
 	ErrCategoryBuiltInProtected = errors.New("built-in category cannot be deleted")
 	ErrCategoryUsed             = errors.New("category is used by financial records")
+	categoryIconPattern         = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
 
 var categoryTypes = map[string]bool{
@@ -41,6 +44,7 @@ type Category struct {
 	CategoryType     string
 	ParentCategoryID *int64
 	AllowsPostings   bool
+	Icon             string
 	IsBuiltin        bool
 	IsStarter        bool
 	BuiltinKey       string
@@ -71,6 +75,7 @@ type CreateCategoryInput struct {
 	CategoryType     string
 	ParentCategoryID *int64
 	AllowsPostings   *bool
+	Icon             string
 	OpenedOn         string
 	EffectiveFrom    string
 	ChangeReason     string
@@ -89,6 +94,7 @@ type UpdateCategoryInput struct {
 	ParentCategoryID *int64
 	ClearParent      bool
 	AllowsPostings   *bool
+	Icon             *string
 	OpenedOn         string
 	EffectiveFrom    string
 	ChangeReason     string
@@ -188,6 +194,7 @@ func (s *CategoryService) CreateCategory(ctx context.Context, input CreateCatego
 		CategoryType:     input.CategoryType,
 		ParentCategoryID: input.ParentCategoryID,
 		AllowsPostings:   input.AllowsPostings,
+		Icon:             input.Icon,
 		OpenedOn:         input.OpenedOn,
 		EffectiveFrom:    input.EffectiveFrom,
 		Now:              now,
@@ -265,6 +272,10 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 	if input.AllowsPostings != nil {
 		allowsPostings = *input.AllowsPostings
 	}
+	icon := current.Icon
+	if input.Icon != nil {
+		icon = *input.Icon
+	}
 
 	now := s.now().UTC()
 	spec, err := s.newCategorySpec(ctx, categorySpecInput{
@@ -274,6 +285,7 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 		CategoryType:     categoryType,
 		ParentCategoryID: parentID,
 		AllowsPostings:   &allowsPostings,
+		Icon:             icon,
 		OpenedOn:         input.OpenedOn,
 		EffectiveFrom:    input.EffectiveFrom,
 		Now:              now,
@@ -442,6 +454,7 @@ type categorySpecInput struct {
 	CategoryType     string
 	ParentCategoryID *int64
 	AllowsPostings   *bool
+	Icon             string
 	OpenedOn         string
 	EffectiveFrom    string
 	Now              time.Time
@@ -476,6 +489,14 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 	}
 	if input.Current != nil && input.Current.CategoryType != categoryType {
 		return db.AccountSpec{}, ValidationError{Message: "category type cannot be changed"}
+	}
+
+	icon := strings.TrimSpace(input.Icon)
+	if len(icon) > categoryIconMaxBytes {
+		return db.AccountSpec{}, ValidationError{Message: fmt.Sprintf("category icon must be at most %d bytes", categoryIconMaxBytes)}
+	}
+	if icon != "" && !categoryIconPattern.MatchString(icon) {
+		return db.AccountSpec{}, ValidationError{Message: "category icon may contain lowercase letters, numbers, underscores, and hyphens"}
 	}
 
 	allowsPostings := true
@@ -529,6 +550,7 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 		IsStarter:    isStarter,
 		BuiltinKey:   builtinKeyForStarter(input.Current),
 		NameOverride: "",
+		Icon:         icon,
 	})
 	if err != nil {
 		return db.AccountSpec{}, err
@@ -540,6 +562,7 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 			IsStarter:    false,
 			BuiltinKey:   input.Current.BuiltinKey,
 			NameOverride: name,
+			Icon:         icon,
 		})
 		if err != nil {
 			return db.AccountSpec{}, err
@@ -568,6 +591,7 @@ type categoryMetadata struct {
 	IsStarter    bool
 	BuiltinKey   string
 	NameOverride string
+	Icon         string
 }
 
 func categoryMetadataJSON(metadata categoryMetadata) (string, error) {
@@ -578,6 +602,7 @@ func categoryMetadataJSON(metadata categoryMetadata) (string, error) {
 			IsStarter    bool   `json:"is_starter,omitempty"`
 			BuiltinKey   string `json:"builtin_key,omitempty"`
 			NameOverride string `json:"name_override,omitempty"`
+			Icon         string `json:"icon,omitempty"`
 		} `json:"category"`
 	}{}
 	envelope.Category.Type = metadata.Type
@@ -585,6 +610,7 @@ func categoryMetadataJSON(metadata categoryMetadata) (string, error) {
 	envelope.Category.IsStarter = metadata.IsStarter
 	envelope.Category.BuiltinKey = metadata.BuiltinKey
 	envelope.Category.NameOverride = metadata.NameOverride
+	envelope.Category.Icon = metadata.Icon
 
 	data, err := json.Marshal(envelope)
 	if err != nil {
@@ -601,6 +627,7 @@ func parseCategoryMetadata(jsonText string) categoryMetadata {
 			IsStarter    bool   `json:"is_starter"`
 			BuiltinKey   string `json:"builtin_key"`
 			NameOverride string `json:"name_override"`
+			Icon         string `json:"icon"`
 		} `json:"category"`
 	}
 	_ = json.Unmarshal([]byte(jsonText), &envelope)
@@ -610,6 +637,7 @@ func parseCategoryMetadata(jsonText string) categoryMetadata {
 		IsStarter:    envelope.Category.IsStarter,
 		BuiltinKey:   envelope.Category.BuiltinKey,
 		NameOverride: envelope.Category.NameOverride,
+		Icon:         envelope.Category.Icon,
 	}
 }
 
@@ -732,6 +760,7 @@ func toCategory(record db.AccountRecord) Category {
 		CategoryType:     record.AccountClass,
 		ParentCategoryID: int64Ptr(record.ParentAccountID),
 		AllowsPostings:   record.AllowsPostings,
+		Icon:             metadata.Icon,
 		IsBuiltin:        metadata.IsBuiltin,
 		IsStarter:        metadata.IsStarter,
 		BuiltinKey:       metadata.BuiltinKey,

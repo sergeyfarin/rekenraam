@@ -19,6 +19,7 @@ type categoryResponse struct {
 	CategoryType     string          `json:"category_type"`
 	ParentCategoryID *int64          `json:"parent_category_id,omitempty"`
 	AllowsPostings   bool            `json:"allows_postings"`
+	Icon             string          `json:"icon,omitempty"`
 	IsBuiltin        bool            `json:"is_builtin"`
 	IsStarter        bool            `json:"is_starter"`
 	BuiltinKey       string          `json:"builtin_key,omitempty"`
@@ -46,6 +47,7 @@ type createCategoryRequest struct {
 	CategoryType     string `json:"category_type"`
 	ParentCategoryID *int64 `json:"parent_category_id"`
 	AllowsPostings   *bool  `json:"allows_postings"`
+	Icon             string `json:"icon"`
 	OpenedOn         string `json:"opened_on"`
 	EffectiveFrom    string `json:"effective_from"`
 	ChangeReason     string `json:"change_reason"`
@@ -58,6 +60,7 @@ type updateCategoryRequest struct {
 	ParentCategoryID *int64  `json:"parent_category_id"`
 	ClearParent      bool    `json:"clear_parent"`
 	AllowsPostings   *bool   `json:"allows_postings"`
+	Icon             *string `json:"icon"`
 	OpenedOn         string  `json:"opened_on"`
 	EffectiveFrom    string  `json:"effective_from"`
 	ChangeReason     string  `json:"change_reason"`
@@ -140,6 +143,7 @@ func createCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 			CategoryType:     request.CategoryType,
 			ParentCategoryID: request.ParentCategoryID,
 			AllowsPostings:   request.AllowsPostings,
+			Icon:             request.Icon,
 			OpenedOn:         request.OpenedOn,
 			EffectiveFrom:    request.EffectiveFrom,
 			ChangeReason:     request.ChangeReason,
@@ -184,6 +188,7 @@ func updateCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 			ParentCategoryID: request.ParentCategoryID,
 			ClearParent:      request.ClearParent,
 			AllowsPostings:   request.AllowsPostings,
+			Icon:             request.Icon,
 			OpenedOn:         request.OpenedOn,
 			EffectiveFrom:    request.EffectiveFrom,
 			ChangeReason:     request.ChangeReason,
@@ -352,6 +357,7 @@ func toCategoryResponse(category app.Category) categoryResponse {
 		CategoryType:     category.CategoryType,
 		ParentCategoryID: category.ParentCategoryID,
 		AllowsPostings:   category.AllowsPostings,
+		Icon:             category.Icon,
 		IsBuiltin:        category.IsBuiltin,
 		IsStarter:        category.IsStarter,
 		BuiltinKey:       category.BuiltinKey,
