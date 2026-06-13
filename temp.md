@@ -251,4 +251,4 @@ The proposal is production-quality thinking. Address the `book_id` omissions, na
 
 
 Please review transactions and reconciliation approach, it's potentially too complex with 3 tables: journal, postings, transactions. 
-Furhtermore, if an account is reconciled it should lock postings in that account but transactions itself could be edited. For example if it is expense then posting to bank account is locked, but categories still possible to edit or even split the expense into several categories as long as posting to bank account unchanged and total value unchanged. Please review the approach - identify gaps, issues, mistakes, refactor opportunities
+Furhtermore, if an account is reconciled it should lock postings in that account but transactions itself could be edited. For example if it is expense then posting to bank account is locked, but categories still possible to edit or even split the expense into several categories as long as posting to bank account unchanged and total value unchanged. Please review the approach - identify gaps, issues, mistakes, refactor opportunities 
