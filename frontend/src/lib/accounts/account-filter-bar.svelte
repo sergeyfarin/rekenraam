@@ -1,19 +1,21 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
-  import type { ClassFilter, StatusFilter } from './account-list-options';
+  import { accountKindGroups, accountKindLabel } from './account-labels';
+  import type { AccountTypeFilter, StatusFilter } from './account-list-options';
 
   let {
     query = $bindable(''),
     statusFilter = $bindable<StatusFilter>('active'),
-    classFilter = $bindable<ClassFilter>('all')
+    accountTypeFilter = $bindable<AccountTypeFilter>('all')
   } = $props<{
     query: string;
     statusFilter: StatusFilter;
-    classFilter: ClassFilter;
+    accountTypeFilter: AccountTypeFilter;
   }>();
 
   const controlClass =
     'mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent';
+  const accountTypeGroups = $derived(accountKindGroups());
 </script>
 
 <div class="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_minmax(9rem,12rem)_minmax(9rem,12rem)]">
@@ -37,12 +39,16 @@
   </label>
 
   <label class="block">
-    <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.accounts_filter_class()}</span>
-    <select bind:value={classFilter} class={controlClass}>
-      <option value="all">{m.accounts_filter_class_all()}</option>
-      <option value="asset">{m.account_class_asset()}</option>
-      <option value="liability">{m.account_class_liability()}</option>
-      <option value="equity">{m.account_class_equity()}</option>
+    <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.accounts_filter_type()}</span>
+    <select bind:value={accountTypeFilter} class={controlClass}>
+      <option value="all">{m.accounts_filter_type_all()}</option>
+      {#each accountTypeGroups as group (group.label)}
+        <optgroup label={group.label}>
+          {#each group.kinds as kind (kind)}
+            <option value={kind}>{accountKindLabel(kind)}</option>
+          {/each}
+        </optgroup>
+      {/each}
     </select>
   </label>
 </div>

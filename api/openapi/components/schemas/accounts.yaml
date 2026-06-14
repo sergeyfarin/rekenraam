@@ -13,9 +13,11 @@ AccountKind:
     - checking
     - savings
     - term_deposit
+    - other_money_account
     - brokerage
     - brokerage_cash
     - security_holding
+    - fund_holding
     - crypto_wallet
     - property
     - vehicle

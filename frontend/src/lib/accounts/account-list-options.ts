@@ -1,4 +1,4 @@
-import type { ManagedAccountClass } from './account-labels';
+import type { AccountKind } from './account-labels';
 
 export type StatusFilter = 'active' | 'closed' | 'all';
-export type ClassFilter = ManagedAccountClass | 'all';
+export type AccountTypeFilter = AccountKind | 'all';

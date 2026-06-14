@@ -431,8 +431,9 @@ wrapper, or investment lot accounting concept.
 Initial supported kinds:
 
 - Asset kinds: `cash`, `checking`, `savings`, `term_deposit`,
-  `brokerage`, `brokerage_cash`, `security_holding`, `crypto_wallet`,
-  `property`, `vehicle`, `rewards_balance`, `receivable`, `other_asset`
+  `other_money_account`, `brokerage`, `brokerage_cash`, `security_holding`,
+  `fund_holding`, `crypto_wallet`, `property`, `vehicle`, `rewards_balance`,
+  `receivable`, `other_asset`
 - Liability kinds: `credit_card`, `line_of_credit`, `loan`, `mortgage`,
   `tax_liability`, `payable`, `other_liability`
 - Equity kind: `equity`
@@ -443,6 +444,12 @@ The database stores the built-in account kind catalog in `account_kinds`. The
 backend validates that a requested kind exists, belongs to the requested class,
 and is user assignable. The frontend uses stable kind codes for labels and UI
 profiles. See `docs/account-hierarchy.md` for the readable taxonomy.
+
+Account management UI exposes the kind as one grouped "Account type" field and
+derives `account_class` from it. The class remains visible in API/database
+contracts because it drives accounting reports, signs, and validation. Ordinary
+account management hides equity account creation; equity accounts are reserved
+for system workflows until a dedicated user-facing adjustment workflow exists.
 
 The `income` and `expense` kinds are generic kind profiles for income and
 expense accounts. They are not system-only. Hidden fallback behavior belongs to

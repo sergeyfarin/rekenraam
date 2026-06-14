@@ -100,6 +100,31 @@ func TestCreateAccountPersistsCommodityInstitutionAndMetadata(t *testing.T) {
 	assert.Equal(t, "Imported from legacy account list", reason)
 }
 
+func TestCreateAccountSupportsUserFacingGroupedKinds(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+
+	otherMoney := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Stored Value",
+		"account_class":"asset",
+		"account_kind":"other_money_account",
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+	assert.Equal(t, "asset", otherMoney.AccountClass)
+	assert.Equal(t, "other_money_account", otherMoney.AccountKind)
+
+	fundHolding := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Mutual Fund",
+		"account_class":"asset",
+		"account_kind":"fund_holding",
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+	assert.Equal(t, "asset", fundHolding.AccountClass)
+	assert.Equal(t, "fund_holding", fundHolding.AccountKind)
+}
+
 func TestUpdateAccountCreatesAppendOnlyVersionAndClearsOptionalFields(t *testing.T) {
 	t.Parallel()
 
@@ -260,6 +285,10 @@ func TestAccountValidationRejectsPostingAssetWithoutCommodityAndNonObjectMetadat
 		{
 			name: "category-like kind rejected",
 			body: `{"name":"Salary","account_class":"income","account_kind":"salary"}`,
+		},
+		{
+			name: "user-created equity rejected",
+			body: `{"name":"Manual Adjustment","account_class":"equity","account_kind":"equity"}`,
 		},
 	}
 

@@ -28,6 +28,12 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Account kinds are catalog-backed behavior/UI profiles constrained by class;
   they are not categories, tax wrappers, budget-visibility wrappers, system
   roles, or investment lot concepts.
+- Account management UI exposes a single user-facing "Account type" field
+  based on `account_kind`; the accounting class is derived and kept out of
+  ordinary account forms and filters.
+- User-created equity/adjustment accounts are hidden from account management.
+  Equity accounts are reserved for system workflows until a dedicated user
+  workflow is designed.
 - Child accounts inherit their parent account's institution. Institution
   assignment is editable only on root accounts; when an account has a parent,
   the backend derives the child institution from the parent.

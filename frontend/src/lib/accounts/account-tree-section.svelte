@@ -1,11 +1,9 @@
 <script lang="ts">
   import Archive from '@lucide/svelte/icons/archive';
-  import Banknote from '@lucide/svelte/icons/banknote';
   import Building2 from '@lucide/svelte/icons/building-2';
   import Edit3 from '@lucide/svelte/icons/edit-3';
   import Lock from '@lucide/svelte/icons/lock';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import type { AccountResponse } from '$lib/api/accounts';
   import type { CurrencyResponse } from '$lib/api/currencies';
   import type { InstitutionResponse } from '$lib/api/institutions';
@@ -13,15 +11,16 @@
   import TreeNameCell from '$lib/components/tree-name-cell.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
-    accountClassLabel,
     accountClassRank,
     accountCommodityLabel,
     accountDisplayName,
+    accountKindGroupLabel,
     accountKindLabel,
     accountStatusLabel,
     institutionCountryLabel,
     institutionKindLabel
   } from './account-labels';
+  import AccountKindIcon from './account-kind-icon.svelte';
 
   type InstitutionRoot = {
     kind: 'institution';
@@ -307,11 +306,7 @@
             >
               <div class="flex min-w-0 items-center gap-2">
                 <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
-                  {#if account.account_kind === 'cash'}
-                    <Banknote size={16} aria-hidden="true" />
-                  {:else}
-                    <WalletCards size={16} aria-hidden="true" />
-                  {/if}
+                  <AccountKindIcon kind={account.account_kind} />
                 </span>
                 <p class="min-w-0 truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
               </div>
@@ -324,7 +319,7 @@
             </TreeNameCell>
 
             <div class="min-w-0 text-sm">
-              <p class="truncate text-foreground">{accountClassLabel(account.account_class)}</p>
+              <p class="truncate text-foreground">{accountKindGroupLabel(account.account_kind)}</p>
               <p class="mt-1 truncate text-xs text-muted">{account.allows_postings ? m.accounts_allows_postings_yes() : m.accounts_allows_postings_no()}</p>
             </div>
 

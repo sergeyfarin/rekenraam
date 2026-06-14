@@ -30,16 +30,16 @@
   import AccountTreeSection from './account-tree-section.svelte';
   import InstitutionEditor from './institution-editor.svelte';
   import {
-    accountClassLabel,
     accountCountryLabel,
     accountDisplayName,
+    accountKindGroupLabel,
     accountInstitutionLabel,
     accountKindLabel,
     institutionCountryLabel,
     institutionKindLabel,
     isCategoryAccount
   } from './account-labels';
-  import type { ClassFilter, StatusFilter } from './account-list-options';
+  import type { AccountTypeFilter, StatusFilter } from './account-list-options';
 
   type EditorState =
     | { type: 'none' }
@@ -56,7 +56,7 @@
   const sessionQuery = createQuery(() => authSessionQueryOptions());
 
   let statusFilter = $state<StatusFilter>('all');
-  let classFilter = $state<ClassFilter>('all');
+  let accountTypeFilter = $state<AccountTypeFilter>('all');
   let query = $state('');
   let editor = $state<EditorState>({ type: 'none' });
   let actionError = $state<unknown>(undefined);
@@ -84,7 +84,7 @@
   });
 
   const userAccounts = $derived.by(() => {
-    return allUserAccounts.filter((account) => !isCategoryAccount(account));
+    return allUserAccounts.filter((account) => !isCategoryAccount(account) && account.account_class !== 'equity');
   });
 
   const manageableAccounts = $derived.by(() => {
@@ -144,7 +144,7 @@
         return institutionMatchesQuery(institution, normalizedQuery);
       }
 
-      return classFilter === 'all' && statusFilter !== 'closed';
+      return accountTypeFilter === 'all' && statusFilter !== 'closed';
     });
   });
 
@@ -196,7 +196,7 @@
       return false;
     }
 
-    if (classFilter !== 'all' && account.account_class !== classFilter) {
+    if (accountTypeFilter !== 'all' && account.account_kind !== accountTypeFilter) {
       return false;
     }
 
@@ -208,7 +208,7 @@
       accountDisplayName(account),
       account.code ?? '',
       accountKindLabel(account.account_kind),
-      accountClassLabel(account.account_class),
+      accountKindGroupLabel(account.account_kind),
       accountInstitutionLabel(account, institutionsByID),
       accountCountryLabel(account, countryNames),
       account.number_last4 ?? ''
@@ -239,7 +239,7 @@
         if (statusFilter !== 'all' && parent.status !== statusFilter) {
           break;
         }
-        if (classFilter !== 'all' && parent.account_class !== classFilter) {
+        if (accountTypeFilter !== 'all' && parent.account_kind !== accountTypeFilter) {
           break;
         }
 
@@ -364,7 +364,7 @@
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <AccountSummaryStats {activeCount} {closedCount} {visibleCount} />
       <div class="min-w-0 flex-1">
-        <AccountFilterBar bind:query bind:statusFilter bind:classFilter />
+        <AccountFilterBar bind:query bind:statusFilter bind:accountTypeFilter />
       </div>
       <div class="flex flex-wrap gap-2 xl:justify-end">
         <button

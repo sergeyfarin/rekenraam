@@ -15,8 +15,9 @@
   import { deriveRecordCode } from '$lib/record-code';
   import type { LocalizedCurrencyCatalogEntry } from '$lib/install-gate/currency-options';
   import {
-    accountClassLabel,
     accountDisplayName,
+    accountKindClass,
+    accountKindGroups,
     accountKindLabel,
     type ManagedAccountClass,
     type AccountKind
@@ -60,8 +61,8 @@
   let accountID = $state<number | undefined>(undefined);
   let name = $state('');
   let code = $state('');
-  let accountClass = $state<ManagedAccountClass>('asset');
   let accountKind = $state<AccountKind>('checking');
+  const accountClass = $derived(accountKindClass(accountKind));
   let parentAccountID = $state('');
   let institutionID = $state('');
   let countryCode = $state('');
@@ -106,7 +107,8 @@
         institution.id === selectedParent?.institution_id
     );
   });
-  const kindOptions = $derived(accountKindOptions(accountClass));
+  const accountTypeGroups = $derived(accountKindGroups());
+  const selectableAccountKinds = $derived(accountTypeGroups.flatMap((group) => group.kinds));
   const currencyRequired = $derived(accountKindRequiresDefaultCurrency(accountClass, accountKind));
   const currencyOptions = $derived.by<CurrencyResponse[]>(() => {
     const currencyByID = new Map<number, CurrencyResponse>();
@@ -183,9 +185,8 @@
     name = account?.name ?? '';
     code = account?.code ?? deriveRecordCode(account?.name ?? '');
     codeEdited = mode === 'edit' && !!account?.code;
-    const nextAccountClass = managedClass(account?.account_class);
-    const nextAccountKind = managedKindForClass(nextAccountClass, account?.account_kind);
-    accountClass = nextAccountClass;
+    const nextAccountKind = managedAccountKind(account?.account_kind);
+    const nextAccountClass = accountKindClass(nextAccountKind);
     accountKind = nextAccountKind;
     parentAccountID = account?.parent_account_id ? String(account.parent_account_id) : '';
     institutionID = account?.institution_id ? String(account.institution_id) : '';
@@ -204,9 +205,8 @@
   });
 
   $effect(() => {
-    const validKinds = accountKindOptions(accountClass).map((option) => option.value);
-    if (!validKinds.includes(accountKind)) {
-      accountKind = defaultKindForClass(accountClass);
+    if (!selectableAccountKinds.includes(accountKind)) {
+      accountKind = defaultAccountKind();
     }
   });
 
@@ -360,28 +360,16 @@
     return values[0]?.id ? String(values[0].id) : '';
   }
 
-  function managedClass(value?: AccountResponse['account_class']): ManagedAccountClass {
-    if (value === 'asset' || value === 'liability' || value === 'equity') {
+  function defaultAccountKind(): AccountKind {
+    return 'checking';
+  }
+
+  function managedAccountKind(value?: AccountKind): AccountKind {
+    if (value && accountKindGroups().some((group) => group.kinds.includes(value))) {
       return value;
     }
 
-    return 'asset';
-  }
-
-  function defaultKindForClass(value: ManagedAccountClass): AccountKind {
-    switch (value) {
-      case 'asset':
-        return 'checking';
-      case 'liability':
-        return 'credit_card';
-      case 'equity':
-        return 'equity';
-    }
-  }
-
-  function managedKindForClass(accountClassValue: ManagedAccountClass, value?: AccountKind): AccountKind {
-    const option = accountKindOptions(accountClassValue).find((candidate) => candidate.value === value);
-    return option?.value ?? defaultKindForClass(accountClassValue);
+    return defaultAccountKind();
   }
 
   function accountKindRequiresDefaultCurrency(accountClassValue: ManagedAccountClass, accountKindValue: AccountKind): boolean {
@@ -392,37 +380,6 @@
     return accountKindValue !== 'receivable' && accountKindValue !== 'payable';
   }
 
-  function accountKindOptions(value: ManagedAccountClass): { value: AccountKind; label: string }[] {
-    const options: Record<ManagedAccountClass, AccountKind[]> = {
-      asset: [
-        'cash',
-        'checking',
-        'savings',
-        'term_deposit',
-        'brokerage',
-        'brokerage_cash',
-        'security_holding',
-        'crypto_wallet',
-        'property',
-        'vehicle',
-        'rewards_balance',
-        'receivable',
-        'other_asset'
-      ],
-      liability: [
-        'credit_card',
-        'line_of_credit',
-        'loan',
-        'mortgage',
-        'tax_liability',
-        'payable',
-        'other_liability'
-      ],
-      equity: ['equity']
-    };
-
-    return options[value].map((kind) => ({ value: kind, label: accountKindLabel(kind) }));
-  }
 </script>
 
 <form class="space-y-4" onsubmit={handleSubmit}>
@@ -453,19 +410,14 @@
     </label>
 
     <label>
-      <span class={labelClass}>{m.accounts_field_class()}</span>
-      <select bind:value={accountClass} class={inputClass}>
-        <option value="asset">{accountClassLabel('asset')}</option>
-        <option value="liability">{accountClassLabel('liability')}</option>
-        <option value="equity">{accountClassLabel('equity')}</option>
-      </select>
-    </label>
-
-    <label>
       <span class={labelClass}>{m.accounts_field_kind()}</span>
       <select bind:value={accountKind} class={inputClass}>
-        {#each kindOptions as option (option.value)}
-          <option value={option.value}>{option.label}</option>
+        {#each accountTypeGroups as group (group.label)}
+          <optgroup label={group.label}>
+            {#each group.kinds as kind (kind)}
+              <option value={kind}>{accountKindLabel(kind)}</option>
+            {/each}
+          </optgroup>
         {/each}
       </select>
     </label>

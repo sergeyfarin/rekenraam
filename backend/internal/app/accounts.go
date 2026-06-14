@@ -631,6 +631,9 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 	if !accountClasses[accountClass] {
 		return db.AccountSpec{}, ValidationError{Message: "account class is invalid"}
 	}
+	if accountClass == "equity" {
+		return db.AccountSpec{}, ValidationError{Message: "equity accounts are managed by system workflows"}
+	}
 
 	accountKind := strings.TrimSpace(input.AccountKind)
 	if accountKind == "" {

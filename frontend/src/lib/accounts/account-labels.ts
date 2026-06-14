@@ -9,20 +9,10 @@ export type AccountKind = AccountResponse['account_kind'];
 export type AccountStatus = AccountResponse['status'];
 export type InstitutionKind = InstitutionResponse['kind'];
 
-export function accountClassLabel(accountClass: AccountClass): string {
-  switch (accountClass) {
-    case 'asset':
-      return m.account_class_asset();
-    case 'liability':
-      return m.account_class_liability();
-    case 'equity':
-      return m.account_class_equity();
-    case 'income':
-      return m.account_class_income();
-    case 'expense':
-      return m.account_class_expense();
-  }
-}
+export type AccountKindGroup = {
+  label: string;
+  kinds: AccountKind[];
+};
 
 export function accountClassRank(accountClass: AccountClass): number {
   switch (accountClass) {
@@ -49,12 +39,16 @@ export function accountKindLabel(accountKind: AccountKind): string {
       return m.account_kind_savings();
     case 'term_deposit':
       return m.account_kind_term_deposit();
+    case 'other_money_account':
+      return m.account_kind_other_money_account();
     case 'brokerage':
       return m.account_kind_brokerage();
     case 'brokerage_cash':
       return m.account_kind_brokerage_cash();
     case 'security_holding':
       return m.account_kind_security_holding();
+    case 'fund_holding':
+      return m.account_kind_fund_holding();
     case 'crypto_wallet':
       return m.account_kind_crypto_wallet();
     case 'property':
@@ -88,6 +82,52 @@ export function accountKindLabel(accountKind: AccountKind): string {
     case 'expense':
       return m.account_kind_expense();
   }
+}
+
+export function accountKindClass(accountKind: AccountKind): ManagedAccountClass {
+  switch (accountKind) {
+    case 'credit_card':
+    case 'line_of_credit':
+    case 'loan':
+    case 'mortgage':
+    case 'tax_liability':
+    case 'payable':
+    case 'other_liability':
+      return 'liability';
+    case 'equity':
+      return 'equity';
+    default:
+      return 'asset';
+  }
+}
+
+export function accountKindGroups(): AccountKindGroup[] {
+  return [
+    {
+      label: m.account_kind_group_everyday_money(),
+      kinds: ['cash', 'checking', 'savings', 'term_deposit', 'other_money_account']
+    },
+    {
+      label: m.account_kind_group_investing(),
+      kinds: ['brokerage', 'brokerage_cash', 'security_holding', 'fund_holding', 'crypto_wallet']
+    },
+    {
+      label: m.account_kind_group_other_assets(),
+      kinds: ['property', 'vehicle', 'other_asset']
+    },
+    {
+      label: m.account_kind_group_credit_loans_money_owed(),
+      kinds: ['credit_card', 'line_of_credit', 'loan', 'mortgage', 'tax_liability', 'receivable', 'payable', 'other_liability']
+    },
+    {
+      label: m.account_kind_group_non_monetary(),
+      kinds: ['rewards_balance']
+    }
+  ];
+}
+
+export function accountKindGroupLabel(accountKind: AccountKind): string {
+  return accountKindGroups().find((group) => group.kinds.includes(accountKind))?.label ?? m.account_kind_group_other_assets();
 }
 
 export function accountStatusLabel(status: AccountStatus): string {
