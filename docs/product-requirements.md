@@ -166,7 +166,9 @@ Goal: create the durable accounting skeleton.
 
 - Single owner book. The `books` table remains a future extension point, but current runtime creates and uses only book `1` with no book selector.
 - Commodity/currency table with exact decimal scale metadata.
-- First-run setup extension for default book, default currency preference, optional additional currencies, and required system accounts.
+- First-run setup extension for default book, default currency preference,
+  optional additional currencies, required system accounts, and a starter cash
+  account for each selected currency.
 - The default currency is a UI/account-default preference, not a book base currency or reporting currency. Reports choose their reporting currency and FX method later without changing the book.
 - Commodity and currency setup comes before accounts. Account precision must derive from commodity metadata or an explicit account-level quantity scale override, not from floating-point or free-text currency fields.
 - Institution logo and backdrop support is limited to optional URL/reference metadata in Phase 1. File upload, attachment storage, statement PDFs, and receipts remain out of scope.

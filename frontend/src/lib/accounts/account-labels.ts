@@ -6,6 +6,7 @@ import { m } from '$lib/paraglide/messages.js';
 export type AccountClass = AccountResponse['account_class'];
 export type AccountKind = AccountResponse['account_kind'];
 export type AccountStatus = AccountResponse['status'];
+export type InstitutionKind = InstitutionResponse['kind'];
 
 export function accountClassLabel(accountClass: AccountClass): string {
   switch (accountClass) {
@@ -100,7 +101,26 @@ export function accountStatusLabel(status: AccountStatus): string {
 }
 
 export function accountDisplayName(account: AccountResponse): string {
+  const starterName = starterAccountDisplayName(account);
+  if (starterName) {
+    return starterName;
+  }
+
   return account.name?.trim() || account.code?.trim() || m.accounts_unnamed_account({ id: account.id });
+}
+
+function starterAccountDisplayName(account: AccountResponse): string {
+  if (account.name?.trim()) {
+    return '';
+  }
+
+  const starterKey = account.metadata['starter_key'];
+  const currencyCode = account.metadata['currency_code'];
+  if (starterKey === 'cash' && typeof currencyCode === 'string' && currencyCode.trim() !== '') {
+    return m.accounts_starter_cash_name({ currency: currencyCode.trim() });
+  }
+
+  return '';
 }
 
 export function accountInstitutionLabel(
@@ -136,4 +156,37 @@ export function accountCommodityLabel(
   }
 
   return `${currency.code} ${currency.display_symbol}`;
+}
+
+export function institutionKindLabel(value: InstitutionKind): string {
+  switch (value) {
+    case 'bank':
+      return m.institution_kind_bank();
+    case 'credit_union':
+      return m.institution_kind_credit_union();
+    case 'brokerage':
+      return m.institution_kind_brokerage();
+    case 'card_issuer':
+      return m.institution_kind_card_issuer();
+    case 'lender':
+      return m.institution_kind_lender();
+    case 'insurance':
+      return m.institution_kind_insurance();
+    case 'employer':
+      return m.institution_kind_employer();
+    case 'rewards_program':
+      return m.institution_kind_rewards_program();
+    case 'government':
+      return m.institution_kind_government();
+    case 'other':
+      return m.institution_kind_other();
+  }
+}
+
+export function institutionCountryLabel(institution: InstitutionResponse, countryNames: Intl.DisplayNames): string {
+  if (!institution.country_code) {
+    return m.accounts_group_no_country();
+  }
+
+  return countryNames.of(institution.country_code) ?? institution.country_code;
 }

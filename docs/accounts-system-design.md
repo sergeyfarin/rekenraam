@@ -21,6 +21,8 @@ mature finance applications into the current Go/SvelteKit/SQLite shape.
   append-only versions instead of mutable fields.
 - Make closing and archiving explicit lifecycle states, never hard deletes.
 - Seed required system accounts for double-entry workflows.
+- Seed a starter cash account for each setup-selected currency without creating
+  balances.
 - Support multi-currency from the first account slice.
 - Keep the first implementation small enough to ship, while leaving room for
   reconciliation, import cleanup, investments, and export.
@@ -255,7 +257,8 @@ different built-in presentation profile.
 - `closed_on`: first date after which ordinary new postings should not target
   this account; null for active accounts
 - `code`
-- `name`: required for user accounts, nullable for system accounts
+- `name`: required for user-entered accounts, nullable for system and
+  app-defined starter accounts whose labels resolve from stable metadata
 - `account_class`
 - `account_kind`
 - `parent_account_id`

@@ -445,16 +445,23 @@ func (s *AccountService) EnsureSystemAccounts(ctx context.Context, input EnsureS
 	}
 
 	now := s.now().UTC()
+	starterCashSpecs, err := s.repository.ListActiveCurrencyStarterSpecs(ctx, BookID)
+	if err != nil {
+		return EnsureSystemAccountsResult{}, fmt.Errorf("read starter cash account currencies: %w", err)
+	}
+
 	result, err := s.repository.EnsureSystemAccounts(ctx, db.EnsureSystemAccountsParams{
-		BookID:          BookID,
-		ChangedByUserID: input.OwnerUserID,
-		AuthSessionID:   input.AuthSessionID,
-		RequestID:       input.RequestID,
-		OriginType:      input.OriginType,
-		Operation:       input.Operation,
-		Specs:           systemAccountSpecs,
-		CreatedAt:       now.Format(time.RFC3339),
-		EffectiveFrom:   systemAccountDate,
+		BookID:               BookID,
+		ChangedByUserID:      input.OwnerUserID,
+		AuthSessionID:        input.AuthSessionID,
+		RequestID:            input.RequestID,
+		OriginType:           input.OriginType,
+		Operation:            input.Operation,
+		Specs:                systemAccountSpecs,
+		StarterCashSpecs:     starterCashSpecs,
+		CreatedAt:            now.Format(time.RFC3339),
+		EffectiveFrom:        systemAccountDate,
+		StarterEffectiveFrom: now.Format(time.DateOnly),
 	})
 	if err != nil {
 		switch {

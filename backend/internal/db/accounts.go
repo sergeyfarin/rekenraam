@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -117,16 +118,23 @@ type SystemAccountSpec struct {
 	AccountKind  string
 }
 
+type StarterCashAccountSpec struct {
+	CommodityID  int64
+	CurrencyCode string
+}
+
 type EnsureSystemAccountsParams struct {
-	BookID          int64
-	ChangedByUserID int64
-	AuthSessionID   int64
-	RequestID       string
-	OriginType      string
-	Operation       string
-	Specs           []SystemAccountSpec
-	CreatedAt       string
-	EffectiveFrom   string
+	BookID               int64
+	ChangedByUserID      int64
+	AuthSessionID        int64
+	RequestID            string
+	OriginType           string
+	Operation            string
+	Specs                []SystemAccountSpec
+	StarterCashSpecs     []StarterCashAccountSpec
+	CreatedAt            string
+	EffectiveFrom        string
+	StarterEffectiveFrom string
 }
 
 type EnsureSystemAccountsRecord struct {
@@ -494,15 +502,22 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 		RequestID:     params.RequestID,
 		OriginType:    params.OriginType,
 		Operation:     params.Operation,
-		Reason:        "seeded system accounts",
+		Reason:        "seeded system and starter accounts",
 	})
 	if err != nil {
 		return EnsureSystemAccountsRecord{}, err
 	}
 
-	records := make([]AccountRecord, 0, len(params.Specs))
+	records := make([]AccountRecord, 0, len(params.Specs)+len(params.StarterCashSpecs))
 	for _, spec := range params.Specs {
 		record, err := r.ensureSystemAccount(ctx, tx, params, spec, auditEventID)
+		if err != nil {
+			return EnsureSystemAccountsRecord{}, err
+		}
+		records = append(records, record)
+	}
+	for _, spec := range params.StarterCashSpecs {
+		record, err := r.ensureStarterCashAccount(ctx, tx, params, spec, auditEventID)
 		if err != nil {
 			return EnsureSystemAccountsRecord{}, err
 		}
@@ -630,6 +645,36 @@ func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) 
 	return record, nil
 }
 
+func (r *AccountRepository) ListActiveCurrencyStarterSpecs(ctx context.Context, bookID int64) ([]StarterCashAccountSpec, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT c.id, c.code
+		FROM commodities c
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE c.book_id = ?
+			AND c.kind = 'currency'
+			AND cv.status = 'active'
+		ORDER BY c.code
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list active currency starter specs: %w", err)
+	}
+	defer rows.Close()
+
+	var specs []StarterCashAccountSpec
+	for rows.Next() {
+		var spec StarterCashAccountSpec
+		if err := rows.Scan(&spec.CommodityID, &spec.CurrencyCode); err != nil {
+			return nil, fmt.Errorf("scan active currency starter spec: %w", err)
+		}
+		specs = append(specs, spec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active currency starter specs: %w", err)
+	}
+
+	return specs, nil
+}
+
 func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx, params EnsureSystemAccountsParams, systemSpec SystemAccountSpec, auditEventID int64) (AccountRecord, error) {
 	record, err := currentSystemAccountByRole(ctx, tx, params.BookID, systemSpec.Role)
 	if err == nil {
@@ -675,6 +720,80 @@ func (r *AccountRepository) ensureSystemAccount(ctx context.Context, tx *sql.Tx,
 			OpenedOn:       params.EffectiveFrom,
 		},
 	})
+}
+
+func (r *AccountRepository) ensureStarterCashAccount(ctx context.Context, tx *sql.Tx, params EnsureSystemAccountsParams, starterSpec StarterCashAccountSpec, auditEventID int64) (AccountRecord, error) {
+	record, err := currentStarterCashAccountByCommodityID(ctx, tx, params.BookID, starterSpec.CommodityID)
+	if err == nil {
+		return record, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return AccountRecord{}, err
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO accounts (book_id, system_role, created_at, created_by_user_id, created_request_id, created_audit_event_id)
+		VALUES (?, NULL, ?, ?, NULLIF(?, ''), ?)
+	`, params.BookID, params.CreatedAt, params.ChangedByUserID, params.RequestID, auditEventID)
+	if err != nil {
+		return AccountRecord{}, fmt.Errorf("insert starter cash account: %w", err)
+	}
+
+	accountID, err := result.LastInsertId()
+	if err != nil {
+		return AccountRecord{}, fmt.Errorf("read starter cash account id: %w", err)
+	}
+
+	effectiveFrom := params.StarterEffectiveFrom
+	if effectiveFrom == "" {
+		effectiveFrom = params.CreatedAt[:10]
+	}
+	metadataJSON, err := starterCashMetadataJSON(starterSpec.CurrencyCode)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+
+	return insertAccountVersion(ctx, tx, insertAccountVersionParams{
+		BookID:             params.BookID,
+		AccountID:          accountID,
+		CreatedAt:          params.CreatedAt,
+		CreatedByUserID:    params.ChangedByUserID,
+		VersionSeq:         1,
+		EffectiveFrom:      effectiveFrom,
+		RecordedAt:         params.CreatedAt,
+		ChangedByUserID:    params.ChangedByUserID,
+		ChangeReason:       "seeded starter cash account",
+		ChangeAuditEventID: auditEventID,
+		Status:             "active",
+		Spec: AccountSpec{
+			Code:               "cash:" + starterSpec.CurrencyCode,
+			AccountClass:       "asset",
+			AccountKind:        "cash",
+			DefaultCommodityID: sql.NullInt64{Int64: starterSpec.CommodityID, Valid: true},
+			AllowsPostings:     true,
+			MetadataJSON:       metadataJSON,
+			OpenedOn:           effectiveFrom,
+		},
+	})
+}
+
+func starterCashMetadataJSON(currencyCode string) (string, error) {
+	payload := struct {
+		Source       string `json:"source"`
+		StarterKey   string `json:"starter_key"`
+		CurrencyCode string `json:"currency_code"`
+	}{
+		Source:       "starter_account_seed",
+		StarterKey:   "cash",
+		CurrencyCode: currencyCode,
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("encode starter cash account metadata: %w", err)
+	}
+
+	return string(encoded), nil
 }
 
 type insertAccountVersionParams struct {
@@ -766,6 +885,21 @@ func currentSystemAccountByRole(ctx context.Context, tx *sql.Tx, bookID int64, r
 	if err := scanAccountRecord(tx.QueryRowContext(ctx, currentAccountSelect(`
 		AND a.book_id = ? AND a.system_role = ?
 	`), bookID, role), &record); err != nil {
+		return AccountRecord{}, err
+	}
+
+	return record, nil
+}
+
+func currentStarterCashAccountByCommodityID(ctx context.Context, tx *sql.Tx, bookID int64, commodityID int64) (AccountRecord, error) {
+	var record AccountRecord
+	if err := scanAccountRecord(tx.QueryRowContext(ctx, currentAccountSelect(`
+		AND a.book_id = ?
+		AND a.system_role IS NULL
+		AND av.default_commodity_id = ?
+		AND json_extract(av.metadata_json, '$.source') = 'starter_account_seed'
+		AND json_extract(av.metadata_json, '$.starter_key') = 'cash'
+	`), bookID, commodityID), &record); err != nil {
 		return AccountRecord{}, err
 	}
 

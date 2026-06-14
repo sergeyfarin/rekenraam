@@ -416,7 +416,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
-	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/system-accounts", nil)
 	req.Header.Set(csrfTokenHeader, csrfToken)
@@ -430,7 +430,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 
 	var body completeSystemAccountsSetupResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	require.Len(t, body.Accounts, 7)
+	require.Len(t, body.Accounts, 8)
 	assert.Equal(t, setupStepResponse{Key: "system_accounts", Status: "completed"}, body.Setup.Steps[3])
 
 	expectedRoles := map[string]struct {
@@ -445,10 +445,16 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		"transfer_clearing":  {accountClass: "asset", accountKind: "receivable"},
 		"commodity_trading":  {accountClass: "equity", accountKind: "equity"},
 	}
-	seenRoles := make(map[string]bool, len(body.Accounts))
+	seenRoles := make(map[string]bool, len(expectedRoles))
+	var starterCashAccounts []accountResponse
 	for _, account := range body.Accounts {
-		assert.True(t, account.IsSystem)
 		assert.Equal(t, "active", account.Status)
+
+		if !account.IsSystem {
+			starterCashAccounts = append(starterCashAccounts, account)
+			continue
+		}
+
 		assert.Nil(t, account.DefaultCommodityID)
 		assert.Equal(t, "0001-01-01", account.OpenedOn)
 		assert.Equal(t, "0001-01-01", account.EffectiveFrom)
@@ -468,18 +474,32 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		"transfer_clearing":  true,
 		"commodity_trading":  true,
 	}, seenRoles)
+	require.Len(t, starterCashAccounts, 1)
+	assert.False(t, starterCashAccounts[0].IsSystem)
+	assert.Empty(t, starterCashAccounts[0].SystemRole)
+	assert.Equal(t, "cash:USD", starterCashAccounts[0].Code)
+	assert.Empty(t, starterCashAccounts[0].Name)
+	assert.Equal(t, "asset", starterCashAccounts[0].AccountClass)
+	assert.Equal(t, "cash", starterCashAccounts[0].AccountKind)
+	require.NotNil(t, starterCashAccounts[0].DefaultCommodityID)
+	assert.Equal(t, currencyID, *starterCashAccounts[0].DefaultCommodityID)
 
 	patchAccount(t, handler, sessionCookie, csrfToken, body.Accounts[0].ID, `{}`, http.StatusConflict)
 
 	defaultList := listAccountsForSession(t, handler, sessionCookie, "")
-	assert.Empty(t, defaultList.Accounts)
+	require.Len(t, defaultList.Accounts, 1)
+	assert.Equal(t, "cash:USD", defaultList.Accounts[0].Code)
 
 	systemList := listAccountsForSession(t, handler, sessionCookie, "?include_system=true")
-	require.Len(t, systemList.Accounts, 7)
+	require.Len(t, systemList.Accounts, 8)
+	var systemCount int
 	for _, account := range systemList.Accounts {
-		assert.True(t, account.IsSystem)
-		assert.NotEmpty(t, account.SystemRole)
+		if account.IsSystem {
+			assert.NotEmpty(t, account.SystemRole)
+			systemCount++
+		}
 	}
+	assert.Equal(t, 7, systemCount)
 
 	var completedAt sql.NullString
 	var auditEventID sql.NullInt64
@@ -504,6 +524,43 @@ func TestSystemAccountSetupCannotRunTwice(t *testing.T) {
 
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusConflict)
+}
+
+func TestSystemAccountSetupCreatesStarterCashForEachCurrency(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	currencySetup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{
+		{Code: "USD"},
+		{Code: "EUR"},
+	})
+
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
+
+	currencyIDsByCode := make(map[string]int64)
+	for _, currency := range currencySetup.Currencies {
+		currencyIDsByCode[currency.Code] = currency.ID
+	}
+
+	accounts := listAccountsForSession(t, handler, sessionCookie, "").Accounts
+	require.Len(t, accounts, 2)
+
+	starterCashByCode := make(map[string]accountResponse)
+	for _, account := range accounts {
+		assert.False(t, account.IsSystem)
+		assert.Equal(t, "asset", account.AccountClass)
+		assert.Equal(t, "cash", account.AccountKind)
+		starterCashByCode[account.Code] = account
+	}
+
+	for _, currencyCode := range []string{"EUR", "USD"} {
+		account, ok := starterCashByCode["cash:"+currencyCode]
+		require.True(t, ok, "missing starter cash account for %s", currencyCode)
+		require.NotNil(t, account.DefaultCommodityID)
+		assert.Equal(t, currencyIDsByCode[currencyCode], *account.DefaultCommodityID)
+	}
 }
 
 func TestSystemAccountSetupRerunWithoutCompletedStepKeepsAuditEventReferenced(t *testing.T) {

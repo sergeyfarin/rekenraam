@@ -8,8 +8,9 @@ until Phase 1 is closed.
 
 Phase 1 creates the durable accounting skeleton: one runtime book, exact
 commodity/currency metadata, institutions, accounts, required system accounts,
-tags, and account/institution UI. Account creation never creates balances.
-Opening balances require posted transactions.
+starter cash accounts for selected setup currencies, tags, and
+account/institution UI. Account creation never creates balances. Opening
+balances require posted transactions.
 
 The backend is ahead of the original Phase 1 boundary: transaction,
 reconciliation, payee, category, and ledger-summary foundations already exist in
@@ -97,8 +98,8 @@ After contract closeout, finish the user-facing Phase 1 skeleton.
 Phase 1 is complete when:
 
 - Fresh setup can create owner, book, default currency preference, optional
-  additional currencies, system accounts, and categories as configured by the
-  setup gate.
+  additional currencies, system accounts, starter cash accounts for those
+  currencies, and categories as configured by the setup gate.
 - Institutions can be managed through the UI.
 - Accounts can be managed through the UI as an append-only versioned tree.
 - Account creation creates no balances and exposes no opening-balance shortcut.

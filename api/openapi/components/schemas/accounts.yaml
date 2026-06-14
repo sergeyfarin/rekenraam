@@ -240,6 +240,7 @@ CompleteSystemAccountsSetupResponse:
   properties:
     accounts:
       type: array
+      description: Required system accounts plus setup-created starter cash accounts for active setup currencies.
       items:
         $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
     setup:

@@ -1,5 +1,5 @@
 post:
-  summary: Seed required system accounts
+  summary: Seed required system accounts and starter cash accounts
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -9,7 +9,7 @@ post:
       description: Session-bound CSRF token for authenticated mutating requests.
   responses:
     "201":
-      description: System accounts created and setup step completed
+      description: System accounts and starter cash accounts created, then setup step completed
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

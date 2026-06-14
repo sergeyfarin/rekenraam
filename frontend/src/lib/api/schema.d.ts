@@ -2782,7 +2782,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Seed required system accounts */
+        /** Seed required system accounts and starter cash accounts */
         post: {
             parameters: {
                 query?: never;
@@ -2795,7 +2795,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description System accounts created and setup step completed */
+                /** @description System accounts and starter cash accounts created, then setup step completed */
                 201: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -5752,6 +5752,7 @@ export interface components {
             change_reason?: string;
         };
         CompleteSystemAccountsSetupResponse: {
+            /** @description Required system accounts plus setup-created starter cash accounts for active setup currencies. */
             accounts: components["schemas"]["AccountResponse"][];
             setup: components["schemas"]["SetupStatusResponse"];
         };

@@ -9,9 +9,9 @@
     type InstitutionResponse
   } from '$lib/api/institutions';
   import { m } from '$lib/paraglide/messages.js';
+  import { institutionKindLabel, type InstitutionKind } from './account-labels';
 
   type InstitutionEditorMode = 'create' | 'edit';
-  type InstitutionKind = InstitutionResponse['kind'];
 
   let {
     mode,
@@ -114,31 +114,6 @@
     const trimmed = value.trim();
     if (trimmed !== '') {
       target[key] = trimmed as T[keyof T];
-    }
-  }
-
-  function institutionKindLabel(value: InstitutionKind): string {
-    switch (value) {
-      case 'bank':
-        return m.institution_kind_bank();
-      case 'credit_union':
-        return m.institution_kind_credit_union();
-      case 'brokerage':
-        return m.institution_kind_brokerage();
-      case 'card_issuer':
-        return m.institution_kind_card_issuer();
-      case 'lender':
-        return m.institution_kind_lender();
-      case 'insurance':
-        return m.institution_kind_insurance();
-      case 'employer':
-        return m.institution_kind_employer();
-      case 'rewards_program':
-        return m.institution_kind_rewards_program();
-      case 'government':
-        return m.institution_kind_government();
-      case 'other':
-        return m.institution_kind_other();
     }
   }
 
