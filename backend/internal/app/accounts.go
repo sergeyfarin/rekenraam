@@ -633,6 +633,8 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 	}
 
 	parentAccountID := nullableInt64(input.ParentAccountID)
+	parentInstitutionID := sql.NullInt64{}
+	parentCountryCode := ""
 	if parentAccountID.Valid {
 		if input.AccountID > 0 && parentAccountID.Int64 == input.AccountID {
 			return db.AccountSpec{}, ErrAccountParentInvalid
@@ -654,11 +656,18 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		if cycle {
 			return db.AccountSpec{}, ErrAccountParentInvalid
 		}
+		parentInstitutionID = nullableInt64(parent.InstitutionID)
+		parentCountryCode = parent.CountryCode
 	}
 
 	institutionID := nullableInt64(input.InstitutionID)
 	countryCode := strings.ToUpper(strings.TrimSpace(input.CountryCode))
-	if institutionID.Valid {
+	if parentAccountID.Valid {
+		institutionID = parentInstitutionID
+		if countryCode == "" {
+			countryCode = parentCountryCode
+		}
+	} else if institutionID.Valid {
 		institution, err := s.institutionRepository.CurrentInstitutionByID(ctx, BookID, institutionID.Int64)
 		if err != nil {
 			return db.AccountSpec{}, ErrAccountReferenceInvalid

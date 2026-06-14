@@ -5656,9 +5656,15 @@ export interface components {
             name?: string;
             account_class: components["schemas"]["AccountClass"];
             account_kind: components["schemas"]["AccountKind"];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Optional parent account. When set, institution_id is derived from the parent account.
+             */
             parent_account_id?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Institution for root accounts. Ignored when parent_account_id is set; child accounts inherit the parent account's institution.
+             */
             institution_id?: number;
             country_code?: string;
             /**
@@ -5705,9 +5711,15 @@ export interface components {
             name: string;
             account_class: components["schemas"]["AccountClass"];
             account_kind?: components["schemas"]["AccountKind"];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Optional parent account. When set, institution_id is derived from the parent account.
+             */
             parent_account_id?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Institution for root accounts. Ignored when parent_account_id is set; child accounts inherit the parent account's institution.
+             */
             institution_id?: number;
             country_code?: string;
             /**

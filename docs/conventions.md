@@ -28,6 +28,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Account kinds are catalog-backed behavior/UI profiles constrained by class;
   they are not categories, tax wrappers, budget-visibility wrappers, system
   roles, or investment lot concepts.
+- Child accounts inherit their parent account's institution. Institution
+  assignment is editable only on root accounts; when an account has a parent,
+  the backend derives the child institution from the parent.
 - Account budget treatment is a separate planning/reporting axis from
   `account_kind`, because the same kind of account can be on-budget,
   off-budget, or excluded from budget views.

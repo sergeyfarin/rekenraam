@@ -360,6 +360,64 @@ func TestAccountParentRulesRejectCyclesAndClassMismatch(t *testing.T) {
 	}`, http.StatusBadRequest)
 }
 
+func TestAccountParentDerivesInstitutionOnCreateAndUpdate(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	parentInstitution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Parent Bank",
+		"kind":"bank",
+		"country_code":"NL"
+	}`)
+	otherInstitution := createInstitutionForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Other Bank",
+		"kind":"bank",
+		"country_code":"BE"
+	}`)
+	parent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Brokerage",
+		"account_class":"asset",
+		"account_kind":"brokerage",
+		"institution_id":`+strconvFormatInt(parentInstitution.ID)+`,
+		"allows_postings":false
+	}`)
+
+	child := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Brokerage Cash",
+		"account_class":"asset",
+		"account_kind":"brokerage_cash",
+		"parent_account_id":`+strconvFormatInt(parent.ID)+`,
+		"institution_id":`+strconvFormatInt(otherInstitution.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+	require.NotNil(t, child.InstitutionID)
+	assert.Equal(t, parentInstitution.ID, *child.InstitutionID)
+	assert.Equal(t, "NL", child.CountryCode)
+
+	standalone := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Standalone Cash",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"institution_id":`+strconvFormatInt(otherInstitution.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`)
+	require.NotNil(t, standalone.InstitutionID)
+	assert.Equal(t, otherInstitution.ID, *standalone.InstitutionID)
+
+	updated := patchAccount(t, handler, sessionCookie, csrfToken, standalone.ID, `{
+		"name":"Standalone Cash",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"parent_account_id":`+strconvFormatInt(parent.ID)+`,
+		"institution_id":`+strconvFormatInt(otherInstitution.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(currencyID)+`
+	}`, http.StatusOK)
+	require.NotNil(t, updated.InstitutionID)
+	assert.Equal(t, parentInstitution.ID, *updated.InstitutionID)
+	assert.Equal(t, "NL", updated.CountryCode)
+}
+
 func TestAccountParentRulesRejectArchivedParent(t *testing.T) {
 	t.Parallel()
 

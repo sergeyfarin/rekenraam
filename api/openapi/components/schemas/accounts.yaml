@@ -93,9 +93,11 @@ AccountResponse:
     parent_account_id:
       type: integer
       format: int64
+      description: Optional parent account. When set, institution_id is derived from the parent account.
     institution_id:
       type: integer
       format: int64
+      description: Institution for root accounts. Ignored when parent_account_id is set; child accounts inherit the parent account's institution.
     country_code:
       type: string
       minLength: 2
@@ -173,9 +175,11 @@ AccountRequest:
     parent_account_id:
       type: integer
       format: int64
+      description: Optional parent account. When set, institution_id is derived from the parent account.
     institution_id:
       type: integer
       format: int64
+      description: Institution for root accounts. Ignored when parent_account_id is set; child accounts inherit the parent account's institution.
     country_code:
       type: string
       minLength: 2

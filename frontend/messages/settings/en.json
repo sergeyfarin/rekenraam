@@ -221,6 +221,8 @@
   "accounts_field_kind": "Kind",
   "accounts_field_institution": "Institution",
   "accounts_field_no_institution": "No institution",
+  "accounts_inherited_institution_hint": "Inherited from parent {parent}: {institution}",
+  "accounts_inherited_no_institution_hint": "Inherited from parent {parent}: no institution",
   "accounts_field_country": "Country",
   "accounts_field_currency": "Currency",
   "accounts_field_no_currency": "No currency",

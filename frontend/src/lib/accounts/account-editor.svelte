@@ -46,7 +46,7 @@
   }>();
 
   const inputClass =
-    'mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent';
+    'mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent disabled:cursor-not-allowed disabled:opacity-70';
   const textAreaClass =
     'mt-1.5 min-h-20 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent';
   const labelClass = 'block text-xs font-semibold uppercase tracking-[0.12em] text-muted';
@@ -70,12 +70,6 @@
   let formError = $state<unknown>(undefined);
   let codeEdited = $state(false);
 
-  const activeInstitutions = $derived.by(() => {
-    return institutions.filter(
-      (institution: InstitutionResponse) =>
-        institution.status === 'active' || institution.id === account?.institution_id
-    );
-  });
   const parentOptions = $derived.by(() => {
     return accounts.filter(
       (candidate: AccountResponse) =>
@@ -85,7 +79,40 @@
         !candidate.is_system
     );
   });
+  const selectedParent = $derived.by(() => {
+    return parentOptions.find((parent: AccountResponse) => String(parent.id) === parentAccountID);
+  });
+  const selectedParentInstitution = $derived.by(() => {
+    if (!selectedParent?.institution_id) {
+      return undefined;
+    }
+
+    return institutions.find((institution: InstitutionResponse) => institution.id === selectedParent.institution_id);
+  });
+  const activeInstitutions = $derived.by(() => {
+    return institutions.filter(
+      (institution: InstitutionResponse) =>
+        institution.status === 'active' ||
+        institution.id === account?.institution_id ||
+        institution.id === selectedParent?.institution_id
+    );
+  });
   const kindOptions = $derived(accountKindOptions(accountClass));
+  const institutionLockedByParent = $derived(!!selectedParent);
+  const institutionInheritanceHint = $derived.by(() => {
+    if (!selectedParent) {
+      return '';
+    }
+
+    if (!selectedParent.institution_id) {
+      return m.accounts_inherited_no_institution_hint({ parent: accountDisplayName(selectedParent) });
+    }
+
+    return m.accounts_inherited_institution_hint({
+      parent: accountDisplayName(selectedParent),
+      institution: selectedParentInstitution?.name ?? m.accounts_group_unknown_institution()
+    });
+  });
   const title = $derived(mode === 'edit' ? m.accounts_form_edit_title() : m.accounts_form_create_title());
   const submitLabel = $derived(
     pending
@@ -145,6 +172,12 @@
   $effect(() => {
     if (parentAccountID !== '' && !parentOptions.some((parent: AccountResponse) => String(parent.id) === parentAccountID)) {
       parentAccountID = '';
+    }
+  });
+
+  $effect(() => {
+    if (selectedParent) {
+      institutionID = selectedParent.institution_id ? String(selectedParent.institution_id) : '';
     }
   });
 
@@ -342,13 +375,26 @@
     </label>
 
     <label>
+      <span class={labelClass}>{m.accounts_field_parent()}</span>
+      <select bind:value={parentAccountID} class={inputClass}>
+        <option value="">{m.accounts_field_no_parent()}</option>
+        {#each parentOptions as parent (parent.id)}
+          <option value={String(parent.id)}>{accountDisplayName(parent)}</option>
+        {/each}
+      </select>
+    </label>
+
+    <label>
       <span class={labelClass}>{m.accounts_field_institution()}</span>
-      <select bind:value={institutionID} class={inputClass}>
+      <select bind:value={institutionID} class={inputClass} disabled={institutionLockedByParent}>
         <option value="">{m.accounts_field_no_institution()}</option>
         {#each activeInstitutions as institution (institution.id)}
           <option value={String(institution.id)}>{institution.name}</option>
         {/each}
       </select>
+      {#if institutionInheritanceHint}
+        <p class="mt-1.5 text-xs leading-5 text-muted">{institutionInheritanceHint}</p>
+      {/if}
     </label>
 
     <label>
@@ -357,16 +403,6 @@
         <option value="">{m.accounts_field_no_currency()}</option>
         {#each currencies as currency (currency.id)}
           <option value={String(currency.id)}>{currency.code} {currency.display_symbol}</option>
-        {/each}
-      </select>
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.accounts_field_parent()}</span>
-      <select bind:value={parentAccountID} class={inputClass}>
-        <option value="">{m.accounts_field_no_parent()}</option>
-        {#each parentOptions as parent (parent.id)}
-          <option value={String(parent.id)}>{accountDisplayName(parent)}</option>
         {/each}
       </select>
     </label>
@@ -418,7 +454,7 @@
     </div>
   </details>
 
-  {#if activeInstitutions.length === 0}
+  {#if activeInstitutions.length === 0 && !selectedParent}
     <button
       type="button"
       class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
