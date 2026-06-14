@@ -144,6 +144,7 @@
         ? m.accounts_field_choose_currency()
         : m.accounts_field_no_currency()
   );
+  const structureLocked = $derived(mode === 'edit' && !!account?.has_activity);
   const filteredCurrencyCatalog = $derived.by(() => {
     const query = currencySearch.trim().toLocaleLowerCase();
     const values = query
@@ -155,6 +156,7 @@
     return values.slice(0, 30);
   });
   const institutionLockedByParent = $derived(!!selectedParent);
+  const institutionLocked = $derived(institutionLockedByParent || structureLocked);
   const institutionInheritanceHint = $derived.by(() => {
     if (!selectedParent) {
       return '';
@@ -411,7 +413,7 @@
 
     <label>
       <span class={labelClass}>{m.accounts_field_kind()}</span>
-      <select bind:value={accountKind} class={inputClass}>
+      <select bind:value={accountKind} class={inputClass} disabled={structureLocked}>
         {#each accountTypeGroups as group (group.label)}
           <optgroup label={group.label}>
             {#each group.kinds as kind (kind)}
@@ -420,11 +422,14 @@
           </optgroup>
         {/each}
       </select>
+      {#if structureLocked}
+        <p class="mt-1.5 text-xs leading-5 text-muted">{m.accounts_structure_locked_hint()}</p>
+      {/if}
     </label>
 
     <label>
       <span class={labelClass}>{m.accounts_field_parent()}</span>
-      <select bind:value={parentAccountID} class={inputClass}>
+      <select bind:value={parentAccountID} class={inputClass} disabled={structureLocked}>
         <option value="">{m.accounts_field_no_parent()}</option>
         {#each parentOptions as parent (parent.id)}
           <option value={String(parent.id)}>{accountDisplayName(parent)}</option>
@@ -434,7 +439,7 @@
 
     <label>
       <span class={labelClass}>{m.accounts_field_institution()}</span>
-      <select bind:value={institutionID} class={inputClass} disabled={institutionLockedByParent}>
+      <select bind:value={institutionID} class={inputClass} disabled={institutionLocked}>
         <option value="">{m.accounts_field_no_institution()}</option>
         {#each activeInstitutions as institution (institution.id)}
           <option value={String(institution.id)}>{institution.name}</option>
@@ -447,7 +452,7 @@
 
     <label>
       <span class={labelClass}>{m.accounts_field_currency()}</span>
-      <select value={defaultCommodityID} class={inputClass} onchange={handleCurrencySelect}>
+      <select value={defaultCommodityID} class={inputClass} onchange={handleCurrencySelect} disabled={structureLocked}>
         {#if selectedCatalogCurrency}
           <option value="">{currencyPlaceholder}</option>
         {:else if currencyRequired}
@@ -465,7 +470,7 @@
   </div>
 
   <label class="flex items-center gap-3 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground">
-    <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" />
+    <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" disabled={structureLocked} />
     {m.accounts_field_allows_postings()}
   </label>
 
@@ -489,7 +494,7 @@
 
       <label>
         <span class={labelClass}>{m.accounts_field_opened_on()}</span>
-        <input bind:value={openedOn} class={inputClass} type="date" />
+        <input bind:value={openedOn} class={inputClass} type="date" disabled={structureLocked} />
       </label>
 
       <label>

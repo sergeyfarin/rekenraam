@@ -44,6 +44,7 @@ type AccountRecord struct {
 	DefaultCommodityID    sql.NullInt64
 	QuantityScaleOverride sql.NullInt64
 	AllowsPostings        bool
+	HasActivity           bool
 	NumberLast4           sql.NullString
 	ExternalRefHint       sql.NullString
 	CommentMarkdown       string
@@ -1021,6 +1022,11 @@ func accountSelect(versionSource string, whereClause string) string {
 			av.default_commodity_id,
 			av.quantity_scale_override,
 			av.allows_postings,
+			EXISTS (
+				SELECT 1
+				FROM posting_versions pv
+				WHERE pv.account_id = a.id
+			),
 			av.number_last4,
 			av.external_ref_hint,
 			av.comment_markdown,
@@ -1057,6 +1063,7 @@ func scanAccountRecord(row rowScanner, record *AccountRecord) error {
 		&record.DefaultCommodityID,
 		&record.QuantityScaleOverride,
 		&allowsPostings,
+		&record.HasActivity,
 		&record.NumberLast4,
 		&record.ExternalRefHint,
 		&record.CommentMarkdown,

@@ -451,6 +451,13 @@ contracts because it drives accounting reports, signs, and validation. Ordinary
 account management hides equity account creation; equity accounts are reserved
 for system workflows until a dedicated user-facing adjustment workflow exists.
 
+After an account has posted ledger activity, account management must treat the
+account structure as locked. Structural fields include `account_class`,
+`account_kind`, `parent_account_id`, `institution_id`, `default_commodity_id`,
+`quantity_scale_override`, `allows_postings`, and `opened_on`. Descriptive
+fields such as `name`, `code`, `number_last4`, and `comment_markdown` remain
+editable through normal account versioning.
+
 The `income` and `expense` kinds are generic kind profiles for income and
 expense accounts. They are not system-only. Hidden fallback behavior belongs to
 `system_role`, and category-facing behavior belongs to the category layer.

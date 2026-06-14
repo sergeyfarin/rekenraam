@@ -31,6 +31,11 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Account management UI exposes a single user-facing "Account type" field
   based on `account_kind`; the accounting class is derived and kept out of
   ordinary account forms and filters.
+- Once an account has posted ledger activity, structural fields are locked:
+  account type/class, parent, institution, default commodity/currency,
+  quantity scale override, posting eligibility, and opened date. Users should
+  create a new account for a different structure and keep descriptive edits
+  such as name, code, notes, and account-number hint editable.
 - User-created equity/adjustment accounts are hidden from account management.
   Equity accounts are reserved for system workflows until a dedicated user
   workflow is designed.

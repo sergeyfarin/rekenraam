@@ -30,6 +30,7 @@ var (
 	ErrAccountParentInvalid    = errors.New("account parent is invalid")
 	ErrAccountReferenceInvalid = errors.New("account reference is invalid")
 	ErrAccountCurrencyLocked   = errors.New("account currency cannot be changed after postings exist")
+	ErrAccountStructureLocked  = errors.New("account structure cannot be changed after postings exist")
 	ErrAccountDeleteNotAllowed = errors.New("account cannot be deleted")
 )
 
@@ -68,6 +69,7 @@ type Account struct {
 	DefaultCommodityCode  string
 	QuantityScaleOverride *int
 	AllowsPostings        bool
+	HasActivity           bool
 	NumberLast4           string
 	ExternalRefHint       string
 	CommentMarkdown       string
@@ -362,6 +364,15 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 		}
 		if hasPostings {
 			return Account{}, ErrAccountCurrencyLocked
+		}
+	}
+	if accountStructureChanged(current, spec, input.OpenedOn) {
+		hasPostings, err := s.repository.AccountHasPostings(ctx, BookID, input.AccountID)
+		if err != nil {
+			return Account{}, fmt.Errorf("check account postings: %w", err)
+		}
+		if hasPostings {
+			return Account{}, ErrAccountStructureLocked
 		}
 	}
 
@@ -873,6 +884,35 @@ func accountSpecWithLifecycle(spec db.AccountSpec, openedOn string, closedOn str
 	return spec
 }
 
+func accountStructureChanged(current Account, next db.AccountSpec, openedOn string) bool {
+	if current.AccountClass != next.AccountClass ||
+		current.AccountKind != next.AccountKind ||
+		!nullableInt64PtrEqual(current.ParentAccountID, next.ParentAccountID) ||
+		!nullableInt64PtrEqual(current.InstitutionID, next.InstitutionID) ||
+		!nullableIntPtrEqual(current.QuantityScaleOverride, next.QuantityScaleOverride) ||
+		current.AllowsPostings != next.AllowsPostings {
+		return true
+	}
+
+	return strings.TrimSpace(openedOn) != "" && strings.TrimSpace(openedOn) != current.OpenedOn
+}
+
+func nullableInt64PtrEqual(left *int64, right sql.NullInt64) bool {
+	if left == nil {
+		return !right.Valid
+	}
+
+	return right.Valid && *left == right.Int64
+}
+
+func nullableIntPtrEqual(left *int, right sql.NullInt64) bool {
+	if left == nil {
+		return !right.Valid
+	}
+
+	return right.Valid && int64(*left) == right.Int64
+}
+
 func cleanAccountOpenedOn(value string, fallback string, now time.Time) (string, error) {
 	return cleanOptionalAccountDate(value, fallback, now, "account opened date")
 }
@@ -967,6 +1007,7 @@ func toAccount(record db.AccountRecord) Account {
 		DefaultCommodityID:    int64Ptr(record.DefaultCommodityID),
 		QuantityScaleOverride: intPtr(record.QuantityScaleOverride),
 		AllowsPostings:        record.AllowsPostings,
+		HasActivity:           record.HasActivity,
 		NumberLast4:           nullableString(record.NumberLast4),
 		ExternalRefHint:       nullableString(record.ExternalRefHint),
 		CommentMarkdown:       record.CommentMarkdown,

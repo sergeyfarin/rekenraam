@@ -26,6 +26,7 @@ type accountResponse struct {
 	DefaultCommodityID    *int64          `json:"default_commodity_id,omitempty"`
 	QuantityScaleOverride *int            `json:"quantity_scale_override,omitempty"`
 	AllowsPostings        bool            `json:"allows_postings"`
+	HasActivity           bool            `json:"has_activity"`
 	NumberLast4           string          `json:"number_last4,omitempty"`
 	ExternalRefHint       string          `json:"external_ref_hint,omitempty"`
 	CommentMarkdown       string          `json:"comment_markdown"`
@@ -410,6 +411,8 @@ func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "account reference is invalid")
 	case errors.Is(err, app.ErrAccountCurrencyLocked):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account currency cannot be changed after postings exist")
+	case errors.Is(err, app.ErrAccountStructureLocked):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "account structure cannot be changed after postings exist")
 	case errors.Is(err, app.ErrAccountInvalidLifecycle):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account lifecycle transition is invalid")
 	case errors.Is(err, app.ErrAccountDeleteNotAllowed):
@@ -441,6 +444,7 @@ func toAccountResponse(account app.Account) accountResponse {
 		DefaultCommodityID:    account.DefaultCommodityID,
 		QuantityScaleOverride: account.QuantityScaleOverride,
 		AllowsPostings:        account.AllowsPostings,
+		HasActivity:           account.HasActivity,
 		NumberLast4:           account.NumberLast4,
 		ExternalRefHint:       account.ExternalRefHint,
 		CommentMarkdown:       account.CommentMarkdown,

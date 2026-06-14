@@ -5667,6 +5667,8 @@ export interface components {
             default_commodity_id?: number;
             quantity_scale_override?: number;
             allows_postings: boolean;
+            /** @description True when the account has posted ledger activity. Structural account fields become locked when true. */
+            has_activity: boolean;
             /** @description Recognition hint only; full account numbers must not be stored. */
             number_last4?: string;
             external_ref_hint?: string;

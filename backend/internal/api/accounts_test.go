@@ -542,6 +542,45 @@ func TestUpdateAccountRejectsCurrencyChangeAfterPostingsExist(t *testing.T) {
 	}`, http.StatusConflict)
 }
 
+func TestUpdateAccountLocksStructureAfterPostingsExistButAllowsDescriptionEdits(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	income := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Salary",
+		"category_type":"income"
+	}`)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, 10000, 2, commodityID),
+		posting(income.ID, -10000, 2, commodityID),
+	), http.StatusCreated)
+
+	patchAccount(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"name":"Checking",
+		"account_class":"asset",
+		"account_kind":"savings",
+		"default_commodity_id":`+strconvFormatInt(commodityID)+`,
+		"quantity_scale_override":2
+	}`, http.StatusConflict)
+
+	updated := patchAccount(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"name":"Main Checking",
+		"code":"main_checking",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"default_commodity_id":`+strconvFormatInt(commodityID)+`,
+		"quantity_scale_override":2,
+		"number_last4":"1234",
+		"comment_markdown":"Renamed after import"
+	}`, http.StatusOK)
+	assert.Equal(t, "Main Checking", updated.Name)
+	assert.Equal(t, "main_checking", updated.Code)
+	assert.Equal(t, "checking", updated.AccountKind)
+	assert.True(t, updated.HasActivity)
+}
+
 func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	t.Parallel()
 

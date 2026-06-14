@@ -60,6 +60,7 @@ AccountResponse:
     - account_class
     - account_kind
     - allows_postings
+    - has_activity
     - comment_markdown
     - metadata
     - opened_on
@@ -114,6 +115,9 @@ AccountResponse:
       maximum: 12
     allows_postings:
       type: boolean
+    has_activity:
+      type: boolean
+      description: True when the account has posted ledger activity. Structural account fields become locked when true.
     number_last4:
       type: string
       maxLength: 8

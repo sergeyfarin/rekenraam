@@ -227,6 +227,7 @@
   "accounts_field_name": "Name",
   "accounts_field_code": "Code",
   "accounts_field_kind": "Account type",
+  "accounts_structure_locked_hint": "This account has transactions, so account type, parent, institution, currency, posting behavior, and opened date are locked. Create a new account for a different structure.",
   "accounts_field_institution": "Institution",
   "accounts_field_no_institution": "No institution",
   "accounts_inherited_institution_hint": "Inherited from parent {parent}: {institution}",
