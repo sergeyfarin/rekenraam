@@ -71,7 +71,10 @@
   let codeEdited = $state(false);
 
   const activeInstitutions = $derived.by(() => {
-    return institutions.filter((institution: InstitutionResponse) => institution.status === 'active');
+    return institutions.filter(
+      (institution: InstitutionResponse) =>
+        institution.status === 'active' || institution.id === account?.institution_id
+    );
   });
   const parentOptions = $derived.by(() => {
     return accounts.filter(
@@ -99,12 +102,16 @@
     name = account?.name ?? '';
     code = account?.code ?? deriveRecordCode(account?.name ?? '');
     codeEdited = mode === 'edit' && !!account?.code;
-    accountClass = managedClass(account?.account_class);
-    accountKind = account?.account_kind ?? defaultKindForClass(accountClass);
+    const nextAccountClass = managedClass(account?.account_class);
+    const nextAccountKind = managedKindForClass(nextAccountClass, account?.account_kind);
+    accountClass = nextAccountClass;
+    accountKind = nextAccountKind;
     parentAccountID = account?.parent_account_id ? String(account.parent_account_id) : '';
     institutionID = account?.institution_id ? String(account.institution_id) : '';
     countryCode = account?.country_code ?? '';
-    defaultCommodityID = account?.default_commodity_id ? String(account.default_commodity_id) : defaultCurrencyID(currencies);
+    defaultCommodityID = account?.default_commodity_id
+      ? String(account.default_commodity_id)
+      : defaultCurrencyID(nextAccountClass, nextAccountKind, currencies);
     allowsPostings = account?.allows_postings ?? true;
     numberLast4 = account?.number_last4 ?? '';
     openedOn = account?.opened_on ?? '';
@@ -118,6 +125,26 @@
     const validKinds = accountKindOptions(accountClass).map((option) => option.value);
     if (!validKinds.includes(accountKind)) {
       accountKind = defaultKindForClass(accountClass);
+    }
+  });
+
+  $effect(() => {
+    if (mode !== 'create') {
+      return;
+    }
+
+    if (accountKindRequiresDefaultCurrency(accountClass, accountKind)) {
+      if (defaultCommodityID === '') {
+        defaultCommodityID = defaultCurrencyID(accountClass, accountKind, currencies);
+      }
+    } else {
+      defaultCommodityID = '';
+    }
+  });
+
+  $effect(() => {
+    if (parentAccountID !== '' && !parentOptions.some((parent: AccountResponse) => String(parent.id) === parentAccountID)) {
+      parentAccountID = '';
     }
   });
 
@@ -196,7 +223,11 @@
     }
   }
 
-  function defaultCurrencyID(values: CurrencyResponse[]): string {
+  function defaultCurrencyID(accountClassValue: ManagedAccountClass, accountKindValue: AccountKind, values: CurrencyResponse[]): string {
+    if (!accountKindRequiresDefaultCurrency(accountClassValue, accountKindValue)) {
+      return '';
+    }
+
     return values[0]?.id ? String(values[0].id) : '';
   }
 
@@ -217,6 +248,19 @@
       case 'equity':
         return 'equity';
     }
+  }
+
+  function managedKindForClass(accountClassValue: ManagedAccountClass, value?: AccountKind): AccountKind {
+    const option = accountKindOptions(accountClassValue).find((candidate) => candidate.value === value);
+    return option?.value ?? defaultKindForClass(accountClassValue);
+  }
+
+  function accountKindRequiresDefaultCurrency(accountClassValue: ManagedAccountClass, accountKindValue: AccountKind): boolean {
+    if (accountClassValue !== 'asset' && accountClassValue !== 'liability') {
+      return false;
+    }
+
+    return accountKindValue !== 'receivable' && accountKindValue !== 'payable';
   }
 
   function accountKindOptions(value: ManagedAccountClass): { value: AccountKind; label: string }[] {
@@ -302,7 +346,7 @@
       <select bind:value={institutionID} class={inputClass}>
         <option value="">{m.accounts_field_no_institution()}</option>
         {#each activeInstitutions as institution (institution.id)}
-          <option value={institution.id}>{institution.name}</option>
+          <option value={String(institution.id)}>{institution.name}</option>
         {/each}
       </select>
     </label>
@@ -312,7 +356,7 @@
       <select bind:value={defaultCommodityID} class={inputClass}>
         <option value="">{m.accounts_field_no_currency()}</option>
         {#each currencies as currency (currency.id)}
-          <option value={currency.id}>{currency.code} {currency.display_symbol}</option>
+          <option value={String(currency.id)}>{currency.code} {currency.display_symbol}</option>
         {/each}
       </select>
     </label>
@@ -322,7 +366,7 @@
       <select bind:value={parentAccountID} class={inputClass}>
         <option value="">{m.accounts_field_no_parent()}</option>
         {#each parentOptions as parent (parent.id)}
-          <option value={parent.id}>{accountDisplayName(parent)}</option>
+          <option value={String(parent.id)}>{accountDisplayName(parent)}</option>
         {/each}
       </select>
     </label>

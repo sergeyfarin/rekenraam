@@ -47,7 +47,7 @@
     | { type: 'institution-edit'; institution: InstitutionResponse };
 
   const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
-  const institutionsQuery = createQuery(() => institutionsQueryOptions(false));
+  const institutionsQuery = createQuery(() => institutionsQueryOptions(true));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
 
@@ -366,7 +366,7 @@
         <AccountEditor
           mode="create"
           accounts={manageableAccounts}
-          institutions={activeInstitutions}
+          institutions={institutionsQuery.data?.institutions ?? []}
           currencies={currenciesQuery.data?.currencies ?? []}
           {csrfToken}
           onSaved={handleSaved}
@@ -378,7 +378,7 @@
           mode="edit"
           account={editor.account}
           accounts={manageableAccounts}
-          institutions={activeInstitutions}
+          institutions={institutionsQuery.data?.institutions ?? []}
           currencies={currenciesQuery.data?.currencies ?? []}
           {csrfToken}
           onSaved={handleSaved}

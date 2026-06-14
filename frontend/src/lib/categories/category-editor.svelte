@@ -103,7 +103,7 @@
   });
 
   $effect(() => {
-    if (parentCategoryID !== '' && !parentOptions.some((parent) => String(parent.id) === parentCategoryID)) {
+    if (parentCategoryID !== '' && !parentOptions.some((parent: CategoryResponse) => String(parent.id) === parentCategoryID)) {
       parentCategoryID = '';
     }
   });
