@@ -4,6 +4,7 @@ import type { CurrencyResponse } from '$lib/api/currencies';
 import { m } from '$lib/paraglide/messages.js';
 
 export type AccountClass = AccountResponse['account_class'];
+export type ManagedAccountClass = Exclude<AccountClass, 'income' | 'expense'>;
 export type AccountKind = AccountResponse['account_kind'];
 export type AccountStatus = AccountResponse['status'];
 export type InstitutionKind = InstitutionResponse['kind'];
@@ -98,6 +99,10 @@ export function accountStatusLabel(status: AccountStatus): string {
     case 'archived':
       return m.account_status_archived();
   }
+}
+
+export function isCategoryAccount(account: AccountResponse): boolean {
+  return account.account_class === 'income' || account.account_class === 'expense';
 }
 
 export function accountDisplayName(account: AccountResponse): string {

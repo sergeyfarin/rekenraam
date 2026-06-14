@@ -43,8 +43,6 @@
       <option value="asset">{m.account_class_asset()}</option>
       <option value="liability">{m.account_class_liability()}</option>
       <option value="equity">{m.account_class_equity()}</option>
-      <option value="income">{m.account_class_income()}</option>
-      <option value="expense">{m.account_class_expense()}</option>
     </select>
   </label>
 </div>

@@ -16,7 +16,7 @@
     accountClassLabel,
     accountDisplayName,
     accountKindLabel,
-    type AccountClass,
+    type ManagedAccountClass,
     type AccountKind
   } from './account-labels';
 
@@ -53,7 +53,7 @@
   let accountID = $state<number | undefined>(undefined);
   let name = $state('');
   let code = $state('');
-  let accountClass = $state<AccountClass>('asset');
+  let accountClass = $state<ManagedAccountClass>('asset');
   let accountKind = $state<AccountKind>('checking');
   let parentAccountID = $state('');
   let institutionID = $state('');
@@ -96,7 +96,7 @@
     accountID = account?.id;
     name = account?.name ?? '';
     code = account?.code ?? '';
-    accountClass = account?.account_class ?? 'asset';
+    accountClass = managedClass(account?.account_class);
     accountKind = account?.account_kind ?? defaultKindForClass(accountClass);
     parentAccountID = account?.parent_account_id ? String(account.parent_account_id) : '';
     institutionID = account?.institution_id ? String(account.institution_id) : '';
@@ -185,7 +185,15 @@
     return values[0]?.id ? String(values[0].id) : '';
   }
 
-  function defaultKindForClass(value: AccountClass): AccountKind {
+  function managedClass(value?: AccountResponse['account_class']): ManagedAccountClass {
+    if (value === 'asset' || value === 'liability' || value === 'equity') {
+      return value;
+    }
+
+    return 'asset';
+  }
+
+  function defaultKindForClass(value: ManagedAccountClass): AccountKind {
     switch (value) {
       case 'asset':
         return 'checking';
@@ -193,15 +201,11 @@
         return 'credit_card';
       case 'equity':
         return 'equity';
-      case 'income':
-        return 'income';
-      case 'expense':
-        return 'expense';
     }
   }
 
-  function accountKindOptions(value: AccountClass): { value: AccountKind; label: string }[] {
-    const options: Record<AccountClass, AccountKind[]> = {
+  function accountKindOptions(value: ManagedAccountClass): { value: AccountKind; label: string }[] {
+    const options: Record<ManagedAccountClass, AccountKind[]> = {
       asset: [
         'cash',
         'checking',
@@ -226,9 +230,7 @@
         'payable',
         'other_liability'
       ],
-      equity: ['equity'],
-      income: ['income'],
-      expense: ['expense']
+      equity: ['equity']
     };
 
     return options[value].map((kind) => ({ value: kind, label: accountKindLabel(kind) }));
@@ -273,8 +275,6 @@
         <option value="asset">{accountClassLabel('asset')}</option>
         <option value="liability">{accountClassLabel('liability')}</option>
         <option value="equity">{accountClassLabel('equity')}</option>
-        <option value="income">{accountClassLabel('income')}</option>
-        <option value="expense">{accountClassLabel('expense')}</option>
       </select>
     </label>
 

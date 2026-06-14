@@ -34,7 +34,8 @@
     accountInstitutionLabel,
     accountKindLabel,
     institutionCountryLabel,
-    institutionKindLabel
+    institutionKindLabel,
+    isCategoryAccount
   } from './account-labels';
   import type { ClassFilter, StatusFilter } from './account-list-options';
 
@@ -72,8 +73,12 @@
     );
   });
 
-  const userAccounts = $derived.by(() => {
+  const allUserAccounts = $derived.by(() => {
     return accountsQuery.data?.accounts.filter((account) => !account.is_system) ?? [];
+  });
+
+  const userAccounts = $derived.by(() => {
+    return allUserAccounts.filter((account) => !isCategoryAccount(account));
   });
 
   const manageableAccounts = $derived.by(() => {
@@ -87,7 +92,7 @@
   const institutionAccountCounts = $derived.by(() => {
     const counts = new Map<number, number>();
 
-    for (const account of userAccounts) {
+    for (const account of allUserAccounts) {
       if (account.institution_id) {
         counts.set(account.institution_id, (counts.get(account.institution_id) ?? 0) + 1);
       }

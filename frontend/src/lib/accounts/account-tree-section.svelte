@@ -1,5 +1,6 @@
 <script lang="ts">
   import Archive from '@lucide/svelte/icons/archive';
+  import Banknote from '@lucide/svelte/icons/banknote';
   import Building2 from '@lucide/svelte/icons/building-2';
   import Edit3 from '@lucide/svelte/icons/edit-3';
   import Lock from '@lucide/svelte/icons/lock';
@@ -306,7 +307,11 @@
             >
               <div class="flex min-w-0 items-center gap-2">
                 <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
-                  <WalletCards size={16} aria-hidden="true" />
+                  {#if account.account_kind === 'cash'}
+                    <Banknote size={16} aria-hidden="true" />
+                  {:else}
+                    <WalletCards size={16} aria-hidden="true" />
+                  {/if}
                 </span>
                 <p class="min-w-0 truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
               </div>
