@@ -206,8 +206,6 @@ components:
       $ref: "./components/schemas/currencies.yaml#/CurrenciesResponse"
     CreateCurrencyRequest:
       $ref: "./components/schemas/currencies.yaml#/CreateCurrencyRequest"
-    CurrencySetupSelection:
-      $ref: "./components/schemas/currencies.yaml#/CurrencySetupSelection"
     CompleteCurrencySetupRequest:
       $ref: "./components/schemas/currencies.yaml#/CompleteCurrencySetupRequest"
     CompleteCurrencySetupResponse:

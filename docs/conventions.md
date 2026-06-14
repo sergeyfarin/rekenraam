@@ -99,6 +99,10 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Built-in records not entered by users or imported from external sources must use stable keys or codes, not English display names as the only source of truth.
 - Built-in labels are resolved at render time by the frontend localization boundary. Do not store localized built-in names as canonical database values or require them in setup/API requests.
 - Seeded categories, account classes, account kinds, currencies, commodities, system accounts, and other app-defined labels must be localization-ready.
+- The setup currency step creates only the book default currency. Currencies are
+  active for everyday account UI when at least one active account uses them;
+  closed or historical currencies remain durable commodities for history,
+  reports, and exports.
 - Preserve `book_id` in core schema even while runtime stays single-book.
 - Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
 - Physical delete is allowed only for never-posted drafts. Posted financial records must use void, archive, or corrective-entry workflows even when unreconciled.
@@ -196,7 +200,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
-- First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, default currency preference, optional additional currencies, system accounts, default categories, and optional additional categories as those domains are implemented.
+- First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, default currency preference, system accounts, default categories, and optional additional categories as those domains are implemented.
 - First-run setup uses `GET /api/v1/setup/status` and `POST /api/v1/setup/owner` for the first slice. Setup progress is persisted as named steps, not as a single boolean.
 - Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path requiring server or database access, and invalidate existing sessions after password reset.
 - Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.

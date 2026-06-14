@@ -470,6 +470,49 @@ func TestUpdateAccountRevalidatesPostingCommodityRequirement(t *testing.T) {
 	}`, http.StatusBadRequest)
 }
 
+func TestCreateAccountCanIntroduceCatalogCurrencyOnSave(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _ := setupAccountAPITest(t, handler)
+
+	account := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Euro Cash",
+		"account_class":"asset",
+		"account_kind":"cash",
+		"default_commodity_code":"EUR"
+	}`)
+
+	require.NotNil(t, account.DefaultCommodityID)
+
+	currencies := listCurrenciesForSession(t, handler, sessionCookie)
+	assert.Equal(t, []string{"EUR", "USD"}, currencyCodes(currencies.Currencies))
+}
+
+func TestUpdateAccountRejectsCurrencyChangeAfterPostingsExist(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	income := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Salary",
+		"category_type":"income"
+	}`)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, 10000, 2, commodityID),
+		posting(income.ID, -10000, 2, commodityID),
+	), http.StatusCreated)
+
+	patchAccount(t, handler, sessionCookie, csrfToken, checking.ID, `{
+		"name":"Checking",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"default_commodity_code":"EUR",
+		"quantity_scale_override":2
+	}`, http.StatusConflict)
+}
+
 func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	t.Parallel()
 
@@ -584,41 +627,27 @@ func TestSystemAccountSetupCannotRunTwice(t *testing.T) {
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusConflict)
 }
 
-func TestSystemAccountSetupCreatesStarterCashForEachCurrency(t *testing.T) {
+func TestSystemAccountSetupCreatesStarterCashForDefaultCurrency(t *testing.T) {
 	t.Parallel()
 
 	handler, _ := newSetupTestHandler(t)
 	sessionCookie, csrfToken := createOwnerSession(t, handler)
 	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
-	currencySetup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{
-		{Code: "USD"},
-		{Code: "EUR"},
-	})
+	currencySetup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "EUR"}})
 
 	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
 
-	currencyIDsByCode := make(map[string]int64)
-	for _, currency := range currencySetup.Currencies {
-		currencyIDsByCode[currency.Code] = currency.ID
-	}
-
 	accounts := listAccountsForSession(t, handler, sessionCookie, "").Accounts
-	require.Len(t, accounts, 2)
+	require.Len(t, accounts, 1)
 
-	starterCashByCode := make(map[string]accountResponse)
-	for _, account := range accounts {
-		assert.False(t, account.IsSystem)
-		assert.Equal(t, "asset", account.AccountClass)
-		assert.Equal(t, "cash", account.AccountKind)
-		starterCashByCode[account.Code] = account
-	}
-
-	for _, currencyCode := range []string{"EUR", "USD"} {
-		account, ok := starterCashByCode["cash:"+currencyCode]
-		require.True(t, ok, "missing starter cash account for %s", currencyCode)
-		require.NotNil(t, account.DefaultCommodityID)
-		assert.Equal(t, currencyIDsByCode[currencyCode], *account.DefaultCommodityID)
-	}
+	require.Len(t, currencySetup.Currencies, 1)
+	account := accounts[0]
+	assert.False(t, account.IsSystem)
+	assert.Equal(t, "asset", account.AccountClass)
+	assert.Equal(t, "cash", account.AccountKind)
+	assert.Equal(t, "cash:USD", account.Code)
+	require.NotNil(t, account.DefaultCommodityID)
+	assert.Equal(t, currencySetup.DefaultCurrency.ID, *account.DefaultCommodityID)
 }
 
 func TestSystemAccountSetupRerunWithoutCompletedStepKeepsAuditEventReferenced(t *testing.T) {

@@ -49,7 +49,7 @@ func TestCurrencyCatalogReturnsEmbeddedCurrencies(t *testing.T) {
 	assert.Contains(t, catalogCodes(body.Currencies), "EUR")
 }
 
-func TestCompleteCurrencySetupCreatesDefaultAndAdditionalCurrencies(t *testing.T) {
+func TestCompleteCurrencySetupCreatesOnlyDefaultCurrency(t *testing.T) {
 	t.Parallel()
 
 	handler, database := newSetupTestHandler(t)
@@ -75,7 +75,7 @@ func TestCompleteCurrencySetupCreatesDefaultAndAdditionalCurrencies(t *testing.T
 
 	var body completeCurrencySetupResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	require.Len(t, body.Currencies, 2)
+	require.Len(t, body.Currencies, 1)
 	assert.Equal(t, "USD", body.DefaultCurrency.Code)
 	assert.Equal(t, "US Dollar", body.DefaultCurrency.Name)
 	assert.Equal(t, 2, body.DefaultCurrency.StandardScale)
@@ -231,10 +231,7 @@ func TestListCurrenciesReturnsCurrentCurrencies(t *testing.T) {
 	handler, _ := newSetupTestHandler(t)
 	sessionCookie, csrfToken := createOwnerSession(t, handler)
 	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
-	completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{
-		{Code: "USD", Name: "US Dollar"},
-		{Code: "EUR", Name: "Euro"},
-	})
+	completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "EUR", Name: "Euro"}})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/currencies", nil)
 	req.AddCookie(sessionCookie)
@@ -246,8 +243,8 @@ func TestListCurrenciesReturnsCurrentCurrencies(t *testing.T) {
 
 	var body currenciesResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	require.Len(t, body.Currencies, 2)
-	assert.Equal(t, []string{"EUR", "USD"}, currencyCodes(body.Currencies))
+	require.Len(t, body.Currencies, 1)
+	assert.Equal(t, []string{"USD"}, currencyCodes(body.Currencies))
 }
 
 func TestCreateCurrencyAddsCatalogCurrencyAfterSetup(t *testing.T) {
@@ -345,20 +342,10 @@ func TestSetDefaultCurrencyChangesPreference(t *testing.T) {
 	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken := createOwnerSession(t, handler)
 	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
-	setup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{
-		{Code: "USD", Name: "US Dollar"},
-		{Code: "EUR", Name: "Euro"},
-	})
+	completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{{Code: "EUR", Name: "Euro"}})
+	euro := createCurrencyForSession(t, handler, sessionCookie, csrfToken, `{"code":"EUR","name":"Euro"}`)
 
-	var euroID int64
-	for _, currency := range setup.Currencies {
-		if currency.Code == "EUR" {
-			euroID = currency.ID
-		}
-	}
-	require.NotZero(t, euroID)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/currencies/"+strconvFormatInt(euroID)+"/default", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/currencies/"+strconvFormatInt(euro.ID)+"/default", nil)
 	req.Header.Set(csrfTokenHeader, csrfToken)
 	setSameOrigin(req)
 	req.AddCookie(sessionCookie)
@@ -380,7 +367,7 @@ func TestSetDefaultCurrencyChangesPreference(t *testing.T) {
 		WHERE id = 1
 	`).Scan(&defaultCurrencyID, &updatedByUserID)
 	require.NoError(t, err)
-	assert.Equal(t, euroID, defaultCurrencyID)
+	assert.Equal(t, euro.ID, defaultCurrencyID)
 	require.True(t, updatedByUserID.Valid)
 	assert.Equal(t, int64(1), updatedByUserID.Int64)
 }
@@ -479,6 +466,22 @@ func completeCurrencySetupForSession(t *testing.T, handler http.Handler, session
 	require.Equal(t, http.StatusCreated, res.Code)
 
 	var response completeCurrencySetupResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func listCurrenciesForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie) currenciesResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/currencies", nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var response currenciesResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 	return response
 }

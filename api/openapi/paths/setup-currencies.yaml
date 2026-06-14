@@ -1,5 +1,5 @@
 post:
-  summary: Create setup currencies and choose the book default currency
+  summary: Choose the book default currency
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -15,7 +15,7 @@ post:
           $ref: "../openapi.yaml#/components/schemas/CompleteCurrencySetupRequest"
   responses:
     "201":
-      description: Currencies created and setup advanced to the next step
+      description: Default currency created and setup advanced to the next step
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

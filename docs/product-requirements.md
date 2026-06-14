@@ -30,7 +30,7 @@ Primary product goal:
 
 - Theme infrastructure starts as a token-based system with light and dark themes only.
 - Runtime product scope is strictly single-owner and single-user for now; if household sharing ever becomes real scope, naming can be revised deliberately then.
-- First-run setup is browser-based and guided. It creates the owner first, then grows to include the default book, default currency preference, optional additional currencies, system accounts, default categories, and optional additional categories as those feature slices are implemented.
+- First-run setup is browser-based and guided. It creates the owner first, then grows to include the default book, default currency preference, system accounts, default categories, and optional additional categories as those feature slices are implemented.
 - Public VPS deployments require HTTPS and local authentication.
 - Public VPS deployment with real financial data requires MFA; public deployment may be delayed until MFA is implemented.
 - Localhost development may use HTTP. LAN/private deployments should strongly prefer HTTPS through a reverse proxy or app-provided certificate and key configuration.
@@ -167,9 +167,11 @@ Goal: create the durable accounting skeleton.
 - Single owner book. The `books` table remains a future extension point, but current runtime creates and uses only book `1` with no book selector.
 - Commodity/currency table with exact decimal scale metadata.
 - First-run setup extension for default book, default currency preference,
-  optional additional currencies, required system accounts, and a starter cash
-  account for each selected currency.
+  required system accounts, and a starter cash account for the default currency.
 - The default currency is a UI/account-default preference, not a book base currency or reporting currency. Reports choose their reporting currency and FX method later without changing the book.
+- Active currencies are derived from active accounts that use a currency. Creating
+  or editing an account can introduce another embedded-catalog currency; that
+  currency becomes active when an active account uses it.
 - Commodity and currency setup comes before accounts. Account precision must derive from commodity metadata or an explicit account-level quantity scale override, not from floating-point or free-text currency fields.
 - Institution logo and backdrop support is limited to optional URL/reference metadata in Phase 1. File upload, attachment storage, statement PDFs, and receipts remain out of scope.
 - Account tree with fixed accounting classes and catalog-backed account kinds.

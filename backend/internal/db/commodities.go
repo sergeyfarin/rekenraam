@@ -146,7 +146,7 @@ func (r *CommodityRepository) CreateCurrency(ctx context.Context, params CreateC
 		return CommodityRecord{}, err
 	}
 
-	record, err := r.createCurrency(ctx, tx, params, auditEventID)
+	record, err := createCurrency(ctx, tx, params, auditEventID)
 	if err != nil {
 		return CommodityRecord{}, err
 	}
@@ -216,7 +216,7 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 	currencies := make([]CommodityRecord, 0, len(params.Specs))
 	var defaultCurrency CommodityRecord
 	for _, spec := range params.Specs {
-		record, err := r.ensureCurrency(ctx, tx, CreateCurrencyParams{
+		record, err := ensureCurrency(ctx, tx, CreateCurrencyParams{
 			BookID:          params.BookID,
 			CreatedByUserID: params.ChangedByUserID,
 			AuthSessionID:   params.AuthSessionID,
@@ -325,8 +325,8 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, params Set
 	return record, nil
 }
 
-func (r *CommodityRepository) ensureCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams, auditEventID int64) (CommodityRecord, error) {
-	record, err := r.currentCurrencyByCode(ctx, tx, params.BookID, params.Spec.Code)
+func ensureCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams, auditEventID int64) (CommodityRecord, error) {
+	record, err := currentCurrencyByCode(ctx, tx, params.BookID, params.Spec.Code)
 	if err == nil {
 		return record, nil
 	}
@@ -334,11 +334,11 @@ func (r *CommodityRepository) ensureCurrency(ctx context.Context, tx *sql.Tx, pa
 		return CommodityRecord{}, err
 	}
 
-	return r.createCurrency(ctx, tx, params, auditEventID)
+	return createCurrency(ctx, tx, params, auditEventID)
 }
 
-func (r *CommodityRepository) createCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams, auditEventID int64) (CommodityRecord, error) {
-	if _, err := r.currentCurrencyByCode(ctx, tx, params.BookID, params.Spec.Code); err == nil {
+func createCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams, auditEventID int64) (CommodityRecord, error) {
+	if _, err := currentCurrencyByCode(ctx, tx, params.BookID, params.Spec.Code); err == nil {
 		return CommodityRecord{}, ErrCommodityExists
 	} else if !errors.Is(err, ErrNotFound) {
 		return CommodityRecord{}, err
@@ -420,7 +420,7 @@ func (r *CommodityRepository) currentCurrencyByID(ctx context.Context, tx *sql.T
 	return record, nil
 }
 
-func (r *CommodityRepository) currentCurrencyByCode(ctx context.Context, tx *sql.Tx, bookID int64, code string) (CommodityRecord, error) {
+func currentCurrencyByCode(ctx context.Context, tx *sql.Tx, bookID int64, code string) (CommodityRecord, error) {
 	var record CommodityRecord
 	if err := scanCommodityRecord(tx.QueryRowContext(ctx, currentCurrencySelect(`
 		AND c.book_id = ? AND c.kind = 'currency' AND c.code = ?

@@ -8,6 +8,7 @@
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
+  import { currentBookQueryOptions } from '$lib/api/books';
   import {
     accountsQueryOptions,
     archiveAccount,
@@ -15,13 +16,14 @@
     deleteAccount,
     type AccountResponse
   } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import { currenciesQueryOptions, currencyCatalogQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
     deleteInstitution,
     institutionsQueryOptions,
     type InstitutionResponse
   } from '$lib/api/institutions';
   import { m } from '$lib/paraglide/messages.js';
+  import { localizedCurrencyCatalog } from '$lib/install-gate/currency-options';
   import AccountEditor from './account-editor.svelte';
   import AccountFilterBar from './account-filter-bar.svelte';
   import AccountSummaryStats from './account-summary-stats.svelte';
@@ -49,6 +51,8 @@
   const accountsQuery = createQuery(() => accountsQueryOptions(true, false));
   const institutionsQuery = createQuery(() => institutionsQueryOptions(true));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
+  const currencyCatalogQuery = createQuery(() => currencyCatalogQueryOptions());
+  const currentBookQuery = createQuery(() => currentBookQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
 
   let statusFilter = $state<StatusFilter>('all');
@@ -60,6 +64,7 @@
   let collapsedNodeIDs = $state<Set<string>>(new Set());
 
   const countryNames = new Intl.DisplayNames(undefined, { type: 'region' });
+  const currencyDisplayNames = new Intl.DisplayNames(undefined, { type: 'currency' });
 
   const institutionsByID = $derived.by(() => {
     return new Map<number, InstitutionResponse>(
@@ -72,6 +77,7 @@
       currenciesQuery.data?.currencies.map((currency) => [currency.id, currency]) ?? []
     );
   });
+  const currencyCatalog = $derived(localizedCurrencyCatalog(currencyCatalogQuery.data?.currencies ?? [], currencyDisplayNames));
 
   const allUserAccounts = $derived.by(() => {
     return accountsQuery.data?.accounts.filter((account) => !account.is_system) ?? [];
@@ -145,15 +151,36 @@
   const visibleCount = $derived(visibleAccounts.length);
   const activeCount = $derived(userAccounts.filter((account) => account.status === 'active').length);
   const closedCount = $derived(userAccounts.filter((account) => account.status === 'closed').length);
-  const shellError = $derived(accountsQuery.error ?? institutionsQuery.error ?? currenciesQuery.error ?? sessionQuery.error);
+  const shellError = $derived(
+    accountsQuery.error ??
+      institutionsQuery.error ??
+      currenciesQuery.error ??
+      currencyCatalogQuery.error ??
+      currentBookQuery.error ??
+      sessionQuery.error
+  );
   const csrfToken = $derived(sessionQuery.data?.csrf_token);
 
   const screenState = $derived.by<'loading' | 'error' | 'empty' | 'ready'>(() => {
-    if (accountsQuery.isPending || institutionsQuery.isPending || currenciesQuery.isPending || sessionQuery.isPending) {
+    if (
+      accountsQuery.isPending ||
+      institutionsQuery.isPending ||
+      currenciesQuery.isPending ||
+      currencyCatalogQuery.isPending ||
+      currentBookQuery.isPending ||
+      sessionQuery.isPending
+    ) {
       return 'loading';
     }
 
-    if (accountsQuery.isError || institutionsQuery.isError || currenciesQuery.isError || sessionQuery.isError) {
+    if (
+      accountsQuery.isError ||
+      institutionsQuery.isError ||
+      currenciesQuery.isError ||
+      currencyCatalogQuery.isError ||
+      currentBookQuery.isError ||
+      sessionQuery.isError
+    ) {
       return 'error';
     }
 
@@ -250,6 +277,8 @@
       accountsQuery.refetch(),
       institutionsQuery.refetch(),
       currenciesQuery.refetch(),
+      currencyCatalogQuery.refetch(),
+      currentBookQuery.refetch(),
       sessionQuery.refetch()
     ]);
   }
@@ -368,6 +397,8 @@
           accounts={manageableAccounts}
           institutions={institutionsQuery.data?.institutions ?? []}
           currencies={currenciesQuery.data?.currencies ?? []}
+          {currencyCatalog}
+          defaultCurrencyCommodityID={currentBookQuery.data?.default_currency_commodity_id ?? undefined}
           {csrfToken}
           onSaved={handleSaved}
           onCancel={() => (editor = { type: 'none' })}
@@ -380,6 +411,8 @@
           accounts={manageableAccounts}
           institutions={institutionsQuery.data?.institutions ?? []}
           currencies={currenciesQuery.data?.currencies ?? []}
+          {currencyCatalog}
+          defaultCurrencyCommodityID={currentBookQuery.data?.default_currency_commodity_id ?? undefined}
           {csrfToken}
           onSaved={handleSaved}
           onCancel={() => (editor = { type: 'none' })}

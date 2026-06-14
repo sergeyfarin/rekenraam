@@ -148,7 +148,7 @@ Early default:
 
 - Support a single owner user first.
 - Add local authentication before real financial data entry ships.
-- Use browser-based first-run setup to create the owner username and password first, then extend setup with default book, default currency preference, optional additional currencies, system accounts, default categories, and optional additional categories as those feature slices are implemented.
+- Use browser-based first-run setup to create the owner username and password first, then extend setup with default book, default currency preference, system accounts, default categories, and optional additional categories as those feature slices are implemented.
 - Persist setup progress as named steps rather than a single boolean.
 - Put all privileged operations behind authentication.
 - Keep auth local to the deployment unless a future decision introduces external identity providers.

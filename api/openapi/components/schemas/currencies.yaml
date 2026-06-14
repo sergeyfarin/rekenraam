@@ -112,20 +112,6 @@ CreateCurrencyRequest:
       description: Display name snapshot supplied by the frontend locale. Falls back to catalog English if omitted.
       maxLength: 200
   additionalProperties: false
-CurrencySetupSelection:
-  type: object
-  required:
-    - code
-  properties:
-    code:
-      type: string
-      minLength: 3
-      maxLength: 3
-    name:
-      type: string
-      description: Display name snapshot supplied by the frontend locale. Falls back to catalog English if omitted.
-      maxLength: 200
-  additionalProperties: false
 CompleteCurrencySetupRequest:
   type: object
   required:
@@ -136,11 +122,6 @@ CompleteCurrencySetupRequest:
       minLength: 3
       maxLength: 3
       description: Default currency preference for new currency-sensitive UI and accounts. It is not a reporting/base currency.
-    currencies:
-      type: array
-      description: Optional additional catalog currencies. The default currency is always created even when this list is omitted or empty.
-      items:
-        $ref: "../../openapi.yaml#/components/schemas/CurrencySetupSelection"
   additionalProperties: false
 CompleteCurrencySetupResponse:
   type: object

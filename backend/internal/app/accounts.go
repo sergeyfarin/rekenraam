@@ -29,6 +29,7 @@ var (
 	ErrAccountInvalidLifecycle = errors.New("account lifecycle transition is invalid")
 	ErrAccountParentInvalid    = errors.New("account parent is invalid")
 	ErrAccountReferenceInvalid = errors.New("account reference is invalid")
+	ErrAccountCurrencyLocked   = errors.New("account currency cannot be changed after postings exist")
 	ErrAccountDeleteNotAllowed = errors.New("account cannot be deleted")
 )
 
@@ -64,6 +65,7 @@ type Account struct {
 	InstitutionID         *int64
 	CountryCode           string
 	DefaultCommodityID    *int64
+	DefaultCommodityCode  string
 	QuantityScaleOverride *int
 	AllowsPostings        bool
 	NumberLast4           string
@@ -100,6 +102,7 @@ type CreateAccountInput struct {
 	InstitutionID         *int64
 	CountryCode           string
 	DefaultCommodityID    *int64
+	DefaultCommodityCode  string
 	QuantityScaleOverride *int
 	AllowsPostings        *bool
 	NumberLast4           string
@@ -126,6 +129,7 @@ type UpdateAccountInput struct {
 	InstitutionID         *int64
 	CountryCode           string
 	DefaultCommodityID    *int64
+	DefaultCommodityCode  string
 	QuantityScaleOverride *int
 	AllowsPostings        *bool
 	NumberLast4           string
@@ -255,6 +259,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 		InstitutionID:         input.InstitutionID,
 		CountryCode:           input.CountryCode,
 		DefaultCommodityID:    input.DefaultCommodityID,
+		DefaultCommodityCode:  input.DefaultCommodityCode,
 		QuantityScaleOverride: input.QuantityScaleOverride,
 		AllowsPostings:        input.AllowsPostings,
 		NumberLast4:           input.NumberLast4,
@@ -335,6 +340,7 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 		InstitutionID:         input.InstitutionID,
 		CountryCode:           input.CountryCode,
 		DefaultCommodityID:    input.DefaultCommodityID,
+		DefaultCommodityCode:  input.DefaultCommodityCode,
 		QuantityScaleOverride: input.QuantityScaleOverride,
 		AllowsPostings:        input.AllowsPostings,
 		NumberLast4:           input.NumberLast4,
@@ -344,6 +350,19 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 	})
 	if err != nil {
 		return Account{}, err
+	}
+	commodityChanged, err := s.defaultCommodityChanged(ctx, current, spec, input.DefaultCommodityCode)
+	if err != nil {
+		return Account{}, err
+	}
+	if commodityChanged {
+		hasPostings, err := s.repository.AccountHasPostings(ctx, BookID, input.AccountID)
+		if err != nil {
+			return Account{}, fmt.Errorf("check account postings: %w", err)
+		}
+		if hasPostings {
+			return Account{}, ErrAccountCurrencyLocked
+		}
 	}
 
 	now := s.now().UTC()
@@ -579,6 +598,7 @@ type accountSpecInput struct {
 	InstitutionID         *int64
 	CountryCode           string
 	DefaultCommodityID    *int64
+	DefaultCommodityCode  string
 	QuantityScaleOverride *int
 	AllowsPostings        *bool
 	NumberLast4           string
@@ -691,6 +711,11 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 	}
 
 	defaultCommodityID := nullableInt64(input.DefaultCommodityID)
+	defaultCommodityCode := normalizeCurrencyCode(input.DefaultCommodityCode)
+	var ensureDefaultCurrency *db.CurrencySpec
+	if defaultCommodityID.Valid && defaultCommodityCode != "" {
+		return db.AccountSpec{}, ValidationError{Message: "use either default commodity id or default commodity code"}
+	}
 	var commodityMaxScale int
 	if defaultCommodityID.Valid {
 		commodity, err := s.repository.CurrentCommodityByID(ctx, BookID, defaultCommodityID.Int64)
@@ -701,6 +726,17 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 			return db.AccountSpec{}, ErrAccountReferenceInvalid
 		}
 		commodityMaxScale = commodity.MaxQuantityScale
+	} else if defaultCommodityCode != "" {
+		spec, err := currencySpecFromCatalog(defaultCommodityCode, "")
+		if err != nil {
+			if errors.Is(err, ErrCurrencyNotFound) {
+				return db.AccountSpec{}, ErrAccountReferenceInvalid
+			}
+			return db.AccountSpec{}, err
+		}
+		ensureDefaultCurrency = &spec
+		commodityMaxScale = spec.MaxQuantityScale
+		defaultCommodityID = sql.NullInt64{Int64: -1, Valid: true}
 	}
 	if allowsPostings && defaultCommodityID.Valid == false && accountKindRequiresDefaultCommodity(accountClass, accountKind) {
 		return db.AccountSpec{}, ValidationError{Message: "default commodity is required for this posting account"}
@@ -751,6 +787,7 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		InstitutionID:         institutionID,
 		CountryCode:           countryCode,
 		DefaultCommodityID:    defaultCommodityID,
+		EnsureDefaultCurrency: ensureDefaultCurrency,
 		QuantityScaleOverride: quantityScaleOverride,
 		AllowsPostings:        allowsPostings,
 		NumberLast4:           numberLast4,
@@ -781,6 +818,29 @@ func accountKindRequiresDefaultCommodity(accountClass string, accountKind string
 	}
 
 	return accountKind != "receivable" && accountKind != "payable"
+}
+
+func (s *AccountService) defaultCommodityChanged(ctx context.Context, current Account, spec db.AccountSpec, defaultCommodityCode string) (bool, error) {
+	if strings.TrimSpace(defaultCommodityCode) != "" {
+		record, err := s.repository.CurrentCurrencyByCode(ctx, BookID, normalizeCurrencyCode(defaultCommodityCode))
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return true, nil
+			}
+			return false, fmt.Errorf("read requested account currency: %w", err)
+		}
+
+		return current.DefaultCommodityID == nil || *current.DefaultCommodityID != record.ID, nil
+	}
+
+	if !spec.DefaultCommodityID.Valid {
+		return current.DefaultCommodityID != nil, nil
+	}
+	if current.DefaultCommodityID == nil {
+		return true, nil
+	}
+
+	return *current.DefaultCommodityID != spec.DefaultCommodityID.Int64, nil
 }
 
 func accountSpecFromStored(account Account) db.AccountSpec {

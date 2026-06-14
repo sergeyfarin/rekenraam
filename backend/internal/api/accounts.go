@@ -51,6 +51,7 @@ type accountRequest struct {
 	InstitutionID         *int64          `json:"institution_id"`
 	CountryCode           string          `json:"country_code"`
 	DefaultCommodityID    *int64          `json:"default_commodity_id"`
+	DefaultCommodityCode  string          `json:"default_commodity_code"`
 	QuantityScaleOverride *int            `json:"quantity_scale_override"`
 	AllowsPostings        *bool           `json:"allows_postings"`
 	NumberLast4           string          `json:"number_last4"`
@@ -175,6 +176,7 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			InstitutionID:         request.InstitutionID,
 			CountryCode:           request.CountryCode,
 			DefaultCommodityID:    request.DefaultCommodityID,
+			DefaultCommodityCode:  request.DefaultCommodityCode,
 			QuantityScaleOverride: request.QuantityScaleOverride,
 			AllowsPostings:        request.AllowsPostings,
 			NumberLast4:           request.NumberLast4,
@@ -227,6 +229,7 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			InstitutionID:         request.InstitutionID,
 			CountryCode:           request.CountryCode,
 			DefaultCommodityID:    request.DefaultCommodityID,
+			DefaultCommodityCode:  request.DefaultCommodityCode,
 			QuantityScaleOverride: request.QuantityScaleOverride,
 			AllowsPostings:        request.AllowsPostings,
 			NumberLast4:           request.NumberLast4,
@@ -405,6 +408,8 @@ func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "account parent is invalid")
 	case errors.Is(err, app.ErrAccountReferenceInvalid):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "account reference is invalid")
+	case errors.Is(err, app.ErrAccountCurrencyLocked):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "account currency cannot be changed after postings exist")
 	case errors.Is(err, app.ErrAccountInvalidLifecycle):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "account lifecycle transition is invalid")
 	case errors.Is(err, app.ErrAccountDeleteNotAllowed):

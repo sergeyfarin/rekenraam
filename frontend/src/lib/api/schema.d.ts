@@ -1513,7 +1513,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create setup currencies and choose the book default currency */
+        /** Choose the book default currency */
         post: {
             parameters: {
                 query?: never;
@@ -1530,7 +1530,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Currencies created and setup advanced to the next step */
+                /** @description Default currency created and setup advanced to the next step */
                 201: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -5537,16 +5537,9 @@ export interface components {
             /** @description Display name snapshot supplied by the frontend locale. Falls back to catalog English if omitted. */
             name?: string;
         };
-        CurrencySetupSelection: {
-            code: string;
-            /** @description Display name snapshot supplied by the frontend locale. Falls back to catalog English if omitted. */
-            name?: string;
-        };
         CompleteCurrencySetupRequest: {
             /** @description Default currency preference for new currency-sensitive UI and accounts. It is not a reporting/base currency. */
             default_currency_code: string;
-            /** @description Optional additional catalog currencies. The default currency is always created even when this list is omitted or empty. */
-            currencies?: components["schemas"]["CurrencySetupSelection"][];
         };
         CompleteCurrencySetupResponse: {
             currencies: components["schemas"]["CurrencyResponse"][];
@@ -5727,6 +5720,8 @@ export interface components {
              * @description Default entry commodity. Required for single-commodity posting asset and liability accounts; omit for multi-commodity transient accounts such as receivable/payable.
              */
             default_commodity_id?: number;
+            /** @description Embedded catalog currency code to create or reuse as the default commodity during account save. Use instead of default_commodity_id. */
+            default_commodity_code?: string;
             quantity_scale_override?: number;
             /** @description Defaults to true when omitted. */
             allows_postings?: boolean;
@@ -5764,7 +5759,7 @@ export interface components {
             change_reason?: string;
         };
         CompleteSystemAccountsSetupResponse: {
-            /** @description Required system accounts plus setup-created starter cash accounts for active setup currencies. */
+            /** @description Required system accounts plus setup-created starter cash account for the default setup currency. */
             accounts: components["schemas"]["AccountResponse"][];
             setup: components["schemas"]["SetupStatusResponse"];
         };

@@ -37,7 +37,6 @@
   let loginUsername = $state('');
   let loginPassword = $state('');
   let currencyDefaultCode = $state('');
-  let selectedCurrencyCodes = $state<string[]>([]);
   let currencySearchCode = $state('');
   let ownerError = $state<unknown>(undefined);
   let loginError = $state<unknown>(undefined);
@@ -114,16 +113,8 @@
 
     const catalogCodes = new Set(catalog.map((currency) => currency.code));
     const fallbackCode = [localeCode, 'USD', catalog[0]?.code].find((code) => code !== undefined && catalogCodes.has(code));
-    const validSelectedCodes = selectedCurrencyCodes.filter((code) => catalogCodes.has(code));
-
-    if (selectedCurrencyCodes.length === 0 && fallbackCode) {
-      selectedCurrencyCodes = [fallbackCode];
-    } else if (!stringArraysEqual(selectedCurrencyCodes, validSelectedCodes)) {
-      selectedCurrencyCodes = validSelectedCodes;
-    }
-
-    if (!currencyDefaultCode || !selectedCurrencyCodes.includes(currencyDefaultCode)) {
-      currencyDefaultCode = selectedCurrencyCodes[0] ?? fallbackCode ?? '';
+    if (!currencyDefaultCode || !catalogCodes.has(currencyDefaultCode)) {
+      currencyDefaultCode = fallbackCode ?? '';
     }
   });
 
@@ -195,12 +186,9 @@
     currencyError = undefined;
 
     try {
-      const currencyCodes = Array.from(new Set([currencyDefaultCode, ...selectedCurrencyCodes])).filter(Boolean);
-
       await completeCurrencySetup(
         {
-          default_currency_code: currencyDefaultCode,
-          currencies: currencyCodes.map((code) => ({ code }))
+          default_currency_code: currencyDefaultCode
         },
         sessionQuery.data?.csrf_token ?? ''
       );
@@ -213,9 +201,6 @@
     }
   }
 
-  function stringArraysEqual(left: string[], right: string[]): boolean {
-    return left.length === right.length && left.every((value, index) => value === right[index]);
-  }
 </script>
 
 <main class="min-h-screen px-6 py-16 sm:px-10">
@@ -283,7 +268,6 @@
           catalogPending={currencyCatalogQuery.isPending}
           {catalog}
           quickCodes={quickCodes}
-          bind:selectedCodes={selectedCurrencyCodes}
           bind:defaultCode={currencyDefaultCode}
           bind:searchCode={currencySearchCode}
           pending={currencyPending}

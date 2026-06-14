@@ -188,6 +188,11 @@ AccountRequest:
       type: integer
       format: int64
       description: Default entry commodity. Required for single-commodity posting asset and liability accounts; omit for multi-commodity transient accounts such as receivable/payable.
+    default_commodity_code:
+      type: string
+      minLength: 3
+      maxLength: 3
+      description: Embedded catalog currency code to create or reuse as the default commodity during account save. Use instead of default_commodity_id.
     quantity_scale_override:
       type: integer
       minimum: 0
@@ -244,7 +249,7 @@ CompleteSystemAccountsSetupResponse:
   properties:
     accounts:
       type: array
-      description: Required system accounts plus setup-created starter cash accounts for active setup currencies.
+      description: Required system accounts plus setup-created starter cash account for the default setup currency.
       items:
         $ref: "../../openapi.yaml#/components/schemas/AccountResponse"
     setup:

@@ -13,6 +13,7 @@
   import type { InstitutionResponse } from '$lib/api/institutions';
   import { m } from '$lib/paraglide/messages.js';
   import { deriveRecordCode } from '$lib/record-code';
+  import type { LocalizedCurrencyCatalogEntry } from '$lib/install-gate/currency-options';
   import {
     accountClassLabel,
     accountDisplayName,
@@ -29,6 +30,8 @@
     accounts,
     institutions,
     currencies,
+    currencyCatalog,
+    defaultCurrencyCommodityID,
     csrfToken,
     onSaved,
     onCancel,
@@ -39,6 +42,8 @@
     accounts: AccountResponse[];
     institutions: InstitutionResponse[];
     currencies: CurrencyResponse[];
+    currencyCatalog: LocalizedCurrencyCatalogEntry[];
+    defaultCurrencyCommodityID?: number;
     csrfToken?: string;
     onSaved: () => Promise<void> | void;
     onCancel: () => void;
@@ -60,6 +65,7 @@
   let institutionID = $state('');
   let countryCode = $state('');
   let defaultCommodityID = $state('');
+  let defaultCommodityCode = $state('');
   let allowsPostings = $state(true);
   let numberLast4 = $state('');
   let openedOn = $state('');
@@ -69,6 +75,8 @@
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
   let codeEdited = $state(false);
+  let currencyDialogOpen = $state(false);
+  let currencySearch = $state('');
 
   const parentOptions = $derived.by(() => {
     return accounts.filter(
@@ -98,6 +106,48 @@
     );
   });
   const kindOptions = $derived(accountKindOptions(accountClass));
+  const currencyOptions = $derived.by<CurrencyResponse[]>(() => {
+    const currencyByID = new Map<number, CurrencyResponse>();
+    for (const currency of currencies) {
+      currencyByID.set(currency.id, currency);
+    }
+    const ids: number[] = [];
+
+    addCurrencyID(ids, currencyByID, defaultCurrencyCommodityID);
+    for (const candidate of accounts) {
+      if (candidate.status === 'active') {
+        addCurrencyID(ids, currencyByID, candidate.default_commodity_id);
+      }
+    }
+    addCurrencyID(ids, currencyByID, account?.default_commodity_id);
+    addCurrencyID(ids, currencyByID, defaultCommodityID === '' ? undefined : Number(defaultCommodityID));
+
+    return ids
+      .map((id) => currencyByID.get(id))
+      .filter((currency: CurrencyResponse | undefined): currency is CurrencyResponse => currency !== undefined);
+  });
+  const selectedCatalogCurrency = $derived.by(() => {
+    if (defaultCommodityCode === '') {
+      return undefined;
+    }
+
+    return currencyCatalog.find((currency: LocalizedCurrencyCatalogEntry) => currency.code === defaultCommodityCode);
+  });
+  const currencyPlaceholder = $derived(
+    selectedCatalogCurrency
+      ? m.accounts_field_pending_currency({ code: selectedCatalogCurrency.code, name: selectedCatalogCurrency.name })
+      : m.accounts_field_no_currency()
+  );
+  const filteredCurrencyCatalog = $derived.by(() => {
+    const query = currencySearch.trim().toLocaleLowerCase();
+    const values = query
+      ? currencyCatalog.filter((currency: LocalizedCurrencyCatalogEntry) =>
+          [currency.code, currency.name, currency.english_name].join(' ').toLocaleLowerCase().includes(query)
+        )
+      : currencyCatalog;
+
+    return values.slice(0, 30);
+  });
   const institutionLockedByParent = $derived(!!selectedParent);
   const institutionInheritanceHint = $derived.by(() => {
     if (!selectedParent) {
@@ -138,7 +188,8 @@
     countryCode = account?.country_code ?? '';
     defaultCommodityID = account?.default_commodity_id
       ? String(account.default_commodity_id)
-      : defaultCurrencyID(nextAccountClass, nextAccountKind, currencies);
+      : defaultCurrencyID(nextAccountClass, nextAccountKind, currencies, defaultCurrencyCommodityID);
+    defaultCommodityCode = '';
     allowsPostings = account?.allows_postings ?? true;
     numberLast4 = account?.number_last4 ?? '';
     openedOn = account?.opened_on ?? '';
@@ -162,10 +213,11 @@
 
     if (accountKindRequiresDefaultCurrency(accountClass, accountKind)) {
       if (defaultCommodityID === '') {
-        defaultCommodityID = defaultCurrencyID(accountClass, accountKind, currencies);
+        defaultCommodityID = defaultCurrencyID(accountClass, accountKind, currencies, defaultCurrencyCommodityID);
       }
     } else {
       defaultCommodityID = '';
+      defaultCommodityCode = '';
     }
   });
 
@@ -222,6 +274,7 @@
     assignNumber(request, 'institution_id', institutionID);
     assignString(request, 'country_code', countryCode.toUpperCase());
     assignNumber(request, 'default_commodity_id', defaultCommodityID);
+    assignString(request, 'default_commodity_code', defaultCommodityCode);
     assignString(request, 'number_last4', numberLast4);
     assignString(request, 'opened_on', openedOn);
     assignString(request, 'effective_from', effectiveFrom);
@@ -243,6 +296,18 @@
     codeEdited = true;
   }
 
+  function handleCurrencySelect(event: Event) {
+    defaultCommodityID = event.currentTarget instanceof HTMLSelectElement ? event.currentTarget.value : '';
+    defaultCommodityCode = '';
+  }
+
+  function chooseCatalogCurrency(currency: LocalizedCurrencyCatalogEntry) {
+    defaultCommodityID = '';
+    defaultCommodityCode = currency.code;
+    currencyDialogOpen = false;
+    currencySearch = '';
+  }
+
   function assignString<T extends Record<string, unknown>>(target: T, key: keyof T, value: string) {
     const trimmed = value.trim();
     if (trimmed !== '') {
@@ -256,9 +321,26 @@
     }
   }
 
-  function defaultCurrencyID(accountClassValue: ManagedAccountClass, accountKindValue: AccountKind, values: CurrencyResponse[]): string {
+  function addCurrencyID(ids: number[], currencyByID: ReadonlyMap<number, CurrencyResponse>, value?: number) {
+    if (!value || !currencyByID.has(value) || ids.includes(value)) {
+      return;
+    }
+
+    ids.push(value);
+  }
+
+  function defaultCurrencyID(
+    accountClassValue: ManagedAccountClass,
+    accountKindValue: AccountKind,
+    values: CurrencyResponse[],
+    preferredID?: number
+  ): string {
     if (!accountKindRequiresDefaultCurrency(accountClassValue, accountKindValue)) {
       return '';
+    }
+
+    if (preferredID && values.some((currency: CurrencyResponse) => currency.id === preferredID)) {
+      return String(preferredID);
     }
 
     return values[0]?.id ? String(values[0].id) : '';
@@ -399,12 +481,19 @@
 
     <label>
       <span class={labelClass}>{m.accounts_field_currency()}</span>
-      <select bind:value={defaultCommodityID} class={inputClass}>
-        <option value="">{m.accounts_field_no_currency()}</option>
-        {#each currencies as currency (currency.id)}
+      <select value={defaultCommodityID} class={inputClass} onchange={handleCurrencySelect}>
+        <option value="">{currencyPlaceholder}</option>
+        {#each currencyOptions as currency (currency.id)}
           <option value={String(currency.id)}>{currency.code} {currency.display_symbol}</option>
         {/each}
       </select>
+      <button
+        type="button"
+        class="mt-2 inline-flex items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-control-hover"
+        onclick={() => (currencyDialogOpen = true)}
+      >
+        {m.accounts_field_other_currency()}
+      </button>
     </label>
 
   </div>
@@ -483,4 +572,56 @@
       {submitLabel}
     </button>
   </div>
+
+  {#if currencyDialogOpen}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-sm">
+      <section class="w-full max-w-lg rounded-[var(--radius-panel)] border border-border bg-surface shadow-[var(--shadow-panel)]">
+        <div class="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div class="min-w-0">
+            <h3 class="text-sm font-semibold text-foreground">{m.accounts_currency_dialog_title()}</h3>
+            <p class="mt-1 text-xs leading-5 text-muted">{m.accounts_currency_dialog_copy()}</p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+            onclick={() => (currencyDialogOpen = false)}
+            aria-label={m.accounts_currency_dialog_close()}
+            title={m.accounts_currency_dialog_close()}
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div class="space-y-3 px-4 py-4">
+          <label>
+            <span class={labelClass}>{m.accounts_currency_dialog_search()}</span>
+            <input
+              bind:value={currencySearch}
+              class={inputClass}
+              autocomplete="off"
+              placeholder={m.accounts_currency_dialog_search_placeholder()}
+            />
+          </label>
+
+          <div class="max-h-72 overflow-auto rounded-[var(--radius-control)] border border-border">
+            {#each filteredCurrencyCatalog as currency (currency.code)}
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm transition last:border-b-0 hover:bg-row-hover"
+                onclick={() => chooseCatalogCurrency(currency)}
+              >
+                <span class="min-w-0">
+                  <span class="block font-semibold text-foreground">{currency.code}</span>
+                  <span class="block truncate text-xs text-muted">{currency.name}</span>
+                </span>
+                <span class="shrink-0 text-muted">{currency.symbol}</span>
+              </button>
+            {:else}
+              <p class="px-3 py-6 text-center text-sm text-muted">{m.accounts_currency_dialog_empty()}</p>
+            {/each}
+          </div>
+        </div>
+      </section>
+    </div>
+  {/if}
 </form>

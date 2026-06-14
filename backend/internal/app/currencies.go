@@ -178,30 +178,11 @@ func (s *CurrencyService) CompleteCurrencySetup(ctx context.Context, input Compl
 		return CompleteCurrencySetupResult{}, ValidationError{Message: "default currency is required"}
 	}
 
-	selectionByCode := make(map[string]CurrencySelectionInput, len(input.Currencies)+1)
-	for _, selection := range input.Currencies {
-		code := normalizeCurrencyCode(selection.Code)
-		if code == "" {
-			return CompleteCurrencySetupResult{}, ValidationError{Message: "currency code is required"}
-		}
-		selection.Code = code
-		selectionByCode[code] = selection
+	defaultSpec, err := s.currencySpec(defaultCode, "")
+	if err != nil {
+		return CompleteCurrencySetupResult{}, err
 	}
-	if _, ok := selectionByCode[defaultCode]; !ok {
-		selectionByCode[defaultCode] = CurrencySelectionInput{Code: defaultCode}
-	}
-
-	specs := make([]db.CurrencySpec, 0, len(selectionByCode))
-	for _, selection := range selectionByCode {
-		spec, err := s.currencySpec(selection.Code, selection.Name)
-		if err != nil {
-			return CompleteCurrencySetupResult{}, err
-		}
-		specs = append(specs, spec)
-	}
-	sort.Slice(specs, func(i, j int) bool {
-		return specs[i].Code < specs[j].Code
-	})
+	specs := []db.CurrencySpec{defaultSpec}
 
 	now := s.now().UTC()
 	result, err := s.repository.CompleteCurrencySetup(ctx, db.CompleteCurrencySetupParams{
@@ -269,13 +250,23 @@ func (s *CurrencyService) SetDefaultCurrency(ctx context.Context, input SetDefau
 }
 
 func (s *CurrencyService) currencySpec(code string, name string) (db.CurrencySpec, error) {
+	return currencySpecFromCatalog(code, name)
+}
+
+func currencySpecFromCatalog(code string, name string) (db.CurrencySpec, error) {
 	code = normalizeCurrencyCode(code)
 	if len(code) != currencyCodeLength {
 		return db.CurrencySpec{}, ValidationError{Message: "currency code must be a 3-letter code"}
 	}
 
-	entry, ok := s.catalog[code]
-	if !ok {
+	var entry CurrencyCatalogEntry
+	for _, candidate := range currencyCatalog {
+		if candidate.Code == code {
+			entry = candidate
+			break
+		}
+	}
+	if entry.Code == "" {
 		return db.CurrencySpec{}, ErrCurrencyNotFound
 	}
 

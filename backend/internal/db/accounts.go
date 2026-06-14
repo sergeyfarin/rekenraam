@@ -59,6 +59,7 @@ type AccountSpec struct {
 	InstitutionID         sql.NullInt64
 	CountryCode           string
 	DefaultCommodityID    sql.NullInt64
+	EnsureDefaultCurrency *CurrencySpec
 	QuantityScaleOverride sql.NullInt64
 	AllowsPostings        bool
 	NumberLast4           string
@@ -144,6 +145,7 @@ type EnsureSystemAccountsRecord struct {
 type AccountCommodityRecord struct {
 	ID               int64
 	BookID           int64
+	Code             string
 	Kind             string
 	Status           string
 	MaxQuantityScale int
@@ -290,6 +292,11 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 		return AccountRecord{}, fmt.Errorf("read account id: %w", err)
 	}
 
+	spec, err := r.accountSpecWithEnsuredCurrency(ctx, tx, params.Spec, params, auditEventID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
 		BookID:             params.BookID,
 		AccountID:          accountID,
@@ -302,7 +309,7 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 		ChangeReason:       params.ChangeReason,
 		ChangeAuditEventID: auditEventID,
 		Status:             "active",
-		Spec:               params.Spec,
+		Spec:               spec,
 	})
 	if err != nil {
 		return AccountRecord{}, err
@@ -357,6 +364,20 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 		return AccountRecord{}, err
 	}
 
+	spec, err := r.accountSpecWithEnsuredCurrency(ctx, tx, params.Spec, CreateAccountParams{
+		BookID:          params.BookID,
+		CreatedByUserID: params.ChangedByUserID,
+		AuthSessionID:   params.AuthSessionID,
+		RequestID:       params.RequestID,
+		OriginType:      params.OriginType,
+		Operation:       params.Operation,
+		CreatedAt:       params.RecordedAt,
+		EffectiveFrom:   params.EffectiveFrom,
+	}, auditEventID)
+	if err != nil {
+		return AccountRecord{}, err
+	}
+
 	record, err := insertAccountVersion(ctx, tx, insertAccountVersionParams{
 		BookID:             params.BookID,
 		AccountID:          params.AccountID,
@@ -369,7 +390,7 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 		ChangeReason:       changeReason,
 		ChangeAuditEventID: auditEventID,
 		Status:             status,
-		Spec:               params.Spec,
+		Spec:               spec,
 	})
 	if err != nil {
 		return AccountRecord{}, err
@@ -548,6 +569,31 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 	return EnsureSystemAccountsRecord{Accounts: records}, nil
 }
 
+func (r *AccountRepository) accountSpecWithEnsuredCurrency(ctx context.Context, tx *sql.Tx, spec AccountSpec, params CreateAccountParams, auditEventID int64) (AccountSpec, error) {
+	if spec.EnsureDefaultCurrency == nil {
+		return spec, nil
+	}
+
+	record, err := ensureCurrency(ctx, tx, CreateCurrencyParams{
+		BookID:          params.BookID,
+		CreatedByUserID: params.CreatedByUserID,
+		AuthSessionID:   params.AuthSessionID,
+		RequestID:       params.RequestID,
+		OriginType:      params.OriginType,
+		Operation:       params.Operation,
+		Spec:            *spec.EnsureDefaultCurrency,
+		CreatedAt:       params.CreatedAt,
+		EffectiveFrom:   params.EffectiveFrom,
+	}, auditEventID)
+	if err != nil {
+		return AccountSpec{}, err
+	}
+
+	spec.DefaultCommodityID = sql.NullInt64{Int64: record.ID, Valid: true}
+	spec.EnsureDefaultCurrency = nil
+	return spec, nil
+}
+
 func (r *AccountRepository) WouldCreateCycle(ctx context.Context, bookID int64, accountID int64, parentAccountID int64) (bool, error) {
 	if accountID <= 0 || parentAccountID <= 0 {
 		return false, nil
@@ -594,13 +640,13 @@ func (r *AccountRepository) WouldCreateCycle(ctx context.Context, bookID int64, 
 func (r *AccountRepository) CurrentCommodityByID(ctx context.Context, bookID int64, commodityID int64) (AccountCommodityRecord, error) {
 	var record AccountCommodityRecord
 	if err := r.database.QueryRowContext(ctx, `
-		SELECT c.id, c.book_id, c.kind, cv.status, cv.max_quantity_scale
+		SELECT c.id, c.book_id, c.code, c.kind, cv.status, cv.max_quantity_scale
 		FROM commodities c
 		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
 		WHERE 1 = 1
 			AND c.book_id = ?
 			AND c.id = ?
-	`, bookID, commodityID).Scan(&record.ID, &record.BookID, &record.Kind, &record.Status, &record.MaxQuantityScale); err != nil {
+	`, bookID, commodityID).Scan(&record.ID, &record.BookID, &record.Code, &record.Kind, &record.Status, &record.MaxQuantityScale); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return AccountCommodityRecord{}, ErrNotFound
 		}
@@ -608,6 +654,42 @@ func (r *AccountRepository) CurrentCommodityByID(ctx context.Context, bookID int
 	}
 
 	return record, nil
+}
+
+func (r *AccountRepository) CurrentCurrencyByCode(ctx context.Context, bookID int64, code string) (AccountCommodityRecord, error) {
+	var record AccountCommodityRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT c.id, c.book_id, c.code, c.kind, cv.status, cv.max_quantity_scale
+		FROM commodities c
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE 1 = 1
+			AND c.book_id = ?
+			AND c.kind = 'currency'
+			AND c.code = ?
+	`, bookID, code).Scan(&record.ID, &record.BookID, &record.Code, &record.Kind, &record.Status, &record.MaxQuantityScale); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return AccountCommodityRecord{}, ErrNotFound
+		}
+		return AccountCommodityRecord{}, fmt.Errorf("read account currency by code: %w", err)
+	}
+
+	return record, nil
+}
+
+func (r *AccountRepository) AccountHasPostings(ctx context.Context, bookID int64, accountID int64) (bool, error) {
+	var exists int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM posting_versions
+			WHERE book_id = ?
+				AND account_id = ?
+		)
+	`, bookID, accountID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("read account posting existence: %w", err)
+	}
+
+	return exists == 1, nil
 }
 
 func (r *AccountRepository) AccountKindByCode(ctx context.Context, code string) (AccountKindRecord, error) {
