@@ -23,6 +23,7 @@
   "api_error_generic": "Something went wrong. Try again.",
   "form_error_title": "We couldn't complete that action.",
   "form_error_request_id": "Request ID: {requestId}",
+  "form_advanced": "Advanced",
   "home_health_checking": "Checking backend health...",
   "home_health_status": "Backend status: {status}",
   "home_health_unavailable": "Backend status unavailable",

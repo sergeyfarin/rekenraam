@@ -10,6 +10,7 @@
     type UpdateCategoryRequest
   } from '$lib/api/categories';
   import { m } from '$lib/paraglide/messages.js';
+  import { deriveRecordCode } from '$lib/record-code';
   import CategoryIcon from './category-icon.svelte';
   import {
     categoryIconLabel,
@@ -57,6 +58,7 @@
   let changeReason = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+  let codeEdited = $state(false);
 
   const parentOptions = $derived.by<CategoryResponse[]>(() => {
     return categories
@@ -88,7 +90,8 @@
   $effect(() => {
     categoryID = category?.id;
     name = category?.name ?? '';
-    code = category?.code ?? '';
+    code = category?.code ?? deriveRecordCode(category ? categoryDisplayName(category) : '');
+    codeEdited = mode === 'edit' && !!category?.code;
     categoryType = category?.category_type ?? 'expense';
     parentCategoryID = category?.parent_category_id ? String(category.parent_category_id) : '';
     allowsPostings = category?.allows_postings ?? true;
@@ -173,6 +176,18 @@
     return request;
   }
 
+  function handleNameInput(event: Event) {
+    name = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+    if (!codeEdited && !category?.is_builtin) {
+      code = deriveRecordCode(name || namePlaceholder);
+    }
+  }
+
+  function handleCodeInput(event: Event) {
+    code = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+    codeEdited = true;
+  }
+
   function assignString<T extends Record<string, unknown>>(target: T, key: keyof T, value: string) {
     const trimmed = value.trim();
     if (trimmed !== '') {
@@ -211,12 +226,7 @@
   <div class="grid gap-3 sm:grid-cols-2">
     <label>
       <span class={labelClass}>{nameLabel}</span>
-      <input bind:value={name} class={inputClass} required={!isAppDefined} maxlength="200" placeholder={namePlaceholder} />
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.categories_field_code()}</span>
-      <input bind:value={code} class={inputClass} maxlength="100" disabled={category?.is_builtin} />
+      <input value={name} class={inputClass} required={!isAppDefined} maxlength="200" placeholder={namePlaceholder} oninput={handleNameInput} />
     </label>
 
     <label>
@@ -235,21 +245,6 @@
           <option value={String(parent.id)}>{categoryDisplayName(parent)}</option>
         {/each}
       </select>
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.categories_field_opened_on()}</span>
-      <input bind:value={openedOn} class={inputClass} type="date" />
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.categories_field_effective_from()}</span>
-      <input bind:value={effectiveFrom} class={inputClass} type="date" />
-    </label>
-
-    <label class="sm:col-span-2">
-      <span class={labelClass}>{m.categories_field_reason()}</span>
-      <input bind:value={changeReason} class={inputClass} maxlength="500" />
     </label>
 
     <fieldset class="sm:col-span-2">
@@ -278,6 +273,31 @@
     <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" />
     {m.categories_field_allows_postings()}
   </label>
+
+  <details class="rounded-[var(--radius-control)] border border-border bg-surface">
+    <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
+    <div class="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
+      <label>
+        <span class={labelClass}>{m.categories_field_code()}</span>
+        <input value={code} class={inputClass} maxlength="100" disabled={category?.is_builtin} oninput={handleCodeInput} />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.categories_field_opened_on()}</span>
+        <input bind:value={openedOn} class={inputClass} type="date" />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.categories_field_effective_from()}</span>
+        <input bind:value={effectiveFrom} class={inputClass} type="date" />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.categories_field_reason()}</span>
+        <input bind:value={changeReason} class={inputClass} maxlength="500" />
+      </label>
+    </div>
+  </details>
 
   <div class="flex flex-wrap items-center justify-end gap-2">
     <button

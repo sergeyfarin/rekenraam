@@ -12,6 +12,7 @@
   import type { CurrencyResponse } from '$lib/api/currencies';
   import type { InstitutionResponse } from '$lib/api/institutions';
   import { m } from '$lib/paraglide/messages.js';
+  import { deriveRecordCode } from '$lib/record-code';
   import {
     accountClassLabel,
     accountDisplayName,
@@ -67,6 +68,7 @@
   let commentMarkdown = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+  let codeEdited = $state(false);
 
   const activeInstitutions = $derived.by(() => {
     return institutions.filter((institution: InstitutionResponse) => institution.status === 'active');
@@ -95,7 +97,8 @@
   $effect(() => {
     accountID = account?.id;
     name = account?.name ?? '';
-    code = account?.code ?? '';
+    code = account?.code ?? deriveRecordCode(account?.name ?? '');
+    codeEdited = mode === 'edit' && !!account?.code;
     accountClass = managedClass(account?.account_class);
     accountKind = account?.account_kind ?? defaultKindForClass(accountClass);
     parentAccountID = account?.parent_account_id ? String(account.parent_account_id) : '';
@@ -166,6 +169,18 @@
     assignString(request, 'comment_markdown', commentMarkdown);
 
     return request;
+  }
+
+  function handleNameInput(event: Event) {
+    name = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+    if (!codeEdited) {
+      code = deriveRecordCode(name);
+    }
+  }
+
+  function handleCodeInput(event: Event) {
+    code = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+    codeEdited = true;
   }
 
   function assignString<T extends Record<string, unknown>>(target: T, key: keyof T, value: string) {
@@ -261,12 +276,7 @@
   <div class="grid gap-3 sm:grid-cols-2">
     <label>
       <span class={labelClass}>{m.accounts_field_name()}</span>
-      <input bind:value={name} class={inputClass} required maxlength="200" />
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.accounts_field_code()}</span>
-      <input bind:value={code} class={inputClass} maxlength="100" />
+      <input value={name} class={inputClass} required maxlength="200" oninput={handleNameInput} />
     </label>
 
     <label>
@@ -298,11 +308,6 @@
     </label>
 
     <label>
-      <span class={labelClass}>{m.accounts_field_country()}</span>
-      <input bind:value={countryCode} class={inputClass} maxlength="2" autocapitalize="characters" />
-    </label>
-
-    <label>
       <span class={labelClass}>{m.accounts_field_currency()}</span>
       <select bind:value={defaultCommodityID} class={inputClass}>
         <option value="">{m.accounts_field_no_currency()}</option>
@@ -322,25 +327,6 @@
       </select>
     </label>
 
-    <label>
-      <span class={labelClass}>{m.accounts_field_number_last4()}</span>
-      <input bind:value={numberLast4} class={inputClass} maxlength="8" inputmode="numeric" />
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.accounts_field_opened_on()}</span>
-      <input bind:value={openedOn} class={inputClass} type="date" />
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.accounts_field_effective_from()}</span>
-      <input bind:value={effectiveFrom} class={inputClass} type="date" />
-    </label>
-
-    <label>
-      <span class={labelClass}>{m.accounts_field_reason()}</span>
-      <input bind:value={changeReason} class={inputClass} maxlength="500" />
-    </label>
   </div>
 
   <label class="flex items-center gap-3 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground">
@@ -348,10 +334,45 @@
     {m.accounts_field_allows_postings()}
   </label>
 
-  <label>
-    <span class={labelClass}>{m.accounts_field_comment()}</span>
-    <textarea bind:value={commentMarkdown} class={textAreaClass} maxlength="5000"></textarea>
-  </label>
+  <details class="rounded-[var(--radius-control)] border border-border bg-surface">
+    <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
+    <div class="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
+      <label>
+        <span class={labelClass}>{m.accounts_field_code()}</span>
+        <input value={code} class={inputClass} maxlength="100" oninput={handleCodeInput} />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.accounts_field_country()}</span>
+        <input bind:value={countryCode} class={inputClass} maxlength="2" autocapitalize="characters" />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.accounts_field_number_last4()}</span>
+        <input bind:value={numberLast4} class={inputClass} maxlength="8" inputmode="numeric" />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.accounts_field_opened_on()}</span>
+        <input bind:value={openedOn} class={inputClass} type="date" />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.accounts_field_effective_from()}</span>
+        <input bind:value={effectiveFrom} class={inputClass} type="date" />
+      </label>
+
+      <label>
+        <span class={labelClass}>{m.accounts_field_reason()}</span>
+        <input bind:value={changeReason} class={inputClass} maxlength="500" />
+      </label>
+
+      <label class="sm:col-span-2">
+        <span class={labelClass}>{m.accounts_field_comment()}</span>
+        <textarea bind:value={commentMarkdown} class={textAreaClass} maxlength="5000"></textarea>
+      </label>
+    </div>
+  </details>
 
   {#if activeInstitutions.length === 0}
     <button
