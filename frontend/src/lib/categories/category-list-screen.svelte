@@ -499,8 +499,8 @@
               {@const category = row.category}
               {@const hasTreeChildren = (treeChildCounts.get(category.id) ?? 0) > 0}
               {@const isCollapsed = collapsedCategoryIDs.has(category.id)}
-              <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.8fr)_minmax(8rem,0.55fr)_auto_auto] lg:items-center">
-                <div class="min-w-0" style={`padding-left: ${Math.min(row.depth, 6) * 1.25}rem`}>
+              <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.75fr)_minmax(7rem,0.45fr)_minmax(9rem,0.55fr)_7.25rem] lg:items-center">
+                <div class="min-w-0" style:padding-left={`${Math.min(row.depth, 6) * 1.25}rem`}>
                   <div class="flex min-w-0 items-start gap-2">
                     {#if hasTreeChildren}
                       <button
@@ -549,7 +549,7 @@
                   <p class="mt-1 truncate text-xs text-muted">{category.allows_postings ? m.categories_allows_postings_yes() : m.categories_allows_postings_no()}</p>
                 </div>
 
-                <div class="flex items-center justify-start">
+                <div class="flex min-w-0 items-center justify-start">
                   <StatusBadge tone={category.status === 'archived' ? 'danger' : 'accent'}>
                     {categoryStatusLabel(category.status)}
                   </StatusBadge>
@@ -565,7 +565,7 @@
                   {/if}
                 </div>
 
-                <div class="flex items-center justify-start gap-1 lg:justify-end">
+                <div class="flex min-w-0 items-center justify-start gap-1 lg:justify-end">
                   <button
                     type="button"
                     class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
