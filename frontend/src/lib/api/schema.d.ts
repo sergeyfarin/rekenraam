@@ -5422,6 +5422,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pricing/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List price observations */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Filter observations by priced/base commodity. */
+                    base_commodity_id?: number;
+                    /** @description Filter observations by quote commodity. */
+                    quote_commodity_id?: number;
+                    /** @description Maximum number of observations to return. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Price observations, newest valuation date first */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PriceObservationsResponse"];
+                    };
+                };
+                /** @description Invalid query parameter */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6030,6 +6104,61 @@ export interface components {
             status: components["schemas"]["TransactionStatus"];
             totals: components["schemas"]["BalanceQuantity"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        PriceObservationResponse: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description Current runtime always uses book id 1.
+             */
+            book_id: number;
+            /** Format: int64 */
+            series_id: number;
+            /** Format: int64 */
+            base_commodity_id: number;
+            /** Format: int64 */
+            quote_commodity_id: number;
+            quote_type: string;
+            adjustment_basis: string;
+            /**
+             * Format: int64
+             * @description Exact quote amount integer.
+             */
+            price_value: number;
+            /** @description Decimal scale for price_value. */
+            price_scale: number;
+            /**
+             * Format: int64
+             * @description Exact base quantity integer for the observed price.
+             */
+            base_quantity_value: number;
+            /** @description Decimal scale for base_quantity_value. */
+            base_quantity_scale: number;
+            /** Format: date */
+            valuation_date: string;
+            /** Format: date-time */
+            observed_at?: string;
+            /** Format: date-time */
+            source_published_at?: string;
+            /** Format: int64 */
+            source_id?: number;
+            provider_observation_id?: string;
+            is_manual: boolean;
+            is_derived: boolean;
+            /** Format: int64 */
+            supersedes_observation_id?: number;
+            derivation: {
+                [key: string]: unknown;
+            };
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            recorded_at: string;
+        };
+        PriceObservationsResponse: {
+            prices: components["schemas"]["PriceObservationResponse"][];
         };
         PostingResponse: {
             /** Format: int64 */

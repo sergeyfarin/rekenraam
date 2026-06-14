@@ -113,6 +113,8 @@ paths:
     $ref: "./paths/reconciliation-void.yaml"
   /api/v1/reconciliation-checkpoints/{checkpoint_id}/void:
     $ref: "./paths/reconciliation-checkpoint-void.yaml"
+  /api/v1/pricing/prices:
+    $ref: "./paths/pricing-prices.yaml"
 components:
   headers:
     XRequestID:
@@ -302,6 +304,10 @@ components:
       $ref: "./components/schemas/ledger.yaml#/CategoryTotalsResponse"
     NetWorthResponse:
       $ref: "./components/schemas/ledger.yaml#/NetWorthResponse"
+    PriceObservationResponse:
+      $ref: "./components/schemas/pricing.yaml#/PriceObservationResponse"
+    PriceObservationsResponse:
+      $ref: "./components/schemas/pricing.yaml#/PriceObservationsResponse"
     PostingResponse:
       $ref: "./components/schemas/transactions.yaml#/PostingResponse"
     JournalEntryResponse:

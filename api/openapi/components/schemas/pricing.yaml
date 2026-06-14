@@ -1,0 +1,95 @@
+PriceObservationResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - series_id
+    - base_commodity_id
+    - quote_commodity_id
+    - quote_type
+    - adjustment_basis
+    - price_value
+    - price_scale
+    - base_quantity_value
+    - base_quantity_scale
+    - valuation_date
+    - is_manual
+    - is_derived
+    - derivation
+    - metadata
+    - recorded_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+      description: Current runtime always uses book id 1.
+    series_id:
+      type: integer
+      format: int64
+    base_commodity_id:
+      type: integer
+      format: int64
+    quote_commodity_id:
+      type: integer
+      format: int64
+    quote_type:
+      type: string
+    adjustment_basis:
+      type: string
+    price_value:
+      type: integer
+      format: int64
+      description: Exact quote amount integer.
+    price_scale:
+      type: integer
+      description: Decimal scale for price_value.
+    base_quantity_value:
+      type: integer
+      format: int64
+      description: Exact base quantity integer for the observed price.
+    base_quantity_scale:
+      type: integer
+      description: Decimal scale for base_quantity_value.
+    valuation_date:
+      type: string
+      format: date
+    observed_at:
+      type: string
+      format: date-time
+    source_published_at:
+      type: string
+      format: date-time
+    source_id:
+      type: integer
+      format: int64
+    provider_observation_id:
+      type: string
+    is_manual:
+      type: boolean
+    is_derived:
+      type: boolean
+    supersedes_observation_id:
+      type: integer
+      format: int64
+    derivation:
+      type: object
+      additionalProperties: true
+    metadata:
+      type: object
+      additionalProperties: true
+    recorded_at:
+      type: string
+      format: date-time
+
+PriceObservationsResponse:
+  type: object
+  required:
+    - prices
+  properties:
+    prices:
+      type: array
+      items:
+        $ref: "#/PriceObservationResponse"

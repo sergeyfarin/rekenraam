@@ -1,0 +1,60 @@
+get:
+  summary: List price observations
+  parameters:
+    - in: query
+      name: base_commodity_id
+      schema:
+        type: integer
+        format: int64
+      description: Filter observations by priced/base commodity.
+    - in: query
+      name: quote_commodity_id
+      schema:
+        type: integer
+        format: int64
+      description: Filter observations by quote commodity.
+    - in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+      description: Maximum number of observations to return.
+  responses:
+    "200":
+      description: Price observations, newest valuation date first
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/PriceObservationsResponse"
+    "400":
+      description: Invalid query parameter
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
