@@ -1,8 +1,6 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import Archive from '@lucide/svelte/icons/archive';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Edit3 from '@lucide/svelte/icons/edit-3';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -13,6 +11,7 @@
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
   import StatusBadge from '$lib/components/status-badge.svelte';
+  import TreeNameCell from '$lib/components/tree-name-cell.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import {
     categoriesQueryOptions,
@@ -500,49 +499,33 @@
               {@const hasTreeChildren = (treeChildCounts.get(category.id) ?? 0) > 0}
               {@const isCollapsed = collapsedCategoryIDs.has(category.id)}
               <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.75fr)_minmax(7rem,0.45fr)_minmax(9rem,0.55fr)_7.25rem] lg:items-center">
-                <div class="min-w-0" style:padding-left={`${Math.min(row.depth, 6) * 1.25}rem`}>
-                  <div class="flex min-w-0 items-start gap-2">
-                    {#if hasTreeChildren}
-                      <button
-                        type="button"
-                        class="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-muted transition hover:bg-control-hover hover:text-foreground"
-                        aria-expanded={!isCollapsed}
-                        aria-label={isCollapsed ? m.categories_tree_expand({ name: categoryDisplayName(category) }) : m.categories_tree_collapse({ name: categoryDisplayName(category) })}
-                        title={isCollapsed ? m.categories_tree_expand({ name: categoryDisplayName(category) }) : m.categories_tree_collapse({ name: categoryDisplayName(category) })}
-                        onclick={() => toggleCategory(category.id)}
-                      >
-                        {#if isCollapsed}
-                          <ChevronRight size={14} aria-hidden="true" />
-                        {:else}
-                          <ChevronDown size={14} aria-hidden="true" />
-                        {/if}
-                      </button>
-                    {:else}
-                      <span class="size-6 shrink-0" aria-hidden="true"></span>
-                    {/if}
-
-                    <div class="min-w-0">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
-                          <CategoryIcon icon={categoryIconName(category)} className="size-4" />
-                        </span>
-                        <p class="min-w-0 truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
-                      </div>
-                      <p class="mt-1 truncate text-xs text-muted">
-                        {#if category.is_builtin}
-                          {m.categories_builtin_marker()}
-                        {:else if category.is_starter}
-                          {m.categories_starter_marker()}
-                        {:else}
-                          {m.categories_custom_marker()}
-                        {/if}
-                        {#if category.code}
-                          <span aria-hidden="true"> · </span>{category.code}
-                        {/if}
-                      </p>
-                    </div>
+                <TreeNameCell
+                  depth={row.depth}
+                  expandable={hasTreeChildren}
+                  expanded={!isCollapsed}
+                  expandLabel={m.categories_tree_expand({ name: categoryDisplayName(category) })}
+                  collapseLabel={m.categories_tree_collapse({ name: categoryDisplayName(category) })}
+                  onToggle={() => toggleCategory(category.id)}
+                >
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
+                      <CategoryIcon icon={categoryIconName(category)} className="size-4" />
+                    </span>
+                    <p class="min-w-0 truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
                   </div>
-                </div>
+                  <p class="mt-1 truncate text-xs text-muted">
+                    {#if category.is_builtin}
+                      {m.categories_builtin_marker()}
+                    {:else if category.is_starter}
+                      {m.categories_starter_marker()}
+                    {:else}
+                      {m.categories_custom_marker()}
+                    {/if}
+                    {#if category.code}
+                      <span aria-hidden="true"> · </span>{category.code}
+                    {/if}
+                  </p>
+                </TreeNameCell>
 
                 <div class="min-w-0 text-sm">
                   <p class="truncate text-foreground">{categoryParentLabel(category, categoriesByID)}</p>
