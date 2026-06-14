@@ -55,6 +55,7 @@
   const textAreaClass =
     'mt-1.5 min-h-20 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent';
   const labelClass = 'block text-xs font-semibold uppercase tracking-[0.12em] text-muted';
+  const otherCurrencyOptionValue = '__other_currency__';
 
   let accountID = $state<number | undefined>(undefined);
   let name = $state('');
@@ -106,6 +107,7 @@
     );
   });
   const kindOptions = $derived(accountKindOptions(accountClass));
+  const currencyRequired = $derived(accountKindRequiresDefaultCurrency(accountClass, accountKind));
   const currencyOptions = $derived.by<CurrencyResponse[]>(() => {
     const currencyByID = new Map<number, CurrencyResponse>();
     for (const currency of currencies) {
@@ -136,7 +138,9 @@
   const currencyPlaceholder = $derived(
     selectedCatalogCurrency
       ? m.accounts_field_pending_currency({ code: selectedCatalogCurrency.code, name: selectedCatalogCurrency.name })
-      : m.accounts_field_no_currency()
+      : currencyRequired
+        ? m.accounts_field_choose_currency()
+        : m.accounts_field_no_currency()
   );
   const filteredCurrencyCatalog = $derived.by(() => {
     const query = currencySearch.trim().toLocaleLowerCase();
@@ -211,8 +215,8 @@
       return;
     }
 
-    if (accountKindRequiresDefaultCurrency(accountClass, accountKind)) {
-      if (defaultCommodityID === '') {
+    if (currencyRequired) {
+      if (defaultCommodityID === '' && defaultCommodityCode === '') {
         defaultCommodityID = defaultCurrencyID(accountClass, accountKind, currencies, defaultCurrencyCommodityID);
       }
     } else {
@@ -297,7 +301,17 @@
   }
 
   function handleCurrencySelect(event: Event) {
-    defaultCommodityID = event.currentTarget instanceof HTMLSelectElement ? event.currentTarget.value : '';
+    if (!(event.currentTarget instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    if (event.currentTarget.value === otherCurrencyOptionValue) {
+      event.currentTarget.value = defaultCommodityID;
+      currencyDialogOpen = true;
+      return;
+    }
+
+    defaultCommodityID = event.currentTarget.value;
     defaultCommodityCode = '';
   }
 
@@ -482,18 +496,18 @@
     <label>
       <span class={labelClass}>{m.accounts_field_currency()}</span>
       <select value={defaultCommodityID} class={inputClass} onchange={handleCurrencySelect}>
-        <option value="">{currencyPlaceholder}</option>
+        {#if selectedCatalogCurrency}
+          <option value="">{currencyPlaceholder}</option>
+        {:else if currencyRequired}
+          <option value="" disabled>{currencyPlaceholder}</option>
+        {:else}
+          <option value="">{currencyPlaceholder}</option>
+        {/if}
         {#each currencyOptions as currency (currency.id)}
           <option value={String(currency.id)}>{currency.code} {currency.display_symbol}</option>
         {/each}
+        <option value={otherCurrencyOptionValue}>{m.accounts_field_other_currency()}</option>
       </select>
-      <button
-        type="button"
-        class="mt-2 inline-flex items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-control-hover"
-        onclick={() => (currencyDialogOpen = true)}
-      >
-        {m.accounts_field_other_currency()}
-      </button>
     </label>
 
   </div>
