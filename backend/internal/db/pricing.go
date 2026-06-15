@@ -334,6 +334,14 @@ func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params C
 }
 
 func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
+	hasCurrentSchema, err := r.tableHasColumn(ctx, "price_observations", "base_commodity_id")
+	if err != nil {
+		return nil, err
+	}
+	if !hasCurrentSchema {
+		return r.listLegacyPriceObservations(ctx, bookID, baseCommodityID, quoteCommodityID, limit)
+	}
+
 	where := "book_id = ? AND voided_at IS NULL"
 	args := []any{bookID}
 	if baseCommodityID > 0 {
@@ -355,6 +363,64 @@ func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID in
 	}
 	defer rows.Close()
 	return scanPriceObservations(rows)
+}
+
+func (r *PricingRepository) listLegacyPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
+	where := "book_id = ? AND voided_at IS NULL"
+	args := []any{bookID}
+	if baseCommodityID > 0 {
+		where += " AND commodity_id = ?"
+		args = append(args, baseCommodityID)
+	}
+	if quoteCommodityID > 0 {
+		where += " AND quote_commodity_id = ?"
+		args = append(args, quoteCommodityID)
+	}
+	args = append(args, limit)
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, book_id, 0 AS series_id, commodity_id AS base_commodity_id, quote_commodity_id,
+			observation_kind AS quote_type, 'raw' AS adjustment_basis, price_value, price_scale,
+			1 AS base_quantity_value, 0 AS base_quantity_scale, price_date AS valuation_date,
+			NULL AS observed_at, NULL AS source_published_at, source_id, provider_observation_id,
+			is_manual, is_derived, supersedes_observation_id, '{}' AS derivation_json, metadata_json,
+			voided_at, created_at AS recorded_at, created_by_user_id
+		FROM price_observations
+		WHERE `+where+`
+		ORDER BY price_date DESC, created_at DESC, id DESC
+		LIMIT ?
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list legacy price observations: %w", err)
+	}
+	defer rows.Close()
+	return scanPriceObservations(rows)
+}
+
+func (r *PricingRepository) tableHasColumn(ctx context.Context, tableName string, columnName string) (bool, error) {
+	rows, err := r.database.QueryContext(ctx, `PRAGMA table_info(`+tableName+`)`)
+	if err != nil {
+		return false, fmt.Errorf("read %s schema: %w", tableName, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue sql.NullString
+		var primaryKey int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, fmt.Errorf("scan %s schema: %w", tableName, err)
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("iterate %s schema: %w", tableName, err)
+	}
+	return false, nil
 }
 
 func (r *PricingRepository) GetPricingPolicy(ctx context.Context, bookID int64) (PricingPolicyRecord, error) {

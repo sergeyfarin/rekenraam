@@ -72,7 +72,7 @@
       const entries = await Promise.all(
         ratePairs.map(async (pair) => [
           rateKey(pair.base.id, pair.quote.id),
-          await getLatestPriceObservation(pair.base.id, pair.quote.id)
+          await getLatestPriceObservation(pair.base.id, pair.quote.id).catch(() => null)
         ] as const)
       );
 
