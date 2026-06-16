@@ -73,6 +73,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
+	pricingService.StartScheduler(ctx, logger)
 	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, investmentService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,

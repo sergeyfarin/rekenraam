@@ -79,6 +79,10 @@ When a feature introduces a durable new rule, update one of those documents in t
   time, and should also preserve provider observation and publication
   timestamps when available. Historical valuation queries must be able to
   filter by both valuation date and recorded-at time.
+- Derived FX observations may combine provider legs with different valuation,
+  observation, or publication timestamps. Store the leg metadata in
+  `derivation_json` and surface a user-visible warning anywhere derived FX
+  rates are displayed.
 - Correct a price by superseding or voiding the observation, not by overwriting
   the old value.
 - External market data is untrusted input by default. Provider dividends,

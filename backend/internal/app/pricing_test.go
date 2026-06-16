@@ -1,7 +1,14 @@
 package app
 
 import (
+	"context"
+	"database/sql"
+	"path/filepath"
 	"testing"
+	"time"
+
+	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/marketdata"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,4 +81,180 @@ func TestCleanPriceObservationSpecRejectsInvalidInputs(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+func TestPricingRefreshStoresDirectRatesIdempotently(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 91234, scale: 5, publishedAt: "2026-06-12T00:00:00Z"},
+			"EUR/USD": {value: 109730, scale: 5, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+
+	run, err := service.RunRefresh(ctx, 1, 0, "manual")
+	require.NoError(t, err)
+	assert.Equal(t, "succeeded", run.Status)
+	assert.Equal(t, 2, run.ItemsTotal)
+
+	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10)
+	require.NoError(t, err)
+	require.Len(t, prices, 1)
+	assert.Equal(t, int64(91234), prices[0].PriceValue)
+	assert.False(t, prices[0].IsDerived)
+
+	_, err = service.RunRefresh(ctx, 1, 0, "manual")
+	require.NoError(t, err)
+	prices, err = db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10)
+	require.NoError(t, err)
+	assert.Len(t, prices, 1)
+}
+
+func TestPricingRefreshStoresDerivedRateWithVintageMetadata(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"GBP/EUR": {value: 12500, scale: 4, publishedAt: "2026-06-11T00:00:00Z"},
+			"EUR/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-11T00:00:00Z"},
+			"GBP/USD": {value: 12500, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+
+	run, err := service.RunRefresh(ctx, 1, 0, "manual")
+	require.NoError(t, err)
+	assert.Equal(t, "succeeded", run.Status)
+
+	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, prices)
+	derived := prices[0]
+	assert.True(t, derived.IsDerived)
+	assert.Equal(t, int64(1000000000000), derived.PriceValue)
+	assert.Equal(t, 12, derived.PriceScale)
+	assert.Contains(t, derived.DerivationJSON, `"mixed_vintage":true`)
+	assert.Contains(t, derived.DerivationJSON, `"source_published_at":"2026-06-11T00:00:00Z"`)
+}
+
+func TestPricingRefreshRecordsFailureHealth(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{
+		code:  "frankfurter",
+		rates: map[string]fakeFXRate{},
+	}))
+
+	run, err := service.RunRefresh(ctx, 1, 0, "manual")
+	require.NoError(t, err)
+	assert.Equal(t, "failed", run.Status)
+	assert.Equal(t, 2, run.ItemsFailed)
+
+	health, err := db.NewPricingRepository(database).ListRefreshState(ctx, BookID)
+	require.NoError(t, err)
+	require.NotEmpty(t, health)
+	assert.True(t, health[0].LastError.Valid)
+}
+
+type fakeFXRate struct {
+	value       int64
+	scale       int
+	publishedAt string
+}
+
+type fakeFXProvider struct {
+	code  string
+	rates map[string]fakeFXRate
+}
+
+func (p fakeFXProvider) Code() string {
+	return p.code
+}
+
+func (p fakeFXProvider) Name() string {
+	return p.code
+}
+
+func (p fakeFXProvider) Capabilities() marketdata.ProviderCapabilities {
+	return marketdata.ProviderCapabilities{FXRates: true}
+}
+
+func (p fakeFXProvider) FetchFXRates(_ context.Context, request marketdata.FXRateRequest) ([]marketdata.FXRateObservation, error) {
+	base := request.BaseCode
+	var observations []marketdata.FXRateObservation
+	for _, quote := range request.QuoteCodes {
+		rate, ok := p.rates[base+"/"+quote]
+		if !ok {
+			continue
+		}
+		publishedAt := rate.publishedAt
+		if publishedAt == "" {
+			publishedAt = "2026-06-12T00:00:00Z"
+		}
+		observations = append(observations, marketdata.FXRateObservation{
+			SourceCode:            p.code,
+			BaseCode:              base,
+			QuoteCode:             quote,
+			QuoteType:             "official_fixing",
+			AdjustmentBasis:       "not_applicable",
+			PriceValue:            rate.value,
+			PriceScale:            rate.scale,
+			BaseQuantityValue:     1,
+			BaseQuantityScale:     0,
+			ValuationDate:         publishedAt[:10],
+			SourcePublishedAt:     publishedAt,
+			ProviderSeriesID:      p.code + ":" + base + ":" + quote,
+			ProviderObservationID: p.code + ":" + publishedAt[:10] + ":" + base + ":" + quote,
+			MetadataJSON:          `{"provider":"fake"}`,
+			RawJSON:               "{}",
+		})
+	}
+	return observations, nil
+}
+
+func newPricingRefreshTestService(t *testing.T, currencyCodes []string, registry *marketdata.Registry) (*sql.DB, *PricingService) {
+	t.Helper()
+	ctx := context.Background()
+	database, err := db.Open(ctx, "file:"+filepath.Join(t.TempDir(), "pricing.sqlite"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, database.Close()) })
+	require.NoError(t, db.Migrate(ctx, database))
+
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (1, 'owner', 'hash', 1, '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z');
+		INSERT INTO books (id, owner_user_id, code, name, default_currency_commodity_id, updated_by_user_id, created_at, updated_at)
+		VALUES (1, 1, 'personal', 'Personal', NULL, 1, '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z');
+	`)
+	require.NoError(t, err)
+
+	for index, code := range currencyCodes {
+		id := int64(index + 1)
+		_, err = database.ExecContext(ctx, `
+			INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
+			VALUES (?, 1, ?, 'currency', 1, '2026-06-12T00:00:00Z', 1);
+			INSERT INTO commodity_versions (
+				commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+				change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
+			)
+			VALUES (?, 1, '2026-06-12', '2026-06-12T00:00:00Z', 1, 'test currency', 'active', ?, ?, ?, 2, 8);
+			INSERT INTO accounts (id, book_id, created_at, created_by_user_id)
+			VALUES (?, 1, '2026-06-12T00:00:00Z', 1);
+			INSERT INTO account_versions (
+				account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+				change_reason, status, opened_on, name, account_class, account_kind,
+				default_commodity_id, allows_postings
+			)
+			VALUES (?, 1, '2026-06-12', '2026-06-12T00:00:00Z', 1, 'test account', 'active', '2026-06-12', ?, 'asset', 'cash', ?, 1);
+		`, id, code, id, code, code, code, id, id, code+" cash", id)
+		require.NoError(t, err)
+	}
+	_, err = database.ExecContext(ctx, `UPDATE books SET default_currency_commodity_id = 1 WHERE id = 1`)
+	require.NoError(t, err)
+
+	service := NewPricingService(db.NewPricingRepository(database), registry)
+	service.SetNowForTest(func() time.Time {
+		return time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	})
+	return database, service
 }

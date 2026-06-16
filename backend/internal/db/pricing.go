@@ -24,6 +24,11 @@ type MarketDataSourceRecord struct {
 	CreatedAt    string
 }
 
+type PricingCurrencyRecord struct {
+	ID   int64
+	Code string
+}
+
 type PriceSeriesRecord struct {
 	ID               int64
 	BookID           int64
@@ -224,6 +229,30 @@ type PricingRefreshStateRecord struct {
 	UpdatedAt        string
 }
 
+type PricingRefreshItemSpec struct {
+	RunID          int64
+	BookID         int64
+	ItemKind       string
+	Status         string
+	ProviderItemID string
+	LocalRefTable  string
+	LocalRefID     int64
+	Error          string
+	RawJSON        string
+	CreatedAt      string
+}
+
+type PricingRefreshStateSpec struct {
+	BookID           int64
+	BaseCommodityID  int64
+	QuoteCommodityID int64
+	SourceID         int64
+	LastSuccessDate  sql.NullString
+	LastAttemptAt    string
+	LastError        string
+	UpdatedAt        string
+}
+
 func NewPricingRepository(database *sql.DB) *PricingRepository {
 	return &PricingRepository{database: database}
 }
@@ -251,6 +280,103 @@ func (r *PricingRepository) ListSources(ctx context.Context) ([]MarketDataSource
 		return nil, fmt.Errorf("iterate market data sources: %w", err)
 	}
 	return records, nil
+}
+
+func (r *PricingRepository) SourceByID(ctx context.Context, sourceID int64) (MarketDataSourceRecord, error) {
+	var record MarketDataSourceRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT id, code, name, kind, provider_key, base_url, status, metadata_json, created_at
+		FROM market_data_sources
+		WHERE id = ?
+	`, sourceID).Scan(&record.ID, &record.Code, &record.Name, &record.Kind, &record.ProviderKey, &record.BaseURL, &record.Status, &record.MetadataJSON, &record.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return MarketDataSourceRecord{}, ErrNotFound
+		}
+		return MarketDataSourceRecord{}, fmt.Errorf("read market data source: %w", err)
+	}
+	return record, nil
+}
+
+func (r *PricingRepository) CurrentBookOwnerID(ctx context.Context, bookID int64) (int64, error) {
+	var ownerID int64
+	if err := r.database.QueryRowContext(ctx, `SELECT owner_user_id FROM books WHERE id = ?`, bookID).Scan(&ownerID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, fmt.Errorf("read book owner: %w", err)
+	}
+	return ownerID, nil
+}
+
+func (r *PricingRepository) DefaultCurrency(ctx context.Context, bookID int64) (PricingCurrencyRecord, error) {
+	var record PricingCurrencyRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT c.id, c.code
+		FROM books b
+		JOIN commodities c ON c.id = b.default_currency_commodity_id
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE b.id = ?
+			AND c.kind = 'currency'
+			AND cv.status = 'active'
+	`, bookID).Scan(&record.ID, &record.Code); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PricingCurrencyRecord{}, ErrNotFound
+		}
+		return PricingCurrencyRecord{}, fmt.Errorf("read default pricing currency: %w", err)
+	}
+	return record, nil
+}
+
+func (r *PricingRepository) ActiveAccountCurrencies(ctx context.Context, bookID int64) ([]PricingCurrencyRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT DISTINCT c.id, c.code
+		FROM accounts a
+		JOIN current_account_versions av ON av.account_id = a.id
+		JOIN commodities c ON c.id = av.default_commodity_id
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE a.book_id = ?
+			AND av.status = 'active'
+			AND av.allows_postings = 1
+			AND c.kind = 'currency'
+			AND cv.status = 'active'
+		ORDER BY c.code
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list active account currencies: %w", err)
+	}
+	defer rows.Close()
+
+	var records []PricingCurrencyRecord
+	for rows.Next() {
+		var record PricingCurrencyRecord
+		if err := rows.Scan(&record.ID, &record.Code); err != nil {
+			return nil, fmt.Errorf("scan active account currency: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active account currencies: %w", err)
+	}
+	return records, nil
+}
+
+func (r *PricingRepository) CurrencyByID(ctx context.Context, bookID int64, commodityID int64) (PricingCurrencyRecord, error) {
+	var record PricingCurrencyRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT c.id, c.code
+		FROM commodities c
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE c.book_id = ?
+			AND c.id = ?
+			AND c.kind = 'currency'
+			AND cv.status = 'active'
+	`, bookID, commodityID).Scan(&record.ID, &record.Code); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PricingCurrencyRecord{}, ErrNotFound
+		}
+		return PricingCurrencyRecord{}, fmt.Errorf("read pricing currency: %w", err)
+	}
+	return record, nil
 }
 
 func (r *PricingRepository) ManualSourceID(ctx context.Context) (int64, error) {
@@ -331,6 +457,16 @@ func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params C
 	}
 	committed = true
 	return record, nil
+}
+
+func (r *PricingRepository) PriceObservationByProviderID(ctx context.Context, sourceID int64, providerObservationID string) (PriceObservationRecord, error) {
+	providerObservationID = strings.TrimSpace(providerObservationID)
+	if sourceID <= 0 || providerObservationID == "" {
+		return PriceObservationRecord{}, ErrNotFound
+	}
+	return scanPriceObservationRow(r.database.QueryRowContext(ctx, priceObservationSelect(`
+		WHERE source_id = ? AND provider_observation_id = ?
+	`), sourceID, providerObservationID))
 }
 
 func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
@@ -502,6 +638,19 @@ func (r *PricingRepository) ListSourceAssignments(ctx context.Context, bookID in
 	return scanPricingSourceAssignments(rows)
 }
 
+func (r *PricingRepository) SourceAssignmentForPair(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, date string) (PricingSourceAssignmentRecord, error) {
+	return scanPricingSourceAssignmentRow(r.database.QueryRowContext(ctx, pricingSourceAssignmentSelect(`
+		WHERE book_id = ?
+			AND base_commodity_id = ?
+			AND quote_commodity_id = ?
+			AND status = 'active'
+			AND effective_from <= ?
+			AND (effective_to IS NULL OR effective_to >= ?)
+		ORDER BY priority, effective_from DESC, id
+		LIMIT 1
+	`), bookID, baseCommodityID, quoteCommodityID, date, date))
+}
+
 func (r *PricingRepository) SaveSourceAssignment(ctx context.Context, params SavePricingSourceAssignmentParams) (PricingSourceAssignmentRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
@@ -587,6 +736,79 @@ func (r *PricingRepository) RecordRefreshRun(ctx context.Context, bookID int64, 
 		return PricingRefreshRunRecord{}, fmt.Errorf("read pricing refresh run id: %w", err)
 	}
 	return r.RefreshRunByID(ctx, bookID, runID)
+}
+
+func (r *PricingRepository) FinishRefreshRun(ctx context.Context, bookID int64, runID int64, status string, finishedAt string, itemsTotal int, itemsSucceeded int, itemsFailed int, lastError string) (PricingRefreshRunRecord, error) {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE market_data_ingest_runs
+		SET status = ?, finished_at = NULLIF(?, ''), items_total = ?, items_succeeded = ?,
+			items_failed = ?, last_error = NULLIF(?, '')
+		WHERE book_id = ? AND id = ?
+	`, status, finishedAt, itemsTotal, itemsSucceeded, itemsFailed, lastError, bookID, runID)
+	if err != nil {
+		return PricingRefreshRunRecord{}, fmt.Errorf("finish pricing refresh run: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return PricingRefreshRunRecord{}, fmt.Errorf("read pricing refresh run finish rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return PricingRefreshRunRecord{}, ErrNotFound
+	}
+	return r.RefreshRunByID(ctx, bookID, runID)
+}
+
+func (r *PricingRepository) RecordRefreshItem(ctx context.Context, spec PricingRefreshItemSpec) error {
+	if spec.RawJSON == "" {
+		spec.RawJSON = "{}"
+	}
+	_, err := r.database.ExecContext(ctx, `
+		INSERT INTO market_data_ingest_items (
+			run_id, book_id, item_kind, status, provider_item_id, local_ref_table,
+			local_ref_id, error, raw_json, created_at
+		)
+		VALUES (?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, ''), ?, ?)
+	`, spec.RunID, spec.BookID, spec.ItemKind, spec.Status, spec.ProviderItemID, spec.LocalRefTable, nullablePositiveInt64(spec.LocalRefID), spec.Error, spec.RawJSON, spec.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("insert pricing refresh item: %w", err)
+	}
+	return nil
+}
+
+func (r *PricingRepository) UpsertRefreshState(ctx context.Context, spec PricingRefreshStateSpec) error {
+	_, err := r.database.ExecContext(ctx, `
+		INSERT INTO pricing_refresh_state (
+			book_id, base_commodity_id, quote_commodity_id, source_id,
+			last_success_date, last_attempt_at, last_error, updated_at
+		)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?)
+		ON CONFLICT(book_id, base_commodity_id, quote_commodity_id, source_id)
+		DO UPDATE SET
+			last_success_date = COALESCE(excluded.last_success_date, pricing_refresh_state.last_success_date),
+			last_attempt_at = excluded.last_attempt_at,
+			last_error = excluded.last_error,
+			updated_at = excluded.updated_at
+	`, spec.BookID, spec.BaseCommodityID, spec.QuoteCommodityID, spec.SourceID, nullableStringValue(spec.LastSuccessDate), spec.LastAttemptAt, spec.LastError, spec.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("upsert pricing refresh state: %w", err)
+	}
+	return nil
+}
+
+func (r *PricingRepository) ScheduledRefreshRunExistsOnDate(ctx context.Context, bookID int64, date string) (bool, error) {
+	var exists int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM market_data_ingest_runs
+			WHERE book_id = ?
+				AND trigger = 'scheduled'
+				AND substr(started_at, 1, 10) = ?
+		)
+	`, bookID, date).Scan(&exists); err != nil {
+		return false, fmt.Errorf("read scheduled pricing refresh existence: %w", err)
+	}
+	return exists == 1, nil
 }
 
 func (r *PricingRepository) ListRefreshRuns(ctx context.Context, bookID int64, limit int) ([]PricingRefreshRunRecord, error) {

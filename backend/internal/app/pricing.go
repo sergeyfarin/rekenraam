@@ -390,13 +390,6 @@ func (s *PricingService) RunRefresh(ctx context.Context, ownerUserID int64, sour
 	if ownerUserID <= 0 {
 		return PricingRefreshRun{}, ValidationError{Message: "owner user is required"}
 	}
-	if sourceID <= 0 {
-		var err error
-		sourceID, err = s.repository.ManualSourceID(ctx)
-		if err != nil {
-			return PricingRefreshRun{}, err
-		}
-	}
 	trigger = strings.TrimSpace(trigger)
 	if trigger == "" {
 		trigger = "manual"
@@ -404,12 +397,7 @@ func (s *PricingService) RunRefresh(ctx context.Context, ownerUserID int64, sour
 	if trigger != "manual" && trigger != "scheduled" && trigger != "import" {
 		return PricingRefreshRun{}, ValidationError{Message: "refresh trigger is invalid"}
 	}
-	now := s.now().UTC().Format(time.RFC3339)
-	record, err := s.repository.RecordRefreshRun(ctx, BookID, sourceID, trigger, "succeeded", now, now, 0, 0, 0, "")
-	if err != nil {
-		return PricingRefreshRun{}, fmt.Errorf("record pricing refresh run: %w", err)
-	}
-	return toPricingRefreshRun(record), nil
+	return s.runFXRefresh(ctx, ownerUserID, sourceID, trigger)
 }
 
 func (s *PricingService) ListRefreshRuns(ctx context.Context, limit int) ([]PricingRefreshRun, error) {

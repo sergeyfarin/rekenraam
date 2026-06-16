@@ -115,6 +115,20 @@ paths:
     $ref: "./paths/reconciliation-checkpoint-void.yaml"
   /api/v1/pricing/prices:
     $ref: "./paths/pricing-prices.yaml"
+  /api/v1/pricing/sources:
+    $ref: "./paths/pricing-sources.yaml"
+  /api/v1/pricing/policy:
+    $ref: "./paths/pricing-policy.yaml"
+  /api/v1/pricing/source-assignments:
+    $ref: "./paths/pricing-source-assignments.yaml"
+  /api/v1/pricing/source-assignments/{assignment_id}:
+    $ref: "./paths/pricing-source-assignment.yaml"
+  /api/v1/pricing/refresh/run:
+    $ref: "./paths/pricing-refresh-run.yaml"
+  /api/v1/pricing/refresh/runs:
+    $ref: "./paths/pricing-refresh-runs.yaml"
+  /api/v1/pricing/source-health:
+    $ref: "./paths/pricing-source-health.yaml"
 components:
   headers:
     XRequestID:
@@ -308,6 +322,30 @@ components:
       $ref: "./components/schemas/pricing.yaml#/PriceObservationResponse"
     PriceObservationsResponse:
       $ref: "./components/schemas/pricing.yaml#/PriceObservationsResponse"
+    MarketDataSourceResponse:
+      $ref: "./components/schemas/pricing.yaml#/MarketDataSourceResponse"
+    MarketDataSourcesResponse:
+      $ref: "./components/schemas/pricing.yaml#/MarketDataSourcesResponse"
+    PricingPolicyResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingPolicyResponse"
+    PricingPolicyRequest:
+      $ref: "./components/schemas/pricing.yaml#/PricingPolicyRequest"
+    PricingSourceAssignmentResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingSourceAssignmentResponse"
+    PricingSourceAssignmentsResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingSourceAssignmentsResponse"
+    PricingSourceAssignmentRequest:
+      $ref: "./components/schemas/pricing.yaml#/PricingSourceAssignmentRequest"
+    PricingRefreshRunResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingRefreshRunResponse"
+    PricingRefreshRunsResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingRefreshRunsResponse"
+    PricingRefreshRunRequest:
+      $ref: "./components/schemas/pricing.yaml#/PricingRefreshRunRequest"
+    PricingSourceHealthResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingSourceHealthResponse"
+    PricingSourceHealthListResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingSourceHealthListResponse"
     PostingResponse:
       $ref: "./components/schemas/transactions.yaml#/PostingResponse"
     JournalEntryResponse:
