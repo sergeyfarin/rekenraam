@@ -66,6 +66,11 @@
     return m.home_health_state_success();
   });
 
+  const browserTimeZone = $derived.by(() => {
+    if (!browser) return 'UTC';
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  });
+
   const currencyDisplayNames = $derived.by(() => {
     if (!browser || typeof Intl.DisplayNames === 'undefined') return null;
     return new Intl.DisplayNames(undefined, { type: 'currency' });
@@ -139,7 +144,11 @@
     ownerError = undefined;
 
     try {
-      const result = await createOwner({ username: ownerUsername, password: ownerPassword });
+      const result = await createOwner({
+        username: ownerUsername,
+        password: ownerPassword,
+        time_zone: browserTimeZone
+      });
       loginUsername = result.owner.username;
       ownerPassword = '';
       await refreshInstallGate();

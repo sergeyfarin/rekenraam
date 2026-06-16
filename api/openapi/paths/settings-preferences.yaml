@@ -14,9 +14,23 @@ get:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"
     "401":
-      $ref: "../components/responses/common.yaml#/Unauthenticated"
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "500":
-      $ref: "../components/responses/common.yaml#/InternalError"
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 
 put:
   tags:
@@ -24,7 +38,12 @@ put:
   summary: Save user preferences
   operationId: saveUserPreferences
   parameters:
-    - $ref: "../components/parameters/common.yaml#/CSRFToken"
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
   requestBody:
     required: true
     content:
@@ -42,10 +61,38 @@ put:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"
     "400":
-      $ref: "../components/responses/common.yaml#/ValidationFailed"
+      description: Invalid request body or validation failure
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "401":
-      $ref: "../components/responses/common.yaml#/Unauthenticated"
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "403":
-      $ref: "../components/responses/common.yaml#/Forbidden"
+      description: Origin or CSRF validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "500":
-      $ref: "../components/responses/common.yaml#/InternalError"
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

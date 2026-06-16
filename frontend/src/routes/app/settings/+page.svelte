@@ -5,18 +5,41 @@
   import Database from '@lucide/svelte/icons/database';
   import Palette from '@lucide/svelte/icons/palette';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import Clock from '@lucide/svelte/icons/clock';
   import packageInfo from '../../../../package.json';
+  import { authSessionQueryOptions } from '$lib/api/auth';
   import { currentBookQueryOptions } from '$lib/api/books';
   import { currenciesQueryOptions } from '$lib/api/currencies';
   import { healthQueryOptions } from '$lib/api/health';
+  import {
+    saveUserPreferences,
+    userPreferencesQueryOptions
+  } from '$lib/api/settings';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import Panel from '$lib/components/panel.svelte';
   import StatusBadge from '$lib/components/status-badge.svelte';
   import { m } from '$lib/paraglide/messages.js';
 
+  const sessionQuery = createQuery(() => authSessionQueryOptions());
   const healthQuery = createQuery(() => healthQueryOptions());
   const currentBookQuery = createQuery(() => currentBookQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
+  const preferencesQuery = createQuery(() => userPreferencesQueryOptions());
+
+  let selectedTimeZone = $state('');
+  let preferencesMarker = $state('');
+  let preferencesPending = $state(false);
+  let preferencesError = $state<unknown>(undefined);
+  let preferencesSuccess = $state('');
+
+  const browserTimeZone = $derived(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const timeZoneOptions = $derived.by(() => {
+    if (typeof Intl.supportedValuesOf !== 'function') {
+      return [selectedTimeZone || browserTimeZone || 'UTC'];
+    }
+    const zones = Intl.supportedValuesOf('timeZone');
+    return zones.includes('UTC') ? zones : ['UTC', ...zones];
+  });
 
   const defaultCurrency = $derived.by(() => {
     const defaultCurrencyID = currentBookQuery.data?.default_currency_commodity_id;
@@ -65,6 +88,18 @@
       : m.settings_status_not_set();
   });
 
+  const timeZoneLabel = $derived.by(() => {
+    if (preferencesQuery.isPending) {
+      return m.settings_status_loading();
+    }
+
+    if (preferencesQuery.isError) {
+      return getAPIClientErrorMessage(preferencesQuery.error);
+    }
+
+    return preferencesQuery.data?.time_zone ?? browserTimeZone;
+  });
+
   const summaryItems = $derived([
     {
       icon: Database,
@@ -83,6 +118,12 @@
       label: m.settings_default_currency_label(),
       value: defaultCurrencyLabel,
       tone: 'accent'
+    },
+    {
+      icon: Clock,
+      label: m.settings_time_zone_label(),
+      value: timeZoneLabel,
+      tone: preferencesQuery.isError ? 'danger' : 'accent'
     },
     {
       icon: Activity,
@@ -112,6 +153,44 @@
       copy: m.settings_card_currencies_copy()
     }
   ];
+
+  $effect(() => {
+    const marker = [preferencesQuery.data?.id ?? 'missing', preferencesQuery.data?.updated_at ?? ''].join(':');
+    if (preferencesMarker === marker || preferencesPending) return;
+    preferencesMarker = marker;
+    selectedTimeZone = preferencesQuery.data?.time_zone ?? browserTimeZone;
+  });
+
+  async function csrfToken() {
+    if (sessionQuery.data?.csrf_token) return sessionQuery.data.csrf_token;
+    const session = await sessionQuery.refetch();
+    const token = session.data?.csrf_token;
+    if (!token) throw new Error('CSRF token is unavailable');
+    return token;
+  }
+
+  async function handleSavePreferences(event: SubmitEvent) {
+    event.preventDefault();
+    preferencesPending = true;
+    preferencesError = undefined;
+    preferencesSuccess = '';
+
+    try {
+      await saveUserPreferences(
+        {
+          time_zone: selectedTimeZone,
+          change_reason: 'saved workspace preferences'
+        },
+        await csrfToken()
+      );
+      preferencesSuccess = m.settings_preferences_saved();
+      await preferencesQuery.refetch();
+    } catch (error) {
+      preferencesError = error;
+    } finally {
+      preferencesPending = false;
+    }
+  }
 </script>
 
 <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -133,6 +212,34 @@
         </article>
       {/each}
     </div>
+
+    <form class="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onsubmit={handleSavePreferences}>
+      <label class="block text-sm font-semibold text-foreground">
+        {m.settings_time_zone_label()}
+        <select
+          bind:value={selectedTimeZone}
+          class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
+          disabled={preferencesPending || preferencesQuery.isPending}
+        >
+          {#each timeZoneOptions as timeZone}
+            <option value={timeZone}>{timeZone}</option>
+          {/each}
+        </select>
+      </label>
+      <button
+        type="submit"
+        class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={preferencesPending || selectedTimeZone === ''}
+      >
+        {preferencesPending ? m.settings_preferences_saving() : m.settings_preferences_save()}
+      </button>
+    </form>
+    {#if preferencesSuccess}
+      <p class="mt-3 text-sm font-semibold text-positive">{preferencesSuccess}</p>
+    {/if}
+    {#if preferencesError}
+      <p class="mt-3 text-sm font-semibold text-danger">{getAPIClientErrorMessage(preferencesError)}</p>
+    {/if}
   </Panel>
 
   <Panel variant="toolbar">

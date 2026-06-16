@@ -261,6 +261,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read user preferences */
+        get: operations["getUserPreferences"];
+        /** Save user preferences */
+        put: operations["saveUserPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/status": {
         parameters: {
             query?: never;
@@ -6143,10 +6161,38 @@ export interface components {
             username: string;
             /** @description Password for the single owner account. Minimum 12 Unicode characters, maximum 1024 bytes. */
             password: string;
+            /**
+             * @description Optional IANA time zone for the owner workspace. Defaults to UTC when omitted.
+             * @example Europe/Amsterdam
+             */
+            time_zone?: string;
         };
         OwnerResponse: {
             id: number;
             username: string;
+        };
+        UserPreferencesResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            user_id: number;
+            /**
+             * @description IANA time zone used for user-facing local times.
+             * @example Europe/Amsterdam
+             */
+            time_zone: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        UserPreferencesRequest: {
+            /**
+             * @description IANA time zone used for user-facing local times.
+             * @example Europe/Amsterdam
+             */
+            time_zone: string;
+            change_reason?: string;
         };
         BookResponse: {
             /**
@@ -6803,6 +6849,8 @@ export interface components {
             refresh_enabled: boolean;
             refresh_hour_utc: number;
             refresh_minute_utc: number;
+            refresh_hour_local: number;
+            refresh_minute_local: number;
             max_backfill_days: number;
             staleness_max_days: number;
             triangulation_max_hops: number;
@@ -6824,6 +6872,8 @@ export interface components {
             refresh_enabled?: boolean;
             refresh_hour_utc?: number;
             refresh_minute_utc?: number;
+            refresh_hour_local?: number;
+            refresh_minute_local?: number;
             max_backfill_days?: number;
             staleness_max_days?: number;
             triangulation_max_hops?: number;
@@ -7263,4 +7313,114 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    getUserPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user preferences. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    saveUserPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound CSRF token for authenticated mutating requests. */
+                "X-CSRF-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved user preferences. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
+                };
+            };
+            /** @description Invalid request body or validation failure */
+            400: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Origin or CSRF validation failed */
+            403: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+}

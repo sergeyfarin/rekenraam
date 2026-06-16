@@ -182,8 +182,6 @@ CREATE TABLE IF NOT EXISTS pricing_policies (
   refresh_enabled INTEGER NOT NULL DEFAULT 1 CHECK (refresh_enabled IN (0, 1)),
   refresh_hour_utc INTEGER NOT NULL DEFAULT 4 CHECK (refresh_hour_utc BETWEEN 0 AND 23),
   refresh_minute_utc INTEGER NOT NULL DEFAULT 0 CHECK (refresh_minute_utc BETWEEN 0 AND 59),
-  refresh_hour_local INTEGER NOT NULL DEFAULT 4 CHECK (refresh_hour_local BETWEEN 0 AND 23),
-  refresh_minute_local INTEGER NOT NULL DEFAULT 0 CHECK (refresh_minute_local BETWEEN 0 AND 59),
   max_backfill_days INTEGER NOT NULL DEFAULT 370 CHECK (max_backfill_days >= 1),
   staleness_max_days INTEGER NOT NULL DEFAULT 3 CHECK (staleness_max_days >= 1),
   triangulation_max_hops INTEGER NOT NULL DEFAULT 1 CHECK (triangulation_max_hops BETWEEN 0 AND 4),

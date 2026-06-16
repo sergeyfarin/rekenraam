@@ -23,6 +23,7 @@
     type PriceObservationResponse,
     type PricingSourceAssignmentResponse
   } from '$lib/api/pricing';
+  import { userPreferencesQueryOptions } from '$lib/api/settings';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
@@ -43,13 +44,14 @@
   const assignmentsQuery = createQuery(() => pricingSourceAssignmentsQueryOptions());
   const refreshRunsQuery = createQuery(() => pricingRefreshRunsQueryOptions());
   const sourceHealthQuery = createQuery(() => pricingSourceHealthQueryOptions());
+  const preferencesQuery = createQuery(() => userPreferencesQueryOptions());
 
   let rateDirection = $state<RateDirection>('currency_default');
   let policyBaseCommodityID = $state('');
   let policyDefaultSourceID = $state('');
   let refreshEnabled = $state(false);
-  let refreshHourUTC = $state(4);
-  let refreshMinuteUTC = $state(0);
+  let refreshHourLocal = $state(4);
+  let refreshMinuteLocal = $state(0);
   let triangulationMaxHops = $state(1);
   let initializedPolicyMarker = $state('');
   let policySaving = $state(false);
@@ -68,14 +70,18 @@
     month: 'short',
     day: 'numeric'
   });
-  const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZoneName: 'short'
-  });
+  const preferencesTimeZone = $derived(preferencesQuery.data?.time_zone ?? 'UTC');
+  const dateTimeFormatter = $derived(
+    new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: preferencesTimeZone,
+      timeZoneName: 'short'
+    })
+  );
 
   const activeCurrencies = $derived.by(() =>
     [...(currenciesQuery.data?.currencies.filter((currency) => currency.status === 'active') ?? [])].sort((left, right) =>
@@ -137,6 +143,7 @@
     currenciesQuery.error ??
       currentBookQuery.error ??
       sessionQuery.error ??
+      preferencesQuery.error ??
       sourcesQuery.error ??
       policyQuery.error ??
       assignmentsQuery.error ??
@@ -148,6 +155,7 @@
     currenciesQuery.isPending ||
       currentBookQuery.isPending ||
       sessionQuery.isPending ||
+      preferencesQuery.isPending ||
       sourcesQuery.isPending ||
       policyQuery.isPending ||
       assignmentsQuery.isPending ||
@@ -159,6 +167,7 @@
     currenciesQuery.isError ||
       currentBookQuery.isError ||
       sessionQuery.isError ||
+      preferencesQuery.isError ||
       sourcesQuery.isError ||
       policyQuery.isError ||
       assignmentsQuery.isError ||
@@ -179,6 +188,7 @@
     const marker = [
       policyQuery.data?.id ?? 'missing',
       policyQuery.data?.updated_at ?? '',
+      preferencesTimeZone,
       defaultCurrency?.id ?? '',
       providerSources.map((source) => source.id).join(',')
     ].join(':');
@@ -198,9 +208,9 @@
       : providerSources[0]
         ? String(providerSources[0].id)
         : '';
-    refreshEnabled = policyQuery.data?.refresh_enabled ?? false;
-    refreshHourUTC = policyQuery.data?.refresh_hour_utc ?? 4;
-    refreshMinuteUTC = policyQuery.data?.refresh_minute_utc ?? 0;
+    refreshEnabled = policyQuery.data?.refresh_enabled ?? true;
+    refreshHourLocal = policyQuery.data?.refresh_hour_local ?? policyQuery.data?.refresh_hour_utc ?? 4;
+    refreshMinuteLocal = policyQuery.data?.refresh_minute_local ?? policyQuery.data?.refresh_minute_utc ?? 0;
     triangulationMaxHops = policyQuery.data?.triangulation_max_hops ?? 1;
   });
 
@@ -209,6 +219,7 @@
       currenciesQuery.refetch(),
       currentBookQuery.refetch(),
       sessionQuery.refetch(),
+      preferencesQuery.refetch(),
       sourcesQuery.refetch(),
       policyQuery.refetch(),
       assignmentsQuery.refetch(),
@@ -252,8 +263,10 @@
           base_commodity_id: numberOrUndefined(policyBaseCommodityID),
           default_source_id: numberOrUndefined(policyDefaultSourceID),
           refresh_enabled: refreshEnabled,
-          refresh_hour_utc: refreshHourUTC,
-          refresh_minute_utc: refreshMinuteUTC,
+          refresh_hour_utc: policyQuery.data?.refresh_hour_utc ?? refreshHourLocal,
+          refresh_minute_utc: policyQuery.data?.refresh_minute_utc ?? refreshMinuteLocal,
+          refresh_hour_local: refreshHourLocal,
+          refresh_minute_local: refreshMinuteLocal,
           max_backfill_days: policyQuery.data?.max_backfill_days ?? 370,
           staleness_max_days: policyQuery.data?.staleness_max_days ?? 3,
           triangulation_max_hops: triangulationMaxHops,
@@ -500,7 +513,7 @@
               type="number"
               min="0"
               max="23"
-              bind:value={refreshHourUTC}
+              bind:value={refreshHourLocal}
               class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
             />
           </label>
@@ -511,7 +524,7 @@
               type="number"
               min="0"
               max="59"
-              bind:value={refreshMinuteUTC}
+              bind:value={refreshMinuteLocal}
               class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
             />
           </label>
@@ -527,6 +540,7 @@
             />
           </label>
         </div>
+        <p class="text-sm text-muted">{m.currencies_policy_time_zone_note({ timeZone: preferencesTimeZone })}</p>
       </div>
 
       <div class="mt-5 flex flex-wrap items-center gap-3">
