@@ -70,6 +70,7 @@ type SetupStep struct {
 type CreateOwnerInput struct {
 	Username string
 	Password string
+	TimeZone string
 }
 
 type CreateOwnerResult struct {
@@ -157,6 +158,10 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 	if err := validateNewOwnerPassword(input.Password); err != nil {
 		return CreateOwnerResult{}, err
 	}
+	timeZone, err := cleanTimeZone(input.TimeZone)
+	if err != nil {
+		return CreateOwnerResult{}, err
+	}
 
 	passwordHash, err := hashPassword(input.Password)
 	if err != nil {
@@ -174,6 +179,7 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 		Username:         username,
 		PasswordHash:     passwordHash,
 		SessionTokenHash: sessionTokenHash,
+		TimeZone:         timeZone,
 		CreatedAt:        createdAt,
 		SessionExpiresAt: sessionExpiresAt(now),
 	})
@@ -235,6 +241,20 @@ func validateLoginPassword(password string) error {
 	}
 
 	return nil
+}
+
+func cleanTimeZone(value string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "UTC", nil
+	}
+	if strings.EqualFold(cleaned, "local") {
+		return "", ValidationError{Message: "time zone must be an IANA time zone or UTC"}
+	}
+	if _, err := time.LoadLocation(cleaned); err != nil {
+		return "", ValidationError{Message: "time zone must be an IANA time zone or UTC"}
+	}
+	return cleaned, nil
 }
 
 func hashPassword(password string) (string, error) {

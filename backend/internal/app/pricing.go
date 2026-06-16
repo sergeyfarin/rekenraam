@@ -105,6 +105,8 @@ type PricingPolicy struct {
 	RefreshEnabled       bool
 	RefreshHourUTC       int
 	RefreshMinuteUTC     int
+	RefreshHourLocal     int
+	RefreshMinuteLocal   int
 	MaxBackfillDays      int
 	StalenessMaxDays     int
 	TriangulationMaxHops int
@@ -124,6 +126,8 @@ type PricingPolicyInput struct {
 	RefreshEnabled       bool
 	RefreshHourUTC       int
 	RefreshMinuteUTC     int
+	RefreshHourLocal     *int
+	RefreshMinuteLocal   *int
 	MaxBackfillDays      int
 	StalenessMaxDays     int
 	TriangulationMaxHops int
@@ -316,7 +320,15 @@ func (s *PricingService) SavePolicy(ctx context.Context, input PricingPolicyInpu
 	if err != nil {
 		return PricingPolicy{}, err
 	}
+	timeZone, err := s.repository.UserTimeZone(ctx, input.OwnerUserID)
+	if err != nil {
+		return PricingPolicy{}, fmt.Errorf("read owner time zone: %w", err)
+	}
 	now := s.now().UTC()
+	spec.RefreshHourUTC, spec.RefreshMinuteUTC, err = localDailyTimeUTC(spec.RefreshHourLocal, spec.RefreshMinuteLocal, timeZone, now)
+	if err != nil {
+		return PricingPolicy{}, err
+	}
 	changeReason, err := cleanChangeReason(input.ChangeReason, "saved pricing policy")
 	if err != nil {
 		return PricingPolicy{}, err
@@ -540,6 +552,20 @@ func cleanPricingPolicySpec(input PricingPolicyInput) (db.PricingPolicySpec, err
 	if input.RefreshMinuteUTC < 0 || input.RefreshMinuteUTC > 59 {
 		return db.PricingPolicySpec{}, ValidationError{Message: "refresh minute is invalid"}
 	}
+	refreshHourLocal := input.RefreshHourUTC
+	if input.RefreshHourLocal != nil {
+		refreshHourLocal = *input.RefreshHourLocal
+	}
+	refreshMinuteLocal := input.RefreshMinuteUTC
+	if input.RefreshMinuteLocal != nil {
+		refreshMinuteLocal = *input.RefreshMinuteLocal
+	}
+	if refreshHourLocal < 0 || refreshHourLocal > 23 {
+		return db.PricingPolicySpec{}, ValidationError{Message: "refresh hour is invalid"}
+	}
+	if refreshMinuteLocal < 0 || refreshMinuteLocal > 59 {
+		return db.PricingPolicySpec{}, ValidationError{Message: "refresh minute is invalid"}
+	}
 	if input.MaxBackfillDays <= 0 {
 		input.MaxBackfillDays = 370
 	}
@@ -569,6 +595,8 @@ func cleanPricingPolicySpec(input PricingPolicyInput) (db.PricingPolicySpec, err
 		RefreshEnabled:       input.RefreshEnabled,
 		RefreshHourUTC:       input.RefreshHourUTC,
 		RefreshMinuteUTC:     input.RefreshMinuteUTC,
+		RefreshHourLocal:     refreshHourLocal,
+		RefreshMinuteLocal:   refreshMinuteLocal,
 		MaxBackfillDays:      input.MaxBackfillDays,
 		StalenessMaxDays:     input.StalenessMaxDays,
 		TriangulationMaxHops: input.TriangulationMaxHops,
@@ -576,6 +604,17 @@ func cleanPricingPolicySpec(input PricingPolicyInput) (db.PricingPolicySpec, err
 		PreferOfficialFX:     input.PreferOfficialFX,
 		WeekendPolicy:        weekendPolicy,
 	}, nil
+}
+
+func localDailyTimeUTC(hour int, minute int, timeZone string, now time.Time) (int, int, error) {
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return 0, 0, ValidationError{Message: "time zone must be an IANA time zone or UTC"}
+	}
+	localNow := now.In(location)
+	localScheduledAt := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), hour, minute, 0, 0, location)
+	utcScheduledAt := localScheduledAt.UTC()
+	return utcScheduledAt.Hour(), utcScheduledAt.Minute(), nil
 }
 
 func cleanPricingSourceAssignmentSpec(input PricingSourceAssignmentInput, now time.Time) (db.PricingSourceAssignmentSpec, error) {
@@ -663,7 +702,7 @@ func toPriceObservations(records []db.PriceObservationRecord) []PriceObservation
 }
 
 func toPricingPolicy(record db.PricingPolicyRecord) PricingPolicy {
-	return PricingPolicy{ID: record.ID, BookID: record.BookID, BaseCommodityID: nullableSQLInt64Ptr(record.BaseCommodityID), DefaultSourceID: nullableSQLInt64Ptr(record.DefaultSourceID), RefreshEnabled: record.RefreshEnabled, RefreshHourUTC: record.RefreshHourUTC, RefreshMinuteUTC: record.RefreshMinuteUTC, MaxBackfillDays: record.MaxBackfillDays, StalenessMaxDays: record.StalenessMaxDays, TriangulationMaxHops: record.TriangulationMaxHops, RoundingMode: record.RoundingMode, PreferOfficialFX: record.PreferOfficialFX, WeekendPolicy: record.WeekendPolicy, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
+	return PricingPolicy{ID: record.ID, BookID: record.BookID, BaseCommodityID: nullableSQLInt64Ptr(record.BaseCommodityID), DefaultSourceID: nullableSQLInt64Ptr(record.DefaultSourceID), RefreshEnabled: record.RefreshEnabled, RefreshHourUTC: record.RefreshHourUTC, RefreshMinuteUTC: record.RefreshMinuteUTC, RefreshHourLocal: record.RefreshHourLocal, RefreshMinuteLocal: record.RefreshMinuteLocal, MaxBackfillDays: record.MaxBackfillDays, StalenessMaxDays: record.StalenessMaxDays, TriangulationMaxHops: record.TriangulationMaxHops, RoundingMode: record.RoundingMode, PreferOfficialFX: record.PreferOfficialFX, WeekendPolicy: record.WeekendPolicy, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
 }
 
 func toPricingSourceAssignment(record db.PricingSourceAssignmentRecord) PricingSourceAssignment {

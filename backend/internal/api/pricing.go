@@ -90,6 +90,8 @@ type pricingPolicyResponse struct {
 	RefreshEnabled       bool   `json:"refresh_enabled"`
 	RefreshHourUTC       int    `json:"refresh_hour_utc"`
 	RefreshMinuteUTC     int    `json:"refresh_minute_utc"`
+	RefreshHourLocal     int    `json:"refresh_hour_local"`
+	RefreshMinuteLocal   int    `json:"refresh_minute_local"`
 	MaxBackfillDays      int    `json:"max_backfill_days"`
 	StalenessMaxDays     int    `json:"staleness_max_days"`
 	TriangulationMaxHops int    `json:"triangulation_max_hops"`
@@ -106,6 +108,8 @@ type pricingPolicyRequest struct {
 	RefreshEnabled       bool   `json:"refresh_enabled"`
 	RefreshHourUTC       int    `json:"refresh_hour_utc"`
 	RefreshMinuteUTC     int    `json:"refresh_minute_utc"`
+	RefreshHourLocal     *int   `json:"refresh_hour_local,omitempty"`
+	RefreshMinuteLocal   *int   `json:"refresh_minute_local,omitempty"`
 	MaxBackfillDays      int    `json:"max_backfill_days"`
 	StalenessMaxDays     int    `json:"staleness_max_days"`
 	TriangulationMaxHops int    `json:"triangulation_max_hops"`
@@ -299,7 +303,8 @@ func savePricingPolicy(logger *slog.Logger, authService *app.AuthService, pricin
 		policy, err := pricingService.SavePolicy(r.Context(), app.PricingPolicyInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 			BaseCommodityID: request.BaseCommodityID, DefaultSourceID: request.DefaultSourceID, RefreshEnabled: request.RefreshEnabled,
-			RefreshHourUTC: request.RefreshHourUTC, RefreshMinuteUTC: request.RefreshMinuteUTC, MaxBackfillDays: request.MaxBackfillDays,
+			RefreshHourUTC: request.RefreshHourUTC, RefreshMinuteUTC: request.RefreshMinuteUTC, RefreshHourLocal: request.RefreshHourLocal,
+			RefreshMinuteLocal: request.RefreshMinuteLocal, MaxBackfillDays: request.MaxBackfillDays,
 			StalenessMaxDays: request.StalenessMaxDays, TriangulationMaxHops: request.TriangulationMaxHops,
 			RoundingMode: request.RoundingMode, PreferOfficialFX: request.PreferOfficialFX, WeekendPolicy: request.WeekendPolicy,
 			ChangeReason: request.ChangeReason,
@@ -470,7 +475,7 @@ func toPriceObservationResponses(prices []app.PriceObservation) []priceObservati
 }
 
 func toPricingPolicyResponse(policy app.PricingPolicy) pricingPolicyResponse {
-	return pricingPolicyResponse{ID: policy.ID, BookID: policy.BookID, BaseCommodityID: policy.BaseCommodityID, DefaultSourceID: policy.DefaultSourceID, RefreshEnabled: policy.RefreshEnabled, RefreshHourUTC: policy.RefreshHourUTC, RefreshMinuteUTC: policy.RefreshMinuteUTC, MaxBackfillDays: policy.MaxBackfillDays, StalenessMaxDays: policy.StalenessMaxDays, TriangulationMaxHops: policy.TriangulationMaxHops, RoundingMode: policy.RoundingMode, PreferOfficialFX: policy.PreferOfficialFX, WeekendPolicy: policy.WeekendPolicy, CreatedAt: policy.CreatedAt, UpdatedAt: policy.UpdatedAt}
+	return pricingPolicyResponse{ID: policy.ID, BookID: policy.BookID, BaseCommodityID: policy.BaseCommodityID, DefaultSourceID: policy.DefaultSourceID, RefreshEnabled: policy.RefreshEnabled, RefreshHourUTC: policy.RefreshHourUTC, RefreshMinuteUTC: policy.RefreshMinuteUTC, RefreshHourLocal: policy.RefreshHourLocal, RefreshMinuteLocal: policy.RefreshMinuteLocal, MaxBackfillDays: policy.MaxBackfillDays, StalenessMaxDays: policy.StalenessMaxDays, TriangulationMaxHops: policy.TriangulationMaxHops, RoundingMode: policy.RoundingMode, PreferOfficialFX: policy.PreferOfficialFX, WeekendPolicy: policy.WeekendPolicy, CreatedAt: policy.CreatedAt, UpdatedAt: policy.UpdatedAt}
 }
 
 func toPricingSourceAssignmentResponse(assignment app.PricingSourceAssignment) pricingSourceAssignmentResponse {

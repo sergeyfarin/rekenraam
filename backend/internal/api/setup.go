@@ -35,6 +35,7 @@ type setupStepResponse struct {
 type createOwnerRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	TimeZone string `json:"time_zone"`
 }
 
 type createOwnerResponse struct {
@@ -71,6 +72,7 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService, options Ha
 		result, err := setupService.CreateOwner(r.Context(), app.CreateOwnerInput{
 			Username: request.Username,
 			Password: request.Password,
+			TimeZone: request.TimeZone,
 		})
 		if err != nil {
 			var validationError app.ValidationError

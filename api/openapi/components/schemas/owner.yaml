@@ -13,6 +13,11 @@ CreateOwnerRequest:
       description: Password for the single owner account. Minimum 12 Unicode characters, maximum 1024 bytes.
       minLength: 12
       maxLength: 1024
+    time_zone:
+      type: string
+      description: Optional IANA time zone for the owner workspace. Defaults to UTC when omitted.
+      examples:
+        - Europe/Amsterdam
   additionalProperties: false
 OwnerResponse:
   type: object

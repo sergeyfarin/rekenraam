@@ -1,0 +1,51 @@
+get:
+  tags:
+    - settings
+  summary: Read user preferences
+  operationId: getUserPreferences
+  responses:
+    "200":
+      description: Current user preferences.
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/UserPreferencesResponse"
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+    "401":
+      $ref: "../components/responses/common.yaml#/Unauthenticated"
+    "500":
+      $ref: "../components/responses/common.yaml#/InternalError"
+
+put:
+  tags:
+    - settings
+  summary: Save user preferences
+  operationId: saveUserPreferences
+  parameters:
+    - $ref: "../components/parameters/common.yaml#/CSRFToken"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/UserPreferencesRequest"
+  responses:
+    "200":
+      description: Saved user preferences.
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/UserPreferencesResponse"
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+    "400":
+      $ref: "../components/responses/common.yaml#/ValidationFailed"
+    "401":
+      $ref: "../components/responses/common.yaml#/Unauthenticated"
+    "403":
+      $ref: "../components/responses/common.yaml#/Forbidden"
+    "500":
+      $ref: "../components/responses/common.yaml#/InternalError"

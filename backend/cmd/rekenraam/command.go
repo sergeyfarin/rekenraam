@@ -58,6 +58,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	setupService := app.NewSetupService(setupRepository)
 	authRepository := db.NewAuthRepository(database)
 	authService := app.NewAuthService(authRepository, logger)
+	settingsService := app.NewSettingsService(db.NewSettingsRepository(database))
 	bookRepository := db.NewBookRepository(database)
 	bookService := app.NewBookService(bookRepository, setupService)
 	commodityRepository := db.NewCommodityRepository(database)
@@ -74,7 +75,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	pricingService.StartScheduler(ctx, logger)
-	handler := api.NewHandler(logger, web.Handler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, investmentService, api.HandlerOptions{
+	handler := api.NewHandler(logger, web.Handler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, investmentService, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
 	})

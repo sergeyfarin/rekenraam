@@ -128,6 +128,8 @@ type PricingPolicyRecord struct {
 	RefreshEnabled       bool
 	RefreshHourUTC       int
 	RefreshMinuteUTC     int
+	RefreshHourLocal     int
+	RefreshMinuteLocal   int
 	MaxBackfillDays      int
 	StalenessMaxDays     int
 	TriangulationMaxHops int
@@ -146,6 +148,8 @@ type PricingPolicySpec struct {
 	RefreshEnabled       bool
 	RefreshHourUTC       int
 	RefreshMinuteUTC     int
+	RefreshHourLocal     int
+	RefreshMinuteLocal   int
 	MaxBackfillDays      int
 	StalenessMaxDays     int
 	TriangulationMaxHops int
@@ -595,23 +599,25 @@ func (r *PricingRepository) SavePricingPolicy(ctx context.Context, params SavePr
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE pricing_policies
 			SET base_commodity_id = ?, default_source_id = ?, refresh_enabled = ?, refresh_hour_utc = ?,
-				refresh_minute_utc = ?, max_backfill_days = ?, staleness_max_days = ?, triangulation_max_hops = ?,
+				refresh_minute_utc = ?, refresh_hour_local = ?, refresh_minute_local = ?,
+				max_backfill_days = ?, staleness_max_days = ?, triangulation_max_hops = ?,
 				rounding_mode = ?, prefer_official_fx = ?, weekend_policy = ?, updated_at = ?,
 				updated_by_user_id = ?, updated_audit_event_id = ?
 			WHERE book_id = ?
-		`, nullableInt64Value(params.Spec.BaseCommodityID), nullableInt64Value(params.Spec.DefaultSourceID), boolInt(params.Spec.RefreshEnabled), params.Spec.RefreshHourUTC, params.Spec.RefreshMinuteUTC, params.Spec.MaxBackfillDays, params.Spec.StalenessMaxDays, params.Spec.TriangulationMaxHops, params.Spec.RoundingMode, boolInt(params.Spec.PreferOfficialFX), params.Spec.WeekendPolicy, params.RecordedAt, params.ActorUserID, auditEventID, params.BookID); err != nil {
+		`, nullableInt64Value(params.Spec.BaseCommodityID), nullableInt64Value(params.Spec.DefaultSourceID), boolInt(params.Spec.RefreshEnabled), params.Spec.RefreshHourUTC, params.Spec.RefreshMinuteUTC, params.Spec.RefreshHourLocal, params.Spec.RefreshMinuteLocal, params.Spec.MaxBackfillDays, params.Spec.StalenessMaxDays, params.Spec.TriangulationMaxHops, params.Spec.RoundingMode, boolInt(params.Spec.PreferOfficialFX), params.Spec.WeekendPolicy, params.RecordedAt, params.ActorUserID, auditEventID, params.BookID); err != nil {
 			return PricingPolicyRecord{}, fmt.Errorf("update pricing policy: %w", err)
 		}
 	} else {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO pricing_policies (
 				book_id, base_commodity_id, default_source_id, refresh_enabled, refresh_hour_utc,
-				refresh_minute_utc, max_backfill_days, staleness_max_days, triangulation_max_hops,
+				refresh_minute_utc, refresh_hour_local, refresh_minute_local, max_backfill_days,
+				staleness_max_days, triangulation_max_hops,
 				rounding_mode, prefer_official_fx, weekend_policy, created_at, created_by_user_id,
 				updated_at, updated_by_user_id, created_audit_event_id, updated_audit_event_id
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, nullableInt64Value(params.Spec.BaseCommodityID), nullableInt64Value(params.Spec.DefaultSourceID), boolInt(params.Spec.RefreshEnabled), params.Spec.RefreshHourUTC, params.Spec.RefreshMinuteUTC, params.Spec.MaxBackfillDays, params.Spec.StalenessMaxDays, params.Spec.TriangulationMaxHops, params.Spec.RoundingMode, boolInt(params.Spec.PreferOfficialFX), params.Spec.WeekendPolicy, params.RecordedAt, params.ActorUserID, params.RecordedAt, params.ActorUserID, auditEventID, auditEventID); err != nil {
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, params.BookID, nullableInt64Value(params.Spec.BaseCommodityID), nullableInt64Value(params.Spec.DefaultSourceID), boolInt(params.Spec.RefreshEnabled), params.Spec.RefreshHourUTC, params.Spec.RefreshMinuteUTC, params.Spec.RefreshHourLocal, params.Spec.RefreshMinuteLocal, params.Spec.MaxBackfillDays, params.Spec.StalenessMaxDays, params.Spec.TriangulationMaxHops, params.Spec.RoundingMode, boolInt(params.Spec.PreferOfficialFX), params.Spec.WeekendPolicy, params.RecordedAt, params.ActorUserID, params.RecordedAt, params.ActorUserID, auditEventID, auditEventID); err != nil {
 			return PricingPolicyRecord{}, fmt.Errorf("insert pricing policy: %w", err)
 		}
 	}
@@ -811,6 +817,54 @@ func (r *PricingRepository) ScheduledRefreshRunExistsOnDate(ctx context.Context,
 	return exists == 1, nil
 }
 
+func (r *PricingRepository) ScheduledRefreshRunExistsBetween(ctx context.Context, bookID int64, startUTC string, endUTC string) (bool, error) {
+	var exists int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM market_data_ingest_runs
+			WHERE book_id = ?
+				AND trigger = 'scheduled'
+				AND started_at >= ?
+				AND started_at < ?
+		)
+	`, bookID, startUTC, endUTC).Scan(&exists); err != nil {
+		return false, fmt.Errorf("read scheduled pricing refresh existence: %w", err)
+	}
+	return exists == 1, nil
+}
+
+func (r *PricingRepository) UserTimeZone(ctx context.Context, userID int64) (string, error) {
+	var timeZone string
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT time_zone
+		FROM user_preferences
+		WHERE user_id = ?
+	`, userID).Scan(&timeZone); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "UTC", nil
+		}
+		return "", fmt.Errorf("read user time zone: %w", err)
+	}
+	return timeZone, nil
+}
+
+func (r *PricingRepository) BookOwnerTimeZone(ctx context.Context, bookID int64) (string, error) {
+	var timeZone string
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT COALESCE(up.time_zone, 'UTC')
+		FROM books b
+		LEFT JOIN user_preferences up ON up.user_id = b.owner_user_id
+		WHERE b.id = ?
+	`, bookID).Scan(&timeZone); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "UTC", nil
+		}
+		return "", fmt.Errorf("read book owner time zone: %w", err)
+	}
+	return timeZone, nil
+}
+
 func (r *PricingRepository) ListRefreshRuns(ctx context.Context, bookID int64, limit int) ([]PricingRefreshRunRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `
 		SELECT id, book_id, source_id, trigger, status, started_at, finished_at, items_total, items_succeeded, items_failed, last_error
@@ -979,7 +1033,7 @@ func scanPriceObservations(rows *sql.Rows) ([]PriceObservationRecord, error) {
 func pricingPolicySelect(whereClause string) string {
 	return `
 		SELECT id, book_id, base_commodity_id, default_source_id, refresh_enabled, refresh_hour_utc,
-			refresh_minute_utc, max_backfill_days, staleness_max_days, triangulation_max_hops,
+			refresh_minute_utc, refresh_hour_local, refresh_minute_local, max_backfill_days, staleness_max_days, triangulation_max_hops,
 			rounding_mode, prefer_official_fx, weekend_policy, created_at, created_by_user_id,
 			updated_at, updated_by_user_id
 		FROM pricing_policies
@@ -990,7 +1044,7 @@ func scanPricingPolicyRow(row rowScanner) (PricingPolicyRecord, error) {
 	var record PricingPolicyRecord
 	var refreshEnabled int
 	var preferOfficialFX int
-	if err := row.Scan(&record.ID, &record.BookID, &record.BaseCommodityID, &record.DefaultSourceID, &refreshEnabled, &record.RefreshHourUTC, &record.RefreshMinuteUTC, &record.MaxBackfillDays, &record.StalenessMaxDays, &record.TriangulationMaxHops, &record.RoundingMode, &preferOfficialFX, &record.WeekendPolicy, &record.CreatedAt, &record.CreatedByUserID, &record.UpdatedAt, &record.UpdatedByUserID); err != nil {
+	if err := row.Scan(&record.ID, &record.BookID, &record.BaseCommodityID, &record.DefaultSourceID, &refreshEnabled, &record.RefreshHourUTC, &record.RefreshMinuteUTC, &record.RefreshHourLocal, &record.RefreshMinuteLocal, &record.MaxBackfillDays, &record.StalenessMaxDays, &record.TriangulationMaxHops, &record.RoundingMode, &preferOfficialFX, &record.WeekendPolicy, &record.CreatedAt, &record.CreatedByUserID, &record.UpdatedAt, &record.UpdatedByUserID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PricingPolicyRecord{}, ErrNotFound
 		}

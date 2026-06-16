@@ -48,6 +48,7 @@ func newAuthHandlerForDatabaseWithOptions(database *sql.DB, options HandlerOptio
 	authRepository := db.NewAuthRepository(database)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	authService := app.NewAuthService(authRepository, logger)
+	settingsService := app.NewSettingsService(db.NewSettingsRepository(database))
 	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
 	currencyService := app.NewCurrencyService(db.NewCommodityRepository(database), setupService)
 	institutionRepository := db.NewInstitutionRepository(database)
@@ -60,7 +61,7 @@ func newAuthHandlerForDatabaseWithOptions(database *sql.DB, options HandlerOptio
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, nil, nil, options)
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, nil, nil, options)
 }
 
 func TestLoginRequiresSetupBeforeOwnerExists(t *testing.T) {

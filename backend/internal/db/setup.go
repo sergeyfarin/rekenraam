@@ -33,6 +33,7 @@ type CompleteOwnerSetupParams struct {
 	Username         string
 	PasswordHash     string
 	SessionTokenHash string
+	TimeZone         string
 	CreatedAt        string
 	SessionExpiresAt string
 }
@@ -126,6 +127,15 @@ func (r *SetupRepository) CompleteOwnerSetup(ctx context.Context, params Complet
 	ownerID, err := result.LastInsertId()
 	if err != nil {
 		return OwnerRecord{}, fmt.Errorf("read owner id: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO user_preferences (
+			user_id, time_zone, created_at, created_by_user_id, updated_at, updated_by_user_id
+		)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, ownerID, params.TimeZone, params.CreatedAt, ownerID, params.CreatedAt, ownerID); err != nil {
+		return OwnerRecord{}, fmt.Errorf("insert owner preferences: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `

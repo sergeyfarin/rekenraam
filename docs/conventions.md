@@ -109,6 +109,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   usually negative.
 - Use calendar dates for financial facts.
 - Use UTC timestamps for system facts.
+- Store recurring user-facing schedules as local wall-clock time plus an IANA
+  time zone, then record each actual run/attempt as UTC timestamps. Storing only
+  a UTC hour for a daily local schedule causes daylight-saving-time drift.
 - Calendar dates travel over the wire as ISO 8601 strings (`YYYY-MM-DD`). UTC timestamps travel as RFC 3339 strings (`2025-01-15T14:30:00Z`). Go's `time.Time` marshals as RFC 3339 by default; use a plain `string` or a validated date type for calendar-date fields.
 - Keep stable codes in data; translated labels belong in localization assets.
 - Built-in records not entered by users or imported from external sources must use stable keys or codes, not English display names as the only source of truth.

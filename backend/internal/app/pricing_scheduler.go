@@ -39,13 +39,25 @@ func (s *PricingService) runScheduledRefreshIfDue(ctx context.Context, logger *s
 		return
 	}
 
-	today := now.Format(time.DateOnly)
-	scheduledAt := time.Date(now.Year(), now.Month(), now.Day(), policy.RefreshHourUTC, policy.RefreshMinuteUTC, 0, 0, time.UTC)
-	if now.Before(scheduledAt) {
+	timeZone, err := s.repository.BookOwnerTimeZone(ctx, BookID)
+	if err != nil {
+		logger.WarnContext(ctx, "read pricing refresh time zone", slog.Any("err", err))
+		return
+	}
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		logger.WarnContext(ctx, "load pricing refresh time zone", slog.String("time_zone", timeZone), slog.Any("err", err))
+		return
+	}
+	localNow := now.In(location)
+	localScheduledAt := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), policy.RefreshHourLocal, policy.RefreshMinuteLocal, 0, 0, location)
+	if localNow.Before(localScheduledAt) {
 		return
 	}
 
-	exists, err := s.repository.ScheduledRefreshRunExistsOnDate(ctx, BookID, today)
+	localDayStart := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, location).UTC()
+	localDayEnd := localDayStart.In(location).AddDate(0, 0, 1).UTC()
+	exists, err := s.repository.ScheduledRefreshRunExistsBetween(ctx, BookID, localDayStart.Format(time.RFC3339), localDayEnd.Format(time.RFC3339))
 	if err != nil {
 		logger.WarnContext(ctx, "read scheduled pricing refresh state", slog.Any("err", err))
 		return

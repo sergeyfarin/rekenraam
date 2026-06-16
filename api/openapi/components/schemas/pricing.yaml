@@ -152,6 +152,8 @@ PricingPolicyResponse:
     - refresh_enabled
     - refresh_hour_utc
     - refresh_minute_utc
+    - refresh_hour_local
+    - refresh_minute_local
     - max_backfill_days
     - staleness_max_days
     - triangulation_max_hops
@@ -180,6 +182,14 @@ PricingPolicyResponse:
       minimum: 0
       maximum: 23
     refresh_minute_utc:
+      type: integer
+      minimum: 0
+      maximum: 59
+    refresh_hour_local:
+      type: integer
+      minimum: 0
+      maximum: 23
+    refresh_minute_local:
       type: integer
       minimum: 0
       maximum: 59
@@ -231,6 +241,14 @@ PricingPolicyRequest:
       minimum: 0
       maximum: 23
     refresh_minute_utc:
+      type: integer
+      minimum: 0
+      maximum: 59
+    refresh_hour_local:
+      type: integer
+      minimum: 0
+      maximum: 23
+    refresh_minute_local:
       type: integer
       minimum: 0
       maximum: 59

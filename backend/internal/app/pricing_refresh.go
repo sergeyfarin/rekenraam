@@ -152,9 +152,11 @@ func (s *PricingService) pricingPolicyOrDefault(ctx context.Context) (PricingPol
 	}
 	return PricingPolicy{
 		BookID:               BookID,
-		RefreshEnabled:       false,
+		RefreshEnabled:       true,
 		RefreshHourUTC:       4,
 		RefreshMinuteUTC:     0,
+		RefreshHourLocal:     4,
+		RefreshMinuteLocal:   0,
 		MaxBackfillDays:      370,
 		StalenessMaxDays:     3,
 		TriangulationMaxHops: 1,
