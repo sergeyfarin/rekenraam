@@ -305,14 +305,7 @@ func (s *PricingService) CreateTradeImpliedPrice(ctx context.Context, input Crea
 }
 
 func (s *PricingService) GetPolicy(ctx context.Context) (PricingPolicy, error) {
-	record, err := s.repository.GetPricingPolicy(ctx, BookID)
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return PricingPolicy{}, ErrPricingPolicyNotFound
-		}
-		return PricingPolicy{}, fmt.Errorf("read pricing policy: %w", err)
-	}
-	return toPricingPolicy(record), nil
+	return s.pricingPolicyOrDefault(ctx)
 }
 
 func (s *PricingService) SavePolicy(ctx context.Context, input PricingPolicyInput) (PricingPolicy, error) {

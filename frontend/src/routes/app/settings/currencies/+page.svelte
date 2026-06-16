@@ -77,8 +77,6 @@
     timeZoneName: 'short'
   });
 
-  const policyMissing = $derived(policyQuery.error instanceof APIClientError && policyQuery.error.status === 404);
-
   const activeCurrencies = $derived.by(() =>
     [...(currenciesQuery.data?.currencies.filter((currency) => currency.status === 'active') ?? [])].sort((left, right) =>
       left.code.localeCompare(right.code)
@@ -140,7 +138,7 @@
       currentBookQuery.error ??
       sessionQuery.error ??
       sourcesQuery.error ??
-      (policyMissing ? null : policyQuery.error) ??
+      policyQuery.error ??
       assignmentsQuery.error ??
       refreshRunsQuery.error ??
       sourceHealthQuery.error ??
@@ -151,7 +149,7 @@
       currentBookQuery.isPending ||
       sessionQuery.isPending ||
       sourcesQuery.isPending ||
-      (policyQuery.isPending && !policyMissing) ||
+      policyQuery.isPending ||
       assignmentsQuery.isPending ||
       refreshRunsQuery.isPending ||
       sourceHealthQuery.isPending ||
@@ -162,7 +160,7 @@
       currentBookQuery.isError ||
       sessionQuery.isError ||
       sourcesQuery.isError ||
-      (policyQuery.isError && !policyMissing) ||
+      policyQuery.isError ||
       assignmentsQuery.isError ||
       refreshRunsQuery.isError ||
       sourceHealthQuery.isError ||

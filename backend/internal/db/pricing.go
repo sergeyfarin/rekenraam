@@ -264,6 +264,9 @@ func (r *PricingRepository) ListSources(ctx context.Context) ([]MarketDataSource
 		ORDER BY kind, name COLLATE NOCASE
 	`)
 	if err != nil {
+		if isMissingPricingTableError(err) {
+			return []MarketDataSourceRecord{}, nil
+		}
 		return nil, fmt.Errorf("list market data sources: %w", err)
 	}
 	defer rows.Close()
@@ -560,7 +563,11 @@ func (r *PricingRepository) tableHasColumn(ctx context.Context, tableName string
 }
 
 func (r *PricingRepository) GetPricingPolicy(ctx context.Context, bookID int64) (PricingPolicyRecord, error) {
-	return scanPricingPolicyRow(r.database.QueryRowContext(ctx, pricingPolicySelect(`WHERE book_id = ?`), bookID))
+	record, err := scanPricingPolicyRow(r.database.QueryRowContext(ctx, pricingPolicySelect(`WHERE book_id = ?`), bookID))
+	if err != nil && isMissingPricingTableError(err) {
+		return PricingPolicyRecord{}, ErrNotFound
+	}
+	return record, err
 }
 
 func (r *PricingRepository) SavePricingPolicy(ctx context.Context, params SavePricingPolicyParams) (PricingPolicyRecord, error) {
@@ -632,6 +639,9 @@ func (r *PricingRepository) ListSourceAssignments(ctx context.Context, bookID in
 		ORDER BY status, priority, base_commodity_id, quote_commodity_id, id
 	`), bookID)
 	if err != nil {
+		if isMissingPricingTableError(err) {
+			return []PricingSourceAssignmentRecord{}, nil
+		}
 		return nil, fmt.Errorf("list pricing source assignments: %w", err)
 	}
 	defer rows.Close()
@@ -820,6 +830,9 @@ func (r *PricingRepository) ListRefreshRuns(ctx context.Context, bookID int64, l
 		LIMIT ?
 	`, bookID, limit)
 	if err != nil {
+		if isMissingPricingTableError(err) {
+			return []PricingRefreshRunRecord{}, nil
+		}
 		return nil, fmt.Errorf("list pricing refresh runs: %w", err)
 	}
 	defer rows.Close()
@@ -849,6 +862,9 @@ func (r *PricingRepository) ListRefreshState(ctx context.Context, bookID int64) 
 		ORDER BY updated_at DESC, id DESC
 	`, bookID)
 	if err != nil {
+		if isMissingPricingTableError(err) {
+			return []PricingRefreshStateRecord{}, nil
+		}
 		return nil, fmt.Errorf("list pricing refresh state: %w", err)
 	}
 	defer rows.Close()
@@ -1054,4 +1070,14 @@ func scanRefreshRuns(rows *sql.Rows) ([]PricingRefreshRunRecord, error) {
 		return nil, fmt.Errorf("iterate pricing refresh runs: %w", err)
 	}
 	return records, nil
+}
+
+func isMissingPricingTableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "no such table: pricing_") ||
+		strings.Contains(message, "no such table: market_data_sources") ||
+		strings.Contains(message, "no such table: market_data_ingest_")
 }

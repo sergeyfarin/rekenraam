@@ -143,12 +143,12 @@ func (s *PricingService) finishFXRefreshRun(ctx context.Context, runID int64, co
 }
 
 func (s *PricingService) pricingPolicyOrDefault(ctx context.Context) (PricingPolicy, error) {
-	policy, err := s.GetPolicy(ctx)
+	record, err := s.repository.GetPricingPolicy(ctx, BookID)
 	if err == nil {
-		return policy, nil
+		return toPricingPolicy(record), nil
 	}
-	if !errors.Is(err, ErrPricingPolicyNotFound) {
-		return PricingPolicy{}, err
+	if !errors.Is(err, db.ErrNotFound) {
+		return PricingPolicy{}, fmt.Errorf("read pricing policy: %w", err)
 	}
 	return PricingPolicy{
 		BookID:               BookID,
