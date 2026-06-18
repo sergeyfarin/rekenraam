@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"rekenraam/backend/internal/exact"
 )
 
 type LedgerAccountRecord struct {
@@ -24,7 +26,7 @@ type LedgerPostingRecord struct {
 	PostingID     int64
 	AccountID     int64
 	CommodityID   int64
-	QuantityValue int64
+	QuantityValue exact.Coefficient
 	QuantityScale int
 	EntryDate     string
 }

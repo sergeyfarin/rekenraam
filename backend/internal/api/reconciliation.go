@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/exact"
 )
 
 type reconciliationSessionResponse struct {
@@ -50,19 +51,19 @@ type reconciliationCheckpointResponse struct {
 }
 
 type reconciliationPostingResponse struct {
-	PostingID            int64  `json:"posting_id"`
-	TransactionID        int64  `json:"transaction_id"`
-	TransactionVersionID int64  `json:"transaction_version_id"`
-	PostingLineID        int64  `json:"posting_line_id"`
-	AccountID            int64  `json:"account_id"`
-	CommodityID          int64  `json:"commodity_id"`
-	EntryDate            string `json:"entry_date"`
-	QuantityValue        int64  `json:"quantity_value"`
-	QuantityScale        int    `json:"quantity_scale"`
-	ReconciliationStatus string `json:"reconciliation_status"`
-	PayeeName            string `json:"payee_name,omitempty"`
-	Description          string `json:"description,omitempty"`
-	Selected             bool   `json:"selected"`
+	PostingID            int64             `json:"posting_id"`
+	TransactionID        int64             `json:"transaction_id"`
+	TransactionVersionID int64             `json:"transaction_version_id"`
+	PostingLineID        int64             `json:"posting_line_id"`
+	AccountID            int64             `json:"account_id"`
+	CommodityID          int64             `json:"commodity_id"`
+	EntryDate            string            `json:"entry_date"`
+	QuantityValue        exact.Coefficient `json:"quantity_value"`
+	QuantityScale        int               `json:"quantity_scale"`
+	ReconciliationStatus string            `json:"reconciliation_status"`
+	PayeeName            string            `json:"payee_name,omitempty"`
+	Description          string            `json:"description,omitempty"`
+	Selected             bool              `json:"selected"`
 }
 
 type reconciliationCheckpointsResponse struct {
@@ -70,13 +71,13 @@ type reconciliationCheckpointsResponse struct {
 }
 
 type startReconciliationRequest struct {
-	CommodityID           int64           `json:"commodity_id"`
-	SourceKind            string          `json:"source_kind"`
-	StatementDate         string          `json:"statement_date"`
-	StatementBalanceValue int64           `json:"statement_balance_value"`
-	StatementBalanceScale int             `json:"statement_balance_scale"`
-	Metadata              json.RawMessage `json:"metadata"`
-	ChangeReason          string          `json:"change_reason"`
+	CommodityID           int64             `json:"commodity_id"`
+	SourceKind            string            `json:"source_kind"`
+	StatementDate         string            `json:"statement_date"`
+	StatementBalanceValue exact.Coefficient `json:"statement_balance_value"`
+	StatementBalanceScale int               `json:"statement_balance_scale"`
+	Metadata              json.RawMessage   `json:"metadata"`
+	ChangeReason          string            `json:"change_reason"`
 }
 
 type reconciliationSelectionRequest struct {

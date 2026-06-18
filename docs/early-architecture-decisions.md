@@ -77,7 +77,8 @@ Use exact decimal storage for money and security quantities. The default represe
 
 Recommended early fields:
 
-- `quantity_value`: signed integer.
+- `quantity_value`: canonical signed base-10 integer string in storage and API;
+  use arbitrary-precision integer arithmetic in the backend (ADR 0009).
 - `quantity_scale`: decimal scale for the stored value.
 - `commodity_code`: stable code such as `EUR`, `USD`, or a security symbol/internal code.
 

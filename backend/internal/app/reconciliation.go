@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 var reconciliationSourceKinds = map[string]bool{
@@ -67,7 +68,7 @@ type ReconciliationPosting struct {
 	AccountID            int64
 	CommodityID          int64
 	EntryDate            string
-	QuantityValue        int64
+	QuantityValue        exact.Coefficient
 	QuantityScale        int
 	ReconciliationStatus string
 	PayeeName            string
@@ -84,7 +85,7 @@ type StartReconciliationInput struct {
 	CommodityID           int64
 	SourceKind            string
 	StatementDate         string
-	StatementBalanceValue int64
+	StatementBalanceValue exact.Coefficient
 	StatementBalanceScale int
 	MetadataJSON          string
 	ChangeReason          string
@@ -156,8 +157,15 @@ func (s *TransactionService) StartReconciliation(ctx context.Context, input Star
 	if err != nil {
 		return ReconciliationSession{}, err
 	}
-	if input.StatementBalanceScale < 0 || input.StatementBalanceScale > 12 {
+	if input.StatementBalanceScale < 0 || input.StatementBalanceScale > exact.MaxCryptoScale {
 		return ReconciliationSession{}, ValidationError{Message: "statement balance scale is invalid"}
+	}
+	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID, statementDate)
+	if err != nil || commodityRule.Status != "active" {
+		return ReconciliationSession{}, ValidationError{Message: "reconciliation commodity is invalid"}
+	}
+	if input.StatementBalanceScale > commodityRule.MaxQuantityScale || input.StatementBalanceScale > exact.MaxScaleForCommodityKind(commodityRule.CommodityKind) {
+		return ReconciliationSession{}, ValidationError{Message: "statement balance scale exceeds commodity precision"}
 	}
 	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", ledgerJSONMaxBytes)
 	if err != nil {
@@ -449,7 +457,7 @@ func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.
 	for _, posting := range selected {
 		selectedAmount.add(posting.QuantityValue, posting.QuantityScale)
 	}
-	selectedValue, err := selectedAmount.int64()
+	selectedValue, err := selectedAmount.coefficient()
 	if err != nil {
 		return BalanceQuantity{}, BalanceQuantity{}, err
 	}
@@ -462,7 +470,7 @@ func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.
 	difference.add(session.StatementBalanceValue, session.StatementBalanceScale)
 	expectedNegative := &scaledAmount{value: new(big.Int).Neg(expected.value), scale: expected.scale}
 	difference.addScaled(expectedNegative)
-	differenceValue, err := difference.int64()
+	differenceValue, err := difference.coefficient()
 	if err != nil {
 		return BalanceQuantity{}, BalanceQuantity{}, err
 	}
@@ -563,7 +571,7 @@ func toReconciliationPostings(records []db.ReconciliationPostingRecord) []Reconc
 	return postings
 }
 
-func reconciliationQuantity(commodityID int64, value int64, scale int) BalanceQuantity {
+func reconciliationQuantity(commodityID int64, value exact.Coefficient, scale int) BalanceQuantity {
 	return BalanceQuantity{
 		CommodityID:         commodityID,
 		QuantityValue:       value,

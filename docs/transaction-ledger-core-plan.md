@@ -393,8 +393,8 @@ journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id)
 posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id)
 line_seq INTEGER NOT NULL CHECK (line_seq > 0)
 account_id INTEGER NOT NULL REFERENCES accounts(id)
-quantity_value INTEGER NOT NULL
-quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12)
+quantity_value TEXT NOT NULL
+quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24)
 commodity_id INTEGER NOT NULL REFERENCES commodities(id)
 memo TEXT NOT NULL DEFAULT ''
 reconciliation_status TEXT NOT NULL CHECK (
@@ -422,7 +422,8 @@ Rules:
 - `entry_date` must be on or after `opened_on`
 - `entry_date` must be on or before `closed_on` when `closed_on` is set
 - if account version has `default_commodity_id`, posting commodity must match
-- `quantity_scale` must not exceed commodity `max_quantity_scale`
+- `quantity_scale` must not exceed commodity `max_quantity_scale` or the kind
+  ceiling: 24 for crypto and 12 for all other commodity kinds
 - if account version has `quantity_scale_override`, `quantity_scale` must not
   exceed that override either
 

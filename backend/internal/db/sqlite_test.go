@@ -8,8 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/migrations"
 )
 
 func TestOpenAppliesRequiredPragmas(t *testing.T) {
@@ -169,6 +172,91 @@ func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {
 	assert.Contains(t, transactionViewSQL, "ORDER BY", "current_transaction_versions")
 	assert.Contains(t, transactionViewSQL, "version_seq DESC", "current_transaction_versions")
 	assert.Contains(t, transactionViewSQL, "id DESC", "current_transaction_versions")
+}
+
+func TestCommodityPrecisionCeilingAllowsCryptoOnlyThroughTwentyFour(t *testing.T) {
+	database := openTestDatabase(t)
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
+		VALUES (2, 1, 'ETH', 'crypto', 0, '2026-06-18T00:00:00Z', 1);
+		INSERT INTO commodity_versions (
+			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
+		) VALUES (2, 1, '2026-06-18', '2026-06-18T00:00:00Z', 1,
+			'crypto precision', 'active', 'ETH', 'ETH', 'Ether', 18, 24);
+	`)
+	require.NoError(t, err)
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO commodity_versions (
+			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
+		) VALUES (1, 1, '2026-06-18', '2026-06-18T00:00:00Z', 1,
+			'invalid currency precision', 'active', 'USD', '$', 'US Dollar', 2, 13)
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "commodity precision is invalid for commodity kind")
+
+	var columnType string
+	require.NoError(t, database.QueryRowContext(context.Background(), `
+		SELECT type FROM pragma_table_info('posting_versions') WHERE name = 'quantity_value'
+	`).Scan(&columnType))
+	assert.Equal(t, "TEXT", columnType)
+}
+
+func TestLosslessQuantityMigrationPreservesExistingLedgerRows(t *testing.T) {
+	database := openTestDatabase(t)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, database, migrations.FS)
+	require.NoError(t, err)
+	_, err = provider.UpTo(context.Background(), 6)
+	require.NoError(t, err)
+	insertMinimalFinancialFixture(t, database)
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO commodity_versions (
+			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
+		) VALUES (1, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1,
+			'initial', 'active', 'USD', '$', 'US Dollar', 2, 6);
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, opened_on, name, account_class, account_kind,
+			default_commodity_id, quantity_scale_override, allows_postings
+		) VALUES (1, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1,
+			'initial', 'active', '2026-01-01', 'Cash', 'asset', 'cash', 1, 6, 1);
+		INSERT INTO transactions (id, book_id, created_at, created_by_user_id)
+		VALUES (1, 1, '2026-01-01T00:00:00Z', 1);
+		INSERT INTO transaction_versions (
+			id, book_id, transaction_id, version_seq, status, transaction_kind,
+			transaction_date, description, note_markdown, recorded_at,
+			changed_by_user_id, change_reason
+		) VALUES (1, 1, 1, 1, 'posted', 'ordinary', '2026-01-01', '', '',
+			'2026-01-01T00:00:00Z', 1, 'initial');
+		INSERT INTO journal_entries (id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind)
+		VALUES (1, 1, 1, 1, '2026-01-01', 'ordinary');
+		INSERT INTO posting_lines (id, book_id, transaction_id, line_key, created_at, created_by_user_id)
+		VALUES (1, 1, 1, 'line-1', '2026-01-01T00:00:00Z', 1);
+		INSERT INTO posting_versions (
+			id, book_id, transaction_version_id, journal_entry_id, posting_line_id,
+			line_seq, account_id, quantity_value, quantity_scale, commodity_id,
+			reconciliation_status
+		) VALUES (1, 1, 1, 1, 1, 1, 1, 12345, 2, 1, 'uncleared');
+	`)
+	require.NoError(t, err)
+
+	_, err = provider.Up(context.Background())
+	require.NoError(t, err)
+
+	var value string
+	var storageType string
+	require.NoError(t, database.QueryRowContext(context.Background(), `
+		SELECT quantity_value, typeof(quantity_value) FROM posting_versions WHERE id = 1
+	`).Scan(&value, &storageType))
+	assert.Equal(t, "12345", value)
+	assert.Equal(t, "text", storageType)
 }
 
 func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {

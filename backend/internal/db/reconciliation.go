@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"rekenraam/backend/internal/exact"
 )
 
 var (
@@ -24,14 +26,14 @@ type ReconciliationSessionRecord struct {
 	Status                string
 	SourceKind            string
 	StatementDate         string
-	StatementBalanceValue int64
+	StatementBalanceValue exact.Coefficient
 	StatementBalanceScale int
 	StartingCheckpointID  sql.NullInt64
-	StartingBalanceValue  int64
+	StartingBalanceValue  exact.Coefficient
 	StartingBalanceScale  int
-	SelectedBalanceValue  int64
+	SelectedBalanceValue  exact.Coefficient
 	SelectedBalanceScale  int
-	DifferenceValue       int64
+	DifferenceValue       exact.Coefficient
 	DifferenceScale       int
 	MetadataJSON          string
 	CreatedAt             string
@@ -54,7 +56,7 @@ type ReconciliationCheckpointRecord struct {
 	PreviousCheckpointID  sql.NullInt64
 	Status                string
 	StatementDate         string
-	StatementBalanceValue int64
+	StatementBalanceValue exact.Coefficient
 	StatementBalanceScale int
 	CreatedAt             string
 	CreatedByUserID       int64
@@ -73,7 +75,7 @@ type ReconciliationPostingRecord struct {
 	AccountID            int64
 	CommodityID          int64
 	EntryDate            string
-	QuantityValue        int64
+	QuantityValue        exact.Coefficient
 	QuantityScale        int
 	ReconciliationStatus string
 	PayeeName            sql.NullString
@@ -87,7 +89,7 @@ type CreateReconciliationSessionParams struct {
 	CommodityID           int64
 	SourceKind            string
 	StatementDate         string
-	StatementBalanceValue int64
+	StatementBalanceValue exact.Coefficient
 	StatementBalanceScale int
 	MetadataJSON          string
 	ActorUserID           int64
@@ -102,9 +104,9 @@ type ReconciliationSessionSelectionParams struct {
 	BookID               int64
 	SessionID            int64
 	PostingVersionIDs    []int64
-	SelectedBalanceValue int64
+	SelectedBalanceValue exact.Coefficient
 	SelectedBalanceScale int
-	DifferenceValue      int64
+	DifferenceValue      exact.Coefficient
 	DifferenceScale      int
 	ActorUserID          int64
 	AuthSessionID        int64
@@ -172,7 +174,7 @@ func (r *TransactionRepository) CreateReconciliationSession(ctx context.Context,
 		return ReconciliationSessionRecord{}, err
 	}
 	startingCheckpointID := sql.NullInt64{}
-	startingValue := int64(0)
+	startingValue := exact.New(0)
 	startingScale := 0
 	if err == nil {
 		startingCheckpointID = sql.NullInt64{Int64: checkpoint.ID, Valid: true}
@@ -355,7 +357,7 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 	if session.Status != "open" {
 		return ReconciliationSessionRecord{}, ErrReconciliationClosed
 	}
-	if session.DifferenceValue != 0 {
+	if session.DifferenceValue.Sign() != 0 {
 		return ReconciliationSessionRecord{}, ErrReconciliationNotBalanced
 	}
 	selected, err := reconciliationSessionPostings(ctx, tx, params.BookID, params.SessionID)

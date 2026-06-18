@@ -55,12 +55,12 @@ ReconciliationPostingResponse:
       type: string
       format: date
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
     quantity_scale:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     reconciliation_status:
       $ref: "../../openapi.yaml#/components/schemas/ReconciliationStatus"
     payee_name:
@@ -221,12 +221,12 @@ StartReconciliationRequest:
       type: string
       format: date
     statement_balance_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
     statement_balance_scale:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     metadata:
       type: object
       additionalProperties: true

@@ -6778,17 +6778,11 @@ export interface components {
         BalanceQuantity: {
             /** Format: int64 */
             commodity_id: number;
-            /**
-             * Format: int64
-             * @description Debit-positive ledger quantity normalized to quantity_scale.
-             */
-            quantity_value: number;
+            /** @description Lossless debit-positive integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
-            /**
-             * Format: int64
-             * @description Class-normalized quantity. Liability, equity, and income balances are sign-flipped for display/reporting.
-             */
-            normal_quantity_value: number;
+            /** @description Lossless class-normalized integer coefficient. Liability, equity, and income balances are sign-flipped for display/reporting. */
+            normal_quantity_value: string;
         };
         AccountBalance: {
             /** Format: int64 */
@@ -7067,8 +7061,7 @@ export interface components {
             line_seq: number;
             /** Format: int64 */
             account_id: number;
-            /** Format: int64 */
-            quantity_value: number;
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             commodity_id: number;
@@ -7191,8 +7184,7 @@ export interface components {
             line_key?: string;
             /** Format: int64 */
             account_id: number;
-            /** Format: int64 */
-            quantity_value: number;
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             commodity_id: number;
@@ -7257,8 +7249,7 @@ export interface components {
             commodity_id: number;
             /** Format: date */
             entry_date: string;
-            /** Format: int64 */
-            quantity_value: number;
+            quantity_value: string;
             quantity_scale: number;
             reconciliation_status: components["schemas"]["ReconciliationStatus"];
             payee_name?: string;
@@ -7334,8 +7325,7 @@ export interface components {
             source_kind?: components["schemas"]["ReconciliationSourceKind"];
             /** Format: date */
             statement_date: string;
-            /** Format: int64 */
-            statement_balance_value: number;
+            statement_balance_value: string;
             statement_balance_scale: number;
             metadata?: {
                 [key: string]: unknown;

@@ -93,16 +93,26 @@ When a feature introduces a durable new rule, update one of those documents in t
   business tables.
 - Market-data providers should be added in this order: built-in Go adapters for
   trusted/high-value sources first, declarative HTTP adapters for simple
-  source mappings second, and external process plugins only after the provider
-  model has settled. In-process scripting is not a first-choice provider
-  extension mechanism.
+  REST/CSV/JSON/XML mappings second, and external process plugins only after
+  trust, lifecycle, and deployment boundaries are mature.
 - Provider adapters must return normalized facts only. They must not directly
   mutate ledger, pricing, lot, dividend, or corporate-action tables.
 
+## Exact Quantity Precision
+
+- Quantity coefficients are canonical signed decimal strings in SQLite and
+  JSON, limited to 38 digits, and are calculated with arbitrary-precision
+  integers. Never aggregate quantity coefficient text with SQLite `SUM`.
+- The technical scale ceiling is 24 for crypto and 12 for every other
+  commodity kind. A commodity's own `max_quantity_scale` may be lower.
+- Standard/display scale is independent from maximum storage scale; do not
+  render trailing places merely because a commodity permits them.
 ## Data And Persistence Conventions
 
 - Never store money or quantities as floating point.
-- Store exact values as integer plus scale plus commodity code.
+- Store exact values as a canonical integer coefficient plus scale and
+  commodity identifier. Quantity coefficients use decimal strings at storage
+  and API boundaries as defined by ADR 0009.
 - Ledger posting quantities use debit-positive sign convention. Positive
   postings are debits; negative postings are credits. Asset and expense
   increases are usually positive. Liability, equity, and income increases are

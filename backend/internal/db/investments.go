@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
+
+	"rekenraam/backend/internal/exact"
 )
 
 var (
@@ -188,9 +191,9 @@ type InvestmentLotRecord struct {
 	OpenedOn                string
 	SourceTransactionID     sql.NullInt64
 	Status                  string
-	QuantityValue           int64
+	QuantityValue           exact.Coefficient
 	QuantityScale           int
-	RemainingQuantityValue  int64
+	RemainingQuantityValue  exact.Coefficient
 	RemainingQuantityScale  int
 	CostBasisValue          int64
 	CostBasisScale          int
@@ -208,7 +211,7 @@ type CreateInvestmentLotParams struct {
 	CommodityID         int64
 	OpenedOn            string
 	SourceTransactionID int64
-	QuantityValue       int64
+	QuantityValue       exact.Coefficient
 	QuantityScale       int
 	CostBasisValue      int64
 	CostBasisScale      int
@@ -226,13 +229,13 @@ type CreateInvestmentLotParams struct {
 
 type LotAllocation struct {
 	LotID         int64
-	QuantityValue int64
+	QuantityValue exact.Coefficient
 	QuantityScale int
 }
 
 type LotDisposalRecord struct {
 	LotID          int64
-	QuantityValue  int64
+	QuantityValue  exact.Coefficient
 	QuantityScale  int
 	CostBasisValue int64
 	CostBasisScale int
@@ -244,7 +247,7 @@ type DisposeLotsParams struct {
 	CommodityID   int64
 	TransactionID int64
 	EventDate     string
-	QuantityValue int64
+	QuantityValue exact.Coefficient
 	QuantityScale int
 	Allocations   []LotAllocation
 	CreatedAt     string
@@ -259,7 +262,7 @@ type DisposeLotsParams struct {
 type InvestmentPositionRecord struct {
 	AccountID               int64
 	CommodityID             int64
-	QuantityValue           int64
+	QuantityValue           exact.Coefficient
 	QuantityScale           int
 	RemainingCostBasisValue int64
 	RemainingCostBasisScale int
@@ -888,7 +891,7 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 		}
 		type lotRef struct {
 			id    int64
-			value int64
+			value exact.Coefficient
 			scale int
 		}
 		var lots []lotRef
@@ -904,11 +907,11 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 			return nil, fmt.Errorf("close FIFO lots: %w", err)
 		}
 		for _, lot := range lots {
-			if remainingValue <= 0 {
+			if remainingValue.Sign() <= 0 {
 				break
 			}
 			take := lot.value
-			if take > remainingValue {
+			if take.Cmp(remainingValue) > 0 {
 				take = remainingValue
 			}
 			disposal, err := disposeLotTx(ctx, tx, params, lot.id, take, lot.scale, auditEventID)
@@ -916,9 +919,13 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 				return nil, err
 			}
 			disposals = append(disposals, disposal)
-			remainingValue -= take
+			remaining, err := exact.FromBig(new(big.Int).Sub(remainingValue.BigInt(), take.BigInt()))
+			if err != nil {
+				return nil, err
+			}
+			remainingValue = remaining
 		}
-		if remainingValue > 0 {
+		if remainingValue.Sign() > 0 {
 			return nil, ErrInsufficientLots
 		}
 	}
@@ -956,10 +963,10 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		SELECT
 			lot.account_id,
 			lot.commodity_id,
-			SUM(lot.remaining_quantity_value),
-			MAX(lot.remaining_quantity_scale),
-			SUM(lot.remaining_cost_basis_value),
-			MAX(lot.remaining_cost_basis_scale),
+			lot.remaining_quantity_value,
+			lot.remaining_quantity_scale,
+			lot.remaining_cost_basis_value,
+			lot.remaining_cost_basis_scale,
 			lot.cost_commodity_id,
 			(
 				SELECT po.price_value
@@ -994,26 +1001,85 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		FROM investment_lots lot
 		WHERE lot.book_id = ?
 			AND lot.status = 'open'
-			AND lot.remaining_quantity_value <> 0
-		GROUP BY lot.account_id, lot.commodity_id, lot.cost_commodity_id
-		ORDER BY lot.account_id, lot.commodity_id
+			AND lot.remaining_quantity_value <> '0'
+		ORDER BY lot.account_id, lot.commodity_id, lot.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read investment positions: %w", err)
 	}
 	defer rows.Close()
-	var records []InvestmentPositionRecord
+	type positionKey struct {
+		accountID, commodityID, costCommodityID int64
+	}
+	type accumulatedPosition struct {
+		record   InvestmentPositionRecord
+		quantity *scaledInteger
+		cost     *scaledInteger
+	}
+	positions := map[positionKey]*accumulatedPosition{}
+	var order []positionKey
 	for rows.Next() {
 		var record InvestmentPositionRecord
-		if err := rows.Scan(&record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale, &record.RemainingCostBasisValue, &record.RemainingCostBasisScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate); err != nil {
+		var quantity exact.Coefficient
+		var quantityScale int
+		var costValue int64
+		var costScale int
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate); err != nil {
 			return nil, fmt.Errorf("scan investment position: %w", err)
 		}
-		records = append(records, record)
+		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
+		position := positions[key]
+		if position == nil {
+			position = &accumulatedPosition{record: record, quantity: newScaledInteger(), cost: newScaledInteger()}
+			positions[key] = position
+			order = append(order, key)
+		}
+		position.quantity.add(quantity.BigInt(), quantityScale)
+		position.cost.add(big.NewInt(costValue), costScale)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate investment positions: %w", err)
 	}
+	records := make([]InvestmentPositionRecord, 0, len(order))
+	for _, key := range order {
+		position := positions[key]
+		quantity, err := exact.FromBig(position.quantity.value)
+		if err != nil {
+			return nil, err
+		}
+		if !position.cost.value.IsInt64() {
+			return nil, fmt.Errorf("investment position cost basis exceeds int64 range")
+		}
+		position.record.QuantityValue = quantity
+		position.record.QuantityScale = position.quantity.scale
+		position.record.RemainingCostBasisValue = position.cost.value.Int64()
+		position.record.RemainingCostBasisScale = position.cost.scale
+		records = append(records, position.record)
+	}
 	return records, nil
+}
+
+type scaledInteger struct {
+	value *big.Int
+	scale int
+}
+
+func newScaledInteger() *scaledInteger { return &scaledInteger{value: big.NewInt(0)} }
+
+func (s *scaledInteger) add(value *big.Int, scale int) {
+	if scale > s.scale {
+		s.value.Mul(s.value, pow10DB(scale-s.scale))
+		s.scale = scale
+	}
+	addend := new(big.Int).Set(value)
+	if scale < s.scale {
+		addend.Mul(addend, pow10DB(s.scale-scale))
+	}
+	s.value.Add(s.value, addend)
+}
+
+func pow10DB(scale int) *big.Int {
+	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(scale)), nil)
 }
 
 func (r *InvestmentRepository) CommodityTradingAccountID(ctx context.Context, bookID int64) (int64, error) {
@@ -1400,7 +1466,7 @@ func scanInvestmentLots(rows *sql.Rows) ([]InvestmentLotRecord, error) {
 	return records, nil
 }
 
-func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lotID int64, quantityValue int64, quantityScale int, auditEventID int64) (LotDisposalRecord, error) {
+func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lotID int64, quantityValue exact.Coefficient, quantityScale int, auditEventID int64) (LotDisposalRecord, error) {
 	lot, err := investmentLotByIDTx(ctx, tx, params.BookID, lotID)
 	if err != nil {
 		return LotDisposalRecord{}, err
@@ -1411,14 +1477,17 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	if quantityScale != lot.RemainingQuantityScale {
 		return LotDisposalRecord{}, fmt.Errorf("lot allocation scale does not match lot scale")
 	}
-	if quantityValue <= 0 || quantityValue > lot.RemainingQuantityValue {
+	if quantityValue.Sign() <= 0 || quantityValue.Cmp(lot.RemainingQuantityValue) > 0 {
 		return LotDisposalRecord{}, ErrInsufficientLots
 	}
 	costBasisValue := proratedCostBasis(lot.RemainingCostBasisValue, quantityValue, lot.RemainingQuantityValue)
-	nextRemainingQuantity := lot.RemainingQuantityValue - quantityValue
+	nextRemainingQuantity, err := exact.FromBig(new(big.Int).Sub(lot.RemainingQuantityValue.BigInt(), quantityValue.BigInt()))
+	if err != nil {
+		return LotDisposalRecord{}, err
+	}
 	nextRemainingCost := lot.RemainingCostBasisValue - costBasisValue
 	status := "open"
-	if nextRemainingQuantity == 0 {
+	if nextRemainingQuantity.Sign() == 0 {
 		status = "closed"
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -1435,7 +1504,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
 		)
 		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)
-	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate, -quantityValue, quantityScale, -costBasisValue, lot.RemainingCostBasisScale, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
+	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityValue.Negated(), quantityScale, -costBasisValue, lot.RemainingCostBasisScale, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert disposal lot event: %w", err)
 	}
 	return LotDisposalRecord{
@@ -1447,11 +1516,13 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	}, nil
 }
 
-func proratedCostBasis(remainingCost int64, quantity int64, remainingQuantity int64) int64 {
-	if remainingQuantity <= 0 {
+func proratedCostBasis(remainingCost int64, quantity exact.Coefficient, remainingQuantity exact.Coefficient) int64 {
+	if remainingQuantity.Sign() <= 0 {
 		return 0
 	}
-	return (remainingCost * quantity) / remainingQuantity
+	value := new(big.Int).Mul(big.NewInt(remainingCost), quantity.BigInt())
+	value.Quo(value, remainingQuantity.BigInt())
+	return value.Int64()
 }
 
 func eventSuggestionByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, suggestionID int64) (EventSuggestionRecord, error) {

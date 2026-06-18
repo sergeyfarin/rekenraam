@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 const (
@@ -225,7 +226,7 @@ type InvestmentTradeInput struct {
 	CommodityID      int64
 	HoldingAccountID int64
 	CashAccountID    int64
-	QuantityValue    int64
+	QuantityValue    exact.Coefficient
 	QuantityScale    int
 	CashAmountValue  int64
 	CashAmountScale  int
@@ -239,7 +240,7 @@ type InvestmentTradeInput struct {
 
 type InvestmentLotAllocationInput struct {
 	LotID         int64
-	QuantityValue int64
+	QuantityValue exact.Coefficient
 	QuantityScale int
 }
 
@@ -251,7 +252,7 @@ type InvestmentTradeResult struct {
 
 type InvestmentLotDisposal struct {
 	LotID          int64
-	QuantityValue  int64
+	QuantityValue  exact.Coefficient
 	QuantityScale  int
 	CostBasisValue int64
 	CostBasisScale int
@@ -285,7 +286,7 @@ type ReinvestedDividendInput struct {
 	CommodityID      int64
 	HoldingAccountID int64
 	IncomeAccountID  *int64
-	QuantityValue    int64
+	QuantityValue    exact.Coefficient
 	QuantityScale    int
 	AmountValue      int64
 	AmountScale      int
@@ -304,9 +305,9 @@ type InvestmentLot struct {
 	OpenedOn                string
 	SourceTransactionID     *int64
 	Status                  string
-	QuantityValue           int64
+	QuantityValue           exact.Coefficient
 	QuantityScale           int
-	RemainingQuantityValue  int64
+	RemainingQuantityValue  exact.Coefficient
 	RemainingQuantityScale  int
 	CostBasisValue          int64
 	CostBasisScale          int
@@ -321,7 +322,7 @@ type InvestmentLot struct {
 type InvestmentPosition struct {
 	AccountID               int64
 	CommodityID             int64
-	QuantityValue           int64
+	QuantityValue           exact.Coefficient
 	QuantityScale           int
 	RemainingCostBasisValue int64
 	RemainingCostBasisScale int
@@ -697,9 +698,9 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 				Memo:      memo,
 				Postings: []PostingInput{
 					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: -input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: input.CashAmountValue, QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					{AccountID: input.CashAccountID, QuantityValue: -input.CashAmountValue, QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+					{AccountID: tradingAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					{AccountID: input.CashAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
 				},
 			}},
 		},
@@ -787,10 +788,10 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 				EntryKind: "investment",
 				Memo:      memo,
 				Postings: []PostingInput{
-					{AccountID: input.HoldingAccountID, QuantityValue: -input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
 					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: input.CashAccountID, QuantityValue: input.CashAmountValue, QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: -input.CashAmountValue, QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					{AccountID: input.CashAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					{AccountID: tradingAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
 				},
 			}},
 		},
@@ -880,8 +881,8 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 		status = "posted"
 	}
 	postings := []PostingInput{
-		{AccountID: input.CashAccountID, QuantityValue: input.AmountValue, QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-		{AccountID: incomeAccountID, QuantityValue: -input.AmountValue, QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+		{AccountID: input.CashAccountID, QuantityValue: exact.New(input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+		{AccountID: incomeAccountID, QuantityValue: exact.New(-input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
 	}
 	if input.WithholdingValue != nil && *input.WithholdingValue > 0 {
 		if input.WithholdingAccountID == nil || *input.WithholdingAccountID <= 0 {
@@ -892,8 +893,8 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 			scale = *input.WithholdingScale
 		}
 		postings = append(postings,
-			PostingInput{AccountID: *input.WithholdingAccountID, QuantityValue: *input.WithholdingValue, QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
-			PostingInput{AccountID: input.CashAccountID, QuantityValue: -*input.WithholdingValue, QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
+			PostingInput{AccountID: *input.WithholdingAccountID, QuantityValue: exact.New(*input.WithholdingValue), QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
+			PostingInput{AccountID: input.CashAccountID, QuantityValue: exact.New(-*input.WithholdingValue), QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
 		)
 	}
 	return s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
@@ -975,9 +976,9 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 				Memo:      memo,
 				Postings: []PostingInput{
 					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: -input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: input.AmountValue, QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					{AccountID: incomeAccountID, QuantityValue: -input.AmountValue, QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+					{AccountID: tradingAccountID, QuantityValue: exact.New(input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					{AccountID: incomeAccountID, QuantityValue: exact.New(-input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
 				},
 			}},
 		},
@@ -1353,10 +1354,10 @@ func validateTradeInput(input InvestmentTradeInput) error {
 	if input.CommodityID <= 0 || input.HoldingAccountID <= 0 || input.CashAccountID <= 0 || input.CashCommodityID <= 0 {
 		return ValidationError{Message: "investment trade references are required"}
 	}
-	if input.QuantityValue <= 0 {
+	if input.QuantityValue.Sign() <= 0 {
 		return ValidationError{Message: "quantity is required"}
 	}
-	if input.QuantityScale < 0 || input.QuantityScale > 12 || input.CashAmountScale < 0 || input.CashAmountScale > 12 {
+	if input.QuantityScale < 0 || input.QuantityScale > exact.MaxCryptoScale || input.CashAmountScale < 0 || input.CashAmountScale > exact.MaxStandardScale {
 		return ValidationError{Message: "quantity scale is invalid"}
 	}
 	if input.CashAmountValue <= 0 {
@@ -1572,8 +1573,8 @@ func boolPtr(value bool) *bool {
 	return &value
 }
 
-func scaledDivision(numerator int64, numeratorScale int, denominator int64, denominatorScale int, resultScale int) (int64, error) {
-	if denominator == 0 {
+func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coefficient, denominatorScale int, resultScale int) (int64, error) {
+	if denominator.Sign() == 0 {
 		return 0, fmt.Errorf("division by zero")
 	}
 	n := big.NewInt(numerator)
@@ -1583,7 +1584,7 @@ func scaledDivision(numerator int64, numeratorScale int, denominator int64, deno
 	} else {
 		n.Div(n, pow10(-exponent))
 	}
-	n.Quo(n, big.NewInt(denominator))
+	n.Quo(n, denominator.BigInt())
 	if !n.IsInt64() {
 		return 0, fmt.Errorf("scaled division overflow")
 	}

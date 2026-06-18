@@ -58,12 +58,12 @@ PostingResponse:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
     quantity_scale:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     commodity_id:
       type: integer
       format: int64
@@ -320,12 +320,12 @@ PostingRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
     quantity_scale:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     commodity_id:
       type: integer
       format: int64

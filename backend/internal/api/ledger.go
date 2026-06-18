@@ -6,13 +6,14 @@ import (
 	"net/http"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/exact"
 )
 
 type balanceQuantityResponse struct {
-	CommodityID         int64 `json:"commodity_id"`
-	QuantityValue       int64 `json:"quantity_value"`
-	QuantityScale       int   `json:"quantity_scale"`
-	NormalQuantityValue int64 `json:"normal_quantity_value"`
+	CommodityID         int64             `json:"commodity_id"`
+	QuantityValue       exact.Coefficient `json:"quantity_value"`
+	QuantityScale       int               `json:"quantity_scale"`
+	NormalQuantityValue exact.Coefficient `json:"normal_quantity_value"`
 }
 
 type accountBalanceResponse struct {

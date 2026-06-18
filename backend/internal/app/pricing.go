@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 	"rekenraam/backend/internal/marketdata"
 )
 
@@ -90,7 +91,7 @@ type CreateTradeImpliedPriceInput struct {
 	CommodityID      int64
 	QuoteCommodityID int64
 	PriceDate        string
-	QuantityValue    int64
+	QuantityValue    exact.Coefficient
 	QuantityScale    int
 	CashValue        int64
 	CashScale        int
@@ -271,7 +272,7 @@ func (s *PricingService) CreatePrice(ctx context.Context, input PriceObservation
 }
 
 func (s *PricingService) CreateTradeImpliedPrice(ctx context.Context, input CreateTradeImpliedPriceInput) error {
-	if input.QuantityValue <= 0 || input.CashValue <= 0 {
+	if input.QuantityValue.Sign() <= 0 || input.CashValue <= 0 {
 		return ValidationError{Message: "trade quantity and cash amount are required"}
 	}
 	priceScale := input.PriceScale

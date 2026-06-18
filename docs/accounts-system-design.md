@@ -132,9 +132,11 @@ Scale rules:
 
 - `standard_scale` is the normal user-facing scale. For example, USD is 2.
 - `max_quantity_scale` is the maximum scale accepted for stored quantities.
-  It must be between 0 and 12 until a later precision decision changes that.
-- Ledger postings will store `quantity_value`, `quantity_scale`, and
-  `commodity_id`. They must never use floating point.
+  Crypto commodities may use 0 through 24; all other commodity kinds use 0
+  through 12. See ADR 0009.
+- Ledger postings store a canonical signed decimal-string `quantity_value`,
+  `quantity_scale`, and `commodity_id`. Backend arithmetic uses arbitrary-
+  precision integers and must never use floating point.
 - An account version references `default_commodity_id`. Posting accounts must
   have one.
 - An account version may also set `quantity_scale_override`. If it is null, data

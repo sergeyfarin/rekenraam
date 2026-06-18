@@ -112,7 +112,7 @@ AccountResponse:
     quantity_scale_override:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     allows_postings:
       type: boolean
     has_activity:
@@ -202,7 +202,7 @@ AccountRequest:
     quantity_scale_override:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     allows_postings:
       type: boolean
       description: Defaults to true when omitted.

@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/exact"
 )
 
 func TestInvestmentInstrumentCreatesSecurityCommodityAndVersionHistory(t *testing.T) {
@@ -95,7 +97,7 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 		AccountID:       accountID,
 		CommodityID:     instrument.CommodityID,
 		OpenedOn:        "2026-01-01",
-		QuantityValue:   100000000,
+		QuantityValue:   exact.New(100000000),
 		QuantityScale:   6,
 		CostBasisValue:  250000,
 		CostBasisScale:  2,
@@ -114,7 +116,7 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 		AccountID:       accountID,
 		CommodityID:     instrument.CommodityID,
 		OpenedOn:        "2026-02-01",
-		QuantityValue:   50000000,
+		QuantityValue:   exact.New(50000000),
 		QuantityScale:   6,
 		CostBasisValue:  150000,
 		CostBasisScale:  2,
@@ -135,7 +137,7 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 		CommodityID:   instrument.CommodityID,
 		TransactionID: 0,
 		EventDate:     "2026-03-01",
-		QuantityValue: 125000000,
+		QuantityValue: exact.New(125000000),
 		QuantityScale: 6,
 		CreatedAt:     "2026-03-01T09:00:00Z",
 		ActorUserID:   ownerID,
@@ -147,18 +149,18 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 
 	require.Len(t, disposals, 2)
 	assert.Equal(t, firstLot.ID, disposals[0].LotID)
-	assert.Equal(t, int64(100000000), disposals[0].QuantityValue)
+	assert.Equal(t, exact.New(100000000), disposals[0].QuantityValue)
 	assert.Equal(t, int64(250000), disposals[0].CostBasisValue)
-	assert.Equal(t, int64(25000000), disposals[1].QuantityValue)
+	assert.Equal(t, exact.New(25000000), disposals[1].QuantityValue)
 	assert.Equal(t, int64(75000), disposals[1].CostBasisValue)
 
 	lots, err := repository.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
 	require.Len(t, lots, 2)
 	assert.Equal(t, "closed", lots[0].Status)
-	assert.Equal(t, int64(0), lots[0].RemainingQuantityValue)
+	assert.Equal(t, exact.New(0), lots[0].RemainingQuantityValue)
 	assert.Equal(t, "open", lots[1].Status)
-	assert.Equal(t, int64(25000000), lots[1].RemainingQuantityValue)
+	assert.Equal(t, exact.New(25000000), lots[1].RemainingQuantityValue)
 	assert.Equal(t, int64(75000), lots[1].RemainingCostBasisValue)
 }
 
@@ -173,7 +175,7 @@ func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
 		AccountID:       accountID,
 		CommodityID:     instrument.CommodityID,
 		OpenedOn:        "2026-01-01",
-		QuantityValue:   10000000,
+		QuantityValue:   exact.New(10000000),
 		QuantityScale:   6,
 		CostBasisValue:  25000,
 		CostBasisScale:  2,
@@ -193,7 +195,7 @@ func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
 		AccountID:     accountID,
 		CommodityID:   instrument.CommodityID,
 		EventDate:     "2026-03-01",
-		QuantityValue: 15000000,
+		QuantityValue: exact.New(15000000),
 		QuantityScale: 6,
 		CreatedAt:     "2026-03-01T09:00:00Z",
 		ActorUserID:   ownerID,
@@ -207,7 +209,7 @@ func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lots, 1)
 	assert.Equal(t, "open", lots[0].Status)
-	assert.Equal(t, int64(10000000), lots[0].RemainingQuantityValue)
+	assert.Equal(t, exact.New(10000000), lots[0].RemainingQuantityValue)
 	assert.Equal(t, int64(25000), lots[0].RemainingCostBasisValue)
 	assert.Equal(t, 1, countRows(t, database, "investment_lot_events"))
 }
@@ -223,7 +225,7 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 		AccountID:       accountID,
 		CommodityID:     instrument.CommodityID,
 		OpenedOn:        "2026-01-01",
-		QuantityValue:   3,
+		QuantityValue:   exact.New(3),
 		QuantityScale:   0,
 		CostBasisValue:  100,
 		CostBasisScale:  2,
@@ -243,9 +245,9 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 		AccountID:     accountID,
 		CommodityID:   instrument.CommodityID,
 		EventDate:     "2026-03-01",
-		QuantityValue: 1,
+		QuantityValue: exact.New(1),
 		QuantityScale: 0,
-		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: 1, QuantityScale: 0}},
+		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: exact.New(1), QuantityScale: 0}},
 		CreatedAt:     "2026-03-01T09:00:00Z",
 		ActorUserID:   ownerID,
 		OriginType:    "browser_api",
@@ -261,9 +263,9 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 		AccountID:     accountID,
 		CommodityID:   instrument.CommodityID,
 		EventDate:     "2026-04-01",
-		QuantityValue: 2,
+		QuantityValue: exact.New(2),
 		QuantityScale: 0,
-		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: 2, QuantityScale: 0}},
+		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: exact.New(2), QuantityScale: 0}},
 		CreatedAt:     "2026-04-01T09:00:00Z",
 		ActorUserID:   ownerID,
 		OriginType:    "browser_api",
@@ -278,7 +280,7 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lots, 1)
 	assert.Equal(t, "closed", lots[0].Status)
-	assert.Equal(t, int64(0), lots[0].RemainingQuantityValue)
+	assert.Equal(t, exact.New(0), lots[0].RemainingQuantityValue)
 	assert.Equal(t, int64(0), lots[0].RemainingCostBasisValue)
 }
 

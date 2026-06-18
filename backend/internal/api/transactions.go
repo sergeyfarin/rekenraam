@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/exact"
 )
 
 type transactionResponse struct {
@@ -45,19 +46,19 @@ type journalEntryResponse struct {
 }
 
 type postingResponse struct {
-	ID                   int64           `json:"id"`
-	PostingLineID        int64           `json:"posting_line_id"`
-	LineKey              string          `json:"line_key"`
-	LineSeq              int64           `json:"line_seq"`
-	AccountID            int64           `json:"account_id"`
-	QuantityValue        int64           `json:"quantity_value"`
-	QuantityScale        int             `json:"quantity_scale"`
-	CommodityID          int64           `json:"commodity_id"`
-	Memo                 string          `json:"memo"`
-	ReconciliationStatus string          `json:"reconciliation_status"`
-	ClearedOn            string          `json:"cleared_on,omitempty"`
-	Metadata             json.RawMessage `json:"metadata"`
-	TagIDs               []int64         `json:"tag_ids"`
+	ID                   int64             `json:"id"`
+	PostingLineID        int64             `json:"posting_line_id"`
+	LineKey              string            `json:"line_key"`
+	LineSeq              int64             `json:"line_seq"`
+	AccountID            int64             `json:"account_id"`
+	QuantityValue        exact.Coefficient `json:"quantity_value"`
+	QuantityScale        int               `json:"quantity_scale"`
+	CommodityID          int64             `json:"commodity_id"`
+	Memo                 string            `json:"memo"`
+	ReconciliationStatus string            `json:"reconciliation_status"`
+	ClearedOn            string            `json:"cleared_on,omitempty"`
+	Metadata             json.RawMessage   `json:"metadata"`
+	TagIDs               []int64           `json:"tag_ids"`
 }
 
 type transactionsResponse struct {
@@ -122,14 +123,14 @@ type journalEntryRequest struct {
 }
 
 type postingRequest struct {
-	LineKey       string          `json:"line_key"`
-	AccountID     int64           `json:"account_id"`
-	QuantityValue int64           `json:"quantity_value"`
-	QuantityScale int             `json:"quantity_scale"`
-	CommodityID   int64           `json:"commodity_id"`
-	Memo          string          `json:"memo"`
-	Metadata      json.RawMessage `json:"metadata"`
-	TagIDs        []int64         `json:"tag_ids"`
+	LineKey       string            `json:"line_key"`
+	AccountID     int64             `json:"account_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+	CommodityID   int64             `json:"commodity_id"`
+	Memo          string            `json:"memo"`
+	Metadata      json.RawMessage   `json:"metadata"`
+	TagIDs        []int64           `json:"tag_ids"`
 }
 
 type voidTransactionRequest struct {

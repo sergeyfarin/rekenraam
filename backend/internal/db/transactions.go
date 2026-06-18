@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"rekenraam/backend/internal/exact"
 )
 
 var (
@@ -73,7 +75,7 @@ type PostingRecord struct {
 	LineKey              string
 	LineSeq              int64
 	AccountID            int64
-	QuantityValue        int64
+	QuantityValue        exact.Coefficient
 	QuantityScale        int
 	CommodityID          int64
 	Memo                 string
@@ -108,7 +110,7 @@ type JournalEntrySpec struct {
 type PostingSpec struct {
 	LineKey              string
 	AccountID            int64
-	QuantityValue        int64
+	QuantityValue        exact.Coefficient
 	QuantityScale        int
 	CommodityID          int64
 	Memo                 string

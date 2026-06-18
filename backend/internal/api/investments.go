@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/exact"
 )
 
 type investmentInstrumentResponse struct {
@@ -139,7 +140,7 @@ type investmentTradeRequest struct {
 	CommodityID      int64                            `json:"commodity_id"`
 	HoldingAccountID int64                            `json:"holding_account_id"`
 	CashAccountID    int64                            `json:"cash_account_id"`
-	QuantityValue    int64                            `json:"quantity_value"`
+	QuantityValue    exact.Coefficient                `json:"quantity_value"`
 	QuantityScale    int                              `json:"quantity_scale"`
 	CashAmountValue  int64                            `json:"cash_amount_value"`
 	CashAmountScale  int                              `json:"cash_amount_scale"`
@@ -152,9 +153,9 @@ type investmentTradeRequest struct {
 }
 
 type investmentLotAllocationRequest struct {
-	LotID         int64 `json:"lot_id"`
-	QuantityValue int64 `json:"quantity_value"`
-	QuantityScale int   `json:"quantity_scale"`
+	LotID         int64             `json:"lot_id"`
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
 }
 
 type investmentTradeResponse struct {
@@ -164,11 +165,11 @@ type investmentTradeResponse struct {
 }
 
 type investmentLotDisposalResponse struct {
-	LotID          int64 `json:"lot_id"`
-	QuantityValue  int64 `json:"quantity_value"`
-	QuantityScale  int   `json:"quantity_scale"`
-	CostBasisValue int64 `json:"cost_basis_value"`
-	CostBasisScale int   `json:"cost_basis_scale"`
+	LotID          int64             `json:"lot_id"`
+	QuantityValue  exact.Coefficient `json:"quantity_value"`
+	QuantityScale  int               `json:"quantity_scale"`
+	CostBasisValue int64             `json:"cost_basis_value"`
+	CostBasisScale int               `json:"cost_basis_scale"`
 }
 
 type dividendRequest struct {
@@ -189,41 +190,41 @@ type dividendRequest struct {
 }
 
 type reinvestedDividendRequest struct {
-	TransactionDate  string `json:"transaction_date"`
-	CommodityID      int64  `json:"commodity_id"`
-	HoldingAccountID int64  `json:"holding_account_id"`
-	IncomeAccountID  *int64 `json:"income_account_id"`
-	QuantityValue    int64  `json:"quantity_value"`
-	QuantityScale    int    `json:"quantity_scale"`
-	AmountValue      int64  `json:"amount_value"`
-	AmountScale      int    `json:"amount_scale"`
-	CashCommodityID  int64  `json:"cash_commodity_id"`
-	Memo             string `json:"memo"`
-	PayeeID          *int64 `json:"payee_id"`
-	Status           string `json:"status"`
-	ChangeReason     string `json:"change_reason"`
+	TransactionDate  string            `json:"transaction_date"`
+	CommodityID      int64             `json:"commodity_id"`
+	HoldingAccountID int64             `json:"holding_account_id"`
+	IncomeAccountID  *int64            `json:"income_account_id"`
+	QuantityValue    exact.Coefficient `json:"quantity_value"`
+	QuantityScale    int               `json:"quantity_scale"`
+	AmountValue      int64             `json:"amount_value"`
+	AmountScale      int               `json:"amount_scale"`
+	CashCommodityID  int64             `json:"cash_commodity_id"`
+	Memo             string            `json:"memo"`
+	PayeeID          *int64            `json:"payee_id"`
+	Status           string            `json:"status"`
+	ChangeReason     string            `json:"change_reason"`
 }
 
 type investmentLotResponse struct {
-	ID                      int64           `json:"id"`
-	BookID                  int64           `json:"book_id"`
-	AccountID               int64           `json:"account_id"`
-	CommodityID             int64           `json:"commodity_id"`
-	OpenedOn                string          `json:"opened_on"`
-	SourceTransactionID     *int64          `json:"source_transaction_id,omitempty"`
-	Status                  string          `json:"status"`
-	QuantityValue           int64           `json:"quantity_value"`
-	QuantityScale           int             `json:"quantity_scale"`
-	RemainingQuantityValue  int64           `json:"remaining_quantity_value"`
-	RemainingQuantityScale  int             `json:"remaining_quantity_scale"`
-	CostBasisValue          int64           `json:"cost_basis_value"`
-	CostBasisScale          int             `json:"cost_basis_scale"`
-	RemainingCostBasisValue int64           `json:"remaining_cost_basis_value"`
-	RemainingCostBasisScale int             `json:"remaining_cost_basis_scale"`
-	CostCommodityID         int64           `json:"cost_commodity_id"`
-	Metadata                json.RawMessage `json:"metadata"`
-	CreatedAt               string          `json:"created_at"`
-	UpdatedAt               string          `json:"updated_at"`
+	ID                      int64             `json:"id"`
+	BookID                  int64             `json:"book_id"`
+	AccountID               int64             `json:"account_id"`
+	CommodityID             int64             `json:"commodity_id"`
+	OpenedOn                string            `json:"opened_on"`
+	SourceTransactionID     *int64            `json:"source_transaction_id,omitempty"`
+	Status                  string            `json:"status"`
+	QuantityValue           exact.Coefficient `json:"quantity_value"`
+	QuantityScale           int               `json:"quantity_scale"`
+	RemainingQuantityValue  exact.Coefficient `json:"remaining_quantity_value"`
+	RemainingQuantityScale  int               `json:"remaining_quantity_scale"`
+	CostBasisValue          int64             `json:"cost_basis_value"`
+	CostBasisScale          int               `json:"cost_basis_scale"`
+	RemainingCostBasisValue int64             `json:"remaining_cost_basis_value"`
+	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
+	CostCommodityID         int64             `json:"cost_commodity_id"`
+	Metadata                json.RawMessage   `json:"metadata"`
+	CreatedAt               string            `json:"created_at"`
+	UpdatedAt               string            `json:"updated_at"`
 }
 
 type investmentLotsResponse struct {
@@ -231,16 +232,16 @@ type investmentLotsResponse struct {
 }
 
 type investmentPositionResponse struct {
-	AccountID               int64  `json:"account_id"`
-	CommodityID             int64  `json:"commodity_id"`
-	QuantityValue           int64  `json:"quantity_value"`
-	QuantityScale           int    `json:"quantity_scale"`
-	RemainingCostBasisValue int64  `json:"remaining_cost_basis_value"`
-	RemainingCostBasisScale int    `json:"remaining_cost_basis_scale"`
-	CostCommodityID         int64  `json:"cost_commodity_id"`
-	LatestPriceValue        *int64 `json:"latest_price_value,omitempty"`
-	LatestPriceScale        *int   `json:"latest_price_scale,omitempty"`
-	LatestPriceDate         string `json:"latest_price_date,omitempty"`
+	AccountID               int64             `json:"account_id"`
+	CommodityID             int64             `json:"commodity_id"`
+	QuantityValue           exact.Coefficient `json:"quantity_value"`
+	QuantityScale           int               `json:"quantity_scale"`
+	RemainingCostBasisValue int64             `json:"remaining_cost_basis_value"`
+	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
+	CostCommodityID         int64             `json:"cost_commodity_id"`
+	LatestPriceValue        *int64            `json:"latest_price_value,omitempty"`
+	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
+	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
 }
 
 type investmentPositionsResponse struct {

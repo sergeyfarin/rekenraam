@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 type BalanceQuantity struct {
 	CommodityID         int64
-	QuantityValue       int64
+	QuantityValue       exact.Coefficient
 	QuantityScale       int
-	NormalQuantityValue int64
+	NormalQuantityValue exact.Coefficient
 }
 
 type AccountBalance struct {
@@ -238,7 +239,7 @@ func (s *TransactionService) accountRegisterRunningBalances(ctx context.Context,
 	for _, posting := range postings {
 		addPosting(running, posting)
 		amount := running[posting.CommodityID]
-		value, err := amount.int64()
+		value, err := amount.coefficient()
 		if err != nil {
 			return nil, err
 		}
@@ -365,13 +366,13 @@ func balanceMapToQuantities(balances map[int64]*scaledAmount, normalClass string
 	}
 	quantities := make([]BalanceQuantity, 0, len(balances))
 	for commodityID, amount := range balances {
-		value, err := amount.int64()
+		value, err := amount.coefficient()
 		if err != nil {
 			return nil, err
 		}
 		normalValue := value
 		if normalClass == "liability" || normalClass == "equity" || normalClass == "income" {
-			normalValue = -normalValue
+			normalValue = normalValue.Negated()
 		}
 		quantities = append(quantities, BalanceQuantity{
 			CommodityID:         commodityID,
@@ -449,9 +450,9 @@ func newScaledAmount() *scaledAmount {
 	return &scaledAmount{value: big.NewInt(0)}
 }
 
-func (a *scaledAmount) add(value int64, scale int) {
+func (a *scaledAmount) add(value exact.Coefficient, scale int) {
 	a.align(scale)
-	addend := big.NewInt(value)
+	addend := value.BigInt()
 	if scale < a.scale {
 		addend.Mul(addend, pow10(a.scale-scale))
 	}
@@ -478,9 +479,6 @@ func (a *scaledAmount) align(scale int) {
 	a.scale = scale
 }
 
-func (a *scaledAmount) int64() (int64, error) {
-	if !a.value.IsInt64() {
-		return 0, fmt.Errorf("ledger balance exceeds int64 range")
-	}
-	return a.value.Int64(), nil
+func (a *scaledAmount) coefficient() (exact.Coefficient, error) {
+	return exact.FromBig(a.value)
 }

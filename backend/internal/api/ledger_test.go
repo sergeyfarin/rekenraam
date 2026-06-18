@@ -183,11 +183,11 @@ func assertBalance(t *testing.T, balances []balanceQuantityResponse, commodityID
 
 	seen := make([]string, 0, len(balances))
 	for _, balance := range balances {
-		seen = append(seen, strconvFormatInt(balance.CommodityID)+":"+strconvFormatInt(balance.QuantityValue)+":"+strconvFormatInt(int64(balance.QuantityScale))+":"+strconvFormatInt(balance.NormalQuantityValue))
+		seen = append(seen, strconvFormatInt(balance.CommodityID)+":"+balance.QuantityValue.String()+":"+strconvFormatInt(int64(balance.QuantityScale))+":"+balance.NormalQuantityValue.String())
 		if balance.CommodityID == commodityID {
-			assert.Equal(t, quantityValue, balance.QuantityValue)
+			assert.Equal(t, strconvFormatInt(quantityValue), balance.QuantityValue.String())
 			assert.Equal(t, quantityScale, balance.QuantityScale)
-			assert.Equal(t, normalQuantityValue, balance.NormalQuantityValue)
+			assert.Equal(t, strconvFormatInt(normalQuantityValue), balance.NormalQuantityValue.String())
 			return
 		}
 	}
@@ -199,7 +199,7 @@ func assertRegisterRunningBalance(t *testing.T, register accountRegisterResponse
 
 	for _, entry := range register.Entries {
 		if entry.TransactionID == transactionID && entry.Posting.CommodityID == commodityID {
-			assert.Equal(t, quantityValue, entry.RunningBalance.QuantityValue)
+			assert.Equal(t, strconvFormatInt(quantityValue), entry.RunningBalance.QuantityValue.String())
 			assert.Equal(t, commodityID, entry.RunningBalance.CommodityID)
 			return
 		}

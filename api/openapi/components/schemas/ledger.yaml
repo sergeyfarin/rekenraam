@@ -10,17 +10,17 @@ BalanceQuantity:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
-      description: Debit-positive ledger quantity normalized to quantity_scale.
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless debit-positive integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
       minimum: 0
-      maximum: 12
+      maximum: 24
     normal_quantity_value:
-      type: integer
-      format: int64
-      description: Class-normalized quantity. Liability, equity, and income balances are sign-flipped for display/reporting.
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless class-normalized integer coefficient. Liability, equity, and income balances are sign-flipped for display/reporting.
 AccountBalance:
   type: object
   required:

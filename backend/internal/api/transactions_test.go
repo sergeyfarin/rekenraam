@@ -310,8 +310,8 @@ func TestReconciliationWorkflowAndCheckpointInvalidation(t *testing.T) {
 	preview := previewReconciliationForSession(t, handler, sessionCookie, csrfToken, started.ID, `{
 		"posting_version_ids":[`+strconvFormatInt(clearedPosting.ID)+`]
 	}`, http.StatusOK)
-	assert.Equal(t, int64(0), preview.Difference.QuantityValue)
-	assert.Equal(t, int64(100000), preview.SelectedBalance.QuantityValue)
+	assert.Equal(t, "0", preview.Difference.QuantityValue.String())
+	assert.Equal(t, "100000", preview.SelectedBalance.QuantityValue.String())
 
 	finished := finishReconciliationForSession(t, handler, sessionCookie, csrfToken, started.ID, `{"change_reason":"matched statement"}`, http.StatusOK)
 	assert.Equal(t, "finished", finished.Status)
@@ -854,12 +854,12 @@ func assertRegisterPosting(t *testing.T, register accountRegisterResponse, trans
 
 	seen := make([]string, 0)
 	for _, entry := range register.Entries {
-		seen = append(seen, strconvFormatInt(entry.TransactionID)+":"+entry.EntryDate+":"+strconvFormatInt(entry.Posting.AccountID)+":"+strconvFormatInt(entry.Posting.CommodityID)+":"+strconv.FormatInt(entry.Posting.QuantityValue, 10))
+		seen = append(seen, strconvFormatInt(entry.TransactionID)+":"+entry.EntryDate+":"+strconvFormatInt(entry.Posting.AccountID)+":"+strconvFormatInt(entry.Posting.CommodityID)+":"+entry.Posting.QuantityValue.String())
 		if entry.TransactionID != transactionID {
 			continue
 		}
 		posting := entry.Posting
-		if posting.AccountID == accountID && posting.CommodityID == commodityID && posting.QuantityValue == quantityValue {
+		if posting.AccountID == accountID && posting.CommodityID == commodityID && posting.QuantityValue.String() == strconvFormatInt(quantityValue) {
 			return
 		}
 	}
@@ -907,7 +907,7 @@ func reconcilePostingForSession(t *testing.T, handler http.Handler, sessionCooki
 		"commodity_id":`+strconvFormatInt(commodityID)+`,
 		"source_kind":"statement",
 		"statement_date":"`+statementDate+`",
-		"statement_balance_value":`+strconv.FormatInt(clearedPosting.QuantityValue, 10)+`,
+		"statement_balance_value":"`+clearedPosting.QuantityValue.String()+`",
 		"statement_balance_scale":`+strconv.Itoa(clearedPosting.QuantityScale)+`
 	}`, http.StatusCreated)
 

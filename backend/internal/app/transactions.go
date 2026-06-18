@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 const (
@@ -104,7 +105,7 @@ type Posting struct {
 	LineKey              string
 	LineSeq              int64
 	AccountID            int64
-	QuantityValue        int64
+	QuantityValue        exact.Coefficient
 	QuantityScale        int
 	CommodityID          int64
 	Memo                 string
@@ -234,7 +235,7 @@ type JournalEntryInput struct {
 type PostingInput struct {
 	LineKey       string
 	AccountID     int64
-	QuantityValue int64
+	QuantityValue exact.Coefficient
 	QuantityScale int
 	CommodityID   int64
 	Memo          string
@@ -757,7 +758,7 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	if input.CommodityID <= 0 {
 		return db.PostingSpec{}, ValidationError{Message: "posting commodity is required"}
 	}
-	if input.QuantityScale < 0 || input.QuantityScale > 12 {
+	if input.QuantityScale < 0 || input.QuantityScale > exact.MaxCryptoScale {
 		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale is invalid"}
 	}
 
@@ -793,6 +794,9 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	}
 	if commodityRule.Status != "active" {
 		return db.PostingSpec{}, ValidationError{Message: "posting commodity is archived"}
+	}
+	if input.QuantityScale > exact.MaxScaleForCommodityKind(commodityRule.CommodityKind) {
+		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale exceeds commodity-kind precision"}
 	}
 	if input.QuantityScale > commodityRule.MaxQuantityScale {
 		return db.PostingSpec{}, ValidationError{Message: "posting quantity scale exceeds commodity precision"}
@@ -893,7 +897,7 @@ func validateBalanced(entries []db.JournalEntrySpec) error {
 				sum = big.NewInt(0)
 				sums[posting.CommodityID] = sum
 			}
-			value := big.NewInt(posting.QuantityValue)
+			value := posting.QuantityValue.BigInt()
 			scaleDiff := maxScales[posting.CommodityID] - posting.QuantityScale
 			if scaleDiff > 0 {
 				value.Mul(value, pow10(scaleDiff))
