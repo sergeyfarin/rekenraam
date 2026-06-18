@@ -5,17 +5,10 @@
   import Save from '@lucide/svelte/icons/save';
   import { parseISO } from 'date-fns';
   import { authSessionQueryOptions } from '$lib/api/auth';
-  import { currentBookQueryOptions } from '$lib/api/books';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import type { CurrencyResponse } from '$lib/api/currencies';
   import { APIClientError } from '$lib/api/client';
   import {
     createPricingSourceAssignment,
-    getLatestPriceObservation,
-    pricingPolicyQueryOptions,
-    pricingRefreshRunsQueryOptions,
-    pricingSourceAssignmentsQueryOptions,
-    pricingSourceHealthQueryOptions,
-    pricingSourcesQueryOptions,
     runPricingRefresh,
     savePricingPolicy,
     updatePricingSourceAssignment,
@@ -23,7 +16,7 @@
     type PriceObservationResponse,
     type PricingSourceAssignmentResponse
   } from '$lib/api/pricing';
-  import { userPreferencesQueryOptions } from '$lib/api/settings';
+  import { currencySettingsPageQueryOptions } from '$lib/api/settings';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
@@ -36,15 +29,8 @@
     quote: CurrencyResponse;
   };
 
-  const currenciesQuery = createQuery(() => currenciesQueryOptions());
-  const currentBookQuery = createQuery(() => currentBookQueryOptions());
+  const pageQuery = createQuery(() => currencySettingsPageQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
-  const sourcesQuery = createQuery(() => pricingSourcesQueryOptions());
-  const policyQuery = createQuery(() => pricingPolicyQueryOptions());
-  const assignmentsQuery = createQuery(() => pricingSourceAssignmentsQueryOptions());
-  const refreshRunsQuery = createQuery(() => pricingRefreshRunsQueryOptions());
-  const sourceHealthQuery = createQuery(() => pricingSourceHealthQueryOptions());
-  const preferencesQuery = createQuery(() => userPreferencesQueryOptions());
 
   let rateDirection = $state<RateDirection>('currency_default');
   let policyBaseCommodityID = $state('');
@@ -70,7 +56,7 @@
     month: 'short',
     day: 'numeric'
   });
-  const preferencesTimeZone = $derived(preferencesQuery.data?.time_zone ?? 'UTC');
+  const preferencesTimeZone = $derived(pageQuery.data?.preferences.time_zone ?? 'UTC');
   const dateTimeFormatter = $derived(
     new Intl.DateTimeFormat(undefined, {
       year: 'numeric',
@@ -84,7 +70,7 @@
   );
 
   const activeCurrencies = $derived.by(() =>
-    [...(currenciesQuery.data?.currencies.filter((currency) => currency.status === 'active') ?? [])].sort((left, right) =>
+    [...(pageQuery.data?.currencies.filter((currency) => currency.status === 'active') ?? [])].sort((left, right) =>
       left.code.localeCompare(right.code)
     )
   );
@@ -92,12 +78,12 @@
   const currencyByID = $derived.by(() => new Map(activeCurrencies.map((currency) => [currency.id, currency])));
 
   const defaultCurrency = $derived.by(() => {
-    const defaultCurrencyID = currentBookQuery.data?.default_currency_commodity_id;
+    const defaultCurrencyID = pageQuery.data?.book.default_currency_commodity_id;
     return activeCurrencies.find((currency) => currency.id === defaultCurrencyID);
   });
 
   const providerSources = $derived.by(() =>
-    (sourcesQuery.data?.sources ?? []).filter((source) => source.kind === 'provider' && source.status === 'active')
+    (pageQuery.data?.sources ?? []).filter((source) => source.kind === 'provider' && source.status === 'active')
   );
 
   const providerByID = $derived.by(() => new Map(providerSources.map((source) => [source.id, source])));
@@ -115,68 +101,15 @@
       ]);
   });
 
-  const ratesQueryEnabled = $derived(ratePairs.length > 0);
-
-  const latestRatesQuery = createQuery(() => ({
-    queryKey: [
-      'api',
-      'pricing',
-      'latest-currency-rates',
-      defaultCurrency?.id ?? null,
-      ratePairs.map((pair) => rateKey(pair.base.id, pair.quote.id)).join(',')
-    ],
-    enabled: ratesQueryEnabled,
-    queryFn: async () => {
-      const entries = await Promise.all(
-        ratePairs.map(async (pair) => [
-          rateKey(pair.base.id, pair.quote.id),
-          await getLatestPriceObservation(pair.base.id, pair.quote.id).catch(() => null)
-        ] as const)
-      );
-
-      return new Map(entries);
-    },
-    staleTime: 30_000
-  }));
-
-  const pageError = $derived(
-    currenciesQuery.error ??
-      currentBookQuery.error ??
-      sessionQuery.error ??
-      preferencesQuery.error ??
-      sourcesQuery.error ??
-      policyQuery.error ??
-      assignmentsQuery.error ??
-      refreshRunsQuery.error ??
-      sourceHealthQuery.error ??
-      (ratesQueryEnabled ? latestRatesQuery.error : null)
-  );
-  const isLoading = $derived(
-    currenciesQuery.isPending ||
-      currentBookQuery.isPending ||
-      sessionQuery.isPending ||
-      preferencesQuery.isPending ||
-      sourcesQuery.isPending ||
-      policyQuery.isPending ||
-      assignmentsQuery.isPending ||
-      refreshRunsQuery.isPending ||
-      sourceHealthQuery.isPending ||
-      (ratesQueryEnabled && latestRatesQuery.isPending)
-  );
-  const isError = $derived(
-    currenciesQuery.isError ||
-      currentBookQuery.isError ||
-      sessionQuery.isError ||
-      preferencesQuery.isError ||
-      sourcesQuery.isError ||
-      policyQuery.isError ||
-      assignmentsQuery.isError ||
-      refreshRunsQuery.isError ||
-      sourceHealthQuery.isError ||
-      (ratesQueryEnabled && latestRatesQuery.isError)
+  const latestRates = $derived.by(
+    () => new Map((pageQuery.data?.latest_rates ?? []).map((rate) => [rateKey(rate.base_commodity_id, rate.quote_commodity_id), rate]))
   );
 
-  const latestRun = $derived(refreshRunsQuery.data?.runs[0]);
+  const pageError = $derived(pageQuery.error ?? sessionQuery.error);
+  const isLoading = $derived(pageQuery.isPending || sessionQuery.isPending);
+  const isError = $derived(pageQuery.isError || sessionQuery.isError);
+
+  const latestRun = $derived(pageQuery.data?.refresh_runs[0]);
 
   const directionOptions: { value: RateDirection; label: string }[] = [
     { value: 'currency_default', label: m.currencies_rate_direction_currency_default() },
@@ -186,8 +119,8 @@
 
   $effect(() => {
     const marker = [
-      policyQuery.data?.id ?? 'missing',
-      policyQuery.data?.updated_at ?? '',
+      pageQuery.data?.policy.id ?? 'missing',
+      pageQuery.data?.policy.updated_at ?? '',
       preferencesTimeZone,
       defaultCurrency?.id ?? '',
       providerSources.map((source) => source.id).join(',')
@@ -198,45 +131,28 @@
     }
 
     initializedPolicyMarker = marker;
-    policyBaseCommodityID = policyQuery.data?.base_commodity_id
-      ? String(policyQuery.data.base_commodity_id)
+    policyBaseCommodityID = pageQuery.data?.policy.base_commodity_id
+      ? String(pageQuery.data.policy.base_commodity_id)
       : defaultCurrency
         ? String(defaultCurrency.id)
         : '';
-    policyDefaultSourceID = policyQuery.data?.default_source_id
-      ? String(policyQuery.data.default_source_id)
+    policyDefaultSourceID = pageQuery.data?.policy.default_source_id
+      ? String(pageQuery.data.policy.default_source_id)
       : providerSources[0]
         ? String(providerSources[0].id)
         : '';
-    refreshEnabled = policyQuery.data?.refresh_enabled ?? true;
-    refreshHourLocal = policyQuery.data?.refresh_hour_local ?? policyQuery.data?.refresh_hour_utc ?? 4;
-    refreshMinuteLocal = policyQuery.data?.refresh_minute_local ?? policyQuery.data?.refresh_minute_utc ?? 0;
-    triangulationMaxHops = policyQuery.data?.triangulation_max_hops ?? 1;
+    refreshEnabled = pageQuery.data?.policy.refresh_enabled ?? true;
+    refreshHourLocal = pageQuery.data?.policy.refresh_hour_local ?? pageQuery.data?.policy.refresh_hour_utc ?? 4;
+    refreshMinuteLocal = pageQuery.data?.policy.refresh_minute_local ?? pageQuery.data?.policy.refresh_minute_utc ?? 0;
+    triangulationMaxHops = pageQuery.data?.policy.triangulation_max_hops ?? 1;
   });
 
   async function retry() {
-    await Promise.all([
-      currenciesQuery.refetch(),
-      currentBookQuery.refetch(),
-      sessionQuery.refetch(),
-      preferencesQuery.refetch(),
-      sourcesQuery.refetch(),
-      policyQuery.refetch(),
-      assignmentsQuery.refetch(),
-      refreshRunsQuery.refetch(),
-      sourceHealthQuery.refetch(),
-      ratesQueryEnabled ? latestRatesQuery.refetch() : Promise.resolve()
-    ]);
+    await Promise.all([pageQuery.refetch(), sessionQuery.refetch()]);
   }
 
   async function refreshAfterMutation() {
-    await Promise.all([
-      policyQuery.refetch(),
-      assignmentsQuery.refetch(),
-      refreshRunsQuery.refetch(),
-      sourceHealthQuery.refetch(),
-      ratesQueryEnabled ? latestRatesQuery.refetch() : Promise.resolve()
-    ]);
+    await pageQuery.refetch();
   }
 
   async function csrfToken(): Promise<string> {
@@ -263,16 +179,16 @@
           base_commodity_id: numberOrUndefined(policyBaseCommodityID),
           default_source_id: numberOrUndefined(policyDefaultSourceID),
           refresh_enabled: refreshEnabled,
-          refresh_hour_utc: policyQuery.data?.refresh_hour_utc ?? refreshHourLocal,
-          refresh_minute_utc: policyQuery.data?.refresh_minute_utc ?? refreshMinuteLocal,
+          refresh_hour_utc: pageQuery.data?.policy.refresh_hour_utc ?? refreshHourLocal,
+          refresh_minute_utc: pageQuery.data?.policy.refresh_minute_utc ?? refreshMinuteLocal,
           refresh_hour_local: refreshHourLocal,
           refresh_minute_local: refreshMinuteLocal,
-          max_backfill_days: policyQuery.data?.max_backfill_days ?? 370,
-          staleness_max_days: policyQuery.data?.staleness_max_days ?? 3,
+          max_backfill_days: pageQuery.data?.policy.max_backfill_days ?? 370,
+          staleness_max_days: pageQuery.data?.policy.staleness_max_days ?? 3,
           triangulation_max_hops: triangulationMaxHops,
-          rounding_mode: policyQuery.data?.rounding_mode ?? 'half_up',
-          prefer_official_fx: policyQuery.data?.prefer_official_fx ?? true,
-          weekend_policy: policyQuery.data?.weekend_policy ?? 'skip',
+          rounding_mode: pageQuery.data?.policy.rounding_mode ?? 'half_up',
+          prefer_official_fx: pageQuery.data?.policy.prefer_official_fx ?? true,
+          weekend_policy: pageQuery.data?.policy.weekend_policy ?? 'skip',
           change_reason: 'saved currency exchange rate settings'
         },
         await csrfToken()
@@ -358,11 +274,11 @@
       return null;
     }
 
-    return latestRatesQuery.data?.get(rateKey(base.id, quote.id));
+    return latestRates.get(rateKey(base.id, quote.id));
   }
 
   function assignmentFor(baseCommodityID: number, quoteCommodityID: number): PricingSourceAssignmentResponse | undefined {
-    return assignmentsQuery.data?.assignments.find(
+    return pageQuery.data?.assignments.find(
       (assignment) =>
         assignment.status === 'active' &&
         assignment.commodity_id === baseCommodityID &&
@@ -375,7 +291,7 @@
   }
 
   function healthFor(baseCommodityID: number, quoteCommodityID: number) {
-    return sourceHealthQuery.data?.sources.find(
+    return pageQuery.data?.source_health.find(
       (health) => health.commodity_id === baseCommodityID && health.quote_commodity_id === quoteCommodityID
     );
   }

@@ -279,6 +279,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/currencies/page-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get currency settings page data
+         * @description Returns the composed read model for the currency settings page in one request.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Currency settings page data */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CurrencySettingsPageResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Book is not available yet */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/status": {
         parameters: {
             query?: never;
@@ -6193,6 +6263,18 @@ export interface components {
              */
             time_zone: string;
             change_reason?: string;
+        };
+        CurrencySettingsPageResponse: {
+            book: components["schemas"]["BookResponse"];
+            preferences: components["schemas"]["UserPreferencesResponse"];
+            currencies: components["schemas"]["CurrencyResponse"][];
+            sources: components["schemas"]["MarketDataSourceResponse"][];
+            policy: components["schemas"]["PricingPolicyResponse"];
+            assignments: components["schemas"]["PricingSourceAssignmentResponse"][];
+            refresh_runs: components["schemas"]["PricingRefreshRunResponse"][];
+            source_health: components["schemas"]["PricingSourceHealthResponse"][];
+            /** @description Latest known observations for active currency/default-currency pairs in both directions. */
+            latest_rates: components["schemas"]["PriceObservationResponse"][];
         };
         BookResponse: {
             /**

@@ -13,6 +13,8 @@ paths:
     $ref: "./paths/auth-logout.yaml"
   /api/v1/settings/preferences:
     $ref: "./paths/settings-preferences.yaml"
+  /api/v1/settings/currencies/page-data:
+    $ref: "./paths/settings-currencies-page-data.yaml"
   /api/v1/setup/status:
     $ref: "./paths/setup-status.yaml"
   /api/v1/setup/owner:
@@ -212,6 +214,8 @@ components:
       $ref: "./components/schemas/settings.yaml#/UserPreferencesResponse"
     UserPreferencesRequest:
       $ref: "./components/schemas/settings.yaml#/UserPreferencesRequest"
+    CurrencySettingsPageResponse:
+      $ref: "./components/schemas/settings.yaml#/CurrencySettingsPageResponse"
     BookResponse:
       $ref: "./components/schemas/books.yaml#/BookResponse"
     CreateBookRequest:

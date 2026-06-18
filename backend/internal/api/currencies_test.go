@@ -247,6 +247,38 @@ func TestListCurrenciesReturnsCurrentCurrencies(t *testing.T) {
 	assert.Equal(t, []string{"USD"}, currencyCodes(body.Currencies))
 }
 
+func TestCurrencySettingsPageDataReturnsComposedReadModel(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	currencySetup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/settings/currencies/page-data", nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var body currencySettingsPageResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "Personal", body.Book.Name)
+	require.NotNil(t, body.Book.DefaultCurrencyCommodityID)
+	assert.Equal(t, currencySetup.DefaultCurrency.ID, *body.Book.DefaultCurrencyCommodityID)
+	assert.Equal(t, "UTC", body.Preferences.TimeZone)
+	assert.Equal(t, []string{"USD"}, currencyCodes(body.Currencies))
+	assert.True(t, body.Policy.RefreshEnabled)
+	assert.Equal(t, 1, body.Policy.TriangulationMaxHops)
+	assert.NotEmpty(t, body.Sources)
+	assert.Empty(t, body.Assignments)
+	assert.Empty(t, body.RefreshRuns)
+	assert.Empty(t, body.SourceHealth)
+	assert.Empty(t, body.LatestRates)
+}
+
 func TestCreateCurrencyAddsCatalogCurrencyAfterSetup(t *testing.T) {
 	t.Parallel()
 

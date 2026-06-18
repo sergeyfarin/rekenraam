@@ -39,3 +39,48 @@ UserPreferencesRequest:
       type: string
       maxLength: 500
   additionalProperties: false
+
+CurrencySettingsPageResponse:
+  type: object
+  required:
+    - book
+    - preferences
+    - currencies
+    - sources
+    - policy
+    - assignments
+    - refresh_runs
+    - source_health
+    - latest_rates
+  properties:
+    book:
+      $ref: "../../openapi.yaml#/components/schemas/BookResponse"
+    preferences:
+      $ref: "../../openapi.yaml#/components/schemas/UserPreferencesResponse"
+    currencies:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CurrencyResponse"
+    sources:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/MarketDataSourceResponse"
+    policy:
+      $ref: "../../openapi.yaml#/components/schemas/PricingPolicyResponse"
+    assignments:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PricingSourceAssignmentResponse"
+    refresh_runs:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PricingRefreshRunResponse"
+    source_health:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PricingSourceHealthResponse"
+    latest_rates:
+      type: array
+      description: Latest known observations for active currency/default-currency pairs in both directions.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PriceObservationResponse"

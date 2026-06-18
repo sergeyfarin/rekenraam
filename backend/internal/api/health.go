@@ -35,6 +35,9 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("GET /api/v1/settings/preferences", userPreferences(logger, authService, settingsService))
 		mux.HandleFunc("PUT /api/v1/settings/preferences", saveUserPreferences(logger, authService, settingsService, options))
 	}
+	if authService != nil && settingsService != nil && bookService != nil && currencyService != nil && pricingService != nil {
+		mux.HandleFunc("GET /api/v1/settings/currencies/page-data", currencySettingsPageData(logger, authService, settingsService, bookService, currencyService, pricingService))
+	}
 	if authService != nil && bookService != nil {
 		mux.HandleFunc("GET /api/v1/books/current", currentBook(logger, authService, bookService))
 		mux.HandleFunc("POST /api/v1/setup/book", createBook(logger, authService, bookService, options))

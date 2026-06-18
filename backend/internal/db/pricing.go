@@ -505,6 +505,65 @@ func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID in
 	return scanPriceObservations(rows)
 }
 
+func (r *PricingRepository) ListLatestPriceObservationsForPairs(ctx context.Context, bookID int64, pairs [][2]int64) ([]PriceObservationRecord, error) {
+	if len(pairs) == 0 {
+		return []PriceObservationRecord{}, nil
+	}
+
+	hasCurrentSchema, err := r.tableHasColumn(ctx, "price_observations", "base_commodity_id")
+	if err != nil {
+		return nil, err
+	}
+	if !hasCurrentSchema {
+		records := make([]PriceObservationRecord, 0, len(pairs))
+		for _, pair := range pairs {
+			pairRecords, err := r.listLegacyPriceObservations(ctx, bookID, pair[0], pair[1], 1)
+			if err != nil {
+				return nil, err
+			}
+			if len(pairRecords) > 0 {
+				records = append(records, pairRecords[0])
+			}
+		}
+		return records, nil
+	}
+
+	clauses := make([]string, 0, len(pairs))
+	args := []any{bookID}
+	for _, pair := range pairs {
+		if pair[0] <= 0 || pair[1] <= 0 {
+			continue
+		}
+		clauses = append(clauses, "(base_commodity_id = ? AND quote_commodity_id = ?)")
+		args = append(args, pair[0], pair[1])
+	}
+	if len(clauses) == 0 {
+		return []PriceObservationRecord{}, nil
+	}
+
+	rows, err := r.database.QueryContext(ctx, priceObservationSelect(`
+		WHERE id IN (
+			SELECT id
+			FROM (
+				SELECT id,
+					ROW_NUMBER() OVER (
+						PARTITION BY base_commodity_id, quote_commodity_id
+						ORDER BY valuation_date DESC, recorded_at DESC, id DESC
+					) AS row_number
+				FROM price_observations
+				WHERE book_id = ? AND voided_at IS NULL AND (`+strings.Join(clauses, " OR ")+`)
+			)
+			WHERE row_number = 1
+		)
+		ORDER BY base_commodity_id, quote_commodity_id
+	`), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list latest price observations for pairs: %w", err)
+	}
+	defer rows.Close()
+	return scanPriceObservations(rows)
+}
+
 func (r *PricingRepository) listLegacyPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
 	where := "book_id = ? AND voided_at IS NULL"
 	args := []any{bookID}

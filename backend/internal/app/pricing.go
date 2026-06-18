@@ -232,6 +232,14 @@ func (s *PricingService) ListPrices(ctx context.Context, commodityID int64, quot
 	return toPriceObservations(records), nil
 }
 
+func (s *PricingService) LatestPricesForPairs(ctx context.Context, pairs [][2]int64) ([]PriceObservation, error) {
+	records, err := s.repository.ListLatestPriceObservationsForPairs(ctx, BookID, pairs)
+	if err != nil {
+		return nil, fmt.Errorf("list latest price observations for pairs: %w", err)
+	}
+	return toPriceObservations(records), nil
+}
+
 func (s *PricingService) CreatePrice(ctx context.Context, input PriceObservationInput) (PriceObservation, error) {
 	if input.OwnerUserID <= 0 {
 		return PriceObservation{}, ValidationError{Message: "owner user is required"}

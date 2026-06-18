@@ -45,6 +45,7 @@ If a change introduces a durable new rule, update the relevant document in the s
 
 - Real API endpoints belong under `/api/v1`.
 - Business rules belong in application services, not directly in HTTP handlers.
+- Avoid frontend fan-out requests for page data. When a page or shareable component would fetch once per row/card/item, add a backend-composed JSON read model so the frontend uses one request per page, or at most one request per shareable component.
 - Schema changes require migrations under `backend/migrations`.
 - SQLite remains the primary database unless an active architecture document is updated.
 
