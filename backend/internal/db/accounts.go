@@ -258,7 +258,7 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, params CreateAcco
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -333,7 +333,7 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -414,7 +414,7 @@ func (r *AccountRepository) DeleteUnusedAccount(ctx context.Context, params Dele
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -493,7 +493,7 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

@@ -402,7 +402,7 @@ func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params C
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -634,7 +634,7 @@ func (r *PricingRepository) SavePricingPolicy(ctx context.Context, params SavePr
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -724,7 +724,7 @@ func (r *PricingRepository) SaveSourceAssignment(ctx context.Context, params Sav
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{

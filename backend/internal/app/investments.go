@@ -1577,16 +1577,43 @@ func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coeff
 	if denominator.Sign() == 0 {
 		return 0, fmt.Errorf("division by zero")
 	}
-	n := big.NewInt(numerator)
+	// Compute result = (numerator * 10^exponent) / denominator with half-up rounding.
+	//
+	// Rounding strategy: multiply the scaled numerator by 2, divide by the
+	// denominator, then add 1 and halve. This is equivalent to
+	//   round(n/d) = floor((2n + d) / (2d))   for positive values,
+	// generalised to signed arithmetic by rounding away from zero.
 	exponent := resultScale + denominatorScale - numeratorScale
+	n := new(big.Int).SetInt64(numerator)
 	if exponent >= 0 {
 		n.Mul(n, pow10(exponent))
 	} else {
-		n.Div(n, pow10(-exponent))
+		// exponent is negative only when numeratorScale greatly exceeds the others;
+		// truncating here loses sub-ULP precision but is unavoidable.
+		n.Quo(n, pow10(-exponent))
 	}
-	n.Quo(n, denominator.BigInt())
-	if !n.IsInt64() {
+	den := denominator.BigInt()
+
+	// Scale both up by 2 so that the remainder tells us whether to round.
+	n2 := new(big.Int).Mul(n, big.NewInt(2))
+	den2 := new(big.Int).Mul(den, big.NewInt(2))
+	q, r := new(big.Int), new(big.Int)
+	q.QuoRem(n2, den2, r) // q = trunc(2n / 2d) = trunc(n/d)
+
+	// r is the remainder of 2n / 2d. If |r| * 2 / 2 >= d/2, i.e. |r| >= d, we
+	// round away from zero. Equivalently: check if |2n mod 2d| >= d.
+	absR := new(big.Int).Abs(r)
+	absDen := new(big.Int).Abs(den)
+	if absR.Cmp(absDen) >= 0 {
+		if q.Sign() >= 0 {
+			q.Add(q, big.NewInt(1))
+		} else {
+			q.Sub(q, big.NewInt(1))
+		}
+	}
+
+	if !q.IsInt64() {
 		return 0, fmt.Errorf("scaled division overflow")
 	}
-	return n.Int64(), nil
+	return q.Int64(), nil
 }

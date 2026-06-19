@@ -472,6 +472,9 @@ func (a *scaledAmount) addScaled(other *scaledAmount) {
 }
 
 func (a *scaledAmount) align(scale int) {
+	if scale < 0 {
+		panic(fmt.Sprintf("scaledAmount.align: negative scale %d", scale))
+	}
 	if scale <= a.scale {
 		return
 	}

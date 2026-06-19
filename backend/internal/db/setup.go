@@ -104,7 +104,7 @@ func (r *SetupRepository) CompleteOwnerSetup(ctx context.Context, params Complet
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

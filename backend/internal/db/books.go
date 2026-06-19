@@ -73,7 +73,7 @@ func (r *BookRepository) CompleteBookSetup(ctx context.Context, params CompleteB
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

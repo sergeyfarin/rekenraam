@@ -156,7 +156,7 @@ func (r *TagRepository) CreateTag(ctx context.Context, params CreateTagParams) (
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -231,7 +231,7 @@ func (r *TagRepository) UpdateTag(ctx context.Context, params UpdateTagParams) (
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -301,7 +301,7 @@ func (r *TagRepository) ChangeTagStatus(ctx context.Context, params TagLifecycle
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

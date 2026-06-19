@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +15,15 @@ import (
 
 	"rekenraam/backend/migrations"
 )
+
+// rollbackTx rolls back tx and logs any rollback error. It is intended for use in
+// deferred cleanup when a transaction has not been committed. A rollback failure is
+// non-fatal (SQLite WAL self-recovers) but must not be silently discarded.
+func rollbackTx(ctx context.Context, tx *sql.Tx) {
+	if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+		slog.Default().ErrorContext(ctx, "db: rollback failed", slog.Any("err", err))
+	}
+}
 
 const (
 	DefaultSQLiteURL = "file:var/dev.sqlite"

@@ -57,7 +57,7 @@ func (r *SettingsRepository) SaveUserPreferences(ctx context.Context, params Sav
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

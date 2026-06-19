@@ -162,7 +162,7 @@ func (r *TransactionRepository) CreateReconciliationSession(ctx context.Context,
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -268,7 +268,7 @@ func (r *TransactionRepository) ReplaceReconciliationSessionSelection(ctx contex
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -343,7 +343,7 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -476,7 +476,7 @@ func (r *TransactionRepository) VoidReconciliationSession(ctx context.Context, p
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
@@ -567,7 +567,7 @@ func (r *TransactionRepository) VoidReconciliationCheckpoint(ctx context.Context
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
@@ -627,7 +627,7 @@ func (r *TransactionRepository) ChangePostingReconciliationStatus(ctx context.Co
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {

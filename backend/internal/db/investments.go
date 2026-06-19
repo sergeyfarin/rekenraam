@@ -408,7 +408,7 @@ func (r *InvestmentRepository) CreateInstrument(ctx context.Context, params Crea
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -506,7 +506,7 @@ func (r *InvestmentRepository) UpdateInstrument(ctx context.Context, params Upda
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -599,7 +599,7 @@ func (r *InvestmentRepository) SaveCostBasisProfile(ctx context.Context, params 
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -717,7 +717,7 @@ func (r *InvestmentRepository) SaveDividendDefault(ctx context.Context, params S
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -792,7 +792,7 @@ func (r *InvestmentRepository) CreateLot(ctx context.Context, params CreateInves
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -853,7 +853,7 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -1154,7 +1154,7 @@ func (r *InvestmentRepository) SetSuggestionStatus(ctx context.Context, bookID i
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -1204,7 +1204,7 @@ func (r *InvestmentRepository) SaveAutomationRule(ctx context.Context, params Sa
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

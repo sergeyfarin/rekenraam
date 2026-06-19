@@ -133,7 +133,7 @@ func (r *PayeeRepository) CreatePayee(ctx context.Context, params CreatePayeePar
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -203,7 +203,7 @@ func (r *PayeeRepository) UpdatePayee(ctx context.Context, params UpdatePayeePar
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

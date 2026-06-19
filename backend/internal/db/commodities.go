@@ -124,7 +124,7 @@ func (r *CommodityRepository) CreateCurrency(ctx context.Context, params CreateC
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -168,7 +168,7 @@ func (r *CommodityRepository) CompleteCurrencySetup(ctx context.Context, params 
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -283,7 +283,7 @@ func (r *CommodityRepository) SetDefaultCurrency(ctx context.Context, params Set
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

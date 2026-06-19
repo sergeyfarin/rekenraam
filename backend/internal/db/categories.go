@@ -224,7 +224,7 @@ func (r *CategoryRepository) CreateCategory(ctx context.Context, params CreateCa
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -299,7 +299,7 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, params UpdateCa
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -370,7 +370,7 @@ func (r *CategoryRepository) ChangeCategoryStatus(ctx context.Context, params Ca
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -451,7 +451,7 @@ func (r *CategoryRepository) DeleteUnusedCategory(ctx context.Context, params De
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -545,7 +545,7 @@ func (r *CategoryRepository) EnsureCategories(ctx context.Context, params Ensure
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

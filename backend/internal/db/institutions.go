@@ -163,7 +163,7 @@ func (r *InstitutionRepository) CreateInstitution(ctx context.Context, params Cr
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -233,7 +233,7 @@ func (r *InstitutionRepository) UpdateInstitution(ctx context.Context, params Up
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -300,7 +300,7 @@ func (r *InstitutionRepository) DeleteUnusedInstitution(ctx context.Context, par
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

@@ -353,7 +353,7 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -426,7 +426,7 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -501,7 +501,7 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
@@ -594,7 +594,7 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 

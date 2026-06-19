@@ -32,7 +32,11 @@ type errorBody struct {
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		// Header is already sent; we cannot change the status code. Log so the
+		// failure is visible — truncated responses are otherwise silent.
+		slog.Default().Error("writeJSON: encode response", slog.Any("err", err))
+	}
 }
 
 func writeAPIError(w http.ResponseWriter, status int, code string, message string) {

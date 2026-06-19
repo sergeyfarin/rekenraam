@@ -29,7 +29,7 @@ func (r *RecoveryRepository) ResetOwnerPasswordAndRevokeSessions(ctx context.Con
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			rollbackTx(ctx, tx)
 		}
 	}()
 
