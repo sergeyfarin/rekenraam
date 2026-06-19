@@ -7,8 +7,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"rekenraam/backend/internal/api"
 	"rekenraam/backend/internal/app"
@@ -186,9 +189,21 @@ func runRecoverOwner(ctx context.Context, cfg config.Config, args []string, stdi
 }
 
 func readPasswordFromStdin(stdin io.Reader) (string, error) {
-	passwordBytes, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
-	if err != nil {
-		return "", err
+	var passwordBytes []byte
+	if f, ok := stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		fmt.Fprint(os.Stderr, "New owner password: ")
+		var err error
+		passwordBytes, err = term.ReadPassword(int(f.Fd()))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		var err error
+		passwordBytes, err = io.ReadAll(io.LimitReader(stdin, 1<<20))
+		if err != nil {
+			return "", err
+		}
 	}
 
 	password := strings.TrimRight(string(passwordBytes), "\r\n")

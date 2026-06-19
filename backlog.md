@@ -159,7 +159,7 @@ Covered by B-05 fix.
 
 ## Security
 
-### B-08 FTS5 query — `ftsPhrase` must sanitise FTS5 operator syntax  `[ ]`
+### B-08 FTS5 query — `ftsPhrase` must sanitise FTS5 operator syntax  `[x]`
 **File:** `backend/internal/db/transactions.go:259–264`
 
 ```go
@@ -182,7 +182,7 @@ quoting strategy.
 
 ---
 
-### B-09 Login timing leak: "user not found" fast-paths before bcrypt  `[ ]`
+### B-09 Login timing leak: "user not found" fast-paths before bcrypt  `[x]`
 **File:** `backend/internal/app/auth.go` (login path)
 
 When the owner account does not exist the function returns early without calling
@@ -197,7 +197,7 @@ returning when the user is not found.
 
 ---
 
-### B-10 `recover-owner` reads password from stdin with echo enabled  `[ ]`
+### B-10 `recover-owner` reads password from stdin with echo enabled  `[x]`
 **File:** `backend/cmd/rekenraam/command.go` (recover-owner command)
 
 `io.ReadAll(os.Stdin)` leaves terminal echo on, so the password is visible on screen

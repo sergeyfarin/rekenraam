@@ -24,6 +24,11 @@ var (
 	ErrRateLimited        = errors.New("rate limited")
 )
 
+// dummyPasswordHash is a precomputed argon2id hash used to ensure the "user not
+// found" code path takes the same time as "wrong password", preventing timing
+// attacks that could distinguish the two outcomes.
+const dummyPasswordHash = `$argon2id$v=19$m=19456,t=2,p=1$yFKjVHLDHsBTRk6lkk88Zg$dJ6u65HlcVuyRD4M7ArLq5QvFzwFgceJMsq/DIucXd0`
+
 // RateLimitError is returned when a login attempt is blocked by the throttle.
 // It carries the remaining wait duration so callers can populate Retry-After.
 // errors.Is(err, ErrRateLimited) returns true for RateLimitError values.
@@ -142,6 +147,9 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	credentials, err := s.repository.ReadOwnerCredentials(ctx, username)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
+			// Constant-time dummy comparison prevents timing oracle distinguishing
+			// "no such user" from "wrong password".
+			_, _ = verifyPassword(input.Password, dummyPasswordHash)
 			blockedUntil, err := s.recordLoginFailure(ctx, scopes)
 			if err != nil {
 				return LoginResult{}, fmt.Errorf("record login throttle failure: %w", err)
