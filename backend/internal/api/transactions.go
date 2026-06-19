@@ -32,7 +32,7 @@ type transactionResponse struct {
 	CreatedAt                 string                 `json:"created_at"`
 	UpdatedAt                 string                 `json:"updated_at"`
 	ChangeReason              string                 `json:"change_reason"`
-	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids,omitempty"`
+	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids"`
 }
 
 type journalEntryResponse struct {
@@ -63,12 +63,12 @@ type postingResponse struct {
 
 type transactionsResponse struct {
 	Transactions []transactionResponse `json:"transactions"`
-	NextCursor   string                `json:"next_cursor,omitempty"`
+	NextCursor   string                `json:"next_cursor"`
 }
 
 type accountRegisterResponse struct {
 	Entries    []accountRegisterEntryResponse `json:"entries"`
-	NextCursor string                         `json:"next_cursor,omitempty"`
+	NextCursor string                         `json:"next_cursor"`
 }
 
 type accountRegisterEntryResponse struct {
@@ -558,6 +558,15 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		})
 	}
 
+	tagIDs := transaction.TagIDs
+	if tagIDs == nil {
+		tagIDs = []int64{}
+	}
+	invalidatedCheckpointIDs := transaction.InvalidatedCheckpointIDs
+	if invalidatedCheckpointIDs == nil {
+		invalidatedCheckpointIDs = []int64{}
+	}
+
 	return transactionResponse{
 		ID:                        transaction.ID,
 		BookID:                    transaction.BookID,
@@ -574,12 +583,12 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		VersionID:                 transaction.VersionID,
 		VersionSeq:                transaction.VersionSeq,
 		SupersedesVersionID:       transaction.SupersedesVersionID,
-		TagIDs:                    transaction.TagIDs,
+		TagIDs:                    tagIDs,
 		JournalEntries:            entries,
 		CreatedAt:                 transaction.CreatedAt,
 		UpdatedAt:                 transaction.UpdatedAt,
 		ChangeReason:              transaction.ChangeReason,
-		InvalidatedCheckpointIDs:  transaction.InvalidatedCheckpointIDs,
+		InvalidatedCheckpointIDs:  invalidatedCheckpointIDs,
 	}
 }
 

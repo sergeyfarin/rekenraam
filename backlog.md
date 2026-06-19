@@ -209,7 +209,7 @@ and in terminal scrollback.
 
 ## API Contract / Schema Drift
 
-### B-11 `InvalidatedCheckpointIDs` uses `omitempty` but schema contract is unclear  `[ ]`
+### B-11 `InvalidatedCheckpointIDs` uses `omitempty` but schema contract is unclear  `[x]`
 **File:** `backend/internal/api/transactions.go:35`
 
 `InvalidatedCheckpointIDs []int64 \`json:"invalidated_checkpoint_ids,omitempty"\``
@@ -226,7 +226,7 @@ absent-vs-empty distinction in the schema.
 
 ---
 
-### B-12 Trade-implied price pagination never consumed by frontend  `[ ]`
+### B-12 Trade-implied price pagination never consumed by frontend  `[x]`
 **File:** `frontend/src/lib/api/transactions.ts` (and reconciliation equivalent)
 
 Backend list endpoints return `next_cursor`. Frontend fetches once with

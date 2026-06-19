@@ -7124,11 +7124,11 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             change_reason: string;
-            invalidated_checkpoint_ids?: number[];
+            invalidated_checkpoint_ids: number[];
         };
         TransactionsResponse: {
             transactions: components["schemas"]["TransactionResponse"][];
-            next_cursor?: string;
+            next_cursor: string;
         };
         AccountRegisterEntryResponse: {
             /** Format: int64 */
@@ -7177,7 +7177,7 @@ export interface components {
         };
         AccountRegisterResponse: {
             entries: components["schemas"]["AccountRegisterEntryResponse"][];
-            next_cursor?: string;
+            next_cursor: string;
         };
         PostingRequest: {
             /** @description Server-generated line key from a previous response. Omit for new lines. */

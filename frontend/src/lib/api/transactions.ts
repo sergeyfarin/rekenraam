@@ -1,5 +1,6 @@
 import type { components } from '$lib/api/schema';
 import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$lib/api/client';
+import type { InfiniteData } from '@tanstack/svelte-query';
 
 export type TransactionResponse = components['schemas']['TransactionResponse'];
 export type TransactionsResponse = components['schemas']['TransactionsResponse'];
@@ -19,12 +20,25 @@ export type TransactionListOptions = {
   cursor?: string;
 };
 
+export type TransactionsInfiniteData = InfiniteData<TransactionsResponse, string>;
+
 export const transactionsQueryKey = ['api', 'transactions'] as const;
 
 export function transactionsQueryOptions(options: TransactionListOptions = {}) {
   return {
     queryKey: [...transactionsQueryKey, options] as const,
     queryFn: () => getTransactions(options),
+    staleTime: 5_000
+  };
+}
+
+export function transactionsInfiniteQueryOptions(options: Omit<TransactionListOptions, 'cursor'> = {}) {
+  return {
+    queryKey: [...transactionsQueryKey, 'infinite', options] as const,
+    queryFn: ({ pageParam }: { pageParam: string }) =>
+      getTransactions({ ...options, cursor: pageParam || undefined }),
+    initialPageParam: '',
+    getNextPageParam: (lastPage: TransactionsResponse) => lastPage.next_cursor || null,
     staleTime: 5_000
   };
 }

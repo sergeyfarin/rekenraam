@@ -131,6 +131,7 @@ TransactionResponse:
     - created_at
     - updated_at
     - change_reason
+    - invalidated_checkpoint_ids
   properties:
     id:
       type: integer
@@ -198,6 +199,7 @@ TransactionsResponse:
   type: object
   required:
     - transactions
+    - next_cursor
   properties:
     transactions:
       type: array
@@ -298,6 +300,7 @@ AccountRegisterResponse:
   type: object
   required:
     - entries
+    - next_cursor
   properties:
     entries:
       type: array
