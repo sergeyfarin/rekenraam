@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -123,6 +124,30 @@ func TestScaledAmountCryptoScaleAlignment(t *testing.T) {
 	assert.Equal(t, 24, a.scale)
 }
 
+func TestScaledAmountAddsAtThirtyEightDigitBoundary(t *testing.T) {
+	// The largest positive 38-digit coefficient remains valid. Arithmetic is
+	// performed with big.Int, so no machine-integer overflow occurs first.
+	a := newScaledAmount()
+	a.add(exact.MustParse("99999999999999999999999999999999999998"), 24)
+	a.add(exact.New(1), 24)
+
+	got, err := a.coefficient()
+	require.NoError(t, err)
+	assert.Equal(t, "99999999999999999999999999999999999999", got.String())
+}
+
+func TestScaledAmountReportsThirtyNineDigitResult(t *testing.T) {
+	// Crossing the documented 38-digit storage boundary is rejected instead
+	// of wrapping, even though the intermediate big.Int remains exact.
+	a := newScaledAmount()
+	a.add(exact.MustParse("99999999999999999999999999999999999999"), 24)
+	a.add(exact.New(1), 24)
+
+	_, err := a.coefficient()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at most 38 digits")
+}
+
 // ---------------------------------------------------------------------------
 // pow10
 // ---------------------------------------------------------------------------
@@ -214,6 +239,48 @@ func TestScaledDivisionCryptoNumeratorScale(t *testing.T) {
 	price, err := scaledDivision(500, 2, exact.MustParse("5000000000"), 8, 8)
 	require.NoError(t, err)
 	assert.Equal(t, int64(10_000_000), price)
+}
+
+func TestScaledDivisionTinyCryptoAmountByLargeFiatAmountReportsOverflow(t *testing.T) {
+	// 10 billion quote units / 10^-21 crypto units = 10^31 quote units per
+	// crypto unit. The calculation is exact, but the current price coefficient
+	// is int64 and therefore cannot store the result.
+	_, err := scaledDivision(10_000_000_000, 0, exact.New(1), 21, 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflow")
+}
+
+// ---------------------------------------------------------------------------
+// scaledFXProduct
+// ---------------------------------------------------------------------------
+
+func TestScaledFXProductUsesWideIntermediate(t *testing.T) {
+	// Both factors fit int64. Their raw product does not, but after applying
+	// the scales the result is exactly math.MaxInt64 and must remain lossless.
+	first := PriceObservation{PriceValue: math.MaxInt64, PriceScale: 18, BaseQuantityValue: 1}
+	second := PriceObservation{PriceValue: 1_000_000_000_000_000_000, PriceScale: 18, BaseQuantityValue: 1}
+
+	got, err := scaledFXProduct(first, second, 18)
+	require.NoError(t, err)
+	assert.Equal(t, int64(math.MaxInt64), got)
+}
+
+func TestScaledFXProductReportsResultOverflow(t *testing.T) {
+	first := PriceObservation{PriceValue: math.MaxInt64, BaseQuantityValue: 1}
+	second := PriceObservation{PriceValue: 2, BaseQuantityValue: 1}
+
+	_, err := scaledFXProduct(first, second, 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overflows int64")
+}
+
+func TestScaledFXProductRoundsHalfUpAtResultScale(t *testing.T) {
+	first := PriceObservation{PriceValue: 1, BaseQuantityValue: 2}
+	second := PriceObservation{PriceValue: 1, BaseQuantityValue: 1}
+
+	got, err := scaledFXProduct(first, second, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), got)
 }
 
 // ---------------------------------------------------------------------------

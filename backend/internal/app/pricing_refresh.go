@@ -508,7 +508,13 @@ func scaledFXProduct(first PriceObservation, second PriceObservation, resultScal
 		return 0, fmt.Errorf("derived FX denominator is zero")
 	}
 
-	value := new(big.Int).Quo(numerator, denominator)
+	value, remainder := new(big.Int), new(big.Int)
+	value.QuoRem(numerator, denominator, remainder)
+	// Price inputs are positive. Round half up at the explicit result scale so
+	// derived rates are not systematically biased downward by truncation.
+	if new(big.Int).Lsh(remainder, 1).Cmp(denominator) >= 0 {
+		value.Add(value, big.NewInt(1))
+	}
 	if value.Sign() <= 0 {
 		return 0, fmt.Errorf("derived FX value is zero")
 	}
