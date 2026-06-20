@@ -6,7 +6,8 @@
       "Bash(go get *)",
       "Bash(pnpm run *)",
       "Skill(code-review)",
-      "Skill(code-review:*)"
+      "Skill(code-review:*)",
+      "Bash(xargs ls -la)"
     ]
   }
 }
