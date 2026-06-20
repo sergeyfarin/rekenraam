@@ -252,7 +252,7 @@ this. If not, add the assertion in the service layer before calling the reposito
 
 ---
 
-### B-14 Draft transactions bypass double-entry structural validation  `[ ]`
+### B-14 Draft transactions bypass double-entry structural validation  `[x]`
 **File:** `backend/internal/app/transactions.go:682–694`
 
 `validateBalanced` and the ≥2-postings check are guarded by `if status == "posted"`.
@@ -260,13 +260,17 @@ A draft can be saved with 1 posting and an unbalanced entry. While the
 draft→posted transition will catch this, any code path that reads or displays drafts
 will encounter structurally invalid journal entries.
 
-**Decision needed:** reject structurally invalid drafts at save time (recommended), or
-accept the current behaviour and ensure all draft-reading code handles degenerate
-entries.
+**Fix applied:** ≥2-postings per journal entry and ≥1-entry per transaction are now
+enforced for all statuses. `validateBalanced` remains "posted"-only (drafts are
+legitimately unbalanced work-in-progress). Also discovered and fixed a critical bug
+where `PostTransaction` was silently broken: `UpdateTransaction` unconditionally
+overwrote `spec.Status = "draft"` for any draft transaction, meaning the dedicated
+post endpoint never actually promoted drafts. Fixed via `AllowDraftPromotion` flag on
+`UpdateTransactionInput`.
 
 ---
 
-### B-15 Dividend withholding can silently mix commodities  `[ ]`
+### B-15 Dividend withholding can silently mix commodities  `[x]`
 **File:** `backend/internal/app/investments.go:887–898`
 
 The dividend withholding posting is created using its own scale and value without
@@ -274,8 +278,16 @@ asserting it shares the same commodity as the dividend amount posting. A configu
 default withholding in a different commodity would produce a journal entry that
 appears balanced per-commodity but has wrong economic meaning.
 
-**Fix:** validate that `WithholdingCommodityID == DividendCommodityID` (or that
-withholding is explicitly cross-currency and both postings are expected).
+**Fix applied:**
+- Added `CashAccountID` and `CashCommodityID` zero-value guards at the top of
+  `Dividend()`.
+- Fixed default resolution: the `WithholdingAccountID` fallback from `DividendDefault`
+  was only applied when `IncomeAccountID` was absent. If a caller provided an explicit
+  `IncomeAccountID` but no `WithholdingAccountID`, the default was silently skipped.
+  Defaults for both fields are now resolved unconditionally when `CommodityID` is set.
+- Added a code comment making the invariant explicit: withholding always uses
+  `CashCommodityID` by design; a `WithholdingCommodityID` field must be added if
+  cross-currency withholding is ever needed.
 
 ---
 
@@ -310,5 +322,33 @@ same-commodity mixed-scale accumulation.
 Same gap as B-17. `scaledDivision` is only called from one place
 (`pricing.go:282`) and has no tests for truncation behaviour, overflow detection, or
 division-by-zero guard.
+
+---
+
+### B-19 Draft ledger balances include structurally invalid entries  `[ ]`
+**File:** `backend/internal/app/ledger.go:89` (`AccountBalances`), `ledger.go:188` (`NetWorth`)
+
+`cleanLedgerStatus` accepts `"draft"` as a valid ledger status filter. Callers
+requesting `status=draft` receive balance totals that include draft postings. Before
+B-14 was fixed, drafts with 0 or 1 posting could silently skew these totals. Even
+post-B-14 fix, unbalanced-but-structurally-valid drafts (≥2 postings, not balanced)
+still contribute one-sided amounts to the net-worth calculation.
+
+**Decision needed:** either (a) document that draft ledger balances are intentionally
+best-effort and unbalanced, or (b) exclude draft transactions from `AccountBalances`
+and `NetWorth` endpoints by default and require an explicit opt-in flag.
+
+---
+
+### B-20 `Dividend` and `ReinvestedDividend` lack a shared input validation helper  `[ ]`
+**File:** `backend/internal/app/investments.go:847` (`Dividend`), `923` (`ReinvestedDividend`)
+
+`Buy` and `Sell` centralise required-field checks in `validateTradeInput` (line 1347).
+`Dividend` and `ReinvestedDividend` repeat the same checks inline with no equivalent
+helper. Adding a required field to `DividendInput` requires updating both functions
+independently, increasing the risk of divergence.
+
+**Fix:** extract a `validateDividendInput` helper analogous to `validateTradeInput`
+and call it from both `Dividend` and `ReinvestedDividend`.
 
 ---

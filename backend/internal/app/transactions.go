@@ -185,6 +185,7 @@ type UpdateTransactionInput struct {
 	Spec                   TransactionInput
 	ChangeReason           string
 	ReconciliationOverride bool
+	AllowDraftPromotion    bool
 }
 
 type PostTransactionInput struct {
@@ -402,9 +403,9 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	if err != nil {
 		return Transaction{}, err
 	}
-	if current.Status == "draft" {
+	if current.Status == "draft" && !input.AllowDraftPromotion {
 		spec.Status = "draft"
-	} else {
+	} else if current.Status != "draft" {
 		spec.Status = "posted"
 	}
 	invalidationRefs, err := reconciliationInvalidationRefs(current, spec)
@@ -464,14 +465,15 @@ func (s *TransactionService) PostTransaction(ctx context.Context, input PostTran
 	spec := transactionInputFromTransaction(current)
 	spec.Status = "posted"
 	return s.UpdateTransaction(ctx, UpdateTransactionInput{
-		OwnerUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    input.OriginType,
-		Operation:     "transaction.post",
-		TransactionID: input.TransactionID,
-		Spec:          spec,
-		ChangeReason:  input.ChangeReason,
+		OwnerUserID:         input.OwnerUserID,
+		AuthSessionID:       input.AuthSessionID,
+		RequestID:           input.RequestID,
+		OriginType:          input.OriginType,
+		Operation:           "transaction.post",
+		TransactionID:       input.TransactionID,
+		Spec:                spec,
+		ChangeReason:        input.ChangeReason,
+		AllowDraftPromotion: true,
 	})
 }
 
@@ -679,15 +681,15 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		if err != nil {
 			return db.TransactionSpec{}, err
 		}
-		if status == "posted" && len(entry.Postings) < 2 {
+		if len(entry.Postings) < 2 {
 			return db.TransactionSpec{}, ValidationError{Message: fmt.Sprintf("journal entry %d must have at least two postings", entryIndex+1)}
 		}
 		entries = append(entries, entry)
 	}
+	if len(entries) == 0 {
+		return db.TransactionSpec{}, ValidationError{Message: "transaction requires at least one journal entry"}
+	}
 	if status == "posted" {
-		if len(entries) == 0 {
-			return db.TransactionSpec{}, ValidationError{Message: "posted transaction requires at least one journal entry"}
-		}
 		if err := validateBalanced(entries); err != nil {
 			return db.TransactionSpec{}, err
 		}

@@ -848,6 +848,12 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 	if input.OwnerUserID <= 0 {
 		return Transaction{}, ValidationError{Message: "owner user is required"}
 	}
+	if input.CashAccountID <= 0 {
+		return Transaction{}, ValidationError{Message: "cash account is required"}
+	}
+	if input.CashCommodityID <= 0 {
+		return Transaction{}, ValidationError{Message: "cash commodity is required"}
+	}
 	if input.AmountValue <= 0 {
 		return Transaction{}, ValidationError{Message: "dividend amount is required"}
 	}
@@ -855,19 +861,22 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 	if err != nil {
 		return Transaction{}, err
 	}
-	incomeAccountID := int64(0)
-	if input.IncomeAccountID != nil {
-		incomeAccountID = *input.IncomeAccountID
-	} else if input.CommodityID != nil {
+	if input.CommodityID != nil && (input.IncomeAccountID == nil || input.WithholdingAccountID == nil) {
 		defaultRecord, err := s.repository.ResolveDividendDefault(ctx, BookID, *input.CommodityID, date)
 		if err == nil {
-			incomeAccountID = defaultRecord.IncomeAccountID
+			if input.IncomeAccountID == nil {
+				input.IncomeAccountID = &defaultRecord.IncomeAccountID
+			}
 			if input.WithholdingAccountID == nil && defaultRecord.WithholdingAccountID.Valid {
 				input.WithholdingAccountID = &defaultRecord.WithholdingAccountID.Int64
 			}
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return Transaction{}, fmt.Errorf("resolve dividend default: %w", err)
 		}
+	}
+	incomeAccountID := int64(0)
+	if input.IncomeAccountID != nil {
+		incomeAccountID = *input.IncomeAccountID
 	}
 	if incomeAccountID <= 0 {
 		return Transaction{}, ValidationError{Message: "dividend income account is required"}
@@ -892,6 +901,9 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 		if input.WithholdingScale != nil {
 			scale = *input.WithholdingScale
 		}
+		// Withholding uses CashCommodityID by design: withholding is always in the
+		// same currency as the dividend cash. If cross-currency withholding is ever
+		// needed, add WithholdingCommodityID to DividendInput and validate it here.
 		postings = append(postings,
 			PostingInput{AccountID: *input.WithholdingAccountID, QuantityValue: exact.New(*input.WithholdingValue), QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
 			PostingInput{AccountID: input.CashAccountID, QuantityValue: exact.New(-*input.WithholdingValue), QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},

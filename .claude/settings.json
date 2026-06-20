@@ -4,7 +4,9 @@
       "Bash(go build *)",
       "Bash(go test *)",
       "Bash(go get *)",
-      "Bash(pnpm run *)"
+      "Bash(pnpm run *)",
+      "Skill(code-review)",
+      "Skill(code-review:*)"
     ]
   }
 }
