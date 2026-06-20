@@ -131,6 +131,14 @@ WHEN EXISTS (
     (SELECT default_currency_commodity_id FROM books WHERE id = NEW.book_id),
     0
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM background_work_items bw
+    WHERE bw.book_id = NEW.book_id
+      AND bw.kind = 'pricing.fx_coverage'
+      AND bw.status IN ('pending', 'running')
+      AND json_extract(bw.payload_json, '$.currency_id') = NEW.commodity_id
+      AND json_extract(bw.payload_json, '$.start_date') <= (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id)
+  )
 BEGIN
   INSERT INTO background_work_items (
     book_id, kind, payload_json, available_at, created_at, updated_at

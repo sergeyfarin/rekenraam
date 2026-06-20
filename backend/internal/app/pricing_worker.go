@@ -68,9 +68,11 @@ func (s *PricingService) processFXCoverageWork(ctx context.Context, logger *slog
 			return
 		}
 	}
+	var err error
 	ownerID, err := s.repository.CurrentBookOwnerID(ctx, item.BookID)
 	if err == nil {
-		_, hasMore, err := s.runFXCoverage(ctx, ownerID, payload.CurrencyID, payload.StartDate, backgroundRunTrigger(payload.Reason))
+		var hasMore bool
+		_, hasMore, err = s.runFXCoverage(ctx, ownerID, payload.CurrencyID, payload.StartDate, backgroundRunTrigger(payload.Reason))
 		if err == nil {
 			now := s.now().UTC().Format(time.RFC3339)
 			if hasMore {

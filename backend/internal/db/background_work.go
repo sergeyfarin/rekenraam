@@ -74,7 +74,10 @@ func (r *PricingRepository) ClaimBackgroundWork(ctx context.Context, kind string
 		return BackgroundWorkItemRecord{}, fmt.Errorf("claim background work: %w", err)
 	}
 	rows, err := result.RowsAffected()
-	if err != nil || rows != 1 {
+	if err != nil {
+		return BackgroundWorkItemRecord{}, fmt.Errorf("claim background work rows affected: %w", err)
+	}
+	if rows != 1 {
 		return BackgroundWorkItemRecord{}, ErrNotFound
 	}
 	if err := tx.Commit(); err != nil {

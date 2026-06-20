@@ -89,7 +89,6 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, r
 				hasMore = true
 				break
 			}
-			remaining--
 			counters.Total++
 			outcome, refreshErr := s.refreshFXTarget(ctx, ownerUserID, target, policy, 0, date, startedAt)
 			if refreshErr != nil {
@@ -104,6 +103,7 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, r
 				continue
 			}
 			consecutiveFailures = 0
+			remaining--
 			counters.Succeeded++
 			itemStatus := "succeeded"
 			if outcome.Skipped || outcome.Observation.ValuationDate != date {
@@ -115,9 +115,6 @@ func (s *PricingService) runFXCoverage(ctx context.Context, ownerUserID int64, r
 				SourceID: outcome.SourceID, LastSuccessDate: sql.NullString{String: outcome.Observation.ValuationDate, Valid: outcome.Observation.ValuationDate != ""},
 				LastAttemptAt: startedAt.Format(time.RFC3339), UpdatedAt: startedAt.Format(time.RFC3339),
 			})
-		}
-		if hasMore {
-			break
 		}
 	}
 
