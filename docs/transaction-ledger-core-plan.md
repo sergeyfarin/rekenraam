@@ -150,6 +150,12 @@ immutability.
 - `voided`: latest version intentionally removes this transaction from current
   ledger views.
 
+A durable manual or autosaved draft is already transaction work and may trigger
+supporting background preparation such as FX-rate coverage. That preparation does
+not make the draft part of ledger balances or reports. Import previews use
+dedicated import staging rather than transaction drafts; only committed import rows
+become transactions and trigger that preparation.
+
 Physical delete is allowed only when a transaction has no posted or voided
 versions. Provide a `DELETE /api/v1/transactions/{transaction_id}` or
 `POST /api/v1/transactions/{transaction_id}/discard-draft` endpoint for

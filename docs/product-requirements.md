@@ -232,6 +232,12 @@ Goal: add power-user workflows after the core ledger is stable.
   can be reproduced with the price knowledge available at report time.
   Corrections supersede or void prior observations rather than mutating them in
   place.
+- FX coverage is demand-driven and restart-safe. Activating a currency or durably
+  entering an older transaction, including a manual draft, extends required
+  provider history from the earliest needed date through today. Import previews do
+  not trigger downloads until selected rows are committed as transactions. Manual,
+  daily, and domain-triggered refreshes use durable background work that resumes
+  after network loss or an app restart.
 - Investment accounts for stocks and ETFs using the existing commodity,
   account, and ledger model.
 - Security identity and provider matching for listed instruments, including

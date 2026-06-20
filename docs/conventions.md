@@ -97,6 +97,17 @@ When a feature introduces a durable new rule, update one of those documents in t
   trust, lifecycle, and deployment boundaries are mature.
 - Provider adapters must return normalized facts only. They must not directly
   mutate ledger, pricing, lot, dividend, or corporate-action tables.
+- Provider downloads and other restart-sensitive background operations use the
+  SQLite-backed at-least-once work queue defined by ADR 0010. Record follow-up work
+  atomically with the originating domain change; never perform network access in
+  that domain transaction.
+- Background handlers must be idempotent, lease work for bounded periods, reclaim
+  expired leases, and distinguish retryable failures from terminal failures.
+- FX backfill covers every required provider publication date from the earliest
+  active-account or durable transaction-entry date through today. Manual and
+  autosaved drafts trigger coverage; import previews remain in import staging and
+  trigger only when committed as transactions. `max_backfill_days` is an execution
+  chunk bound and must not silently truncate the required history.
 
 ## Exact Quantity Precision
 
