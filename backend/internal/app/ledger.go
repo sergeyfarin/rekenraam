@@ -281,13 +281,18 @@ func cleanLedgerAsOfAndStatus(asOfInput string, statusInput string, now func() t
 	return cleanedAsOf, status, nil
 }
 
+var ledgerStatuses = map[string]bool{
+	"posted": true,
+	"voided": true,
+}
+
 func cleanLedgerStatus(value string) (string, error) {
 	status := strings.TrimSpace(value)
 	if status == "" {
 		return "posted", nil
 	}
-	if !transactionStatuses[status] {
-		return "", ValidationError{Message: "transaction status is invalid"}
+	if !ledgerStatuses[status] {
+		return "", ValidationError{Message: "ledger status must be 'posted' or 'voided'"}
 	}
 	return status, nil
 }

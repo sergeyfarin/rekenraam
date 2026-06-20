@@ -14,7 +14,7 @@ get:
     - in: query
       name: status
       schema:
-        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+        $ref: "../openapi.yaml#/components/schemas/LedgerStatus"
     - in: query
       name: category_type
       schema:

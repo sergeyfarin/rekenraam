@@ -2699,7 +2699,7 @@ export interface paths {
             parameters: {
                 query?: {
                     as_of?: string;
-                    status?: components["schemas"]["TransactionStatus"];
+                    status?: components["schemas"]["LedgerStatus"];
                     include_system?: boolean;
                 };
                 header?: never;
@@ -2758,7 +2758,7 @@ export interface paths {
                 query?: {
                     after_date?: string;
                     before_date?: string;
-                    status?: components["schemas"]["TransactionStatus"];
+                    status?: components["schemas"]["LedgerStatus"];
                     category_type?: components["schemas"]["CategoryType"];
                 };
                 header?: never;
@@ -2816,7 +2816,7 @@ export interface paths {
             parameters: {
                 query?: {
                     as_of?: string;
-                    status?: components["schemas"]["TransactionStatus"];
+                    status?: components["schemas"]["LedgerStatus"];
                 };
                 header?: never;
                 path?: never;
@@ -6775,6 +6775,8 @@ export interface components {
         ReconciliationCheckpointStatus: "active" | "invalidated" | "voided";
         /** @enum {string} */
         ReconciliationSourceKind: "statement" | "online_balance" | "manual_cash_count" | "asset_valuation" | "other";
+        /** @enum {string} */
+        LedgerStatus: "posted" | "voided";
         BalanceQuantity: {
             /** Format: int64 */
             commodity_id: number;

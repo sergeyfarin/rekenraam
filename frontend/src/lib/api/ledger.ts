@@ -6,7 +6,7 @@ export type AccountBalancesResponse = components['schemas']['AccountBalancesResp
 export type CategoryTotalsResponse = components['schemas']['CategoryTotalsResponse'];
 export type NetWorthResponse = components['schemas']['NetWorthResponse'];
 
-export type LedgerStatus = 'draft' | 'posted' | 'voided';
+export type LedgerStatus = components['schemas']['LedgerStatus'];
 
 export type AccountBalancesOptions = {
   asOf?: string;

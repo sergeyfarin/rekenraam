@@ -9,7 +9,7 @@ get:
     - in: query
       name: status
       schema:
-        $ref: "../openapi.yaml#/components/schemas/TransactionStatus"
+        $ref: "../openapi.yaml#/components/schemas/LedgerStatus"
   responses:
     "200":
       description: Net worth totals grouped by commodity

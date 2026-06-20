@@ -150,8 +150,8 @@ CREATE TABLE IF NOT EXISTS commodity_versions (
   symbol TEXT NOT NULL,
   display_symbol TEXT NOT NULL,
   name TEXT NOT NULL,
-  standard_scale INTEGER NOT NULL CHECK (standard_scale BETWEEN 0 AND 12),
-  max_quantity_scale INTEGER NOT NULL CHECK (max_quantity_scale BETWEEN 0 AND 12 AND max_quantity_scale >= standard_scale),
+  standard_scale INTEGER NOT NULL CHECK (standard_scale BETWEEN 0 AND 24),
+  max_quantity_scale INTEGER NOT NULL CHECK (max_quantity_scale BETWEEN 0 AND 24 AND max_quantity_scale >= standard_scale),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   UNIQUE (commodity_id, version_seq)
@@ -243,9 +243,11 @@ INSERT OR IGNORE INTO account_kinds (
   ('checking', 'asset', 'bank_account', 1, 1, 'account_kind_checking', 120),
   ('savings', 'asset', 'bank_account', 1, 1, 'account_kind_savings', 130),
   ('term_deposit', 'asset', 'bank_account', 1, 1, 'account_kind_term_deposit', 140),
+  ('other_money_account', 'asset', 'bank_account', 1, 1, 'account_kind_other_money_account', 150),
   ('brokerage', 'asset', 'investment_container', 1, 1, 'account_kind_brokerage', 200),
   ('brokerage_cash', 'asset', 'investment_cash', 1, 1, 'account_kind_brokerage_cash', 210),
   ('security_holding', 'asset', 'security_holding', 1, 1, 'account_kind_security_holding', 220),
+  ('fund_holding', 'asset', 'security_holding', 1, 1, 'account_kind_fund_holding', 225),
   ('crypto_wallet', 'asset', 'digital_asset', 1, 1, 'account_kind_crypto_wallet', 230),
   ('property', 'asset', 'tangible_asset', 1, 1, 'account_kind_property', 300),
   ('vehicle', 'asset', 'tangible_asset', 1, 1, 'account_kind_vehicle', 310),
@@ -309,7 +311,7 @@ CREATE TABLE IF NOT EXISTS account_versions (
   institution_id INTEGER REFERENCES institutions(id) ON DELETE RESTRICT,
   country_code TEXT,
   default_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
-  quantity_scale_override INTEGER CHECK (quantity_scale_override IS NULL OR quantity_scale_override BETWEEN 0 AND 12),
+  quantity_scale_override INTEGER CHECK (quantity_scale_override IS NULL OR quantity_scale_override BETWEEN 0 AND 24),
   allows_postings INTEGER NOT NULL CHECK (allows_postings IN (0, 1)),
   number_last4 TEXT,
   external_ref_hint TEXT,
@@ -509,8 +511,8 @@ CREATE TABLE IF NOT EXISTS posting_versions (
   posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id) ON DELETE RESTRICT,
   line_seq INTEGER NOT NULL CHECK (line_seq > 0),
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  quantity_value INTEGER NOT NULL,
-  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
+  quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   memo TEXT NOT NULL DEFAULT '',
   reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN ('uncleared', 'cleared', 'reconciled')),
@@ -562,15 +564,15 @@ CREATE TABLE IF NOT EXISTS reconciliation_sessions (
   status TEXT NOT NULL CHECK (status IN ('open', 'finished', 'voided')),
   source_kind TEXT NOT NULL CHECK (source_kind IN ('statement', 'online_balance', 'manual_cash_count', 'asset_valuation', 'other')),
   statement_date TEXT NOT NULL CHECK (statement_date GLOB '????-??-??'),
-  statement_balance_value INTEGER NOT NULL,
-  statement_balance_scale INTEGER NOT NULL CHECK (statement_balance_scale BETWEEN 0 AND 12),
+  statement_balance_value TEXT NOT NULL DEFAULT '0' CHECK (length(statement_balance_value) BETWEEN 1 AND 39),
+  statement_balance_scale INTEGER NOT NULL DEFAULT 0 CHECK (statement_balance_scale BETWEEN 0 AND 24),
   starting_checkpoint_id INTEGER REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
-  starting_balance_value INTEGER NOT NULL,
-  starting_balance_scale INTEGER NOT NULL CHECK (starting_balance_scale BETWEEN 0 AND 12),
-  selected_balance_value INTEGER NOT NULL DEFAULT 0,
-  selected_balance_scale INTEGER NOT NULL DEFAULT 0 CHECK (selected_balance_scale BETWEEN 0 AND 12),
-  difference_value INTEGER NOT NULL DEFAULT 0,
-  difference_scale INTEGER NOT NULL DEFAULT 0 CHECK (difference_scale BETWEEN 0 AND 12),
+  starting_balance_value TEXT NOT NULL DEFAULT '0' CHECK (length(starting_balance_value) BETWEEN 1 AND 39),
+  starting_balance_scale INTEGER NOT NULL DEFAULT 0 CHECK (starting_balance_scale BETWEEN 0 AND 24),
+  selected_balance_value TEXT NOT NULL DEFAULT '0' CHECK (length(selected_balance_value) BETWEEN 1 AND 39),
+  selected_balance_scale INTEGER NOT NULL DEFAULT 0 CHECK (selected_balance_scale BETWEEN 0 AND 24),
+  difference_value TEXT NOT NULL DEFAULT '0' CHECK (length(difference_value) BETWEEN 1 AND 39),
+  difference_scale INTEGER NOT NULL DEFAULT 0 CHECK (difference_scale BETWEEN 0 AND 24),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -596,8 +598,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_session_postings (
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
-  quantity_value INTEGER NOT NULL,
-  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
+  quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
   payee_name TEXT,
   description TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
@@ -618,8 +620,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_checkpoints (
   previous_checkpoint_id INTEGER REFERENCES reconciliation_checkpoints(id) ON DELETE RESTRICT,
   status TEXT NOT NULL CHECK (status IN ('active', 'invalidated', 'voided')),
   statement_date TEXT NOT NULL CHECK (statement_date GLOB '????-??-??'),
-  statement_balance_value INTEGER NOT NULL,
-  statement_balance_scale INTEGER NOT NULL CHECK (statement_balance_scale BETWEEN 0 AND 12),
+  statement_balance_value TEXT NOT NULL DEFAULT '0' CHECK (length(statement_balance_value) BETWEEN 1 AND 39),
+  statement_balance_scale INTEGER NOT NULL DEFAULT 0 CHECK (statement_balance_scale BETWEEN 0 AND 24),
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   invalidated_at TEXT,
@@ -643,13 +645,555 @@ CREATE TABLE IF NOT EXISTS reconciliation_checkpoint_postings (
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   entry_date TEXT NOT NULL CHECK (entry_date GLOB '????-??-??'),
-  quantity_value INTEGER NOT NULL,
-  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
+  quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
   PRIMARY KEY (checkpoint_id, posting_version_id)
 );
 
 CREATE INDEX IF NOT EXISTS reconciliation_checkpoint_postings_posting_idx
   ON reconciliation_checkpoint_postings (posting_version_id);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+  time_zone TEXT NOT NULL DEFAULT 'UTC',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+INSERT INTO user_preferences (
+  user_id, time_zone, created_at, created_by_user_id, updated_at, updated_by_user_id
+)
+SELECT id, 'UTC', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), id, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), id
+FROM users
+WHERE is_owner = 1
+  AND NOT EXISTS (
+    SELECT 1
+    FROM user_preferences
+    WHERE user_preferences.user_id = users.id
+  );
+
+CREATE TABLE IF NOT EXISTS market_data_sources (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE CHECK (
+    length(code) BETWEEN 1 AND 64
+    AND code = trim(code)
+    AND code GLOB '[a-z]*'
+    AND code NOT GLOB '*[^a-z0-9_-]*'
+  ),
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  kind TEXT NOT NULL CHECK (kind IN ('manual', 'provider', 'import')),
+  provider_key TEXT,
+  base_url TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'disabled')),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+INSERT OR IGNORE INTO market_data_sources (
+  id, code, name, kind, status, metadata_json, created_at
+) VALUES (
+  1, 'manual', 'Manual', 'manual', 'active', '{}', '0001-01-01T00:00:00Z'
+);
+
+INSERT OR IGNORE INTO market_data_sources (
+  code, name, kind, provider_key, base_url, status, metadata_json, created_at
+) VALUES
+  (
+    'ecb_euro_reference_rates',
+    'ECB euro foreign exchange reference rates',
+    'provider',
+    'ecb_euro_reference_rates',
+    'https://www.ecb.europa.eu/stats/eurofxref/',
+    'active',
+    '{"capabilities":["fx_rates"],"quote_type":"official_fixing","requires_secret":false}',
+    '0001-01-01T00:00:00Z'
+  ),
+  (
+    'frankfurter',
+    'Frankfurter',
+    'provider',
+    'frankfurter',
+    'https://api.frankfurter.dev/v2/',
+    'active',
+    '{"capabilities":["fx_rates","fx_currencies"],"quote_type":"official_fixing","requires_secret":false,"supports_provider_filter":true}',
+    '0001-01-01T00:00:00Z'
+  ),
+  (
+    'exchangerate_api_open_access',
+    'ExchangeRate-API Open Access',
+    'provider',
+    'exchangerate_api_open_access',
+    'https://open.er-api.com/v6/',
+    'active',
+    '{"capabilities":["fx_rates"],"quote_type":"official_fixing","requires_secret":false,"attribution_required":true}',
+    '0001-01-01T00:00:00Z'
+  ),
+  (
+    'open_exchange_rates_free',
+    'Open Exchange Rates Free',
+    'provider',
+    'open_exchange_rates_free',
+    'https://openexchangerates.org/api/',
+    'disabled',
+    '{"capabilities":["fx_rates"],"quote_type":"official_fixing","requires_secret":true,"secret_ref":"OPEN_EXCHANGE_RATES_APP_ID"}',
+    '0001-01-01T00:00:00Z'
+  );
+
+CREATE TABLE IF NOT EXISTS investment_instruments (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_request_id TEXT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (book_id, commodity_id)
+);
+
+CREATE INDEX IF NOT EXISTS investment_instruments_book_idx
+  ON investment_instruments (book_id);
+
+CREATE TABLE IF NOT EXISTS investment_instrument_versions (
+  id INTEGER PRIMARY KEY,
+  instrument_id INTEGER NOT NULL REFERENCES investment_instruments(id) ON DELETE RESTRICT,
+  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  recorded_at TEXT NOT NULL,
+  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  instrument_type TEXT NOT NULL CHECK (instrument_type IN ('stock', 'etf', 'fund', 'bond', 'option', 'future', 'other')),
+  display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0 AND display_name = trim(display_name)),
+  symbol TEXT CHECK (symbol IS NULL OR (length(trim(symbol)) > 0 AND symbol = trim(symbol))),
+  exchange_code TEXT,
+  mic TEXT,
+  issuer TEXT,
+  country_code TEXT,
+  quote_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  trading_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  price_scale INTEGER NOT NULL CHECK (price_scale BETWEEN 0 AND 12),
+  identifiers_json TEXT NOT NULL DEFAULT '{}',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (instrument_id, version_seq)
+);
+
+CREATE INDEX IF NOT EXISTS investment_instrument_versions_instrument_seq_idx
+  ON investment_instrument_versions (instrument_id, version_seq DESC);
+
+CREATE INDEX IF NOT EXISTS investment_instrument_versions_symbol_idx
+  ON investment_instrument_versions (symbol COLLATE NOCASE, exchange_code, mic);
+
+CREATE VIEW IF NOT EXISTS current_investment_instrument_versions AS
+SELECT iiv.*
+FROM investment_instrument_versions iiv
+WHERE iiv.id = (
+  SELECT current_iiv.id
+  FROM investment_instrument_versions current_iiv
+  WHERE current_iiv.instrument_id = iiv.instrument_id
+    AND current_iiv.effective_from <= date('now')
+  ORDER BY current_iiv.effective_from DESC, current_iiv.version_seq DESC
+  LIMIT 1
+);
+
+CREATE TABLE IF NOT EXISTS instrument_source_links (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  instrument_id INTEGER NOT NULL REFERENCES investment_instruments(id) ON DELETE RESTRICT,
+  source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  provider_instrument_id TEXT,
+  symbol TEXT NOT NULL CHECK (length(trim(symbol)) > 0 AND symbol = trim(symbol)),
+  exchange_code TEXT,
+  mic TEXT,
+  confidence_bps INTEGER NOT NULL DEFAULT 10000 CHECK (confidence_bps BETWEEN 0 AND 10000),
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+CREATE INDEX IF NOT EXISTS instrument_source_links_lookup_idx
+  ON instrument_source_links (book_id, source_id, symbol COLLATE NOCASE, exchange_code, mic, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS instrument_source_links_active_provider_idx
+  ON instrument_source_links (book_id, source_id, provider_instrument_id)
+  WHERE status = 'active' AND provider_instrument_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS instrument_search_cache (
+  id INTEGER PRIMARY KEY,
+  source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  query TEXT NOT NULL,
+  provider_instrument_id TEXT,
+  symbol TEXT NOT NULL,
+  exchange_code TEXT,
+  mic TEXT,
+  display_name TEXT NOT NULL,
+  instrument_type TEXT NOT NULL,
+  quote_code TEXT,
+  country_code TEXT,
+  confidence_bps INTEGER NOT NULL DEFAULT 0 CHECK (confidence_bps BETWEEN 0 AND 10000),
+  raw_json TEXT NOT NULL DEFAULT '{}',
+  fetched_at TEXT NOT NULL,
+  expires_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS instrument_search_cache_query_idx
+  ON instrument_search_cache (source_id, query COLLATE NOCASE, fetched_at DESC);
+
+CREATE TABLE IF NOT EXISTS pricing_policies (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT UNIQUE,
+  base_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  default_source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  refresh_enabled INTEGER NOT NULL DEFAULT 1 CHECK (refresh_enabled IN (0, 1)),
+  refresh_hour_utc INTEGER NOT NULL DEFAULT 4 CHECK (refresh_hour_utc BETWEEN 0 AND 23),
+  refresh_minute_utc INTEGER NOT NULL DEFAULT 0 CHECK (refresh_minute_utc BETWEEN 0 AND 59),
+  refresh_hour_local INTEGER NOT NULL DEFAULT 4 CHECK (refresh_hour_local BETWEEN 0 AND 23),
+  refresh_minute_local INTEGER NOT NULL DEFAULT 0 CHECK (refresh_minute_local BETWEEN 0 AND 59),
+  max_backfill_days INTEGER NOT NULL DEFAULT 370 CHECK (max_backfill_days >= 1),
+  staleness_max_days INTEGER NOT NULL DEFAULT 3 CHECK (staleness_max_days >= 1),
+  triangulation_max_hops INTEGER NOT NULL DEFAULT 1 CHECK (triangulation_max_hops BETWEEN 0 AND 4),
+  rounding_mode TEXT NOT NULL DEFAULT 'half_up' CHECK (rounding_mode IN ('half_up', 'half_even', 'down', 'up')),
+  prefer_official_fx INTEGER NOT NULL DEFAULT 1 CHECK (prefer_official_fx IN (0, 1)),
+  weekend_policy TEXT NOT NULL DEFAULT 'skip' CHECK (weekend_policy IN ('skip', 'fill_previous', 'download')),
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS pricing_source_assignments (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  priority INTEGER NOT NULL DEFAULT 100 CHECK (priority >= 0),
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+CREATE INDEX IF NOT EXISTS pricing_source_assignments_lookup_idx
+  ON pricing_source_assignments (book_id, base_commodity_id, quote_commodity_id, status, effective_from DESC, priority);
+
+CREATE TABLE IF NOT EXISTS price_series (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  quote_type TEXT NOT NULL CHECK (quote_type IN ('close', 'adjusted_close', 'nav', 'official_fixing', 'spot_mid', 'bid', 'ask', 'manual', 'trade_implied', 'valuation_override')),
+  adjustment_basis TEXT NOT NULL DEFAULT 'raw' CHECK (adjustment_basis IN ('raw', 'split_adjusted', 'dividend_adjusted', 'total_return', 'not_applicable')),
+  market_code TEXT,
+  provider_series_id TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS price_series_lookup_idx
+  ON price_series (book_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, status, source_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS price_series_provider_idx
+  ON price_series (book_id, source_id, provider_series_id)
+  WHERE source_id IS NOT NULL AND provider_series_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS price_observations (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  series_id INTEGER NOT NULL REFERENCES price_series(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_type TEXT NOT NULL CHECK (quote_type IN ('close', 'adjusted_close', 'nav', 'official_fixing', 'spot_mid', 'bid', 'ask', 'manual', 'trade_implied', 'valuation_override')),
+  adjustment_basis TEXT NOT NULL DEFAULT 'raw' CHECK (adjustment_basis IN ('raw', 'split_adjusted', 'dividend_adjusted', 'total_return', 'not_applicable')),
+  price_value INTEGER NOT NULL,
+  price_scale INTEGER NOT NULL CHECK (price_scale BETWEEN 0 AND 18),
+  base_quantity_value INTEGER NOT NULL DEFAULT 1 CHECK (base_quantity_value > 0),
+  base_quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (base_quantity_scale BETWEEN 0 AND 18),
+  valuation_date TEXT NOT NULL CHECK (valuation_date GLOB '????-??-??'),
+  observed_at TEXT,
+  source_published_at TEXT,
+  source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  provider_observation_id TEXT,
+  is_manual INTEGER NOT NULL DEFAULT 0 CHECK (is_manual IN (0, 1)),
+  is_derived INTEGER NOT NULL DEFAULT 0 CHECK (is_derived IN (0, 1)),
+  supersedes_observation_id INTEGER REFERENCES price_observations(id) ON DELETE RESTRICT,
+  ingest_run_id INTEGER,
+  derivation_json TEXT NOT NULL DEFAULT '{}',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  voided_at TEXT,
+  voided_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  void_reason TEXT NOT NULL DEFAULT '',
+  recorded_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS price_observations_lookup_idx
+  ON price_observations (book_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, valuation_date DESC, recorded_at DESC, id DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS price_observations_provider_event_idx
+  ON price_observations (source_id, provider_observation_id)
+  WHERE provider_observation_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS market_data_ingest_runs (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'scheduled', 'domain', 'recovery', 'provider_callback', 'import')),
+  status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'partial')),
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  items_total INTEGER NOT NULL DEFAULT 0 CHECK (items_total >= 0),
+  items_succeeded INTEGER NOT NULL DEFAULT 0 CHECK (items_succeeded >= 0),
+  items_failed INTEGER NOT NULL DEFAULT 0 CHECK (items_failed >= 0),
+  last_error TEXT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS market_data_ingest_runs_book_idx
+  ON market_data_ingest_runs (book_id, started_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS market_data_ingest_items (
+  id INTEGER PRIMARY KEY,
+  run_id INTEGER NOT NULL REFERENCES market_data_ingest_runs(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  item_kind TEXT NOT NULL CHECK (item_kind IN ('instrument', 'price', 'dividend', 'corporate_action')),
+  status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed', 'skipped')),
+  provider_item_id TEXT,
+  local_ref_table TEXT,
+  local_ref_id INTEGER,
+  error TEXT,
+  raw_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS market_data_ingest_items_run_idx
+  ON market_data_ingest_items (run_id, item_kind, status);
+
+CREATE TABLE IF NOT EXISTS pricing_refresh_state (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  base_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  quote_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  last_success_date TEXT CHECK (last_success_date IS NULL OR last_success_date GLOB '????-??-??'),
+  last_attempt_at TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL,
+  UNIQUE (book_id, base_commodity_id, quote_commodity_id, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS cost_basis_profiles (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  method TEXT NOT NULL CHECK (method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
+  is_default INTEGER NOT NULL CHECK (is_default IN (0, 1)),
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  description TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (book_id, name COLLATE NOCASE)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS cost_basis_profiles_default_idx
+  ON cost_basis_profiles (book_id)
+  WHERE is_default = 1 AND status = 'active';
+
+CREATE TABLE IF NOT EXISTS dividend_defaults (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  income_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  withholding_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  default_withholding_value INTEGER,
+  default_withholding_scale INTEGER CHECK (default_withholding_scale IS NULL OR default_withholding_scale BETWEEN 0 AND 12),
+  withholding_rate_bps INTEGER CHECK (withholding_rate_bps IS NULL OR withholding_rate_bps BETWEEN 0 AND 10000),
+  tax_country_code TEXT,
+  tax_treatment TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+CREATE INDEX IF NOT EXISTS dividend_defaults_lookup_idx
+  ON dividend_defaults (book_id, commodity_id, status, effective_from DESC);
+
+CREATE TABLE IF NOT EXISTS investment_lots (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
+  source_transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 38),
+  quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
+  remaining_quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(remaining_quantity_value) BETWEEN 1 AND 38),
+  remaining_quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (remaining_quantity_scale BETWEEN 0 AND 24),
+  cost_basis_value INTEGER NOT NULL,
+  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  remaining_cost_basis_value INTEGER NOT NULL,
+  remaining_cost_basis_scale INTEGER NOT NULL CHECK (remaining_cost_basis_scale BETWEEN 0 AND 12),
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS investment_lots_position_idx
+  ON investment_lots (book_id, account_id, commodity_id, status, opened_on, id);
+
+CREATE TABLE IF NOT EXISTS investment_lot_events (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment')),
+  transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
+  quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
+  cost_basis_value INTEGER NOT NULL DEFAULT 0,
+  cost_basis_scale INTEGER NOT NULL DEFAULT 0 CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS investment_lot_events_lot_idx
+  ON investment_lot_events (lot_id, event_date, id);
+
+CREATE TABLE IF NOT EXISTS investment_provider_events (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  source_id INTEGER NOT NULL REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  provider_event_id TEXT,
+  instrument_id INTEGER REFERENCES investment_instruments(id) ON DELETE RESTRICT,
+  event_family TEXT NOT NULL CHECK (event_family IN ('dividend', 'distribution', 'split', 'merger', 'spin_off', 'ticker_change', 'delisting', 'cash_in_lieu', 'return_of_capital', 'corporate_action')),
+  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  status TEXT NOT NULL CHECK (status IN ('new', 'matched', 'ignored', 'superseded')),
+  normalized_json TEXT NOT NULL DEFAULT '{}',
+  raw_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS investment_provider_events_source_event_idx
+  ON investment_provider_events (source_id, provider_event_id)
+  WHERE provider_event_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS investment_provider_events_book_idx
+  ON investment_provider_events (book_id, event_family, event_date DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS investment_event_suggestions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  provider_event_id INTEGER NOT NULL REFERENCES investment_provider_events(id) ON DELETE RESTRICT,
+  instrument_id INTEGER REFERENCES investment_instruments(id) ON DELETE RESTRICT,
+  confidence_bps INTEGER NOT NULL CHECK (confidence_bps BETWEEN 0 AND 10000),
+  status TEXT NOT NULL CHECK (status IN ('suggested', 'accepted', 'ignored', 'auto_posted', 'failed', 'superseded')),
+  proposed_transaction_json TEXT NOT NULL DEFAULT '{}',
+  generated_transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+  failure_reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS investment_event_suggestions_book_idx
+  ON investment_event_suggestions (book_id, status, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS investment_automation_rules (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  source_id INTEGER REFERENCES market_data_sources(id) ON DELETE RESTRICT,
+  instrument_id INTEGER REFERENCES investment_instruments(id) ON DELETE RESTRICT,
+  event_family TEXT NOT NULL CHECK (event_family IN ('dividend', 'distribution', 'split', 'merger', 'spin_off', 'ticker_change', 'delisting', 'cash_in_lieu', 'return_of_capital', 'corporate_action')),
+  mode TEXT NOT NULL CHECK (mode IN ('suggest', 'auto_post')),
+  confidence_threshold_bps INTEGER NOT NULL CHECK (confidence_threshold_bps BETWEEN 0 AND 10000),
+  required_accounts_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  effective_to TEXT CHECK (effective_to IS NULL OR effective_to GLOB '????-??-??'),
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+CREATE INDEX IF NOT EXISTS investment_automation_rules_lookup_idx
+  ON investment_automation_rules (book_id, event_family, status, source_id, instrument_id);
+
+CREATE TABLE IF NOT EXISTS background_work_items (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  kind TEXT NOT NULL CHECK (length(trim(kind)) > 0 AND kind = trim(kind)),
+  payload_version INTEGER NOT NULL DEFAULT 1 CHECK (payload_version > 0),
+  payload_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(payload_json)),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  available_at TEXT NOT NULL,
+  lease_owner TEXT,
+  lease_expires_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT,
+  CHECK (
+    (status = 'running' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)
+    OR status != 'running'
+  )
+);
+
+CREATE INDEX IF NOT EXISTS background_work_items_due_idx
+  ON background_work_items (status, available_at, lease_expires_at, id);
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS books_default_currency_must_exist_on_insert
@@ -684,6 +1228,20 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS commodity_versions_kind_scale_valid
+BEFORE INSERT ON commodity_versions
+WHEN NEW.standard_scale > 24
+  OR NEW.max_quantity_scale > 24
+  OR (
+    (SELECT kind FROM commodities WHERE id = NEW.commodity_id) <> 'crypto'
+    AND (NEW.standard_scale > 12 OR NEW.max_quantity_scale > 12)
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'commodity precision is invalid for commodity kind');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS commodity_versions_no_update
 BEFORE UPDATE ON commodity_versions
 BEGIN
@@ -710,6 +1268,11 @@ END;
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS institution_versions_no_delete
 BEFORE DELETE ON institution_versions
+WHEN EXISTS (
+  SELECT 1
+  FROM account_versions av
+  WHERE av.institution_id = OLD.institution_id
+)
 BEGIN
   SELECT RAISE(ABORT, 'institution_versions rows are append-only');
 END;
@@ -735,10 +1298,30 @@ END;
 CREATE TRIGGER IF NOT EXISTS account_versions_no_delete
 BEFORE DELETE ON account_versions
 WHEN NOT (
-  OLD.account_class IN ('income', 'expense')
-  AND OLD.account_kind = OLD.account_class
-  AND json_extract(OLD.metadata_json, '$.category.type') = OLD.account_class
-  AND json_extract(OLD.metadata_json, '$.category.is_builtin') = 0
+  (
+    OLD.account_class IN ('income', 'expense')
+    AND OLD.account_kind = OLD.account_class
+    AND json_extract(OLD.metadata_json, '$.category.type') = OLD.account_class
+    AND json_extract(OLD.metadata_json, '$.category.is_builtin') = 0
+  )
+  OR (
+    NOT EXISTS (
+      SELECT 1
+      FROM accounts a
+      WHERE a.id = OLD.account_id
+        AND a.system_role IS NOT NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM posting_versions pv
+      WHERE pv.account_id = OLD.account_id
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM account_versions child
+      WHERE child.parent_account_id = OLD.account_id
+    )
+  )
 )
 BEGIN
   SELECT RAISE(ABORT, 'account_versions rows are append-only');
@@ -970,16 +1553,12 @@ WHEN NOT EXISTS (
   JOIN account_versions av ON av.account_id = NEW.account_id
   WHERE je.id = NEW.journal_entry_id
     AND av.id = (
-      SELECT asof_av.id
-      FROM account_versions asof_av
-      WHERE asof_av.account_id = NEW.account_id
-        AND asof_av.effective_from <= je.entry_date
-      ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC
-      LIMIT 1
+      SELECT asof_av.id FROM account_versions asof_av
+      WHERE asof_av.account_id = NEW.account_id AND asof_av.effective_from <= je.entry_date
+      ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC LIMIT 1
     )
-    AND av.status = 'active'
-    AND av.allows_postings = 1
-    AND je.entry_date >= av.opened_on
+    AND av.status = 'active' AND av.allows_postings = 1
+    AND (av.opened_on IS NULL OR je.entry_date >= av.opened_on)
     AND (av.closed_on IS NULL OR je.entry_date <= av.closed_on)
     AND (av.default_commodity_id IS NULL OR av.default_commodity_id = NEW.commodity_id)
     AND (av.quantity_scale_override IS NULL OR NEW.quantity_scale <= av.quantity_scale_override)
@@ -996,17 +1575,16 @@ WHEN NOT EXISTS (
   SELECT 1
   FROM journal_entries je
   JOIN commodity_versions cv ON cv.commodity_id = NEW.commodity_id
+  JOIN commodities c ON c.id = cv.commodity_id
   WHERE je.id = NEW.journal_entry_id
     AND cv.id = (
-      SELECT asof_cv.id
-      FROM commodity_versions asof_cv
-      WHERE asof_cv.commodity_id = NEW.commodity_id
-        AND asof_cv.effective_from <= je.entry_date
-      ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC
-      LIMIT 1
+      SELECT asof_cv.id FROM commodity_versions asof_cv
+      WHERE asof_cv.commodity_id = NEW.commodity_id AND asof_cv.effective_from <= je.entry_date
+      ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC LIMIT 1
     )
     AND cv.status = 'active'
     AND NEW.quantity_scale <= cv.max_quantity_scale
+    AND NEW.quantity_scale <= CASE WHEN c.kind = 'crypto' THEN 24 ELSE 12 END
 )
 BEGIN
   SELECT RAISE(ABORT, 'posting commodity scale is invalid');
@@ -1047,7 +1625,259 @@ BEGIN
 END;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_instrument_versions_no_update
+BEFORE UPDATE ON investment_instrument_versions
+BEGIN
+  SELECT RAISE(ABORT, 'investment_instrument_versions rows are append-only');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_instrument_versions_no_delete
+BEFORE DELETE ON investment_instrument_versions
+BEGIN
+  SELECT RAISE(ABORT, 'investment_instrument_versions rows are append-only');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_instruments_commodity_must_be_security
+BEFORE INSERT ON investment_instruments
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities c
+  WHERE c.id = NEW.commodity_id
+    AND c.book_id = NEW.book_id
+    AND c.kind = 'security'
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment instrument commodity must be a security in the same book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lots_same_book
+BEFORE INSERT ON investment_lots
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM accounts a
+  JOIN commodities security ON security.id = NEW.commodity_id
+  JOIN commodities cost ON cost.id = NEW.cost_commodity_id
+  WHERE a.id = NEW.account_id
+    AND a.book_id = NEW.book_id
+    AND security.book_id = NEW.book_id
+    AND security.kind = 'security'
+    AND cost.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment lot references must belong to one book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_events_same_book
+BEFORE INSERT ON investment_lot_events
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM investment_lots lot
+  WHERE lot.id = NEW.lot_id
+    AND lot.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment lot event must reference a lot in the same book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lots_values_valid_insert
+BEFORE INSERT ON investment_lots
+WHEN NEW.quantity_value = '0' OR substr(NEW.quantity_value, 1, 1) = '-'
+  OR substr(NEW.remaining_quantity_value, 1, 1) = '-'
+  OR NEW.cost_basis_value < 0 OR NEW.remaining_cost_basis_value < 0
+BEGIN
+  SELECT RAISE(ABORT, 'investment lot values are invalid');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lots_values_valid_update
+BEFORE UPDATE ON investment_lots
+WHEN NEW.quantity_value = '0' OR substr(NEW.quantity_value, 1, 1) = '-'
+  OR substr(NEW.remaining_quantity_value, 1, 1) = '-'
+  OR NEW.cost_basis_value < 0 OR NEW.remaining_cost_basis_value < 0
+BEGIN
+  SELECT RAISE(ABORT, 'investment lot values are invalid');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS pricing_source_assignments_same_book
+BEFORE INSERT ON pricing_source_assignments
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities b
+  JOIN commodities q ON q.id = NEW.quote_commodity_id
+  WHERE b.id = NEW.base_commodity_id
+    AND b.book_id = NEW.book_id
+    AND q.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'pricing source assignment commodities must belong to one book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS price_series_same_book
+BEFORE INSERT ON price_series
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM commodities b
+  JOIN commodities q ON q.id = NEW.quote_commodity_id
+  WHERE b.id = NEW.base_commodity_id
+    AND b.book_id = NEW.book_id
+    AND q.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'price series commodities must belong to one book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS price_observations_same_book
+BEFORE INSERT ON price_observations
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM price_series ps
+  JOIN commodities c ON c.id = NEW.base_commodity_id
+  JOIN commodities q ON q.id = NEW.quote_commodity_id
+  WHERE ps.id = NEW.series_id
+    AND ps.book_id = NEW.book_id
+    AND ps.base_commodity_id = NEW.base_commodity_id
+    AND ps.quote_commodity_id = NEW.quote_commodity_id
+    AND c.book_id = NEW.book_id
+    AND q.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'price observation series and commodities must belong to one book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS price_observations_positive_insert
+BEFORE INSERT ON price_observations
+WHEN NEW.price_value <= 0
+BEGIN
+  SELECT RAISE(ABORT, 'price observation value must be positive');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS price_observations_positive_update
+BEFORE UPDATE ON price_observations
+WHEN NEW.price_value <= 0
+BEGIN
+  SELECT RAISE(ABORT, 'price observation value must be positive');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER fx_work_after_account_version_insert
+AFTER INSERT ON account_versions
+WHEN NEW.status = 'active'
+  AND NEW.default_commodity_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM commodities c
+    WHERE c.id = NEW.default_commodity_id AND c.kind = 'currency'
+  )
+  AND NEW.default_commodity_id != COALESCE(
+    (SELECT pp.base_commodity_id
+     FROM accounts a JOIN pricing_policies pp ON pp.book_id = a.book_id
+     WHERE a.id = NEW.account_id),
+    (SELECT b.default_currency_commodity_id
+     FROM accounts a JOIN books b ON b.id = a.book_id
+     WHERE a.id = NEW.account_id),
+    0
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM account_versions prior
+    WHERE prior.account_id = NEW.account_id AND prior.id != NEW.id
+      AND prior.status = 'active'
+      AND prior.default_commodity_id = NEW.default_commodity_id
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM current_account_versions other
+    JOIN accounts other_account ON other_account.id = other.account_id
+    JOIN accounts new_account ON new_account.id = NEW.account_id
+    WHERE other_account.book_id = new_account.book_id
+      AND other.account_id != NEW.account_id
+      AND other.status = 'active'
+      AND other.default_commodity_id = NEW.default_commodity_id
+  )
+BEGIN
+  INSERT INTO background_work_items (
+    book_id, kind, payload_json, available_at, created_at, updated_at
+  )
+  SELECT a.book_id, 'pricing.fx_coverage',
+    json_object('reason', 'currency_activated', 'start_date', NEW.opened_on,
+      'currency_id', NEW.default_commodity_id),
+    NEW.recorded_at, NEW.recorded_at, NEW.recorded_at
+  FROM accounts a WHERE a.id = NEW.account_id;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER fx_work_after_posting_version_insert
+AFTER INSERT ON posting_versions
+WHEN EXISTS (
+  SELECT 1 FROM transaction_versions tv
+  WHERE tv.id = NEW.transaction_version_id AND tv.status IN ('draft', 'posted')
+)
+  AND EXISTS (SELECT 1 FROM commodities c WHERE c.id = NEW.commodity_id AND c.kind = 'currency')
+  AND NEW.commodity_id != COALESCE(
+    (SELECT base_commodity_id FROM pricing_policies WHERE book_id = NEW.book_id),
+    (SELECT default_currency_commodity_id FROM books WHERE id = NEW.book_id),
+    0
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM background_work_items bw
+    WHERE bw.book_id = NEW.book_id
+      AND bw.kind = 'pricing.fx_coverage'
+      AND bw.status IN ('pending', 'running')
+      AND json_extract(bw.payload_json, '$.currency_id') = NEW.commodity_id
+      AND json_extract(bw.payload_json, '$.start_date') <= (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id)
+  )
+BEGIN
+  INSERT INTO background_work_items (
+    book_id, kind, payload_json, available_at, created_at, updated_at
+  ) VALUES (
+    NEW.book_id, 'pricing.fx_coverage',
+    json_object('reason', 'transaction_entered',
+      'start_date', (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id),
+      'currency_id', NEW.commodity_id),
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  );
+END;
+-- +goose StatementEnd
+
 -- +goose Down
+DROP TRIGGER IF EXISTS fx_work_after_posting_version_insert;
+DROP TRIGGER IF EXISTS fx_work_after_account_version_insert;
+DROP TRIGGER IF EXISTS price_observations_positive_update;
+DROP TRIGGER IF EXISTS price_observations_positive_insert;
+DROP TRIGGER IF EXISTS price_observations_same_book;
+DROP TRIGGER IF EXISTS price_series_same_book;
+DROP TRIGGER IF EXISTS pricing_source_assignments_same_book;
+DROP TRIGGER IF EXISTS investment_lots_values_valid_update;
+DROP TRIGGER IF EXISTS investment_lots_values_valid_insert;
+DROP TRIGGER IF EXISTS investment_lot_events_same_book;
+DROP TRIGGER IF EXISTS investment_lots_same_book;
+DROP TRIGGER IF EXISTS investment_instruments_commodity_must_be_security;
+DROP TRIGGER IF EXISTS investment_instrument_versions_no_delete;
+DROP TRIGGER IF EXISTS investment_instrument_versions_no_update;
 DROP TRIGGER IF EXISTS posting_tags_same_book_and_active_tag;
 DROP TRIGGER IF EXISTS transaction_tags_same_book_and_active_tag;
 DROP TRIGGER IF EXISTS posting_versions_commodity_scale_valid;
@@ -1059,12 +1889,12 @@ DROP TRIGGER IF EXISTS transactions_correction_same_book;
 DROP TRIGGER IF EXISTS transaction_search_insert;
 DROP TRIGGER IF EXISTS transaction_versions_supersedes_same_transaction;
 DROP TRIGGER IF EXISTS transaction_versions_same_book;
-DROP TRIGGER IF EXISTS transaction_versions_no_delete;
-DROP TRIGGER IF EXISTS transaction_versions_no_update;
-DROP TRIGGER IF EXISTS journal_entries_no_delete;
-DROP TRIGGER IF EXISTS journal_entries_no_update;
 DROP TRIGGER IF EXISTS posting_versions_no_delete;
 DROP TRIGGER IF EXISTS posting_versions_no_update;
+DROP TRIGGER IF EXISTS journal_entries_no_delete;
+DROP TRIGGER IF EXISTS journal_entries_no_update;
+DROP TRIGGER IF EXISTS transaction_versions_no_delete;
+DROP TRIGGER IF EXISTS transaction_versions_no_update;
 DROP TRIGGER IF EXISTS payee_versions_no_delete;
 DROP TRIGGER IF EXISTS payee_versions_no_update;
 DROP TRIGGER IF EXISTS account_versions_no_delete;
@@ -1074,14 +1904,57 @@ DROP TRIGGER IF EXISTS institution_versions_no_delete;
 DROP TRIGGER IF EXISTS institution_versions_no_update;
 DROP TRIGGER IF EXISTS commodity_versions_no_delete;
 DROP TRIGGER IF EXISTS commodity_versions_no_update;
+DROP TRIGGER IF EXISTS commodity_versions_kind_scale_valid;
 DROP TRIGGER IF EXISTS books_default_currency_must_exist;
 DROP TRIGGER IF EXISTS books_default_currency_must_exist_on_insert;
 
-DROP INDEX IF EXISTS account_versions_default_commodity_idx;
-DROP INDEX IF EXISTS account_versions_institution_idx;
-DROP INDEX IF EXISTS account_versions_parent_idx;
-DROP INDEX IF EXISTS account_versions_account_seq_idx;
-DROP VIEW IF EXISTS current_account_versions;
+DROP INDEX IF EXISTS background_work_items_due_idx;
+DROP TABLE IF EXISTS background_work_items;
+
+DROP INDEX IF EXISTS investment_automation_rules_lookup_idx;
+DROP TABLE IF EXISTS investment_automation_rules;
+DROP INDEX IF EXISTS investment_event_suggestions_book_idx;
+DROP TABLE IF EXISTS investment_event_suggestions;
+DROP INDEX IF EXISTS investment_provider_events_book_idx;
+DROP INDEX IF EXISTS investment_provider_events_source_event_idx;
+DROP TABLE IF EXISTS investment_provider_events;
+DROP INDEX IF EXISTS investment_lot_events_lot_idx;
+DROP TABLE IF EXISTS investment_lot_events;
+DROP INDEX IF EXISTS investment_lots_position_idx;
+DROP TABLE IF EXISTS investment_lots;
+DROP INDEX IF EXISTS dividend_defaults_lookup_idx;
+DROP TABLE IF EXISTS dividend_defaults;
+DROP INDEX IF EXISTS cost_basis_profiles_default_idx;
+DROP TABLE IF EXISTS cost_basis_profiles;
+DROP TABLE IF EXISTS pricing_refresh_state;
+DROP INDEX IF EXISTS market_data_ingest_items_run_idx;
+DROP TABLE IF EXISTS market_data_ingest_items;
+DROP INDEX IF EXISTS market_data_ingest_runs_book_idx;
+DROP TABLE IF EXISTS market_data_ingest_runs;
+DROP INDEX IF EXISTS price_observations_provider_event_idx;
+DROP INDEX IF EXISTS price_observations_lookup_idx;
+DROP TABLE IF EXISTS price_observations;
+DROP INDEX IF EXISTS price_series_provider_idx;
+DROP INDEX IF EXISTS price_series_lookup_idx;
+DROP TABLE IF EXISTS price_series;
+DROP INDEX IF EXISTS pricing_source_assignments_lookup_idx;
+DROP TABLE IF EXISTS pricing_source_assignments;
+DROP TABLE IF EXISTS pricing_policies;
+DROP INDEX IF EXISTS instrument_search_cache_query_idx;
+DROP TABLE IF EXISTS instrument_search_cache;
+DROP INDEX IF EXISTS instrument_source_links_active_provider_idx;
+DROP INDEX IF EXISTS instrument_source_links_lookup_idx;
+DROP TABLE IF EXISTS instrument_source_links;
+DROP INDEX IF EXISTS investment_instrument_versions_symbol_idx;
+DROP INDEX IF EXISTS investment_instrument_versions_instrument_seq_idx;
+DROP VIEW IF EXISTS current_investment_instrument_versions;
+DROP TABLE IF EXISTS investment_instrument_versions;
+DROP INDEX IF EXISTS investment_instruments_book_idx;
+DROP TABLE IF EXISTS investment_instruments;
+DROP TABLE IF EXISTS market_data_sources;
+
+DROP TABLE IF EXISTS user_preferences;
+
 DROP INDEX IF EXISTS reconciliation_checkpoint_postings_posting_idx;
 DROP TABLE IF EXISTS reconciliation_checkpoint_postings;
 DROP INDEX IF EXISTS reconciliation_checkpoints_account_idx;
@@ -1118,44 +1991,38 @@ DROP INDEX IF EXISTS payee_versions_payee_seq_idx;
 DROP TABLE IF EXISTS payee_versions;
 DROP INDEX IF EXISTS payees_book_idx;
 DROP TABLE IF EXISTS payees;
+DROP INDEX IF EXISTS account_versions_default_commodity_idx;
+DROP INDEX IF EXISTS account_versions_institution_idx;
+DROP INDEX IF EXISTS account_versions_parent_idx;
+DROP INDEX IF EXISTS account_versions_account_seq_idx;
+DROP VIEW IF EXISTS current_account_versions;
 DROP TABLE IF EXISTS account_versions;
-
 DROP INDEX IF EXISTS accounts_book_idx;
 DROP INDEX IF EXISTS accounts_system_role_idx;
 DROP TABLE IF EXISTS accounts;
-
 DROP TABLE IF EXISTS account_kinds;
-
 DROP INDEX IF EXISTS institution_versions_institution_seq_idx;
 DROP VIEW IF EXISTS current_institution_versions;
 DROP TABLE IF EXISTS institution_versions;
-
 DROP INDEX IF EXISTS institutions_book_idx;
 DROP TABLE IF EXISTS institutions;
-
 DROP INDEX IF EXISTS commodity_versions_commodity_seq_idx;
 DROP VIEW IF EXISTS current_commodity_versions;
 DROP TABLE IF EXISTS commodity_versions;
-
 DROP INDEX IF EXISTS commodities_book_kind_idx;
 DROP TABLE IF EXISTS commodities;
-
 DROP INDEX IF EXISTS tags_active_name_kind_idx;
 DROP INDEX IF EXISTS tags_book_status_kind_idx;
 DROP TABLE IF EXISTS tags;
-
 DROP TABLE IF EXISTS books;
 DROP TABLE IF EXISTS login_throttles;
 DROP TABLE IF EXISTS setup_steps;
-
 DROP INDEX IF EXISTS audit_events_request_idx;
 DROP INDEX IF EXISTS audit_events_actor_occurred_idx;
 DROP INDEX IF EXISTS audit_events_book_occurred_idx;
 DROP TABLE IF EXISTS audit_events;
-
 DROP INDEX IF EXISTS auth_sessions_expires_revoked_idx;
 DROP INDEX IF EXISTS auth_sessions_user_id_idx;
 DROP TABLE IF EXISTS auth_sessions;
-
 DROP INDEX IF EXISTS users_one_owner_idx;
 DROP TABLE IF EXISTS users;

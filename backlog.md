@@ -84,7 +84,7 @@ a descriptive message ("balance for commodity N exceeds maximum precision…").
 
 ---
 
-### B-04 `scaledAmount.add()` mutates intermediate `big.Int` from `BigInt()`  `[ ]`
+### B-04 `scaledAmount.add()` mutates intermediate `big.Int` from `BigInt()`  `[~]`
 **File:** `backend/internal/app/ledger.go:453–460`
 
 ```go
@@ -152,7 +152,7 @@ context (function name + request ID if available).
 
 ---
 
-### B-07 JSON encode error also silently dropped in reconciliation preview handler  `[ ]`
+### B-07 JSON encode error also silently dropped in reconciliation preview handler  `[x]`
 **File:** Search `writeJSON` call sites — all share the same `middleware.go:35` path.  
 Covered by B-05 fix.
 
@@ -324,18 +324,15 @@ division-by-zero guard.
 
 ---
 
-### B-19 Draft ledger balances include structurally invalid entries  `[ ]`
+### B-19 Draft ledger balances include structurally invalid entries  `[x]`
 **File:** `backend/internal/app/ledger.go:89` (`AccountBalances`), `ledger.go:188` (`NetWorth`)
 
-`cleanLedgerStatus` accepts `"draft"` as a valid ledger status filter. Callers
-requesting `status=draft` receive balance totals that include draft postings. Before
-B-14 was fixed, drafts with 0 or 1 posting could silently skew these totals. Even
-post-B-14 fix, unbalanced-but-structurally-valid drafts (≥2 postings, not balanced)
-still contribute one-sided amounts to the net-worth calculation.
-
-**Decision needed:** either (a) document that draft ledger balances are intentionally
-best-effort and unbalanced, or (b) exclude draft transactions from `AccountBalances`
-and `NetWorth` endpoints by default and require an explicit opt-in flag.
+**Fix applied (option b):** `cleanLedgerStatus` now uses a `ledgerStatuses` set
+(`posted`, `voided` only) instead of `transactionStatuses`. Passing `status=draft`
+to any ledger endpoint returns HTTP 400 with message "ledger status must be 'posted'
+or 'voided'". The OpenAPI schema introduces a `LedgerStatus` type (separate from
+`TransactionStatus`) used on all three ledger path specs; the generated TypeScript
+client and the hand-written `ledger.ts` type were updated accordingly.
 
 ---
 

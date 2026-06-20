@@ -1,3 +1,9 @@
+LedgerStatus:
+  type: string
+  enum:
+    - posted
+    - voided
+
 BalanceQuantity:
   type: object
   required:
