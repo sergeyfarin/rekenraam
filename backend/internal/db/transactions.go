@@ -40,6 +40,7 @@ type TransactionRecord struct {
 	ExternalRefHint           sql.NullString
 	NoteMarkdown              string
 	MetadataJSON              string
+	NeedsReview               bool
 	RecordedAt                string
 	ChangedByUserID           int64
 	ChangeReason              string
@@ -95,6 +96,7 @@ type TransactionSpec struct {
 	ExternalRefHint string
 	NoteMarkdown    string
 	MetadataJSON    string
+	NeedsReview     bool
 	TagIDs          []int64
 	JournalEntries  []JournalEntrySpec
 }
@@ -126,6 +128,7 @@ type ListTransactionsParams struct {
 	PayeeID         int64
 	Status          string
 	Kind            string
+	NeedsReview     bool
 	Query           string
 	AfterDate       string
 	BeforeDate      string
@@ -180,6 +183,18 @@ type VoidTransactionParams struct {
 type DeleteDraftTransactionParams struct {
 	BookID        int64
 	TransactionID int64
+}
+
+type ApproveTransactionParams struct {
+	BookID        int64
+	TransactionID int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	RecordedAt    string
+	ChangeReason  string
 }
 
 type PostingAccountRule struct {
@@ -238,6 +253,9 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 				AND account_pv.account_id = ?
 		)`)
 		args = append(args, params.AccountID)
+	}
+	if params.NeedsReview {
+		where = append(where, "tv.needs_review = 1")
 	}
 	dateColumn := "tv.transaction_date"
 	if params.FilterEntryDate {
@@ -601,6 +619,88 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 	return record, nil
 }
 
+func (r *TransactionRepository) ApproveTransaction(ctx context.Context, params ApproveTransactionParams) (TransactionRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return TransactionRecord{}, fmt.Errorf("begin approve transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TransactionRecord{}, err
+	}
+	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	if !current.NeedsReview {
+		records := []TransactionRecord{current}
+		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return TransactionRecord{}, fmt.Errorf("commit approve transaction: %w", err)
+		}
+		committed = true
+		return records[0], nil
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.RecordedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+
+	spec := TransactionSpec{
+		Status:          current.Status,
+		TransactionKind: current.TransactionKind,
+		TransactionDate: current.TransactionDate,
+		PayeeID:         current.PayeeID,
+		PayeeName:       current.PayeeName,
+		Description:     current.Description,
+		ExternalRefHint: nullStringText(current.ExternalRefHint),
+		NoteMarkdown:    current.NoteMarkdown,
+		MetadataJSON:    current.MetadataJSON,
+		NeedsReview:     false,
+	}
+	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+		BookID:              params.BookID,
+		TransactionID:       params.TransactionID,
+		VersionSeq:          current.VersionSeq + 1,
+		SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
+		Spec:                spec,
+		ReplaceTags:         false,
+		RecordedAt:          params.RecordedAt,
+		ChangedByUserID:     params.ActorUserID,
+		ChangeReason:        params.ChangeReason,
+		ChangeAuditEventID:  auditEventID,
+		RequestID:           params.RequestID,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return TransactionRecord{}, fmt.Errorf("commit approve transaction: %w", err)
+	}
+	committed = true
+
+	return record, nil
+}
+
 func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, params DeleteDraftTransactionParams) error {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
@@ -839,13 +939,14 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 			external_ref_hint,
 			note_markdown,
 			metadata_json,
+			needs_review,
 			recorded_at,
 			changed_by_user_id,
 			change_reason,
 			change_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.TransactionID, params.VersionSeq, nullableInt64Value(params.SupersedesVersionID), params.Spec.Status, params.Spec.TransactionKind, params.Spec.TransactionDate, nullableInt64Value(params.Spec.PayeeID), nullableStringValue(params.Spec.PayeeName), params.Spec.Description, params.Spec.ExternalRefHint, params.Spec.NoteMarkdown, params.Spec.MetadataJSON, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.ChangeAuditEventID)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.TransactionID, params.VersionSeq, nullableInt64Value(params.SupersedesVersionID), params.Spec.Status, params.Spec.TransactionKind, params.Spec.TransactionDate, nullableInt64Value(params.Spec.PayeeID), nullableStringValue(params.Spec.PayeeName), params.Spec.Description, params.Spec.ExternalRefHint, params.Spec.NoteMarkdown, params.Spec.MetadataJSON, boolToInt(params.Spec.NeedsReview), params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.ChangeAuditEventID)
 	if err != nil {
 		return TransactionRecord{}, fmt.Errorf("insert transaction version: %w", err)
 	}
@@ -1286,6 +1387,7 @@ func transactionSelect(extraConditions string) string {
 			tv.external_ref_hint,
 			tv.note_markdown,
 			tv.metadata_json,
+			tv.needs_review,
 			tv.recorded_at,
 			tv.changed_by_user_id,
 			tv.change_reason
@@ -1314,6 +1416,7 @@ func accountRegisterSelect(extraConditions string) string {
 			tv.external_ref_hint,
 			tv.note_markdown,
 			tv.metadata_json,
+			tv.needs_review,
 			tv.recorded_at,
 			tv.changed_by_user_id,
 			tv.change_reason,
@@ -1399,6 +1502,7 @@ func scanTransactionRecord(scanner interface{ Scan(dest ...any) error }, record 
 		&record.ExternalRefHint,
 		&record.NoteMarkdown,
 		&record.MetadataJSON,
+		&record.NeedsReview,
 		&record.RecordedAt,
 		&record.ChangedByUserID,
 		&record.ChangeReason,
@@ -1431,6 +1535,7 @@ func scanAccountRegisterEntry(scanner interface{ Scan(dest ...any) error }, entr
 		&entry.Transaction.ExternalRefHint,
 		&entry.Transaction.NoteMarkdown,
 		&entry.Transaction.MetadataJSON,
+		&entry.Transaction.NeedsReview,
 		&entry.Transaction.RecordedAt,
 		&entry.Transaction.ChangedByUserID,
 		&entry.Transaction.ChangeReason,

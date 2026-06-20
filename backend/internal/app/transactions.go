@@ -78,6 +78,7 @@ type Transaction struct {
 	ExternalRefHint           string
 	NoteMarkdown              string
 	MetadataJSON              string
+	NeedsReview               bool
 	VersionID                 int64
 	VersionSeq                int64
 	SupersedesVersionID       *int64
@@ -126,6 +127,7 @@ type AccountRegisterEntry struct {
 	PayeeName                 string
 	Description               string
 	ExternalRefHint           string
+	NeedsReview               bool
 	VersionID                 int64
 	VersionSeq                int64
 	SupersedesVersionID       *int64
@@ -143,15 +145,16 @@ type AccountRegisterEntry struct {
 }
 
 type ListTransactionsInput struct {
-	AccountID  int64
-	PayeeID    int64
-	Status     string
-	Kind       string
-	Query      string
-	AfterDate  string
-	BeforeDate string
-	Limit      int
-	Cursor     string
+	AccountID   int64
+	PayeeID     int64
+	Status      string
+	Kind        string
+	NeedsReview bool
+	Query       string
+	AfterDate   string
+	BeforeDate  string
+	Limit       int
+	Cursor      string
 }
 
 type ListTransactionsResult struct {
@@ -221,6 +224,7 @@ type TransactionInput struct {
 	ExternalRefHint string
 	NoteMarkdown    string
 	MetadataJSON    string
+	NeedsReview     bool
 	TagIDs          []int64
 	JournalEntries  []JournalEntryInput
 }
@@ -549,6 +553,38 @@ func (s *TransactionService) DeleteDraftTransaction(ctx context.Context, input D
 	return nil
 }
 
+type ApproveTransactionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	TransactionID int64
+	ChangeReason  string
+}
+
+func (s *TransactionService) ApproveTransaction(ctx context.Context, input ApproveTransactionInput) (Transaction, error) {
+	if input.TransactionID <= 0 {
+		return Transaction{}, ValidationError{Message: "transaction id is required"}
+	}
+
+	record, err := s.repository.ApproveTransaction(ctx, db.ApproveTransactionParams{
+		BookID:        BookID,
+		TransactionID: input.TransactionID,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		Operation:     "transaction.approve",
+		RecordedAt:    s.now().UTC().Format(time.RFC3339Nano),
+		ChangeReason:  input.ChangeReason,
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+
+	return toTransaction(record), nil
+}
+
 func (s *TransactionService) listParams(input ListTransactionsInput, filterEntryDate bool) (db.ListTransactionsParams, error) {
 	status := strings.TrimSpace(input.Status)
 	if status != "" && !transactionStatuses[status] {
@@ -589,6 +625,7 @@ func (s *TransactionService) listParams(input ListTransactionsInput, filterEntry
 		PayeeID:         input.PayeeID,
 		Status:          status,
 		Kind:            kind,
+		NeedsReview:     input.NeedsReview,
 		Query:           strings.TrimSpace(input.Query),
 		AfterDate:       afterDate,
 		BeforeDate:      beforeDate,
@@ -714,6 +751,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		ExternalRefHint: externalRefHint,
 		NoteMarkdown:    noteMarkdown,
 		MetadataJSON:    metadataJSON,
+		NeedsReview:     input.NeedsReview,
 		TagIDs:          tagIDs,
 		JournalEntries:  entries,
 	}, nil
@@ -1170,6 +1208,7 @@ func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord, runningBa
 			PayeeName:                 transaction.PayeeName,
 			Description:               transaction.Description,
 			ExternalRefHint:           transaction.ExternalRefHint,
+			NeedsReview:               transaction.NeedsReview,
 			VersionID:                 transaction.VersionID,
 			VersionSeq:                transaction.VersionSeq,
 			SupersedesVersionID:       transaction.SupersedesVersionID,
@@ -1234,6 +1273,7 @@ func toTransaction(record db.TransactionRecord) Transaction {
 		ExternalRefHint:           nullableString(record.ExternalRefHint),
 		NoteMarkdown:              record.NoteMarkdown,
 		MetadataJSON:              record.MetadataJSON,
+		NeedsReview:               record.NeedsReview,
 		VersionID:                 record.VersionID,
 		VersionSeq:                record.VersionSeq,
 		SupersedesVersionID:       nullableInt64FromSQL(record.SupersedesVersionID),

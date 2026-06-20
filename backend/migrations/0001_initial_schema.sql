@@ -432,6 +432,7 @@ CREATE TABLE IF NOT EXISTS transaction_versions (
   external_ref_hint TEXT,
   note_markdown TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
+  needs_review INTEGER NOT NULL DEFAULT 0 CHECK (needs_review IN (0, 1)),
   recorded_at TEXT NOT NULL,
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
@@ -448,6 +449,10 @@ CREATE INDEX IF NOT EXISTS transaction_versions_book_date_idx
 CREATE INDEX IF NOT EXISTS transaction_versions_payee_idx
   ON transaction_versions (payee_id)
   WHERE payee_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS transaction_versions_needs_review_idx
+  ON transaction_versions (book_id, transaction_date DESC, id DESC)
+  WHERE needs_review = 1;
 
 CREATE VIEW IF NOT EXISTS current_transaction_versions AS
 SELECT tv.*
@@ -1832,7 +1837,7 @@ CREATE TRIGGER fx_work_after_posting_version_insert
 AFTER INSERT ON posting_versions
 WHEN EXISTS (
   SELECT 1 FROM transaction_versions tv
-  WHERE tv.id = NEW.transaction_version_id AND tv.status IN ('draft', 'posted')
+  WHERE tv.id = NEW.transaction_version_id AND tv.status = 'posted'
 )
   AND EXISTS (SELECT 1 FROM commodities c WHERE c.id = NEW.commodity_id AND c.kind = 'currency')
   AND NEW.commodity_id != COALESCE(

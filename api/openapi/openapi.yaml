@@ -107,6 +107,8 @@ paths:
     $ref: "./paths/transaction-void.yaml"
   /api/v1/transactions/{transaction_id}/correct:
     $ref: "./paths/transaction-correct.yaml"
+  /api/v1/transactions/{transaction_id}/approve:
+    $ref: "./paths/transaction-approve.yaml"
   /api/v1/reconciliations/{reconciliation_id}:
     $ref: "./paths/reconciliation.yaml"
   /api/v1/reconciliations/{reconciliation_id}/preview:
@@ -304,6 +306,8 @@ components:
       $ref: "./components/schemas/payees.yaml#/PayeeLifecycleRequest"
     TransactionStatus:
       $ref: "./components/schemas/transactions.yaml#/TransactionStatus"
+    TransactionNeedsReview:
+      $ref: "./components/schemas/transactions.yaml#/TransactionNeedsReview"
     TransactionKind:
       $ref: "./components/schemas/transactions.yaml#/TransactionKind"
     JournalEntryKind:

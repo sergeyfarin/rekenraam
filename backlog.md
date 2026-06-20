@@ -336,6 +336,40 @@ client and the hand-written `ledger.ts` type were updated accordingly.
 
 ---
 
+### B-21 FX background work triggered prematurely for draft transactions  `[x]`
+**File:** `backend/migrations/0001_initial_schema.sql` — trigger `fx_work_after_posting_version_insert`
+
+The trigger's `WHEN` condition included `tv.status IN ('draft', 'posted')`, so saving a
+draft transaction with a foreign-currency posting would enqueue an FX coverage work item
+before the transaction was complete. This is wasteful (drafts may be discarded) and
+conceptually wrong (a draft is not a committed economic event).
+
+**Fix applied:** Changed the condition to `tv.status = 'posted'` only. FX coverage work
+is now only enqueued when the posting belongs to a fully posted transaction.
+
+---
+
+### B-22 Transaction status model — `needs_review` flag for import workflow  `[x]`
+**Files:** `backend/migrations/0001_initial_schema.sql`, `backend/internal/db/transactions.go`,
+`backend/internal/app/transactions.go`, `backend/internal/api/transactions.go`,
+`api/openapi/`, `frontend/src/lib/api/transactions.ts`
+
+**Design decision:** The two existing axes (`TransactionStatus` × `PostingReconciliationStatus`)
+are correct for double-entry semantics. The only genuine gap was the bank-import review
+workflow: imported transactions are structurally `posted` but not yet reviewed by the user,
+and there was no way to distinguish them from manually-entered ones.
+
+**Fix applied:** Added `needs_review BOOLEAN NOT NULL DEFAULT FALSE` to `transaction_versions`.
+- All create/update API inputs accept `needs_review: true` (import pipeline sets it).
+- New endpoint `POST /api/v1/transactions/{id}/approve` clears the flag by inserting a new
+  version with `needs_review = false` (idempotent — no-op if already false).
+- List endpoint gains `needs_review=true` filter for a "to-review" queue.
+- Added partial index `transaction_versions_needs_review_idx` for efficient queue queries.
+- `TransactionNeedsReview` schema type added to OpenAPI spec; `TransactionResponse` and
+  `AccountRegisterEntryResponse` include `needs_review` as a required field.
+- Frontend `approveTransaction()` function and `needsReview` list filter added to
+  `frontend/src/lib/api/transactions.ts`.
+
 ### B-20 `Dividend` and `ReinvestedDividend` lack a shared input validation helper  `[x]`
 **File:** `backend/internal/app/investments.go:847` (`Dividend`), `923` (`ReinvestedDividend`)
 

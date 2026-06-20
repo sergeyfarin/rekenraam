@@ -4575,6 +4575,7 @@ export interface paths {
                     q?: string;
                     status?: components["schemas"]["TransactionStatus"];
                     kind?: components["schemas"]["TransactionKind"];
+                    needs_review?: boolean;
                     after_date?: string;
                     before_date?: string;
                     limit?: number;
@@ -5063,6 +5064,68 @@ export interface paths {
                     };
                 };
                 /** @description Corrected transaction not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/{transaction_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a transaction as reviewed (clear needs_review flag) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: components["parameters"]["TransactionID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TransactionLifecycleRequest"];
+                };
+            };
+            responses: {
+                /** @description Transaction approved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransactionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transaction not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -6763,6 +6826,8 @@ export interface components {
         };
         /** @enum {string} */
         TransactionStatus: "draft" | "posted" | "voided";
+        /** @description True when the transaction came from an import or external source and has not yet been reviewed by the user. Always false for manually entered transactions. */
+        TransactionNeedsReview: boolean;
         /** @enum {string} */
         TransactionKind: "ordinary" | "transfer" | "investment" | "opening_balance" | "adjustment";
         /** @enum {string} */
@@ -7113,6 +7178,7 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            needs_review: components["schemas"]["TransactionNeedsReview"];
             /** Format: int64 */
             version_id: number;
             /** Format: int64 */
@@ -7151,6 +7217,7 @@ export interface components {
             payee_name?: string;
             description: string;
             external_ref_hint?: string;
+            needs_review: components["schemas"]["TransactionNeedsReview"];
             /** Format: int64 */
             version_id: number;
             /** Format: int64 */
@@ -7226,6 +7293,7 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            needs_review?: components["schemas"]["TransactionNeedsReview"];
             tag_ids?: number[];
             journal_entries?: components["schemas"]["JournalEntryRequest"][];
             change_reason?: string;

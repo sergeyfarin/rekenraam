@@ -24,6 +24,7 @@ type transactionResponse struct {
 	ExternalRefHint           string                 `json:"external_ref_hint,omitempty"`
 	NoteMarkdown              string                 `json:"note_markdown"`
 	Metadata                  json.RawMessage        `json:"metadata"`
+	NeedsReview               bool                   `json:"needs_review"`
 	VersionID                 int64                  `json:"version_id"`
 	VersionSeq                int64                  `json:"version_seq"`
 	SupersedesVersionID       *int64                 `json:"supersedes_version_id,omitempty"`
@@ -82,6 +83,7 @@ type accountRegisterEntryResponse struct {
 	PayeeName                 string                  `json:"payee_name,omitempty"`
 	Description               string                  `json:"description"`
 	ExternalRefHint           string                  `json:"external_ref_hint,omitempty"`
+	NeedsReview               bool                    `json:"needs_review"`
 	VersionID                 int64                   `json:"version_id"`
 	VersionSeq                int64                   `json:"version_seq"`
 	SupersedesVersionID       *int64                  `json:"supersedes_version_id,omitempty"`
@@ -108,6 +110,7 @@ type transactionRequest struct {
 	ExternalRefHint        string                `json:"external_ref_hint"`
 	NoteMarkdown           string                `json:"note_markdown"`
 	Metadata               json.RawMessage       `json:"metadata"`
+	NeedsReview            bool                  `json:"needs_review"`
 	TagIDs                 []int64               `json:"tag_ids"`
 	JournalEntries         []journalEntryRequest `json:"journal_entries"`
 	ChangeReason           string                `json:"change_reason"`
@@ -374,6 +377,40 @@ func deleteDraftTransaction(logger *slog.Logger, authService *app.AuthService, t
 	}))
 }
 
+func approveTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readTransactionID(w, r)
+		if !ok {
+			return
+		}
+
+		var request voidTransactionRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
+		transaction, err := transactionService.ApproveTransaction(r.Context(), app.ApproveTransactionInput{
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "browser_api",
+			TransactionID: transactionID,
+			ChangeReason:  request.ChangeReason,
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "approve transaction", err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toTransactionResponse(transaction))
+	}))
+}
+
 func accountRegister(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
@@ -422,15 +459,16 @@ func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListT
 	}
 
 	return app.ListTransactionsInput{
-		AccountID:  accountID,
-		PayeeID:    payeeID,
-		Status:     query.Get("status"),
-		Kind:       query.Get("kind"),
-		Query:      query.Get("q"),
-		AfterDate:  query.Get("after_date"),
-		BeforeDate: query.Get("before_date"),
-		Limit:      limit,
-		Cursor:     query.Get("cursor"),
+		AccountID:   accountID,
+		PayeeID:     payeeID,
+		Status:      query.Get("status"),
+		Kind:        query.Get("kind"),
+		NeedsReview: query.Get("needs_review") == "true",
+		Query:       query.Get("q"),
+		AfterDate:   query.Get("after_date"),
+		BeforeDate:  query.Get("before_date"),
+		Limit:       limit,
+		Cursor:      query.Get("cursor"),
 	}, true
 }
 
@@ -528,6 +566,7 @@ func toTransactionInput(request transactionRequest) app.TransactionInput {
 		ExternalRefHint: request.ExternalRefHint,
 		NoteMarkdown:    request.NoteMarkdown,
 		MetadataJSON:    rawJSONText(request.Metadata),
+		NeedsReview:     request.NeedsReview,
 		TagIDs:          request.TagIDs,
 		JournalEntries:  entries,
 	}
@@ -587,6 +626,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		ExternalRefHint:           transaction.ExternalRefHint,
 		NoteMarkdown:              transaction.NoteMarkdown,
 		Metadata:                  json.RawMessage(transaction.MetadataJSON),
+		NeedsReview:               transaction.NeedsReview,
 		VersionID:                 transaction.VersionID,
 		VersionSeq:                transaction.VersionSeq,
 		SupersedesVersionID:       transaction.SupersedesVersionID,
@@ -621,6 +661,7 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 			PayeeName:                 entry.PayeeName,
 			Description:               entry.Description,
 			ExternalRefHint:           entry.ExternalRefHint,
+			NeedsReview:               entry.NeedsReview,
 			VersionID:                 entry.VersionID,
 			VersionSeq:                entry.VersionSeq,
 			SupersedesVersionID:       entry.SupersedesVersionID,

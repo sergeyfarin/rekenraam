@@ -14,6 +14,7 @@ export type TransactionListOptions = {
   q?: string;
   status?: 'draft' | 'posted' | 'voided';
   kind?: 'ordinary' | 'transfer' | 'investment' | 'opening_balance' | 'adjustment';
+  needsReview?: boolean;
   afterDate?: string;
   beforeDate?: string;
   limit?: number;
@@ -53,6 +54,7 @@ export async function getTransactions(options: TransactionListOptions = {}): Pro
           q: options.q || undefined,
           status: options.status,
           kind: options.kind,
+          needs_review: options.needsReview,
           after_date: options.afterDate,
           before_date: options.beforeDate,
           limit: options.limit,
@@ -191,6 +193,10 @@ export async function voidTransaction(transactionID: number, csrfToken: string, 
   return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/void', transactionID, csrfToken, input);
 }
 
+export async function approveTransaction(transactionID: number, csrfToken: string, input: TransactionLifecycleRequest = {}): Promise<TransactionResponse> {
+  return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/approve', transactionID, csrfToken, input);
+}
+
 export async function correctTransaction(transactionID: number, input: TransactionRequest, csrfToken: string): Promise<TransactionResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/transactions/{transaction_id}/correct', {
@@ -247,7 +253,7 @@ export async function deleteDraftTransaction(transactionID: number, csrfToken: s
 }
 
 async function transactionLifecycleMutation(
-  path: '/api/v1/transactions/{transaction_id}/post' | '/api/v1/transactions/{transaction_id}/void',
+  path: '/api/v1/transactions/{transaction_id}/post' | '/api/v1/transactions/{transaction_id}/void' | '/api/v1/transactions/{transaction_id}/approve',
   transactionID: number,
   csrfToken: string,
   input: TransactionLifecycleRequest

@@ -4,6 +4,9 @@ TransactionStatus:
     - draft
     - posted
     - voided
+TransactionNeedsReview:
+  type: boolean
+  description: True when the transaction came from an import or external source and has not yet been reviewed by the user. Always false for manually entered transactions.
 TransactionKind:
   type: string
   enum:
@@ -124,6 +127,7 @@ TransactionResponse:
     - description
     - note_markdown
     - metadata
+    - needs_review
     - version_id
     - version_seq
     - tag_ids
@@ -164,6 +168,8 @@ TransactionResponse:
     metadata:
       type: object
       additionalProperties: true
+    needs_review:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionNeedsReview"
     version_id:
       type: integer
       format: int64
@@ -218,6 +224,7 @@ AccountRegisterEntryResponse:
     - transaction_kind
     - transaction_date
     - description
+    - needs_review
     - version_id
     - version_seq
     - transaction_tag_ids
@@ -258,6 +265,8 @@ AccountRegisterEntryResponse:
       type: string
     external_ref_hint:
       type: string
+    needs_review:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionNeedsReview"
     version_id:
       type: integer
       format: int64
@@ -391,6 +400,8 @@ TransactionRequest:
     metadata:
       type: object
       additionalProperties: true
+    needs_review:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionNeedsReview"
     tag_ids:
       type: array
       items:
