@@ -137,9 +137,12 @@ func netWorth(logger *slog.Logger, authService *app.AuthService, transactionServ
 
 func writeLedgerServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
 	var validationErr app.ValidationError
+	var overflowErr app.LedgerOverflowError
 	switch {
 	case errors.As(err, &validationErr):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationErr.Message)
+	case errors.As(err, &overflowErr):
+		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", overflowErr.Error())
 	default:
 		logger.Error(operation, "error", err, "request_id", RequestIDFromContext(r.Context()))
 		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")

@@ -12,6 +12,17 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
+// LedgerOverflowError is returned when an accumulated balance exceeds the
+// maximum coefficient precision. This can happen for large crypto holdings
+// with many small postings at high scale.
+type LedgerOverflowError struct {
+	CommodityID int64
+}
+
+func (e LedgerOverflowError) Error() string {
+	return fmt.Sprintf("balance for commodity %d exceeds maximum precision; try reducing posting scale or splitting the account", e.CommodityID)
+}
+
 type BalanceQuantity struct {
 	CommodityID         int64
 	QuantityValue       exact.Coefficient
@@ -241,7 +252,7 @@ func (s *TransactionService) accountRegisterRunningBalances(ctx context.Context,
 		amount := running[posting.CommodityID]
 		value, err := amount.coefficient()
 		if err != nil {
-			return nil, err
+			return nil, LedgerOverflowError{CommodityID: posting.CommodityID}
 		}
 		byPostingID[posting.PostingID] = BalanceQuantity{
 			CommodityID:         posting.CommodityID,
@@ -368,7 +379,7 @@ func balanceMapToQuantities(balances map[int64]*scaledAmount, normalClass string
 	for commodityID, amount := range balances {
 		value, err := amount.coefficient()
 		if err != nil {
-			return nil, err
+			return nil, LedgerOverflowError{CommodityID: commodityID}
 		}
 		normalValue := value
 		if normalClass == "liability" || normalClass == "equity" || normalClass == "income" {

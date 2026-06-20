@@ -845,19 +845,7 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 }
 
 func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (Transaction, error) {
-	if input.OwnerUserID <= 0 {
-		return Transaction{}, ValidationError{Message: "owner user is required"}
-	}
-	if input.CashAccountID <= 0 {
-		return Transaction{}, ValidationError{Message: "cash account is required"}
-	}
-	if input.CashCommodityID <= 0 {
-		return Transaction{}, ValidationError{Message: "cash commodity is required"}
-	}
-	if input.AmountValue <= 0 {
-		return Transaction{}, ValidationError{Message: "dividend amount is required"}
-	}
-	date, err := cleanRequiredDate(input.TransactionDate, "transaction date")
+	date, err := validateDividendInput(input)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -933,10 +921,7 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 }
 
 func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input ReinvestedDividendInput) (InvestmentTradeResult, error) {
-	if input.OwnerUserID <= 0 {
-		return InvestmentTradeResult{}, ValidationError{Message: "owner user is required"}
-	}
-	date, err := cleanRequiredDate(input.TransactionDate, "transaction date")
+	date, err := validateReinvestedDividendInput(input)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1376,6 +1361,52 @@ func validateTradeInput(input InvestmentTradeInput) error {
 		return ValidationError{Message: "cash amount is required"}
 	}
 	return nil
+}
+
+func validateDividendInput(input DividendInput) (string, error) {
+	if input.OwnerUserID <= 0 {
+		return "", ValidationError{Message: "owner user is required"}
+	}
+	if input.CashAccountID <= 0 {
+		return "", ValidationError{Message: "cash account is required"}
+	}
+	if input.CashCommodityID <= 0 {
+		return "", ValidationError{Message: "cash commodity is required"}
+	}
+	if input.AmountValue <= 0 {
+		return "", ValidationError{Message: "dividend amount is required"}
+	}
+	date, err := cleanRequiredDate(input.TransactionDate, "transaction date")
+	if err != nil {
+		return "", err
+	}
+	return date, nil
+}
+
+func validateReinvestedDividendInput(input ReinvestedDividendInput) (string, error) {
+	if input.OwnerUserID <= 0 {
+		return "", ValidationError{Message: "owner user is required"}
+	}
+	if input.CommodityID <= 0 {
+		return "", ValidationError{Message: "commodity is required"}
+	}
+	if input.HoldingAccountID <= 0 {
+		return "", ValidationError{Message: "holding account is required"}
+	}
+	if input.CashCommodityID <= 0 {
+		return "", ValidationError{Message: "cash commodity is required"}
+	}
+	if input.QuantityValue.Sign() <= 0 {
+		return "", ValidationError{Message: "quantity is required"}
+	}
+	if input.AmountValue <= 0 {
+		return "", ValidationError{Message: "dividend amount is required"}
+	}
+	date, err := cleanRequiredDate(input.TransactionDate, "transaction date")
+	if err != nil {
+		return "", err
+	}
+	return date, nil
 }
 
 func toInvestmentInstrument(record db.InvestmentInstrumentRecord) InvestmentInstrument {
