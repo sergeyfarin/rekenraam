@@ -32,7 +32,7 @@ func (p *FrankfurterProvider) Name() string {
 }
 
 func (p *FrankfurterProvider) Capabilities() ProviderCapabilities {
-	return ProviderCapabilities{FXRates: true}
+	return ProviderCapabilities{FXRates: true, HistoricalFXRates: true}
 }
 
 func (p *FrankfurterProvider) FetchFXRates(ctx context.Context, request FXRateRequest) ([]FXRateObservation, error) {

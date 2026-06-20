@@ -156,6 +156,69 @@ func TestPricingRefreshRecordsFailureHealth(t *testing.T) {
 	assert.True(t, health[0].LastError.Valid)
 }
 
+func TestFXCoverageBackfillsHistoricalPublicationDatesIdempotently(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 91234, scale: 5},
+			"EUR/USD": {value: 109730, scale: 5},
+		},
+	}))
+	_, err := database.ExecContext(ctx, `
+		INSERT INTO accounts (id, book_id, created_at, created_by_user_id)
+		VALUES (3, 1, '2026-06-09T00:00:00Z', 1);
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, opened_on, name, account_class, account_kind,
+			default_commodity_id, allows_postings
+		) VALUES (
+			3, 1, '2026-06-09', '2026-06-09T00:00:00Z', 1,
+			'test historical account', 'active', '2026-06-09', 'Historical EUR cash',
+			'asset', 'cash', 2, 1
+		)
+	`)
+	require.NoError(t, err)
+
+	run, hasMore, err := service.runFXCoverage(ctx, 1, 2, "2026-06-09", "domain")
+	require.NoError(t, err)
+	assert.False(t, hasMore)
+	assert.Equal(t, "succeeded", run.Status)
+	assert.Equal(t, 8, run.ItemsTotal)
+
+	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 20)
+	require.NoError(t, err)
+	require.Len(t, prices, 4)
+	assert.Equal(t, "2026-06-12", prices[0].ValuationDate)
+	assert.Equal(t, "2026-06-09", prices[3].ValuationDate)
+
+	run, hasMore, err = service.runFXCoverage(ctx, 1, 2, "2026-06-09", "recovery")
+	require.NoError(t, err)
+	assert.False(t, hasMore)
+	assert.Equal(t, 0, run.ItemsTotal)
+}
+
+func TestBackgroundWorkExpiredLeaseCanBeReclaimed(t *testing.T) {
+	ctx := context.Background()
+	database, _ := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
+	repository := db.NewPricingRepository(database)
+	_, err := repository.EnqueueBackgroundWork(ctx, BookID, "test.work", `{}`, "2026-06-12T00:00:00Z")
+	require.NoError(t, err)
+
+	first, err := repository.ClaimBackgroundWork(ctx, "test.work", "worker-one", "2026-06-12T01:00:00Z", "2026-06-12T01:05:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, 1, first.Attempts)
+
+	_, err = repository.ClaimBackgroundWork(ctx, "test.work", "worker-two", "2026-06-12T01:04:00Z", "2026-06-12T01:09:00Z")
+	require.ErrorIs(t, err, db.ErrNotFound)
+
+	reclaimed, err := repository.ClaimBackgroundWork(ctx, "test.work", "worker-two", "2026-06-12T01:06:00Z", "2026-06-12T01:11:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, reclaimed.ID)
+	assert.Equal(t, 2, reclaimed.Attempts)
+	require.NoError(t, repository.CompleteBackgroundWork(ctx, reclaimed.ID, "worker-two", "2026-06-12T01:07:00Z"))
+}
+
 type fakeFXRate struct {
 	value       int64
 	scale       int
@@ -176,7 +239,7 @@ func (p fakeFXProvider) Name() string {
 }
 
 func (p fakeFXProvider) Capabilities() marketdata.ProviderCapabilities {
-	return marketdata.ProviderCapabilities{FXRates: true}
+	return marketdata.ProviderCapabilities{FXRates: true, HistoricalFXRates: true}
 }
 
 func (p fakeFXProvider) FetchFXRates(_ context.Context, request marketdata.FXRateRequest) ([]marketdata.FXRateObservation, error) {
@@ -188,7 +251,9 @@ func (p fakeFXProvider) FetchFXRates(_ context.Context, request marketdata.FXRat
 			continue
 		}
 		publishedAt := rate.publishedAt
-		if publishedAt == "" {
+		if request.Date != "" {
+			publishedAt = request.Date + "T00:00:00Z"
+		} else if publishedAt == "" {
 			publishedAt = "2026-06-12T00:00:00Z"
 		}
 		observations = append(observations, marketdata.FXRateObservation{

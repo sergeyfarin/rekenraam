@@ -29,6 +29,11 @@ type PricingCurrencyRecord struct {
 	Code string
 }
 
+type PricingCurrencyCoverageRecord struct {
+	CommodityID int64
+	StartDate   string
+}
+
 type PriceSeriesRecord struct {
 	ID               int64
 	BookID           int64
@@ -259,6 +264,60 @@ type PricingRefreshStateSpec struct {
 
 func NewPricingRepository(database *sql.DB) *PricingRepository {
 	return &PricingRepository{database: database}
+}
+
+func (r *PricingRepository) FXCoverageStartDates(ctx context.Context, bookID int64) ([]PricingCurrencyCoverageRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		WITH required_dates AS (
+			SELECT av.default_commodity_id AS commodity_id, av.opened_on AS required_date
+			FROM current_account_versions av
+			JOIN accounts a ON a.id = av.account_id
+			JOIN commodities c ON c.id = av.default_commodity_id
+			WHERE a.book_id = ? AND av.status = 'active' AND c.kind = 'currency'
+			UNION ALL
+			SELECT pv.commodity_id, je.entry_date
+			FROM current_transaction_versions tv
+			JOIN journal_entries je ON je.transaction_version_id = tv.id
+			JOIN posting_versions pv ON pv.journal_entry_id = je.id
+			JOIN commodities c ON c.id = pv.commodity_id
+			WHERE tv.book_id = ? AND tv.status IN ('draft', 'posted') AND c.kind = 'currency'
+		)
+		SELECT commodity_id, MIN(required_date)
+		FROM required_dates
+		GROUP BY commodity_id
+		ORDER BY commodity_id
+	`, bookID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list FX coverage start dates: %w", err)
+	}
+	defer rows.Close()
+	var records []PricingCurrencyCoverageRecord
+	for rows.Next() {
+		var record PricingCurrencyCoverageRecord
+		if err := rows.Scan(&record.CommodityID, &record.StartDate); err != nil {
+			return nil, fmt.Errorf("scan FX coverage start date: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate FX coverage start dates: %w", err)
+	}
+	return records, nil
+}
+
+func (r *PricingRepository) PriceObservationExistsOnDate(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, valuationDate string) (bool, error) {
+	var exists int
+	err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM price_observations
+			WHERE book_id = ? AND base_commodity_id = ? AND quote_commodity_id = ?
+			  AND valuation_date = ? AND voided_at IS NULL
+		)
+	`, bookID, baseCommodityID, quoteCommodityID, valuationDate).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check FX observation date: %w", err)
+	}
+	return exists == 1, nil
 }
 
 func (r *PricingRepository) ListSources(ctx context.Context) ([]MarketDataSourceRecord, error) {

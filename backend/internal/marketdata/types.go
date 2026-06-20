@@ -16,7 +16,8 @@ var (
 )
 
 type ProviderCapabilities struct {
-	FXRates bool
+	FXRates           bool
+	HistoricalFXRates bool
 }
 
 type Provider interface {

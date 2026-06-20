@@ -156,6 +156,11 @@ not make the draft part of ledger balances or reports. Import previews use
 dedicated import staging rather than transaction drafts; only committed import rows
 become transactions and trigger that preparation.
 
+Whether manually entered work should default directly to `posted`, or remain a
+draft that reports can optionally include, is still a product decision to review.
+FX preparation deliberately does not depend on that choice: entered manual work
+can request rates without deciding its ledger/reporting status.
+
 Physical delete is allowed only when a transaction has no posted or voided
 versions. Provide a `DELETE /api/v1/transactions/{transaction_id}` or
 `POST /api/v1/transactions/{transaction_id}/discard-draft` endpoint for

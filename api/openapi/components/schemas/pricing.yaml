@@ -389,6 +389,8 @@ PricingRefreshRunResponse:
       enum:
         - manual
         - scheduled
+        - domain
+        - recovery
         - import
     status:
       type: string

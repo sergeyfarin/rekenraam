@@ -31,7 +31,7 @@ func (p *ECBReferenceRatesProvider) Name() string {
 }
 
 func (p *ECBReferenceRatesProvider) Capabilities() ProviderCapabilities {
-	return ProviderCapabilities{FXRates: true}
+	return ProviderCapabilities{FXRates: true, HistoricalFXRates: true}
 }
 
 func (p *ECBReferenceRatesProvider) FetchFXRates(ctx context.Context, request FXRateRequest) ([]FXRateObservation, error) {

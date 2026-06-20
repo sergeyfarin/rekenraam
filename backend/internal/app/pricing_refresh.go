@@ -87,7 +87,7 @@ func (s *PricingService) runFXRefresh(ctx context.Context, ownerUserID int64, so
 
 	for _, target := range targets {
 		counters.Total++
-		outcome, err := s.refreshFXTarget(ctx, ownerUserID, target, policy, sourceID, startedAt)
+		outcome, err := s.refreshFXTarget(ctx, ownerUserID, target, policy, sourceID, "", startedAt)
 		if err != nil {
 			counters.Failed++
 			counters.LastError = err.Error()
@@ -223,19 +223,19 @@ func (s *PricingService) fxRefreshTargets(ctx context.Context, policy PricingPol
 	return targets, nil
 }
 
-func (s *PricingService) refreshFXTarget(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, now time.Time) (fxRefreshOutcome, error) {
-	if outcome, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, target, policy, overrideSourceID, now); err == nil {
+func (s *PricingService) refreshFXTarget(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) (fxRefreshOutcome, error) {
+	if outcome, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, target, policy, overrideSourceID, valuationDate, now); err == nil {
 		return outcome, nil
 	}
 
 	if policy.TriangulationMaxHops <= 0 {
 		return fxRefreshOutcome{}, fmt.Errorf("FX rate %s/%s is unavailable", target.Base.Code, target.Quote.Code)
 	}
-	return s.fetchAndStoreDerivedFX(ctx, ownerUserID, target, policy, overrideSourceID, now)
+	return s.fetchAndStoreDerivedFX(ctx, ownerUserID, target, policy, overrideSourceID, valuationDate, now)
 }
 
-func (s *PricingService) fetchAndStoreDirectFX(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, now time.Time) (fxRefreshOutcome, error) {
-	sources, err := s.sourcesForFXPair(ctx, target, policy, overrideSourceID)
+func (s *PricingService) fetchAndStoreDirectFX(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) (fxRefreshOutcome, error) {
+	sources, err := s.sourcesForFXPair(ctx, target, policy, overrideSourceID, valuationDate)
 	if err != nil {
 		return fxRefreshOutcome{}, err
 	}
@@ -247,9 +247,13 @@ func (s *PricingService) fetchAndStoreDirectFX(ctx context.Context, ownerUserID 
 			lastErr = fmt.Errorf("market data provider is unavailable: %s", source.ProviderKey)
 			continue
 		}
+		if valuationDate != "" && !provider.Capabilities().HistoricalFXRates {
+			continue
+		}
 		observations, err := provider.FetchFXRates(ctx, marketdata.FXRateRequest{
 			BaseCode:   target.Base.Code,
 			QuoteCodes: []string{target.Quote.Code},
+			Date:       valuationDate,
 		})
 		if err != nil {
 			if errors.Is(err, marketdata.ErrUnsupportedPair) || errors.Is(err, marketdata.ErrMissingSecret) {
@@ -277,7 +281,7 @@ func (s *PricingService) fetchAndStoreDirectFX(ctx context.Context, ownerUserID 
 	return fxRefreshOutcome{}, lastErr
 }
 
-func (s *PricingService) fetchAndStoreDerivedFX(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, now time.Time) (fxRefreshOutcome, error) {
+func (s *PricingService) fetchAndStoreDerivedFX(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) (fxRefreshOutcome, error) {
 	currencies, err := s.repository.ActiveAccountCurrencies(ctx, BookID)
 	if err != nil {
 		return fxRefreshOutcome{}, err
@@ -295,12 +299,12 @@ func (s *PricingService) fetchAndStoreDerivedFX(ctx context.Context, ownerUserID
 		}
 		seen[via.ID] = true
 
-		first, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, fxRefreshTarget{Base: target.Base, Quote: via}, policy, overrideSourceID, now)
+		first, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, fxRefreshTarget{Base: target.Base, Quote: via}, policy, overrideSourceID, valuationDate, now)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		second, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, fxRefreshTarget{Base: via, Quote: target.Quote}, policy, overrideSourceID, now)
+		second, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, fxRefreshTarget{Base: via, Quote: target.Quote}, policy, overrideSourceID, valuationDate, now)
 		if err != nil {
 			lastErr = err
 			continue
@@ -319,12 +323,15 @@ func (s *PricingService) fetchAndStoreDerivedFX(ctx context.Context, ownerUserID
 	return fxRefreshOutcome{}, lastErr
 }
 
-func (s *PricingService) sourcesForFXPair(ctx context.Context, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64) ([]fxRefreshSource, error) {
+func (s *PricingService) sourcesForFXPair(ctx context.Context, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string) ([]fxRefreshSource, error) {
 	sourceIDs := []int64{}
 	if overrideSourceID > 0 {
 		sourceIDs = append(sourceIDs, overrideSourceID)
 	} else {
-		date := s.now().UTC().Format(time.DateOnly)
+		date := valuationDate
+		if date == "" {
+			date = s.now().UTC().Format(time.DateOnly)
+		}
 		if assignment, err := s.repository.SourceAssignmentForPair(ctx, BookID, target.Base.ID, target.Quote.ID, date); err == nil {
 			sourceIDs = append(sourceIDs, assignment.SourceID)
 		} else if !errors.Is(err, db.ErrNotFound) {

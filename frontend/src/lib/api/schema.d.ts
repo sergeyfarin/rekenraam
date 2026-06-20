@@ -7006,7 +7006,7 @@ export interface components {
             /** Format: int64 */
             source_id: number;
             /** @enum {string} */
-            trigger: "manual" | "scheduled" | "import";
+            trigger: "manual" | "scheduled" | "domain" | "recovery" | "import";
             /** @enum {string} */
             status: "running" | "succeeded" | "failed" | "partial";
             /** Format: date-time */

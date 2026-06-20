@@ -411,6 +411,11 @@ func (s *PricingService) RunRefresh(ctx context.Context, ownerUserID int64, sour
 	if trigger != "manual" && trigger != "scheduled" && trigger != "import" {
 		return PricingRefreshRun{}, ValidationError{Message: "refresh trigger is invalid"}
 	}
+	now := s.now().UTC().Format(time.RFC3339)
+	payload := fmt.Sprintf(`{"reason":%q,"start_date":""}`, trigger)
+	if _, err := s.repository.EnqueueBackgroundWork(ctx, BookID, "pricing.fx_coverage", payload, now); err != nil {
+		return PricingRefreshRun{}, fmt.Errorf("enqueue pricing refresh: %w", err)
+	}
 	return s.runFXRefresh(ctx, ownerUserID, sourceID, trigger)
 }
 

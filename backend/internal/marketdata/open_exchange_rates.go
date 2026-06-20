@@ -35,7 +35,7 @@ func (p *OpenExchangeRatesProvider) Name() string {
 }
 
 func (p *OpenExchangeRatesProvider) Capabilities() ProviderCapabilities {
-	return ProviderCapabilities{FXRates: true}
+	return ProviderCapabilities{FXRates: true, HistoricalFXRates: true}
 }
 
 func (p *OpenExchangeRatesProvider) FetchFXRates(ctx context.Context, request FXRateRequest) ([]FXRateObservation, error) {
