@@ -679,7 +679,7 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transaction, err := s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+	transactionParams, err := s.transactionService.prepareCreateTransaction(ctx, CreateTransactionInput{
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
@@ -709,30 +709,30 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 		return InvestmentTradeResult{}, err
 	}
 	now := s.now().UTC().Format(time.RFC3339)
-	lot, err := s.repository.CreateLot(ctx, db.CreateInvestmentLotParams{
-		BookID:              BookID,
-		AccountID:           input.HoldingAccountID,
-		CommodityID:         input.CommodityID,
-		OpenedOn:            input.TransactionDate,
-		SourceTransactionID: transaction.ID,
-		QuantityValue:       input.QuantityValue,
-		QuantityScale:       input.QuantityScale,
-		CostBasisValue:      input.CashAmountValue,
-		CostBasisScale:      input.CashAmountScale,
-		CostCommodityID:     input.CashCommodityID,
-		MetadataJSON:        "{}",
-		CreatedAt:           now,
-		CreatedByUserID:     input.OwnerUserID,
-		AuthSessionID:       input.AuthSessionID,
-		RequestID:           input.RequestID,
-		OriginType:          "browser_api",
-		Operation:           "investment.lot.create",
-		ChangeReason:        "created lot from buy transaction",
-		EventKind:           "acquisition",
+	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, db.CreateInvestmentLotParams{
+		BookID:          BookID,
+		AccountID:       input.HoldingAccountID,
+		CommodityID:     input.CommodityID,
+		OpenedOn:        input.TransactionDate,
+		QuantityValue:   input.QuantityValue,
+		QuantityScale:   input.QuantityScale,
+		CostBasisValue:  input.CashAmountValue,
+		CostBasisScale:  input.CashAmountScale,
+		CostCommodityID: input.CashCommodityID,
+		MetadataJSON:    "{}",
+		CreatedAt:       now,
+		CreatedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.create",
+		ChangeReason:    "created lot from buy transaction",
+		EventKind:       "acquisition",
 	})
 	if err != nil {
-		return InvestmentTradeResult{}, fmt.Errorf("create buy lot: %w", err)
+		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
 	}
+	transaction := toTransaction(transactionRecord)
 	if s.pricingService != nil {
 		_ = s.pricingService.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
 			OwnerUserID:      input.OwnerUserID,
@@ -770,7 +770,7 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transaction, err := s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+	transactionParams, err := s.transactionService.prepareCreateTransaction(ctx, CreateTransactionInput{
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
@@ -803,11 +803,10 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	for _, allocation := range input.LotAllocations {
 		allocations = append(allocations, db.LotAllocation{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
 	}
-	disposals, err := s.repository.DisposeLots(ctx, db.DisposeLotsParams{
+	transactionRecord, disposals, err := s.repository.CreateTransactionAndDisposeLots(ctx, transactionParams, db.DisposeLotsParams{
 		BookID:        BookID,
 		AccountID:     input.HoldingAccountID,
 		CommodityID:   input.CommodityID,
-		TransactionID: transaction.ID,
 		EventDate:     input.TransactionDate,
 		QuantityValue: input.QuantityValue,
 		QuantityScale: input.QuantityScale,
@@ -826,6 +825,7 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 		}
 		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
 	}
+	transaction := toTransaction(transactionRecord)
 	if s.pricingService != nil {
 		_ = s.pricingService.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
 			OwnerUserID:      input.OwnerUserID,
@@ -954,7 +954,7 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transaction, err := s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+	transactionParams, err := s.transactionService.prepareCreateTransaction(ctx, CreateTransactionInput{
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
@@ -983,30 +983,30 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
-	lot, err := s.repository.CreateLot(ctx, db.CreateInvestmentLotParams{
-		BookID:              BookID,
-		AccountID:           input.HoldingAccountID,
-		CommodityID:         input.CommodityID,
-		OpenedOn:            date,
-		SourceTransactionID: transaction.ID,
-		QuantityValue:       input.QuantityValue,
-		QuantityScale:       input.QuantityScale,
-		CostBasisValue:      input.AmountValue,
-		CostBasisScale:      input.AmountScale,
-		CostCommodityID:     input.CashCommodityID,
-		MetadataJSON:        `{"source":"reinvested_dividend"}`,
-		CreatedAt:           s.now().UTC().Format(time.RFC3339),
-		CreatedByUserID:     input.OwnerUserID,
-		AuthSessionID:       input.AuthSessionID,
-		RequestID:           input.RequestID,
-		OriginType:          "browser_api",
-		Operation:           "investment.lot.create",
-		ChangeReason:        "created lot from reinvested dividend",
-		EventKind:           "reinvested_dividend",
+	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, db.CreateInvestmentLotParams{
+		BookID:          BookID,
+		AccountID:       input.HoldingAccountID,
+		CommodityID:     input.CommodityID,
+		OpenedOn:        date,
+		QuantityValue:   input.QuantityValue,
+		QuantityScale:   input.QuantityScale,
+		CostBasisValue:  input.AmountValue,
+		CostBasisScale:  input.AmountScale,
+		CostCommodityID: input.CashCommodityID,
+		MetadataJSON:    `{"source":"reinvested_dividend"}`,
+		CreatedAt:       s.now().UTC().Format(time.RFC3339),
+		CreatedByUserID: input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.create",
+		ChangeReason:    "created lot from reinvested dividend",
+		EventKind:       "reinvested_dividend",
 	})
 	if err != nil {
-		return InvestmentTradeResult{}, fmt.Errorf("create reinvested dividend lot: %w", err)
+		return InvestmentTradeResult{}, fmt.Errorf("create reinvested dividend transaction and lot: %w", mapTransactionDBError(err))
 	}
+	transaction := toTransaction(transactionRecord)
 	if s.pricingService != nil {
 		_ = s.pricingService.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
 			OwnerUserID:      input.OwnerUserID,
@@ -1620,39 +1620,28 @@ func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coeff
 	if denominator.Sign() == 0 {
 		return 0, fmt.Errorf("division by zero")
 	}
-	// Compute result = (numerator * 10^exponent) / denominator with half-up rounding.
-	//
-	// Rounding strategy: multiply the scaled numerator by 2, divide by the
-	// denominator, then add 1 and halve. This is equivalent to
-	//   round(n/d) = floor((2n + d) / (2d))   for positive values,
-	// generalised to signed arithmetic by rounding away from zero.
+	// Compute result = (numerator * 10^exponent) / denominator. When the
+	// exponent is negative, scale the denominator instead of truncating the
+	// numerator so all information remains available at the rounding boundary.
 	exponent := resultScale + denominatorScale - numeratorScale
 	n := new(big.Int).SetInt64(numerator)
+	d := denominator.BigInt()
 	if exponent >= 0 {
 		n.Mul(n, pow10(exponent))
 	} else {
-		// exponent is negative only when numeratorScale greatly exceeds the others;
-		// truncating here loses sub-ULP precision but is unavoidable.
-		n.Quo(n, pow10(-exponent))
+		d.Mul(d, pow10(-exponent))
 	}
-	den := denominator.BigInt()
 
-	// Scale both up by 2 so that the remainder tells us whether to round.
-	n2 := new(big.Int).Mul(n, big.NewInt(2))
-	den2 := new(big.Int).Mul(den, big.NewInt(2))
+	sign := n.Sign() * d.Sign()
+	absN := new(big.Int).Abs(n)
+	absD := new(big.Int).Abs(d)
 	q, r := new(big.Int), new(big.Int)
-	q.QuoRem(n2, den2, r) // q = trunc(2n / 2d) = trunc(n/d)
-
-	// r is the remainder of 2n / 2d. If |r| * 2 / 2 >= d/2, i.e. |r| >= d, we
-	// round away from zero. Equivalently: check if |2n mod 2d| >= d.
-	absR := new(big.Int).Abs(r)
-	absDen := new(big.Int).Abs(den)
-	if absR.Cmp(absDen) >= 0 {
-		if q.Sign() >= 0 {
-			q.Add(q, big.NewInt(1))
-		} else {
-			q.Sub(q, big.NewInt(1))
-		}
+	q.QuoRem(absN, absD, r)
+	if new(big.Int).Lsh(r, 1).Cmp(absD) >= 0 {
+		q.Add(q, big.NewInt(1))
+	}
+	if sign < 0 {
+		q.Neg(q)
 	}
 
 	if !q.IsInt64() {

@@ -795,6 +795,18 @@ func (r *InvestmentRepository) CreateLot(ctx context.Context, params CreateInves
 			rollbackTx(ctx, tx)
 		}
 	}()
+	record, err := createLotTx(ctx, tx, params)
+	if err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return InvestmentLotRecord{}, fmt.Errorf("commit create investment lot: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+func createLotTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams) (InvestmentLotRecord, error) {
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.CreatedByUserID,
@@ -808,6 +820,10 @@ func (r *InvestmentRepository) CreateLot(ctx context.Context, params CreateInves
 	if err != nil {
 		return InvestmentLotRecord{}, err
 	}
+	return createLotWithAuditTx(ctx, tx, params, auditEventID)
+}
+
+func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64) (InvestmentLotRecord, error) {
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lots (
 			book_id, account_id, commodity_id, opened_on, source_transaction_id, status,
@@ -838,10 +854,6 @@ func (r *InvestmentRepository) CreateLot(ctx context.Context, params CreateInves
 	if err != nil {
 		return InvestmentLotRecord{}, err
 	}
-	if err := tx.Commit(); err != nil {
-		return InvestmentLotRecord{}, fmt.Errorf("commit create investment lot: %w", err)
-	}
-	committed = true
 	return record, nil
 }
 
@@ -856,6 +868,18 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 			rollbackTx(ctx, tx)
 		}
 	}()
+	disposals, err := disposeLotsTx(ctx, tx, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit dispose lots: %w", err)
+	}
+	committed = true
+	return disposals, nil
+}
+
+func disposeLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) ([]LotDisposalRecord, error) {
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ActorUserID,
@@ -869,6 +893,10 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 	if err != nil {
 		return nil, err
 	}
+	return disposeLotsWithAuditTx(ctx, tx, params, auditEventID)
+}
+
+func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64) ([]LotDisposalRecord, error) {
 	disposals := make([]LotDisposalRecord, 0)
 	if len(params.Allocations) > 0 {
 		for _, allocation := range params.Allocations {
@@ -929,11 +957,63 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 			return nil, ErrInsufficientLots
 		}
 	}
+	return disposals, nil
+}
+
+func (r *InvestmentRepository) CreateTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) (TransactionRecord, InvestmentLotRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("begin create investment transaction and lot: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, transactionParams)
+	if err != nil {
+		return TransactionRecord{}, InvestmentLotRecord{}, err
+	}
+	lotParams.SourceTransactionID = transaction.ID
+	lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, InvestmentLotRecord{}, err
+	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit dispose lots: %w", err)
+		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("commit create investment transaction and lot: %w", err)
 	}
 	committed = true
-	return disposals, nil
+	return transaction, lot, nil
+}
+
+func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (TransactionRecord, []LotDisposalRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return TransactionRecord{}, nil, fmt.Errorf("begin create investment transaction and dispose lots: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, transactionParams)
+	if err != nil {
+		return TransactionRecord{}, nil, err
+	}
+	disposalParams.TransactionID = transaction.ID
+	disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return TransactionRecord{}, nil, fmt.Errorf("commit create investment transaction and dispose lots: %w", err)
+	}
+	committed = true
+	return transaction, disposals, nil
 }
 
 func (r *InvestmentRepository) ListLots(ctx context.Context, bookID int64, accountID int64, commodityID int64) ([]InvestmentLotRecord, error) {

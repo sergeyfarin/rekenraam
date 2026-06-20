@@ -7128,7 +7128,7 @@ export interface components {
         };
         TransactionsResponse: {
             transactions: components["schemas"]["TransactionResponse"][];
-            next_cursor: string;
+            next_cursor: string | null;
         };
         AccountRegisterEntryResponse: {
             /** Format: int64 */
@@ -7177,7 +7177,7 @@ export interface components {
         };
         AccountRegisterResponse: {
             entries: components["schemas"]["AccountRegisterEntryResponse"][];
-            next_cursor: string;
+            next_cursor: string | null;
         };
         PostingRequest: {
             /** @description Server-generated line key from a previous response. Omit for new lines. */
@@ -7359,7 +7359,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

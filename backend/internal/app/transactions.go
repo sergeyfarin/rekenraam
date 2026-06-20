@@ -335,25 +335,39 @@ func (s *TransactionService) Transaction(ctx context.Context, transactionID int6
 }
 
 func (s *TransactionService) CreateTransaction(ctx context.Context, input CreateTransactionInput) (Transaction, error) {
+	params, err := s.prepareCreateTransaction(ctx, input)
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	record, err := s.repository.CreateTransaction(ctx, params)
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
 	if input.OwnerUserID <= 0 {
-		return Transaction{}, ValidationError{Message: "owner user is required"}
+		return db.CreateTransactionParams{}, ValidationError{Message: "owner user is required"}
 	}
 
 	now := s.now().UTC()
 	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: "posted"})
 	if err != nil {
-		return Transaction{}, err
+		return db.CreateTransactionParams{}, err
 	}
 	changeReason, err := cleanChangeReason(input.ChangeReason, "created transaction")
 	if err != nil {
-		return Transaction{}, err
+		return db.CreateTransactionParams{}, err
 	}
 	operation := strings.TrimSpace(input.Operation)
 	if operation == "" {
 		operation = "transaction.create"
 	}
 
-	record, err := s.repository.CreateTransaction(ctx, db.CreateTransactionParams{
+	return db.CreateTransactionParams{
 		BookID:                    BookID,
 		CorrectionOfTransactionID: nullableInt64(input.CorrectionOfTransactionID),
 		ActorUserID:               input.OwnerUserID,
@@ -364,12 +378,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 		Spec:                      spec,
 		CreatedAt:                 now.Format(time.RFC3339),
 		ChangeReason:              changeReason,
-	})
-	if err != nil {
-		return Transaction{}, mapTransactionDBError(err)
-	}
-
-	return toTransaction(record), nil
+	}, nil
 }
 
 func (s *TransactionService) UpdateTransaction(ctx context.Context, input UpdateTransactionInput) (Transaction, error) {

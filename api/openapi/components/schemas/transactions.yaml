@@ -206,7 +206,9 @@ TransactionsResponse:
       items:
         $ref: "../../openapi.yaml#/components/schemas/TransactionResponse"
     next_cursor:
-      type: string
+      type:
+        - string
+        - "null"
 AccountRegisterEntryResponse:
   type: object
   required:
@@ -307,7 +309,9 @@ AccountRegisterResponse:
       items:
         $ref: "../../openapi.yaml#/components/schemas/AccountRegisterEntryResponse"
     next_cursor:
-      type: string
+      type:
+        - string
+        - "null"
 PostingRequest:
   type: object
   required:

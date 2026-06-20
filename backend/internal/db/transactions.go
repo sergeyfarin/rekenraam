@@ -357,8 +357,27 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 		}
 	}()
 
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+	record, err := createTransactionTx(ctx, tx, params)
+	if err != nil {
 		return TransactionRecord{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return TransactionRecord{}, fmt.Errorf("commit create transaction: %w", err)
+	}
+	committed = true
+
+	return record, nil
+}
+
+func createTransactionTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (TransactionRecord, error) {
+	record, _, err := createTransactionWithAuditTx(ctx, tx, params)
+	return record, err
+}
+
+func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (TransactionRecord, int64, error) {
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TransactionRecord{}, 0, err
 	}
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -372,7 +391,7 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 		Reason:        params.ChangeReason,
 	})
 	if err != nil {
-		return TransactionRecord{}, err
+		return TransactionRecord{}, 0, err
 	}
 
 	result, err := tx.ExecContext(ctx, `
@@ -387,14 +406,15 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 		VALUES (?, ?, ?, ?, NULLIF(?, ''), ?)
 	`, params.BookID, nullableInt64Value(params.CorrectionOfTransactionID), params.CreatedAt, params.ActorUserID, params.RequestID, auditEventID)
 	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("insert transaction: %w", err)
+		return TransactionRecord{}, 0, fmt.Errorf("insert transaction: %w", err)
 	}
 	transactionID, err := result.LastInsertId()
 	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("read transaction id: %w", err)
+		return TransactionRecord{}, 0, fmt.Errorf("read transaction id: %w", err)
 	}
 
-	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+	repository := &TransactionRepository{}
+	record, err := repository.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 		BookID:             params.BookID,
 		TransactionID:      transactionID,
 		VersionSeq:         1,
@@ -407,15 +427,10 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 		RequestID:          params.RequestID,
 	})
 	if err != nil {
-		return TransactionRecord{}, err
+		return TransactionRecord{}, 0, err
 	}
 
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit create transaction: %w", err)
-	}
-	committed = true
-
-	return record, nil
+	return record, auditEventID, nil
 }
 
 func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params UpdateTransactionParams) (TransactionRecord, error) {

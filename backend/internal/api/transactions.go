@@ -63,12 +63,12 @@ type postingResponse struct {
 
 type transactionsResponse struct {
 	Transactions []transactionResponse `json:"transactions"`
-	NextCursor   string                `json:"next_cursor"`
+	NextCursor   *string               `json:"next_cursor"`
 }
 
 type accountRegisterResponse struct {
 	Entries    []accountRegisterEntryResponse `json:"entries"`
-	NextCursor string                         `json:"next_cursor"`
+	NextCursor *string                        `json:"next_cursor"`
 }
 
 type accountRegisterEntryResponse struct {
@@ -157,7 +157,7 @@ func listTransactions(logger *slog.Logger, authService *app.AuthService, transac
 
 		writeJSON(w, http.StatusOK, transactionsResponse{
 			Transactions: toTransactionResponses(result.Transactions),
-			NextCursor:   result.NextCursor,
+			NextCursor:   nullableCursor(result.NextCursor),
 		})
 	}
 }
@@ -396,7 +396,7 @@ func accountRegister(logger *slog.Logger, authService *app.AuthService, transact
 
 		writeJSON(w, http.StatusOK, accountRegisterResponse{
 			Entries:    toAccountRegisterEntryResponses(result.Entries),
-			NextCursor: result.NextCursor,
+			NextCursor: nullableCursor(result.NextCursor),
 		})
 	}
 }
@@ -432,6 +432,13 @@ func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListT
 		Limit:      limit,
 		Cursor:     query.Get("cursor"),
 	}, true
+}
+
+func nullableCursor(cursor string) *string {
+	if cursor == "" {
+		return nil
+	}
+	return &cursor
 }
 
 func parseOptionalPositiveInt64(w http.ResponseWriter, value string, field string) (int64, bool) {

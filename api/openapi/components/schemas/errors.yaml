@@ -15,6 +15,7 @@ ErrorBody:
         - CSRF_INVALID
         - RATE_LIMITED
         - RESOURCE_BUSY
+        - LEDGER_OVERFLOW
         - SETUP_REQUIRED
         - SETUP_ALREADY_COMPLETE
         - INTERNAL_ERROR

@@ -16,6 +16,7 @@
   "api_error_csrf_invalid": "Your session could not be verified. Refresh and try again.",
   "api_error_rate_limited": "Too many attempts were made. Wait a moment and try again.",
   "api_error_resource_busy": "That resource is busy right now. Try again in a moment.",
+  "api_error_ledger_overflow": "This balance is too large to represent safely. Reduce the posting scale or split the account.",
   "api_error_setup_required": "Finish setup before continuing.",
   "api_error_setup_already_complete": "Setup is already complete. Sign in with the owner account instead.",
   "api_error_internal_error": "Something went wrong on the server. Try again.",

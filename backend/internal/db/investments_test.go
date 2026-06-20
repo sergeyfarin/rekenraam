@@ -164,6 +164,47 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 	assert.Equal(t, int64(75000), lots[1].RemainingCostBasisValue)
 }
 
+func TestCreateTransactionAndDisposeLotsRollsBackTransactionOnInsufficientLots(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repository := NewInvestmentRepository(database)
+	before := countRows(t, database, "transactions")
+
+	_, _, err := repository.CreateTransactionAndDisposeLots(ctx, CreateTransactionParams{
+		BookID:      1,
+		ActorUserID: ownerID,
+		RequestID:   "atomic-sell",
+		OriginType:  "browser_api",
+		Operation:   "investment.sell",
+		Spec: TransactionSpec{
+			Status:          "posted",
+			TransactionKind: "investment",
+			TransactionDate: "2026-03-01",
+			Description:     "sell without lots",
+			MetadataJSON:    "{}",
+		},
+		CreatedAt:    "2026-03-01T09:00:00Z",
+		ChangeReason: "test atomic sell",
+	}, DisposeLotsParams{
+		BookID:        1,
+		AccountID:     accountID,
+		CommodityID:   instrument.CommodityID,
+		EventDate:     "2026-03-01",
+		QuantityValue: exact.New(1),
+		QuantityScale: 0,
+		CreatedAt:     "2026-03-01T09:00:00Z",
+		ActorUserID:   ownerID,
+		RequestID:     "atomic-sell",
+		OriginType:    "browser_api",
+		Operation:     "investment.lot.dispose",
+		ChangeReason:  "test atomic sell",
+	})
+	require.ErrorIs(t, err, ErrInsufficientLots)
+	assert.Equal(t, before, countRows(t, database, "transactions"))
+}
+
 func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)

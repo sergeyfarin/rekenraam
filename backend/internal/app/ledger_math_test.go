@@ -181,6 +181,18 @@ func TestScaledDivisionRoundsUp(t *testing.T) {
 	assert.Equal(t, int64(6667), price) // 0.6667, rounded half-up
 }
 
+func TestScaledDivisionRoundsAfterNegativeExponent(t *testing.T) {
+	price, err := scaledDivision(5000, 12, exact.New(1), 0, 8)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), price)
+}
+
+func TestScaledDivisionRoundsNegativeHalfAwayFromZero(t *testing.T) {
+	price, err := scaledDivision(-1, 0, exact.New(2), 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(-1), price)
+}
+
 func TestScaledDivisionDivisionByZero(t *testing.T) {
 	_, err := scaledDivision(100, 2, exact.New(0), 0, 8)
 	require.Error(t, err)
@@ -198,19 +210,10 @@ func TestScaledDivisionOverflow(t *testing.T) {
 }
 
 func TestScaledDivisionCryptoNumeratorScale(t *testing.T) {
-	// 50 of a token (scale 8 → coefficient 5_000_000_000) / 5 USD (scale 2)
-	// = 10 tokens/USD at scale 8
+	// 5 USD (scale 2) / 50 tokens (scale 8) = 0.1 USD/token.
 	price, err := scaledDivision(500, 2, exact.MustParse("5000000000"), 8, 8)
 	require.NoError(t, err)
-	// 500 * 10^(8+8-2+1) / 5_000_000_000 = 500 * 10^15 / 5e9 = 1e8; round / 10 = 1e7? Let's compute:
-	// exponent = 8 + 8 - 2 + 1 = 15; n = 500 * 10^15 = 5e17
-	// q = 5e17 / 5e9 = 1e8 (exact, no rounding needed); drop extra digit: 1e7
-	// price at scale 8 = 10_000_000 → 0.10000000 tokens per USD? Hmm, let's reconsider.
-	// Actually: 50 tokens at scale 8 means coefficient 5_000_000_000 represents 50.
-	// Price = numerator/denominator = (500 / 10^2) / (5_000_000_000 / 10^8) = 5 / 0.05 = 100
-	// At result scale 8: 10_000_000_000 (100.00000000)
-	_ = price // just assert no error and no panic for this scale combination
-	assert.NoError(t, err)
+	assert.Equal(t, int64(10_000_000), price)
 }
 
 // ---------------------------------------------------------------------------
