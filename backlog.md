@@ -60,7 +60,7 @@ guard to `align()`.
 
 ---
 
-### B-03 Crypto-scale precision accumulation: 38-digit limit hit at query time, not write time  `[ ]`
+### B-03 Crypto-scale precision accumulation: 38-digit limit hit at query time, not write time  `[x]`
 **File:** `backend/internal/app/ledger.go:482–484` (`coefficient()`)
 
 `scaledAmount` accumulates via `*big.Int` (unbounded). The 38-digit limit from
@@ -76,10 +76,11 @@ query. This means:
 **Impact:** users with large crypto balances (many small postings adding up to > 10^14
 tokens) will see the account balance page return 500 with no useful message.
 
-**Fix:** Either (a) enforce a maximum total-digits limit on individual postings so the
-sum can never overflow the budget, or (b) extend `MaxCoefficientDigits` for ledger
-aggregation only (it's already a constant), or (c) improve the error message so the
-user sees a comprehensible explanation. Option (c) is the minimum safe fix.
+**Fix applied (option c):** Added `LedgerOverflowError{CommodityID}` type in `ledger.go`.
+`balanceMapToQuantities` and the running-balance path in `accountRegisterRunningBalances`
+now wrap coefficient overflow errors with `LedgerOverflowError`, carrying the commodity ID.
+`writeLedgerServiceError` in `api/ledger.go` maps it to HTTP 422 `LEDGER_OVERFLOW` with
+a descriptive message ("balance for commodity N exceeds maximum precision…").
 
 ---
 
@@ -240,15 +241,13 @@ show a count of hidden results.
 
 ## Business Logic
 
-### B-13 `FinishReconciliation` does not assert difference is zero  `[ ]`
-**File:** `backend/internal/app/reconciliation.go:296–325`
+### B-13 `FinishReconciliation` does not assert difference is zero  `[x]`
+**File:** `backend/internal/db/reconciliation.go:360`
 
-`FinishReconciliationSession` is called without first asserting
-`session.Difference.QuantityValue == 0`. A race condition (two concurrent requests)
-or direct DB edit could finalise an unbalanced reconciliation.
-
-**Verify:** check whether the DB layer has a CHECK constraint or trigger that enforces
-this. If not, add the assertion in the service layer before calling the repository.
+The DB layer's `FinishReconciliationSession` already checks `session.DifferenceValue.Sign() != 0`
+inside the serialisable transaction after acquiring the book-level write lock (`readBookForUpdate`),
+returning `ErrReconciliationNotBalanced` if non-zero. This prevents both race conditions and
+direct DB edits from producing unbalanced reconciliations.
 
 ---
 
@@ -340,7 +339,7 @@ and `NetWorth` endpoints by default and require an explicit opt-in flag.
 
 ---
 
-### B-20 `Dividend` and `ReinvestedDividend` lack a shared input validation helper  `[ ]`
+### B-20 `Dividend` and `ReinvestedDividend` lack a shared input validation helper  `[x]`
 **File:** `backend/internal/app/investments.go:847` (`Dividend`), `923` (`ReinvestedDividend`)
 
 `Buy` and `Sell` centralise required-field checks in `validateTradeInput` (line 1347).
@@ -348,7 +347,12 @@ and `NetWorth` endpoints by default and require an explicit opt-in flag.
 helper. Adding a required field to `DividendInput` requires updating both functions
 independently, increasing the risk of divergence.
 
-**Fix:** extract a `validateDividendInput` helper analogous to `validateTradeInput`
-and call it from both `Dividend` and `ReinvestedDividend`.
+**Fix applied:** Extracted `validateDividendInput(DividendInput) (date string, error)` and
+`validateReinvestedDividendInput(ReinvestedDividendInput) (date string, error)` helpers
+(placed alongside `validateTradeInput`). Both return the cleaned date string to avoid
+re-parsing it in the caller. `Dividend` and `ReinvestedDividend` now call these at the top
+of each function. `validateReinvestedDividendInput` also adds explicit checks for
+`CommodityID`, `HoldingAccountID`, `CashCommodityID`, and `QuantityValue.Sign()` that
+were previously missing from `ReinvestedDividend`.
 
 ---

@@ -114,7 +114,14 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 
 	draft := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
 		"status":"draft",
-		"transaction_date":"2026-06-07"
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
 	}`, http.StatusCreated)
 	mutateTransactionNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/transactions/"+strconvFormatInt(draft.ID), http.StatusNoContent)
 	readTransactionForSession(t, handler, sessionCookie, draft.ID, http.StatusNotFound)
