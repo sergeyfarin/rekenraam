@@ -19,6 +19,7 @@ type transactionResponse struct {
 	Status                    string                 `json:"status"`
 	TransactionKind           string                 `json:"transaction_kind"`
 	TransactionDate           string                 `json:"transaction_date"`
+	TransactionDaySequence    int64                  `json:"transaction_day_sequence"`
 	PayeeID                   *int64                 `json:"payee_id,omitempty"`
 	PayeeName                 string                 `json:"payee_name,omitempty"`
 	Description               string                 `json:"description"`
@@ -54,6 +55,7 @@ type postingResponse struct {
 	LineKey              string            `json:"line_key"`
 	LineSeq              int64             `json:"line_seq"`
 	AccountID            int64             `json:"account_id"`
+	AccountDaySequence   int64             `json:"account_day_sequence"`
 	QuantityValue        exact.Coefficient `json:"quantity_value"`
 	QuantityScale        int               `json:"quantity_scale"`
 	CommodityID          int64             `json:"commodity_id"`
@@ -210,13 +212,14 @@ func createTransaction(logger *slog.Logger, authService *app.AuthService, transa
 		}
 
 		transaction, err := transactionService.CreateTransaction(r.Context(), app.CreateTransactionInput{
-			OwnerUserID:   owner.ID,
-			AuthSessionID: authenticatedSessionID(r),
-			RequestID:     RequestIDFromContext(r.Context()),
-			OriginType:    "browser_api",
-			Operation:     "transaction.create",
-			Spec:          toTransactionInput(request),
-			ChangeReason:  request.ChangeReason,
+			OwnerUserID:            owner.ID,
+			AuthSessionID:          authenticatedSessionID(r),
+			RequestID:              RequestIDFromContext(r.Context()),
+			OriginType:             "browser_api",
+			Operation:              "transaction.create",
+			Spec:                   toTransactionInput(request),
+			ChangeReason:           request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "create transaction", err)
@@ -490,6 +493,160 @@ func accountRegister(logger *slog.Logger, authService *app.AuthService, transact
 	}
 }
 
+type moveRequest struct {
+	Direction string `json:"direction"`
+}
+
+func moveTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readTransactionID(w, r)
+		if !ok {
+			return
+		}
+		var req moveRequest
+		if err := decodeJSONBody(r, &req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		transaction, err := transactionService.MoveTransaction(r.Context(), app.MoveTransactionInput{
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "browser_api",
+			TransactionID: transactionID,
+			Direction:     req.Direction,
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "move transaction", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toTransactionResponse(transaction))
+	}))
+}
+
+func movePosting(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		accountID, ok := readAccountID(w, r)
+		if !ok {
+			return
+		}
+		postingLineID, ok := readPostingLineIDParam(w, r)
+		if !ok {
+			return
+		}
+		var req moveRequest
+		if err := decodeJSONBody(r, &req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		transaction, err := transactionService.MovePosting(r.Context(), app.MovePostingInput{
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "browser_api",
+			AccountID:     accountID,
+			PostingLineID: postingLineID,
+			Direction:     req.Direction,
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "move posting", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toTransactionResponse(transaction))
+	}))
+}
+
+type reconciliationImpactResponse struct {
+	AffectedCheckpoints []checkpointImpactResponse `json:"affected_checkpoints"`
+}
+
+type checkpointImpactResponse struct {
+	AccountID   int64  `json:"account_id"`
+	CommodityID int64  `json:"commodity_id"`
+	EntryDate   string `json:"entry_date"`
+}
+
+func toReconciliationImpactResponse(impact app.ReconciliationImpact) reconciliationImpactResponse {
+	out := make([]checkpointImpactResponse, 0, len(impact.AffectedCheckpoints))
+	for _, ref := range impact.AffectedCheckpoints {
+		out = append(out, checkpointImpactResponse{
+			AccountID:   ref.AccountID,
+			CommodityID: ref.CommodityID,
+			EntryDate:   ref.EntryDate,
+		})
+	}
+	return reconciliationImpactResponse{AffectedCheckpoints: out}
+}
+
+func createReconciliationImpact(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request transactionRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		impact, err := transactionService.ReconciliationImpactForCreate(r.Context(), app.CreateReconciliationImpactInput{
+			OwnerUserID: owner.ID,
+			Spec:        toTransactionInput(request),
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func updateReconciliationImpact(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readTransactionID(w, r)
+		if !ok {
+			return
+		}
+		var request transactionRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		impact, err := transactionService.ReconciliationImpactForUpdate(r.Context(), app.UpdateReconciliationImpactInput{
+			OwnerUserID:   owner.ID,
+			TransactionID: transactionID,
+			Spec:          toTransactionInput(request),
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func readPostingLineIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.PathValue("posting_line_id")
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "posting line id is invalid")
+		return 0, false
+	}
+	return id, true
+}
+
 func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListTransactionsInput, bool) {
 	query := r.URL.Query()
 	accountID, ok := parseOptionalPositiveInt64(w, query.Get("account_id"), "account id")
@@ -642,6 +799,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 				LineKey:              posting.LineKey,
 				LineSeq:              posting.LineSeq,
 				AccountID:            posting.AccountID,
+				AccountDaySequence:   posting.AccountDaySequence,
 				QuantityValue:        posting.QuantityValue,
 				QuantityScale:        posting.QuantityScale,
 				CommodityID:          posting.CommodityID,
@@ -686,6 +844,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		Status:                    transaction.Status,
 		TransactionKind:           transaction.TransactionKind,
 		TransactionDate:           transaction.TransactionDate,
+		TransactionDaySequence:    transaction.TransactionDaySequence,
 		PayeeID:                   transaction.PayeeID,
 		PayeeName:                 transaction.PayeeName,
 		Description:               transaction.Description,
@@ -744,6 +903,7 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 				LineKey:              entry.Posting.LineKey,
 				LineSeq:              entry.Posting.LineSeq,
 				AccountID:            entry.Posting.AccountID,
+				AccountDaySequence:   entry.Posting.AccountDaySequence,
 				QuantityValue:        entry.Posting.QuantityValue,
 				QuantityScale:        entry.Posting.QuantityScale,
 				CommodityID:          entry.Posting.CommodityID,

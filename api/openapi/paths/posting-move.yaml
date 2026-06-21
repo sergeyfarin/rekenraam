@@ -1,0 +1,40 @@
+post:
+  summary: Move a posting earlier or later within its same-day account register sequence
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AccountID"
+    - name: posting_line_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/MoveRequest"
+  responses:
+    "200":
+      description: Posting moved; new versions written for affected transaction(s)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TransactionResponse"
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posting or adjacent posting not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

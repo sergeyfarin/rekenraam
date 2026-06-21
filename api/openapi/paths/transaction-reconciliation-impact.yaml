@@ -1,0 +1,25 @@
+post:
+  summary: Preview reconciliation impact of creating a new transaction
+  description: >
+    Returns the set of active reconciliation checkpoints that would be invalidated
+    if the submitted transaction were created. Does not persist anything.
+    Use to display a named warning before retrying with reconciliation_override=true.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/TransactionRequest"
+  responses:
+    "200":
+      description: Reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -81,6 +82,7 @@ type Transaction struct {
 	Status                    string
 	TransactionKind           string
 	TransactionDate           string
+	TransactionDaySequence    int64
 	PayeeID                   *int64
 	PayeeName                 string
 	Description               string
@@ -116,6 +118,7 @@ type Posting struct {
 	LineKey              string
 	LineSeq              int64
 	AccountID            int64
+	AccountDaySequence   int64
 	QuantityValue        exact.Coefficient
 	QuantityScale        int
 	CommodityID          int64
@@ -196,6 +199,7 @@ type CreateTransactionInput struct {
 	CorrectionOfTransactionID *int64
 	Spec                      TransactionInput
 	ChangeReason              string
+	ReconciliationOverride    bool
 }
 
 type UpdateTransactionInput struct {
@@ -309,7 +313,7 @@ func (s *TransactionService) ListTransactions(ctx context.Context, input ListTra
 	nextCursor := ""
 	if len(records) == params.Limit {
 		last := records[len(records)-1]
-		nextCursor = db.EncodeTransactionCursor(last.TransactionDate, last.ID)
+		nextCursor = db.EncodeTransactionCursor(last.TransactionDate, last.TransactionDaySequence, last.ID)
 	}
 
 	txns := toTransactions(records)
@@ -349,7 +353,7 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	nextCursor := ""
 	if len(records) == params.Limit {
 		last := records[len(records)-1]
-		nextCursor = db.EncodeTransactionCursor(last.JournalEntry.EntryDate, last.Posting.ID)
+		nextCursor = db.EncodeRegisterCursor(last.JournalEntry.EntryDate, last.Posting.AccountDaySequence, last.Posting.ID)
 	}
 
 	entries := toAccountRegisterEntries(records, runningBalances)
@@ -391,6 +395,18 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 	params, err := s.prepareCreateTransaction(ctx, input)
 	if err != nil {
 		return Transaction{}, err
+	}
+
+	refs, err := s.reconciliationInvalidationRefsFromSpec(ctx, params.Spec)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if len(refs) > 0 && !input.ReconciliationOverride {
+		return Transaction{}, ErrReconciliationOverrideRequired
+	}
+	if input.ReconciliationOverride {
+		params.InvalidateCheckpointRefs = refs
+		params.InvalidateCheckpointReason = params.ChangeReason
 	}
 
 	record, err := s.repository.CreateTransaction(ctx, params)
@@ -470,7 +486,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	} else if current.Status != "draft" {
 		spec.Status = "posted"
 	}
-	invalidationRefs, err := reconciliationInvalidationRefs(current, spec)
+	invalidationRefs, err := s.reconciliationInvalidationRefs(ctx, current, spec)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -562,7 +578,10 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 		}
 		return Transaction{}, fmt.Errorf("read transaction: %w", err)
 	}
-	invalidationRefs := reconciliationRefsFromRecord(current)
+	invalidationRefs, err := s.periodScopedRefsFromRecord(ctx, current)
+	if err != nil {
+		return Transaction{}, err
+	}
 	if len(invalidationRefs) > 0 && !input.ReconciliationOverride {
 		return Transaction{}, ErrReconciliationOverrideRequired
 	}
@@ -598,7 +617,10 @@ func (s *TransactionService) UnvoidTransaction(ctx context.Context, input Transa
 	if current.Status != "voided" {
 		return current, nil
 	}
-	refs := reconciliationRefsFromTransaction(current)
+	refs, err := s.periodScopedRefsFromTransaction(ctx, current)
+	if err != nil {
+		return Transaction{}, err
+	}
 	if len(refs) > 0 && !input.ReconciliationOverride {
 		return Transaction{}, ErrReconciliationOverrideRequired
 	}
@@ -633,7 +655,10 @@ func (s *TransactionService) setTransactionDeleted(ctx context.Context, input Tr
 	if deleted && current.Status == "draft" {
 		return Transaction{}, ErrTransactionPosted
 	}
-	refs := reconciliationRefsFromTransaction(current)
+	refs, err := s.periodScopedRefsFromTransaction(ctx, current)
+	if err != nil {
+		return Transaction{}, err
+	}
 	if deleted && len(refs) > 0 && !input.ReconciliationOverride {
 		return Transaction{}, ErrReconciliationOverrideRequired
 	}
@@ -723,6 +748,146 @@ func (s *TransactionService) ApproveTransaction(ctx context.Context, input Appro
 	return s.enrichOne(ctx, toTransaction(record))
 }
 
+type MoveTransactionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	TransactionID int64
+	Direction     string // "earlier" | "later"
+}
+
+func (s *TransactionService) MoveTransaction(ctx context.Context, input MoveTransactionInput) (Transaction, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, ValidationError{Message: "owner user is required"}
+	}
+	if input.TransactionID <= 0 {
+		return Transaction{}, ValidationError{Message: "transaction id is required"}
+	}
+	if input.Direction != "earlier" && input.Direction != "later" {
+		return Transaction{}, ValidationError{Message: "direction must be 'earlier' or 'later'"}
+	}
+	record, err := s.repository.MoveTransaction(ctx, db.MoveTransactionParams{
+		BookID:        BookID,
+		TransactionID: input.TransactionID,
+		Direction:     input.Direction,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		RecordedAt:    s.now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+	return s.enrichOne(ctx, toTransaction(record))
+}
+
+type MovePostingInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	AccountID     int64
+	PostingLineID int64
+	Direction     string // "earlier" | "later"
+}
+
+func (s *TransactionService) MovePosting(ctx context.Context, input MovePostingInput) (Transaction, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, ValidationError{Message: "owner user is required"}
+	}
+	if input.AccountID <= 0 {
+		return Transaction{}, ValidationError{Message: "account id is required"}
+	}
+	if input.PostingLineID <= 0 {
+		return Transaction{}, ValidationError{Message: "posting line id is required"}
+	}
+	if input.Direction != "earlier" && input.Direction != "later" {
+		return Transaction{}, ValidationError{Message: "direction must be 'earlier' or 'later'"}
+	}
+	record, err := s.repository.MovePosting(ctx, db.MovePostingParams{
+		BookID:        BookID,
+		AccountID:     input.AccountID,
+		PostingLineID: input.PostingLineID,
+		Direction:     input.Direction,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    input.OriginType,
+		RecordedAt:    s.now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+	return s.enrichOne(ctx, toTransaction(record))
+}
+
+type ReconciliationImpact struct {
+	// AffectedCheckpoints holds refs for each checkpoint that would be
+	// invalidated by this create or update.
+	AffectedCheckpoints []db.CheckpointInvalidationRef
+}
+
+type CreateReconciliationImpactInput struct {
+	OwnerUserID int64
+	Spec        TransactionInput
+}
+
+type UpdateReconciliationImpactInput struct {
+	OwnerUserID   int64
+	TransactionID int64
+	Spec          TransactionInput
+}
+
+// ReconciliationImpactForCreate returns the reconciliation impact of creating a
+// new transaction without actually persisting anything.
+func (s *TransactionService) ReconciliationImpactForCreate(ctx context.Context, input CreateReconciliationImpactInput) (ReconciliationImpact, error) {
+	if input.OwnerUserID <= 0 {
+		return ReconciliationImpact{}, ValidationError{Message: "owner user is required"}
+	}
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: "posted"})
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	refs, err := s.reconciliationInvalidationRefsFromSpec(ctx, spec)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
+}
+
+// ReconciliationImpactForUpdate returns the reconciliation impact of updating an
+// existing transaction without actually persisting anything.
+func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, input UpdateReconciliationImpactInput) (ReconciliationImpact, error) {
+	if input.OwnerUserID <= 0 {
+		return ReconciliationImpact{}, ValidationError{Message: "owner user is required"}
+	}
+	if input.TransactionID <= 0 {
+		return ReconciliationImpact{}, ValidationError{Message: "transaction id is required"}
+	}
+	current, err := s.repository.TransactionByID(ctx, BookID, input.TransactionID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ReconciliationImpact{}, ErrTransactionNotFound
+		}
+		return ReconciliationImpact{}, fmt.Errorf("read transaction: %w", err)
+	}
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{
+		DefaultStatus:    current.Status,
+		ExistingLineKeys: lineKeySet(current),
+		ExistingPostings: existingPostingStateSet(current),
+	})
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	refs, err := s.reconciliationInvalidationRefs(ctx, current, spec)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
+}
+
 func (s *TransactionService) listParams(ctx context.Context, input ListTransactionsInput, filterEntryDate bool) (db.ListTransactionsParams, error) {
 	status := strings.TrimSpace(input.Status)
 	if status != "" && !transactionStatuses[status] {
@@ -744,7 +909,7 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 		return db.ListTransactionsParams{}, ValidationError{Message: "after date must be on or before before date"}
 	}
 
-	cursorDate, cursorID, err := db.DecodeTransactionCursor(input.Cursor)
+	cursorDate, cursorDaySequence, cursorID, err := db.DecodeTransactionCursor(input.Cursor)
 	if err != nil {
 		return db.ListTransactionsParams{}, ValidationError{Message: "cursor is invalid"}
 	}
@@ -772,20 +937,22 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 	}
 
 	return db.ListTransactionsParams{
-		BookID:          BookID,
-		AccountID:       input.AccountID,
-		CategoryID:      input.CategoryID,
-		PayeeID:         input.PayeeID,
-		Status:          status,
-		Kind:            kind,
-		NeedsReview:     input.NeedsReview,
-		Query:           strings.TrimSpace(input.Query),
-		AfterDate:       afterDate,
-		BeforeDate:      beforeDate,
-		CursorDate:      cursorDate,
-		CursorID:        cursorID,
-		Limit:           limit,
-		FilterEntryDate: filterEntryDate,
+		BookID:            BookID,
+		AccountID:         input.AccountID,
+		CategoryID:        input.CategoryID,
+		PayeeID:           input.PayeeID,
+		Status:            status,
+		ExcludeDraft:      status == "", // default: exclude draft when no status filter
+		Kind:              kind,
+		NeedsReview:       input.NeedsReview,
+		Query:             strings.TrimSpace(input.Query),
+		AfterDate:         afterDate,
+		BeforeDate:        beforeDate,
+		CursorDate:        cursorDate,
+		CursorDaySequence: cursorDaySequence,
+		CursorID:          cursorID,
+		Limit:             limit,
+		FilterEntryDate:   filterEntryDate,
 	}, nil
 }
 
@@ -1188,88 +1355,135 @@ func existingPostingStateSet(record db.TransactionRecord) map[string]existingPos
 	return states
 }
 
-func reconciliationInvalidationRefs(current db.TransactionRecord, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
-	currentByLineKey := map[string]struct {
-		entryDate string
-		posting   db.PostingRecord
-	}{}
-	for _, entry := range current.JournalEntries {
+// periodScopedRefsFromTransaction returns CheckpointInvalidationRefs for all
+// postings in the transaction that fall within the period of an active
+// reconciliation checkpoint (the period-scoped rule from docs/conventions.md).
+// This is used for void, unvoid, soft-delete, and restore guards.
+func (s *TransactionService) periodScopedRefsFromTransaction(ctx context.Context, transaction Transaction) ([]db.CheckpointInvalidationRef, error) {
+	candidates := make([]db.PeriodScopedCheckpointRef, 0)
+	for _, entry := range transaction.JournalEntries {
 		for _, posting := range entry.Postings {
-			if posting.ReconciliationStatus == "reconciled" {
-				currentByLineKey[posting.LineKey] = struct {
-					entryDate string
-					posting   db.PostingRecord
-				}{entryDate: entry.EntryDate, posting: posting}
-			}
-		}
-	}
-	if len(currentByLineKey) == 0 {
-		return nil, nil
-	}
-
-	nextByLineKey := map[string]struct {
-		entryDate string
-		posting   db.PostingSpec
-	}{}
-	for _, entry := range spec.JournalEntries {
-		for _, posting := range entry.Postings {
-			nextByLineKey[posting.LineKey] = struct {
-				entryDate string
-				posting   db.PostingSpec
-			}{entryDate: entry.EntryDate, posting: posting}
-		}
-	}
-
-	refs := make([]db.CheckpointInvalidationRef, 0)
-	for lineKey, currentPosting := range currentByLineKey {
-		nextPosting, ok := nextByLineKey[lineKey]
-		if !ok || reconciliationAffectingPostingChange(currentPosting.entryDate, currentPosting.posting, nextPosting.entryDate, nextPosting.posting) {
-			refs = append(refs, db.CheckpointInvalidationRef{
-				AccountID:   currentPosting.posting.AccountID,
-				CommodityID: currentPosting.posting.CommodityID,
-				EntryDate:   currentPosting.entryDate,
+			candidates = append(candidates, db.PeriodScopedCheckpointRef{
+				AccountID:          posting.AccountID,
+				CommodityID:        posting.CommodityID,
+				EntryDate:          entry.EntryDate,
+				AccountDaySequence: posting.AccountDaySequence,
 			})
 		}
 	}
-	return refs, nil
+	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
 }
 
-func reconciliationAffectingPostingChange(currentEntryDate string, current db.PostingRecord, nextEntryDate string, next db.PostingSpec) bool {
-	return currentEntryDate != nextEntryDate ||
+// periodScopedRefsFromRecord is the same as periodScopedRefsFromTransaction but
+// takes a db.TransactionRecord (used in the update path before enrichment).
+func (s *TransactionService) periodScopedRefsFromRecord(ctx context.Context, record db.TransactionRecord) ([]db.CheckpointInvalidationRef, error) {
+	candidates := make([]db.PeriodScopedCheckpointRef, 0)
+	for _, entry := range record.JournalEntries {
+		for _, posting := range entry.Postings {
+			candidates = append(candidates, db.PeriodScopedCheckpointRef{
+				AccountID:          posting.AccountID,
+				CommodityID:        posting.CommodityID,
+				EntryDate:          entry.EntryDate,
+				AccountDaySequence: posting.AccountDaySequence,
+			})
+		}
+	}
+	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
+}
+
+// reconciliationInvalidationRefs returns refs for the period-scoped update guard.
+// Only postings that change a reconciliation-affecting field (account, commodity,
+// quantity, or entry_date) are checked — pure memo/metadata edits are exempt.
+// For each changed posting, both the current position (with its known sequence)
+// and the proposed next position (with MaxInt64 sequence, reflecting that a new
+// allocation will be above any existing statement_account_sequence) are added.
+func (s *TransactionService) reconciliationInvalidationRefs(ctx context.Context, current db.TransactionRecord, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+	// Index current postings by line_key for O(1) lookup.
+	type currentPosting struct {
+		entryDate string
+		posting   db.PostingRecord
+	}
+	currentByKey := map[string]currentPosting{}
+	for _, entry := range current.JournalEntries {
+		for _, posting := range entry.Postings {
+			currentByKey[posting.LineKey] = currentPosting{entryDate: entry.EntryDate, posting: posting}
+		}
+	}
+
+	// Index spec postings by line_key.
+	type specPosting struct {
+		entryDate string
+		posting   db.PostingSpec
+	}
+	specByKey := map[string]specPosting{}
+	for _, entry := range spec.JournalEntries {
+		for _, posting := range entry.Postings {
+			specByKey[posting.LineKey] = specPosting{entryDate: entry.EntryDate, posting: posting}
+		}
+	}
+
+	candidates := make([]db.PeriodScopedCheckpointRef, 0)
+
+	// For each current posting: if it was deleted or a reconciliation-affecting
+	// field changed, add its current (known) position as a candidate.
+	for key, cur := range currentByKey {
+		next, exists := specByKey[key]
+		if !exists || reconciliationAffectingChange(cur.entryDate, cur.posting, next.entryDate, next.posting) {
+			candidates = append(candidates, db.PeriodScopedCheckpointRef{
+				AccountID:          cur.posting.AccountID,
+				CommodityID:        cur.posting.CommodityID,
+				EntryDate:          cur.entryDate,
+				AccountDaySequence: cur.posting.AccountDaySequence,
+			})
+		}
+	}
+
+	// For each spec posting: if it is new (no current counterpart) or changed,
+	// add its proposed position. New/reallocated positions get MaxInt64 because
+	// the allocation will be MAX+1 (above any checkpoint boundary on that date).
+	for key, next := range specByKey {
+		cur, exists := currentByKey[key]
+		if !exists || reconciliationAffectingChange(cur.entryDate, cur.posting, next.entryDate, next.posting) {
+			candidates = append(candidates, db.PeriodScopedCheckpointRef{
+				AccountID:          next.posting.AccountID,
+				CommodityID:        next.posting.CommodityID,
+				EntryDate:          next.entryDate,
+				AccountDaySequence: math.MaxInt64,
+			})
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
+}
+
+func reconciliationAffectingChange(currentDate string, current db.PostingRecord, nextDate string, next db.PostingSpec) bool {
+	return currentDate != nextDate ||
 		current.AccountID != next.AccountID ||
 		current.CommodityID != next.CommodityID ||
-		current.QuantityValue != next.QuantityValue ||
+		current.QuantityValue.Cmp(next.QuantityValue) != 0 ||
 		current.QuantityScale != next.QuantityScale
 }
 
-func reconciliationRefsFromRecord(record db.TransactionRecord) []db.CheckpointInvalidationRef {
-	refs := make([]db.CheckpointInvalidationRef, 0)
-	for _, entry := range record.JournalEntries {
+// reconciliationInvalidationRefsFromSpec checks whether any posting in the spec
+// would land inside an already-reconciled period. Used for the create-time guard.
+// New postings always get sequence MAX+1, so math.MaxInt64 correctly represents
+// "not inside" for the same-date case (see reconciliationInvalidationRefs).
+func (s *TransactionService) reconciliationInvalidationRefsFromSpec(ctx context.Context, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+	candidates := make([]db.PeriodScopedCheckpointRef, 0)
+	for _, entry := range spec.JournalEntries {
 		for _, posting := range entry.Postings {
-			if posting.ReconciliationStatus == "reconciled" {
-				refs = append(refs, db.CheckpointInvalidationRef{
-					AccountID:   posting.AccountID,
-					CommodityID: posting.CommodityID,
-					EntryDate:   entry.EntryDate,
-				})
-			}
+			candidates = append(candidates, db.PeriodScopedCheckpointRef{
+				AccountID:          posting.AccountID,
+				CommodityID:        posting.CommodityID,
+				EntryDate:          entry.EntryDate,
+				AccountDaySequence: math.MaxInt64,
+			})
 		}
 	}
-	return refs
-}
-
-func reconciliationRefsFromTransaction(transaction Transaction) []db.CheckpointInvalidationRef {
-	refs := make([]db.CheckpointInvalidationRef, 0)
-	for _, entry := range transaction.JournalEntries {
-		for _, posting := range entry.Postings {
-			if posting.ReconciliationStatus == "reconciled" {
-				refs = append(refs, db.CheckpointInvalidationRef{
-					AccountID: posting.AccountID, CommodityID: posting.CommodityID, EntryDate: entry.EntryDate,
-				})
-			}
-		}
-	}
-	return refs
+	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
 }
 
 func transactionInputFromTransaction(transaction Transaction) TransactionInput {
@@ -1334,6 +1548,8 @@ func mapTransactionDBError(err error) error {
 		return ErrReconciliationNotBalanced
 	case errors.Is(err, db.ErrReconciliationPosting), errors.Is(err, db.ErrReconciliationCheckpoint):
 		return ErrReconciliationPosting
+	case errors.Is(err, db.ErrReconciliationOverrideRequired):
+		return ErrReconciliationOverrideRequired
 	default:
 		return fmt.Errorf("transaction repository: %w", err)
 	}
@@ -1500,6 +1716,7 @@ func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord, runningBa
 			LineKey:              record.Posting.LineKey,
 			LineSeq:              record.Posting.LineSeq,
 			AccountID:            record.Posting.AccountID,
+			AccountDaySequence:   record.Posting.AccountDaySequence,
 			QuantityValue:        record.Posting.QuantityValue,
 			QuantityScale:        record.Posting.QuantityScale,
 			CommodityID:          record.Posting.CommodityID,
@@ -1551,6 +1768,7 @@ func toTransaction(record db.TransactionRecord) Transaction {
 				LineKey:              posting.LineKey,
 				LineSeq:              posting.LineSeq,
 				AccountID:            posting.AccountID,
+				AccountDaySequence:   posting.AccountDaySequence,
 				QuantityValue:        posting.QuantityValue,
 				QuantityScale:        posting.QuantityScale,
 				CommodityID:          posting.CommodityID,
@@ -1579,6 +1797,7 @@ func toTransaction(record db.TransactionRecord) Transaction {
 		Status:                    record.Status,
 		TransactionKind:           record.TransactionKind,
 		TransactionDate:           record.TransactionDate,
+		TransactionDaySequence:    record.TransactionDaySequence,
 		PayeeID:                   nullableInt64FromSQL(record.PayeeID),
 		PayeeName:                 nullableString(record.PayeeName),
 		Description:               record.Description,

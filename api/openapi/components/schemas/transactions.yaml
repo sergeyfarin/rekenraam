@@ -60,6 +60,10 @@ PostingResponse:
     account_id:
       type: integer
       format: int64
+    account_day_sequence:
+      type: integer
+      format: int64
+      description: Same-day position within (account_id, entry_date). Used for ordering and period-scoped reconciliation boundary.
     quantity_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,37})$'
@@ -154,6 +158,10 @@ TransactionResponse:
       type: string
       format: date
       description: User-facing register display date.
+    transaction_day_sequence:
+      type: integer
+      format: int64
+      description: Same-day position within (book_id, transaction_date). Used for ordering and 3-tuple cursor.
     payee_id:
       type: integer
       format: int64
@@ -429,3 +437,39 @@ TransactionLifecycleRequest:
     reconciliation_override:
       type: boolean
   additionalProperties: false
+MoveRequest:
+  type: object
+  required:
+    - direction
+  properties:
+    direction:
+      type: string
+      enum:
+        - earlier
+        - later
+      description: Semantic direction independent of visual sort order.
+  additionalProperties: false
+ReconciliationImpactResponse:
+  type: object
+  required:
+    - affected_checkpoints
+  properties:
+    affected_checkpoints:
+      type: array
+      description: Checkpoints that would be invalidated by the proposed operation. Empty when no reconciliation guard applies.
+      items:
+        type: object
+        required:
+          - account_id
+          - commodity_id
+          - entry_date
+        properties:
+          account_id:
+            type: integer
+            format: int64
+          commodity_id:
+            type: integer
+            format: int64
+          entry_date:
+            type: string
+            format: date

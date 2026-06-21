@@ -180,6 +180,10 @@ ReconciliationCheckpointResponse:
     statement_date:
       type: string
       format: date
+    statement_account_sequence:
+      type: integer
+      format: int64
+      description: Inclusive account-register lock boundary on statement_date. A posting on statement_date is inside the reconciled period when its account_day_sequence <= this value.
     statement_balance:
       $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
     created_at:

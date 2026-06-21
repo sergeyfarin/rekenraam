@@ -288,11 +288,25 @@ both most-recent-first; the cursor format can absorb ASC later without breaking.
 
 ---
 
-## Step 2.5 — Backend prerequisite: ordering and reconciliation impact
+## Step 2.5 — Backend prerequisite: ordering and reconciliation impact ✅ DONE
 
 This step must land before frontend table/editor work. It introduces the explicit
 same-day order requested by the UI and finishes the period-scoped reconciliation
 contract that the editor and Trash view consume.
+
+**Status**: Completed 2026-06-21. All sub-steps (2.5a–e) implemented, all tests pass,
+OpenAPI updated, frontend types regenerated. Notable fixes applied during implementation:
+- `allocateOrInheritAccountDaySeq` bug: was querying `current_transaction_versions` after
+  inserting the new version row (so no postings existed yet); fixed to use `SupersedesVersionID`
+  (the previous version) for the inheritance lookup.
+- Reconciliation guard change-detection (`reconciliationInvalidationRefs`): uses
+  `reconciliationAffectingChange` to exempt memo/metadata-only edits from the guard,
+  matching the pre-existing `TestPostingScopedReconciliation*` tests.
+- `MovePosting` boundary guard: added inline reconciliation check in the DB method before
+  the swap is committed. Uses `db.ErrReconciliationOverrideRequired` (now in `db/setup.go`).
+- `CreateTransaction` checkpoint invalidation: wired `InvalidateCheckpointRefs` through
+  `CreateTransactionParams` so backdated creates with override actually invalidate
+  the checkpoint.
 
 ### 2.5a. Migration and model fields
 
@@ -407,17 +421,24 @@ link to future import-review, scheduled-generation, or recovery-draft owners. It
 must not be a generic draft editor and is intentionally empty/unexposed until a
 producer workflow exists.
 
-**Verify Step 2.5:**
+**Verify Step 2.5:** ✅ PASSED 2026-06-21
 
 ```bash
 cd backend && go test ./internal/app/ ./internal/db/ ./internal/api/
 cd .. && pnpm --dir frontend run openapi:generate && pnpm --dir frontend run check
 ```
 
-Required tests: deterministic backfill; independent transfer order in two account
-registers; move within each side of a checkpoint; guarded crossing; backdated
-create preview/retry; voided restore exemption; default list excludes draft;
-global/register cursor traversal before and after same-day movement.
+Required tests: ✅ all written and passing in `internal/api/day_sequence_test.go`
+- `TestSameDaySequencesAreMonotonicallyIncreasing` — monotonic allocation
+- `TestDaySequenceAssignedOnCreateAndInheritedOnEdit` — inheritance on same-date edit
+- `TestTransferPostingMovesIndependentlyInEachRegister` — independent transfer order
+- `TestMoveTransactionSwapsAdjacentSameDaySequences` — move semantics
+- `TestCursorPaginationRespectsDaySequence` — cursor traversal before/after move
+- `TestMovePostingAcrossReconciliationBoundaryRequiresOverride` — guarded crossing
+- `TestBackdatedCreateReconciliationImpactPreviewAndRetry` — backdated create preview/retry
+- `TestReconciliationImpactPreviewForUpdate` — update impact preview
+- `TestVoidedTransactionRestoreIsExemptFromReconciliationGuard` — voided restore exemption
+- `TestDefaultListExcludesDraft` — default list excludes draft
 
 ---
 

@@ -9,6 +9,7 @@ import (
 
 var ErrOwnerExists = errors.New("owner already exists")
 var ErrNotFound = errors.New("record not found")
+var ErrReconciliationOverrideRequired = errors.New("reconciliation override is required")
 
 type SetupRepository struct {
 	database *sql.DB

@@ -115,6 +115,14 @@ paths:
     $ref: "./paths/transaction-correct.yaml"
   /api/v1/transactions/{transaction_id}/approve:
     $ref: "./paths/transaction-approve.yaml"
+  /api/v1/transactions/{transaction_id}/move:
+    $ref: "./paths/transaction-move.yaml"
+  /api/v1/transactions/{transaction_id}/reconciliation-impact:
+    $ref: "./paths/transaction-id-reconciliation-impact.yaml"
+  /api/v1/transactions/reconciliation-impact:
+    $ref: "./paths/transaction-reconciliation-impact.yaml"
+  /api/v1/accounts/{account_id}/postings/{posting_line_id}/move:
+    $ref: "./paths/posting-move.yaml"
   /api/v1/reconciliations/{reconciliation_id}:
     $ref: "./paths/reconciliation.yaml"
   /api/v1/reconciliations/{reconciliation_id}/preview:
@@ -388,6 +396,10 @@ components:
       $ref: "./components/schemas/transactions.yaml#/TransactionRequest"
     TransactionLifecycleRequest:
       $ref: "./components/schemas/transactions.yaml#/TransactionLifecycleRequest"
+    MoveRequest:
+      $ref: "./components/schemas/transactions.yaml#/MoveRequest"
+    ReconciliationImpactResponse:
+      $ref: "./components/schemas/transactions.yaml#/ReconciliationImpactResponse"
     ReconciliationPostingResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPostingResponse"
     ReconciliationSessionResponse:

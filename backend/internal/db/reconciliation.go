@@ -48,22 +48,23 @@ type ReconciliationSessionRecord struct {
 }
 
 type ReconciliationCheckpointRecord struct {
-	ID                    int64
-	BookID                int64
-	AccountID             int64
-	CommodityID           int64
-	SessionID             sql.NullInt64
-	PreviousCheckpointID  sql.NullInt64
-	Status                string
-	StatementDate         string
-	StatementBalanceValue exact.Coefficient
-	StatementBalanceScale int
-	CreatedAt             string
-	CreatedByUserID       int64
-	InvalidatedAt         sql.NullString
-	InvalidationReason    string
-	VoidedAt              sql.NullString
-	VoidReason            string
+	ID                      int64
+	BookID                  int64
+	AccountID               int64
+	CommodityID             int64
+	SessionID               sql.NullInt64
+	PreviousCheckpointID    sql.NullInt64
+	Status                  string
+	StatementDate           string
+	StatementAccountSequence int64
+	StatementBalanceValue   exact.Coefficient
+	StatementBalanceScale   int
+	CreatedAt               string
+	CreatedByUserID         int64
+	InvalidatedAt           sql.NullString
+	InvalidationReason      string
+	VoidedAt                sql.NullString
+	VoidReason              string
 }
 
 type ReconciliationPostingRecord struct {
@@ -401,6 +402,23 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 		return ReconciliationSessionRecord{}, err
 	}
 
+	// Compute statement_account_sequence: greatest account_day_sequence among
+	// newly-reconciled postings whose entry_date matches the statement_date.
+	var stmtAccountSeq int64
+	if len(reconciledPostingIDs) > 0 {
+		postingIDs := make([]string, 0, len(reconciledPostingIDs))
+		for _, p := range reconciledPostingIDs {
+			postingIDs = append(postingIDs, fmt.Sprintf("%d", p.PostingID))
+		}
+		_ = tx.QueryRowContext(ctx, `
+			SELECT COALESCE(MAX(pv.account_day_sequence), 0)
+			FROM posting_versions pv
+			JOIN journal_entries je ON je.id = pv.journal_entry_id
+			WHERE pv.id IN (`+strings.Join(postingIDs, ",")+`)
+				AND je.entry_date = ?
+		`, session.StatementDate).Scan(&stmtAccountSeq)
+	}
+
 	checkpointResult, err := tx.ExecContext(ctx, `
 		INSERT INTO reconciliation_checkpoints (
 			book_id,
@@ -410,14 +428,15 @@ func (r *TransactionRepository) FinishReconciliationSession(ctx context.Context,
 			previous_checkpoint_id,
 			status,
 			statement_date,
+			statement_account_sequence,
 			statement_balance_value,
 			statement_balance_scale,
 			created_at,
 			created_by_user_id,
 			created_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
-	`, params.BookID, session.AccountID, session.CommodityID, session.ID, nullableInt64Value(session.StartingCheckpointID), session.StatementDate, session.StatementBalanceValue, session.StatementBalanceScale, params.OccurredAt, params.ActorUserID, auditEventID)
+		VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, session.AccountID, session.CommodityID, session.ID, nullableInt64Value(session.StartingCheckpointID), session.StatementDate, stmtAccountSeq, session.StatementBalanceValue, session.StatementBalanceScale, params.OccurredAt, params.ActorUserID, auditEventID)
 	if err != nil {
 		return ReconciliationSessionRecord{}, fmt.Errorf("insert reconciliation checkpoint: %w", err)
 	}
@@ -545,7 +564,7 @@ func (r *TransactionRepository) ListReconciliationCheckpoints(ctx context.Contex
 	rows, err := r.database.QueryContext(ctx, `
 		SELECT
 			id, book_id, account_id, commodity_id, session_id, previous_checkpoint_id,
-			status, statement_date, statement_balance_value, statement_balance_scale,
+			status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
 			created_at, created_by_user_id, invalidated_at, invalidation_reason,
 			voided_at, void_reason
 		FROM reconciliation_checkpoints
@@ -961,7 +980,7 @@ func latestActiveReconciliationCheckpoint(ctx context.Context, queryer interface
 	if err := scanReconciliationCheckpoint(queryer.QueryRowContext(ctx, `
 		SELECT
 			id, book_id, account_id, commodity_id, session_id, previous_checkpoint_id,
-			status, statement_date, statement_balance_value, statement_balance_scale,
+			status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
 			created_at, created_by_user_id, invalidated_at, invalidation_reason,
 			voided_at, void_reason
 		FROM reconciliation_checkpoints
@@ -1001,7 +1020,7 @@ func reconciliationCheckpointByID(ctx context.Context, queryer interface {
 	if err := scanReconciliationCheckpoint(queryer.QueryRowContext(ctx, `
 		SELECT
 			id, book_id, account_id, commodity_id, session_id, previous_checkpoint_id,
-			status, statement_date, statement_balance_value, statement_balance_scale,
+			status, statement_date, statement_account_sequence, statement_balance_value, statement_balance_scale,
 			created_at, created_by_user_id, invalidated_at, invalidation_reason,
 			voided_at, void_reason
 		FROM reconciliation_checkpoints
@@ -1203,6 +1222,60 @@ func scanReconciliationPostings(rows *sql.Rows) ([]ReconciliationPostingRecord, 
 	return postings, nil
 }
 
+// PeriodScopedCheckpointRef is one potential posting position to test against
+// active checkpoint boundaries.
+type PeriodScopedCheckpointRef struct {
+	AccountID          int64
+	CommodityID        int64
+	EntryDate          string
+	AccountDaySequence int64
+}
+
+// PeriodScopedCheckpointInvalidationRefs returns a CheckpointInvalidationRef for
+// each ref in candidates that falls within the latest active checkpoint's period
+// for its (account_id, commodity_id). A posting is inside the period when:
+//   entry_date < statement_date
+//   OR (entry_date = statement_date AND account_day_sequence <= statement_account_sequence)
+//
+// Candidates with no active checkpoint are silently excluded.
+func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx context.Context, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	seen := map[string]bool{}
+	var refs []CheckpointInvalidationRef
+
+	for _, candidate := range candidates {
+		key := fmt.Sprintf("%d|%d|%s|%d", candidate.AccountID, candidate.CommodityID, candidate.EntryDate, candidate.AccountDaySequence)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		checkpoint, err := latestActiveReconciliationCheckpoint(ctx, r.database, bookID, candidate.AccountID, candidate.CommodityID)
+		if errors.Is(err, ErrReconciliationCheckpoint) {
+			continue // no active checkpoint for this account/commodity
+		}
+		if err != nil {
+			return nil, fmt.Errorf("check period-scoped checkpoint: %w", err)
+		}
+
+		inside := candidate.EntryDate < checkpoint.StatementDate ||
+			(candidate.EntryDate == checkpoint.StatementDate &&
+				candidate.AccountDaySequence <= checkpoint.StatementAccountSequence)
+		if inside {
+			refs = append(refs, CheckpointInvalidationRef{
+				AccountID:   candidate.AccountID,
+				CommodityID: candidate.CommodityID,
+				EntryDate:   candidate.EntryDate,
+			})
+		}
+	}
+
+	return refs, nil
+}
+
 func scanReconciliationCheckpoints(rows *sql.Rows) ([]ReconciliationCheckpointRecord, error) {
 	var checkpoints []ReconciliationCheckpointRecord
 	for rows.Next() {
@@ -1228,6 +1301,7 @@ func scanReconciliationCheckpoint(scanner interface{ Scan(dest ...any) error }, 
 		&checkpoint.PreviousCheckpointID,
 		&checkpoint.Status,
 		&checkpoint.StatementDate,
+		&checkpoint.StatementAccountSequence,
 		&checkpoint.StatementBalanceValue,
 		&checkpoint.StatementBalanceScale,
 		&checkpoint.CreatedAt,

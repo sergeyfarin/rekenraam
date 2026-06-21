@@ -5330,6 +5330,246 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/{transaction_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a transaction earlier or later within its same-day sequence */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: components["parameters"]["TransactionID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MoveRequest"];
+                };
+            };
+            responses: {
+                /** @description Transaction moved; new versions written for both swapped transactions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransactionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transaction or adjacent transaction not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/{transaction_id}/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of updating an existing transaction
+         * @description Returns the set of active reconciliation checkpoints that would be invalidated if the submitted spec were applied to the existing transaction. Does not persist anything. Use to display a named warning before retrying with reconciliation_override=true.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: components["parameters"]["TransactionID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TransactionRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transaction not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of creating a new transaction
+         * @description Returns the set of active reconciliation checkpoints that would be invalidated if the submitted transaction were created. Does not persist anything. Use to display a named warning before retrying with reconciliation_override=true.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TransactionRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{account_id}/postings/{posting_line_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a posting earlier or later within its same-day account register sequence */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    account_id: components["parameters"]["AccountID"];
+                    posting_line_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MoveRequest"];
+                };
+            };
+            responses: {
+                /** @description Posting moved; new versions written for affected transaction(s) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TransactionResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posting or adjacent posting not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reconciliations/{reconciliation_id}": {
         parameters: {
             query?: never;
@@ -7316,6 +7556,11 @@ export interface components {
             line_seq: number;
             /** Format: int64 */
             account_id: number;
+            /**
+             * Format: int64
+             * @description Same-day position within (account_id, entry_date). Used for ordering and period-scoped reconciliation boundary.
+             */
+            account_day_sequence?: number;
             quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
@@ -7357,6 +7602,11 @@ export interface components {
              * @description User-facing register display date.
              */
             transaction_date: string;
+            /**
+             * Format: int64
+             * @description Same-day position within (book_id, transaction_date). Used for ordering and 3-tuple cursor.
+             */
+            transaction_day_sequence?: number;
             /** Format: int64 */
             payee_id?: number;
             payee_name?: string;
@@ -7497,6 +7747,24 @@ export interface components {
             change_reason?: string;
             reconciliation_override?: boolean;
         };
+        MoveRequest: {
+            /**
+             * @description Semantic direction independent of visual sort order.
+             * @enum {string}
+             */
+            direction: "earlier" | "later";
+        };
+        ReconciliationImpactResponse: {
+            /** @description Checkpoints that would be invalidated by the proposed operation. Empty when no reconciliation guard applies. */
+            affected_checkpoints: {
+                /** Format: int64 */
+                account_id: number;
+                /** Format: int64 */
+                commodity_id: number;
+                /** Format: date */
+                entry_date: string;
+            }[];
+        };
         ReconciliationPostingResponse: {
             /** Format: int64 */
             posting_id: number;
@@ -7569,6 +7837,11 @@ export interface components {
             status: components["schemas"]["ReconciliationCheckpointStatus"];
             /** Format: date */
             statement_date: string;
+            /**
+             * Format: int64
+             * @description Inclusive account-register lock boundary on statement_date. A posting on statement_date is inside the reconciled period when its account_day_sequence <= this value.
+             */
+            statement_account_sequence?: number;
             statement_balance: components["schemas"]["BalanceQuantity"];
             /** Format: date-time */
             created_at: string;
