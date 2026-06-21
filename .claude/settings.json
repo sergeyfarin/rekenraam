@@ -25,7 +25,11 @@
       "Bash(svelte-kit sync *)",
       "Bash(npx svelte-check *)",
       "Bash(node_modules/.bin/vitest run *)",
-      "Bash(npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide)"
+      "Bash(npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(node node_modules/@inlang/paraglide-js/dist/cli/index.js compile --project project.inlang --outdir src/lib/paraglide)",
+      "Bash(./node_modules/.bin/paraglide-js compile *)"
     ]
   }
 }

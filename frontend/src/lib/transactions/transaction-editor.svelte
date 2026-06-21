@@ -10,6 +10,7 @@
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { categoriesQueryOptions } from '$lib/api/categories';
   import { payeesQueryOptions } from '$lib/api/payees';
+  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
     createTransaction,
     updateTransaction,
@@ -61,6 +62,7 @@
   // Load accounts (asset/liability for the account leg; income/expense categories loaded separately)
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
   const categoriesQuery = createQuery(() => categoriesQueryOptions());
+  const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   // Payee autocomplete — only triggered when user types
   let payeeSearch = $state('');
@@ -94,6 +96,8 @@
   let categoryLabel = $state('');
   let amountStr = $state(''); // user-entered amount string, e.g. "25.00"
   let accountID = $state<number | undefined>(undefined);
+  // Manually chosen commodity when the selected account has no default_commodity_id.
+  let simpleCommodityID = $state<number | undefined>(undefined);
 
   // Tier 2 fields (under Advanced)
   let transactionKind = $state<string>('ordinary');
@@ -153,6 +157,15 @@
   // Infer commodity from the selected account's default_commodity_id.
   const inferredCommodityID = $derived(selectedAccount?.default_commodity_id);
 
+  // Effective commodity for the simple form: inferred from account, or manually chosen.
+  const effectiveCommodityID = $derived(inferredCommodityID ?? simpleCommodityID);
+
+  const currenciesByID = $derived(
+    new Map<number, CurrencyResponse>(
+      (currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c])
+    )
+  );
+
   // For Tier 3 imbalance check — sum within each commodity using BigInt string arithmetic.
   const splitImbalance = $derived.by(() => computeSplitImbalance(splitLegs));
 
@@ -187,6 +200,7 @@
       categoryLabel = '';
       amountStr = '';
       accountID = undefined;
+      simpleCommodityID = undefined;
       transactionKind = 'ordinary';
       noteMarkdown = '';
       externalRefHint = '';
@@ -224,6 +238,7 @@
       );
       if (assetLeg) {
         accountID = assetLeg.account_id;
+        simpleCommodityID = assetLeg.commodity_id;
         // Format the amount with correct sign: positive = inflow to account.
         amountStr = postingToDisplayAmount(assetLeg);
       }
@@ -357,7 +372,7 @@
   }
 
   function buildSimpleJournalEntries(): TransactionRequest['journal_entries'] {
-    if (!accountID || !inferredCommodityID || !categoryID || !amountStr.trim()) {
+    if (!accountID || !effectiveCommodityID || !categoryID || !amountStr.trim()) {
       return [];
     }
 
@@ -381,14 +396,14 @@
         postings: [
           {
             account_id: accountID,
-            commodity_id: inferredCommodityID,
+            commodity_id: effectiveCommodityID,
             quantity_value: assetLedgerValue,
             quantity_scale: scale,
             memo: ''
           },
           {
             account_id: categoryID,
-            commodity_id: inferredCommodityID,
+            commodity_id: effectiveCommodityID,
             quantity_value: catLedgerValue,
             quantity_scale: scale,
             memo: ''
@@ -598,8 +613,8 @@
     const seen = new Map<number, { id: number; code: string }>();
     for (const a of (accountsQuery.data?.accounts ?? [])) {
       if (a.default_commodity_id && !seen.has(a.default_commodity_id)) {
-        // We don't have the commodity code here, just the ID — use a placeholder.
-        seen.set(a.default_commodity_id, { id: a.default_commodity_id, code: String(a.default_commodity_id) });
+        const code = currenciesByID.get(a.default_commodity_id)?.code ?? String(a.default_commodity_id);
+        seen.set(a.default_commodity_id, { id: a.default_commodity_id, code });
       }
     }
     return [...seen.values()];
@@ -794,7 +809,10 @@
         <span class={labelClass}>{m.transactions_field_account()}</span>
         <select
           value={accountID ?? ''}
-          onchange={(e) => { accountID = Number((e.target as HTMLSelectElement).value) || undefined; }}
+          onchange={(e) => {
+            accountID = Number((e.target as HTMLSelectElement).value) || undefined;
+            simpleCommodityID = undefined;
+          }}
           class={inputClass}
           disabled={isVoided && mode === 'edit'}
         >
@@ -818,6 +836,25 @@
           disabled={isVoided && mode === 'edit'}
         />
       </label>
+
+      <!-- Commodity selector — only shown when the selected account has no default commodity -->
+      {#if accountID !== undefined && inferredCommodityID === undefined}
+        <label class="sm:col-span-2">
+          <span class={labelClass}>{m.transactions_field_posting_commodity()}</span>
+          <select
+            value={simpleCommodityID ?? ''}
+            onchange={(e) => { simpleCommodityID = Number((e.target as HTMLSelectElement).value) || undefined; }}
+            class={inputClass}
+            required
+            disabled={isVoided && mode === 'edit'}
+          >
+            <option value="">—</option>
+            {#each allActiveCommodities as c (c.id)}
+              <option value={c.id}>{c.code}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
 
       <!-- Category (income/expense) with searchable dropdown -->
       <label class="relative sm:col-span-2">

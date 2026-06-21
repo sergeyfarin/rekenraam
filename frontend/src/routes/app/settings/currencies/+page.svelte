@@ -1,11 +1,17 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+  import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Save from '@lucide/svelte/icons/save';
+  import X from '@lucide/svelte/icons/x';
   import { parseISO } from 'date-fns';
   import { authSessionQueryOptions } from '$lib/api/auth';
-  import type { CurrencyResponse } from '$lib/api/currencies';
+  import {
+    createCurrency,
+    currencyCatalogQueryOptions,
+    type CurrencyResponse
+  } from '$lib/api/currencies';
   import { APIClientError } from '$lib/api/client';
   import {
     createPricingSourceAssignment,
@@ -21,6 +27,7 @@
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
   import StatusBadge from '$lib/components/status-badge.svelte';
+  import { localizedCurrencyCatalog, type LocalizedCurrencyCatalogEntry } from '$lib/install-gate/currency-options';
   import { m } from '$lib/paraglide/messages.js';
 
   type RateDirection = 'currency_default' | 'default_currency' | 'both';
@@ -31,6 +38,7 @@
 
   const pageQuery = createQuery(() => currencySettingsPageQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
+  const catalogQuery = createQuery(() => currencyCatalogQueryOptions());
 
   let rateDirection = $state<RateDirection>('currency_default');
   let policyBaseCommodityID = $state('');
@@ -45,6 +53,11 @@
   let assignmentSavingKey = $state('');
   let actionError = $state<unknown>(undefined);
   let actionMessage = $state('');
+
+  let addCurrencyDialogOpen = $state(false);
+  let addCurrencySearch = $state('');
+  let addCurrencyPending = $state(false);
+  let addCurrencyError = $state<unknown>(undefined);
 
   const currencyDisplayNames = new Intl.DisplayNames(undefined, { type: 'currency' });
   const numberFormatter = new Intl.NumberFormat(undefined, {
@@ -74,6 +87,22 @@
       left.code.localeCompare(right.code)
     )
   );
+
+  const activeCurrencyCodes = $derived(new Set(activeCurrencies.map((c) => c.code)));
+
+  const localizedCatalog = $derived(
+    localizedCurrencyCatalog(catalogQuery.data?.currencies ?? [], currencyDisplayNames)
+  );
+
+  const filteredCatalog = $derived.by(() => {
+    const q = addCurrencySearch.trim().toLocaleLowerCase();
+    const entries = q
+      ? localizedCatalog.filter((c: LocalizedCurrencyCatalogEntry) =>
+          [c.code, c.name, c.english_name].join(' ').toLocaleLowerCase().includes(q)
+        )
+      : localizedCatalog;
+    return entries.slice(0, 30);
+  });
 
   const currencyByID = $derived.by(() => new Map(activeCurrencies.map((currency) => [currency.id, currency])));
 
@@ -153,6 +182,22 @@
 
   async function refreshAfterMutation() {
     await pageQuery.refetch();
+  }
+
+  async function handleAddCurrency(entry: LocalizedCurrencyCatalogEntry) {
+    addCurrencyPending = true;
+    addCurrencyError = undefined;
+    try {
+      await createCurrency({ code: entry.code, name: entry.name }, await csrfToken());
+      addCurrencyDialogOpen = false;
+      addCurrencySearch = '';
+      actionMessage = m.currencies_add_success({ code: entry.code });
+      await refreshAfterMutation();
+    } catch (error) {
+      addCurrencyError = error;
+    } finally {
+      addCurrencyPending = false;
+    }
   }
 
   async function csrfToken(): Promise<string> {
@@ -371,7 +416,16 @@
     </button>
   </StatePanel>
 {:else if activeCurrencies.length === 0}
-  <StatePanel title={m.currencies_empty_title()} copy={m.currencies_empty_copy()} />
+  <StatePanel title={m.currencies_empty_title()} copy={m.currencies_empty_copy()}>
+    <button
+      type="button"
+      class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      onclick={() => { addCurrencyDialogOpen = true; }}
+    >
+      <Plus size={16} aria-hidden="true" />
+      {m.currencies_add()}
+    </button>
+  </StatePanel>
 {:else}
   <section class="space-y-4">
     <Panel>
@@ -382,14 +436,25 @@
           <p class="mt-2 max-w-3xl text-sm leading-6 text-muted">{m.currencies_copy()}</p>
         </div>
 
-        {#if defaultCurrency}
-          <div class="rounded-(--radius-panel) border border-border bg-toolbar px-4 py-3 text-sm">
-            <p class="font-semibold text-foreground">{m.currencies_default_label()}</p>
-            <p class="mt-1 text-muted">
-              {m.currencies_default_value({ code: defaultCurrency.code, name: currencyName(defaultCurrency) })}
-            </p>
-          </div>
-        {/if}
+        <div class="flex flex-wrap items-start gap-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+            onclick={() => { addCurrencyDialogOpen = true; }}
+          >
+            <Plus size={16} aria-hidden="true" />
+            {m.currencies_add()}
+          </button>
+
+          {#if defaultCurrency}
+            <div class="rounded-(--radius-panel) border border-border bg-toolbar px-4 py-3 text-sm">
+              <p class="font-semibold text-foreground">{m.currencies_default_label()}</p>
+              <p class="mt-1 text-muted">
+                {m.currencies_default_value({ code: defaultCurrency.code, name: currencyName(defaultCurrency) })}
+              </p>
+            </div>
+          {/if}
+        </div>
       </div>
 
       <div class="mt-6 grid gap-4 lg:grid-cols-2">
@@ -707,4 +772,66 @@
       </div>
     </Panel>
   </section>
+{/if}
+
+{#if addCurrencyDialogOpen}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-sm">
+    <section class="w-full max-w-lg rounded-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel)">
+      <div class="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div class="min-w-0">
+          <h3 class="text-sm font-semibold text-foreground">{m.currencies_add_dialog_title()}</h3>
+          <p class="mt-1 text-xs leading-5 text-muted">{m.currencies_add_dialog_copy()}</p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover"
+          onclick={() => { addCurrencyDialogOpen = false; addCurrencySearch = ''; addCurrencyError = undefined; }}
+          aria-label={m.currencies_add_dialog_close()}
+          title={m.currencies_add_dialog_close()}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div class="space-y-3 px-4 py-4">
+        <label>
+          <span class="block text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.currencies_add_dialog_search()}</span>
+          <input
+            bind:value={addCurrencySearch}
+            class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent"
+            autocomplete="off"
+            placeholder={m.currencies_add_dialog_search_placeholder()}
+          />
+        </label>
+
+        {#if addCurrencyError}
+          <p class="text-sm font-semibold text-danger">{getAPIClientErrorMessage(addCurrencyError)}</p>
+        {/if}
+
+        <div class="max-h-72 overflow-auto rounded-(--radius-control) border border-border">
+          {#each filteredCatalog as entry (entry.code)}
+            {@const alreadyActive = activeCurrencyCodes.has(entry.code)}
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm transition last:border-b-0 hover:bg-row-hover disabled:cursor-not-allowed disabled:opacity-50"
+              onclick={() => handleAddCurrency(entry)}
+              disabled={alreadyActive || addCurrencyPending}
+            >
+              <span class="min-w-0">
+                <span class="block font-semibold text-foreground">{entry.code}</span>
+                <span class="block truncate text-xs text-muted">{entry.name}</span>
+              </span>
+              {#if alreadyActive}
+                <span class="shrink-0 text-xs text-muted">{m.currencies_add_dialog_already_active()}</span>
+              {:else}
+                <span class="shrink-0 text-muted">{entry.symbol}</span>
+              {/if}
+            </button>
+          {:else}
+            <p class="px-3 py-6 text-center text-sm text-muted">{m.currencies_add_dialog_empty()}</p>
+          {/each}
+        </div>
+      </div>
+    </section>
+  </div>
 {/if}
