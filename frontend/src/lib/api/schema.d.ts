@@ -7758,10 +7758,29 @@ export interface components {
             /** @description Checkpoints that would be invalidated by the proposed operation. Empty when no reconciliation guard applies. */
             affected_checkpoints: {
                 /** Format: int64 */
+                checkpoint_id: number;
+                /** Format: int64 */
                 account_id: number;
+                /** @description Display label for the account (system_role, builtin_key, name, or code — first non-empty in that order). Localise system_role and builtin_key values client-side via Paraglide. */
+                account_label: string;
                 /** Format: int64 */
                 commodity_id: number;
-                /** Format: date */
+                /** @description ISO commodity code (e.g. "USD", "EUR", "AAPL"). */
+                commodity_code: string;
+                /**
+                 * Format: date
+                 * @description The reconciled-through date of this checkpoint.
+                 */
+                statement_date: string;
+                /**
+                 * Format: int64
+                 * @description Inclusive account-register lock boundary on statement_date. A posting on statement_date is inside the reconciled period when its account_day_sequence <= this value.
+                 */
+                statement_account_sequence: number;
+                /**
+                 * Format: date
+                 * @description The affected posting's entry date that falls within this checkpoint's reconciled period.
+                 */
                 entry_date: string;
             }[];
         };

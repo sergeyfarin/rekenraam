@@ -1266,9 +1266,12 @@ func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx conte
 				candidate.AccountDaySequence <= checkpoint.StatementAccountSequence)
 		if inside {
 			refs = append(refs, CheckpointInvalidationRef{
-				AccountID:   candidate.AccountID,
-				CommodityID: candidate.CommodityID,
-				EntryDate:   candidate.EntryDate,
+				CheckpointID:             checkpoint.ID,
+				AccountID:                candidate.AccountID,
+				CommodityID:              candidate.CommodityID,
+				EntryDate:                candidate.EntryDate,
+				StatementDate:            checkpoint.StatementDate,
+				StatementAccountSequence: checkpoint.StatementAccountSequence,
 			})
 		}
 	}

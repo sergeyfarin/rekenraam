@@ -12,18 +12,28 @@ type reconciliationImpactResponse struct {
 }
 
 type checkpointImpactResponse struct {
-	AccountID   int64  `json:"account_id"`
-	CommodityID int64  `json:"commodity_id"`
-	EntryDate   string `json:"entry_date"`
+	CheckpointID             int64  `json:"checkpoint_id"`
+	AccountID                int64  `json:"account_id"`
+	AccountLabel             string `json:"account_label"`
+	CommodityID              int64  `json:"commodity_id"`
+	CommodityCode            string `json:"commodity_code"`
+	StatementDate            string `json:"statement_date"`
+	StatementAccountSequence int64  `json:"statement_account_sequence"`
+	EntryDate                string `json:"entry_date"`
 }
 
 func toReconciliationImpactResponse(impact app.ReconciliationImpact) reconciliationImpactResponse {
 	out := make([]checkpointImpactResponse, 0, len(impact.AffectedCheckpoints))
 	for _, ref := range impact.AffectedCheckpoints {
 		out = append(out, checkpointImpactResponse{
-			AccountID:   ref.AccountID,
-			CommodityID: ref.CommodityID,
-			EntryDate:   ref.EntryDate,
+			CheckpointID:             ref.CheckpointID,
+			AccountID:                ref.AccountID,
+			AccountLabel:             ref.AccountLabel,
+			CommodityID:              ref.CommodityID,
+			CommodityCode:            ref.CommodityCode,
+			StatementDate:            ref.StatementDate,
+			StatementAccountSequence: ref.StatementAccountSequence,
+			EntryDate:                ref.EntryDate,
 		})
 	}
 	return reconciliationImpactResponse{AffectedCheckpoints: out}

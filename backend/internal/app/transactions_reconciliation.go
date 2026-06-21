@@ -24,6 +24,9 @@ func (s *TransactionService) ReconciliationImpactForCreate(ctx context.Context, 
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
+	if err := s.enrichCheckpointRefs(ctx, refs); err != nil {
+		return ReconciliationImpact{}, err
+	}
 	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
 }
 
@@ -53,6 +56,9 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 	}
 	refs, err := s.reconciliationInvalidationRefs(ctx, current, spec)
 	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	if err := s.enrichCheckpointRefs(ctx, refs); err != nil {
 		return ReconciliationImpact{}, err
 	}
 	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
@@ -199,6 +205,61 @@ func (s *TransactionService) reconciliationInvalidationRefsFromSpec(ctx context.
 		}
 	}
 	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
+}
+
+// enrichCheckpointRefs populates AccountLabel and CommodityCode on each ref
+// using one bulk account lookup and one bulk commodity lookup.
+func (s *TransactionService) enrichCheckpointRefs(ctx context.Context, refs []db.CheckpointInvalidationRef) error {
+	if len(refs) == 0 {
+		return nil
+	}
+
+	accountIDSet := make(map[int64]struct{}, len(refs))
+	commodityIDSet := make(map[int64]struct{}, len(refs))
+	for _, ref := range refs {
+		accountIDSet[ref.AccountID] = struct{}{}
+		commodityIDSet[ref.CommodityID] = struct{}{}
+	}
+
+	accountIDs := make([]int64, 0, len(accountIDSet))
+	for id := range accountIDSet {
+		accountIDs = append(accountIDs, id)
+	}
+	commodityIDs := make([]int64, 0, len(commodityIDSet))
+	for id := range commodityIDSet {
+		commodityIDs = append(commodityIDs, id)
+	}
+
+	accountMap, err := s.accountRepository.AccountsByIDs(ctx, BookID, accountIDs)
+	if err != nil {
+		return fmt.Errorf("enrich checkpoint refs: accounts lookup: %w", err)
+	}
+	commodityMap, err := s.commodityRepository.CommoditiesByIDs(ctx, BookID, commodityIDs)
+	if err != nil {
+		return fmt.Errorf("enrich checkpoint refs: commodities lookup: %w", err)
+	}
+
+	for i := range refs {
+		if acct, ok := accountMap[refs[i].AccountID]; ok {
+			switch {
+			case acct.SystemRole.Valid:
+				refs[i].AccountLabel = acct.SystemRole.String
+			case acct.BuiltinKey.Valid:
+				refs[i].AccountLabel = acct.BuiltinKey.String
+			case acct.Name.Valid:
+				refs[i].AccountLabel = acct.Name.String
+			case acct.Code.Valid:
+				refs[i].AccountLabel = acct.Code.String
+			default:
+				refs[i].AccountLabel = fmt.Sprintf("account:%d", refs[i].AccountID)
+			}
+		}
+		if comm, ok := commodityMap[refs[i].CommodityID]; ok {
+			refs[i].CommodityCode = comm.Code
+		}
+	}
+
+	return nil
 }
 
 func mapTransactionDBError(err error) error {

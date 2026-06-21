@@ -460,16 +460,39 @@ ReconciliationImpactResponse:
       items:
         type: object
         required:
+          - checkpoint_id
           - account_id
+          - account_label
           - commodity_id
+          - commodity_code
+          - statement_date
+          - statement_account_sequence
           - entry_date
         properties:
+          checkpoint_id:
+            type: integer
+            format: int64
           account_id:
             type: integer
             format: int64
+          account_label:
+            type: string
+            description: Display label for the account (system_role, builtin_key, name, or code — first non-empty in that order). Localise system_role and builtin_key values client-side via Paraglide.
           commodity_id:
             type: integer
             format: int64
+          commodity_code:
+            type: string
+            description: ISO commodity code (e.g. "USD", "EUR", "AAPL").
+          statement_date:
+            type: string
+            format: date
+            description: The reconciled-through date of this checkpoint.
+          statement_account_sequence:
+            type: integer
+            format: int64
+            description: Inclusive account-register lock boundary on statement_date. A posting on statement_date is inside the reconciled period when its account_day_sequence <= this value.
           entry_date:
             type: string
             format: date
+            description: The affected posting's entry date that falls within this checkpoint's reconciled period.

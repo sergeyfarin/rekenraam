@@ -464,15 +464,25 @@ In `frontend/src/lib/api/transactions.ts`:
   `ReconciliationImpactResponse`, `AccountRegisterInfiniteData`,
   `RegisterFilterOptions`.
 
-**Gap flagged:** `ReconciliationImpactResponse` (both backend and OpenAPI) only
-carries `{ account_id, commodity_id, entry_date }` per checkpoint. The plan (Step
-2.5d) specifies also `account_label`, `commodity_code`, `statement_date`,
-`statement_account_sequence`, `checkpoint_id`. These richer fields are needed so
-the Step 5 warning modal can name the affected checkpoints by account/date rather
-than showing raw IDs. The backend `CheckpointInvalidationRef` struct and the
-`checkpointImpactResponse` DTO need to be extended, with the OpenAPI schema and
-generated types updated. Recommend addressing this before Step 5 (editor) to
-avoid hardcoding a raw-ID fallback that would need to be ripped out.
+**Gap resolved (2026-06-21):** `ReconciliationImpactResponse` now carries all
+fields needed for the Step 5 named-checkpoint warning modal:
+
+| Field | Source |
+|---|---|
+| `checkpoint_id` | `reconciliation_checkpoints.id` |
+| `account_id` | posting account |
+| `account_label` | first non-empty of system_role → builtin_key → name → code (raw key; localise via Paraglide client-side) |
+| `commodity_id` | posting commodity |
+| `commodity_code` | `PostingCommoditySummary.Code` |
+| `statement_date` | `ReconciliationCheckpointRecord.StatementDate` |
+| `statement_account_sequence` | `ReconciliationCheckpointRecord.StatementAccountSequence` |
+| `entry_date` | the affected posting's entry date |
+
+Changes: `db.CheckpointInvalidationRef` extended; `PeriodScopedCheckpointInvalidationRefs`
+populates the new DB fields from the already-fetched checkpoint record; new
+`enrichCheckpointRefs` helper at the app layer runs one bulk account + one bulk
+commodity lookup; API DTO updated; OpenAPI schema updated; frontend types
+regenerated. All existing tests pass.
 
 **Verify Step 3:** ✅ PASSED — `pnpm --dir frontend run check` → 0 errors, 0 warnings.
 

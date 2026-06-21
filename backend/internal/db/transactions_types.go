@@ -267,9 +267,15 @@ type PostingCommodityRule struct {
 }
 
 type CheckpointInvalidationRef struct {
-	AccountID   int64
-	CommodityID int64
-	EntryDate   string
+	CheckpointID             int64
+	AccountID                int64
+	CommodityID              int64
+	EntryDate                string
+	StatementDate            string
+	StatementAccountSequence int64
+	// Enriched fields — set by the app layer after the DB lookup.
+	AccountLabel  string
+	CommodityCode string
 }
 
 type MoveTransactionParams struct {
