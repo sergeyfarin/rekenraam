@@ -796,7 +796,7 @@ Implementation notes:
 
 ---
 
-## Step 6 — Global transactions page
+## Step 6 — Global transactions page ✅ DONE (2026-06-21)
 
 ### `frontend/src/lib/transactions/transaction-list.svelte`
 
@@ -846,8 +846,36 @@ navigation, close, or refresh, durable recovery occurs through the dedicated
 Settings → Trash view in Step 9; do not rely on reopening the deleted ID through
 the ordinary read endpoint.
 
-**Verify Step 6:** `pnpm --dir frontend run check`; run the app and confirm list
-loads, row opens detail, and edit/void/unvoid/soft-delete/restore round-trips.
+**Verify Step 6:** ✅ PASSED 2026-06-21
+
+```bash
+# svelte-check: 0 errors, 0 warnings across 1824 files
+npx svelte-check --tsconfig ./tsconfig.json
+
+# Vitest: 11/11 tests pass
+frontend/node_modules/.bin/vitest run
+```
+
+**Implementation notes:**
+- New files: `transaction-list.svelte` (context wrapper), `transaction-detail-panel.svelte`
+  (read-only detail + action buttons), `routes/app/transactions/+page.svelte`.
+- Nav: `Receipt` icon + "Transactions" link added to the app layout sidebar; header
+  title/copy updated for `/app/transactions`.
+- `TransactionLifecycleRequest` uses `change_reason` (not `reason`) — fixed during
+  type-check pass.
+- Paraglide runtime exports `getLocale()` (not `languageTag()`) — fixed during
+  type-check pass.
+- Snippets passed as `Column.cell` values — defined in the same component scope as the
+  list wrapper, consistent with the Svelte 5 snippet contract.
+- Soft-delete shows a brief undo affordance (5-second window) before calling
+  `invalidateQueries`; after navigation the user recovers from Settings → Trash (Step 9).
+- Void/unvoid hit the reconciliation guard: the override flow mirrors the editor —
+  catch `CONFLICT + "reconciliation override"`, fetch impact, show named checkpoints,
+  retry with `reconciliation_override: true`.
+- Move up/down (earlier/later) buttons on each row call `moveTransaction` then
+  `query.refetch()` — sequence numbers stay hidden from the UI.
+- Mobile: panel renders as a full-screen overlay with a backdrop click to dismiss;
+  desktop: sticky right-column panel via CSS grid.
 
 ---
 

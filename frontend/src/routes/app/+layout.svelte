@@ -9,6 +9,7 @@
   import Settings from '@lucide/svelte/icons/settings';
   import Tags from '@lucide/svelte/icons/tags';
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
+  import Receipt from '@lucide/svelte/icons/receipt';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -78,6 +79,7 @@
   const isOverviewRoute = $derived($page.url.pathname === '/app');
   const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
   const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
+  const isTransactionsRoute = $derived($page.url.pathname.startsWith('/app/transactions'));
   const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
 
   const headerTitle = $derived(
@@ -85,18 +87,22 @@
       ? m.accounts_title()
       : isCategoriesRoute
         ? m.categories_title()
-        : isSettingsRoute
-          ? m.settings_title()
-          : m.app_shell_header_title()
+        : isTransactionsRoute
+          ? m.transactions_page_title()
+          : isSettingsRoute
+            ? m.settings_title()
+            : m.app_shell_header_title()
   );
   const headerCopy = $derived(
     isAccountsRoute
       ? m.accounts_shell_copy()
       : isCategoriesRoute
         ? m.categories_shell_copy()
-        : isSettingsRoute
-          ? m.settings_shell_copy()
-          : m.app_shell_header_copy()
+        : isTransactionsRoute
+          ? m.transactions_page_copy()
+          : isSettingsRoute
+            ? m.settings_shell_copy()
+            : m.app_shell_header_copy()
   );
 
   $effect(() => {
@@ -219,6 +225,18 @@
         >
           <Tags size={16} aria-hidden="true" />
           {m.app_shell_nav_categories()}
+        </a>
+        <a
+          href="/app/transactions"
+          aria-current={isTransactionsRoute ? 'page' : undefined}
+          class:bg-selected={isTransactionsRoute}
+          class:text-selected-foreground={isTransactionsRoute}
+          class:bg-transparent={!isTransactionsRoute}
+          class:text-foreground={!isTransactionsRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <Receipt size={16} aria-hidden="true" />
+          {m.app_shell_nav_transactions()}
         </a>
         <a
           href="/app/settings"

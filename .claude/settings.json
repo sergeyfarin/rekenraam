@@ -29,7 +29,8 @@
       "Bash(npx tsc *)",
       "Bash(npm run *)",
       "Bash(node node_modules/@inlang/paraglide-js/dist/cli/index.js compile --project project.inlang --outdir src/lib/paraglide)",
-      "Bash(./node_modules/.bin/paraglide-js compile *)"
+      "Bash(./node_modules/.bin/paraglide-js compile *)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); keys=[k for k in data.keys\\(\\) if 'transaction' in k.lower\\(\\)]; print\\('\\\\n'.join\\(sorted\\(keys\\)\\)\\)\")"
     ]
   }
 }
