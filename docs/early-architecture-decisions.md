@@ -235,8 +235,10 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
 - Before commodities: currency metadata source, custom commodity codes, display scale, precision limits, maximum quantity scale, and commodity-code validation.
 - Before first frontend use of typed API clients: exact OpenAPI generation/check command and generated-client path.
 - Before transactions: posting schema, balancing rules, transfer representation,
-  posting editing, draft versus posted lifecycle, correction behavior, and
-  import-source metadata.
+  posting editing, lifecycle (unsaved entry vs persisted `draft` vs `posted`, and
+  the distinct void vs soft-delete removals), correction behavior, and
+  import-source metadata. The lifecycle is detailed in
+  `docs/transaction-ledger-core-plan.md`.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
 - Before budgets: period semantics, category/account mapping, rollover rules,
   whether budgets are book-wide or account-scoped, and the detailed UI for

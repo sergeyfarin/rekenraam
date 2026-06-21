@@ -139,67 +139,132 @@ stable invariants it can check reliably: same book, account eligibility,
 posting dates, commodity/default-commodity consistency, version ordering, and
 immutability.
 
-## Draft, Posted, Voided
+## Lifecycle: Unsaved Entry, Draft, Posted, Voided, Soft-Deleted
 
-`transaction_versions.status`:
+There are five states a user-visible transaction can be in. Only four are
+persisted statuses; the first is a UI condition with no database row.
 
-- `draft`: incomplete or unposted work. It may come from manual entry, import
-  preview, scheduled transaction generation, or autosave. Draft does not mean
-  unreconciled. Drafts have never affected the posted ledger.
-- `posted`: participates in current ledger views and reports.
-- `voided`: latest version intentionally removes this transaction from current
-  ledger views.
+### Unsaved entry (working copy — not a status)
 
-A durable manual or autosaved draft is already transaction work and may trigger
-supporting background preparation such as FX-rate coverage. That preparation does
-not make the draft part of ledger balances or reports. Import previews use
-dedicated import staging rather than transaction drafts; only committed import rows
-become transactions and trigger that preparation.
+An unsaved entry is in-progress UI entry that has **no `transactions` or
+`transaction_versions` row yet**: a half-filled editor, autosave-pending form
+state held only in the browser. This is the everyday "I started typing a
+transaction and have not finished" condition.
+
+Because nothing is persisted, an unsaved entry triggers **no** background work:
+no FX/commodity-rate coverage, no base-currency conversion, no posting/balance
+validation side effects. It becomes a `draft` or `posted` transaction only when
+the user explicitly saves, autosave persists it, or the import commit step
+persists it. "Unsaved entry" must never be called a "draft," and persisted
+`draft` rows must never be called "unsaved."
+
+### Persisted statuses — `transaction_versions.status`
+
+- `draft`: durable but unposted work that exists in the database and is
+  intentionally excluded from the posted ledger and reports. Sources: autosaved
+  manual work, scheduled-transaction generation, and (only after the import
+  commit step) imported rows awaiting review. Draft does not mean unreconciled.
+  Drafts have never affected the posted ledger.
+- `posted`: entered and participating in current ledger views and reports.
+  "Entered" covers manual entry, bank/file import after commit, and anything
+  already existing in the ledger. Posted does not imply reconciled and stays
+  directly editable.
+- `voided`: the latest version intentionally removes this transaction from the
+  posted ledger, but the transaction stays **visible in the UI marked as
+  voided** as a deliberate reference/memory record. A voided transaction can be
+  unvoided and edited.
+
+### Soft-delete (separate flag, not a status — planned)
+
+Soft-delete is **distinct from voiding** and is a separate flag rather than a
+`status` value. A soft-deleted transaction is hidden from the transactions table
+and all ordinary views — it looks deleted to the user — while the row stays in
+the database for audit/history and recovery.
+
+The contrast is intentional:
+
+- **Soft-delete** when the user knows the entry was a mistake and wants it gone
+  from view. Looks deleted; recoverable from audit/history.
+- **Void** when the user wants to keep the entry visible as a reference (for
+  example, an entry that never appeared on the bank statement, kept while the
+  user investigates whether it was a glitch).
+
+The soft-delete column/schema pattern is defined when its migration lands (see
+the soft-delete convention in `docs/conventions.md`); until then it is a
+documented design target. Soft-delete and void must remain independently
+reversible: a transaction can be unvoided, undeleted, or both, subject to the
+reconciliation guard below.
+
+### Background preparation and FX
+
+Persisted work triggers FX/commodity-rate coverage: autosaved `draft` rows and
+`posted` transactions both do. That preparation never makes a draft part of
+ledger balances or reports. Unsaved entries and import previews trigger nothing;
+import rows trigger only after the commit step persists them. FX preparation does
+not depend on whether manual work defaults to `draft` or `posted` — entered work
+can request rates without that decision being settled.
 
 Whether manually entered work should default directly to `posted`, or remain a
 draft that reports can optionally include, is still a product decision to review.
-FX preparation deliberately does not depend on that choice: entered manual work
-can request rates without deciding its ledger/reporting status.
 
-Physical delete is allowed only when a transaction has no posted or voided
+### Delete and discard
+
+Physical (hard) delete is allowed only when a transaction has no posted or voided
 versions. Provide a `DELETE /api/v1/transactions/{transaction_id}` or
 `POST /api/v1/transactions/{transaction_id}/discard-draft` endpoint for
 never-posted drafts. A later maintenance job may remove abandoned drafts, but
-the first slice should make draft discard explicit.
+the first slice should make draft discard explicit. Removing a **posted**
+transaction never hard-deletes: it uses soft-delete (hidden, recoverable),
+void (visible, marked voided), or a corrective entry.
 
-Draft identity is lifecycle state, not reconciliation state. A bank-imported
-transaction can be draft while the user reviews it, and a manually entered
-transaction can be posted but still uncleared.
+Lifecycle is independent of reconciliation state. A bank-imported transaction
+can be draft while the user reviews it, and a manually entered transaction can be
+posted but still uncleared.
 
-## Void And Correction Workflow
+## Void, Soft-Delete, And Correction Workflow
 
 Voiding should append a new `transaction_version` with `status='voided'`. Do
-not update the prior posted version in place.
+not update the prior posted version in place. A voided transaction stays visible
+in the UI, marked as voided, and can be unvoided (which appends a new
+non-voided version) and then edited.
 
-Current ledger views select the latest version per transaction:
+Soft-delete is a separate flag, not a `status` value, and is not a void variant.
+A soft-deleted transaction is hidden from the transactions table and all ordinary
+views while its rows stay durable for audit and recovery. It can be undeleted.
+Soft-delete and void are independent: a transaction may be voided, soft-deleted,
+or both, and each is reversed independently.
 
-- latest `status='posted'`: include its posting versions
+Current ledger views select the latest version per transaction and skip
+soft-deleted transactions:
+
+- soft-deleted: excluded from posted ledger and from the transactions table
+- latest `status='posted'` (not soft-deleted): include its posting versions
 - latest `status='draft'`: exclude from posted ledger
-- latest `status='voided'`: exclude from posted ledger
+- latest `status='voided'`: exclude from posted ledger, but still shown in the
+  transactions table marked as voided
 
-Voiding does not remove or rewrite `transaction_tags` or `posting_tags`.
-Transaction tags are identity-level context and continue to describe the
-historical transaction after voiding. Posting tags are keyed to posting lines;
-the voided version has no current postings, but historical posting-line context
+Voiding and soft-deleting do not remove or rewrite `transaction_tags` or
+`posting_tags`. Transaction tags are identity-level context and continue to
+describe the historical transaction. Posting tags are keyed to posting lines;
+a voided version has no current postings, but historical posting-line context
 remains available for audit/history views.
 
 Implement now: reconciliation locks the affected account posting facts, not the
 whole UI transaction. Ordinary superseding is allowed when every reconciled
 posting keeps the same account, commodity, quantity value, quantity scale, and
-entry date. This lets a user recategorize or split the income/expense side of a
-transaction after the bank-side posting has been reconciled, as long as the
-reconciled bank posting is unchanged and the transaction remains balanced.
+entry date. This lets a user recategorize, change the description/payee/note, or
+split the income/expense side of a transaction after the bank-side posting has
+been reconciled — the reconciliation stays intact — as long as every reconciled
+posting is unchanged and the transaction remains balanced.
 
-Changing or removing a reconciled posting requires explicit reconciliation
-override and must invalidate the affected active checkpoint plus later active
-checkpoints for that account/commodity. Voiding a transaction with reconciled
-postings follows the same rule: either use override and invalidate checkpoints,
-or use a corrective transaction that preserves the original reconciled record.
+Changing or removing a reconciled posting (its account, commodity, amount,
+scale, or entry date) requires explicit reconciliation override and must
+invalidate the affected active checkpoint plus later active checkpoints for that
+account/commodity. Voiding, unvoiding, or soft-deleting a transaction with
+reconciled postings follows the same rule: either use override and invalidate
+checkpoints, or use a corrective transaction that preserves the original
+reconciled record. Editing a non-reconciled posted transaction needs none of
+this — it is directly editable.
 
 Defer: closed-period posting guards until period close exists. The transaction
 slice must not attempt to enforce closed periods because no closed-period model
@@ -727,9 +792,19 @@ Minimum transaction endpoints:
 - `PATCH /api/v1/transactions/{transaction_id}`
 - `POST /api/v1/transactions/{transaction_id}/post`
 - `POST /api/v1/transactions/{transaction_id}/void`
+- `POST /api/v1/transactions/{transaction_id}/unvoid`
+- `POST /api/v1/transactions/{transaction_id}/soft-delete` (hides a posted
+  transaction from the table; recoverable)
+- `POST /api/v1/transactions/{transaction_id}/restore` (undeletes a
+  soft-deleted transaction)
 - `POST /api/v1/transactions/{transaction_id}/correct`
 - `DELETE /api/v1/transactions/{transaction_id}` for never-posted drafts only
+  (hard delete; soft-delete is a separate posted-transaction workflow)
 - `GET /api/v1/accounts/{account_id}/register`
+
+The `unvoid`, `soft-delete`, and `restore` endpoints are the API surface for the
+soft-delete design target above; they land with the soft-delete migration, not
+before it.
 
 Minimum query parameters:
 
@@ -745,6 +820,10 @@ Minimum query parameters:
 - `before_date` optional, inclusive `YYYY-MM-DD` filter on `transaction_date`
 - `limit` optional with a bounded default
 - `cursor` optional opaque pagination cursor
+
+Soft-deleted transactions are excluded by default and never appear for any
+`status` value. A separate `include_deleted` flag (or a dedicated trash/recovery
+view) surfaces them for audit and restore once soft-delete lands.
 
 `GET /api/v1/accounts/{account_id}/register`:
 
@@ -771,13 +850,21 @@ offsets over an append-only ledger.
 
 - PATCH on a draft keeps the transaction in draft state, but still appends a
   new draft `transaction_version`; transaction version rows remain append-only.
-- PATCH on a posted transaction creates a new posted version.
-- PATCH on a voided transaction is rejected; use a corrective transaction if
-  further accounting is required.
+- PATCH on a posted transaction creates a new posted version. This is the
+  "directly editable" path for posted transactions; non-reconciled edits need no
+  special acknowledgement.
+- PATCH on a voided transaction is rejected; unvoid first (then it is editable),
+  or use a corrective transaction if further accounting is required.
+- PATCH on a soft-deleted transaction is rejected; restore it first.
+- PATCH that changes a reconciled posting's account, commodity, amount, scale,
+  or entry date requires explicit reconciliation override and invalidates the
+  affected checkpoints. PATCH that changes only category, description, payee,
+  note, or tags is allowed and keeps the reconciliation intact.
 
 `POST /api/v1/transactions/{transaction_id}/void` must accept a JSON request
 body with `change_reason` so the appended `status='voided'` transaction version
-has audit attribution.
+has audit attribution. `unvoid`, `soft-delete`, and `restore` likewise accept a
+`change_reason` for audit attribution.
 
 Payee endpoints are listed in the Payees section and should land before or with
 transaction entry UI.
@@ -808,9 +895,18 @@ Required backend tests:
 - superseding reconciled posting facts requires override and checkpoint
   invalidation
 - category edit and category split allowed when reconciled account posting is
-  unchanged
-- draft delete allowed only for never-posted drafts
+  unchanged, and the reconciliation stays intact
+- description/payee/note/tag edit on a reconciled transaction keeps
+  reconciliation intact
+- draft delete allowed only for never-posted drafts (hard delete)
 - posted financial records are not hard-deleted
+- void appends a `voided` version and the transaction stays listed, marked voided
+- unvoid restores an editable non-voided version
+- soft-delete hides a posted transaction from the list but keeps the row durable
+- restore undeletes a soft-deleted transaction
+- soft-delete and void are independent: each can be applied and reversed without
+  the other
+- PATCH on a voided or soft-deleted transaction is rejected until unvoided/restored
 - payee create, update, archive, restore
 - transaction stores `payee_name` snapshot
 - payee rename/archive does not rewrite historical transaction snapshots

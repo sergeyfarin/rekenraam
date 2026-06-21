@@ -43,10 +43,12 @@ transaction date through today without duplicate observations.
 
 - Enqueue FX coverage in the same transaction when an account creation, currency
   change, or reopen makes a currency active.
-- Enqueue or extend coverage whenever a durable transaction is created or updated,
-  including manual/autosaved drafts and corrections to an earlier date or another
-  currency. Keep import preview data in import staging and enqueue only when rows
-  are committed into transactions.
+- Enqueue or extend coverage whenever a durable transaction is created or updated:
+  persisted manual/autosaved `draft` rows, `posted` transactions, and corrections
+  to an earlier date or another currency all count. Do **not** enqueue for unsaved
+  entries (in-progress UI working copies with no database row) — there is nothing
+  persisted to back the work. Keep import preview data in import staging and
+  enqueue only when rows are committed into transactions.
 - Expose queue state and historical coverage in the currency settings page using
   one backend-composed request.
 - Add localized pending, running, retrying, failed, and completed states, plus an
@@ -54,7 +56,8 @@ transaction date through today without duplicate observations.
 - Add service and API tests proving domain persistence succeeds independently of
   provider availability and that the matching work item is never omitted.
 
-Acceptance: a new account currency and a backdated manually entered draft both
-create durable work immediately, while merely previewing an import does not; going
+Acceptance: a new account currency and a backdated, *saved* manual transaction
+(persisted draft or posted) both create durable work immediately, while an
+unsaved in-progress entry and merely previewing an import do not; going
 offline shows retrying work and reconnecting lets it complete without another user
 action.

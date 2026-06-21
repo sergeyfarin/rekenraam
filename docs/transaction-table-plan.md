@@ -165,7 +165,7 @@ frontend/src/
   lib/
     transactions/
       transaction-table.svelte          ← dumb display primitive
-      transaction-row-actions.svelte    ← post/void/approve/correct/delete menu
+      transaction-row-actions.svelte    ← post/void/unvoid/approve/correct/soft-delete/restore/delete menu
       transaction-editor.svelte         ← create/edit form (largest piece)
       transaction-filter-bar.svelte     ← reusable filter controls
       transaction-list.svelte           ← global list wrapper (uses /transactions)
@@ -201,7 +201,7 @@ The "primary posting" for display is the first asset or liability leg (`account_
 | Payee / Description | `payee_name` or `description` | 1 (always shown) | |
 | Amount | Primary posting, formatted | 1 (always shown) | See Amount Display Semantics |
 | Account(s) | Primary posting label (resolved: `account_system_role` → `account_builtin_key` → `account_name` → `account_code`) | 2 | Collapse to "N accounts" when more than two |
-| Status | `status` | 3 | Badge: draft/posted/voided |
+| Status | `status` | 3 | Badge: draft/posted/voided (soft-deleted rows are excluded from the list, not badged) |
 | Flags | `needs_review` | 3 | Review badge |
 
 ### Account register
@@ -278,26 +278,48 @@ A synthetic `base_currency_value` enrichment (summing asset/liability legs conve
 
 ## Row Actions
 
-Actions are context-sensitive based on transaction status:
+Actions are context-sensitive based on transaction status. Note `draft` here
+means a persisted draft row, not an unsaved editor working copy (which has no row
+and therefore no row actions):
 
 | Status | Available actions |
 |---|---|
-| draft | Edit, Post, Delete |
+| draft | Edit, Post, Delete (hard delete — never-posted draft) |
 | posted | Edit, Create correction |
-| voided | View only |
+| voided | Unvoid (then editable), View |
 | any + needs_review | Approve (inline, no editor needed) |
 
-Void is an action on the **detail panel**, not the row action menu — it requires a reason and is consequential enough to warrant the extra step.
+**Void vs Soft-delete vs Hard delete — three distinct removals:**
+
+- **Hard delete** is only for never-posted drafts (`DELETE`). It physically
+  removes the row.
+- **Void** keeps a posted transaction *visible in the table, marked as voided*,
+  as an intentional reference (e.g. an entry that never showed on the bank
+  statement, kept while investigating). It is reversible via Unvoid.
+- **Soft-delete** removes a posted transaction *from the table and ordinary
+  views* — it looks deleted — while keeping the row durable for audit and
+  recovery. Use it for a known mistake. It is reversible via Restore from a
+  trash/recovery view.
+
+Void and Soft-delete are actions on the **detail panel**, not the row action
+menu — each requires a reason and is consequential enough to warrant the extra
+step. They are independent: a transaction can be voided, soft-deleted, or both.
 
 ### Edit/correction lifecycle
 
-The backend (`app/transactions.go`) permits `PATCH` on any non-voided transaction. The UI must distinguish four cases and route accordingly:
+The backend (`app/transactions.go`) permits `PATCH` on any transaction that is
+not voided and not soft-deleted. A voided transaction must be unvoided first; a
+soft-deleted transaction must be restored first. The UI must distinguish these
+cases and route accordingly:
 
 | Case | Trigger | API call | UI behaviour |
 |---|---|---|---|
-| Draft edit | Transaction is draft | `PATCH /api/v1/transactions/{id}` | Editor opens directly, no warning |
-| Posted edit — safe | No reconciled postings are affected by the change | `PATCH /api/v1/transactions/{id}` | Editor opens directly, no warning |
-| Posted edit — reconciliation-invalidating | Change affects quantity, account, commodity, or date of a reconciled posting | `PATCH /api/v1/transactions/{id}` with `reconciliation_override: true` | Warning modal at save time: "This will invalidate a reconciliation checkpoint. Continue?" |
+| New entry (unsaved) | User is composing a brand-new transaction | `POST /api/v1/transactions` on first save | Editor working copy only; no row, no FX trigger, until saved |
+| Draft edit | Transaction is a persisted draft | `PATCH /api/v1/transactions/{id}` | Editor opens directly, no warning |
+| Posted edit — safe | No reconciled postings are affected by the change | `PATCH /api/v1/transactions/{id}` | Editor opens directly, no warning (posted is directly editable) |
+| Posted edit — reconciliation-invalidating | Change affects quantity, account, commodity, scale, or date of a reconciled posting | `PATCH /api/v1/transactions/{id}` with `reconciliation_override: true` | Warning modal at save time: "This will invalidate a reconciliation checkpoint. Continue?" |
+| Posted edit — non-financial on reconciled | Change touches only category, description, payee, note, or tags | `PATCH /api/v1/transactions/{id}` | Allowed, reconciliation stays intact, no override needed |
+| Voided edit | Transaction is voided | Unvoid, then `PATCH` | Editor offers Unvoid first; editing a voided transaction is blocked until unvoided |
 | Corrective transaction | User chooses "Create correction" | `POST /api/v1/transactions/{id}/correct` | Editor opens in correction mode |
 
 Cases 2 and 3 are only distinguishable after the user makes edits, so the reconciliation warning fires at save time, not when the editor opens.
@@ -319,9 +341,9 @@ The global transactions page has:
 Clicking a row opens a **detail panel** (read-only) first. The detail panel shows:
 - All fields in a clean read layout
 - Full posting breakdown (with account names/codes and commodity symbols from enriched response; account labels resolved using the full chain: `account_system_role` → `account_builtin_key` → `account_name` → `account_code`)
-- **Edit button** — opens editor in the same panel, replacing detail view
+- **Edit button** — opens editor in the same panel, replacing detail view (posted is directly editable; voided must be unvoided first)
 - **Create correction button** — opens editor in correction mode (posted transactions only)
-- **Action buttons** — Post, Approve, Void with reason (status-appropriate)
+- **Action buttons** — Post, Approve, Void with reason, Unvoid, Soft-delete with reason, Restore (status-appropriate). Void keeps the row visible marked voided; Soft-delete hides it from the table but keeps it recoverable
 
 Version history / audit trail is not included in the detail panel for v1 (no API exists for it).
 

@@ -104,10 +104,13 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Background handlers must be idempotent, lease work for bounded periods, reclaim
   expired leases, and distinguish retryable failures from terminal failures.
 - FX backfill covers every required provider publication date from the earliest
-  active-account or durable transaction-entry date through today. Manual and
-  autosaved drafts trigger coverage; import previews remain in import staging and
-  trigger only when committed as transactions. `max_backfill_days` is an execution
-  chunk bound and must not silently truncate the required history.
+  active-account or durable transaction-entry date through today. Persisted work
+  triggers coverage: autosaved manual `draft` rows and `posted` transactions both
+  count. Unsaved entries (in-progress UI working copies with no database row) and
+  import previews do not trigger coverage; import rows trigger only after the
+  import commit step persists them as draft or posted transactions.
+  `max_backfill_days` is an execution chunk bound and must not silently truncate
+  the required history.
 
 ## Exact Quantity Precision
 
@@ -143,16 +146,22 @@ When a feature introduces a durable new rule, update one of those documents in t
   closed or historical currencies remain durable commodities for history,
   reports, and exports.
 - Preserve `book_id` in core schema even while runtime stays single-book.
-- Use state transitions, voiding, archival, or corrective entries instead of hard-deleting business records.
-- Physical delete is allowed only for never-posted drafts. Posted financial records must use void, archive, or corrective-entry workflows even when unreconciled.
-- Keep transaction lifecycle separate from reconciliation state. `draft`, `posted`, and `voided` determine whether a transaction affects the ledger; `uncleared`, `cleared`, and `reconciled` describe account-posting verification.
-- Reconciliation is account- and commodity-scoped. Finished reconciliation checkpoints are lock floors for reporting and register trust; edits that change a reconciled posting's account, commodity, amount, or entry date require explicit override and must invalidate affected checkpoints rather than silently preserving the old lock.
+- Use state transitions, voiding, archival, soft-delete, or corrective entries instead of hard-deleting business records.
+- Physical (hard) delete is allowed only for never-posted drafts. Posted financial records must use void, soft-delete, archive, or corrective-entry workflows even when unreconciled.
+- Keep transaction lifecycle separate from reconciliation state. The transaction lifecycle is `draft`, `posted`, and `voided`; whether a transaction affects the ledger is determined by that lifecycle plus the soft-delete flag. `uncleared`, `cleared`, and `reconciled` describe account-posting verification and are an independent axis.
+- "Unsaved entry" (working copy) is **not** a transaction status. It is in-progress UI entry that has no `transactions` or `transaction_versions` row yet: half-typed forms and pre-save editor state held only in the browser. An unsaved entry triggers no background work — no FX/commodity-rate coverage, no base-currency conversion, no validation side effects — because nothing is persisted. It becomes a `draft` or `posted` transaction only when the user (or the import commit step) saves it. Do not call persisted `draft` rows "unsaved"; do not call an unsaved working copy a "draft."
+- `draft` is a persisted lifecycle status, distinct from an unsaved entry. A draft is a real `transaction_versions` row that exists in the database but is intentionally excluded from the posted ledger and reports: autosaved manual work, scheduled-transaction generation output, and (only after the import commit step) imported rows awaiting review. Because a draft is durable persisted work, it may trigger supporting background preparation such as FX/commodity-rate coverage; that preparation never makes a draft part of ledger balances or reports.
+- `posted` means the transaction is entered and participates in the ledger and reports. "Entered" covers manual entry, bank/file import (after commit), and anything already existing in the ledger; posted does not imply reconciled. Posted transactions remain directly editable.
+- Two distinct removal workflows apply to posted transactions, and they are not interchangeable:
+  - **Void** keeps the transaction *visible in the UI, marked as voided*, as an intentional reference/memory record (for example: an entry that never appeared on the bank statement, kept while the user investigates). A void appends a `voided` transaction version and excludes the transaction from the posted ledger. A voided transaction can be unvoided and edited.
+  - **Soft-delete** removes the transaction *from the transactions table and all ordinary views* — it looks deleted to the user — while keeping the row in the database for audit/history and recovery. Use it when the user knows the entry was a mistake. Soft-delete is a separate flag from `voided`, not a void variant. The soft-delete column/schema pattern is defined when its migration lands; until then it is a documented design target, not yet implemented.
+- Reconciliation is account- and commodity-scoped. Finished reconciliation checkpoints are lock floors for reporting and register trust; edits that change a reconciled posting's account, commodity, amount, or entry date require explicit override and must invalidate affected checkpoints rather than silently preserving the old lock. Edits that touch only category, description, payee, note, tags, or other non-financial fields are allowed and keep the reconciliation intact. Voiding, unvoiding, or soft-deleting a transaction with reconciled postings follows the same override-and-invalidate rule.
 - Use the hybrid audit model for durable domain changes: domain version/lifecycle tables explain what changed, while `audit_events` rows explain who, when, how, and why the operation was initiated.
 - One `audit_events` row should represent one user/system operation, not one changed column. Multi-row workflows such as setup, imports, reconciliation, and transaction correction should create one event inside the same database transaction and reference it from every created version/lifecycle row.
 - Keep essential attribution columns such as `created_at`, `recorded_at`, `created_by_user_id`, `changed_by_user_id`, `created_request_id`, and `change_reason` on domain rows as denormalized snapshots for straightforward history and export queries. The referenced audit event is the canonical home for request, session, origin, operation, and grouped-workflow provenance.
 - `audit_events.auth_session_id` is nullable and must not block session cleanup; request IDs and actor IDs remain the stable attribution floor.
 - `audit_events.operation` must be non-empty and follow stable dotted-code naming such as `account.create` or `transaction.correct`, but the database must not use a full enum that requires a migration for every new operation.
-- Soft-delete column convention and the specific schema pattern (e.g., `deleted_at` vs `archived_at` vs a status enum) will be documented when first introduced in a migration. Consistency across tables is required; do not mix approaches.
+- Soft-delete column convention and the specific schema pattern (e.g., `deleted_at` vs `archived_at` vs a status enum) will be documented when first introduced in a migration. Consistency across tables is required; do not mix approaches. The transaction soft-delete (distinct from `voided`) is the first planned use: it hides a transaction from the table and ordinary views while keeping the row durable for audit and recovery.
 - Schema changes require explicit migrations under `backend/migrations`.
 - The migration runner is **`pressly/goose`** with embedded SQL files. Migrations are sequential numbered `.sql` files under `backend/migrations/`. Run at startup; goose tracks applied versions in the database.
 - The SQLite Go driver is **`modernc.org/sqlite`** (pure Go, no CGO). Do not use `mattn/go-sqlite3`.

@@ -36,6 +36,15 @@ var (
 	ErrReconciliationPosting          = errors.New("reconciliation posting is invalid")
 )
 
+// transactionStatuses is the persisted transaction lifecycle. An unsaved entry
+// (an in-progress UI working copy with no row) is deliberately NOT a status: it
+// has no database row and triggers no side effects until it is saved as a draft
+// or posted transaction. "draft" here always means a persisted, durable draft
+// (autosave, scheduled generation, committed import awaiting review) excluded
+// from the ledger but able to trigger background work such as FX coverage —
+// never the unsaved working copy. Soft-delete (hiding a posted transaction while
+// keeping it recoverable) is a separate flag from "voided", not a status value;
+// it lands with its own migration. See docs/transaction-ledger-core-plan.md.
 var transactionStatuses = map[string]bool{
 	"draft":  true,
 	"posted": true,

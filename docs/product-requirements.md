@@ -64,12 +64,19 @@ These decisions must be locked before the first real domain slice beyond setup/a
 
 - Money representation limits: maximum `quantity_scale`, allowed `commodity_code` formats, custom commodity identifiers, and validation behavior for values that exceed limits.
 - Exact OpenAPI type generation/check command and frontend generated-client path.
-- Domain lifecycle status taxonomy for drafts, posted records, voided records, archived records, and corrective entries.
+- Domain lifecycle status taxonomy. For transactions this is now locked: an
+  unsaved entry (UI working copy, no row, no side effects) becomes a persisted
+  `draft` (durable but excluded from the ledger; may trigger FX coverage) or
+  `posted` (in the ledger, directly editable) record. Posted records are removed
+  by **void** (stays visible, marked voided, reversible) or **soft-delete**
+  (hidden from the table, durable, recoverable) — two distinct workflows — or by
+  a corrective entry; never by hard delete. `reconciled` is an independent
+  posting-verification axis. See `docs/transaction-ledger-core-plan.md`.
 
 Already locked before domain work:
 
 - Foundation coding gates for setup, password recovery, API contracts, error codes, request IDs, i18n scaffolding, and theme token scaffolding.
-- Physical delete is allowed only for never-posted drafts; posted financial records use void, archive, or corrective-entry workflows.
+- Physical (hard) delete is allowed only for never-posted drafts; posted financial records use void, soft-delete, archive, or corrective-entry workflows.
 - Static frontend routing: Go serves real assets, returns 404 for unknown `/api/` and missing asset-like paths, and falls back to the SvelteKit app shell for extensionless non-API routes.
 - SQLite connection, migration, busy-timeout, WAL, and backup behavior.
 - Docker runtime base image.
@@ -187,7 +194,7 @@ Goal: make daily transaction entry useful.
 - Opening balances through explicit equity/opening-balance transactions.
 - Friendly category UI mapped to income/expense accounts.
 - First-run setup extension for choosing default categories and optional additional categories.
-- Transaction create, edit, void/archive, and list flows.
+- Transaction create, edit, void, unvoid, soft-delete, restore, and list flows. Void keeps a transaction visible as a marked reference; soft-delete hides it from the table while keeping it recoverable.
 - Transaction list uses cursor-based pagination and supports server-side FTS5 search.
 - Backend balancing tests and API smoke tests.
 
@@ -233,9 +240,11 @@ Goal: add power-user workflows after the core ledger is stable.
   Corrections supersede or void prior observations rather than mutating them in
   place.
 - FX coverage is demand-driven and restart-safe. Activating a currency or durably
-  entering an older transaction, including a manual draft, extends required
-  provider history from the earliest needed date through today. Import previews do
-  not trigger downloads until selected rows are committed as transactions. Manual,
+  entering an older transaction — a persisted manual `draft` or a `posted`
+  transaction — extends required provider history from the earliest needed date
+  through today. Unsaved entries (in-progress UI working copies with no database
+  row) and import previews do not trigger downloads; import rows trigger only
+  after the commit step persists them. Manual,
   daily, and domain-triggered refreshes use durable background work that resumes
   after network loss or an app restart.
 - Investment accounts for stocks and ETFs using the existing commodity,
@@ -293,7 +302,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - Authentication scope: single owner only versus future household users, and MFA timing for public real-data deployments.
 - Authorization model: whether multi-user language should be avoided or prepared in table and API naming.
 - Audit model: mutation attribution fields, change reasons, and audit visibility.
-- Data lifecycle rules: void, archive, correct, restore, and retention semantics.
+- Data lifecycle rules: void, unvoid, soft-delete, restore, archive, correct, and retention semantics. Void (visible reference) and soft-delete (hidden but recoverable) are distinct workflows.
 - Import priorities: which file formats arrive first after CSV.
 - Export guarantees: minimum export formats and whether exports should include settings, reports, and metadata.
 - API contract workflow: exact OpenAPI type generation command, frontend generated-client path, and CI check behavior.
@@ -322,7 +331,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - Keep runtime UX explicitly single-owner and single-user for now.
 - Use browser-based setup for initial local authentication. Implement owner creation first, then extend the setup workflow with default book, currency, system account, and category choices when those domains exist.
 - Keep app-defined database labels localization-ready; do not seed English-only category, currency, commodity, or system labels as the only source of truth.
-- Prefer void or corrective workflows over destructive deletion.
+- Prefer void, soft-delete, or corrective workflows over destructive (hard) deletion of posted records.
 - Avoid desktop-only concepts such as native file pickers, session undo stacks, or local database-path selection UX.
 - Keep the web deployment model same-origin and self-contained.
 
