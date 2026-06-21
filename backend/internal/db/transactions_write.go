@@ -427,18 +427,8 @@ func (r *TransactionRepository) ApproveTransaction(ctx context.Context, params A
 			return TransactionRecord{}, err
 		}
 
-		spec := TransactionSpec{
-			Status:          current.Status,
-			TransactionKind: current.TransactionKind,
-			TransactionDate: current.TransactionDate,
-			PayeeID:         current.PayeeID,
-			PayeeName:       current.PayeeName,
-			Description:     current.Description,
-			ExternalRefHint: nullStringText(current.ExternalRefHint),
-			NoteMarkdown:    current.NoteMarkdown,
-			MetadataJSON:    current.MetadataJSON,
-			NeedsReview:     false,
-		}
+		spec := transactionSpecFromRecord(current)
+		spec.NeedsReview = false
 		record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 			BookID:                 params.BookID,
 			TransactionID:          params.TransactionID,
