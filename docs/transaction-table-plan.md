@@ -200,7 +200,7 @@ The "primary posting" for display is the first asset or liability leg (`account_
 | Date | `transaction_date` | 1 (always shown) | |
 | Payee / Description | `payee_name` or `description` | 1 (always shown) | |
 | Amount | Primary posting, formatted | 1 (always shown) | See Amount Display Semantics |
-| Account(s) | Primary posting `account_name` / `account_system_role` | 2 | Collapse to "N accounts" when more than two |
+| Account(s) | Primary posting label (resolved: `account_system_role` → `account_builtin_key` → `account_name` → `account_code`) | 2 | Collapse to "N accounts" when more than two |
 | Status | `status` | 3 | Badge: draft/posted/voided |
 | Flags | `needs_review` | 3 | Review badge |
 
@@ -225,7 +225,7 @@ Category views use a category-activity convention rather than cashflow wording: 
 |---|---|---|---|
 | Date | `transaction_date` | 1 (always shown) | |
 | Payee / Description | `payee_name` or `description` | 1 (always shown) | |
-| Amount | Sum of postings to selected category account | 1 (always shown) | |
+| Amount | Sum of postings to selected category account | 1 (always shown) | Activity-positive: expense debits and income credits are positive; reversals are negative |
 | Counterpart | Non-category posting `account_name`(s) | 2 | |
 | Status | `status` | 3 | |
 | Flags | `needs_review` | 3 | |
@@ -318,7 +318,7 @@ The global transactions page has:
 
 Clicking a row opens a **detail panel** (read-only) first. The detail panel shows:
 - All fields in a clean read layout
-- Full posting breakdown (with account names/codes and commodity symbols from enriched response; system account labels resolved from `account_system_role`)
+- Full posting breakdown (with account names/codes and commodity symbols from enriched response; account labels resolved using the full chain: `account_system_role` → `account_builtin_key` → `account_name` → `account_code`)
 - **Edit button** — opens editor in the same panel, replacing detail view
 - **Create correction button** — opens editor in correction mode (posted transactions only)
 - **Action buttons** — Post, Approve, Void with reason (status-appropriate)
@@ -406,7 +406,7 @@ This covers the common case: one asset/liability account leg + one income/expens
 ### Tier 2 — Advanced (expandable section)
 
 Reveals additional fields:
-- Transaction kind (ordinary / transfer / adjustment — opening_balance is system-only)
+- Transaction kind (ordinary / adjustment — opening_balance is system-only; transfer is set automatically by the explicit Transfer workflow, not selectable here)
 - Note (markdown)
 - External reference / import hint
 - Individual posting memos
