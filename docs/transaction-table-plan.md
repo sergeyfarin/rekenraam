@@ -231,6 +231,27 @@ Add a backend test asserting a list response includes `account_class` and
 posting (e.g. `transfer_clearing`) returns `account_system_role` non-null with
 `account_name` null.
 
+What was done
+Step 1a (db layer):
+
+backend/internal/db/accounts.go — AccountsByIDs with new PostingAccountSummary type. Uses a targeted query (5 columns only) rather than the full AccountRecord scan, which avoids touching the existing accountSelect/scanAccountRecord path.
+backend/internal/db/commodities.go — CommoditiesByIDs with PostingCommoditySummary. Does not filter by kind so securities work too.
+Step 1b (app.Posting): 7 enrichment fields added, all optional/zero-valued until enrichPostings is called.
+
+Step 1c (enrichment helper): enrichPostings / enrichRegisterPostings / enrichOne added. TransactionService now takes accountRepository and commodityRepository. All mutation and list paths call enrichment before returning.
+
+Step 1d (API DTOs): Both postingResponse construction sites updated.
+
+Issues / things to flag
+Step 1e (OpenAPI) not done yet — the plan lists it and says to regenerate frontend types. It's needed before the frontend can consume the new fields with generated types. It's the natural next sub-step before moving to Step 2.
+
+PostTransaction delegates through UpdateTransaction which now calls enrichOne — so it's enriched twice for draft→posted transitions where Transaction already called the service. Not a correctness issue (idempotent), but one redundant lookup. Acceptable for now.
+
+prepareLifecycleChange reads the transaction for internal use only (not returned to callers) and skips enrichment — correct, since it's used for reconciliation guards, not response building.
+
+No test yet asserting account_class and commodity_code appear in responses — the plan calls for this in the Step 1 verification block. The existing tests pass but don't specifically assert the new fields. Worth adding, or noting as a gap. Next step 1e naturally pairs with adding that assertion.
+
+
 ---
 
 ## Step 2 — Backend: `category_id` filter on `GET /transactions`
