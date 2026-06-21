@@ -62,6 +62,15 @@ type postingResponse struct {
 	ClearedOn            string            `json:"cleared_on,omitempty"`
 	Metadata             json.RawMessage   `json:"metadata"`
 	TagIDs               []int64           `json:"tag_ids"`
+
+	// Enriched display metadata — populated on every response path.
+	AccountName       *string `json:"account_name"`
+	AccountCode       *string `json:"account_code"`
+	AccountSystemRole *string `json:"account_system_role"`
+	AccountBuiltinKey *string `json:"account_builtin_key"`
+	AccountClass      string  `json:"account_class"`
+	CommodityCode     string  `json:"commodity_code"`
+	CommoditySymbol   *string `json:"commodity_symbol"`
 }
 
 type transactionsResponse struct {
@@ -636,6 +645,13 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 				ClearedOn:            posting.ClearedOn,
 				Metadata:             json.RawMessage(posting.MetadataJSON),
 				TagIDs:               posting.TagIDs,
+				AccountName:          posting.AccountName,
+				AccountCode:          posting.AccountCode,
+				AccountSystemRole:    posting.AccountSystemRole,
+				AccountBuiltinKey:    posting.AccountBuiltinKey,
+				AccountClass:         posting.AccountClass,
+				CommodityCode:        posting.CommodityCode,
+				CommoditySymbol:      posting.CommoditySymbol,
 			})
 		}
 		entries = append(entries, journalEntryResponse{
@@ -731,6 +747,13 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 				ClearedOn:            entry.Posting.ClearedOn,
 				Metadata:             json.RawMessage(entry.Posting.MetadataJSON),
 				TagIDs:               entry.Posting.TagIDs,
+				AccountName:          entry.Posting.AccountName,
+				AccountCode:          entry.Posting.AccountCode,
+				AccountSystemRole:    entry.Posting.AccountSystemRole,
+				AccountBuiltinKey:    entry.Posting.AccountBuiltinKey,
+				AccountClass:         entry.Posting.AccountClass,
+				CommodityCode:        entry.Posting.CommodityCode,
+				CommoditySymbol:      entry.Posting.CommoditySymbol,
 			},
 			RunningBalance: toBalanceQuantityResponse(entry.RunningBalance),
 			CreatedAt:      entry.CreatedAt,

@@ -158,28 +158,21 @@ commodity metadata so the frontend never fan-outs to resolve names.
 commodity IDs across all postings in the result set, run one bulk account query
 and one bulk commodity query, join in memory.
 
-### 1a. Add bulk lookup methods (db layer)
+### ✅ 1a. Add bulk lookup methods (db layer) — DONE
 
-- `backend/internal/db/accounts.go` — add
-  `AccountsByIDs(ctx, bookID int64, ids []int64) (map[int64]AccountRecord, error)`.
-  It must return, per account: current `name` (nullable), `code` (nullable),
-  `system_role` (nullable), `account_class`, and the category built-in key. The
-  built-in key is **not a column** — it is
-  `json_extract(av.metadata_json, '$.category.builtin_key')` on the current
-  account version (see `db/categories.go:136,147` for the exact path). Use the
-  current-account-version resolution already used by `CurrentAccountByID`.
-- `backend/internal/db/commodities.go` — add
-  `CommoditiesByIDs(ctx, bookID int64, ids []int64) (map[int64]CommodityRecord, error)`
-  returning `code`, `symbol`/`display_symbol`, and `kind`. Note commodities used
-  by postings may be currencies or securities; do not filter by
-  `kind='currency'` here (existing `ListCurrencies` does — do not reuse it).
+- `backend/internal/db/accounts.go` — `AccountsByIDs` added; returns
+  `PostingAccountSummary` (id, name, code, system_role, account_class,
+  builtin_key via `json_extract(av.metadata_json, '$.category.builtin_key')`).
+- `backend/internal/db/commodities.go` — `CommoditiesByIDs` added; returns
+  `PostingCommoditySummary` (id, code, display_symbol, kind). Does not filter by
+  kind so securities and currencies are both returned.
 
-Use parameterised `IN (?, ?, ...)` with a bounded batch; dedupe IDs first. Return
-a map keyed by ID.
+Both use parameterised `IN (?, ?, ...)`. Return a map keyed by ID. Missing IDs
+absent from map.
 
-### 1b. Add fields to `app.Posting` (app layer)
+### ✅ 1b. Add fields to `app.Posting` (app layer) — DONE
 
-In `backend/internal/app/transactions.go`, add to `Posting`:
+Added to `Posting` in `backend/internal/app/transactions.go`:
 
 ```go
 AccountName       *string  // nil for system accounts with no user-visible name
@@ -191,42 +184,26 @@ CommodityCode     string   // "USD", "EUR", "AAPL"
 CommoditySymbol   *string  // "$", "€"; nil if unset
 ```
 
-### 1c. One reusable enrichment helper (app layer)
+### ✅ 1c. One reusable enrichment helper (app layer) — DONE
 
-Add a single helper, e.g.
-`enrichPostings(ctx, txns []Transaction) error` (and an
-`enrichRegisterEntries` variant or a shared inner function), that:
-1. Walks the transactions/entries and collects the union of account and
-   commodity IDs.
-2. Calls `AccountsByIDs` and `CommoditiesByIDs` once each.
-3. Joins results into each `Posting`'s new fields in memory.
+`enrichPostings(ctx, txns []Transaction) error` and
+`enrichRegisterPostings(ctx, entries []AccountRegisterEntry) error` added.
+`enrichOne` convenience wrapper for single-record paths.
 
-**Every** response path must call it: list, account register, single read,
-create, update, post, void, unvoid, soft-delete, restore, approve, correct.
-Step 2.5 move endpoints also return fully enriched affected rows (or a refreshed
-page contract), never partial posting metadata.
-Single-record paths pass a one-element slice. No path may emit partially
-populated metadata — if a referenced account/commodity is missing, that is an
-internal error, not a silent null.
+`TransactionService` now holds `accountRepository *db.AccountRepository` and
+`commodityRepository *db.CommodityRepository`. `NewTransactionService` updated
+(4 params: repository, payeeRepository, accountRepository, commodityRepository).
+Call sites updated: `cmd/rekenraam/command.go`, `api/setup_test.go`,
+`api/auth_test.go`.
 
-### 1d. Propagate to API DTOs
+All response paths call enrichment: list, register, single read, create, update,
+post, void, unvoid, soft-delete, restore, approve.
 
-In `backend/internal/api/transactions.go`, add to `postingResponse` and to the
-register's posting field:
+### ✅ 1d. Propagate to API DTOs — DONE
 
-```go
-AccountName       *string `json:"account_name"`
-AccountCode       *string `json:"account_code"`
-AccountSystemRole *string `json:"account_system_role"`
-AccountBuiltinKey *string `json:"account_builtin_key"`
-AccountClass      string  `json:"account_class"`
-CommodityCode     string  `json:"commodity_code"`
-CommoditySymbol   *string `json:"commodity_symbol"`
-```
-
-Map from `app.Posting` in the existing `postingResponse` construction sites
-(there are construction points for list, register at ~line 625, and single/
-mutation at ~720 — update all).
+Seven fields added to `postingResponse` in
+`backend/internal/api/transactions.go`. Both construction sites updated (list
+path ~line 625, register path ~line 720).
 
 ### 1e. OpenAPI + types
 

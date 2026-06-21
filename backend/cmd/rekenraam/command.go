@@ -74,7 +74,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	categoryService := app.NewCategoryService(db.NewCategoryRepository(database), setupService)
 	payeeRepository := db.NewPayeeRepository(database)
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
-	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
+	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	pricingService.StartScheduler(ctx, logger)

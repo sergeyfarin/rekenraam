@@ -124,6 +124,15 @@ type Posting struct {
 	ClearedOn            string
 	MetadataJSON         string
 	TagIDs               []int64
+
+	// Enriched fields — populated by enrichPostings; nil means system account has no user-visible name.
+	AccountName       *string
+	AccountCode       *string
+	AccountSystemRole *string
+	AccountBuiltinKey *string // non-nil for built-in/starter category accounts
+	AccountClass      string  // asset | liability | income | expense | equity
+	CommodityCode     string  // "USD", "EUR", "AAPL"
+	CommoditySymbol   *string // "$", "€"; nil when no symbol is set
 }
 
 type AccountRegisterEntry struct {
@@ -261,18 +270,27 @@ type PostingInput struct {
 }
 
 type TransactionService struct {
-	repository      *db.TransactionRepository
-	payeeRepository *db.PayeeRepository
-	now             func() time.Time
-	newLineKey      func() string
+	repository          *db.TransactionRepository
+	payeeRepository     *db.PayeeRepository
+	accountRepository   *db.AccountRepository
+	commodityRepository *db.CommodityRepository
+	now                 func() time.Time
+	newLineKey          func() string
 }
 
-func NewTransactionService(repository *db.TransactionRepository, payeeRepository *db.PayeeRepository) *TransactionService {
+func NewTransactionService(
+	repository *db.TransactionRepository,
+	payeeRepository *db.PayeeRepository,
+	accountRepository *db.AccountRepository,
+	commodityRepository *db.CommodityRepository,
+) *TransactionService {
 	return &TransactionService{
-		repository:      repository,
-		payeeRepository: payeeRepository,
-		now:             time.Now,
-		newLineKey:      uuid.NewString,
+		repository:          repository,
+		payeeRepository:     payeeRepository,
+		accountRepository:   accountRepository,
+		commodityRepository: commodityRepository,
+		now:                 time.Now,
+		newLineKey:          uuid.NewString,
 	}
 }
 
@@ -293,8 +311,13 @@ func (s *TransactionService) ListTransactions(ctx context.Context, input ListTra
 		nextCursor = db.EncodeTransactionCursor(last.TransactionDate, last.ID)
 	}
 
+	txns := toTransactions(records)
+	if err := s.enrichPostings(ctx, txns); err != nil {
+		return ListTransactionsResult{}, err
+	}
+
 	return ListTransactionsResult{
-		Transactions: toTransactions(records),
+		Transactions: txns,
 		NextCursor:   nextCursor,
 	}, nil
 }
@@ -328,8 +351,13 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 		nextCursor = db.EncodeTransactionCursor(last.JournalEntry.EntryDate, last.Posting.ID)
 	}
 
+	entries := toAccountRegisterEntries(records, runningBalances)
+	if err := s.enrichRegisterPostings(ctx, entries); err != nil {
+		return AccountRegisterResult{}, err
+	}
+
 	return AccountRegisterResult{
-		Entries:    toAccountRegisterEntries(records, runningBalances),
+		Entries:    entries,
 		NextCursor: nextCursor,
 	}, nil
 }
@@ -347,7 +375,15 @@ func (s *TransactionService) Transaction(ctx context.Context, transactionID int6
 		return Transaction{}, fmt.Errorf("read transaction: %w", err)
 	}
 
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
+}
+
+func (s *TransactionService) enrichOne(ctx context.Context, txn Transaction) (Transaction, error) {
+	slice := []Transaction{txn}
+	if err := s.enrichPostings(ctx, slice); err != nil {
+		return Transaction{}, err
+	}
+	return slice[0], nil
 }
 
 func (s *TransactionService) CreateTransaction(ctx context.Context, input CreateTransactionInput) (Transaction, error) {
@@ -361,7 +397,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 		return Transaction{}, mapTransactionDBError(err)
 	}
 
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
@@ -469,7 +505,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		return Transaction{}, mapTransactionDBError(err)
 	}
 
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *TransactionService) PostTransaction(ctx context.Context, input PostTransactionInput) (Transaction, error) {
@@ -547,7 +583,7 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 		return Transaction{}, mapTransactionDBError(err)
 	}
 
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *TransactionService) UnvoidTransaction(ctx context.Context, input TransactionLifecycleInput) (Transaction, error) {
@@ -574,7 +610,7 @@ func (s *TransactionService) UnvoidTransaction(ctx context.Context, input Transa
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
 	}
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *TransactionService) SoftDeleteTransaction(ctx context.Context, input TransactionLifecycleInput) (Transaction, error) {
@@ -615,7 +651,7 @@ func (s *TransactionService) setTransactionDeleted(ctx context.Context, input Tr
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
 	}
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *TransactionService) prepareLifecycleChange(ctx context.Context, input TransactionLifecycleInput, requireReason bool) (Transaction, string, string, error) {
@@ -683,7 +719,7 @@ func (s *TransactionService) ApproveTransaction(ctx context.Context, input Appro
 		return Transaction{}, mapTransactionDBError(err)
 	}
 
-	return toTransaction(record), nil
+	return s.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *TransactionService) listParams(input ListTransactionsInput, filterEntryDate bool) (db.ListTransactionsParams, error) {
@@ -1285,6 +1321,149 @@ func mapTransactionDBError(err error) error {
 	default:
 		return fmt.Errorf("transaction repository: %w", err)
 	}
+}
+
+// enrichPostings performs one bulk account lookup and one bulk commodity lookup
+// across all postings in the given transactions, then fills the enriched fields
+// on each Posting in memory. It must be called before any response path returns
+// transaction data to callers. A missing account or commodity is an internal error.
+func (s *TransactionService) enrichPostings(ctx context.Context, transactions []Transaction) error {
+	accountIDs := make(map[int64]struct{})
+	commodityIDs := make(map[int64]struct{})
+	for i := range transactions {
+		for j := range transactions[i].JournalEntries {
+			for k := range transactions[i].JournalEntries[j].Postings {
+				accountIDs[transactions[i].JournalEntries[j].Postings[k].AccountID] = struct{}{}
+				commodityIDs[transactions[i].JournalEntries[j].Postings[k].CommodityID] = struct{}{}
+			}
+		}
+	}
+
+	flatAccountIDs := make([]int64, 0, len(accountIDs))
+	for id := range accountIDs {
+		flatAccountIDs = append(flatAccountIDs, id)
+	}
+	flatCommodityIDs := make([]int64, 0, len(commodityIDs))
+	for id := range commodityIDs {
+		flatCommodityIDs = append(flatCommodityIDs, id)
+	}
+
+	accountMap, err := s.accountRepository.AccountsByIDs(ctx, BookID, flatAccountIDs)
+	if err != nil {
+		return fmt.Errorf("enrich postings: accounts lookup: %w", err)
+	}
+	commodityMap, err := s.commodityRepository.CommoditiesByIDs(ctx, BookID, flatCommodityIDs)
+	if err != nil {
+		return fmt.Errorf("enrich postings: commodities lookup: %w", err)
+	}
+
+	for i := range transactions {
+		for j := range transactions[i].JournalEntries {
+			for k := range transactions[i].JournalEntries[j].Postings {
+				p := &transactions[i].JournalEntries[j].Postings[k]
+
+				acct, ok := accountMap[p.AccountID]
+				if !ok {
+					return fmt.Errorf("enrich postings: account %d not found", p.AccountID)
+				}
+				if acct.Name.Valid {
+					name := acct.Name.String
+					p.AccountName = &name
+				}
+				if acct.Code.Valid {
+					code := acct.Code.String
+					p.AccountCode = &code
+				}
+				if acct.SystemRole.Valid {
+					role := acct.SystemRole.String
+					p.AccountSystemRole = &role
+				}
+				if acct.BuiltinKey.Valid {
+					key := acct.BuiltinKey.String
+					p.AccountBuiltinKey = &key
+				}
+				p.AccountClass = acct.AccountClass
+
+				comm, ok := commodityMap[p.CommodityID]
+				if !ok {
+					return fmt.Errorf("enrich postings: commodity %d not found", p.CommodityID)
+				}
+				p.CommodityCode = comm.Code
+				if comm.DisplaySymbol != "" {
+					sym := comm.DisplaySymbol
+					p.CommoditySymbol = &sym
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// enrichRegisterPostings is the AccountRegisterEntry equivalent of enrichPostings.
+func (s *TransactionService) enrichRegisterPostings(ctx context.Context, entries []AccountRegisterEntry) error {
+	accountIDs := make(map[int64]struct{})
+	commodityIDs := make(map[int64]struct{})
+	for i := range entries {
+		accountIDs[entries[i].Posting.AccountID] = struct{}{}
+		commodityIDs[entries[i].Posting.CommodityID] = struct{}{}
+	}
+
+	flatAccountIDs := make([]int64, 0, len(accountIDs))
+	for id := range accountIDs {
+		flatAccountIDs = append(flatAccountIDs, id)
+	}
+	flatCommodityIDs := make([]int64, 0, len(commodityIDs))
+	for id := range commodityIDs {
+		flatCommodityIDs = append(flatCommodityIDs, id)
+	}
+
+	accountMap, err := s.accountRepository.AccountsByIDs(ctx, BookID, flatAccountIDs)
+	if err != nil {
+		return fmt.Errorf("enrich register postings: accounts lookup: %w", err)
+	}
+	commodityMap, err := s.commodityRepository.CommoditiesByIDs(ctx, BookID, flatCommodityIDs)
+	if err != nil {
+		return fmt.Errorf("enrich register postings: commodities lookup: %w", err)
+	}
+
+	for i := range entries {
+		p := &entries[i].Posting
+
+		acct, ok := accountMap[p.AccountID]
+		if !ok {
+			return fmt.Errorf("enrich register postings: account %d not found", p.AccountID)
+		}
+		if acct.Name.Valid {
+			name := acct.Name.String
+			p.AccountName = &name
+		}
+		if acct.Code.Valid {
+			code := acct.Code.String
+			p.AccountCode = &code
+		}
+		if acct.SystemRole.Valid {
+			role := acct.SystemRole.String
+			p.AccountSystemRole = &role
+		}
+		if acct.BuiltinKey.Valid {
+			key := acct.BuiltinKey.String
+			p.AccountBuiltinKey = &key
+		}
+		p.AccountClass = acct.AccountClass
+
+		comm, ok := commodityMap[p.CommodityID]
+		if !ok {
+			return fmt.Errorf("enrich register postings: commodity %d not found", p.CommodityID)
+		}
+		p.CommodityCode = comm.Code
+		if comm.DisplaySymbol != "" {
+			sym := comm.DisplaySymbol
+			p.CommoditySymbol = &sym
+		}
+	}
+
+	return nil
 }
 
 func toTransactions(records []db.TransactionRecord) []Transaction {

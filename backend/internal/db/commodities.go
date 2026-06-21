@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var ErrCommodityExists = errors.New("commodity already exists")
@@ -89,6 +90,66 @@ type SetDefaultCurrencyParams struct {
 
 func NewCommodityRepository(database *sql.DB) *CommodityRepository {
 	return &CommodityRepository{database: database}
+}
+
+// PostingCommoditySummary holds the commodity fields needed to enrich posting responses.
+type PostingCommoditySummary struct {
+	ID            int64
+	Code          string
+	DisplaySymbol string // prefer display_symbol; falls back to symbol in DB (both stored identically in current data)
+	Kind          string
+}
+
+// CommoditiesByIDs returns a PostingCommoditySummary keyed by commodity ID for the given IDs.
+// Missing IDs are absent from the map (not an error). Callers must deduplicate IDs first.
+// Does not filter by kind so securities and currencies are both returned.
+func (r *CommodityRepository) CommoditiesByIDs(ctx context.Context, bookID int64, ids []int64) (map[int64]PostingCommoditySummary, error) {
+	if len(ids) == 0 {
+		return map[int64]PostingCommoditySummary{}, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, bookID)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := `
+		SELECT
+			c.id,
+			c.code,
+			COALESCE(NULLIF(cv.display_symbol, ''), NULLIF(cv.symbol, '')),
+			c.kind
+		FROM commodities c
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE c.book_id = ?
+			AND c.id IN (` + strings.Join(placeholders, ", ") + `)`
+
+	rows, err := r.database.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("commodities by ids: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[int64]PostingCommoditySummary, len(ids))
+	for rows.Next() {
+		var s PostingCommoditySummary
+		var displaySymbol sql.NullString
+		if err := rows.Scan(&s.ID, &s.Code, &displaySymbol, &s.Kind); err != nil {
+			return nil, fmt.Errorf("scan posting commodity summary: %w", err)
+		}
+		if displaySymbol.Valid {
+			s.DisplaySymbol = displaySymbol.String
+		}
+		result[s.ID] = s
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate posting commodity summaries: %w", err)
+	}
+
+	return result, nil
 }
 
 func (r *CommodityRepository) ListCurrencies(ctx context.Context, bookID int64) ([]CommodityRecord, error) {

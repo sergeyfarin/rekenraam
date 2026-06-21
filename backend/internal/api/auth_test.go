@@ -59,7 +59,7 @@ func newAuthHandlerForDatabaseWithOptions(database *sql.DB, options HandlerOptio
 	categoryService := app.NewCategoryService(db.NewCategoryRepository(database), setupService)
 	payeeRepository := db.NewPayeeRepository(database)
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
-	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository)
+	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, db.NewCommodityRepository(database))
 
 	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, nil, nil, options)
 }

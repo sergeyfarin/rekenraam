@@ -217,6 +217,65 @@ func (r *AccountRepository) ListAccounts(ctx context.Context, params ListAccount
 	return scanAccountRecords(rows)
 }
 
+// PostingAccountSummary holds the account fields needed to enrich posting responses.
+type PostingAccountSummary struct {
+	ID           int64
+	Name         sql.NullString
+	Code         sql.NullString
+	SystemRole   sql.NullString
+	AccountClass string
+	BuiltinKey   sql.NullString // json_extract(metadata_json, '$.category.builtin_key')
+}
+
+// AccountsByIDs returns a PostingAccountSummary keyed by account ID for the given IDs.
+// Missing IDs are absent from the map (not an error). Callers must deduplicate IDs first.
+func (r *AccountRepository) AccountsByIDs(ctx context.Context, bookID int64, ids []int64) (map[int64]PostingAccountSummary, error) {
+	if len(ids) == 0 {
+		return map[int64]PostingAccountSummary{}, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, bookID)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := `
+		SELECT
+			a.id,
+			av.name,
+			av.code,
+			a.system_role,
+			av.account_class,
+			json_extract(av.metadata_json, '$.category.builtin_key')
+		FROM accounts a
+		JOIN current_account_versions av ON av.account_id = a.id
+		WHERE a.book_id = ?
+			AND a.id IN (` + strings.Join(placeholders, ", ") + `)`
+
+	rows, err := r.database.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("accounts by ids: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[int64]PostingAccountSummary, len(ids))
+	for rows.Next() {
+		var s PostingAccountSummary
+		if err := rows.Scan(&s.ID, &s.Name, &s.Code, &s.SystemRole, &s.AccountClass, &s.BuiltinKey); err != nil {
+			return nil, fmt.Errorf("scan posting account summary: %w", err)
+		}
+		result[s.ID] = s
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate posting account summaries: %w", err)
+	}
+
+	return result, nil
+}
+
 func (r *AccountRepository) CurrentAccountByID(ctx context.Context, bookID int64, accountID int64) (AccountRecord, error) {
 	var record AccountRecord
 	if err := scanAccountRecord(r.database.QueryRowContext(ctx, currentAccountSelect(`
