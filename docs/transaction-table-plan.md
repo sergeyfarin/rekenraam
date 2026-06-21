@@ -27,13 +27,13 @@ These are NOT a single five-step ladder. There are **three persisted statuses**
 entry) and **one independent flag** (soft-delete) that is orthogonal to status.
 
 - **Unsaved entry** — pre-persistence UI working copy, no database row, no side
-  effects. Not a status. Becomes `posted` (manual entry) or `draft`
-  (autosave/import) only on save.
+  effects. Not a status. Manual Save creates `posted`; a future producer may
+  persist `draft` for its own recovery/review workflow.
 - **draft** — persisted `transaction_versions.status='draft'`. **System-only, not
-  user-facing.** Produced only by autosave recovery, scheduled generation, and
-  committed-import-awaiting-review. Manual entry never produces a draft. There is
-  no "save as draft" button and users never pick `draft`. Excluded from the
-  ledger; may trigger FX coverage.
+  user-facing.** Reserved for future autosave recovery, scheduled generation, and
+  committed-import-awaiting-review; no current workflow produces it. Manual entry
+  never produces a draft. There is no "save as draft" button and users never pick
+  `draft`. Excluded from the ledger; may trigger FX coverage.
 - **posted** — in the ledger, directly editable. The default and only outcome of
   manual entry.
 - **voided** — excluded from ledger but **stays visible** in the table marked
@@ -72,6 +72,9 @@ Already implemented — **consume, do not rebuild**:
   guard at all.
 - List/register queries already exclude soft-deleted rows
   (`deleted_at IS NULL`).
+- Current same-day order uses database IDs as tie-breakers. The core plan now
+  requires separate editable transaction-day and account-posting-day sequences;
+  Step 2.5 replaces those incidental tie-breakers.
 - Reusable frontend primitives: `frontend/src/lib/components/` has
   `status-badge.svelte`, `panel.svelte`, `state-panel.svelte`,
   `page-header.svelte`, `api-form-error.svelte`, `top-bar.svelte`. Editor
@@ -200,6 +203,8 @@ Add a single helper, e.g.
 
 **Every** response path must call it: list, account register, single read,
 create, update, post, void, unvoid, soft-delete, restore, approve, correct.
+Step 2.5 move endpoints also return fully enriched affected rows (or a refreshed
+page contract), never partial posting metadata.
 Single-record paths pass a one-element slice. No path may emit partially
 populated metadata — if a referenced account/commodity is missing, that is an
 internal error, not a silent null.
@@ -285,6 +290,139 @@ both most-recent-first; the cursor format can absorb ASC later without breaking.
 
 ---
 
+## Step 2.5 — Backend prerequisite: ordering and reconciliation impact
+
+This step must land before frontend table/editor work. It introduces the explicit
+same-day order requested by the UI and finishes the period-scoped reconciliation
+contract that the editor and Trash view consume.
+
+### 2.5a. Migration and model fields
+
+Add a migration under `backend/migrations`:
+
+- `transaction_versions.transaction_day_sequence INTEGER NOT NULL CHECK
+  (transaction_day_sequence > 0)`
+  — scoped to current transactions in `(book_id, transaction_date)`.
+- `posting_versions.account_day_sequence INTEGER NOT NULL CHECK
+  (account_day_sequence > 0)` — scoped
+  to current postings in `(book_id, account_id, entry_date)`.
+- `reconciliation_checkpoints.statement_account_sequence INTEGER NOT NULL CHECK
+  (>= 0)` — together with `statement_date`, the inclusive account-register lock
+  boundary. `0` means before every posting on that date.
+
+Backfill transaction and posting sequences deterministically using the current
+ID tie-breakers so existing visible order does not jump. Backfill each checkpoint
+to the greatest account-day sequence among its `reconciliation_checkpoint_postings`
+whose `entry_date` equals `statement_date`, or `0` when it selected none that day.
+Use stable identity ranks for history: rank `transaction_id` within each
+transaction date and `posting_line_id` within each account/entry date, so multiple
+versions of the same logical row inherit the same initial position. Current rows
+must preserve the existing ID order.
+
+The existing append-only triggers reject updates to `transaction_versions` and
+`posting_versions`. The migration must explicitly drop and recreate those
+triggers around a controlled backfill (or rebuild the tables); do not leave the
+new columns at one shared default and call that ordered. Add migration tests that
+both verify the backfill and confirm append-only enforcement is restored.
+Do not add a simple SQL UNIQUE constraint across the append-only version tables:
+historical versions legitimately repeat positions. The service validates
+uniqueness among current rows.
+
+Add the fields through db records, app models, API DTOs, OpenAPI, and generated
+frontend types. Keep sequence values hidden in ordinary forms; they remain in the
+contract for deterministic cursors and move operations.
+
+### 2.5b. Allocation, movement, and cursor rules
+
+- New manual transactions receive `MAX(transaction_day_sequence)+1` on their
+  `transaction_date`.
+- Each new posting receives `MAX(account_day_sequence)+1` for its
+  `(account_id, entry_date)`.
+- A transaction date or posting account/date change places the affected item at
+  the end of its new scope unless an explicit move follows.
+- Add `POST /api/v1/transactions/{id}/move` with
+  `{ "direction": "earlier" | "later" }` for global same-day order.
+- Add `POST /api/v1/accounts/{account_id}/postings/{posting_line_id}/move` with
+  the same body for account-register order. A transfer's posting in each account
+  moves independently.
+- Movement swaps adjacent current positions atomically. If multiple transactions
+  are affected, append all replacement transaction versions under one audit
+  event. Numeric gaps are allowed; the UI may display dense ordinal positions.
+- Replace global pagination with cursor tuple `(transaction_date,
+  transaction_day_sequence, transaction_id)` and register pagination with
+  `(entry_date, account_day_sequence, posting_version_id)`. Update encode/decode,
+  WHERE clauses, ordering, OpenAPI descriptions, and cursor tests together.
+
+The UI labels movement as Move up/down for the current sort direction, backed by
+the semantic earlier/later API so reversing visual sort does not reverse meaning.
+
+### 2.5c. Reconciliation boundary
+
+For an account/commodity checkpoint, a posting is inside the reconciled period
+when:
+
+```text
+entry_date < statement_date
+OR (entry_date = statement_date AND account_day_sequence <= statement_account_sequence)
+```
+
+At reconciliation finish, set `statement_account_sequence` to the greatest
+sequence among selected postings on the statement date, or `0` if none are
+selected that day. Before finish, allow the user to move an unselected same-day
+posting after the selected statement items; this is the explicit before/after
+distinction requested for one calendar date.
+
+Changing `transaction_day_sequence` never affects reconciliation. Moving a
+posting sequence wholly within the same side of the boundary is allowed without
+override. Moving across it is guarded and invalidates that checkpoint plus later
+active checkpoints for the account/commodity after explicit confirmation.
+
+Apply this period rule consistently to create, edit, void, unvoid, soft-delete,
+restore, and posting movement. Exempt restoring a voided+soft-deleted transaction,
+which changes visibility but does not re-enter postings into the ledger.
+
+### 2.5d. Backdated create and affected-checkpoint preview
+
+- Plumb `reconciliation_override` through `CreateTransactionInput` and the create
+  handler. Manual browser creation accepts only `status='posted'`.
+- Before create, evaluate every proposed posting against active checkpoint
+  date/sequence boundaries. On conflict, do not persist anything.
+- Add `POST /api/v1/transactions/reconciliation-impact` for an unsaved create
+  payload.
+- Add `POST /api/v1/transactions/{id}/reconciliation-impact` for update, unvoid,
+  soft-delete, restore, or posting-move payloads.
+- Return `{ account_id, account_label, commodity_code, statement_date,
+  statement_account_sequence, checkpoint_id }[]`. Keep the stable error envelope
+  unchanged; these are explicit read-only previews.
+- The UI may call preview proactively or after the generic override-required
+  conflict, show named checkpoints, then retry with override.
+
+### 2.5e. Ordinary list versus reserved drafts
+
+With no status filter, `GET /transactions` returns only `posted` and `voided`.
+`status=draft` remains an explicit internal filter for a future producer-owned
+surface, but the general transaction table and filter bar never expose it. Manual
+create rejects draft and no current workflow creates one.
+
+Deferred follow-up: an owner-facing **Unfinished Work** inbox/backlog button may
+link to future import-review, scheduled-generation, or recovery-draft owners. It
+must not be a generic draft editor and is intentionally empty/unexposed until a
+producer workflow exists.
+
+**Verify Step 2.5:**
+
+```bash
+cd backend && go test ./internal/app/ ./internal/db/ ./internal/api/
+cd .. && pnpm --dir frontend run openapi:generate && pnpm --dir frontend run check
+```
+
+Required tests: deterministic backfill; independent transfer order in two account
+registers; move within each side of a checkpoint; guarded crossing; backdated
+create preview/retry; voided restore exemption; default list excludes draft;
+global/register cursor traversal before and after same-day movement.
+
+---
+
 ## Step 3 — Frontend API layer
 
 In `frontend/src/lib/api/transactions.ts`:
@@ -294,6 +432,8 @@ In `frontend/src/lib/api/transactions.ts`:
 - Add `accountRegisterInfiniteQueryOptions(accountID, options)` mirroring
   `transactionsInfiniteQueryOptions`, calling the existing `getAccountRegister`,
   with `getNextPageParam` reading `next_cursor`.
+- Add typed helpers for transaction/posting move and both reconciliation-impact
+  preview endpoints from Step 2.5.
 
 **Verify Step 3:** `pnpm --dir frontend run check`.
 
@@ -377,8 +517,10 @@ Use Tailwind + existing semantic tokens; do not invent route-local colors.
 ### 4c. `frontend/src/lib/transactions/transaction-filter-bar.svelte`
 
 Reusable filter controls; each context passes which filters to show. Controls:
-status (draft/posted/voided), kind, date range, account, payee (autocomplete via
-`payeesQueryOptions`), search (`q`), needs_review. Emits a typed filter object.
+ordinary status (posted/voided), kind, date range, account, payee (autocomplete
+via `payeesQueryOptions`), search (`q`), needs_review. The shared status-label
+helper may understand `draft` for future producer-owned screens, but the general
+filter must not offer it. Emits a typed filter object.
 Use `minisearch` only for small in-memory dropdowns (accounts/payees), never for
 the transaction list itself (server FTS5 handles `q`).
 
@@ -399,8 +541,9 @@ general list. Each row's actions:
 | any + needs_review | Approve (inline, no editor) | Import-set flag only |
 
 Notes:
-- "Reconciliation-locked" is a per-row hint: any posting whose `entry_date` is on
-  or before the latest active checkpoint for its account/commodity. Use the
+- "Reconciliation-locked" is a per-row hint: any posting before an active
+  checkpoint's `(statement_date, statement_account_sequence)` boundary for its
+  account/commodity. Use the
   backend-provided per-row flag from Step 1/Step 9 enrichment rather than
   computing it client-side; if the flag is not yet available, treat the row as
   potentially locked and let the save-time guard decide.
@@ -455,6 +598,20 @@ amount; show a running total and highlight imbalance (balance enforced by
 backend; check client-side with Dinero before submit). Tiers 1/2 construct the
 same `journal_entries[]` payload as Tier 3 — the abstraction is cosmetic.
 
+### Commodity selection
+
+- Tier 1 infers commodity from the selected asset/liability account's
+  `default_commodity_id`. If that account has no default commodity, show a
+  required commodity selector. The generated category posting uses the same
+  commodity.
+- Tier 3 exposes commodity on every posting. Account/default-commodity and scale
+  validation mirror the backend rules; archived commodities remain displayable
+  for history but are unavailable for new entry.
+- A same-commodity transfer creates the ordinary balanced transfer postings. A
+  cross-commodity transfer uses explicit From and To amounts/commodities and the
+  FX `commodity_trading` pattern from the core plan; never infer an exchange rate
+  by equating unlike quantities.
+
 ### Save and cancel routing (the editor owns this, not the table)
 
 **There is no user-facing "save as draft."** Manual entry always saves to
@@ -468,22 +625,29 @@ soft-deleted. Route by case:
 | Case | Trigger | Call | Behaviour |
 |---|---|---|---|
 | New entry (unsaved) | Composing a new transaction | `POST /transactions` (`status:"posted"`) on Save | Working copy only — no row, no FX — until Save. No draft created |
-| Posted edit — not in a reconciled period | No affected posting falls on/before a latest active checkpoint | `PATCH /transactions/{id}` | Opens and saves directly, no warning |
+| Posted edit — not in a reconciled period | No affected posting falls inside an active checkpoint's date/account-sequence boundary | `PATCH /transactions/{id}` | Opens and saves directly, no warning |
 | Posted edit — non-financial only | Only category/description/payee/note/tags change | `PATCH /transactions/{id}` | Always allowed, reconciliation intact, no override — even inside a reconciled period |
 | Posted edit — changes a reconciled balance | Adds/removes/re-dates a posting in a reconciled period, or changes a reconciled posting's account/commodity/amount/scale/date | `PATCH /transactions/{id}` with `reconciliation_override: true` | Warning modal **at save time** naming the affected checkpoint(s); proceed only on confirm |
 | Voided edit | Transaction is voided | Unvoid first, then `PATCH` | Editor offers Unvoid (which re-enters the ledger and is itself period-guarded); editing blocked until unvoided |
 | Draft edit (system) | A persisted draft in its producing workflow (import-review tray) | `PATCH /transactions/{id}` | Out of scope for the general editor; the import-review surface owns draft editing/promotion |
 | Corrective transaction | "Create correction" | `POST /transactions/{id}/correct` | Opens in correction mode |
 
-The guard uses the **period-scoped** rule (see `docs/conventions.md` and the core
+A new backdated transaction uses the create-impact preview from Step 2.5 when the
+first save reports an override conflict. Nothing is persisted before confirmation;
+after the user reviews the named checkpoints, retry the same create payload with
+`reconciliation_override:true`.
+
+The guard uses the **period-scoped** rule (see Step 2.5,
+`docs/conventions.md`, and the core
 plan): a change is guarded when it would alter a reconciled balance — either it
 touches a reconciled posting's facts, or it adds/removes/re-dates a posting whose
-`entry_date` is on or before the latest active checkpoint `statement_date` for an
-affected account/commodity, even if that posting is not itself flagged
-reconciled. Whether a specific edit crosses that line is only knowable after the
+`(entry_date, account_day_sequence)` falls inside an active checkpoint's
+`(statement_date, statement_account_sequence)` boundary for an affected
+account/commodity, even if that posting is not itself flagged reconciled.
+Whether a specific edit crosses that line is only knowable after the
 user edits, so the warning fires at save, not on open. If the backend returns
 `reconciliation override is required`, fetch the affected-checkpoint details
-(Step 9's preview/conflict read model) and show the warning naming them, then
+(Step 2.5's preview read model) and show the warning naming them, then
 retry with `reconciliation_override: true` on confirm.
 
 **Cancel semantics:**
@@ -545,10 +709,14 @@ override required, naming the checkpoint), and Cancel an in-progress new entry
 | Payee / Description | `payee_name` or `description` | 1 | |
 | Amount | Primary posting, signed-formatted | 1 | Sign convention by primary posting class |
 | Account(s) | Primary posting label (resolution chain) | 2 | "N accounts" when more than two |
-| Status | `status` | 3 | Badge draft/posted/voided (soft-deleted are excluded from the list, not badged) |
+| Status | `status` | 3 | Badge posted/voided (draft is not part of the general table) |
 | Flags | `needs_review` | 3 | Review badge |
 
-- Full filter bar (status, kind, date, account, payee, search, needs_review).
+- Full filter bar (posted/voided status, kind, date, account, payee, search,
+  needs_review). No draft option.
+- Same-day Move up/down actions call the semantic earlier/later transaction move
+  endpoint. Sequence numbers remain hidden unless a future advanced preference
+  exposes them.
 
 ### `frontend/src/routes/app/transactions/+page.svelte`
 
@@ -560,8 +728,9 @@ override required, naming the checkpoint), and Cancel an in-progress new entry
   - **Edit** — opens the editor in the panel, replacing the detail view (posted
     is directly editable; voided must be unvoided first).
   - **Create correction** — opens editor in correction mode (posted only).
-  - **Action buttons (status-appropriate):** Post, Approve, Void with reason,
-    Unvoid, Soft-delete with reason, Restore. Void keeps the row visible marked
+  - **Action buttons (status-appropriate):** Approve, Void with reason, Unvoid,
+    Soft-delete with reason, Restore. `Post` belongs only to a future draft-owning
+    workflow and never appears here. Void keeps the row visible marked
     voided; Soft-delete hides it from the table but keeps it recoverable. Void
     and Soft-delete are independent and each requires a reason.
 - No version/audit history in the panel for v1 (no API).
@@ -570,12 +739,14 @@ override required, naming the checkpoint), and Cancel an in-progress new entry
 - The side panel hosts the editor; it is never used for navigation.
 
 **Soft-delete recovery:** soft-deleted transactions never appear in the list or
-for any `status` value. Restore from the detail panel works once a transaction is
-opened by id. A dedicated trash/recovery view for browsing and restoring them is
-built in **Step 9** as a settings subpage.
+ordinary single-record reads. Immediately after soft-delete, the detail panel may
+offer Undo/Restore using the mutation response retained in local state. After
+navigation, close, or refresh, durable recovery occurs through the dedicated
+Settings → Trash view in Step 9; do not rely on reopening the deleted ID through
+the ordinary read endpoint.
 
 **Verify Step 6:** `pnpm --dir frontend run check`; run the app and confirm list
-loads, row opens detail, edit/post/void/soft-delete round-trip.
+loads, row opens detail, and edit/void/unvoid/soft-delete/restore round-trips.
 
 ---
 
@@ -591,14 +762,22 @@ loads, row opens detail, edit/post/void/soft-delete round-trip.
 |---|---|---|---|
 | Date | `entry_date` | 1 | Journal entry date, not transaction date |
 | Payee / Description | `payee_name` or `description` | 1 | |
-| Amount | `posting.quantity_value`, signed | 1 | Inflow +/outflow − from *this* account's class (known from context) |
-| Balance | `running_balance` | 1 | Right-aligned, account's commodity |
+| Amount | `posting.quantity_value`, signed | 1 | Inflow +/outflow − from this account's class; label with the posting commodity |
+| Balance | `running_balance` | 1 | Right-aligned balance for this account/commodity pair |
 | Reconciliation | `posting.reconciliation_status` | 2 | Icon uncleared/cleared/reconciled |
 | Memo | `posting.memo` | 3 | |
 
 - Filter bar: status, date range only (matches the register API).
+- Same-day Move up/down changes only this posting's account-register order. For
+  transfers, moving the posting in one account does not move its counterpart in
+  the other account. A boundary-crossing move uses the Step 2.5 impact/override
+  flow; movement wholly on one side is immediate.
 - Mobile: priority-1 columns in a responsive grid; Payee may wrap; Amount and
   Balance stay right-aligned.
+
+Multi-commodity accounts may show interleaved commodities. Each row carries its
+posting commodity and an independently accumulated running balance for that
+commodity; never carry a USD balance into the next EUR row.
 
 ### `frontend/src/routes/app/accounts/[id]/register/+page.svelte`
 
@@ -685,90 +864,30 @@ guarded.
   transaction is **always easy, never reconciliation-guarded.** (Re-entering it
   into the ledger would be a separate unvoid, which is itself guarded.)
 - **Easy restore (default for posted):** restorable with no warning when no
-  affected posting falls on or before the latest active reconciliation checkpoint
-  for its `(account_id, commodity_id)` — i.e. every affected posting `entry_date`
-  is strictly after that account/commodity's most recent active checkpoint
-  `statement_date`, or there is no active checkpoint. The common case.
+  affected posting falls inside the latest active reconciliation checkpoint's
+  `(statement_date, statement_account_sequence)` boundary for its account and
+  commodity, or there is no active checkpoint. The common case.
 - **Guarded restore (posted in a reconciled period):** if any affected posting is
-  on or before a latest active checkpoint, restore requires explicit
+  inside a latest active checkpoint's date/sequence boundary, restore requires explicit
   `reconciliation_override: true` and invalidates that checkpoint plus all later
   active checkpoints for the same account/commodity — the same
   override-and-invalidate mechanism used by edit/void/unvoid/soft-delete. The UI
   warns, naming the affected checkpoint(s), like the guarded edit path in Step 5.
 
-The checkpoint is the lock floor; crossing it is allowed but never silent.
+The checkpoint is the lock floor; crossing it is allowed but never silent. The
+restore guard and affected-checkpoint preview are implemented earlier in Step
+2.5 so this step only adds deleted-listing and recovery UI.
 
-### 9a. Backend — restore guard (period-scoped)
-
-Today `RestoreTransaction` (`app/transactions.go`,
-`setTransactionDeleted(..., false)`) performs **no** reconciliation check. Add
-the period-scoped guard:
-
-- **Exempt voided transactions first:** if `current.Status == "voided"`, skip the
-  guard entirely — restore changes no balance.
-- Otherwise compute affected checkpoint refs by the **period** rule, not the
-  reconciled-posting-facts rule. For each posting, look up the latest active
-  checkpoint for its `(account_id, commodity_id)` and flag it when the posting's
-  `entry_date <= checkpoint.statement_date`. This differs from soft-delete's
-  `reconciliationRefsFromTransaction` (which keys on
-  `reconciliation_status='reconciled'`): a soft-deleted posting may not itself be
-  flagged reconciled yet still fall inside a reconciled period.
-- Add a repository query, e.g.
-  `LatestActiveCheckpointByAccountCommodity(ctx, bookID, accountID, commodityID)`
-  reading `reconciliation_checkpoints` (filter `status='active'`,
-  `ORDER BY statement_date DESC, id DESC LIMIT 1`; the
-  `reconciliation_checkpoints_account_idx` index already supports this).
-- If any posting trips the period check and `!input.ReconciliationOverride`,
-  return `ErrReconciliationOverrideRequired`. With override, pass the affected
-  checkpoint refs through `InvalidateCheckpointRefs` (plumbing already exists on
-  `SetTransactionDeletedParams`).
-
-**Apply the same period rule to the other in-ledger mutations** so the guard is
-consistent everywhere (this is the rule change agreed in conventions/core plan,
-not restore-only): create/edit (`reconciliationInvalidationRefs`) and unvoid must
-also flag postings that enter a reconciled period, not only changes to
-already-reconciled postings. Update `reconciliationAffectingPostingChange` and its
-callers accordingly. Soft-delete of a posted transaction in a reconciled period
-is likewise guarded.
-
-Add backend tests: restore of a post-checkpoint posted transaction succeeds with
-no override; restore of a posted transaction dated on/before the latest active
-checkpoint fails without override and, with override, succeeds and invalidates
-that checkpoint and later ones; restore of a voided+soft-deleted transaction in a
-reconciled period succeeds with no override (exempt); create/edit/unvoid that
-places a posting in a reconciled period is guarded.
-
-### 9a-bis. Backend — affected-checkpoint preview (so warnings can name them)
-
-The generic `ErrReconciliationOverrideRequired` cannot tell the UI *which*
-checkpoints are affected, but Step 5 and Step 9 both require warnings that name
-them. Add a read-only preview the editor/trash UI can call before confirming:
-
-- A dry-run/preview endpoint or read model that, given a pending operation
-  (restore, unvoid, or an edit payload) for a transaction, returns the list of
-  affected active checkpoints: `{ account_id, account_label, commodity_code,
-  statement_date, checkpoint_id }[]`. Prefer a dedicated preview endpoint (e.g.
-  `POST /api/v1/transactions/{id}/reconciliation-impact`) over enriching the
-  error envelope, because the error envelope is a stable `{code, message}` shape
-  per conventions and must not grow structured payloads.
-- The UI calls preview when it knows an override may be required (or after
-  receiving `ErrReconciliationOverrideRequired`), renders the named checkpoints in
-  the warning modal, then retries the real mutation with
-  `reconciliation_override: true`.
-- Update OpenAPI and regenerate types.
-
-### 9b. Backend — list soft-deleted
+### 9a. Backend — list soft-deleted
 
 Add a deleted-only listing path so the trash view can enumerate soft-deleted
 transactions (the list query currently hard-excludes `deleted_at IS NULL`; only
 single-record `TransactionByIDIncludingDeleted` exists).
 
 **Use a dedicated trash endpoint, not a `deleted=true` flag on `/transactions`.**
-The existing list cursor encodes and filters by `(transaction_date, id)` (see
-`EncodeTransactionCursor`/`DecodeTransactionCursor` in `db/transactions.go`).
-The trash view must order by deletion recency (`deleted_at DESC, id DESC`), which
-the date cursor cannot express — overloading `/transactions?deleted=true` would
-silently break pagination. A separate endpoint with its own cursor avoids that.
+After Step 2.5 the ordinary cursor follows transaction date and same-day sequence,
+while Trash must order by deletion recency (`deleted_at DESC, id DESC`). A
+separate endpoint with its own cursor keeps those semantics independent.
 
 - `db/transactions.go` — add a deleted-only query ordered by
   `deleted_at DESC, id DESC`, with a **deletion cursor** `(deleted_at, id)`
@@ -776,14 +895,14 @@ silently break pagination. A separate endpoint with its own cursor avoids that.
   `delete_reason`, `deleted_at`, and `deleted_by_user_id` snapshot columns.
 - `app/transactions.go` — a `ListDeletedTransactions` service; still run Step 1
   enrichment so rows render with names. Per row, compute a
-  `restore_blocked_by_reconciliation` boolean using 9a's **period** check
+  `restore_blocked_by_reconciliation` boolean using Step 2.5's **period** check
   (and honouring the voided exemption: a voided row is never blocked) so the UI
   shows easy-restore vs guarded **without** a per-row probe request.
 - `api/transactions.go` + OpenAPI — add `GET /api/v1/transactions/deleted`
   (cursor-paginated) returning the deleted rows plus the snapshot fields and the
   per-row flag. Regenerate types.
 
-### 9c. Frontend — settings subpage
+### 9b. Frontend — settings subpage
 
 - Route: `frontend/src/routes/app/settings/trash/+page.svelte` (sibling of the
   existing `settings/currencies`, `settings/appearance`). Add it to the settings
@@ -815,8 +934,9 @@ For v1 each context shows the **native amount of the relevant posting** only —
 synthetic base-currency equivalent:
 
 - Global list: native amount of the primary asset/liability posting, with symbol.
-- Account register: native amount of this account's posting, account's commodity.
-- Category: sum of postings to the category, in the category's commodity.
+- Account register: native amount and running balance for this account/posting
+  commodity pair.
+- Category: separate per-commodity sums of postings to the category.
 
 A synthetic `base_currency_value` (summing legs converted to book currency) is
 **deferred** — naive summation double-counts same-currency transfers and is
@@ -855,6 +975,9 @@ full-screen form / bottom sheet below the breakpoint.
 - Global list, account register, and category routes render, paginate, filter,
   and open the editor; list rows navigate via the stretched-link pattern (no
   nested interactive elements inside an `<a>`).
+- Global transactions and account postings have independent editable same-day
+  order; transfers can occupy different positions in their two registers;
+  sequence-aware cursors and reconciliation boundaries are covered by tests.
 - Editor saves manual entry directly to `posted` (no "save as draft"), handles
   posted edit (incl. period-scoped reconciliation override at save with named
   checkpoints), correction, the transfer entry point, and well-defined Cancel
@@ -862,7 +985,7 @@ full-screen form / bottom sheet below the breakpoint.
 - The period-scoped reconciliation guard is enforced consistently across
   create/edit/void/unvoid/soft-delete/restore; restoring a voided+soft-deleted
   transaction is exempt (visibility only).
-- Detail panel exposes Post/Approve/Void/Unvoid/Soft-delete/Restore correctly by
+- Detail panel exposes Approve/Void/Unvoid/Soft-delete/Restore correctly by
   status and the soft-delete flag, each consequential action requiring a reason.
 - Soft-deleted transactions never appear in the main list; voided transactions
   appear marked voided. The Settings → Trash subpage (its own deleted endpoint +
@@ -878,13 +1001,19 @@ full-screen form / bottom sheet below the breakpoint.
 These were previously open; they are now settled and reflected in the steps
 above:
 
-1. **Account list → register navigation:** the account list row itself links to
-   `/app/accounts/[id]/register`; per-row action buttons stop propagation.
+1. **Account list → register navigation:** the account list row uses a stretched
+   link to `/app/accounts/[id]/register`; per-row buttons are focusable siblings.
    (Step 7.)
 2. **Category list → navigation:** the category list row itself links to
    `/app/categories/[id]`, same pattern. (Step 8.)
 3. **Trash/recovery:** a Settings → Trash subpage
    (`/app/settings/trash`) lists and restores soft-deleted transactions.
-   Easy one-click restore is allowed only for transactions after the latest
-   active reconciliation checkpoint; older ones require reconciliation override
-   and invalidate affected checkpoints. (Step 9.)
+   Easy one-click restore is allowed only when postings are outside the latest
+   active account checkpoint's date/sequence boundary; boundary-crossing restores
+   require reconciliation override and invalidate affected checkpoints. (Step 9.)
+4. **Draft:** retained as an inactive, system-only status. Manual entry posts
+   directly; the ordinary table excludes drafts. A producer-owned Unfinished Work
+   inbox is deferred until imports, scheduling, or recovery autosave exists.
+5. **Same-day order:** global transaction order and account-posting register order
+   are independent. Reconciliation uses the account-specific date/sequence
+   boundary; only crossing it is guarded.

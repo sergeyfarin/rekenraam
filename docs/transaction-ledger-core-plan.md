@@ -35,6 +35,12 @@ aligned with it.
   <https://hledger.org/SPEC-lots.html>
   <https://beancount.io/docs/Basics/inventories>
   <https://ledger-cli.org/3.0/doc/ledger3.html>
+- GnuCash's standard register order uses posted date, then a transaction-level
+  number, then entry time. It can instead use the split/action field for the
+  account shown in the register, demonstrating why transaction-wide same-day
+  order and account-posting same-day order are separate concerns. Rekenraam uses
+  explicit sequence fields rather than overloading check/action text.
+  <https://wiki.gnucash.org/wiki/FAQ#Q:_How_do_I_order_transactions_in_a_register_so_deposits_are_before_withdrawals.3F>
 
 ## Terminology
 
@@ -163,16 +169,14 @@ persists it. "Unsaved entry" must never be called a "draft," and persisted
 
 ### Persisted statuses — `transaction_versions.status`
 
-- `draft`: durable but unposted work that exists in the database and is
-  intentionally excluded from the posted ledger and reports. **System-only, not a
-  user-facing maturity step.** Sources are machine/async producers only: autosaved
-  manual work (crash/refresh recovery), scheduled-transaction generation, and
-  (only after the import commit step) imported rows awaiting review. Manual entry
-  never produces a draft — it goes directly to `posted`. There is no user-facing
-  "save as draft"; users never pick `draft`. Drafts surface only in their
-  producing workflow (e.g. an import-review tray), never as a tier the user
-  advances through. Draft does not mean unreconciled. Drafts have never affected
-  the posted ledger.
+- `draft`: reserved durable but unposted work that exists in the database and is
+  intentionally excluded from the posted ledger and reports. It is **system-only,
+  not a user-facing maturity step**. Manual entry never produces a draft and
+  there is no user-facing "save as draft." No current workflow produces drafts;
+  future import review, scheduled generation, or explicit crash-recovery
+  autosave may activate the status and must own a dedicated review/discard
+  surface. A future Unfinished Work inbox may link to those producer-owned
+  surfaces. Draft does not mean unreconciled and never affects the posted ledger.
 - `posted`: entered and participating in current ledger views and reports.
   "Entered" covers manual entry (the default and only outcome of manual entry),
   bank/file import after commit, and anything already existing in the ledger.
@@ -208,15 +212,11 @@ reconciliation guard below.
 
 ### Background preparation and FX
 
-Persisted work triggers FX/commodity-rate coverage: autosaved `draft` rows and
-`posted` transactions both do. That preparation never makes a draft part of
-ledger balances or reports. Unsaved entries and import previews trigger nothing;
-import rows trigger only after the commit step persists them. FX preparation does
-not depend on whether manual work defaults to `draft` or `posted` — entered work
-can request rates without that decision being settled.
-
-Whether manually entered work should default directly to `posted`, or remain a
-draft that reports can optionally include, is still a product decision to review.
+Persisted work triggers FX/commodity-rate coverage: a future producer-created
+`draft` row and every `posted` transaction both count. That preparation never
+makes a draft part of ledger balances or reports. Unsaved entries and import
+previews trigger nothing; future import rows trigger only after commit persists
+them. Manual entry always saves directly to `posted`.
 
 ### Delete and discard
 
@@ -256,30 +256,38 @@ soft-deleted transactions:
 
 Voiding and soft-deleting do not remove or rewrite `transaction_tags` or
 `posting_tags`. Transaction tags are identity-level context and continue to
-describe the historical transaction. Posting tags are keyed to posting lines;
-a voided version has no current postings, but historical posting-line context
-remains available for audit/history views.
+describe the historical transaction. Posting tags are keyed to posting lines. A
+voided version retains a complete immutable posting snapshot, including
+posting-line identity, ordering, and reconciliation state. Ledger queries exclude
+those postings because the version status is `voided`, not because the posting
+rows are absent. This keeps the visible voided row explainable and gives unvoid
+an exact source snapshot.
 
 **Guiding principle: if an operation changes a reconciled balance, it is
 guarded** (explicit override plus invalidation of the affected active checkpoint
-and all later active checkpoints for that account/commodity), never silent. The
-checkpoint `statement_date` is the lock floor per account/commodity. Two
-situations change a reconciled balance:
+and all later active checkpoints for that account/commodity), never silent. A
+checkpoint's `(statement_date, statement_account_sequence)` is the inclusive lock
+boundary in that account register. A posting is inside the reconciled period when
+its `entry_date` is earlier, or when its date is equal and its
+`account_day_sequence` is at or before the checkpoint sequence.
+
+Two situations change a reconciled balance:
 
 1. **Reconciled posting facts change.** A reconciled posting's account,
    commodity, quantity value, quantity scale, or entry date changes.
-2. **A posting enters or leaves a reconciled period.** Any operation adds,
-   removes, or re-dates a posting whose `entry_date` falls on or before the
-   latest active checkpoint `statement_date` for an affected account/commodity —
-   **even if that posting is not itself marked `reconciled`.** Creating, editing,
-   voiding, unvoiding, soft-deleting, or restoring a transaction inside an
-   already-reconciled period changes that period's balance, so it is guarded.
+2. **A posting enters or leaves a reconciled period.** Creating, editing,
+   voiding, unvoiding, soft-deleting, restoring, or changing
+   `account_day_sequence` across the inclusive checkpoint boundary is guarded,
+   even if the posting is not itself marked `reconciled`.
 
 This is broader than locking only reconciled posting facts: it protects the
 integrity of a reconciled *period*, not just the individual reconciled rows. The
 broader rule is intentional — a transaction dated inside a reconciled window but
 whose postings were never individually flagged reconciled still shifts the
-checkpoint's statement balance if added back or removed.
+checkpoint's statement balance if added back or removed. A sequence move that
+stays entirely before or entirely after the same checkpoint boundary does not
+change its ending balance and is allowed. `transaction_day_sequence` affects
+only global-table presentation and never reconciliation.
 
 Always allowed without override (never changes a balance):
 
@@ -329,6 +337,49 @@ Required constraints:
 
 Use a trigger if practical. If implemented in app logic first, the migration and
 docs must explicitly say so and tests must cover cross-transaction rejection.
+
+## Same-Day Ordering
+
+Dates remain the accounting facts; sequence numbers disambiguate order inside a
+date. There are two deliberately independent values:
+
+- `transaction_day_sequence` on `transaction_versions`, scoped to
+  `(book_id, transaction_date)`, orders UI transactions in the global table.
+- `account_day_sequence` on `posting_versions`, scoped to
+  `(book_id, account_id, journal_entries.entry_date)`, orders postings in that
+  account register. A transfer may therefore appear at sequence `2` in one
+  account and sequence `5` in the other.
+
+Both are positive integers, assigned at the end of their scope by default, and
+normally hidden. The UI exposes Move earlier / Move later (rendered as Up / Down
+for the active sort direction), not a free-form sequence input. `line_seq` still
+orders split lines inside one journal entry and is unrelated to either day
+sequence.
+
+Ordering is a register and running-balance aid, not proof that a bank accepted a
+posting. Moving a row never changes `reconciliation_status` or selects it into a
+checkpoint; reconciliation membership remains an explicit account workflow.
+
+Current rows in a scope must have a deterministic order. The application service
+owns sequence allocation and reordering inside one SQLite write transaction.
+Moving swaps adjacent current positions; insertion uses `MAX(sequence)+1`.
+Gaps are allowed after date/account moves or hidden/voided rows, and the UI may
+display dense ordinal positions derived from the sorted current rows. Sequence
+gaps are not normalized automatically because an active checkpoint stores its
+numeric cutoff. Because rows are append-only, a reorder appends replacement
+transaction versions for every transaction whose current posting sequence
+changes, under one audit event.
+
+Ordering and pagination must use stable tuples:
+
+- global list: `(transaction_date, transaction_day_sequence, transaction_id)`
+- account register: `(entry_date, account_day_sequence, posting_version_id)`
+
+Changing `transaction_day_sequence` is presentation-only. Changing
+`account_day_sequence` affects intermediate running balances but not the day's
+ending balance. It requires reconciliation override only when the posting crosses
+an active checkpoint's `(statement_date, statement_account_sequence)` boundary;
+moves wholly on one side remain allowed.
 
 ## Payees
 
@@ -389,12 +440,34 @@ created_at TEXT NOT NULL
 created_by_user_id INTEGER NOT NULL REFERENCES users(id)
 created_request_id TEXT
 created_audit_event_id INTEGER REFERENCES audit_events(id)
+deleted_at TEXT
+deleted_by_user_id INTEGER REFERENCES users(id)
+deleted_audit_event_id INTEGER REFERENCES audit_events(id)
+delete_reason TEXT
 ```
 
 Constraints/triggers:
 
 - correction target must be in the same book
 - transaction cannot correct itself
+
+Soft-delete current state lives on `transactions.deleted_at`. Each delete and
+restore also appends an immutable `transaction_deletion_events` row containing
+`book_id`, `transaction_id`, action (`soft_delete` or `restore`), timestamp,
+actor, audit event, and reason. Restoring clears only current deleted state; it
+does not erase lifecycle history.
+
+```text
+transaction_deletion_events
+id INTEGER PRIMARY KEY
+book_id INTEGER NOT NULL REFERENCES books(id)
+transaction_id INTEGER NOT NULL REFERENCES transactions(id)
+action TEXT NOT NULL CHECK (action IN ('soft_delete', 'restore'))
+occurred_at TEXT NOT NULL
+actor_user_id INTEGER NOT NULL REFERENCES users(id)
+audit_event_id INTEGER NOT NULL REFERENCES audit_events(id)
+reason TEXT NOT NULL
+```
 
 ### transaction_versions
 
@@ -411,12 +484,14 @@ transaction_kind TEXT NOT NULL CHECK (
   transaction_kind IN ('ordinary', 'transfer', 'investment', 'opening_balance', 'adjustment')
 )
 transaction_date TEXT NOT NULL CHECK (transaction_date GLOB '????-??-??')
+transaction_day_sequence INTEGER NOT NULL CHECK (transaction_day_sequence > 0)
 payee_id INTEGER REFERENCES payees(id)
 payee_name TEXT
 description TEXT NOT NULL DEFAULT ''
 external_ref_hint TEXT
 note_markdown TEXT NOT NULL DEFAULT ''
 metadata_json TEXT NOT NULL DEFAULT '{}'
+needs_review INTEGER NOT NULL DEFAULT 0 CHECK (needs_review IN (0, 1))
 recorded_at TEXT NOT NULL
 changed_by_user_id INTEGER NOT NULL REFERENCES users(id)
 change_reason TEXT NOT NULL
@@ -431,6 +506,8 @@ Rules:
 - `supersedes_version_id` must be from the same transaction
 - `transaction_date` is the user-facing register display date; `entry_date` on
   each `journal_entry` is the accounting effective date
+- `transaction_day_sequence` is current-version ordering within
+  `(book_id, transaction_date)`; historical versions may repeat prior positions
 - inserting a superseding version must preserve reconciled posting account,
   commodity, amount, scale, and entry date unless the operation explicitly uses
   reconciliation override and invalidates the affected checkpoints
@@ -499,6 +576,7 @@ transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id)
 journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id)
 posting_line_id INTEGER NOT NULL REFERENCES posting_lines(id)
 line_seq INTEGER NOT NULL CHECK (line_seq > 0)
+account_day_sequence INTEGER NOT NULL CHECK (account_day_sequence > 0)
 account_id INTEGER NOT NULL REFERENCES accounts(id)
 quantity_value TEXT NOT NULL
 quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24)
@@ -515,6 +593,10 @@ UNIQUE (journal_entry_id, line_seq)
 `line_seq` is unique within each journal entry, not across the whole transaction
 version. This is intentional: a delayed transfer can have two journal entries,
 each numbered from line `1`.
+
+`account_day_sequence` is independent of `line_seq`. It orders this posting
+within its account register on `journal_entries.entry_date`; different postings
+of one transfer may have different account-day positions.
 
 `posting_line_id` should be NOT NULL. System-generated postings also receive
 server-generated posting lines. This keeps every posting traceable.
@@ -552,6 +634,23 @@ default-commodity/scale matching if the trigger remains understandable.
 Balance checking should stay in the application service because it must
 validate a full set of postings atomically.
 
+### reconciliation checkpoint ordering extension
+
+Each account/commodity checkpoint adds:
+
+```text
+statement_account_sequence INTEGER NOT NULL CHECK (statement_account_sequence >= 0)
+```
+
+Together with `statement_date`, this is the inclusive same-day boundary. `0`
+means the checkpoint ends before every posting on its statement date. On finish,
+derive it as the greatest `account_day_sequence` among selected reconciliation
+postings whose entry date equals the statement date, or `0` when none are
+selected on that date. If an unselected same-day posting would fall before that
+cutoff, the reconciliation UI lets the user move it after the selected statement
+items before finishing. The checkpoint stores the chosen value permanently;
+later sequence changes do not move the boundary silently.
+
 ## Balancing Rule
 
 Every posted journal entry must balance per commodity.
@@ -585,20 +684,26 @@ Backend read-model endpoints:
   transfers do not temporarily reduce net worth; `commodity_trading` is listed
   as an excluded system role and must not inflate ordinary net-worth reports.
 - `GET /api/v1/accounts/{account_id}/register`: posting-shaped account
-  register rows with per-commodity running balances.
+  register rows ordered by `(entry_date, account_day_sequence,
+  posting_version_id)`, with per-commodity running balances.
 
 Read-model quantities keep the debit-positive ledger sign in `quantity_value`.
 Responses also include `normal_quantity_value`; liability, equity, and income
 balances are sign-flipped there for display and reporting. Values are normalized
 exactly in Go using integer quantity plus scale, not floating point.
 
+The global transaction list orders by `(transaction_date,
+transaction_day_sequence, transaction_id)`. UI sort direction may reverse this
+tuple but must not change the stored meaning of earlier/later.
+
 ## Reconciliation Guard
 
-A reconciled posting version must not be silently changed by a later edit.
+A reconciled balance must not be silently changed by a later operation.
 
 Reconciliation is account- and commodity-scoped. Finished reconciliation
 sessions create checkpoint rows containing statement date, statement balance,
-and the posting versions selected into the reconciliation. These checkpoints
+same-day account sequence boundary, and the posting versions selected into the
+reconciliation. These checkpoints
 act as the trust/lock floor for account registers, reports, cash counts, and
 statement-backed balances.
 
@@ -613,13 +718,19 @@ implemented by appending transaction versions:
 - cash reconciliation uses `source_kind='manual_cash_count'`; remaining
   differences are resolved by ordinary adjustment transactions before finish
 
-The edit guard is:
+The guard is:
 
 - allow metadata-only edits such as payee, description, note, external
   reference, and tags
+- treat `(statement_date, statement_account_sequence)` as the inclusive boundary
+  for each account/commodity checkpoint
 - require explicit reconciliation override when changing account, commodity,
-  amount, or entry date for a reconciled posting
-- when the user confirms such an edit, invalidate the affected active
+  amount, scale, or entry date for a reconciled posting, or when any operation
+  makes a posting enter or leave that boundary
+- allow `account_day_sequence` moves that remain wholly before or wholly after
+  the boundary; guard only a crossing
+- never guard `transaction_day_sequence`, which affects only global presentation
+- when the user confirms a guarded operation, invalidate the affected active
   reconciliation checkpoint and all later active checkpoints for the same
   account/commodity
 - keep invalidated checkpoints visible for warning/history; do not physically
@@ -633,8 +744,13 @@ Examples:
   with the same total: allowed
 - reconciled checking posting amount, account, commodity, or entry date changed:
   requires override and checkpoint invalidation
-- transaction void with reconciled postings: requires override and checkpoint
-  invalidation, or an explicit corrective transaction instead
+- posting moved from sequence `4` to `2` while the checkpoint ends at `5`:
+  allowed because it remains inside the same boundary
+- posting moved from sequence `6` to `4` while the checkpoint ends at `5`:
+  requires override because it enters the reconciled period
+- transaction create/void/unvoid/soft-delete/restore that adds or removes a
+  posting inside the boundary: requires override and checkpoint invalidation,
+  except restoring an already-voided transaction, which changes visibility only
 
 ## Tags
 
@@ -824,11 +940,18 @@ Minimum transaction endpoints:
 - `POST /api/v1/transactions/{transaction_id}/post`
 - `POST /api/v1/transactions/{transaction_id}/void`
 - `POST /api/v1/transactions/{transaction_id}/unvoid`
-- `POST /api/v1/transactions/{transaction_id}/soft-delete` (hides a posted
-  transaction from the table; recoverable)
+- `POST /api/v1/transactions/{transaction_id}/soft-delete` (hides a posted or
+  voided transaction from the table; recoverable)
 - `POST /api/v1/transactions/{transaction_id}/restore` (undeletes a
   soft-deleted transaction)
 - `POST /api/v1/transactions/{transaction_id}/correct`
+- `POST /api/v1/transactions/reconciliation-impact` for a proposed create
+- `POST /api/v1/transactions/{transaction_id}/reconciliation-impact` for a
+  proposed edit or lifecycle operation
+- `POST /api/v1/transactions/{transaction_id}/move` to move a global same-day
+  transaction earlier/later
+- `POST /api/v1/accounts/{account_id}/postings/{posting_line_id}/move` to move an
+  account-register posting earlier/later on its entry date
 - `DELETE /api/v1/transactions/{transaction_id}` for never-posted drafts only
   (hard delete; soft-delete is a separate posted-transaction workflow)
 - `GET /api/v1/accounts/{account_id}/register`
@@ -851,9 +974,14 @@ Minimum query parameters:
 - `limit` optional with a bounded default
 - `cursor` optional opaque pagination cursor
 
-Soft-deleted transactions are excluded by default and never appear for any
-`status` value. A separate `include_deleted` flag (or a dedicated trash/recovery
-view) can surface them for audit and restore.
+With no `status`, the ordinary list returns `posted` and `voided` transactions
+and excludes reserved system drafts. `status=draft` is an explicit internal API
+filter reserved for the future producer-owned workflow; the general table does
+not expose it. Soft-deleted transactions are excluded and never appear for any
+`status` value. A dedicated trash/recovery view surfaces them for restore.
+
+The global cursor contains `(transaction_date, transaction_day_sequence,
+transaction_id)` so same-day reordering remains deterministic.
 
 `GET /api/v1/accounts/{account_id}/register`:
 
@@ -872,6 +1000,10 @@ carries transaction and journal-entry context. This matters for delayed
 transfers and clearing accounts where one UI transaction can produce multiple
 dated register rows for the same account.
 
+The register cursor contains `(entry_date, account_day_sequence,
+posting_version_id)`. Each response row exposes both sequence fields, although
+ordinary UI hides the numeric values and offers Move earlier / Move later.
+
 Use cursor pagination in the OpenAPI contract. Offset can be kept as an
 internal development fallback, but the public API should not require stable
 offsets over an append-only ledger.
@@ -887,9 +1019,18 @@ offsets over an append-only ledger.
   or use a corrective transaction if further accounting is required.
 - PATCH on a soft-deleted transaction is rejected; restore it first.
 - PATCH that changes a reconciled posting's account, commodity, amount, scale,
-  or entry date requires explicit reconciliation override and invalidates the
+  or entry date, or moves a posting across an active checkpoint's date/sequence
+  boundary, requires explicit reconciliation override and invalidates the
   affected checkpoints. PATCH that changes only category, description, payee,
-  note, or tags is allowed and keeps the reconciliation intact.
+  note, tags, global transaction sequence, or posting order wholly on one side
+  of the boundary is allowed and keeps reconciliation intact.
+
+Manual `POST /transactions` accepts only `status='posted'` and must run the same
+period-impact check as edit/lifecycle operations. A backdated create that would
+enter an active checkpoint boundary returns reconciliation-override-required;
+the UI previews named checkpoints and may retry with
+`reconciliation_override=true`. `draft` creation is available only to future
+trusted internal producers, not the browser manual-entry route.
 
 `POST /api/v1/transactions/{transaction_id}/void` must accept a JSON request
 body with `change_reason` so the appended `status='voided'` transaction version
@@ -922,8 +1063,15 @@ Required backend tests:
 - `version_seq > 0` and unique sequence enforced
 - cross-transaction `supersedes_version_id` rejected
 - self-correction rejected
-- superseding reconciled posting facts requires override and checkpoint
-  invalidation
+- changing reconciled posting facts requires override and checkpoint invalidation
+- backdated create/edit/void/unvoid/soft-delete/restore that crosses an active
+  `(statement_date, statement_account_sequence)` boundary requires override and
+  checkpoint invalidation
+- a voided+soft-deleted restore is exempt because it changes visibility only
+- same-day posting movement wholly before or wholly after a checkpoint boundary
+  is allowed; movement across it requires override
+- global transaction same-day movement never requires reconciliation override
+- global and register cursor pagination remains stable with same-day sequences
 - category edit and category split allowed when reconciled account posting is
   unchanged, and the reconciliation stays intact
 - description/payee/note/tag edit on a reconciled transaction keeps
@@ -937,6 +1085,8 @@ Required backend tests:
 - soft-delete and void are independent: each can be applied and reversed without
   the other
 - PATCH on a voided or soft-deleted transaction is rejected until unvoided/restored
+- manual create rejects `draft`; the ordinary list excludes drafts by default
+- voided versions retain their complete posting snapshot
 - payee create, update, archive, restore
 - transaction stores `payee_name` snapshot
 - payee rename/archive does not rewrite historical transaction snapshots

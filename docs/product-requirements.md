@@ -65,9 +65,10 @@ These decisions must be locked before the first real domain slice beyond setup/a
 - Money representation limits: maximum `quantity_scale`, allowed `commodity_code` formats, custom commodity identifiers, and validation behavior for values that exceed limits.
 - Exact OpenAPI type generation/check command and frontend generated-client path.
 - Domain lifecycle status taxonomy. For transactions this is now locked: an
-  unsaved entry (UI working copy, no row, no side effects) becomes a persisted
-  `draft` (durable but excluded from the ledger; may trigger FX coverage) or
-  `posted` (in the ledger, directly editable) record. Posted records are removed
+  unsaved manual entry (UI working copy, no row, no side effects) saves directly
+  as `posted` (in the ledger, directly editable). `draft` remains a reserved,
+  system-only persisted status for future producer-owned workflows such as import
+  review or crash recovery; no current UI workflow creates it. Posted records are removed
   by **void** (stays visible, marked voided, reversible) or **soft-delete**
   (hidden from the table, durable, recoverable) — two distinct workflows — or by
   a corrective entry; never by hard delete. `reconciled` is an independent
@@ -102,6 +103,11 @@ These apply across all feature phases.
   used as user-facing copy for split transaction entry, but "posting" is the
   canonical schema and service term.
 - Transfers are ordinary balanced transactions.
+- Same-day ordering is explicit and independently editable for the global
+  transaction list and each account's posting register. A transfer may occupy a
+  different same-day position in each account. Account-posting order, together
+  with entry date, defines the reconciliation boundary; moving within one side
+  is allowed, while crossing an active boundary is guarded.
 - Financial quantities must never use floating point storage.
 - Reconciled or closed-period data must prefer corrective workflows over silent in-place mutation.
 - Posted financial data must not be hard-deleted.
@@ -196,6 +202,8 @@ Goal: make daily transaction entry useful.
 - First-run setup extension for choosing default categories and optional additional categories.
 - Transaction create, edit, void, unvoid, soft-delete, restore, and list flows. Void keeps a transaction visible as a marked reference; soft-delete hides it from the table while keeping it recoverable.
 - Transaction list uses cursor-based pagination and supports server-side FTS5 search.
+- Same-day global transaction order and per-account posting order are independently
+  movable; account posting order participates in reconciliation boundaries.
 - Backend balancing tests and API smoke tests.
 
 ### Phase 3: Reconciliation And Core Reports
@@ -240,7 +248,7 @@ Goal: add power-user workflows after the core ledger is stable.
   Corrections supersede or void prior observations rather than mutating them in
   place.
 - FX coverage is demand-driven and restart-safe. Activating a currency or durably
-  entering an older transaction — a persisted manual `draft` or a `posted`
+  entering an older transaction — a future producer-created `draft` or a `posted`
   transaction — extends required provider history from the earliest needed date
   through today. Unsaved entries (in-progress UI working copies with no database
   row) and import previews do not trigger downloads; import rows trigger only

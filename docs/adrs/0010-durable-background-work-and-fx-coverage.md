@@ -54,10 +54,11 @@ FX coverage is demand-driven:
 
 - A currency becomes active when an active account uses it. Creating, updating,
   or reopening an account in a currency enqueues FX coverage work immediately.
-- Creating or updating a durable transaction, including a manually entered or
-  autosaved draft, enqueues coverage from its earliest journal-entry date for every
-  currency involved. Starting the download early improves transaction review and
-  does not make the draft affect ledger balances or reports.
+- Creating or updating a durable transaction enqueues coverage from its earliest
+  journal-entry date for every currency involved. Manual entry saves directly as
+  `posted`. A future producer-created `draft` also enqueues coverage; starting the
+  download early improves its review workflow and does not make it affect ledger
+  balances or reports. No current workflow creates drafts.
 - Import preview rows belong in dedicated import staging, not in the transaction
   ledger as drafts. Previewing an import does not enqueue FX work; committing
   selected rows creates transactions and does enqueue it.
