@@ -13,7 +13,18 @@
       "Bash(pnpm --dir frontend run openapi:generate)",
       "Bash(pnpm --dir /home/coder/Repos/rekenraam/frontend run check)",
       "Bash(go vet *)",
-      "Bash(pnpm --dir frontend run check)"
+      "Bash(pnpm --dir frontend run check)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k,'=',v[:60] if isinstance\\(v,str\\) else v\\) for k,v in sorted\\(d.items\\(\\)\\)]\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in sorted\\(d.keys\\(\\)\\)]\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('exports:', list\\(d.get\\('exports',{}\\).keys\\(\\)\\)[:10]\\); print\\('main:', d.get\\('main'\\)\\); print\\('types:', d.get\\('types'\\)\\)\")",
+      "Bash(pnpm test *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('compilerOptions',{}\\).get\\('paths',{}\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['version']\\)\")",
+      "Bash(svelte-kit sync *)",
+      "Bash(npx svelte-check *)",
+      "Bash(node_modules/.bin/vitest run *)"
     ]
   }
 }

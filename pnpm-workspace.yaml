@@ -20,6 +20,7 @@ minimumReleaseAgeExclude:
   - '@tailwindcss/vite@4.3.1'
   - tailwindcss@4.3.1
   - '@inlang/paraglide-js@2.20.0'
+  - '@inlang/paraglide-js@2.20.1'
 
 overrides:
   cookie: 1.0.2

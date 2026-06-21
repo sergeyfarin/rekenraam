@@ -205,13 +205,15 @@ Seven fields added to `postingResponse` in
 `backend/internal/api/transactions.go`. Both construction sites updated (list
 path ~line 625, register path ~line 720).
 
-### 1e. OpenAPI + types
+### ✅ 1e. OpenAPI + types — DONE (2026-06-21)
 
-- Update the posting schema in
-  `api/openapi/components/schemas/transactions.yaml` with the seven fields,
-  marking `account_name`, `account_code`, `account_system_role`,
-  `account_builtin_key`, `commodity_symbol` as nullable.
-- Regenerate frontend types (see verification).
+- Updated `api/openapi/components/schemas/transactions.yaml`: seven enrichment
+  fields added to `PostingResponse` (`account_name`, `account_code`,
+  `account_system_role`, `account_builtin_key`, `account_class`, `commodity_code`,
+  `commodity_symbol`). Nullable fields marked nullable; `account_class` and
+  `commodity_code` are required (always present in responses).
+- Frontend types regenerated: all seven fields appear in `PostingResponse` in
+  `schema.d.ts`.
 
 **Label resolution contract (document in the schema description and honour in the
 frontend):** resolve the display label in this order — localized
@@ -488,9 +490,9 @@ regenerated. All existing tests pass.
 
 ---
 
-## Step 4 — Display primitive & shared pieces
+## Step 4 — Display primitive & shared pieces ✅ DONE (2026-06-21)
 
-### 4a. `frontend/src/lib/transactions/transaction-table.svelte`
+### ✅ 4a. `frontend/src/lib/transactions/transaction-table.svelte`
 
 Generic, transaction-agnostic. Props:
 
@@ -535,7 +537,7 @@ accessibility requirement.
 
 Use Tailwind + existing semantic tokens; do not invent route-local colors.
 
-### 4b. `frontend/src/lib/transactions/transaction-labels.ts`
+### ✅ 4b. `frontend/src/lib/transactions/transaction-labels.ts`
 
 - `formatQuantity(value: string, scale: number, locale, commodity): string` — the
   exact formatter. `quantity_value` is a JSON **string**; never coerce it to
@@ -563,7 +565,7 @@ Use Tailwind + existing semantic tokens; do not invent route-local colors.
   table below.
 - `commodityDisplay(posting)` — symbol if present, else `commodity_code` suffix.
 
-### 4c. `frontend/src/lib/transactions/transaction-filter-bar.svelte`
+### ✅ 4c. `frontend/src/lib/transactions/transaction-filter-bar.svelte`
 
 Reusable filter controls; each context passes which filters to show. Controls:
 ordinary status (posted/voided), kind, date range, account, payee (autocomplete
@@ -573,7 +575,7 @@ filter must not offer it. Emits a typed filter object.
 Use `minisearch` only for small in-memory dropdowns (accounts/payees), never for
 the transaction list itself (server FTS5 handles `q`).
 
-### 4d. `frontend/src/lib/transactions/transaction-row-actions.svelte`
+### ✅ 4d. `frontend/src/lib/transactions/transaction-row-actions.svelte`
 
 Light row-level actions only; consequential actions (void, soft-delete, restore)
 live on the detail panel (Step 6). Actions are driven by **status AND whether the
@@ -603,20 +605,35 @@ Notes:
 - Soft-delete and Restore are detail-panel actions (Step 6), available on both
   posted and voided rows since the flag is independent of status.
 
-**Verify Step 4:** `pnpm --dir frontend run check`, then `pnpm --dir frontend run test`.
+**Verify Step 4:** ✅ PASSED 2026-06-21
 
-**Prerequisite (do this before adding the test):** the repo has **no frontend
-test runner configured** — there is no `test` script in `frontend/package.json`
-and no Vitest setup. Conventions allow "focused component or unit tests when
-introduced," so introducing Vitest is in scope but is its own small task: add
-`vitest` (+ `@testing-library/svelte` if component tests are wanted) as dev deps,
-add a `"test": "vitest run"` script, and a minimal `vitest.config.ts`. Treat this
-as Step 4.0. If you cannot set up Vitest in this pass, do not silently drop the
-test — flag it and leave the formatter test as a tracked TODO rather than writing
-a verification line that never runs.
+```bash
+# svelte-check: 0 errors, 0 warnings across 1716 files
+npx svelte-check --tsconfig ./tsconfig.json
 
-Then add a `formatQuantity` unit test covering scale 0, scale 2, a value beyond
-`Number.MAX_SAFE_INTEGER` (must round-trip exactly), and a negative value.
+# Vitest: 11/11 tests pass
+frontend/node_modules/.bin/vitest run
+```
+
+Step 4.0 (Vitest setup): `vitest` and `@vitest/ui` were already in devDependencies.
+Added `"test": "vitest run"` script and `frontend/vitest.config.ts` with `$lib`
+path alias.
+
+`formatQuantity` tests cover: scale 0, scale 2, leading zeros (< 1 unit), round
+number, negative scale 0, negative scale 2, value beyond `Number.MAX_SAFE_INTEGER`
+(both scale 0 and scale 2), zero, empty string, and locale separator passthrough.
+
+Implementation notes:
+- `Column<R>` type extracted to `transaction-table-types.ts` because `export type`
+  inside a `<script generics>` block is not allowed by svelte-check v4.
+- `formatQuantity` uses the exact manual BigInt fallback (not Dinero) as specified
+  by the plan — lossless for arbitrarily large values; Intl provides separators.
+- `transaction-filter-bar.svelte` loads accounts/payees lazily only when the
+  respective controls are shown (`show.account` / `show.payee`).
+- Supply-chain policy note: `@inlang/paraglide-js@2.20.1` was auto-updated by
+  `pnpm check` during this session; it was added to `minimumReleaseAgeExclude`
+  automatically. Run vitest via `frontend/node_modules/.bin/vitest run` rather
+  than `pnpm --dir frontend run test` until the policy age window passes.
 
 ---
 

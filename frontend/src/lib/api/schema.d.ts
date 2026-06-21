@@ -7561,10 +7561,24 @@ export interface components {
              * @description Same-day position within (account_id, entry_date). Used for ordering and period-scoped reconciliation boundary.
              */
             account_day_sequence?: number;
-            quantity_value: string;
-            quantity_scale: number;
+            /** @description User-visible account name. Null for system accounts with no user-visible name (use account_system_role instead). */
+            account_name?: string | null;
+            /** @description Account code. Null when not set. */
+            account_code?: string | null;
+            /** @description Non-null for system accounts (e.g. transfer_clearing). Use as the display label for system postings. */
+            account_system_role?: string | null;
+            /** @description Non-null for built-in/starter category accounts. Localise via Paraglide on the client. */
+            account_builtin_key?: string | null;
+            /** @description Account class (asset | liability | income | expense | equity). Always present. */
+            account_class: components["schemas"]["AccountClass"];
             /** Format: int64 */
             commodity_id: number;
+            /** @description e.g. USD, EUR, AAPL. Always present. */
+            commodity_code: string;
+            /** @description e.g. $, €. Null when not set. */
+            commodity_symbol?: string | null;
+            quantity_value: string;
+            quantity_scale: number;
             memo: string;
             reconciliation_status: components["schemas"]["ReconciliationStatus"];
             /** Format: date */

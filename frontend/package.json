@@ -9,16 +9,17 @@
         "dev": "pnpm run openapi:generate && vite --host 0.0.0.0 --port 1888 --strictPort",
         "build": "pnpm run openapi:generate && pnpm run paraglide:compile && vite build",
         "preview": "vite preview",
-        "check": "pnpm run openapi:generate && pnpm run paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+        "check": "pnpm run openapi:generate && pnpm run paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "test": "vitest run"
     },
     "devDependencies": {
         "@internationalized/date": "3.12.2",
-        "@lucide/svelte": "1.20.0",
+        "@lucide/svelte": "1.21.0",
         "@sveltejs/adapter-static": "3.0.10",
-        "@sveltejs/kit": "2.65.2",
+        "@sveltejs/kit": "2.66.0",
         "@sveltejs/vite-plugin-svelte": "7.1.2",
         "@tailwindcss/vite": "4.3.1",
-        "@types/node": "25.9.3",
+        "@types/node": "26.0.0",
         "@vitest/ui": "4.1.9",
         "bits-ui": "2.18.1",
         "clsx": "2.1.1",
@@ -35,7 +36,7 @@
         "vitest": "4.1.9"
     },
     "dependencies": {
-        "@inlang/paraglide-js": "2.20.0",
+        "@inlang/paraglide-js": "2.20.1",
         "@tanstack/svelte-query": "6.1.34",
         "date-fns": "4.4.0",
         "dinero.js": "2.0.2",

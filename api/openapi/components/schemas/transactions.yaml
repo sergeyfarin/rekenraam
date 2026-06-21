@@ -38,9 +38,11 @@ PostingResponse:
     - line_key
     - line_seq
     - account_id
+    - account_class
+    - commodity_id
+    - commodity_code
     - quantity_value
     - quantity_scale
-    - commodity_id
     - memo
     - reconciliation_status
     - metadata
@@ -64,6 +66,35 @@ PostingResponse:
       type: integer
       format: int64
       description: Same-day position within (account_id, entry_date). Used for ordering and period-scoped reconciliation boundary.
+    account_name:
+      type: string
+      nullable: true
+      description: "User-visible account name. Null for system accounts with no user-visible name (use account_system_role instead)."
+    account_code:
+      type: string
+      nullable: true
+      description: "Account code. Null when not set."
+    account_system_role:
+      type: string
+      nullable: true
+      description: "Non-null for system accounts (e.g. transfer_clearing). Use as the display label for system postings."
+    account_builtin_key:
+      type: string
+      nullable: true
+      description: "Non-null for built-in/starter category accounts. Localise via Paraglide on the client."
+    account_class:
+      $ref: "../../openapi.yaml#/components/schemas/AccountClass"
+      description: "Account class (asset | liability | income | expense | equity). Always present."
+    commodity_id:
+      type: integer
+      format: int64
+    commodity_code:
+      type: string
+      description: "e.g. USD, EUR, AAPL. Always present."
+    commodity_symbol:
+      type: string
+      nullable: true
+      description: "e.g. $, €. Null when not set."
     quantity_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,37})$'
@@ -71,9 +102,6 @@ PostingResponse:
       type: integer
       minimum: 0
       maximum: 24
-    commodity_id:
-      type: integer
-      format: int64
     memo:
       type: string
     reconciliation_status:
