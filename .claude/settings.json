@@ -30,7 +30,11 @@
       "Bash(npm run *)",
       "Bash(node node_modules/@inlang/paraglide-js/dist/cli/index.js compile --project project.inlang --outdir src/lib/paraglide)",
       "Bash(./node_modules/.bin/paraglide-js compile *)",
-      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); keys=[k for k in data.keys\\(\\) if 'transaction' in k.lower\\(\\)]; print\\('\\\\n'.join\\(sorted\\(keys\\)\\)\\)\")"
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); keys=[k for k in data.keys\\(\\) if 'transaction' in k.lower\\(\\)]; print\\('\\\\n'.join\\(sorted\\(keys\\)\\)\\)\")",
+      "Bash(node_modules/.bin/paraglide-js compile *)",
+      "Bash(grep -v \"\\\\.d\\\\.ts$\")",
+      "Bash(node_modules/.bin/svelte-kit sync *)",
+      "Bash(node_modules/.bin/svelte-check --tsconfig ./tsconfig.json)"
     ]
   }
 }

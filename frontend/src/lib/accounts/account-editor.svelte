@@ -394,7 +394,7 @@
     </div>
     <button
       type="button"
-      class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+      class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
       aria-label={m.accounts_form_cancel()}
       title={m.accounts_form_cancel()}
@@ -469,12 +469,12 @@
 
   </div>
 
-  <label class="flex items-center gap-3 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground">
-    <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" disabled={structureLocked} />
+  <label class="flex items-center gap-3 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+    <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-accent" disabled={structureLocked} />
     {m.accounts_field_allows_postings()}
   </label>
 
-  <details class="rounded-[var(--radius-control)] border border-border bg-surface">
+  <details class="rounded-(--radius-control) border border-border bg-surface">
     <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
     <div class="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
       <label>
@@ -517,7 +517,7 @@
   {#if activeInstitutions.length === 0 && !selectedParent}
     <button
       type="button"
-      class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       onclick={onQuickInstitution}
     >
       <Plus size={16} aria-hidden="true" />
@@ -528,7 +528,7 @@
   <div class="flex flex-wrap items-center justify-end gap-2">
     <button
       type="button"
-      class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
     >
       <X size={16} aria-hidden="true" />
@@ -536,7 +536,7 @@
     </button>
     <button
       type="submit"
-      class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       disabled={pending}
     >
       <Save size={16} aria-hidden="true" />
@@ -546,7 +546,7 @@
 
   {#if currencyDialogOpen}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-sm">
-      <section class="w-full max-w-lg rounded-[var(--radius-panel)] border border-border bg-surface shadow-[var(--shadow-panel)]">
+      <section class="w-full max-w-lg rounded-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel)">
         <div class="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
           <div class="min-w-0">
             <h3 class="text-sm font-semibold text-foreground">{m.accounts_currency_dialog_title()}</h3>
@@ -554,7 +554,7 @@
           </div>
           <button
             type="button"
-            class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover"
             onclick={() => (currencyDialogOpen = false)}
             aria-label={m.accounts_currency_dialog_close()}
             title={m.accounts_currency_dialog_close()}
@@ -574,7 +574,7 @@
             />
           </label>
 
-          <div class="max-h-72 overflow-auto rounded-[var(--radius-control)] border border-border">
+          <div class="max-h-72 overflow-auto rounded-(--radius-control) border border-border">
             {#each filteredCurrencyCatalog as currency (currency.code)}
               <button
                 type="button"

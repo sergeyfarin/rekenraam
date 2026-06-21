@@ -212,7 +212,7 @@
     </div>
     <button
       type="button"
-      class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
+      class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
       aria-label={m.categories_form_cancel()}
       title={m.categories_form_cancel()}
@@ -253,7 +253,7 @@
         {#each categoryIconOptions as option (option)}
           <button
             type="button"
-            class={`inline-flex min-h-10 items-center gap-2 rounded-[var(--radius-control)] border px-3 py-2 text-left text-sm transition ${
+            class={`inline-flex min-h-10 items-center gap-2 rounded-(--radius-control) border px-3 py-2 text-left text-sm transition ${
               icon === option
                 ? 'border-accent bg-accent-soft text-foreground shadow-sm'
                 : 'border-border bg-control text-muted hover:bg-control-hover hover:text-foreground'
@@ -269,12 +269,12 @@
     </fieldset>
   </div>
 
-  <label class="flex items-center gap-3 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground">
-    <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" />
+  <label class="flex items-center gap-3 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+    <input bind:checked={allowsPostings} type="checkbox" class="h-4 w-4 accent-accent" />
     {m.categories_field_allows_postings()}
   </label>
 
-  <details class="rounded-[var(--radius-control)] border border-border bg-surface">
+  <details class="rounded-(--radius-control) border border-border bg-surface">
     <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
     <div class="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
       <label>
@@ -302,7 +302,7 @@
   <div class="flex flex-wrap items-center justify-end gap-2">
     <button
       type="button"
-      class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
     >
       <X size={16} aria-hidden="true" />
@@ -310,7 +310,7 @@
     </button>
     <button
       type="submit"
-      class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       disabled={pending}
     >
       <Save size={16} aria-hidden="true" />

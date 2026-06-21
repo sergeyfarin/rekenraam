@@ -81,7 +81,7 @@
           <tr class="sticky top-0 z-10 border-b border-border bg-surface">
             {#each columns as col (col.key)}
               <th
-                class={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.1em] text-muted ${PRIORITY_CLASSES[col.priority ?? 1]}`}
+                class={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-widest text-muted ${PRIORITY_CLASSES[col.priority ?? 1]}`}
                 style={col.width ? `width: ${col.width}` : undefined}
               >
                 {col.header}
@@ -127,7 +127,7 @@
           <tr class="sticky top-0 z-10 border-b border-border bg-surface">
             {#each columns as col (col.key)}
               <th
-                class={`px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted ${col.align === 'right' ? 'text-right' : 'text-left'} ${PRIORITY_CLASSES[col.priority ?? 1]}`}
+                class={`px-3 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted ${col.align === 'right' ? 'text-right' : 'text-left'} ${PRIORITY_CLASSES[col.priority ?? 1]}`}
                 style={col.width ? `width: ${col.width}` : undefined}
               >
                 {col.header}

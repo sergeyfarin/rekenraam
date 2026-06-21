@@ -231,7 +231,7 @@
   {/if}
 
   {#if show.needsReview}
-    <label class="flex min-w-[9rem] items-center gap-2 self-end pb-2.5">
+    <label class="flex min-w-36 items-center gap-2 self-end pb-2.5">
       <input
         type="checkbox"
         checked={filters.needsReview ?? false}

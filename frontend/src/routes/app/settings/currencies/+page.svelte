@@ -588,7 +588,7 @@
 
     <Panel padding="none">
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[68rem] text-left text-sm">
+        <table class="w-full min-w-272 text-left text-sm">
           <thead class="border-b border-border bg-toolbar text-xs font-semibold uppercase tracking-[0.12em] text-muted">
             <tr>
               <th class="px-4 py-3">{m.currencies_table_currency()}</th>
