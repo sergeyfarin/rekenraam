@@ -483,7 +483,7 @@
         </label>
 
         <label class="flex items-center gap-3 text-sm font-semibold text-foreground">
-          <input type="checkbox" bind:checked={refreshEnabled} class="size-4 accent-[var(--color-accent)]" />
+          <input type="checkbox" bind:checked={refreshEnabled} class="size-4 accent-accent" />
           {m.currencies_policy_refresh_enabled()}
         </label>
 
