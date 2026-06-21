@@ -39,6 +39,7 @@ type Column<R> = {
   header: string;
   width?: string;
   align?: 'left' | 'right';
+  priority?: number;  // lower = hidden first on narrow viewports
   cell: Snippet<[R]>;  // Svelte 5 snippet
 };
 
@@ -47,12 +48,15 @@ let {
   columns,      // Column<R>[]
   isLoading,
   hasNextPage,
-  onLoadMore,   // called by intersection observer at bottom
+  onLoadMore,   // called by intersection observer at bottom; falls back to a "Load more" button if observer unavailable
   onRowClick,   // optional: (row: R) => void
+  onError,      // optional: (err: Error) => void — surfaces retry UI when set
 }: Props<R>
 ```
 
-Handles: intersection observer for infinite scroll, loading skeleton rows, empty state, sticky header. Does not know about transactions.
+Handles: intersection observer for infinite scroll, loading skeleton rows, empty state, error/retry state, sticky header. Does not know about transactions.
+
+**Keyboard interaction:** the primitive supports arrow-key row navigation and Enter to activate `onRowClick`. Tab moves focus to row action buttons within the focused row.
 
 ### Layer 2: Context Wrappers
 
@@ -95,18 +99,48 @@ The side panel (global transactions page) remains the right pattern for the tran
 
 ## Backend Changes Required
 
-### 1. Category filtering on transactions (~30 lines)
+### 1. Enrich posting and register responses with display metadata
 
-`GET /api/v1/transactions` currently has no `category_id` param. Categories are income/expense accounts. The account filter already uses an EXISTS subquery against `posting_versions`. Category filtering is identical — just an additional OR branch.
+`postingResponse` currently carries only IDs for account and commodity (`app.Posting` has `AccountID` and `CommodityID`, and `toTransactionResponse` maps these directly with no name resolution). The frontend cannot resolve names without fan-out requests or a warm client-side cache — both fragile.
+
+**The enrichment must not be done per-posting.** The implementation must bulk-fetch all account and commodity records needed for a page in one query each (keyed by the union of IDs across all postings in the result set), then join in memory before constructing responses. One lookup per page, not one per posting.
+
+**Add to `postingResponse`:**
+```go
+AccountName       *string `json:"account_name"`        // null for system accounts that have no user-visible name
+AccountCode       *string `json:"account_code"`        // user-assigned account code, if set
+AccountSystemRole *string `json:"account_system_role"` // non-null for built-in system accounts (e.g. "transfer_clearing")
+AccountClass      string  `json:"account_class"`       // asset | liability | income | expense | equity
+CommodityCode     string  `json:"commodity_code"`      // e.g. "USD", "EUR", "AAPL"
+CommoditySymbol   *string `json:"commodity_symbol"`    // e.g. "$", "€" — null if not set
+```
+
+System accounts (`account_system_role` non-null) have no `account_name`. The frontend derives a display label from `account_system_role` via a localized lookup table — it must not fall back to rendering a null name directly. User accounts always have `account_name`; `account_code` is optional.
+
+The same enrichment applies to `accountRegisterEntryResponse` posting rows.
+
+**Version history for the detail panel is deferred.** The plan previously mentioned "status history / version info" in the detail panel. No corresponding API exists, and building one is out of scope. The detail panel will show current state only; a version history view is a future feature.
 
 **Changes:**
-- `db/transactions.go` — add `CategoryID int64` to `ListTransactionsParams`; add EXISTS clause (same pattern as AccountID)
-- `app/transactions.go` — add `CategoryID int64` to `ListTransactionsInput`; pass through
+- `app/transactions.go` — add bulk account/commodity fetch before building `Transaction` structs for list responses (new method on `TransactionService` for the list path); add `AccountName`, `AccountCode`, `AccountSystemRole`, `AccountClass`, `CommodityCode`, `CommoditySymbol` to `app.Posting`
+- `api/transactions.go` — propagate new fields into `postingResponse` and `accountRegisterEntryResponse`
+- `api/schema.yaml` — reflect new fields
+- Regenerate `schema.d.ts`
+
+### 2. Category filtering on transactions (~30 lines)
+
+`GET /api/v1/transactions` has no `category_id` param. Categories are income/expense accounts; `account_id` already filters by account using an EXISTS subquery against `posting_versions`. `category_id` uses the same EXISTS pattern but additionally validates that the resolved account has class `income` or `expense`, so callers get a clear error if they pass an asset account ID by mistake.
+
+`category_id` and `account_id` compose with AND when both are supplied — they are not an OR branch.
+
+**Changes:**
+- `db/transactions.go` — add `CategoryID int64` to `ListTransactionsParams`; add EXISTS clause (same pattern as `AccountID`)
+- `app/transactions.go` — add `CategoryID int64` to `ListTransactionsInput`; validate account class; pass through
 - `api/transactions.go` — parse `category_id` query param in `readTransactionListInput`
-- `api/schema.yaml` (or equivalent OpenAPI spec) — add `category_id` query param
+- `api/schema.yaml` — add `category_id` query param
 - Regenerate `schema.d.ts` and add `categoryID` to `TransactionListOptions` in `transactions.ts`
 
-### 2. Sort direction (~20 lines, optional for v1)
+### 3. Sort direction (~20 lines, optional for v1)
 
 Current sort is always `transaction_date DESC, id DESC`. For the global transactions page it may be useful to flip to ASC. Cursor logic already uses `(date, id)` tuple — just invert the comparison.
 
@@ -114,7 +148,7 @@ Add `SortAsc bool` to `ListTransactionsParams`. When true: `ORDER BY transaction
 
 **Decision: defer to v2.** The register is always most-recent-first. The global page starting most-recent-first is reasonable. Sort direction can be added later without breaking the cursor format.
 
-### 3. Account register infinite query options (~15 lines)
+### 4. Account register infinite query options (~15 lines)
 
 Add `accountRegisterInfiniteQueryOptions` to `transactions.ts` following the same pattern as `transactionsInfiniteQueryOptions`. The `getAccountRegister` function already exists.
 
@@ -133,7 +167,7 @@ frontend/src/
       transaction-list.svelte           ← global list wrapper (uses /transactions)
       account-register.svelte           ← account register wrapper
       category-transactions.svelte      ← category wrapper
-      transaction-labels.ts             ← display helpers (status labels, etc.)
+      transaction-labels.ts             ← display helpers (status labels, amount formatter, system account labels)
     api/
       transactions.ts                   ← add accountRegisterInfiniteQueryOptions
                                            add categoryID to TransactionListOptions
@@ -155,29 +189,84 @@ frontend/src/
 
 ### Global transaction list
 
-| Column | Source | Notes |
-|---|---|---|
-| Date | `transaction_date` | |
-| Payee / Description | `payee_name` or `description` | |
-| Account(s) | Derived from `journal_entries[].postings[].account_id` | Show primary account(s), collapse if many |
-| Amount | Primary posting `quantity_value / 10^quantity_scale` | Signed, formatted with commodity symbol |
-| Status | `status` | Badge: draft/posted/voided |
-| Flags | `needs_review` | Review badge |
+The "primary posting" for display is the first asset or liability leg (`account_class = asset` or `liability`). For FX transfers, this leg's amount is in a single commodity — showing both legs would require two Amount columns, which is out of scope for v1. For income/expense-only transactions (unusual), fall back to the first posting. Account name and commodity symbol are available directly from the enriched `postingResponse` fields.
+
+| Column | Source | Priority | Notes |
+|---|---|---|---|
+| Date | `transaction_date` | 1 (always shown) | |
+| Payee / Description | `payee_name` or `description` | 1 (always shown) | |
+| Amount | Primary posting, formatted | 1 (always shown) | See Amount Display Semantics |
+| Account(s) | Primary posting `account_name` / `account_system_role` | 2 | Collapse to "N accounts" when more than two |
+| Status | `status` | 3 | Badge: draft/posted/voided |
+| Flags | `needs_review` | 3 | Review badge |
 
 ### Account register
 
-| Column | Source | Notes |
-|---|---|---|
-| Date | `entry_date` | Journal entry date, not transaction date |
-| Payee / Description | `payee_name` or `description` | |
-| Memo | `posting.memo` | |
-| Reconciliation | `posting.reconciliation_status` | Icon: uncleared/cleared/reconciled |
-| Amount | `posting.quantity_value` | Signed |
-| Balance | `running_balance` | Right-aligned, shown in account's commodity |
+| Column | Source | Priority | Notes |
+|---|---|---|---|
+| Date | `entry_date` | 1 (always shown) | Journal entry date, not transaction date |
+| Payee / Description | `payee_name` or `description` | 1 (always shown) | |
+| Amount | `posting.quantity_value` | 1 (always shown) | Inflow positive, outflow negative from this account's perspective |
+| Balance | `running_balance` | 1 (always shown) | Right-aligned, in account's commodity |
+| Reconciliation | `posting.reconciliation_status` | 2 | Icon: uncleared/cleared/reconciled |
+| Memo | `posting.memo` | 3 | |
 
 ### Category transactions
 
-Same as global list, minus the Accounts column (replaced by a "counterpart account" column showing where the money went/came from — the non-category posting's account).
+The category amount is the **sum of all postings to the selected category account** within the transaction. A split transaction may have multiple postings to the same category; these are summed. The counterpart column lists the `account_name` of non-category postings, collapsed to "N accounts" when more than one.
+
+| Column | Source | Priority | Notes |
+|---|---|---|---|
+| Date | `transaction_date` | 1 (always shown) | |
+| Payee / Description | `payee_name` or `description` | 1 (always shown) | |
+| Amount | Sum of postings to selected category account | 1 (always shown) | |
+| Counterpart | Non-category posting `account_name`(s) | 2 | |
+| Status | `status` | 3 | |
+| Flags | `needs_review` | 3 | |
+
+---
+
+## Amount Display Semantics
+
+### Exact formatting
+
+`quantity_value` is serialized as a JSON string (not a number) to preserve lossless precision across Go's and JavaScript's integer ranges. The frontend must **never convert it to a JavaScript `number`** — doing so silently truncates values beyond 53-bit precision (possible for crypto amounts with large scales).
+
+`transaction-labels.ts` must export a `formatQuantity(value: string, scale: number): string` function that:
+1. Inserts the decimal point by string index arithmetic (e.g. `"12345"` at scale 2 → `"123.45"`), using `BigInt` if arithmetic is needed.
+2. Passes the resulting decimal string to `Intl.NumberFormat` with `{ minimumFractionDigits: scale, maximumFractionDigits: scale }` for locale-aware display.
+3. Never coerces the coefficient string to `number` at any step.
+
+The commodity symbol from `postingResponse.commodity_symbol` is appended/prepended as appropriate for the commodity's locale convention. When `commodity_symbol` is null, fall back to `commodity_code` as a suffix.
+
+### User-facing sign convention
+
+The user-facing amount is always expressed as **inflow/outflow from the account's perspective**: inflow is positive, outflow is negative. This applies in both the table and the simple editor.
+
+This differs from the ledger's internal debit/credit convention. The translation is deterministic by account class:
+
+| Account class | Debit posting | Credit posting |
+|---|---|---|
+| Asset | Inflow (+) | Outflow (−) |
+| Liability | Outflow (−) | Inflow (+) |
+| Income | Outflow (−) | Inflow (+) |
+| Expense | Inflow (+) | Outflow (−) |
+
+In the global list and category view, the sign convention applies to the primary/category posting's account class. In the account register, it always applies to this account's class (already known from context).
+
+For the simple editor, the Amount field is always labelled relative to the selected **Account** field (the asset/liability account): positive means money arrived in that account, negative means it left. The backend posting signs are derived from the account class at save time, not stored from the field value directly.
+
+**Transfers are a distinct workflow.** Tier 1 assumes one asset/liability account and one category (income/expense) account. A transaction with two asset/liability accounts and no category is a transfer — this does not fit Tier 1 and must be entered via Tier 3 (split editor) or a dedicated transfer form. Tier 1 should detect this case (when the user selects an asset/liability as the Category) and redirect to the appropriate workflow rather than silently constructing a malformed entry.
+
+### FX and multi-commodity transactions
+
+For v1, each context shows the **native amount of the relevant posting** only — no synthetic base-currency equivalent:
+
+- Global list: native amount of the primary asset/liability posting, with commodity symbol
+- Account register: native amount of this account's posting, in the account's commodity
+- Category transactions: sum of postings to the selected category, in the category's commodity
+
+A synthetic `base_currency_value` enrichment (summing asset/liability legs converted to book currency) is **deferred to a later step**. Summing absolute values of asset/liability postings double-counts same-currency transfers (two asset legs in a transfer), and the semantics become ambiguous for split transactions and FX pairs. The correct definition depends on transaction kind and requires per-kind rules before it can be implemented safely.
 
 ---
 
@@ -188,15 +277,30 @@ Actions are context-sensitive based on transaction status:
 | Status | Available actions |
 |---|---|
 | draft | Edit, Post, Delete |
-| posted | View, Void (with reason), Correct (opens editor in correction mode) |
+| posted | Edit, Create correction |
 | voided | View only |
 | any + needs_review | Approve (inline, no editor needed) |
 
-The editor distinguishes between:
-- **Draft edit** → `PATCH /api/v1/transactions/{id}`
-- **Correction** → `POST /api/v1/transactions/{id}/correct` (creates new transaction replacing the posted one)
+Void is an action on the **detail panel**, not the row action menu — it requires a reason and is consequential enough to warrant the extra step.
 
-This distinction is owned by `transaction-editor.svelte`, not the table — the table just passes the transaction and whether it's a correction.
+### Edit/correction lifecycle
+
+The backend (`app/transactions.go`) permits `PATCH` on any non-voided transaction. The UI must distinguish four cases and route accordingly:
+
+| Case | Trigger | API call | UI behaviour |
+|---|---|---|---|
+| Draft edit | Transaction is draft | `PATCH /api/v1/transactions/{id}` | Editor opens directly, no warning |
+| Posted edit — safe | No reconciled postings are affected by the change | `PATCH /api/v1/transactions/{id}` | Editor opens directly, no warning |
+| Posted edit — reconciliation-invalidating | Change affects quantity, account, commodity, or date of a reconciled posting | `PATCH /api/v1/transactions/{id}` with `reconciliation_override: true` | Warning modal at save time: "This will invalidate a reconciliation checkpoint. Continue?" |
+| Corrective transaction | User chooses "Create correction" | `POST /api/v1/transactions/{id}/correct` | Editor opens in correction mode |
+
+Cases 2 and 3 are only distinguishable after the user makes edits, so the reconciliation warning fires at save time, not when the editor opens.
+
+**"Create correction"** creates a new adjusting transaction linked to the original via `correction_of_transaction_id`. It does not void or replace the original — both transactions exist in the ledger and the net effect of both represents the corrected state. The action label and editor UI must make this clear: the correction is an *additional* transaction, not an edit of the existing one.
+
+Reconciliation override is a destructive acknowledgement, not a routine path — the warning must be explicit about which checkpoint is affected.
+
+This distinction is owned by `transaction-editor.svelte`, not the table — the table passes the transaction and opens the editor.
 
 ---
 
@@ -206,9 +310,36 @@ The global transactions page has:
 - Full-width table on the left/main area
 - Side panel (same pattern as account-editor, category-editor) that slides in when a transaction is clicked or "New transaction" is pressed
 
+Clicking a row opens a **detail panel** (read-only) first. The detail panel shows:
+- All fields in a clean read layout
+- Full posting breakdown (with account names/codes and commodity symbols from enriched response; system account labels resolved from `account_system_role`)
+- **Edit button** — opens editor in the same panel, replacing detail view
+- **Create correction button** — opens editor in correction mode (posted transactions only)
+- **Action buttons** — Post, Approve, Void with reason (status-appropriate)
+
+Version history / audit trail is not included in the detail panel for v1 (no API exists for it).
+
+On **mobile**, the side panel becomes a full-screen overlay (no split layout).
+
 The side panel is NOT used for navigation — it hosts `transaction-editor.svelte`. This is consistent with the existing account and category page patterns.
 
 Account and category register pages do not use a side panel for the table itself — they navigate to a dedicated route. They also embed the editor side panel within the route for editing.
+
+---
+
+## Mobile Presentation
+
+The app is primarily desktop but register use on mobile is a realistic workflow. The table adapts to narrow viewports using the `priority` values defined in each column set:
+
+- **Priority 1** columns are always shown.
+- **Priority 2** columns are hidden below ~600px.
+- **Priority 3** columns are hidden below ~900px.
+
+This gives a mobile global list of Date + Payee + Amount, and a mobile register of Date + Payee + Amount + Balance, which covers the essential read use case.
+
+The transaction **editor** on mobile is a full-screen form rather than a side panel. The side panel component detects viewport width and switches to a bottom-sheet or full-page presentation below the breakpoint.
+
+The account register on mobile is horizontally scrollable rather than column-collapsing, because Balance must always be visible alongside Amount.
 
 ---
 
@@ -216,33 +347,36 @@ Account and category register pages do not use a side panel for the table itself
 
 Each step leaves the app runnable.
 
-**Step 1 — Backend: category filter**
-Add `category_id` to `ListTransactionsParams`, `ListTransactionsInput`, API handler, and OpenAPI spec. Regenerate schema. No frontend changes yet.
+**Step 1 — Backend: posting response enrichment**
+Add bulk account/commodity fetch to the transaction list and account register paths. Add `account_name`, `account_code`, `account_system_role`, `account_class`, `commodity_code`, `commodity_symbol` to `app.Posting` and propagate to API response structs. Update schema, regenerate types.
 
-**Step 2 — Frontend API layer**
+**Step 2 — Backend: category filter**
+Add `category_id` to `ListTransactionsParams`, `ListTransactionsInput`, API handler, and OpenAPI spec. Validate account class in app layer. Regenerate schema. No frontend changes yet.
+
+**Step 3 — Frontend API layer**
 - Add `categoryID` to `TransactionListOptions` in `transactions.ts`
 - Add `accountRegisterInfiniteQueryOptions`
 
-**Step 3 — Display primitive and shared pieces**
-- `transaction-table.svelte` (generic table with infinite scroll)
-- `transaction-labels.ts` (status/kind display helpers)
+**Step 4 — Display primitive and shared pieces**
+- `transaction-table.svelte` (generic table with infinite scroll, error/retry, keyboard navigation, priority-based column hiding)
+- `transaction-labels.ts` (status/kind display helpers, `formatQuantity` exact formatter, system account label resolver)
 - `transaction-filter-bar.svelte`
 - `transaction-row-actions.svelte`
 
-**Step 4 — Transaction editor**
-`transaction-editor.svelte` — create, draft edit, and correction mode. This is the largest piece and can be built independently of the table.
+**Step 5 — Transaction editor**
+`transaction-editor.svelte` — create, draft edit, posted edit (with reconciliation-override path at save time), and correction mode. Transfer detection in Tier 1. This is the largest piece and can be built independently of the table.
 
-**Step 5 — Global transactions page**
+**Step 6 — Global transactions page**
 - `transaction-list.svelte` wrapper
-- `/app/transactions/+page.svelte`
+- `/app/transactions/+page.svelte` with mobile-responsive side panel
 - Wire editor side panel
 
-**Step 6 — Account register route**
-- `account-register.svelte` wrapper
+**Step 7 — Account register route**
+- `account-register.svelte` wrapper (horizontally scrollable on mobile)
 - `/app/accounts/[id]/+page.svelte`
 - Add "View register" link/click handler on account list rows
 
-**Step 7 — Category transactions route**
+**Step 8 — Category transactions route**
 - `category-transactions.svelte` wrapper
 - `/app/categories/[id]/+page.svelte`
 - Add click handler on category list rows
@@ -257,97 +391,31 @@ The editor has three tiers exposed progressively — the default view covers the
 
 Single-form fields:
 - Date
-- Payee (autocomplete from existing payees)
+- Payee (autocomplete using `payeesQueryOptions({ q: inputValue })` — endpoint and query helper already exist)
 - Description / memo
 - Category (income or expense account, single select)
-- Amount (signed: positive = income, negative = expense)
+- Amount (inflow positive, outflow negative — from the selected Account's perspective; see Amount Display Semantics)
 - Account (which asset/liability account the money moves from/to)
 
-This covers the common case: one account leg + one category leg. The backend receives this as two postings in one journal entry. No posting structure is shown to the user.
+This covers the common case: one asset/liability account leg + one income/expense category leg. If the user selects a second asset/liability account in the Category field, the editor detects this and prompts to switch to the split editor (Tier 3) or a transfer form — it does not silently accept the mismatch.
 
 ### Tier 2 — Advanced (expandable section)
 
 Reveals additional fields:
 - Transaction kind (ordinary / transfer / adjustment — opening_balance is system-only)
 - Note (markdown)
-- Needs review toggle
 - External reference / import hint
 - Individual posting memos
-- Reconciliation status per posting (for manual override)
+
+`needs_review` is **not** exposed here. Per the API contract, `needs_review` is always false for manually entered transactions and is only set by the import pipeline. Exposing a toggle would contradict the product contract.
+
+Reconciliation status is also **not** exposed here. Reconciliation is an auditable workflow; per-posting status must not be settable as a manual form field during ordinary transaction entry.
 
 ### Tier 3 — Split transaction (button that expands the posting list)
 
 Reveals the full posting list editor: multiple category/account legs, each with an amount. The sum must balance (backend enforces this; frontend shows a running total and highlights imbalance).
 
 The backend already accepts the full `journal_entries[]` structure. The UI abstraction is purely cosmetic — Tiers 1 and 2 construct the same payload as Tier 3.
-
-### Click-to-view vs. Click-to-edit
-
-Clicking a transaction row opens a **detail panel** (read-only), not the editor directly. The detail panel shows:
-- All fields in a clean read layout
-- Full posting breakdown
-- Status history / version info
-- **Edit button** — opens editor in the same panel, replacing detail view
-- **Action buttons** — Post, Approve, Void (status-appropriate)
-
-If the transaction has any reconciled postings, the Edit button shows a warning modal first:
-> "This transaction has reconciled postings. Editing it will require a corrective entry that may affect your reconciliation. Continue?"
-
-Confirming opens the editor in **correction mode** (`POST /correct`), not draft edit mode. This is because `PATCH` is only valid for drafts; a posted transaction with reconciled postings requires the corrective workflow. The warning makes this consequential distinction visible to the user before they proceed.
-
-For draft transactions with no reconciled postings, Edit opens the editor directly with no warning.
-
----
-
-## Amount Display and FX Conversion
-
-### The data model
-
-Each posting carries: `quantity_value` (integer coefficient), `quantity_scale` (decimal places), and `commodity_id`. The book has a `default_currency_commodity_id` (the base currency). Historical FX rates are stored in the pricing system as `(base_commodity_id, quote_commodity_id, valuation_date) → price`.
-
-### The display problem
-
-In the transaction list, a single transaction may have postings in multiple commodities (e.g. a EUR purchase on a USD account involves a USD posting and a EUR posting plus potentially an exchange journal entry). The list needs one primary amount and optionally a base-currency equivalent.
-
-### Strategy: backend-enriched amounts (preferred)
-
-Doing this purely client-side requires: for each transaction row, identify the "primary" posting, look up the FX rate for that commodity on that date, and compute the base-currency equivalent. This means N price lookups per page load, or a bulk price fetch that then needs client-side joining. Both are fragile and add latency.
-
-**Better: add a `ValuedAt` enrichment to the transaction list response.** The backend, when returning a transaction list, can attach the base-currency valuation to each transaction (the sum of all posting values converted to the book's base commodity at the transaction date's rate). This is a single backend computation at query time with access to all the pricing data.
-
-This requires a new optional field on `TransactionResponse`:
-
-```go
-BaseCurrencyValue *valuationResponse `json:"base_currency_value,omitempty"`
-
-type valuationResponse struct {
-    CommodityID  int64  `json:"commodity_id"`
-    Value        string `json:"value"`   // formatted decimal
-    Scale        int    `json:"scale"`
-    IsEstimated  bool   `json:"is_estimated"` // true if rate was approximated
-}
-```
-
-The backend computes this by summing the absolute value of asset/liability postings (not the income/expense counterparts — they are the same transaction in double-entry) converted to base commodity using the nearest available price on the transaction date.
-
-**For transfers between same-commodity accounts:** the posting amounts are in the same commodity — no conversion needed, value is exact.
-
-**For FX transfers (e.g. USD→EUR):** the exchange journal entry postings already encode the rate implicitly. The backend can derive base-currency value from the asset/liability legs directly if both are in known commodities with prices on file.
-
-**When no price is available** (missing historical rate): `IsEstimated: true` is set, and the UI shows the native amount only with a visual indicator (e.g. a `~` prefix or a muted "no rate" label in the converted column). This is better than showing nothing or erroring.
-
-### Column layout in the global list
-
-| Column | Content |
-|---|---|
-| Amount | Native amount of the primary posting (asset/liability leg), with commodity symbol |
-| Base value | Base-currency equivalent from `base_currency_value`, shown in a narrower column with muted styling. Hidden if commodity = base commodity (no conversion needed). `~` prefix if `is_estimated`. |
-
-The "primary posting" for display is the asset or liability leg (account_class = asset or liability). For income/expense-only transactions (unusual), fall back to the first posting.
-
-### Implementation note
-
-The `BaseCurrencyValue` enrichment is an optional backend addition — it can be deferred to a later step without blocking the table build. For v1, show native amount only; add the base-currency column in a follow-up once the enrichment endpoint is built.
 
 ---
 
@@ -356,5 +424,3 @@ The `BaseCurrencyValue` enrichment is an optional backend addition — it can be
 1. **Navigation from account list** — clicking an account row currently opens the editor. Adding "View register" navigation needs a UI decision: make the row itself a link to `/app/accounts/[id]`, or add a dedicated register icon button alongside the existing Edit/Close/Archive actions?
 
 2. **Navigation from category list** — same question.
-
-3. **Editor: payee autocomplete scope** — payee names are stored on transactions as free text (`payee_name`). The backend would need a `GET /api/v1/payees` or a suggestion endpoint to power autocomplete. Currently there is no such endpoint. Defer autocomplete to v2, or add a lightweight payee suggestion endpoint as part of this work?
