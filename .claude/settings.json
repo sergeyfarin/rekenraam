@@ -7,7 +7,9 @@
       "Bash(pnpm run *)",
       "Skill(code-review)",
       "Skill(code-review:*)",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(grep -n \"accounts/\\\\[id\\\\]/+page.svelte exists\\\\|+page.svelte\\\\` exists\\\\|currently an account editor\" docs/transaction-table-plan.md)",
+      "Bash(grep -n \"category list row\\\\|categories/\\\\[id\\\\]\\\\`, consistent\\\\|stop their propagation\" docs/transaction-table-plan.md)"
     ]
   }
 }

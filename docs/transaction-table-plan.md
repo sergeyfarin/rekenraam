@@ -10,25 +10,44 @@ Read these first; they are the source of truth and override anything here on
 conflict:
 
 - `docs/conventions.md` — cross-cutting rules (money precision, API envelope,
-  frontend stack, lifecycle vs reconciliation separation).
-- `docs/transaction-ledger-core-plan.md` — the ledger schema, the five-state
-  lifecycle (unsaved entry, draft, posted, voided, soft-deleted), the
-  reconciliation guard, and the API slice.
+  frontend stack, lifecycle vs reconciliation separation, the period-scoped
+  reconciliation guard).
+- `docs/transaction-ledger-core-plan.md` — the ledger schema, the transaction
+  lifecycle, the reconciliation guard, and the API slice.
+- `docs/product-requirements.md` — product source of truth and sequencing.
+- `docs/early-architecture-decisions.md` and `docs/adrs/` — long-lived
+  architectural constraints and decision records.
 - `docs/categories-design.md` — categories are income/expense accounts; the
   built-in key lives in `metadata_json.$.category.builtin_key`.
 
 ### Lifecycle terms used throughout (do not conflate)
 
-- **Unsaved entry** — in-progress UI working copy, no database row, no side
-  effects. Not a status. Becomes draft/posted only on save.
-- **draft** — persisted `transaction_versions.status='draft'`. Excluded from the
-  ledger; may trigger FX coverage. A real row with row actions.
-- **posted** — in the ledger, directly editable.
+These are NOT a single five-step ladder. There are **three persisted statuses**
+(`draft`, `posted`, `voided`), plus **one pre-persistence condition** (unsaved
+entry) and **one independent flag** (soft-delete) that is orthogonal to status.
+
+- **Unsaved entry** — pre-persistence UI working copy, no database row, no side
+  effects. Not a status. Becomes `posted` (manual entry) or `draft`
+  (autosave/import) only on save.
+- **draft** — persisted `transaction_versions.status='draft'`. **System-only, not
+  user-facing.** Produced only by autosave recovery, scheduled generation, and
+  committed-import-awaiting-review. Manual entry never produces a draft. There is
+  no "save as draft" button and users never pick `draft`. Excluded from the
+  ledger; may trigger FX coverage.
+- **posted** — in the ledger, directly editable. The default and only outcome of
+  manual entry.
 - **voided** — excluded from ledger but **stays visible** in the table marked
   voided; reversible via unvoid.
 - **soft-deleted** — nullable `transactions.deleted_at` flag (NOT a status),
-  **hidden** from the table and all ordinary views, durable and recoverable;
-  reversible via restore. Independent of voided.
+  orthogonal to `draft`/`posted`/`voided`. **Hidden** from the table and all
+  ordinary views, durable and recoverable; reversible via restore. A transaction
+  can be e.g. posted+deleted, or voided+deleted.
+
+**The user-facing maturity line is reconciled vs not reconciled — not draft vs
+posted.** Before a reconciliation checkpoint locks a posting, the transaction is
+freely editable and removable; after, changes are guarded (period-scoped
+reconciliation rule). The table/editor UI must present this distinction, not
+draft-vs-posted, as what gates editability.
 
 ## Current state of the codebase (verified)
 
@@ -44,10 +63,13 @@ Already implemented — **consume, do not rebuild**:
   `updateTransaction`, `getTransactions`, `getTransaction`, `getAccountRegister`,
   `transactionsInfiniteQueryOptions`.
 - Reconciliation guard in `app/transactions.go`
-  (`reconciliationAffectingPostingChange`): override required only when a
-  reconciled posting's account, commodity, quantity value, quantity scale, or
-  entry date changes. `reconciliation_override` flag plumbed through update,
-  void, unvoid, soft-delete.
+  (`reconciliationAffectingPostingChange`): **currently the narrow rule** —
+  override required only when a *reconciled* posting's account, commodity, value,
+  scale, or entry date changes. `reconciliation_override` flag plumbed through
+  update, void, unvoid, soft-delete. **This plan broadens it** to the
+  period-scoped rule (guard any posting entering/leaving a reconciled period; see
+  Step 9a) per the updated `conventions.md`/core plan; restore currently has no
+  guard at all.
 - List/register queries already exclude soft-deleted rows
   (`deleted_at IS NULL`).
 - Reusable frontend primitives: `frontend/src/lib/components/` has
@@ -55,8 +77,11 @@ Already implemented — **consume, do not rebuild**:
   `page-header.svelte`, `api-form-error.svelte`, `top-bar.svelte`. Editor
   patterns to mirror: `frontend/src/lib/accounts/account-editor.svelte`,
   `frontend/src/lib/categories/category-editor.svelte`.
-- `frontend/src/routes/app/accounts/[id]/+page.svelte` exists (currently an
-  account editor view, not a register).
+- Account editing currently lives **inside** the account-list screen
+  (`frontend/src/routes/app/accounts/+page.svelte`). There is **no**
+  `accounts/[id]/` route yet — the register route in Step 7 is greenfield, and
+  the "row link" navigation must be added to the existing list screen. The same
+  is true for categories (list-screen editing, no `categories/[id]/` route yet).
 - `payeesQueryOptions({ q })` exists in `frontend/src/lib/api/payees.ts`.
 
 **Not yet implemented — this plan builds it**:
@@ -107,10 +132,12 @@ model for both forces awkward normalisation or a large `if (mode)` template tree
   and columns.
 - **Layer 3 — routes**:
   - `/app/transactions` — global page, table + editor side panel.
-  - `/app/accounts/[id]/register` — account register, dedicated route (the
-    existing `/app/accounts/[id]` editor route is left intact; the register is a
-    sibling so Back/Forward and bookmarking work for the primary daily view).
-  - `/app/categories/[id]` — category transactions, dedicated route.
+  - `/app/accounts/[id]/register` — account register, new dedicated route (no
+    `/app/accounts/[id]` route exists today; account editing stays on the list
+    screen). A dedicated route so Back/Forward and bookmarking work for the
+    primary daily view.
+  - `/app/categories/[id]` — category transactions, new dedicated route (no
+    `/app/categories/[id]` route exists today either).
 
 Dedicated routes for account/category (not a drawer) because the register is the
 primary daily interaction — bookmarkable, shareable, Back/Forward must work. The
@@ -215,7 +242,7 @@ name directly.
 **Verify Step 1:**
 ```bash
 cd backend && go build ./... && go test ./internal/app/ ./internal/db/ ./internal/api/
-cd ../frontend && npm run check
+cd .. && pnpm --dir frontend run check
 ```
 Add a backend test asserting a list response includes `account_class` and
 `commodity_code` for a known seeded transaction, and that a system-account
@@ -268,7 +295,7 @@ In `frontend/src/lib/api/transactions.ts`:
   `transactionsInfiniteQueryOptions`, calling the existing `getAccountRegister`,
   with `getNextPageParam` reading `next_cursor`.
 
-**Verify Step 3:** `cd frontend && npm run check`.
+**Verify Step 3:** `pnpm --dir frontend run check`.
 
 ---
 
@@ -289,19 +316,29 @@ type Column<R> = {
 };
 
 let {
-  rows,          // R[]
-  columns,       // Column<R>[]
-  isLoading,
+  rows,                // R[]
+  columns,             // Column<R>[]
+  isLoading,           // initial load
+  isFetchingNextPage,  // a page fetch is in flight — gate the observer on this
   hasNextPage,
-  onLoadMore,    // intersection observer at bottom; "Load more" button fallback
-  onRowClick,    // optional (row: R) => void
-  onError,       // optional (err: Error) => void — show retry UI when set
+  onLoadMore,          // intersection observer at bottom; "Load more" button fallback
+  error,               // Error | null — reactive value, drives persistent retry UI
+  onRetry,             // () => void — re-runs the failed query
+  onRowClick,          // optional (row: R) => void
 }: Props<R>;
 ```
 
-Must handle: IntersectionObserver infinite scroll with a button fallback,
-loading skeleton rows, empty state (use `state-panel.svelte`), error/retry state,
-sticky header, priority-based column hiding via CSS (no horizontal scroll).
+These map onto TanStack Query's `createInfiniteQuery` result fields; the wrapper
+passes `error`, `isFetchingNextPage`, `fetchNextPage`, and `refetch` straight
+through. `error` is a reactive value (not a callback) so retry UI persists while
+the error stands. The observer must not call `onLoadMore` while
+`isFetchingNextPage` is true, or it fires duplicate page requests.
+
+Must handle: IntersectionObserver infinite scroll (gated on
+`!isFetchingNextPage && hasNextPage`) with a button fallback, loading skeleton
+rows, empty state (use `state-panel.svelte`), error state with a Retry button
+wired to `onRetry`, sticky header, priority-based column hiding via CSS (no
+horizontal scroll).
 
 **Keyboard:** arrow keys move row focus; Enter activates `onRowClick`; Tab moves
 into row action buttons within the focused row. Honour the conventions'
@@ -311,15 +348,21 @@ Use Tailwind + existing semantic tokens; do not invent route-local colors.
 
 ### 4b. `frontend/src/lib/transactions/transaction-labels.ts`
 
-- `formatQuantity(value: string, scale: number): string` — the exact formatter.
-  `quantity_value` is a JSON **string**; never coerce to `number` (loses 53-bit+
-  precision). Insert the decimal point by string/`BigInt` arithmetic
-  (`"12345"`, scale 2 → `"123.45"`), then pass the decimal string to
-  `Intl.NumberFormat` with `{ minimumFractionDigits: scale, maximumFractionDigits: scale }`.
-  Convention also mandates Dinero.js v2 for money — prefer constructing a Dinero
-  amount from the integer coefficient + scale and using its formatting layer; if
-  Dinero is not yet wired, the `BigInt` + `Intl` path above is the fallback, but
-  still never via `number`.
+- `formatQuantity(value: string, scale: number, locale, commodity): string` — the
+  exact formatter. `quantity_value` is a JSON **string**; never coerce it to
+  `number` at any step (loses 53-bit+ precision). **Do not pass a decimal string
+  to `Intl.NumberFormat.format()`** — that coerces the argument to `Number` and
+  destroys precision just as badly. Two safe paths:
+  - **Preferred:** Dinero.js v2 (mandated by conventions) constructed from the
+    integer coefficient + scale, using its formatting layer for locale output.
+  - **Exact manual fallback:** split the coefficient with `BigInt` into integer
+    and fractional parts by string-index arithmetic (`"12345"`, scale 2 →
+    int `"123"`, frac `"45"`). Group the integer part using
+    `Intl.NumberFormat(locale).formatToParts(BigInt(intPart))` (`Intl` handles a
+    `BigInt` integer losslessly) to obtain the locale group/decimal separators,
+    then reassemble with the untouched fractional string. Never build a JS
+    `number` from the coefficient.
+  Both paths must round-trip a value beyond `Number.MAX_SAFE_INTEGER` unchanged.
 - `resolveAccountLabel(posting)` — applies the label resolution chain
   (`account_system_role` → `account_builtin_key` → `account_name` →
   `account_code`) through the Paraglide i18n boundary for the localized
@@ -341,19 +384,47 @@ the transaction list itself (server FTS5 handles `q`).
 
 ### 4d. `frontend/src/lib/transactions/transaction-row-actions.svelte`
 
-Status-driven action menu. Light row-level actions only; consequential actions
-(void, soft-delete) live on the detail panel (Step 6).
+Light row-level actions only; consequential actions (void, soft-delete, restore)
+live on the detail panel (Step 6). Actions are driven by **status AND whether the
+transaction is reconciliation-locked** — not by a draft-vs-posted maturity idea.
+The main transactions table shows `posted` and `voided` rows; `draft` is
+system-only and surfaces in its producing workflow (import-review tray), not the
+general list. Each row's actions:
 
-| Status | Row actions |
-|---|---|
-| draft | Edit, Post, Delete (hard delete — never-posted draft, via `deleteDraftTransaction`) |
-| posted | Edit, Create correction |
-| voided | Unvoid, View |
-| any + needs_review | Approve (inline, no editor) |
+| Row state | Row actions | Notes |
+|---|---|---|
+| posted, not locked | Edit, Create correction | Freely editable — "not locked" = no affected posting falls in a reconciled period |
+| posted, reconciliation-locked | Edit (warns on save), Create correction | Edit opens normally; the period-guard warning fires at save only if the change actually shifts a reconciled balance |
+| voided | Unvoid, View | Unvoid re-enters the ledger and is period-guarded |
+| any + needs_review | Approve (inline, no editor) | Import-set flag only |
 
-**Verify Step 4:** `cd frontend && npm run check`. Add a focused unit test for
-`formatQuantity` covering scale 0, scale 2, a value beyond `Number.MAX_SAFE_INTEGER`,
-and a negative value.
+Notes:
+- "Reconciliation-locked" is a per-row hint: any posting whose `entry_date` is on
+  or before the latest active checkpoint for its account/commodity. Use the
+  backend-provided per-row flag from Step 1/Step 9 enrichment rather than
+  computing it client-side; if the flag is not yet available, treat the row as
+  potentially locked and let the save-time guard decide.
+- The row menu never shows `Post` (no user-facing draft promotion) or a hard
+  `Delete` (hard delete is only for never-posted system drafts, exposed in the
+  import-review tray, not here). Removal of a posted/voided transaction is
+  Soft-delete on the detail panel.
+- Soft-delete and Restore are detail-panel actions (Step 6), available on both
+  posted and voided rows since the flag is independent of status.
+
+**Verify Step 4:** `pnpm --dir frontend run check`, then `pnpm --dir frontend run test`.
+
+**Prerequisite (do this before adding the test):** the repo has **no frontend
+test runner configured** — there is no `test` script in `frontend/package.json`
+and no Vitest setup. Conventions allow "focused component or unit tests when
+introduced," so introducing Vitest is in scope but is its own small task: add
+`vitest` (+ `@testing-library/svelte` if component tests are wanted) as dev deps,
+add a `"test": "vitest run"` script, and a minimal `vitest.config.ts`. Treat this
+as Step 4.0. If you cannot set up Vitest in this pass, do not silently drop the
+test — flag it and leave the formatter test as a tracked TODO rather than writing
+a verification line that never runs.
+
+Then add a `formatQuantity` unit test covering scale 0, scale 2, a value beyond
+`Number.MAX_SAFE_INTEGER` (must round-trip exactly), and a negative value.
 
 ---
 
@@ -384,25 +455,46 @@ amount; show a running total and highlight imbalance (balance enforced by
 backend; check client-side with Dinero before submit). Tiers 1/2 construct the
 same `journal_entries[]` payload as Tier 3 — the abstraction is cosmetic.
 
-### Save routing (the editor owns this, not the table)
+### Save and cancel routing (the editor owns this, not the table)
+
+**There is no user-facing "save as draft."** Manual entry always saves to
+`posted` (`POST /transactions` with `status:"posted"`). `draft` is system-only
+(autosave/import) and the editor never offers it as a choice. The editor's
+primary save action is a single "Save" / "Add transaction" that posts.
 
 The backend permits `PATCH` on any transaction that is not voided and not
 soft-deleted. Route by case:
 
 | Case | Trigger | Call | Behaviour |
 |---|---|---|---|
-| New entry (unsaved) | Composing a new transaction | `POST /transactions` on first save | Working copy only; no row, no FX, until saved |
-| Draft edit | Persisted draft | `PATCH /transactions/{id}` | Opens directly, no warning |
-| Posted edit — safe | No reconciled posting affected | `PATCH /transactions/{id}` | Opens directly, no warning (posted is directly editable) |
-| Posted edit — non-financial on reconciled | Only category/description/payee/note/tags change | `PATCH /transactions/{id}` | Allowed, reconciliation stays intact, no override |
-| Posted edit — reconciliation-invalidating | Reconciled posting's account/commodity/amount/scale/date changes | `PATCH /transactions/{id}` with `reconciliation_override: true` | Warning modal **at save time**: "This will invalidate a reconciliation checkpoint. Continue?" naming the affected checkpoint |
-| Voided edit | Transaction is voided | Unvoid first, then `PATCH` | Editor offers Unvoid; editing blocked until unvoided |
+| New entry (unsaved) | Composing a new transaction | `POST /transactions` (`status:"posted"`) on Save | Working copy only — no row, no FX — until Save. No draft created |
+| Posted edit — not in a reconciled period | No affected posting falls on/before a latest active checkpoint | `PATCH /transactions/{id}` | Opens and saves directly, no warning |
+| Posted edit — non-financial only | Only category/description/payee/note/tags change | `PATCH /transactions/{id}` | Always allowed, reconciliation intact, no override — even inside a reconciled period |
+| Posted edit — changes a reconciled balance | Adds/removes/re-dates a posting in a reconciled period, or changes a reconciled posting's account/commodity/amount/scale/date | `PATCH /transactions/{id}` with `reconciliation_override: true` | Warning modal **at save time** naming the affected checkpoint(s); proceed only on confirm |
+| Voided edit | Transaction is voided | Unvoid first, then `PATCH` | Editor offers Unvoid (which re-enters the ledger and is itself period-guarded); editing blocked until unvoided |
+| Draft edit (system) | A persisted draft in its producing workflow (import-review tray) | `PATCH /transactions/{id}` | Out of scope for the general editor; the import-review surface owns draft editing/promotion |
 | Corrective transaction | "Create correction" | `POST /transactions/{id}/correct` | Opens in correction mode |
 
-The safe vs reconciliation-invalidating distinction is only knowable after edits,
-so the warning fires at save, not on open. If the backend returns
-`reconciliation override is required`, surface the warning modal and retry with
-`reconciliation_override: true` on confirm.
+The guard uses the **period-scoped** rule (see `docs/conventions.md` and the core
+plan): a change is guarded when it would alter a reconciled balance — either it
+touches a reconciled posting's facts, or it adds/removes/re-dates a posting whose
+`entry_date` is on or before the latest active checkpoint `statement_date` for an
+affected account/commodity, even if that posting is not itself flagged
+reconciled. Whether a specific edit crosses that line is only knowable after the
+user edits, so the warning fires at save, not on open. If the backend returns
+`reconciliation override is required`, fetch the affected-checkpoint details
+(Step 9's preview/conflict read model) and show the warning naming them, then
+retry with `reconciliation_override: true` on confirm.
+
+**Cancel semantics:**
+- Cancel on a new (unsaved) entry: discard the working copy entirely. No row was
+  created, nothing to clean up. No draft is left behind.
+- Cancel on an edit of an existing transaction: discard pending field changes and
+  return to the read-only detail view; the persisted transaction is unchanged
+  (no `PATCH` was sent).
+- Autosave (if/when implemented) persists a `draft` row for crash recovery only;
+  it is never the user's "save." A future autosave design must define its own
+  discard path and must not surface the recovery draft as a user-chosen status.
 
 **Create correction** makes a *new* adjusting transaction linked via
 `correction_of_transaction_id`; it does not void or replace the original — both
@@ -430,8 +522,12 @@ income/expense accounts. An explicit "Transfer" entry point opens Tier 3 in
 transfer mode (From/To account controls). Never infer transfer from an invalid
 Category choice.
 
-**Verify Step 5:** `cd frontend && npm run check`. Manually: create, save a draft,
-post it, edit a posted transaction.
+**Verify Step 5:** `pnpm --dir frontend run check`. Manually: create a new
+transaction (saves directly to posted — confirm there is no "save as draft"
+choice), edit a posted transaction, edit only the category of a reconciled
+transaction (no warning), then change a reconciled posting's amount (warning +
+override required, naming the checkpoint), and Cancel an in-progress new entry
+(no row left behind).
 
 ---
 
@@ -478,7 +574,7 @@ for any `status` value. Restore from the detail panel works once a transaction i
 opened by id. A dedicated trash/recovery view for browsing and restoring them is
 built in **Step 9** as a settings subpage.
 
-**Verify Step 6:** `cd frontend && npm run check`; run the app and confirm list
+**Verify Step 6:** `pnpm --dir frontend run check`; run the app and confirm list
 loads, row opens detail, edit/post/void/soft-delete round-trip.
 
 ---
@@ -508,14 +604,18 @@ loads, row opens detail, edit/post/void/soft-delete round-trip.
 
 - Mounts `account-register.svelte` for the route's account id.
 - Embeds the editor side panel for editing a clicked entry's transaction.
-- **Navigation:** make the account list row itself a link to
-  `/app/accounts/[id]/register`. The whole row navigates; keep the existing
-  Edit/Close/Archive actions as explicit buttons within the row (stop event
-  propagation so an action click does not also trigger navigation). The register
-  is the primary daily destination, so the row's default action is "open
-  register," not "edit."
+- **Navigation:** make the account list row navigate to
+  `/app/accounts/[id]/register` as its default action (register is the primary
+  daily destination, not edit). Use the **stretched-link** pattern, not a
+  row-level `<a>` wrapping the action buttons: a single `<a>` for the register
+  link with an absolutely-positioned `::after` covering the row, and the
+  Edit/Close/Archive `<button>`s as siblings at a higher stacking context (so
+  they remain valid, focusable, and keyboard-reachable). Do **not** nest
+  interactive elements inside the `<a>` — that is invalid HTML and breaks assistive
+  tech. The action buttons sit above the stretched link, so a click on them does
+  not trigger navigation without relying on `stopPropagation`.
 
-**Verify Step 7:** `cd frontend && npm run check`; confirm register loads with a
+**Verify Step 7:** `pnpm --dir frontend run check`; confirm register loads with a
 running balance and respects status/date filters.
 
 ---
@@ -525,13 +625,20 @@ running balance and respects status/date filters.
 ### `frontend/src/lib/transactions/category-transactions.svelte`
 
 - `createInfiniteQuery(transactionsInfiniteQueryOptions({ categoryID, ...filters }))`.
-- **Category amount** = sum of all postings to the selected category account
-  within each transaction (a split may have several). Sum exactly: rescale each
-  integer coefficient to the greatest scale present using `BigInt`, sum, retain
-  the common scale. Never sum JS numbers or formatted strings.
-- **Category-activity sign convention** (not cashflow): a debit to an expense
-  category and a credit to an income category both display **positive**;
-  reversals display negative.
+- **Category amount = per-commodity sums; never combine commodities.** A category
+  is an income/expense account and may hold postings in different commodities
+  (e.g. a EUR and a USD grocery purchase). **Group postings to the category
+  account by `commodity_id` first**, then sum exactly within each commodity group
+  (rescale each integer coefficient to the greatest scale present in that group
+  using `BigInt`, sum, retain the common scale). EUR and USD must never be
+  rescaled together or added — that produces a meaningless number. A row with
+  postings in two commodities shows two amounts (e.g. "€120.00" and "$40.00",
+  stacked or "+N more"); never one fused total. Never sum JS numbers or formatted
+  strings. (This per-commodity rule applies anywhere postings are aggregated —
+  running balances and any future totals included.)
+- **Category-activity sign convention** (not cashflow), applied within each
+  commodity group: a debit to an expense category and a credit to an income
+  category both display **positive**; reversals display negative.
 - Columns:
 
 | Column | Source | Priority | Notes |
@@ -548,12 +655,12 @@ running balance and respects status/date filters.
 ### `frontend/src/routes/app/categories/[id]/+page.svelte`
 
 - Mounts `category-transactions.svelte`; embeds the editor side panel.
-- **Navigation:** make the category list row itself a link to
-  `/app/categories/[id]`, consistent with the account-register row-link pattern.
-  Keep any per-row action buttons explicit and stop their propagation so they do
-  not also trigger navigation.
+- **Navigation:** make the category list row navigate to `/app/categories/[id]`
+  using the same **stretched-link** pattern as the account register (single `<a>`
+  with a covering `::after`; action `<button>`s as higher-stacked siblings, never
+  nested inside the `<a>`).
 
-**Verify Step 8:** `cd frontend && npm run check`; confirm category totals match a
+**Verify Step 8:** `pnpm --dir frontend run check`; confirm category totals match a
 known split transaction.
 
 ---
@@ -566,76 +673,115 @@ frontend work.
 
 ### Recovery rule (the safety contract)
 
-Restoring a soft-deleted transaction puts its postings back into the ledger. If
-those postings fall within an already-reconciled period, restoring would silently
-change a reconciled balance. So:
+This applies the **period-scoped reconciliation guard** (now the source-of-truth
+rule in `docs/conventions.md` and the core plan). Restoring a soft-deleted
+*posted* transaction puts its postings back into the ledger; if any fall within
+an already-reconciled period, restoring changes a reconciled balance and must be
+guarded.
 
-- **Easy restore (default):** a soft-deleted transaction is restorable with no
-  warning **only when none of its postings sit on or before the latest active
-  reconciliation checkpoint** for their `(account_id, commodity_id)`. In
-  practice: every affected account's posting `entry_date` is strictly after that
-  account/commodity's most recent active checkpoint `statement_date` (or the
-  account/commodity has no active checkpoint at all). This is the common case —
-  recovering something deleted since the last reconciliation.
-- **Guarded restore:** if any affected posting is on or before a latest active
-  checkpoint, restore requires explicit `reconciliation_override: true` and
-  invalidates that checkpoint plus all later active checkpoints for the same
-  account/commodity — the same override-and-invalidate mechanism already used by
-  edit, void, and soft-delete. The UI must warn, naming the affected
-  checkpoint(s), exactly like the reconciliation-invalidating edit path in
-  Step 5.
+- **Voided transactions are exempt.** A voided transaction is already out of the
+  ledger, so restoring it from soft-delete only restores *visibility* of an
+  out-of-ledger record and changes no balance. Restoring a voided+soft-deleted
+  transaction is **always easy, never reconciliation-guarded.** (Re-entering it
+  into the ledger would be a separate unvoid, which is itself guarded.)
+- **Easy restore (default for posted):** restorable with no warning when no
+  affected posting falls on or before the latest active reconciliation checkpoint
+  for its `(account_id, commodity_id)` — i.e. every affected posting `entry_date`
+  is strictly after that account/commodity's most recent active checkpoint
+  `statement_date`, or there is no active checkpoint. The common case.
+- **Guarded restore (posted in a reconciled period):** if any affected posting is
+  on or before a latest active checkpoint, restore requires explicit
+  `reconciliation_override: true` and invalidates that checkpoint plus all later
+  active checkpoints for the same account/commodity — the same
+  override-and-invalidate mechanism used by edit/void/unvoid/soft-delete. The UI
+  warns, naming the affected checkpoint(s), like the guarded edit path in Step 5.
 
-This mirrors how the reconciled posting itself works: the checkpoint is the lock
-floor; crossing it is allowed but never silent.
+The checkpoint is the lock floor; crossing it is allowed but never silent.
 
-### 9a. Backend — restore guard
+### 9a. Backend — restore guard (period-scoped)
 
 Today `RestoreTransaction` (`app/transactions.go`,
 `setTransactionDeleted(..., false)`) performs **no** reconciliation check. Add
-one symmetric to the soft-delete path:
+the period-scoped guard:
 
-- Compute the affected checkpoint refs for the transaction being restored. Unlike
-  soft-delete (which uses `reconciliationRefsFromTransaction` keyed on postings
-  whose `reconciliation_status='reconciled'`), restore must compare each
-  posting's `entry_date` against the **latest active checkpoint** for its
-  `(account_id, commodity_id)`, because a soft-deleted transaction's postings may
-  not themselves be marked reconciled yet still fall inside a reconciled period.
+- **Exempt voided transactions first:** if `current.Status == "voided"`, skip the
+  guard entirely — restore changes no balance.
+- Otherwise compute affected checkpoint refs by the **period** rule, not the
+  reconciled-posting-facts rule. For each posting, look up the latest active
+  checkpoint for its `(account_id, commodity_id)` and flag it when the posting's
+  `entry_date <= checkpoint.statement_date`. This differs from soft-delete's
+  `reconciliationRefsFromTransaction` (which keys on
+  `reconciliation_status='reconciled'`): a soft-deleted posting may not itself be
+  flagged reconciled yet still fall inside a reconciled period.
 - Add a repository query, e.g.
   `LatestActiveCheckpointByAccountCommodity(ctx, bookID, accountID, commodityID)`
   reading `reconciliation_checkpoints` (filter `status='active'`,
   `ORDER BY statement_date DESC, id DESC LIMIT 1`; the
   `reconciliation_checkpoints_account_idx` index already supports this).
-- If any posting's `entry_date <= latest active checkpoint.statement_date` and
-  `!input.ReconciliationOverride`, return `ErrReconciliationOverrideRequired`.
-- When override is given, pass the affected checkpoint refs through
-  `InvalidateCheckpointRefs` (the plumbing already exists on
+- If any posting trips the period check and `!input.ReconciliationOverride`,
+  return `ErrReconciliationOverrideRequired`. With override, pass the affected
+  checkpoint refs through `InvalidateCheckpointRefs` (plumbing already exists on
   `SetTransactionDeletedParams`).
 
-Add backend tests: restore of a post-checkpoint transaction succeeds with no
-override; restore of a transaction dated on/before the latest active checkpoint
-fails without override and, with override, succeeds and invalidates that
-checkpoint and later ones.
+**Apply the same period rule to the other in-ledger mutations** so the guard is
+consistent everywhere (this is the rule change agreed in conventions/core plan,
+not restore-only): create/edit (`reconciliationInvalidationRefs`) and unvoid must
+also flag postings that enter a reconciled period, not only changes to
+already-reconciled postings. Update `reconciliationAffectingPostingChange` and its
+callers accordingly. Soft-delete of a posted transaction in a reconciled period
+is likewise guarded.
+
+Add backend tests: restore of a post-checkpoint posted transaction succeeds with
+no override; restore of a posted transaction dated on/before the latest active
+checkpoint fails without override and, with override, succeeds and invalidates
+that checkpoint and later ones; restore of a voided+soft-deleted transaction in a
+reconciled period succeeds with no override (exempt); create/edit/unvoid that
+places a posting in a reconciled period is guarded.
+
+### 9a-bis. Backend — affected-checkpoint preview (so warnings can name them)
+
+The generic `ErrReconciliationOverrideRequired` cannot tell the UI *which*
+checkpoints are affected, but Step 5 and Step 9 both require warnings that name
+them. Add a read-only preview the editor/trash UI can call before confirming:
+
+- A dry-run/preview endpoint or read model that, given a pending operation
+  (restore, unvoid, or an edit payload) for a transaction, returns the list of
+  affected active checkpoints: `{ account_id, account_label, commodity_code,
+  statement_date, checkpoint_id }[]`. Prefer a dedicated preview endpoint (e.g.
+  `POST /api/v1/transactions/{id}/reconciliation-impact`) over enriching the
+  error envelope, because the error envelope is a stable `{code, message}` shape
+  per conventions and must not grow structured payloads.
+- The UI calls preview when it knows an override may be required (or after
+  receiving `ErrReconciliationOverrideRequired`), renders the named checkpoints in
+  the warning modal, then retries the real mutation with
+  `reconciliation_override: true`.
+- Update OpenAPI and regenerate types.
 
 ### 9b. Backend — list soft-deleted
 
-Add an `include_deleted` / deleted-only listing path so the trash view can
-enumerate soft-deleted transactions (the list query currently hard-excludes
-`deleted_at IS NULL`; only single-record `TransactionByIDIncludingDeleted`
-exists).
+Add a deleted-only listing path so the trash view can enumerate soft-deleted
+transactions (the list query currently hard-excludes `deleted_at IS NULL`; only
+single-record `TransactionByIDIncludingDeleted` exists).
 
-- `db/transactions.go` — add a `Deleted` filter mode to `ListTransactionsParams`
-  (e.g. `DeletedOnly bool`) that flips the `deleted_at IS NULL` clause to
-  `deleted_at IS NOT NULL` and orders by `deleted_at DESC, id DESC`. Include the
-  `delete_reason`, `deleted_at`, and `deleted_by_user_id` snapshot columns in the
-  response so the trash view can show when/why.
-- `app/transactions.go` — surface it on `ListTransactionsInput`; still run the
-  Step 1 enrichment so rows render with names. Also compute, per row, a
-  `restore_blocked_by_reconciliation` boolean (using 9a's checkpoint comparison)
-  so the UI can show which rows are easy-restore vs guarded **without** a
-  per-row probe request.
-- `api/transactions.go` + OpenAPI — expose the filter (e.g.
-  `GET /api/v1/transactions?deleted=true`) and the extra response fields.
-  Regenerate types.
+**Use a dedicated trash endpoint, not a `deleted=true` flag on `/transactions`.**
+The existing list cursor encodes and filters by `(transaction_date, id)` (see
+`EncodeTransactionCursor`/`DecodeTransactionCursor` in `db/transactions.go`).
+The trash view must order by deletion recency (`deleted_at DESC, id DESC`), which
+the date cursor cannot express — overloading `/transactions?deleted=true` would
+silently break pagination. A separate endpoint with its own cursor avoids that.
+
+- `db/transactions.go` — add a deleted-only query ordered by
+  `deleted_at DESC, id DESC`, with a **deletion cursor** `(deleted_at, id)`
+  (add `Encode/DecodeDeletionCursor`; do not reuse the date cursor). Select the
+  `delete_reason`, `deleted_at`, and `deleted_by_user_id` snapshot columns.
+- `app/transactions.go` — a `ListDeletedTransactions` service; still run Step 1
+  enrichment so rows render with names. Per row, compute a
+  `restore_blocked_by_reconciliation` boolean using 9a's **period** check
+  (and honouring the voided exemption: a voided row is never blocked) so the UI
+  shows easy-restore vs guarded **without** a per-row probe request.
+- `api/transactions.go` + OpenAPI — add `GET /api/v1/transactions/deleted`
+  (cursor-paginated) returning the deleted rows plus the snapshot fields and the
+  per-row flag. Regenerate types.
 
 ### 9c. Frontend — settings subpage
 
@@ -655,7 +801,7 @@ exists).
 **Verify Step 9:**
 ```bash
 cd backend && go test ./internal/app/ ./internal/db/ ./internal/api/
-cd ../frontend && npm run check
+cd .. && pnpm --dir frontend run check
 ```
 Manually: soft-delete a recent transaction, open Settings → Trash, restore it in
 one click; soft-delete a transaction inside a reconciled period and confirm the
@@ -698,20 +844,32 @@ full-screen form / bottom sheet below the breakpoint.
 ## Definition of done
 
 - `cd backend && go build ./... && go test ./...` passes.
-- `cd frontend && npm run check` passes (0 errors, 0 warnings).
+- `pnpm --dir frontend run check` passes (0 errors, 0 warnings), and
+  `pnpm --dir frontend run test` passes (Vitest set up per Step 4.0).
 - All response paths return enriched posting metadata (verified by test).
 - `category_id` filter works and validates account class.
+- Category and any aggregate amounts are **per-commodity** — different commodities
+  are never rescaled or summed together.
+- Money is never coerced to a JS `number` at any step, including formatting
+  (no decimal string passed to `Intl.NumberFormat.format()`).
 - Global list, account register, and category routes render, paginate, filter,
-  and open the editor.
-- Editor handles create, draft edit, posted edit (incl. reconciliation-override
-  at save), correction, and the transfer entry point.
+  and open the editor; list rows navigate via the stretched-link pattern (no
+  nested interactive elements inside an `<a>`).
+- Editor saves manual entry directly to `posted` (no "save as draft"), handles
+  posted edit (incl. period-scoped reconciliation override at save with named
+  checkpoints), correction, the transfer entry point, and well-defined Cancel
+  semantics.
+- The period-scoped reconciliation guard is enforced consistently across
+  create/edit/void/unvoid/soft-delete/restore; restoring a voided+soft-deleted
+  transaction is exempt (visibility only).
 - Detail panel exposes Post/Approve/Void/Unvoid/Soft-delete/Restore correctly by
-  status, each consequential action requiring a reason.
+  status and the soft-delete flag, each consequential action requiring a reason.
 - Soft-deleted transactions never appear in the main list; voided transactions
-  appear marked voided. The Settings → Trash subpage lists soft-deleted
-  transactions and restores them, with the reconciliation-aware recovery guard.
+  appear marked voided. The Settings → Trash subpage (its own deleted endpoint +
+  deletion cursor) lists soft-deleted transactions and restores them with the
+  period-scoped recovery guard and per-row impact flag.
 - New copy goes through Paraglide; new components use Svelte 5 runes and semantic
-  tokens; money is never coerced to `number`.
+  tokens.
 
 ---
 

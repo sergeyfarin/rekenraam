@@ -141,8 +141,11 @@ immutability.
 
 ## Lifecycle: Unsaved Entry, Draft, Posted, Voided, Soft-Deleted
 
-There are five states a user-visible transaction can be in. Only four are
-persisted statuses; the first is a UI condition with no database row.
+This is not a single five-step ladder. There are **three persisted statuses**
+(`draft`, `posted`, `voided`), plus **one pre-persistence condition** (unsaved
+entry — a UI working copy with no database row) and **one independent flag**
+(soft-delete — a nullable `deleted_at` orthogonal to status). Soft-delete is not
+a status and not a point on the draft→posted→voided line.
 
 ### Unsaved entry (working copy — not a status)
 
@@ -161,14 +164,22 @@ persists it. "Unsaved entry" must never be called a "draft," and persisted
 ### Persisted statuses — `transaction_versions.status`
 
 - `draft`: durable but unposted work that exists in the database and is
-  intentionally excluded from the posted ledger and reports. Sources: autosaved
-  manual work, scheduled-transaction generation, and (only after the import
-  commit step) imported rows awaiting review. Draft does not mean unreconciled.
-  Drafts have never affected the posted ledger.
+  intentionally excluded from the posted ledger and reports. **System-only, not a
+  user-facing maturity step.** Sources are machine/async producers only: autosaved
+  manual work (crash/refresh recovery), scheduled-transaction generation, and
+  (only after the import commit step) imported rows awaiting review. Manual entry
+  never produces a draft — it goes directly to `posted`. There is no user-facing
+  "save as draft"; users never pick `draft`. Drafts surface only in their
+  producing workflow (e.g. an import-review tray), never as a tier the user
+  advances through. Draft does not mean unreconciled. Drafts have never affected
+  the posted ledger.
 - `posted`: entered and participating in current ledger views and reports.
-  "Entered" covers manual entry, bank/file import after commit, and anything
-  already existing in the ledger. Posted does not imply reconciled and stays
-  directly editable.
+  "Entered" covers manual entry (the default and only outcome of manual entry),
+  bank/file import after commit, and anything already existing in the ledger.
+  Posted does not imply reconciled and stays directly editable. The user-facing
+  maturity line is reconciled vs not reconciled, not draft vs posted: a posted
+  transaction is freely editable and removable until a reconciliation checkpoint
+  locks it.
 - `voided`: the latest version intentionally removes this transaction from the
   posted ledger, but the transaction stays **visible in the UI marked as
   voided** as a deliberate reference/memory record. A voided transaction can be
@@ -249,22 +260,42 @@ describe the historical transaction. Posting tags are keyed to posting lines;
 a voided version has no current postings, but historical posting-line context
 remains available for audit/history views.
 
-Implement now: reconciliation locks the affected account posting facts, not the
-whole UI transaction. Ordinary superseding is allowed when every reconciled
-posting keeps the same account, commodity, quantity value, quantity scale, and
-entry date. This lets a user recategorize, change the description/payee/note, or
-split the income/expense side of a transaction after the bank-side posting has
-been reconciled — the reconciliation stays intact — as long as every reconciled
-posting is unchanged and the transaction remains balanced.
+**Guiding principle: if an operation changes a reconciled balance, it is
+guarded** (explicit override plus invalidation of the affected active checkpoint
+and all later active checkpoints for that account/commodity), never silent. The
+checkpoint `statement_date` is the lock floor per account/commodity. Two
+situations change a reconciled balance:
 
-Changing or removing a reconciled posting (its account, commodity, amount,
-scale, or entry date) requires explicit reconciliation override and must
-invalidate the affected active checkpoint plus later active checkpoints for that
-account/commodity. Voiding, unvoiding, or soft-deleting a transaction with
-reconciled postings follows the same rule: either use override and invalidate
-checkpoints, or use a corrective transaction that preserves the original
-reconciled record. Editing a non-reconciled posted transaction needs none of
-this — it is directly editable.
+1. **Reconciled posting facts change.** A reconciled posting's account,
+   commodity, quantity value, quantity scale, or entry date changes.
+2. **A posting enters or leaves a reconciled period.** Any operation adds,
+   removes, or re-dates a posting whose `entry_date` falls on or before the
+   latest active checkpoint `statement_date` for an affected account/commodity —
+   **even if that posting is not itself marked `reconciled`.** Creating, editing,
+   voiding, unvoiding, soft-deleting, or restoring a transaction inside an
+   already-reconciled period changes that period's balance, so it is guarded.
+
+This is broader than locking only reconciled posting facts: it protects the
+integrity of a reconciled *period*, not just the individual reconciled rows. The
+broader rule is intentional — a transaction dated inside a reconciled window but
+whose postings were never individually flagged reconciled still shifts the
+checkpoint's statement balance if added back or removed.
+
+Always allowed without override (never changes a balance):
+
+- Editing only category, description, payee, note, or tags — regardless of date.
+  This lets a user recategorize or split the income/expense side of a reconciled
+  transaction with the reconciliation intact, as long as no posting's account,
+  commodity, amount, scale, or entry date moves and the transaction stays
+  balanced.
+- Any operation on a transaction that is already out of the ledger. Restoring a
+  voided-and-soft-deleted transaction only restores visibility of an out-of-ledger
+  record and changes no balance, so it is never reconciliation-guarded. (An
+  unvoid, by contrast, *does* re-enter the ledger and is guarded under the
+  period rule above.)
+
+A corrective transaction that preserves the original reconciled record is always
+an alternative to overriding.
 
 Defer: closed-period posting guards until period close exists. The transaction
 slice must not attempt to enforce closed periods because no closed-period model
