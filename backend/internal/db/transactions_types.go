@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"rekenraam/backend/internal/exact"
 )
@@ -17,6 +19,40 @@ var (
 
 type TransactionRepository struct {
 	database *sql.DB
+}
+
+func (r *TransactionRepository) withTx(ctx context.Context, op string, fn func(*sql.Tx) error) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", op, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit %s: %w", op, err)
+	}
+	committed = true
+	return nil
+}
+
+func withTransactionRecordTx(r *TransactionRepository, ctx context.Context, op string, fn func(*sql.Tx) (TransactionRecord, error)) (TransactionRecord, error) {
+	var record TransactionRecord
+	err := r.withTx(ctx, op, func(tx *sql.Tx) error {
+		var err error
+		record, err = fn(tx)
+		return err
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	return record, err
 }
 
 type TransactionRecord struct {

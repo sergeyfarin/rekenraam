@@ -114,518 +114,426 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 }
 
 func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params UpdateTransactionParams) (TransactionRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin update transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
+	return withTransactionRecordTx(r, ctx, "update transaction", func(tx *sql.Tx) (TransactionRecord, error) {
+
+		if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+			return TransactionRecord{}, err
 		}
-	}()
 
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
-		return TransactionRecord{}, err
-	}
+		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		if current.Status == "voided" {
+			return TransactionRecord{}, ErrTransactionVoided
+		}
+		if current.DeletedAt.Valid {
+			return TransactionRecord{}, ErrTransactionDeleted
+		}
+		auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID:        params.BookID,
+			ActorUserID:   params.ActorUserID,
+			AuthSessionID: params.AuthSessionID,
+			OccurredAt:    params.RecordedAt,
+			RequestID:     params.RequestID,
+			OriginType:    params.OriginType,
+			Operation:     params.Operation,
+			Reason:        params.ChangeReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
 
-	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if current.Status == "voided" {
-		return TransactionRecord{}, ErrTransactionVoided
-	}
-	if current.DeletedAt.Valid {
-		return TransactionRecord{}, ErrTransactionDeleted
-	}
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID:        params.BookID,
-		ActorUserID:   params.ActorUserID,
-		AuthSessionID: params.AuthSessionID,
-		OccurredAt:    params.RecordedAt,
-		RequestID:     params.RequestID,
-		OriginType:    params.OriginType,
-		Operation:     params.Operation,
-		Reason:        params.ChangeReason,
+		// Inherit the existing day sequence when the date is unchanged; otherwise
+		// the transaction moves to the end of its new date (0 triggers MAX+1).
+		inheritedTxDaySeq := int64(0)
+		if params.Spec.TransactionDate == current.TransactionDate {
+			inheritedTxDaySeq = current.TransactionDaySequence
+		}
+
+		record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+			BookID:                 params.BookID,
+			TransactionID:          params.TransactionID,
+			VersionSeq:             current.VersionSeq + 1,
+			SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
+			Spec:                   params.Spec,
+			ReplaceTags:            true,
+			RecordedAt:             params.RecordedAt,
+			ChangedByUserID:        params.ActorUserID,
+			ChangeReason:           params.ChangeReason,
+			ChangeAuditEventID:     auditEventID,
+			RequestID:              params.RequestID,
+			TransactionDaySequence: inheritedTxDaySeq,
+		})
+		if err != nil {
+			return TransactionRecord{}, mapTransactionConstraintError(err)
+		}
+		invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+			BookID:       params.BookID,
+			Refs:         params.InvalidateCheckpointRefs,
+			ActorUserID:  params.ActorUserID,
+			AuditEventID: auditEventID,
+			OccurredAt:   params.RecordedAt,
+			Reason:       params.InvalidateCheckpointReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		record.InvalidatedCheckpointIDs = invalidatedCheckpointIDs
+
+		return record, nil
 	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-
-	// Inherit the existing day sequence when the date is unchanged; otherwise
-	// the transaction moves to the end of its new date (0 triggers MAX+1).
-	inheritedTxDaySeq := int64(0)
-	if params.Spec.TransactionDate == current.TransactionDate {
-		inheritedTxDaySeq = current.TransactionDaySequence
-	}
-
-	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
-		BookID:                 params.BookID,
-		TransactionID:          params.TransactionID,
-		VersionSeq:             current.VersionSeq + 1,
-		SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
-		Spec:                   params.Spec,
-		ReplaceTags:            true,
-		RecordedAt:             params.RecordedAt,
-		ChangedByUserID:        params.ActorUserID,
-		ChangeReason:           params.ChangeReason,
-		ChangeAuditEventID:     auditEventID,
-		RequestID:              params.RequestID,
-		TransactionDaySequence: inheritedTxDaySeq,
-	})
-	if err != nil {
-		return TransactionRecord{}, mapTransactionConstraintError(err)
-	}
-	invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-		BookID:       params.BookID,
-		Refs:         params.InvalidateCheckpointRefs,
-		ActorUserID:  params.ActorUserID,
-		AuditEventID: auditEventID,
-		OccurredAt:   params.RecordedAt,
-		Reason:       params.InvalidateCheckpointReason,
-	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	record.InvalidatedCheckpointIDs = invalidatedCheckpointIDs
-
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit update transaction: %w", err)
-	}
-	committed = true
-
-	return record, nil
 }
 
 func (r *TransactionRepository) VoidTransaction(ctx context.Context, params VoidTransactionParams) (TransactionRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin void transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
+	return withTransactionRecordTx(r, ctx, "void transaction", func(tx *sql.Tx) (TransactionRecord, error) {
 
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
-		return TransactionRecord{}, err
-	}
-	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if current.Status == "voided" {
-		records := []TransactionRecord{current}
-		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+		if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
 			return TransactionRecord{}, err
 		}
-		if err := tx.Commit(); err != nil {
-			return TransactionRecord{}, fmt.Errorf("commit void transaction: %w", err)
+		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+		if err != nil {
+			return TransactionRecord{}, err
 		}
-		committed = true
-		return records[0], nil
-	}
-	if current.DeletedAt.Valid {
-		return TransactionRecord{}, ErrTransactionDeleted
-	}
-	currentRecords := []TransactionRecord{current}
-	if err := loadTransactionChildrenTx(ctx, tx, currentRecords); err != nil {
-		return TransactionRecord{}, err
-	}
-	current = currentRecords[0]
+		if current.Status == "voided" {
+			records := []TransactionRecord{current}
+			if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+				return TransactionRecord{}, err
+			}
+			return records[0], nil
+		}
+		if current.DeletedAt.Valid {
+			return TransactionRecord{}, ErrTransactionDeleted
+		}
+		currentRecords := []TransactionRecord{current}
+		if err := loadTransactionChildrenTx(ctx, tx, currentRecords); err != nil {
+			return TransactionRecord{}, err
+		}
+		current = currentRecords[0]
 
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID:        params.BookID,
-		ActorUserID:   params.ActorUserID,
-		AuthSessionID: params.AuthSessionID,
-		OccurredAt:    params.RecordedAt,
-		RequestID:     params.RequestID,
-		OriginType:    params.OriginType,
-		Operation:     params.Operation,
-		Reason:        params.ChangeReason,
+		auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID:        params.BookID,
+			ActorUserID:   params.ActorUserID,
+			AuthSessionID: params.AuthSessionID,
+			OccurredAt:    params.RecordedAt,
+			RequestID:     params.RequestID,
+			OriginType:    params.OriginType,
+			Operation:     params.Operation,
+			Reason:        params.ChangeReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+
+		spec := transactionSpecFromRecord(current)
+		spec.Status = "voided"
+		record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+			BookID:                 params.BookID,
+			TransactionID:          params.TransactionID,
+			VersionSeq:             current.VersionSeq + 1,
+			SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
+			Spec:                   spec,
+			ReplaceTags:            false,
+			RecordedAt:             params.RecordedAt,
+			ChangedByUserID:        params.ActorUserID,
+			ChangeReason:           params.ChangeReason,
+			ChangeAuditEventID:     auditEventID,
+			RequestID:              params.RequestID,
+			TransactionDaySequence: current.TransactionDaySequence,
+		})
+		if err != nil {
+			return TransactionRecord{}, mapTransactionConstraintError(err)
+		}
+		invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+			BookID:       params.BookID,
+			Refs:         params.InvalidateCheckpointRefs,
+			ActorUserID:  params.ActorUserID,
+			AuditEventID: auditEventID,
+			OccurredAt:   params.RecordedAt,
+			Reason:       params.InvalidateCheckpointReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		record.InvalidatedCheckpointIDs = invalidatedCheckpointIDs
+
+		return record, nil
 	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-
-	spec := transactionSpecFromRecord(current)
-	spec.Status = "voided"
-	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
-		BookID:                 params.BookID,
-		TransactionID:          params.TransactionID,
-		VersionSeq:             current.VersionSeq + 1,
-		SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
-		Spec:                   spec,
-		ReplaceTags:            false,
-		RecordedAt:             params.RecordedAt,
-		ChangedByUserID:        params.ActorUserID,
-		ChangeReason:           params.ChangeReason,
-		ChangeAuditEventID:     auditEventID,
-		RequestID:              params.RequestID,
-		TransactionDaySequence: current.TransactionDaySequence,
-	})
-	if err != nil {
-		return TransactionRecord{}, mapTransactionConstraintError(err)
-	}
-	invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-		BookID:       params.BookID,
-		Refs:         params.InvalidateCheckpointRefs,
-		ActorUserID:  params.ActorUserID,
-		AuditEventID: auditEventID,
-		OccurredAt:   params.RecordedAt,
-		Reason:       params.InvalidateCheckpointReason,
-	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	record.InvalidatedCheckpointIDs = invalidatedCheckpointIDs
-
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit void transaction: %w", err)
-	}
-	committed = true
-
-	return record, nil
 }
 
 func (r *TransactionRepository) UnvoidTransaction(ctx context.Context, params TransactionLifecycleParams) (TransactionRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin unvoid transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
+	return withTransactionRecordTx(r, ctx, "unvoid transaction", func(tx *sql.Tx) (TransactionRecord, error) {
 
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
-		return TransactionRecord{}, err
-	}
-	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if current.DeletedAt.Valid {
-		return TransactionRecord{}, ErrTransactionDeleted
-	}
-	if current.Status != "voided" {
-		records := []TransactionRecord{current}
-		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+		if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
 			return TransactionRecord{}, err
 		}
-		if err := tx.Commit(); err != nil {
-			return TransactionRecord{}, fmt.Errorf("commit unvoid transaction: %w", err)
+		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+		if err != nil {
+			return TransactionRecord{}, err
 		}
-		committed = true
-		return records[0], nil
-	}
+		if current.DeletedAt.Valid {
+			return TransactionRecord{}, ErrTransactionDeleted
+		}
+		if current.Status != "voided" {
+			records := []TransactionRecord{current}
+			if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+				return TransactionRecord{}, err
+			}
+			return records[0], nil
+		}
 
-	var prior TransactionRecord
-	if err := scanTransactionRecord(tx.QueryRowContext(ctx, transactionVersionSelect("transaction_versions", `
+		var prior TransactionRecord
+		if err := scanTransactionRecord(tx.QueryRowContext(ctx, transactionVersionSelect("transaction_versions", `
 		WHERE tv.id = (
 			SELECT prior.id FROM transaction_versions prior
 			WHERE prior.transaction_id = ? AND prior.status <> 'voided'
 			ORDER BY prior.version_seq DESC, prior.id DESC LIMIT 1
 		)
 	`), params.TransactionID), &prior); err != nil {
-		return TransactionRecord{}, err
-	}
-	priorRecords := []TransactionRecord{prior}
-	if err := loadTransactionChildrenTx(ctx, tx, priorRecords); err != nil {
-		return TransactionRecord{}, err
-	}
-	prior = priorRecords[0]
+			return TransactionRecord{}, err
+		}
+		priorRecords := []TransactionRecord{prior}
+		if err := loadTransactionChildrenTx(ctx, tx, priorRecords); err != nil {
+			return TransactionRecord{}, err
+		}
+		prior = priorRecords[0]
 
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
-		OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: params.OriginType,
-		Operation: params.Operation, Reason: params.ChangeReason,
+		auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
+			OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: params.OriginType,
+			Operation: params.Operation, Reason: params.ChangeReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+			BookID: params.BookID, TransactionID: params.TransactionID, VersionSeq: current.VersionSeq + 1,
+			SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
+			Spec:                transactionSpecFromRecord(prior), ReplaceTags: false, RecordedAt: params.RecordedAt,
+			ChangedByUserID: params.ActorUserID, ChangeReason: params.ChangeReason,
+			ChangeAuditEventID: auditEventID, RequestID: params.RequestID,
+			TransactionDaySequence: prior.TransactionDaySequence,
+		})
+		if err != nil {
+			return TransactionRecord{}, mapTransactionConstraintError(err)
+		}
+		invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+			BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
+			AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		record.InvalidatedCheckpointIDs = invalidated
+		return record, nil
 	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
-		BookID: params.BookID, TransactionID: params.TransactionID, VersionSeq: current.VersionSeq + 1,
-		SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
-		Spec:                transactionSpecFromRecord(prior), ReplaceTags: false, RecordedAt: params.RecordedAt,
-		ChangedByUserID: params.ActorUserID, ChangeReason: params.ChangeReason,
-		ChangeAuditEventID: auditEventID, RequestID: params.RequestID,
-		TransactionDaySequence: prior.TransactionDaySequence,
-	})
-	if err != nil {
-		return TransactionRecord{}, mapTransactionConstraintError(err)
-	}
-	invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-		BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
-		AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
-	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	record.InvalidatedCheckpointIDs = invalidated
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit unvoid transaction: %w", err)
-	}
-	committed = true
-	return record, nil
 }
 
 func (r *TransactionRepository) SetTransactionDeleted(ctx context.Context, params SetTransactionDeletedParams) (TransactionRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin set transaction deleted: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
-		return TransactionRecord{}, err
-	}
-	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if current.DeletedAt.Valid == params.Deleted {
-		records := []TransactionRecord{current}
-		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+	return withTransactionRecordTx(r, ctx, "set transaction deleted", func(tx *sql.Tx) (TransactionRecord, error) {
+		if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
 			return TransactionRecord{}, err
 		}
-		if err := tx.Commit(); err != nil {
-			return TransactionRecord{}, fmt.Errorf("commit set transaction deleted: %w", err)
+		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+		if err != nil {
+			return TransactionRecord{}, err
 		}
-		committed = true
-		return records[0], nil
-	}
-	if params.Deleted && current.Status == "draft" {
-		return TransactionRecord{}, ErrTransactionHasPostedVersions
-	}
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
-		OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: params.OriginType,
-		Operation: params.Operation, Reason: params.ChangeReason,
-	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if params.Deleted {
-		_, err = tx.ExecContext(ctx, `UPDATE transactions SET deleted_at = ?, deleted_by_user_id = ?, deleted_audit_event_id = ?, delete_reason = ? WHERE book_id = ? AND id = ?`, params.RecordedAt, params.ActorUserID, auditEventID, params.ChangeReason, params.BookID, params.TransactionID)
-	} else {
-		_, err = tx.ExecContext(ctx, `UPDATE transactions SET deleted_at = NULL WHERE book_id = ? AND id = ?`, params.BookID, params.TransactionID)
-	}
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("set transaction deleted: %w", err)
-	}
-	action := "restore"
-	if params.Deleted {
-		action = "soft_delete"
-	}
-	if _, err := tx.ExecContext(ctx, `
+		if current.DeletedAt.Valid == params.Deleted {
+			records := []TransactionRecord{current}
+			if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+				return TransactionRecord{}, err
+			}
+			return records[0], nil
+		}
+		if params.Deleted && current.Status == "draft" {
+			return TransactionRecord{}, ErrTransactionHasPostedVersions
+		}
+		auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
+			OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: params.OriginType,
+			Operation: params.Operation, Reason: params.ChangeReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		if params.Deleted {
+			_, err = tx.ExecContext(ctx, `UPDATE transactions SET deleted_at = ?, deleted_by_user_id = ?, deleted_audit_event_id = ?, delete_reason = ? WHERE book_id = ? AND id = ?`, params.RecordedAt, params.ActorUserID, auditEventID, params.ChangeReason, params.BookID, params.TransactionID)
+		} else {
+			_, err = tx.ExecContext(ctx, `UPDATE transactions SET deleted_at = NULL WHERE book_id = ? AND id = ?`, params.BookID, params.TransactionID)
+		}
+		if err != nil {
+			return TransactionRecord{}, fmt.Errorf("set transaction deleted: %w", err)
+		}
+		action := "restore"
+		if params.Deleted {
+			action = "soft_delete"
+		}
+		if _, err := tx.ExecContext(ctx, `
 		INSERT INTO transaction_deletion_events (book_id, transaction_id, action, occurred_at, actor_user_id, audit_event_id, reason)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, params.TransactionID, action, params.RecordedAt, params.ActorUserID, auditEventID, params.ChangeReason); err != nil {
-		return TransactionRecord{}, fmt.Errorf("insert transaction deletion event: %w", err)
-	}
-	invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-		BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
-		AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
-	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	record, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	records := []TransactionRecord{record}
-	if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
-		return TransactionRecord{}, err
-	}
-	record = records[0]
-	record.InvalidatedCheckpointIDs = invalidated
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit set transaction deleted: %w", err)
-	}
-	committed = true
-	return record, nil
-}
-
-func (r *TransactionRepository) ApproveTransaction(ctx context.Context, params ApproveTransactionParams) (TransactionRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin approve transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
+			return TransactionRecord{}, fmt.Errorf("insert transaction deletion event: %w", err)
 		}
-	}()
-
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
-		return TransactionRecord{}, err
-	}
-	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if !current.NeedsReview {
-		records := []TransactionRecord{current}
+		invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+			BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
+			AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		record, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		records := []TransactionRecord{record}
 		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
 			return TransactionRecord{}, err
 		}
-		if err := tx.Commit(); err != nil {
-			return TransactionRecord{}, fmt.Errorf("commit approve transaction: %w", err)
+		record = records[0]
+		record.InvalidatedCheckpointIDs = invalidated
+		return record, nil
+	})
+}
+
+func (r *TransactionRepository) ApproveTransaction(ctx context.Context, params ApproveTransactionParams) (TransactionRecord, error) {
+	return withTransactionRecordTx(r, ctx, "approve transaction", func(tx *sql.Tx) (TransactionRecord, error) {
+
+		if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+			return TransactionRecord{}, err
 		}
-		committed = true
-		return records[0], nil
-	}
+		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+		if !current.NeedsReview {
+			records := []TransactionRecord{current}
+			if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+				return TransactionRecord{}, err
+			}
+			return records[0], nil
+		}
 
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID:        params.BookID,
-		ActorUserID:   params.ActorUserID,
-		AuthSessionID: params.AuthSessionID,
-		OccurredAt:    params.RecordedAt,
-		RequestID:     params.RequestID,
-		OriginType:    params.OriginType,
-		Operation:     params.Operation,
-		Reason:        params.ChangeReason,
+		auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID:        params.BookID,
+			ActorUserID:   params.ActorUserID,
+			AuthSessionID: params.AuthSessionID,
+			OccurredAt:    params.RecordedAt,
+			RequestID:     params.RequestID,
+			OriginType:    params.OriginType,
+			Operation:     params.Operation,
+			Reason:        params.ChangeReason,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+
+		spec := TransactionSpec{
+			Status:          current.Status,
+			TransactionKind: current.TransactionKind,
+			TransactionDate: current.TransactionDate,
+			PayeeID:         current.PayeeID,
+			PayeeName:       current.PayeeName,
+			Description:     current.Description,
+			ExternalRefHint: nullStringText(current.ExternalRefHint),
+			NoteMarkdown:    current.NoteMarkdown,
+			MetadataJSON:    current.MetadataJSON,
+			NeedsReview:     false,
+		}
+		record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+			BookID:                 params.BookID,
+			TransactionID:          params.TransactionID,
+			VersionSeq:             current.VersionSeq + 1,
+			SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
+			Spec:                   spec,
+			ReplaceTags:            false,
+			RecordedAt:             params.RecordedAt,
+			ChangedByUserID:        params.ActorUserID,
+			ChangeReason:           params.ChangeReason,
+			ChangeAuditEventID:     auditEventID,
+			RequestID:              params.RequestID,
+			TransactionDaySequence: current.TransactionDaySequence,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
+		}
+
+		return record, nil
 	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-
-	spec := TransactionSpec{
-		Status:          current.Status,
-		TransactionKind: current.TransactionKind,
-		TransactionDate: current.TransactionDate,
-		PayeeID:         current.PayeeID,
-		PayeeName:       current.PayeeName,
-		Description:     current.Description,
-		ExternalRefHint: nullStringText(current.ExternalRefHint),
-		NoteMarkdown:    current.NoteMarkdown,
-		MetadataJSON:    current.MetadataJSON,
-		NeedsReview:     false,
-	}
-	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
-		BookID:                 params.BookID,
-		TransactionID:          params.TransactionID,
-		VersionSeq:             current.VersionSeq + 1,
-		SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
-		Spec:                   spec,
-		ReplaceTags:            false,
-		RecordedAt:             params.RecordedAt,
-		ChangedByUserID:        params.ActorUserID,
-		ChangeReason:           params.ChangeReason,
-		ChangeAuditEventID:     auditEventID,
-		RequestID:              params.RequestID,
-		TransactionDaySequence: current.TransactionDaySequence,
-	})
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit approve transaction: %w", err)
-	}
-	committed = true
-
-	return record, nil
 }
 
 func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, params DeleteDraftTransactionParams) error {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin delete draft transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
+	return r.withTx(ctx, "delete draft transaction", func(tx *sql.Tx) error {
+
+		if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+			return err
 		}
-	}()
+		if _, err := transactionByID(ctx, tx, params.BookID, params.TransactionID); err != nil {
+			return err
+		}
 
-	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
-		return err
-	}
-	if _, err := transactionByID(ctx, tx, params.BookID, params.TransactionID); err != nil {
-		return err
-	}
-
-	var durableCount int
-	if err := tx.QueryRowContext(ctx, `
+		var durableCount int
+		if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM transaction_versions
 		WHERE transaction_id = ?
 			AND status IN ('posted', 'voided')
 	`, params.TransactionID).Scan(&durableCount); err != nil {
-		return fmt.Errorf("count durable transaction versions: %w", err)
-	}
-	if durableCount > 0 {
-		return ErrTransactionHasPostedVersions
-	}
+			return fmt.Errorf("count durable transaction versions: %w", err)
+		}
+		if durableCount > 0 {
+			return ErrTransactionHasPostedVersions
+		}
 
-	if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.ExecContext(ctx, `
 		DELETE FROM posting_tags
 		WHERE posting_line_id IN (
 			SELECT id FROM posting_lines WHERE transaction_id = ?
 		)
 	`, params.TransactionID); err != nil {
-		return fmt.Errorf("delete posting tags: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_tags WHERE transaction_id = ?", params.TransactionID); err != nil {
-		return fmt.Errorf("delete transaction tags: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
+			return fmt.Errorf("delete posting tags: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_tags WHERE transaction_id = ?", params.TransactionID); err != nil {
+			return fmt.Errorf("delete transaction tags: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
 		DELETE FROM posting_versions
 		WHERE transaction_version_id IN (
 			SELECT id FROM transaction_versions WHERE transaction_id = ?
 		)
 	`, params.TransactionID); err != nil {
-		return fmt.Errorf("delete posting versions: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
+			return fmt.Errorf("delete posting versions: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
 		DELETE FROM journal_entries
 		WHERE transaction_version_id IN (
 			SELECT id FROM transaction_versions WHERE transaction_id = ?
 		)
 	`, params.TransactionID); err != nil {
-		return fmt.Errorf("delete journal entries: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_search WHERE transaction_id = ?", params.TransactionID); err != nil {
-		return fmt.Errorf("delete transaction search rows: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_versions WHERE transaction_id = ?", params.TransactionID); err != nil {
-		return fmt.Errorf("delete transaction versions: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM posting_lines WHERE transaction_id = ?", params.TransactionID); err != nil {
-		return fmt.Errorf("delete posting lines: %w", err)
-	}
-	result, err := tx.ExecContext(ctx, "DELETE FROM transactions WHERE book_id = ? AND id = ?", params.BookID, params.TransactionID)
-	if err != nil {
-		return fmt.Errorf("delete transaction: %w", err)
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read delete transaction rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return ErrNotFound
-	}
+			return fmt.Errorf("delete journal entries: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_search WHERE transaction_id = ?", params.TransactionID); err != nil {
+			return fmt.Errorf("delete transaction search rows: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_versions WHERE transaction_id = ?", params.TransactionID); err != nil {
+			return fmt.Errorf("delete transaction versions: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM posting_lines WHERE transaction_id = ?", params.TransactionID); err != nil {
+			return fmt.Errorf("delete posting lines: %w", err)
+		}
+		result, err := tx.ExecContext(ctx, "DELETE FROM transactions WHERE book_id = ? AND id = ?", params.BookID, params.TransactionID)
+		if err != nil {
+			return fmt.Errorf("delete transaction: %w", err)
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read delete transaction rows affected: %w", err)
+		}
+		if rowsAffected == 0 {
+			return ErrNotFound
+		}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit delete draft transaction: %w", err)
-	}
-	committed = true
-
-	return nil
+		return nil
+	})
 }
 
 func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx *sql.Tx, params insertTransactionVersionParams) (TransactionRecord, error) {
