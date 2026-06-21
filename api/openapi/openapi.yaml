@@ -105,6 +105,12 @@ paths:
     $ref: "./paths/transaction-post.yaml"
   /api/v1/transactions/{transaction_id}/void:
     $ref: "./paths/transaction-void.yaml"
+  /api/v1/transactions/{transaction_id}/unvoid:
+    $ref: "./paths/transaction-unvoid.yaml"
+  /api/v1/transactions/{transaction_id}/soft-delete:
+    $ref: "./paths/transaction-soft-delete.yaml"
+  /api/v1/transactions/{transaction_id}/restore:
+    $ref: "./paths/transaction-restore.yaml"
   /api/v1/transactions/{transaction_id}/correct:
     $ref: "./paths/transaction-correct.yaml"
   /api/v1/transactions/{transaction_id}/approve:

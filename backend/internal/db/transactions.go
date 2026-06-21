@@ -15,6 +15,7 @@ var (
 	ErrTransactionHasPostedVersions = errors.New("transaction has posted or voided versions")
 	ErrTransactionReconciled        = errors.New("transaction has reconciled postings")
 	ErrTransactionVoided            = errors.New("voided transaction cannot be updated")
+	ErrTransactionDeleted           = errors.New("soft-deleted transaction cannot be updated")
 	ErrArchivedTag                  = errors.New("archived tag cannot be assigned")
 )
 
@@ -28,6 +29,7 @@ type TransactionRecord struct {
 	CorrectionOfTransactionID sql.NullInt64
 	CreatedAt                 string
 	CreatedByUserID           int64
+	DeletedAt                 sql.NullString
 	VersionID                 int64
 	VersionSeq                int64
 	SupersedesVersionID       sql.NullInt64
@@ -180,6 +182,13 @@ type VoidTransactionParams struct {
 	InvalidateCheckpointReason string
 }
 
+type TransactionLifecycleParams = VoidTransactionParams
+
+type SetTransactionDeletedParams struct {
+	TransactionLifecycleParams
+	Deleted bool
+}
+
 type DeleteDraftTransactionParams struct {
 	BookID        int64
 	TransactionID int64
@@ -229,7 +238,7 @@ func NewTransactionRepository(database *sql.DB) *TransactionRepository {
 }
 
 func (r *TransactionRepository) ListTransactions(ctx context.Context, params ListTransactionsParams) ([]TransactionRecord, error) {
-	where := []string{"t.book_id = ?"}
+	where := []string{"t.book_id = ?", "t.deleted_at IS NULL"}
 	args := []any{params.BookID}
 
 	if params.Status != "" {
@@ -305,7 +314,7 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 }
 
 func (r *TransactionRepository) AccountRegister(ctx context.Context, params ListTransactionsParams) ([]AccountRegisterEntryRecord, error) {
-	where := []string{"t.book_id = ?", "pv.account_id = ?"}
+	where := []string{"t.book_id = ?", "t.deleted_at IS NULL", "pv.account_id = ?"}
 	args := []any{params.BookID, params.AccountID}
 
 	if params.Status != "" {
@@ -348,9 +357,21 @@ func (r *TransactionRepository) AccountRegister(ctx context.Context, params List
 }
 
 func (r *TransactionRepository) TransactionByID(ctx context.Context, bookID int64, transactionID int64) (TransactionRecord, error) {
+	return r.transactionByID(ctx, bookID, transactionID, false)
+}
+
+func (r *TransactionRepository) TransactionByIDIncludingDeleted(ctx context.Context, bookID int64, transactionID int64) (TransactionRecord, error) {
+	return r.transactionByID(ctx, bookID, transactionID, true)
+}
+
+func (r *TransactionRepository) transactionByID(ctx context.Context, bookID int64, transactionID int64, includeDeleted bool) (TransactionRecord, error) {
 	var record TransactionRecord
+	deletedCondition := " AND t.deleted_at IS NULL"
+	if includeDeleted {
+		deletedCondition = ""
+	}
 	if err := scanTransactionRecord(r.database.QueryRowContext(ctx, transactionSelect(`
-		WHERE t.book_id = ? AND t.id = ?
+		WHERE t.book_id = ? AND t.id = ?`+deletedCondition+`
 	`), bookID, transactionID), &record); err != nil {
 		return TransactionRecord{}, err
 	}
@@ -474,7 +495,9 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 	if current.Status == "voided" {
 		return TransactionRecord{}, ErrTransactionVoided
 	}
-
+	if current.DeletedAt.Valid {
+		return TransactionRecord{}, ErrTransactionDeleted
+	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ActorUserID,
@@ -556,6 +579,14 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 		committed = true
 		return records[0], nil
 	}
+	if current.DeletedAt.Valid {
+		return TransactionRecord{}, ErrTransactionDeleted
+	}
+	currentRecords := []TransactionRecord{current}
+	if err := loadTransactionChildrenTx(ctx, tx, currentRecords); err != nil {
+		return TransactionRecord{}, err
+	}
+	current = currentRecords[0]
 
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
@@ -571,17 +602,8 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 		return TransactionRecord{}, err
 	}
 
-	spec := TransactionSpec{
-		Status:          "voided",
-		TransactionKind: current.TransactionKind,
-		TransactionDate: current.TransactionDate,
-		PayeeID:         current.PayeeID,
-		PayeeName:       current.PayeeName,
-		Description:     current.Description,
-		ExternalRefHint: nullStringText(current.ExternalRefHint),
-		NoteMarkdown:    current.NoteMarkdown,
-		MetadataJSON:    current.MetadataJSON,
-	}
+	spec := transactionSpecFromRecord(current)
+	spec.Status = "voided"
 	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 		BookID:              params.BookID,
 		TransactionID:       params.TransactionID,
@@ -616,6 +638,171 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 	}
 	committed = true
 
+	return record, nil
+}
+
+func (r *TransactionRepository) UnvoidTransaction(ctx context.Context, params TransactionLifecycleParams) (TransactionRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return TransactionRecord{}, fmt.Errorf("begin unvoid transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TransactionRecord{}, err
+	}
+	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	if current.DeletedAt.Valid {
+		return TransactionRecord{}, ErrTransactionDeleted
+	}
+	if current.Status != "voided" {
+		records := []TransactionRecord{current}
+		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return TransactionRecord{}, fmt.Errorf("commit unvoid transaction: %w", err)
+		}
+		committed = true
+		return records[0], nil
+	}
+
+	var prior TransactionRecord
+	if err := scanTransactionRecord(tx.QueryRowContext(ctx, transactionVersionSelect("transaction_versions", `
+		WHERE tv.id = (
+			SELECT prior.id FROM transaction_versions prior
+			WHERE prior.transaction_id = ? AND prior.status <> 'voided'
+			ORDER BY prior.version_seq DESC, prior.id DESC LIMIT 1
+		)
+	`), params.TransactionID), &prior); err != nil {
+		return TransactionRecord{}, err
+	}
+	priorRecords := []TransactionRecord{prior}
+	if err := loadTransactionChildrenTx(ctx, tx, priorRecords); err != nil {
+		return TransactionRecord{}, err
+	}
+	prior = priorRecords[0]
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
+		OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: params.OriginType,
+		Operation: params.Operation, Reason: params.ChangeReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
+		BookID: params.BookID, TransactionID: params.TransactionID, VersionSeq: current.VersionSeq + 1,
+		SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
+		Spec:                transactionSpecFromRecord(prior), ReplaceTags: false, RecordedAt: params.RecordedAt,
+		ChangedByUserID: params.ActorUserID, ChangeReason: params.ChangeReason,
+		ChangeAuditEventID: auditEventID, RequestID: params.RequestID,
+	})
+	if err != nil {
+		return TransactionRecord{}, mapTransactionConstraintError(err)
+	}
+	invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+		BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
+		AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	record.InvalidatedCheckpointIDs = invalidated
+	if err := tx.Commit(); err != nil {
+		return TransactionRecord{}, fmt.Errorf("commit unvoid transaction: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+func (r *TransactionRepository) SetTransactionDeleted(ctx context.Context, params SetTransactionDeletedParams) (TransactionRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return TransactionRecord{}, fmt.Errorf("begin set transaction deleted: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TransactionRecord{}, err
+	}
+	current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	if current.DeletedAt.Valid == params.Deleted {
+		records := []TransactionRecord{current}
+		if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return TransactionRecord{}, fmt.Errorf("commit set transaction deleted: %w", err)
+		}
+		committed = true
+		return records[0], nil
+	}
+	if params.Deleted && current.Status == "draft" {
+		return TransactionRecord{}, ErrTransactionHasPostedVersions
+	}
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
+		OccurredAt: params.RecordedAt, RequestID: params.RequestID, OriginType: params.OriginType,
+		Operation: params.Operation, Reason: params.ChangeReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	if params.Deleted {
+		_, err = tx.ExecContext(ctx, `UPDATE transactions SET deleted_at = ?, deleted_by_user_id = ?, deleted_audit_event_id = ?, delete_reason = ? WHERE book_id = ? AND id = ?`, params.RecordedAt, params.ActorUserID, auditEventID, params.ChangeReason, params.BookID, params.TransactionID)
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE transactions SET deleted_at = NULL WHERE book_id = ? AND id = ?`, params.BookID, params.TransactionID)
+	}
+	if err != nil {
+		return TransactionRecord{}, fmt.Errorf("set transaction deleted: %w", err)
+	}
+	action := "restore"
+	if params.Deleted {
+		action = "soft_delete"
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO transaction_deletion_events (book_id, transaction_id, action, occurred_at, actor_user_id, audit_event_id, reason)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.TransactionID, action, params.RecordedAt, params.ActorUserID, auditEventID, params.ChangeReason); err != nil {
+		return TransactionRecord{}, fmt.Errorf("insert transaction deletion event: %w", err)
+	}
+	invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+		BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
+		AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
+	})
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	record, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
+	if err != nil {
+		return TransactionRecord{}, err
+	}
+	records := []TransactionRecord{record}
+	if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
+		return TransactionRecord{}, err
+	}
+	record = records[0]
+	record.InvalidatedCheckpointIDs = invalidated
+	if err := tx.Commit(); err != nil {
+		return TransactionRecord{}, fmt.Errorf("commit set transaction deleted: %w", err)
+	}
+	committed = true
 	return record, nil
 }
 
@@ -1358,7 +1545,7 @@ func transactionByID(ctx context.Context, tx *sql.Tx, bookID int64, transactionI
 
 func transactionVersionByID(ctx context.Context, tx *sql.Tx, transactionVersionID int64) (TransactionRecord, error) {
 	var record TransactionRecord
-	if err := scanTransactionRecord(tx.QueryRowContext(ctx, transactionSelect(`
+	if err := scanTransactionRecord(tx.QueryRowContext(ctx, transactionVersionSelect("transaction_versions", `
 		WHERE tv.id = ?
 	`), transactionVersionID), &record); err != nil {
 		return TransactionRecord{}, err
@@ -1368,6 +1555,10 @@ func transactionVersionByID(ctx context.Context, tx *sql.Tx, transactionVersionI
 }
 
 func transactionSelect(extraConditions string) string {
+	return transactionVersionSelect("current_transaction_versions", extraConditions)
+}
+
+func transactionVersionSelect(source string, extraConditions string) string {
 	return `
 		SELECT
 			t.id,
@@ -1375,6 +1566,7 @@ func transactionSelect(extraConditions string) string {
 			t.correction_of_transaction_id,
 			t.created_at,
 			t.created_by_user_id,
+			t.deleted_at,
 			tv.id,
 			tv.version_seq,
 			tv.supersedes_version_id,
@@ -1392,7 +1584,7 @@ func transactionSelect(extraConditions string) string {
 			tv.changed_by_user_id,
 			tv.change_reason
 		FROM transactions t
-		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
+		JOIN ` + source + ` tv ON tv.transaction_id = t.id
 	` + extraConditions
 }
 
@@ -1404,6 +1596,7 @@ func accountRegisterSelect(extraConditions string) string {
 			t.correction_of_transaction_id,
 			t.created_at,
 			t.created_by_user_id,
+			t.deleted_at,
 			tv.id,
 			tv.version_seq,
 			tv.supersedes_version_id,
@@ -1490,6 +1683,7 @@ func scanTransactionRecord(scanner interface{ Scan(dest ...any) error }, record 
 		&record.CorrectionOfTransactionID,
 		&record.CreatedAt,
 		&record.CreatedByUserID,
+		&record.DeletedAt,
 		&record.VersionID,
 		&record.VersionSeq,
 		&record.SupersedesVersionID,
@@ -1523,6 +1717,7 @@ func scanAccountRegisterEntry(scanner interface{ Scan(dest ...any) error }, entr
 		&entry.Transaction.CorrectionOfTransactionID,
 		&entry.Transaction.CreatedAt,
 		&entry.Transaction.CreatedByUserID,
+		&entry.Transaction.DeletedAt,
 		&entry.Transaction.VersionID,
 		&entry.Transaction.VersionSeq,
 		&entry.Transaction.SupersedesVersionID,

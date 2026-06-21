@@ -174,7 +174,7 @@ persists it. "Unsaved entry" must never be called a "draft," and persisted
   voided** as a deliberate reference/memory record. A voided transaction can be
   unvoided and edited.
 
-### Soft-delete (separate flag, not a status — planned)
+### Soft-delete (separate flag, not a status)
 
 Soft-delete is **distinct from voiding** and is a separate flag rather than a
 `status` value. A soft-deleted transaction is hidden from the transactions table
@@ -189,9 +189,9 @@ The contrast is intentional:
   example, an entry that never appeared on the bank statement, kept while the
   user investigates whether it was a glitch).
 
-The soft-delete column/schema pattern is defined when its migration lands (see
-the soft-delete convention in `docs/conventions.md`); until then it is a
-documented design target. Soft-delete and void must remain independently
+Soft-delete is stored as nullable `transactions.deleted_at`; delete and restore
+actions append actor, audit event, timestamp, and reason to
+`transaction_deletion_events` (see `docs/conventions.md`). Soft-delete and void remain independently
 reversible: a transaction can be unvoided, undeleted, or both, subject to the
 reconciliation guard below.
 
@@ -802,9 +802,8 @@ Minimum transaction endpoints:
   (hard delete; soft-delete is a separate posted-transaction workflow)
 - `GET /api/v1/accounts/{account_id}/register`
 
-The `unvoid`, `soft-delete`, and `restore` endpoints are the API surface for the
-soft-delete design target above; they land with the soft-delete migration, not
-before it.
+The `unvoid`, `soft-delete`, and `restore` endpoints implement the independent
+void and deletion workflows above.
 
 Minimum query parameters:
 
@@ -823,7 +822,7 @@ Minimum query parameters:
 
 Soft-deleted transactions are excluded by default and never appear for any
 `status` value. A separate `include_deleted` flag (or a dedicated trash/recovery
-view) surfaces them for audit and restore once soft-delete lands.
+view) can surface them for audit and restore.
 
 `GET /api/v1/accounts/{account_id}/register`:
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -32,6 +33,7 @@ type transactionResponse struct {
 	JournalEntries            []journalEntryResponse `json:"journal_entries"`
 	CreatedAt                 string                 `json:"created_at"`
 	UpdatedAt                 string                 `json:"updated_at"`
+	DeletedAt                 string                 `json:"deleted_at,omitempty"`
 	ChangeReason              string                 `json:"change_reason"`
 	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids"`
 }
@@ -322,6 +324,47 @@ func voidTransaction(logger *slog.Logger, authService *app.AuthService, transact
 	}))
 }
 
+func unvoidTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
+	return transactionLifecycleHandler(logger, authService, transactionService, options, "unvoid transaction", transactionService.UnvoidTransaction)
+}
+
+func softDeleteTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
+	return transactionLifecycleHandler(logger, authService, transactionService, options, "soft-delete transaction", transactionService.SoftDeleteTransaction)
+}
+
+func restoreTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
+	return transactionLifecycleHandler(logger, authService, transactionService, options, "restore transaction", transactionService.RestoreTransaction)
+}
+
+func transactionLifecycleHandler(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions, action string, mutate func(context.Context, app.TransactionLifecycleInput) (app.Transaction, error)) http.HandlerFunc {
+	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readTransactionID(w, r)
+		if !ok {
+			return
+		}
+		var request voidTransactionRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		transaction, err := mutate(r.Context(), app.TransactionLifecycleInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), OriginType: "browser_api",
+			TransactionID: transactionID, ChangeReason: request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, action, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toTransactionResponse(transaction))
+	}))
+}
+
 func correctTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -513,6 +556,8 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "posted or voided transaction cannot be deleted")
 	case errors.Is(err, app.ErrTransactionVoided):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "voided transaction cannot be edited")
+	case errors.Is(err, app.ErrTransactionDeleted):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "soft-deleted transaction must be restored first")
 	case errors.Is(err, app.ErrTransactionTag):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "transaction tag is invalid")
 	case errors.Is(err, app.ErrReconciliationOverrideRequired):
@@ -634,6 +679,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		JournalEntries:            entries,
 		CreatedAt:                 transaction.CreatedAt,
 		UpdatedAt:                 transaction.UpdatedAt,
+		DeletedAt:                 transaction.DeletedAt,
 		ChangeReason:              transaction.ChangeReason,
 		InvalidatedCheckpointIDs:  invalidatedCheckpointIDs,
 	}

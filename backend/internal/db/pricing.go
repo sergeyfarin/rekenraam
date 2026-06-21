@@ -277,6 +277,7 @@ func (r *PricingRepository) FXCoverageStartDates(ctx context.Context, bookID int
 			UNION ALL
 			SELECT pv.commodity_id, je.entry_date
 			FROM current_transaction_versions tv
+			JOIN transactions t ON t.id = tv.transaction_id AND t.deleted_at IS NULL
 			JOIN journal_entries je ON je.transaction_version_id = tv.id
 			JOIN posting_versions pv ON pv.journal_entry_id = je.id
 			JOIN commodities c ON c.id = pv.commodity_id

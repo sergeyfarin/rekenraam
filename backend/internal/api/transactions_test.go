@@ -65,6 +65,42 @@ func TestTransactionCreateListRegisterVoidAndPayeeSnapshot(t *testing.T) {
 	assert.Empty(t, postedList.Transactions)
 }
 
+func TestTransactionUnvoidSoftDeleteAndRestoreAreDistinct(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Lifecycle Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Lifecycle Expense","category_type":"expense"}`)
+	transaction := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, commodityID),
+		posting(expense.ID, 10000, 2, commodityID),
+	), http.StatusCreated)
+
+	voided := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/void", `{"change_reason":"investigating mismatch"}`, http.StatusOK)
+	assert.Equal(t, "voided", voided.Status)
+	require.Len(t, voided.JournalEntries, 1, "void keeps the posting snapshot for audit and unvoid")
+
+	unvoided := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/unvoid", `{"change_reason":"entry was valid"}`, http.StatusOK)
+	assert.Equal(t, "posted", unvoided.Status)
+	require.Len(t, unvoided.JournalEntries, 1)
+
+	deleted := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/soft-delete", `{"change_reason":"entered by mistake"}`, http.StatusOK)
+	assert.Equal(t, "posted", deleted.Status, "soft-delete is independent of lifecycle status")
+	assert.NotEmpty(t, deleted.DeletedAt)
+	assert.Empty(t, listTransactionsForSession(t, handler, sessionCookie, "").Transactions)
+	assert.Empty(t, accountRegisterForSession(t, handler, sessionCookie, checking.ID, "").Entries)
+	readTransactionForSession(t, handler, sessionCookie, transaction.ID, http.StatusNotFound)
+
+	restored := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/restore", `{"change_reason":"restored from trash"}`, http.StatusOK)
+	assert.Empty(t, restored.DeletedAt)
+	assert.Equal(t, "posted", restored.Status)
+	require.Len(t, listTransactionsForSession(t, handler, sessionCookie, "").Transactions, 1)
+	var deletionEventCount int
+	require.NoError(t, database.QueryRow("SELECT COUNT(*) FROM transaction_deletion_events WHERE transaction_id = ?", transaction.ID).Scan(&deletionEventCount))
+	assert.Equal(t, 2, deletionEventCount)
+}
+
 func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 	t.Parallel()
 

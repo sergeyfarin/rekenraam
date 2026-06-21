@@ -28,6 +28,7 @@ var (
 	ErrTransactionProtected           = errors.New("transaction requires corrective workflow")
 	ErrTransactionPosted              = errors.New("posted or voided transaction cannot be deleted")
 	ErrTransactionVoided              = errors.New("voided transaction cannot be edited")
+	ErrTransactionDeleted             = errors.New("soft-deleted transaction must be restored first")
 	ErrTransactionTag                 = errors.New("transaction tag is invalid")
 	ErrReconciliationOverrideRequired = errors.New("reconciliation override is required")
 	ErrReconciliationNotFound         = errors.New("reconciliation not found")
@@ -42,9 +43,8 @@ var (
 // or posted transaction. "draft" here always means a persisted, durable draft
 // (autosave, scheduled generation, committed import awaiting review) excluded
 // from the ledger but able to trigger background work such as FX coverage —
-// never the unsaved working copy. Soft-delete (hiding a posted transaction while
-// keeping it recoverable) is a separate flag from "voided", not a status value;
-// it lands with its own migration. See docs/transaction-ledger-core-plan.md.
+// never the unsaved working copy. Soft-delete is the separate deleted_at flag,
+// not a status value. See docs/transaction-ledger-core-plan.md.
 var transactionStatuses = map[string]bool{
 	"draft":  true,
 	"posted": true,
@@ -95,6 +95,7 @@ type Transaction struct {
 	JournalEntries            []JournalEntry
 	CreatedAt                 string
 	UpdatedAt                 string
+	DeletedAt                 string
 	ChangeReason              string
 	InvalidatedCheckpointIDs  []int64
 }
@@ -218,6 +219,8 @@ type VoidTransactionInput struct {
 	ChangeReason           string
 	ReconciliationOverride bool
 }
+
+type TransactionLifecycleInput = VoidTransactionInput
 
 type DeleteDraftTransactionInput struct {
 	TransactionID int64
@@ -545,6 +548,95 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 	}
 
 	return toTransaction(record), nil
+}
+
+func (s *TransactionService) UnvoidTransaction(ctx context.Context, input TransactionLifecycleInput) (Transaction, error) {
+	current, changeReason, now, err := s.prepareLifecycleChange(ctx, input, true)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if current.DeletedAt != "" {
+		return Transaction{}, ErrTransactionDeleted
+	}
+	if current.Status != "voided" {
+		return current, nil
+	}
+	refs := reconciliationRefsFromTransaction(current)
+	if len(refs) > 0 && !input.ReconciliationOverride {
+		return Transaction{}, ErrReconciliationOverrideRequired
+	}
+	record, err := s.repository.UnvoidTransaction(ctx, db.TransactionLifecycleParams{
+		BookID: BookID, TransactionID: input.TransactionID, ActorUserID: input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
+		Operation: "transaction.unvoid", RecordedAt: now, ChangeReason: changeReason,
+		InvalidateCheckpointRefs: refs, InvalidateCheckpointReason: changeReason,
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) SoftDeleteTransaction(ctx context.Context, input TransactionLifecycleInput) (Transaction, error) {
+	return s.setTransactionDeleted(ctx, input, true)
+}
+
+func (s *TransactionService) RestoreTransaction(ctx context.Context, input TransactionLifecycleInput) (Transaction, error) {
+	return s.setTransactionDeleted(ctx, input, false)
+}
+
+func (s *TransactionService) setTransactionDeleted(ctx context.Context, input TransactionLifecycleInput, deleted bool) (Transaction, error) {
+	current, changeReason, now, err := s.prepareLifecycleChange(ctx, input, true)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if (current.DeletedAt != "") == deleted {
+		return current, nil
+	}
+	if deleted && current.Status == "draft" {
+		return Transaction{}, ErrTransactionPosted
+	}
+	refs := reconciliationRefsFromTransaction(current)
+	if deleted && len(refs) > 0 && !input.ReconciliationOverride {
+		return Transaction{}, ErrReconciliationOverrideRequired
+	}
+	operation := "transaction.restore"
+	if deleted {
+		operation = "transaction.soft_delete"
+	}
+	record, err := s.repository.SetTransactionDeleted(ctx, db.SetTransactionDeletedParams{
+		TransactionLifecycleParams: db.TransactionLifecycleParams{
+			BookID: BookID, TransactionID: input.TransactionID, ActorUserID: input.OwnerUserID,
+			AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
+			Operation: operation, RecordedAt: now, ChangeReason: changeReason,
+			InvalidateCheckpointRefs: refs, InvalidateCheckpointReason: changeReason,
+		}, Deleted: deleted,
+	})
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+	return toTransaction(record), nil
+}
+
+func (s *TransactionService) prepareLifecycleChange(ctx context.Context, input TransactionLifecycleInput, requireReason bool) (Transaction, string, string, error) {
+	if input.OwnerUserID <= 0 {
+		return Transaction{}, "", "", ValidationError{Message: "owner user is required"}
+	}
+	if input.TransactionID <= 0 {
+		return Transaction{}, "", "", ValidationError{Message: "transaction id is required"}
+	}
+	record, err := s.repository.TransactionByIDIncludingDeleted(ctx, BookID, input.TransactionID)
+	if err != nil {
+		return Transaction{}, "", "", mapTransactionDBError(err)
+	}
+	reason, err := cleanChangeReason(input.ChangeReason, "")
+	if err != nil {
+		return Transaction{}, "", "", err
+	}
+	if requireReason && reason == "" {
+		return Transaction{}, "", "", ValidationError{Message: "change reason is required"}
+	}
+	return toTransaction(record), reason, s.now().UTC().Format(time.RFC3339), nil
 }
 
 func (s *TransactionService) DeleteDraftTransaction(ctx context.Context, input DeleteDraftTransactionInput) error {
@@ -1114,6 +1206,20 @@ func reconciliationRefsFromRecord(record db.TransactionRecord) []db.CheckpointIn
 	return refs
 }
 
+func reconciliationRefsFromTransaction(transaction Transaction) []db.CheckpointInvalidationRef {
+	refs := make([]db.CheckpointInvalidationRef, 0)
+	for _, entry := range transaction.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.ReconciliationStatus == "reconciled" {
+				refs = append(refs, db.CheckpointInvalidationRef{
+					AccountID: posting.AccountID, CommodityID: posting.CommodityID, EntryDate: entry.EntryDate,
+				})
+			}
+		}
+	}
+	return refs
+}
+
 func transactionInputFromTransaction(transaction Transaction) TransactionInput {
 	entries := make([]JournalEntryInput, 0, len(transaction.JournalEntries))
 	for _, entry := range transaction.JournalEntries {
@@ -1162,6 +1268,8 @@ func mapTransactionDBError(err error) error {
 		return ErrTransactionPosted
 	case errors.Is(err, db.ErrTransactionVoided):
 		return ErrTransactionVoided
+	case errors.Is(err, db.ErrTransactionDeleted):
+		return ErrTransactionDeleted
 	case errors.Is(err, db.ErrTransactionReconciled):
 		return ErrTransactionProtected
 	case errors.Is(err, db.ErrArchivedTag):
@@ -1290,6 +1398,7 @@ func toTransaction(record db.TransactionRecord) Transaction {
 		JournalEntries:            entries,
 		CreatedAt:                 record.CreatedAt,
 		UpdatedAt:                 record.RecordedAt,
+		DeletedAt:                 nullableString(record.DeletedAt),
 		ChangeReason:              record.ChangeReason,
 		InvalidatedCheckpointIDs:  record.InvalidatedCheckpointIDs,
 	}

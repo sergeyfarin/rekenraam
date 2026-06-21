@@ -130,7 +130,7 @@ type ledgerPostingQuery struct {
 }
 
 func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledgerPostingQuery) ([]LedgerPostingRecord, error) {
-	where := []string{"tv.book_id = ?"}
+	where := []string{"tv.book_id = ?", "t.deleted_at IS NULL"}
 	args := []any{query.BookID}
 	if query.Status != "" {
 		where = append(where, "tv.status = ?")
@@ -198,6 +198,7 @@ func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledger
 			pv.quantity_scale,
 			je.entry_date
 		FROM current_transaction_versions tv
+		JOIN transactions t ON t.id = tv.transaction_id
 		JOIN journal_entries je ON je.transaction_version_id = tv.id
 		JOIN posting_versions pv ON pv.journal_entry_id = je.id
 		WHERE `+strings.Join(where, " AND ")+`

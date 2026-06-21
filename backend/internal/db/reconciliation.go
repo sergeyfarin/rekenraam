@@ -816,6 +816,7 @@ func transactionSpecFromRecord(record TransactionRecord) TransactionSpec {
 		ExternalRefHint: nullStringText(record.ExternalRefHint),
 		NoteMarkdown:    record.NoteMarkdown,
 		MetadataJSON:    record.MetadataJSON,
+		NeedsReview:     record.NeedsReview,
 		TagIDs:          record.TagIDs,
 		JournalEntries:  entries,
 	}
@@ -1167,7 +1168,7 @@ func reconciliationPostingSelect(extra string) string {
 			tv.payee_name,
 			tv.description
 		FROM transactions t
-		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
+		JOIN current_transaction_versions tv ON tv.transaction_id = t.id AND t.deleted_at IS NULL
 		JOIN journal_entries je ON je.transaction_version_id = tv.id
 		JOIN posting_versions pv ON pv.journal_entry_id = je.id
 	` + extra

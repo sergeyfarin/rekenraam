@@ -193,6 +193,18 @@ export async function voidTransaction(transactionID: number, csrfToken: string, 
   return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/void', transactionID, csrfToken, input);
 }
 
+export async function unvoidTransaction(transactionID: number, csrfToken: string, input: TransactionLifecycleRequest): Promise<TransactionResponse> {
+  return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/unvoid', transactionID, csrfToken, input);
+}
+
+export async function softDeleteTransaction(transactionID: number, csrfToken: string, input: TransactionLifecycleRequest): Promise<TransactionResponse> {
+  return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/soft-delete', transactionID, csrfToken, input);
+}
+
+export async function restoreTransaction(transactionID: number, csrfToken: string, input: TransactionLifecycleRequest): Promise<TransactionResponse> {
+  return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/restore', transactionID, csrfToken, input);
+}
+
 export async function approveTransaction(transactionID: number, csrfToken: string, input: TransactionLifecycleRequest = {}): Promise<TransactionResponse> {
   return transactionLifecycleMutation('/api/v1/transactions/{transaction_id}/approve', transactionID, csrfToken, input);
 }
@@ -253,7 +265,13 @@ export async function deleteDraftTransaction(transactionID: number, csrfToken: s
 }
 
 async function transactionLifecycleMutation(
-  path: '/api/v1/transactions/{transaction_id}/post' | '/api/v1/transactions/{transaction_id}/void' | '/api/v1/transactions/{transaction_id}/approve',
+  path:
+    | '/api/v1/transactions/{transaction_id}/post'
+    | '/api/v1/transactions/{transaction_id}/void'
+    | '/api/v1/transactions/{transaction_id}/unvoid'
+    | '/api/v1/transactions/{transaction_id}/soft-delete'
+    | '/api/v1/transactions/{transaction_id}/restore'
+    | '/api/v1/transactions/{transaction_id}/approve',
   transactionID: number,
   csrfToken: string,
   input: TransactionLifecycleRequest
