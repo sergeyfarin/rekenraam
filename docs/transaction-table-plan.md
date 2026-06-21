@@ -474,10 +474,9 @@ post it, edit a posted transaction.
 - The side panel hosts the editor; it is never used for navigation.
 
 **Soft-delete recovery:** soft-deleted transactions never appear in the list or
-for any `status` value. A trash/recovery view to browse and restore them is a
-**follow-up slice** (needs an `include_deleted` list flag — currently only
-single-record restore-by-id exists). Restore from the detail panel works once a
-transaction is opened by id.
+for any `status` value. Restore from the detail panel works once a transaction is
+opened by id. A dedicated trash/recovery view for browsing and restoring them is
+built in **Step 9** as a settings subpage.
 
 **Verify Step 6:** `cd frontend && npm run check`; run the app and confirm list
 loads, row opens detail, edit/post/void/soft-delete round-trip.
@@ -509,9 +508,12 @@ loads, row opens detail, edit/post/void/soft-delete round-trip.
 
 - Mounts `account-register.svelte` for the route's account id.
 - Embeds the editor side panel for editing a clicked entry's transaction.
-- Add a "View register" affordance on account list rows (decide: row link to
-  `/app/accounts/[id]/register` vs a dedicated register icon button beside
-  existing actions — see Open Questions).
+- **Navigation:** make the account list row itself a link to
+  `/app/accounts/[id]/register`. The whole row navigates; keep the existing
+  Edit/Close/Archive actions as explicit buttons within the row (stop event
+  propagation so an action click does not also trigger navigation). The register
+  is the primary daily destination, so the row's default action is "open
+  register," not "edit."
 
 **Verify Step 7:** `cd frontend && npm run check`; confirm register loads with a
 running balance and respects status/date filters.
@@ -546,10 +548,118 @@ running balance and respects status/date filters.
 ### `frontend/src/routes/app/categories/[id]/+page.svelte`
 
 - Mounts `category-transactions.svelte`; embeds the editor side panel.
-- Add a click handler on category list rows to navigate here.
+- **Navigation:** make the category list row itself a link to
+  `/app/categories/[id]`, consistent with the account-register row-link pattern.
+  Keep any per-row action buttons explicit and stop their propagation so they do
+  not also trigger navigation.
 
 **Verify Step 8:** `cd frontend && npm run check`; confirm category totals match a
 known split transaction.
+
+---
+
+## Step 9 — Trash / recovery (settings subpage)
+
+A dedicated view to browse and restore soft-deleted transactions, with a
+recovery rule that protects reconciled periods. This step has both backend and
+frontend work.
+
+### Recovery rule (the safety contract)
+
+Restoring a soft-deleted transaction puts its postings back into the ledger. If
+those postings fall within an already-reconciled period, restoring would silently
+change a reconciled balance. So:
+
+- **Easy restore (default):** a soft-deleted transaction is restorable with no
+  warning **only when none of its postings sit on or before the latest active
+  reconciliation checkpoint** for their `(account_id, commodity_id)`. In
+  practice: every affected account's posting `entry_date` is strictly after that
+  account/commodity's most recent active checkpoint `statement_date` (or the
+  account/commodity has no active checkpoint at all). This is the common case —
+  recovering something deleted since the last reconciliation.
+- **Guarded restore:** if any affected posting is on or before a latest active
+  checkpoint, restore requires explicit `reconciliation_override: true` and
+  invalidates that checkpoint plus all later active checkpoints for the same
+  account/commodity — the same override-and-invalidate mechanism already used by
+  edit, void, and soft-delete. The UI must warn, naming the affected
+  checkpoint(s), exactly like the reconciliation-invalidating edit path in
+  Step 5.
+
+This mirrors how the reconciled posting itself works: the checkpoint is the lock
+floor; crossing it is allowed but never silent.
+
+### 9a. Backend — restore guard
+
+Today `RestoreTransaction` (`app/transactions.go`,
+`setTransactionDeleted(..., false)`) performs **no** reconciliation check. Add
+one symmetric to the soft-delete path:
+
+- Compute the affected checkpoint refs for the transaction being restored. Unlike
+  soft-delete (which uses `reconciliationRefsFromTransaction` keyed on postings
+  whose `reconciliation_status='reconciled'`), restore must compare each
+  posting's `entry_date` against the **latest active checkpoint** for its
+  `(account_id, commodity_id)`, because a soft-deleted transaction's postings may
+  not themselves be marked reconciled yet still fall inside a reconciled period.
+- Add a repository query, e.g.
+  `LatestActiveCheckpointByAccountCommodity(ctx, bookID, accountID, commodityID)`
+  reading `reconciliation_checkpoints` (filter `status='active'`,
+  `ORDER BY statement_date DESC, id DESC LIMIT 1`; the
+  `reconciliation_checkpoints_account_idx` index already supports this).
+- If any posting's `entry_date <= latest active checkpoint.statement_date` and
+  `!input.ReconciliationOverride`, return `ErrReconciliationOverrideRequired`.
+- When override is given, pass the affected checkpoint refs through
+  `InvalidateCheckpointRefs` (the plumbing already exists on
+  `SetTransactionDeletedParams`).
+
+Add backend tests: restore of a post-checkpoint transaction succeeds with no
+override; restore of a transaction dated on/before the latest active checkpoint
+fails without override and, with override, succeeds and invalidates that
+checkpoint and later ones.
+
+### 9b. Backend — list soft-deleted
+
+Add an `include_deleted` / deleted-only listing path so the trash view can
+enumerate soft-deleted transactions (the list query currently hard-excludes
+`deleted_at IS NULL`; only single-record `TransactionByIDIncludingDeleted`
+exists).
+
+- `db/transactions.go` — add a `Deleted` filter mode to `ListTransactionsParams`
+  (e.g. `DeletedOnly bool`) that flips the `deleted_at IS NULL` clause to
+  `deleted_at IS NOT NULL` and orders by `deleted_at DESC, id DESC`. Include the
+  `delete_reason`, `deleted_at`, and `deleted_by_user_id` snapshot columns in the
+  response so the trash view can show when/why.
+- `app/transactions.go` — surface it on `ListTransactionsInput`; still run the
+  Step 1 enrichment so rows render with names. Also compute, per row, a
+  `restore_blocked_by_reconciliation` boolean (using 9a's checkpoint comparison)
+  so the UI can show which rows are easy-restore vs guarded **without** a
+  per-row probe request.
+- `api/transactions.go` + OpenAPI — expose the filter (e.g.
+  `GET /api/v1/transactions?deleted=true`) and the extra response fields.
+  Regenerate types.
+
+### 9c. Frontend — settings subpage
+
+- Route: `frontend/src/routes/app/settings/trash/+page.svelte` (sibling of the
+  existing `settings/currencies`, `settings/appearance`). Add it to the settings
+  navigation.
+- Reuse `transaction-table.svelte` with a trash column set: Deleted date, Date,
+  Payee/Description, Amount, Delete reason, and a Restore action. Query the
+  deleted-only list via a new `deletedTransactionsInfiniteQueryOptions` in
+  `transactions.ts`.
+- Restore action calls the existing `restoreTransaction` helper. Rows where
+  `restore_blocked_by_reconciliation` is false restore in one click. Rows where
+  it is true show the warning modal (naming the checkpoint) and only then retry
+  with `reconciliation_override: true`, consistent with Step 5's override flow.
+- Empty state via `state-panel.svelte`. All copy through Paraglide.
+
+**Verify Step 9:**
+```bash
+cd backend && go test ./internal/app/ ./internal/db/ ./internal/api/
+cd ../frontend && npm run check
+```
+Manually: soft-delete a recent transaction, open Settings → Trash, restore it in
+one click; soft-delete a transaction inside a reconciled period and confirm the
+restore warning fires and override is required.
 
 ---
 
@@ -597,19 +707,26 @@ full-screen form / bottom sheet below the breakpoint.
   at save), correction, and the transfer entry point.
 - Detail panel exposes Post/Approve/Void/Unvoid/Soft-delete/Restore correctly by
   status, each consequential action requiring a reason.
-- Soft-deleted transactions never appear in any list; voided transactions appear
-  marked voided.
+- Soft-deleted transactions never appear in the main list; voided transactions
+  appear marked voided. The Settings → Trash subpage lists soft-deleted
+  transactions and restores them, with the reconciliation-aware recovery guard.
 - New copy goes through Paraglide; new components use Svelte 5 runes and semantic
   tokens; money is never coerced to `number`.
 
 ---
 
-## Open questions (resolve before/while building, do not block Steps 1–5)
+## Resolved decisions
 
-1. **Navigation from account list to register** — make the account row a link to
-   `/app/accounts/[id]/register`, or add a dedicated register icon button beside
-   the existing Edit/Close/Archive actions? (Affects Step 7.)
-2. **Navigation from category list** — same decision for `/app/categories/[id]`.
-3. **Trash/recovery view** — when to add the `include_deleted` list flag and a
-   dedicated view for browsing/restoring soft-deleted transactions (follow-up
-   slice; restore-by-id already works).
+These were previously open; they are now settled and reflected in the steps
+above:
+
+1. **Account list → register navigation:** the account list row itself links to
+   `/app/accounts/[id]/register`; per-row action buttons stop propagation.
+   (Step 7.)
+2. **Category list → navigation:** the category list row itself links to
+   `/app/categories/[id]`, same pattern. (Step 8.)
+3. **Trash/recovery:** a Settings → Trash subpage
+   (`/app/settings/trash`) lists and restores soft-deleted transactions.
+   Easy one-click restore is allowed only for transactions after the latest
+   active reconciliation checkpoint; older ones require reconciliation override
+   and invalidate affected checkpoints. (Step 9.)
