@@ -24,7 +24,8 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['version']\\)\")",
       "Bash(svelte-kit sync *)",
       "Bash(npx svelte-check *)",
-      "Bash(node_modules/.bin/vitest run *)"
+      "Bash(node_modules/.bin/vitest run *)",
+      "Bash(npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide)"
     ]
   }
 }

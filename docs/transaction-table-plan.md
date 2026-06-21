@@ -637,7 +637,7 @@ Implementation notes:
 
 ---
 
-## Step 5 — Transaction editor `transaction-editor.svelte`
+## Step 5 — Transaction editor `transaction-editor.svelte` ✅ DONE (2026-06-21)
 
 Largest piece; can be built independently of the table. Mirror the structure of
 `account-editor.svelte`/`category-editor.svelte` (panel, runes, `api-form-error`).
@@ -752,12 +752,47 @@ income/expense accounts. An explicit "Transfer" entry point opens Tier 3 in
 transfer mode (From/To account controls). Never infer transfer from an invalid
 Category choice.
 
-**Verify Step 5:** `pnpm --dir frontend run check`. Manually: create a new
-transaction (saves directly to posted — confirm there is no "save as draft"
-choice), edit a posted transaction, edit only the category of a reconciled
-transaction (no warning), then change a reconciled posting's amount (warning +
-override required, naming the checkpoint), and Cancel an in-progress new entry
-(no row left behind).
+**Verify Step 5:** ✅ PASSED 2026-06-21
+
+```bash
+# svelte-check: 0 errors, 0 warnings across 1760 files
+npx svelte-check --tsconfig ./tsconfig.json
+
+# Vitest: 11/11 tests pass
+frontend/node_modules/.bin/vitest run
+```
+
+Manually: create a new transaction (saves directly to posted — confirm there is
+no "save as draft" choice), edit a posted transaction, edit only the category of
+a reconciled transaction (no warning), then change a reconciled posting's amount
+(warning + override required, naming the checkpoint), and Cancel an in-progress
+new entry (no row left behind).
+
+Implementation notes:
+- All three tiers in one file: Tier 1 (simple two-posting form with searchable
+  category autocomplete), Tier 2 (Advanced `<details>` with kind/note/ref), Tier
+  3 (split legs with BigInt imbalance indicator).
+- Tier switch preserves existing field values (simple → split prefills two legs).
+- Payee autocomplete uses `payeesQueryOptions`; category uses a local
+  filtered-list dropdown (income/expense only, never asset/liability).
+- Commodity inferred from the selected account's `default_commodity_id`; no
+  selector shown in Tier 1 when inference succeeds.
+- Amount sign convention: user enters inflow-positive relative to the asset/
+  liability account; ledger signs derived at save time by account class.
+- Reconciliation override: backend returns `CONFLICT` + "reconciliation override
+  is required" in `detail`; editor catches this, calls the impact preview endpoint
+  to get named checkpoints, shows warning modal, retries with
+  `reconciliation_override: true` on confirm.
+- Correction mode: opens an identical form prefilled with nothing (a new
+  transaction linked via `POST .../correct`); correction banner explains purpose.
+- Voided edit: form renders read-only with informational banner; submit button
+  hidden.
+- `isReconciliationOverrideRequired` detects `code === 'CONFLICT'` + detail
+  contains "reconciliation override" (matches backend `transactions_errors.go`).
+- New messages added to `messages/settings/en.json` and regenerated via
+  `npx @inlang/paraglide-js compile`.
+- `JournalEntryResponse` / `PostingResponse` types imported from schema for
+  explicit typing in `flatMap` callbacks (avoids implicit `any` errors).
 
 ---
 
