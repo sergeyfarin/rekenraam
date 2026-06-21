@@ -272,6 +272,9 @@ type insertTransactionVersionParams struct {
 	ChangeReason        string
 	ChangeAuditEventID  int64
 	RequestID           string
+	// PostingSeqOverrides: posting line IDs present in this map use the specified
+	// account day sequence. Nil means inherit or allocate for every posting.
+	PostingSeqOverrides map[int64]int64
 	// TransactionDaySequence: if > 0, use this value directly (same-date update that
 	// inherits the existing sequence). If 0, allocate MAX+1 for the new date scope.
 	TransactionDaySequence int64

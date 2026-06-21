@@ -351,10 +351,10 @@ func (r *TransactionRepository) UnvoidTransaction(ctx context.Context, params Tr
 	}
 	record, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 		BookID: params.BookID, TransactionID: params.TransactionID, VersionSeq: current.VersionSeq + 1,
-		SupersedesVersionID:    sql.NullInt64{Int64: current.VersionID, Valid: true},
-		Spec:                   transactionSpecFromRecord(prior), ReplaceTags: false, RecordedAt: params.RecordedAt,
-		ChangedByUserID:        params.ActorUserID, ChangeReason: params.ChangeReason,
-		ChangeAuditEventID:     auditEventID, RequestID: params.RequestID,
+		SupersedesVersionID: sql.NullInt64{Int64: current.VersionID, Valid: true},
+		Spec:                transactionSpecFromRecord(prior), ReplaceTags: false, RecordedAt: params.RecordedAt,
+		ChangedByUserID: params.ActorUserID, ChangeReason: params.ChangeReason,
+		ChangeAuditEventID: auditEventID, RequestID: params.RequestID,
 		TransactionDaySequence: prior.TransactionDaySequence,
 	})
 	if err != nil {
@@ -708,9 +708,12 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 			}
 			postingLineIDs[postingLineID] = true
 
-			acctDaySeq, err := allocateOrInheritAccountDaySeq(ctx, tx, params.BookID, params.SupersedesVersionID.Int64, postingLineID, posting.AccountID, entry.EntryDate)
-			if err != nil {
-				return TransactionRecord{}, err
+			acctDaySeq, overridden := params.PostingSeqOverrides[postingLineID]
+			if !overridden {
+				acctDaySeq, err = allocateOrInheritAccountDaySeq(ctx, tx, params.BookID, params.SupersedesVersionID.Int64, postingLineID, posting.AccountID, entry.EntryDate)
+				if err != nil {
+					return TransactionRecord{}, err
+				}
 			}
 
 			postingResult, err := tx.ExecContext(ctx, `
@@ -761,106 +764,6 @@ func (r *TransactionRepository) insertTransactionVersion(ctx context.Context, tx
 		return TransactionRecord{}, err
 	}
 
-	return records[0], nil
-}
-
-// insertTransactionVersionWithExplicitPostingSeqs is like insertTransactionVersion
-// but accepts a map of postingLineID → account_day_sequence overrides. Any
-// posting line ID in the override map uses the specified sequence rather than
-// inheriting or allocating.
-func (r *TransactionRepository) insertTransactionVersionWithExplicitPostingSeqs(
-	ctx context.Context, tx *sql.Tx, params insertTransactionVersionParams,
-	seqOverrides map[int64]int64,
-) (TransactionRecord, error) {
-	txDaySeq := params.TransactionDaySequence
-	if txDaySeq <= 0 {
-		if err := tx.QueryRowContext(ctx, `
-			SELECT COALESCE(MAX(transaction_day_sequence), 0) + 1
-			FROM transaction_versions
-			WHERE book_id = ? AND transaction_date = ?
-		`, params.BookID, params.Spec.TransactionDate).Scan(&txDaySeq); err != nil {
-			return TransactionRecord{}, fmt.Errorf("compute transaction day sequence: %w", err)
-		}
-	}
-
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO transaction_versions (
-			book_id, transaction_id, version_seq, supersedes_version_id,
-			status, transaction_kind, transaction_date, transaction_day_sequence,
-			payee_id, payee_name, description, external_ref_hint, note_markdown,
-			metadata_json, needs_review, recorded_at, changed_by_user_id,
-			change_reason, change_audit_event_id
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.TransactionID, params.VersionSeq, nullableInt64Value(params.SupersedesVersionID),
-		params.Spec.Status, params.Spec.TransactionKind, params.Spec.TransactionDate, txDaySeq,
-		nullableInt64Value(params.Spec.PayeeID), nullableStringValue(params.Spec.PayeeName),
-		params.Spec.Description, params.Spec.ExternalRefHint, params.Spec.NoteMarkdown,
-		params.Spec.MetadataJSON, boolToInt(params.Spec.NeedsReview), params.RecordedAt,
-		params.ChangedByUserID, params.ChangeReason, params.ChangeAuditEventID)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("insert transaction version: %w", err)
-	}
-	transactionVersionID, err := result.LastInsertId()
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("read transaction version id: %w", err)
-	}
-
-	postingLineIDs := make(map[int64]bool)
-	for entryIndex, entry := range params.Spec.JournalEntries {
-		entryResult, err := tx.ExecContext(ctx, `
-			INSERT INTO journal_entries (book_id, transaction_version_id, entry_seq, entry_date, entry_kind, memo, metadata_json)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, transactionVersionID, entryIndex+1, entry.EntryDate, entry.EntryKind, entry.Memo, entry.MetadataJSON)
-		if err != nil {
-			return TransactionRecord{}, fmt.Errorf("insert journal entry: %w", err)
-		}
-		journalEntryID, err := entryResult.LastInsertId()
-		if err != nil {
-			return TransactionRecord{}, fmt.Errorf("read journal entry id: %w", err)
-		}
-
-		for postingIndex, posting := range entry.Postings {
-			postingLineID, err := ensurePostingLine(ctx, tx, params.BookID, params.TransactionID, posting.LineKey, params.RecordedAt, params.ChangedByUserID, params.RequestID, params.ChangeAuditEventID)
-			if err != nil {
-				return TransactionRecord{}, err
-			}
-			postingLineIDs[postingLineID] = true
-
-			var acctDaySeq int64
-			if override, ok := seqOverrides[postingLineID]; ok {
-				acctDaySeq = override
-			} else {
-				acctDaySeq, err = allocateOrInheritAccountDaySeq(ctx, tx, params.BookID, params.SupersedesVersionID.Int64, postingLineID, posting.AccountID, entry.EntryDate)
-				if err != nil {
-					return TransactionRecord{}, err
-				}
-			}
-
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO posting_versions (
-					book_id, transaction_version_id, journal_entry_id, posting_line_id,
-					line_seq, account_id, account_day_sequence, quantity_value, quantity_scale,
-					commodity_id, memo, reconciliation_status, cleared_on, metadata_json
-				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			`, params.BookID, transactionVersionID, journalEntryID, postingLineID,
-				postingIndex+1, posting.AccountID, acctDaySeq, posting.QuantityValue, posting.QuantityScale,
-				posting.CommodityID, posting.Memo, posting.ReconciliationStatus,
-				nullableStringValue(posting.ClearedOn), posting.MetadataJSON); err != nil {
-				return TransactionRecord{}, fmt.Errorf("insert posting version: %w", err)
-			}
-		}
-	}
-
-	record, err := transactionVersionByID(ctx, tx, transactionVersionID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	records := []TransactionRecord{record}
-	if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
-		return TransactionRecord{}, err
-	}
 	return records[0], nil
 }
 

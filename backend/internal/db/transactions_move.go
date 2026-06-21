@@ -273,14 +273,15 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 
 	// Write a new version of the moved transaction with an explicit seq override
 	// for the target posting line.
-	movedResult, err := r.insertTransactionVersionWithExplicitPostingSeqs(ctx, tx, insertTransactionVersionParams{
+	movedResult, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 		BookID: params.BookID, TransactionID: currentTransactionID, VersionSeq: movedTxRecord.VersionSeq + 1,
 		SupersedesVersionID: sql.NullInt64{Int64: movedTxRecord.VersionID, Valid: true},
 		Spec:                transactionSpecFromRecord(movedTxRecord), ReplaceTags: false,
 		RecordedAt: params.RecordedAt, ChangedByUserID: params.ActorUserID,
 		ChangeReason: "posting moved " + params.Direction, ChangeAuditEventID: auditEventID,
 		RequestID: params.RequestID, TransactionDaySequence: movedTxRecord.TransactionDaySequence,
-	}, map[int64]int64{params.PostingLineID: adjSeq})
+		PostingSeqOverrides: map[int64]int64{params.PostingLineID: adjSeq},
+	})
 	if err != nil {
 		return TransactionRecord{}, fmt.Errorf("insert moved posting version: %w", err)
 	}
@@ -297,14 +298,15 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 			return TransactionRecord{}, err
 		}
 		adjTxRecord = adjTxRecords[0]
-		_, err = r.insertTransactionVersionWithExplicitPostingSeqs(ctx, tx, insertTransactionVersionParams{
+		_, err = r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 			BookID: params.BookID, TransactionID: adjTransactionID, VersionSeq: adjTxRecord.VersionSeq + 1,
 			SupersedesVersionID: sql.NullInt64{Int64: adjTxRecord.VersionID, Valid: true},
 			Spec:                transactionSpecFromRecord(adjTxRecord), ReplaceTags: false,
 			RecordedAt: params.RecordedAt, ChangedByUserID: params.ActorUserID,
 			ChangeReason: "swapped for moved posting", ChangeAuditEventID: auditEventID,
 			RequestID: params.RequestID, TransactionDaySequence: adjTxRecord.TransactionDaySequence,
-		}, map[int64]int64{adjPostingLineID: currentSeq})
+			PostingSeqOverrides: map[int64]int64{adjPostingLineID: currentSeq},
+		})
 		if err != nil {
 			return TransactionRecord{}, fmt.Errorf("insert adjacent posting version after move: %w", err)
 		}
