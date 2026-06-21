@@ -442,19 +442,39 @@ Required tests: ✅ all written and passing in `internal/api/day_sequence_test.g
 
 ---
 
-## Step 3 — Frontend API layer
+## Step 3 — Frontend API layer ✅ DONE
 
 In `frontend/src/lib/api/transactions.ts`:
 
-- Add `categoryID?: number` to `TransactionListOptions`; include it in the query
-  string in `getTransactions` and in the infinite query key.
-- Add `accountRegisterInfiniteQueryOptions(accountID, options)` mirroring
-  `transactionsInfiniteQueryOptions`, calling the existing `getAccountRegister`,
-  with `getNextPageParam` reading `next_cursor`.
-- Add typed helpers for transaction/posting move and both reconciliation-impact
-  preview endpoints from Step 2.5.
+- `categoryID?: number` in `TransactionListOptions` — already present from an
+  earlier pass; plumbed into `getTransactions` query string.
+- `accountRegisterInfiniteQueryOptions(accountID, options)` — added, mirrors
+  `transactionsInfiniteQueryOptions`, keyed on `[..accountRegisterQueryKey,
+  accountID, 'infinite', options]`. Accepts `RegisterFilterOptions` (status,
+  afterDate, beforeDate, limit).
+- `moveTransaction(id, direction, csrfToken)` — calls
+  `POST /api/v1/transactions/{id}/move`.
+- `movePosting(accountID, postingLineID, direction, csrfToken)` — calls
+  `POST /api/v1/accounts/{account_id}/postings/{posting_line_id}/move`.
+- `reconciliationImpactForCreate(input)` — calls
+  `POST /api/v1/transactions/reconciliation-impact`.
+- `reconciliationImpactForUpdate(id, input)` — calls
+  `POST /api/v1/transactions/{id}/reconciliation-impact`.
+- Exported types: `AccountRegisterEntryResponse`, `MoveRequest`,
+  `ReconciliationImpactResponse`, `AccountRegisterInfiniteData`,
+  `RegisterFilterOptions`.
 
-**Verify Step 3:** `pnpm --dir frontend run check`.
+**Gap flagged:** `ReconciliationImpactResponse` (both backend and OpenAPI) only
+carries `{ account_id, commodity_id, entry_date }` per checkpoint. The plan (Step
+2.5d) specifies also `account_label`, `commodity_code`, `statement_date`,
+`statement_account_sequence`, `checkpoint_id`. These richer fields are needed so
+the Step 5 warning modal can name the affected checkpoints by account/date rather
+than showing raw IDs. The backend `CheckpointInvalidationRef` struct and the
+`checkpointImpactResponse` DTO need to be extended, with the OpenAPI schema and
+generated types updated. Recommend addressing this before Step 5 (editor) to
+avoid hardcoding a raw-ID fallback that would need to be ripped out.
+
+**Verify Step 3:** ✅ PASSED — `pnpm --dir frontend run check` → 0 errors, 0 warnings.
 
 ---
 

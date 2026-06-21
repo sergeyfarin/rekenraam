@@ -5,8 +5,11 @@ import type { InfiniteData } from '@tanstack/svelte-query';
 export type TransactionResponse = components['schemas']['TransactionResponse'];
 export type TransactionsResponse = components['schemas']['TransactionsResponse'];
 export type AccountRegisterResponse = components['schemas']['AccountRegisterResponse'];
+export type AccountRegisterEntryResponse = components['schemas']['AccountRegisterEntryResponse'];
 export type TransactionRequest = components['schemas']['TransactionRequest'];
 export type TransactionLifecycleRequest = components['schemas']['TransactionLifecycleRequest'];
+export type MoveRequest = components['schemas']['MoveRequest'];
+export type ReconciliationImpactResponse = components['schemas']['ReconciliationImpactResponse'];
 
 export type TransactionListOptions = {
   accountID?: number;
@@ -23,8 +26,10 @@ export type TransactionListOptions = {
 };
 
 export type TransactionsInfiniteData = InfiniteData<TransactionsResponse, string>;
+export type AccountRegisterInfiniteData = InfiniteData<AccountRegisterResponse, string>;
 
 export const transactionsQueryKey = ['api', 'transactions'] as const;
+export const accountRegisterQueryKey = ['api', 'account-register'] as const;
 
 export function transactionsQueryOptions(options: TransactionListOptions = {}) {
   return {
@@ -41,6 +46,19 @@ export function transactionsInfiniteQueryOptions(options: Omit<TransactionListOp
       getTransactions({ ...options, cursor: pageParam || undefined }),
     initialPageParam: '',
     getNextPageParam: (lastPage: TransactionsResponse) => lastPage.next_cursor || null,
+    staleTime: 5_000
+  };
+}
+
+export type RegisterFilterOptions = Pick<TransactionListOptions, 'status' | 'afterDate' | 'beforeDate' | 'limit'>;
+
+export function accountRegisterInfiniteQueryOptions(accountID: number, options: RegisterFilterOptions = {}) {
+  return {
+    queryKey: [...accountRegisterQueryKey, accountID, 'infinite', options] as const,
+    queryFn: ({ pageParam }: { pageParam: string }) =>
+      getAccountRegister(accountID, { ...options, cursor: pageParam || undefined }),
+    initialPageParam: '',
+    getNextPageParam: (lastPage: AccountRegisterResponse) => lastPage.next_cursor || null,
     staleTime: 5_000
   };
 }
@@ -254,6 +272,97 @@ export async function deleteDraftTransaction(transactionID: number, csrfToken: s
 
     if (response.ok) {
       return;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function moveTransaction(transactionID: number, direction: MoveRequest['direction'], csrfToken: string): Promise<TransactionResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/transactions/{transaction_id}/move', {
+      params: {
+        path: { transaction_id: transactionID },
+        header: { 'X-CSRF-Token': csrfToken }
+      },
+      body: { direction }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function movePosting(accountID: number, postingLineID: number, direction: MoveRequest['direction'], csrfToken: string): Promise<TransactionResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/accounts/{account_id}/postings/{posting_line_id}/move', {
+      params: {
+        path: { account_id: accountID, posting_line_id: postingLineID },
+        header: { 'X-CSRF-Token': csrfToken }
+      },
+      body: { direction }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function reconciliationImpactForCreate(input: TransactionRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/transactions/reconciliation-impact', {
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function reconciliationImpactForUpdate(transactionID: number, input: TransactionRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/transactions/{transaction_id}/reconciliation-impact', {
+      params: {
+        path: { transaction_id: transactionID }
+      },
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
     }
 
     throw toAPIClientError(response, error);
