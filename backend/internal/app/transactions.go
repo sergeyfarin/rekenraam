@@ -296,21 +296,7 @@ func NewTransactionService(
 }
 
 func (s *TransactionService) ListTransactions(ctx context.Context, input ListTransactionsInput) (ListTransactionsResult, error) {
-	if input.CategoryID > 0 {
-		accountMap, err := s.accountRepository.AccountsByIDs(ctx, BookID, []int64{input.CategoryID})
-		if err != nil {
-			return ListTransactionsResult{}, fmt.Errorf("look up category account: %w", err)
-		}
-		acct, ok := accountMap[input.CategoryID]
-		if !ok {
-			return ListTransactionsResult{}, ValidationError{Message: "category account not found"}
-		}
-		if acct.AccountClass != "income" && acct.AccountClass != "expense" {
-			return ListTransactionsResult{}, ValidationError{Message: "category_id must refer to an income or expense account"}
-		}
-	}
-
-	params, err := s.listParams(input, false)
+	params, err := s.listParams(ctx, input, false)
 	if err != nil {
 		return ListTransactionsResult{}, err
 	}
@@ -346,7 +332,7 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 		input.Status = "posted"
 	}
 
-	params, err := s.listParams(input, true)
+	params, err := s.listParams(ctx, input, true)
 	if err != nil {
 		return AccountRegisterResult{}, err
 	}
@@ -737,7 +723,7 @@ func (s *TransactionService) ApproveTransaction(ctx context.Context, input Appro
 	return s.enrichOne(ctx, toTransaction(record))
 }
 
-func (s *TransactionService) listParams(input ListTransactionsInput, filterEntryDate bool) (db.ListTransactionsParams, error) {
+func (s *TransactionService) listParams(ctx context.Context, input ListTransactionsInput, filterEntryDate bool) (db.ListTransactionsParams, error) {
 	status := strings.TrimSpace(input.Status)
 	if status != "" && !transactionStatuses[status] {
 		return db.ListTransactionsParams{}, ValidationError{Message: "transaction status is invalid"}
@@ -761,6 +747,20 @@ func (s *TransactionService) listParams(input ListTransactionsInput, filterEntry
 	cursorDate, cursorID, err := db.DecodeTransactionCursor(input.Cursor)
 	if err != nil {
 		return db.ListTransactionsParams{}, ValidationError{Message: "cursor is invalid"}
+	}
+
+	if input.CategoryID > 0 {
+		accountMap, err := s.accountRepository.AccountsByIDs(ctx, BookID, []int64{input.CategoryID})
+		if err != nil {
+			return db.ListTransactionsParams{}, fmt.Errorf("look up category account: %w", err)
+		}
+		acct, ok := accountMap[input.CategoryID]
+		if !ok {
+			return db.ListTransactionsParams{}, ValidationError{Message: "category account not found"}
+		}
+		if acct.AccountClass != "income" && acct.AccountClass != "expense" {
+			return db.ListTransactionsParams{}, ValidationError{Message: "category_id must refer to an income or expense account"}
+		}
 	}
 
 	limit := input.Limit
