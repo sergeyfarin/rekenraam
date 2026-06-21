@@ -10,6 +10,7 @@ export type TransactionLifecycleRequest = components['schemas']['TransactionLife
 
 export type TransactionListOptions = {
   accountID?: number;
+  categoryID?: number;
   payeeID?: number;
   q?: string;
   status?: 'draft' | 'posted' | 'voided';
@@ -50,6 +51,7 @@ export async function getTransactions(options: TransactionListOptions = {}): Pro
       params: {
         query: {
           account_id: options.accountID,
+          category_id: options.categoryID,
           payee_id: options.payeeID,
           q: options.q || undefined,
           status: options.status,

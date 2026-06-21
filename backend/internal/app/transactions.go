@@ -165,6 +165,7 @@ type AccountRegisterEntry struct {
 
 type ListTransactionsInput struct {
 	AccountID   int64
+	CategoryID  int64
 	PayeeID     int64
 	Status      string
 	Kind        string
@@ -295,6 +296,20 @@ func NewTransactionService(
 }
 
 func (s *TransactionService) ListTransactions(ctx context.Context, input ListTransactionsInput) (ListTransactionsResult, error) {
+	if input.CategoryID > 0 {
+		accountMap, err := s.accountRepository.AccountsByIDs(ctx, BookID, []int64{input.CategoryID})
+		if err != nil {
+			return ListTransactionsResult{}, fmt.Errorf("look up category account: %w", err)
+		}
+		acct, ok := accountMap[input.CategoryID]
+		if !ok {
+			return ListTransactionsResult{}, ValidationError{Message: "category account not found"}
+		}
+		if acct.AccountClass != "income" && acct.AccountClass != "expense" {
+			return ListTransactionsResult{}, ValidationError{Message: "category_id must refer to an income or expense account"}
+		}
+	}
+
 	params, err := s.listParams(input, false)
 	if err != nil {
 		return ListTransactionsResult{}, err
@@ -759,6 +774,7 @@ func (s *TransactionService) listParams(input ListTransactionsInput, filterEntry
 	return db.ListTransactionsParams{
 		BookID:          BookID,
 		AccountID:       input.AccountID,
+		CategoryID:      input.CategoryID,
 		PayeeID:         input.PayeeID,
 		Status:          status,
 		Kind:            kind,

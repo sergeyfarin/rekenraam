@@ -127,6 +127,7 @@ type PostingSpec struct {
 type ListTransactionsParams struct {
 	BookID          int64
 	AccountID       int64
+	CategoryID      int64
 	PayeeID         int64
 	Status          string
 	Kind            string
@@ -262,6 +263,16 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 				AND account_pv.account_id = ?
 		)`)
 		args = append(args, params.AccountID)
+	}
+	if params.CategoryID > 0 {
+		where = append(where, `EXISTS (
+			SELECT 1
+			FROM journal_entries category_je
+			JOIN posting_versions category_pv ON category_pv.journal_entry_id = category_je.id
+			WHERE category_je.transaction_version_id = tv.id
+				AND category_pv.account_id = ?
+		)`)
+		args = append(args, params.CategoryID)
 	}
 	if params.NeedsReview {
 		where = append(where, "tv.needs_review = 1")

@@ -1200,3 +1200,61 @@ func voidReconciliationCheckpointForSession(t *testing.T, handler http.Handler, 
 	}
 	return response
 }
+
+func TestCategoryIDFilter(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	rent := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Rent","category_type":"expense"}`)
+
+	// Transaction with groceries category
+	groceriesTx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-10",
+		posting(checking.ID, -5000, 2, commodityID),
+		posting(groceries.ID, 5000, 2, commodityID),
+	), http.StatusCreated)
+
+	// Transaction with rent category
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-10",
+		posting(checking.ID, -120000, 2, commodityID),
+		posting(rent.ID, 120000, 2, commodityID),
+	), http.StatusCreated)
+
+	// Filtering by groceries returns only the groceries transaction
+	groceriesList := listTransactionsForSession(t, handler, sessionCookie, "?category_id="+strconvFormatInt(groceries.ID))
+	require.Len(t, groceriesList.Transactions, 1)
+	assert.Equal(t, groceriesTx.ID, groceriesList.Transactions[0].ID)
+
+	// Filtering by rent returns only the rent transaction
+	rentList := listTransactionsForSession(t, handler, sessionCookie, "?category_id="+strconvFormatInt(rent.ID))
+	require.Len(t, rentList.Transactions, 1)
+	assert.NotEqual(t, groceriesTx.ID, rentList.Transactions[0].ID)
+
+	// category_id AND account_id compose with AND: both filters must match
+	andList := listTransactionsForSession(t, handler, sessionCookie, "?category_id="+strconvFormatInt(groceries.ID)+"&account_id="+strconvFormatInt(checking.ID))
+	require.Len(t, andList.Transactions, 1)
+	assert.Equal(t, groceriesTx.ID, andList.Transactions[0].ID)
+
+	// Passing an asset account as category_id returns VALIDATION_FAILED
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?category_id="+strconvFormatInt(checking.ID), nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusBadRequest, res.Code)
+	var errBody errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&errBody))
+	assert.Equal(t, "VALIDATION_FAILED", errBody.Error.Code)
+
+	// Passing a non-existent account as category_id returns VALIDATION_FAILED
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/transactions?category_id=999999", nil)
+	req2.AddCookie(sessionCookie)
+	res2 := httptest.NewRecorder()
+	handler.ServeHTTP(res2, req2)
+	require.Equal(t, http.StatusBadRequest, res2.Code)
+	var errBody2 errorResponse
+	require.NoError(t, json.NewDecoder(res2.Body).Decode(&errBody2))
+	assert.Equal(t, "VALIDATION_FAILED", errBody2.Error.Code)
+}

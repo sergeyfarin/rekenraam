@@ -4571,6 +4571,8 @@ export interface paths {
             parameters: {
                 query?: {
                     account_id?: number;
+                    /** @description Filter to transactions that have a posting to this income or expense account. Returns VALIDATION_FAILED if the account is not income or expense class. */
+                    category_id?: number;
                     payee_id?: number;
                     q?: string;
                     status?: components["schemas"]["TransactionStatus"];
