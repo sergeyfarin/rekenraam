@@ -110,19 +110,23 @@ The side panel (global transactions page) remains the right pattern for the tran
 AccountName       *string `json:"account_name"`        // null for system accounts that have no user-visible name
 AccountCode       *string `json:"account_code"`        // user-assigned account code, if set
 AccountSystemRole *string `json:"account_system_role"` // non-null for built-in system accounts (e.g. "transfer_clearing")
+AccountBuiltinKey *string `json:"account_builtin_key"` // non-null for built-in/starter category accounts
 AccountClass      string  `json:"account_class"`       // asset | liability | income | expense | equity
 CommodityCode     string  `json:"commodity_code"`      // e.g. "USD", "EUR", "AAPL"
 CommoditySymbol   *string `json:"commodity_symbol"`    // e.g. "$", "€" — null if not set
 ```
 
-System accounts (`account_system_role` non-null) have no `account_name`. The frontend derives a display label from `account_system_role` via a localized lookup table — it must not fall back to rendering a null name directly. User accounts always have `account_name`; `account_code` is optional.
+System accounts (`account_system_role` non-null) have no `account_name`. Built-in and starter category accounts may also omit `account_name`; their localized label comes from `account_builtin_key`. The frontend resolves labels in this order: localized `account_system_role`, localized `account_builtin_key`, user-entered `account_name`, then `account_code` as a defensive fallback. It must not render a null name directly.
 
 The same enrichment applies to `accountRegisterEntryResponse` posting rows.
+
+Because `postingResponse` is shared by list, detail, and mutation responses, enrichment must cover every path that returns a transaction: list, account register, single read, create, update, post, void, approve, and correct. Implement one reusable application-service enrichment helper that collects the union of account and commodity IDs for the returned transaction or page, performs one bulk account query and one bulk commodity query, and joins the results in memory. Mutation and single-read paths call the same helper for their one returned transaction. No response path may emit partially populated display metadata.
 
 **Version history for the detail panel is deferred.** The plan previously mentioned "status history / version info" in the detail panel. No corresponding API exists, and building one is out of scope. The detail panel will show current state only; a version history view is a future feature.
 
 **Changes:**
-- `app/transactions.go` — add bulk account/commodity fetch before building `Transaction` structs for list responses (new method on `TransactionService` for the list path); add `AccountName`, `AccountCode`, `AccountSystemRole`, `AccountClass`, `CommodityCode`, `CommoditySymbol` to `app.Posting`
+- `db/accounts.go` / `db/commodities.go` — add bulk lookup methods by ID for one book; account lookup must expose category `builtin_key` metadata as well as system role, code, name, and class
+- `app/transactions.go` — add one reusable enrichment helper used by list, register, single-read, and every mutation response; add `AccountName`, `AccountCode`, `AccountSystemRole`, `AccountBuiltinKey`, `AccountClass`, `CommodityCode`, `CommoditySymbol` to `app.Posting`
 - `api/transactions.go` — propagate new fields into `postingResponse` and `accountRegisterEntryResponse`
 - `api/schema.yaml` — reflect new fields
 - Regenerate `schema.d.ts`
@@ -213,7 +217,9 @@ The "primary posting" for display is the first asset or liability leg (`account_
 
 ### Category transactions
 
-The category amount is the **sum of all postings to the selected category account** within the transaction. A split transaction may have multiple postings to the same category; these are summed. The counterpart column lists the `account_name` of non-category postings, collapsed to "N accounts" when more than one.
+The category amount is the **sum of all postings to the selected category account** within the transaction. A split transaction may have multiple postings to the same category; these are summed exactly. To add values with different scales, rescale each integer coefficient to the greatest scale present using `BigInt`, sum the rescaled coefficients, and retain that common scale for formatting. Never sum JavaScript numbers or already-formatted decimal strings.
+
+Category views use a category-activity convention rather than cashflow wording: normal expense activity (a debit to an expense category) and normal income activity (a credit to an income category) both display as positive. Reversals display as negative. The counterpart column lists localized labels for non-category postings, collapsed to "N accounts" when more than one.
 
 | Column | Source | Priority | Notes |
 |---|---|---|---|
@@ -252,11 +258,11 @@ This differs from the ledger's internal debit/credit convention. The translation
 | Income | Outflow (−) | Inflow (+) |
 | Expense | Inflow (+) | Outflow (−) |
 
-In the global list and category view, the sign convention applies to the primary/category posting's account class. In the account register, it always applies to this account's class (already known from context).
+In the global list, the sign convention applies to the primary posting's account class. In the account register, it always applies to this account's class (already known from context). Category views instead use the category-activity convention defined above so ordinary expense and income activity are both positive and reversals are negative.
 
 For the simple editor, the Amount field is always labelled relative to the selected **Account** field (the asset/liability account): positive means money arrived in that account, negative means it left. The backend posting signs are derived from the account class at save time, not stored from the field value directly.
 
-**Transfers are a distinct workflow.** Tier 1 assumes one asset/liability account and one category (income/expense) account. A transaction with two asset/liability accounts and no category is a transfer — this does not fit Tier 1 and must be entered via Tier 3 (split editor) or a dedicated transfer form. Tier 1 should detect this case (when the user selects an asset/liability as the Category) and redirect to the appropriate workflow rather than silently constructing a malformed entry.
+**Transfers are a distinct workflow.** Tier 1 assumes one asset/liability account and one category (income/expense) account, and the Category control only offers income/expense accounts. The editor provides an explicit "Transfer" entry point beside transaction creation; choosing it opens Tier 3 in transfer mode (or a dedicated transfer form) with From account and To account controls. Transfer selection is never inferred from an invalid Category choice.
 
 ### FX and multi-commodity transactions
 
@@ -335,11 +341,9 @@ The app is primarily desktop but register use on mobile is a realistic workflow.
 - **Priority 2** columns are hidden below ~600px.
 - **Priority 3** columns are hidden below ~900px.
 
-This gives a mobile global list of Date + Payee + Amount, and a mobile register of Date + Payee + Amount + Balance, which covers the essential read use case.
+This gives a mobile global list of Date + Payee + Amount, and a compact mobile register of Date + Payee + Amount + Balance, which covers the essential read use case. The four priority-1 register columns remain visible in a responsive grid; Payee may wrap, while Amount and Balance remain right-aligned. Priority-2 and priority-3 columns are hidden rather than forcing horizontal scrolling.
 
 The transaction **editor** on mobile is a full-screen form rather than a side panel. The side panel component detects viewport width and switches to a bottom-sheet or full-page presentation below the breakpoint.
-
-The account register on mobile is horizontally scrollable rather than column-collapsing, because Balance must always be visible alongside Amount.
 
 ---
 
@@ -348,7 +352,7 @@ The account register on mobile is horizontally scrollable rather than column-col
 Each step leaves the app runnable.
 
 **Step 1 — Backend: posting response enrichment**
-Add bulk account/commodity fetch to the transaction list and account register paths. Add `account_name`, `account_code`, `account_system_role`, `account_class`, `commodity_code`, `commodity_symbol` to `app.Posting` and propagate to API response structs. Update schema, regenerate types.
+Add bulk account/commodity lookup and reusable enrichment to all transaction response paths: list, register, single read, create, update, post, void, approve, and correct. Add `account_name`, `account_code`, `account_system_role`, `account_builtin_key`, `account_class`, `commodity_code`, `commodity_symbol` to `app.Posting` and propagate them to API response structs. Update schema and regenerate types.
 
 **Step 2 — Backend: category filter**
 Add `category_id` to `ListTransactionsParams`, `ListTransactionsInput`, API handler, and OpenAPI spec. Validate account class in app layer. Regenerate schema. No frontend changes yet.
@@ -364,7 +368,7 @@ Add `category_id` to `ListTransactionsParams`, `ListTransactionsInput`, API hand
 - `transaction-row-actions.svelte`
 
 **Step 5 — Transaction editor**
-`transaction-editor.svelte` — create, draft edit, posted edit (with reconciliation-override path at save time), and correction mode. Transfer detection in Tier 1. This is the largest piece and can be built independently of the table.
+`transaction-editor.svelte` — create, draft edit, posted edit (with reconciliation-override path at save time), correction mode, and an explicit transfer entry point. This is the largest piece and can be built independently of the table.
 
 **Step 6 — Global transactions page**
 - `transaction-list.svelte` wrapper
@@ -372,7 +376,7 @@ Add `category_id` to `ListTransactionsParams`, `ListTransactionsInput`, API hand
 - Wire editor side panel
 
 **Step 7 — Account register route**
-- `account-register.svelte` wrapper (horizontally scrollable on mobile)
+- `account-register.svelte` wrapper (priority-based compact grid on mobile)
 - `/app/accounts/[id]/+page.svelte`
 - Add "View register" link/click handler on account list rows
 
@@ -397,7 +401,7 @@ Single-form fields:
 - Amount (inflow positive, outflow negative — from the selected Account's perspective; see Amount Display Semantics)
 - Account (which asset/liability account the money moves from/to)
 
-This covers the common case: one asset/liability account leg + one income/expense category leg. If the user selects a second asset/liability account in the Category field, the editor detects this and prompts to switch to the split editor (Tier 3) or a transfer form — it does not silently accept the mismatch.
+This covers the common case: one asset/liability account leg + one income/expense category leg. The Category field cannot select asset/liability accounts. An explicit "Transfer" action opens Tier 3 in transfer mode (or a dedicated transfer form) for account-to-account movement.
 
 ### Tier 2 — Advanced (expandable section)
 
