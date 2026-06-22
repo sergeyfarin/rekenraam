@@ -295,7 +295,12 @@
           {@const hasChildren = (visibleAccountChildCounts.get(account.id) ?? 0) > 0}
           {@const hasAnyChildren = (allAccountChildCounts.get(account.id) ?? 0) > 0}
           {@const accountCollapsed = collapsedNodeIDs.has(accountNodeID(account.id))}
-          <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.75fr)_minmax(8rem,0.55fr)_minmax(8rem,0.5fr)_7.25rem] lg:items-center">
+          <!--
+            Stretched-link pattern: the <a> for the register covers the whole row via
+            ::after. Action buttons sit at relative z-[1] so clicks on them don't
+            navigate. No interactive elements are nested inside the <a>.
+          -->
+          <article class="relative grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.75fr)_minmax(8rem,0.55fr)_minmax(8rem,0.5fr)_7.25rem] lg:items-center">
             <TreeNameCell
               depth={row.depth}
               expandable={hasChildren}
@@ -308,7 +313,19 @@
                 <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
                   <AccountKindIcon kind={account.account_kind} />
                 </span>
-                <p class="min-w-0 truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
+                <!--
+                  The stretched link: a visually hidden label inside a block <a> that
+                  expands to cover the entire row via ::after. We apply
+                  "before:absolute before:inset-0" via Tailwind arbitrary variant so no
+                  custom CSS file is required.
+                -->
+                <a
+                  href="/app/accounts/{account.id}/register"
+                  class="min-w-0 truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:z-0"
+                  aria-label={m.accounts_action_view_register({ name: accountDisplayName(account) })}
+                >
+                  {accountDisplayName(account)}
+                </a>
               </div>
               <p class="mt-1 truncate text-xs text-muted">
                 {accountKindLabel(account.account_kind)}
@@ -338,7 +355,8 @@
               </StatusBadge>
             </div>
 
-            <div class="flex min-w-0 items-center justify-start gap-1 lg:justify-end">
+            <!-- Action buttons are siblings at z-[1], above the stretched-link ::after overlay -->
+            <div class="relative z-[1] flex min-w-0 items-center justify-start gap-1 lg:justify-end">
               <button
                 type="button"
                 class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"

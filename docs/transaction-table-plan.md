@@ -879,7 +879,7 @@ frontend/node_modules/.bin/vitest run
 
 ---
 
-## Step 7 — Account register route
+## Step 7 — Account register route ✅ DONE (2026-06-22)
 
 ### `frontend/src/lib/transactions/account-register.svelte`
 
@@ -890,41 +890,61 @@ frontend/node_modules/.bin/vitest run
 | Column | Source | Priority | Notes |
 |---|---|---|---|
 | Date | `entry_date` | 1 | Journal entry date, not transaction date |
-| Payee / Description | `payee_name` or `description` | 1 | |
-| Amount | `posting.quantity_value`, signed | 1 | Inflow +/outflow − from this account's class; label with the posting commodity |
-| Balance | `running_balance` | 1 | Right-aligned balance for this account/commodity pair |
-| Reconciliation | `posting.reconciliation_status` | 2 | Icon uncleared/cleared/reconciled |
+| Payee / Description | `payee_name` or `description` | 1 | Voided badge shown inline if voided |
+| Amount | `posting.quantity_value`, signed | 1 | Inflow +/outflow − from this account's class; commodity symbol prefix |
+| Balance | `running_balance.normal_quantity_value` | 1 | Class-normalised value from backend; right-aligned |
+| Reconciliation | `posting.reconciliation_status` | 2 | CheckCircle/Circle icon: reconciled/cleared/uncleared |
 | Memo | `posting.memo` | 3 | |
+| Actions | Move earlier/later | 1 | Per-posting register order swap |
 
 - Filter bar: status, date range only (matches the register API).
-- Same-day Move up/down changes only this posting's account-register order. For
-  transfers, moving the posting in one account does not move its counterpart in
-  the other account. A boundary-crossing move uses the Step 2.5 impact/override
-  flow; movement wholly on one side is immediate.
+- Same-day Move up/down: calls `movePosting` then `invalidateQueries` on the
+  register query key prefix — moves are independent per account, consistent with
+  the Step 2.5 semantics. Move error shown inline with a warning bar.
 - Mobile: priority-1 columns in a responsive grid; Payee may wrap; Amount and
   Balance stay right-aligned.
 
-Multi-commodity accounts may show interleaved commodities. Each row carries its
-posting commodity and an independently accumulated running balance for that
-commodity; never carry a USD balance into the next EUR row.
+Multi-commodity accounts show interleaved commodities. Each row's `running_balance`
+from the backend is already commodity-scoped; the frontend displays it as-is.
 
 ### `frontend/src/routes/app/accounts/[id]/register/+page.svelte`
 
-- Mounts `account-register.svelte` for the route's account id.
-- Embeds the editor side panel for editing a clicked entry's transaction.
-- **Navigation:** make the account list row navigate to
-  `/app/accounts/[id]/register` as its default action (register is the primary
-  daily destination, not edit). Use the **stretched-link** pattern, not a
-  row-level `<a>` wrapping the action buttons: a single `<a>` for the register
-  link with an absolutely-positioned `::after` covering the row, and the
-  Edit/Close/Archive `<button>`s as siblings at a higher stacking context (so
-  they remain valid, focusable, and keyboard-reachable). Do **not** nest
-  interactive elements inside the `<a>` — that is invalid HTML and breaks assistive
-  tech. The action buttons sit above the stretched link, so a click on them does
-  not trigger navigation without relying on `stopPropagation`.
+- Mounts `account-register.svelte` for the route's account id (from `$page.params.id`).
+- Account name resolved from `accountsQueryOptions` for the breadcrumb display.
+- Row click: fetches the full transaction via `getTransaction(entry.transaction_id)`
+  (register entry only has partial data), then opens `TransactionDetailPanel`.
+  Loading indicator shown in the right column during the fetch.
+- Same side panel pattern as `/app/transactions`: detail → edit → correct → just-deleted.
+- Invalidates both `transactionsQueryKey` and `[...accountRegisterQueryKey, accountID]`
+  after any mutation so both the global list and this register stay fresh.
 
-**Verify Step 7:** `pnpm --dir frontend run check`; confirm register loads with a
-running balance and respects status/date filters.
+### Stretched-link navigation on account list (`account-tree-section.svelte`)
+
+- Account rows now `relative`; the account name `<a>` has `after:absolute after:inset-0
+  after:z-0` (Tailwind `after:` variants) so the entire row is clickable for the register.
+- Action button wrapper gets `relative z-[1]` — sits above the overlay so Edit/Close/
+  Archive/Delete buttons receive clicks without `stopPropagation`.
+- No interactive elements nested inside the `<a>`; the name text is the link label;
+  `aria-label` provides the full accessible name (`accounts_action_view_register`).
+
+**Verify Step 7:** ✅ PASSED 2026-06-22
+
+```bash
+# svelte-check: 0 errors, 0 warnings across 1853 files
+npx svelte-check --tsconfig ./tsconfig.json
+
+# Vitest: 11/11 tests pass
+frontend/node_modules/.bin/vitest run
+```
+
+Implementation notes:
+- `formatBalance` uses `running_balance.normal_quantity_value` (class-normalised by the
+  backend) directly, bypassing `formatSignedAmount` — the sign is already correct.
+- Amount color logic in `amountCell` mirrors `formatSignedAmount`'s sign convention:
+  `asset/expense` → positive coefficient = inflow = no danger color; others flip.
+- Unused imports (`resolveAccountLabel`, `Column`) and the dead `reconciliationIcon`
+  function removed in cleanup pass.
+- `accounts_action_view_register` i18n key added; Paraglide regenerated.
 
 ---
 

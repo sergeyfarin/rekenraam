@@ -41,7 +41,11 @@
       "Bash(go version *)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); keys=[k for k in d if 'register' in k.lower\\(\\) or 'account_register' in k.lower\\(\\)]; print\\(json.dumps\\({k:d[k] for k in keys}, indent=2\\)\\)\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); keys=[k for k in d if 'transaction' in k.lower\\(\\)]; print\\('\\\\n'.join\\(sorted\\(keys\\)[:60]\\)\\)\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/\\\\[id\\\\]/register)"
+    ],
+    "additionalDirectories": [
+      "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]"
     ]
   }
 }
