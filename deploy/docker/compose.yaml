@@ -5,7 +5,6 @@ services:
             dockerfile: deploy/docker/Dockerfile
         ports:
             - "16888:16888"
-            - "1888:1888"
         volumes:
             - rekenraam-data:/app/data
 

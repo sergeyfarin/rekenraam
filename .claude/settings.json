@@ -36,7 +36,9 @@
       "Bash(node_modules/.bin/svelte-kit sync *)",
       "Bash(node_modules/.bin/svelte-check --tsconfig ./tsconfig.json)",
       "Bash(staticcheck ./...)",
-      "Bash(grep -v \"^--$\")"
+      "Bash(grep -v \"^--$\")",
+      "Bash(docker --version)",
+      "Bash(go version *)"
     ]
   }
 }
