@@ -61,6 +61,11 @@ func Open(ctx context.Context, databaseURL string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
 
+	// Single connection is safe here: SQLite does not support concurrent writers,
+	// and the background FX worker (pricing_worker.go) intentionally performs all
+	// HTTP fetches before opening any DB transaction (see pricing_refresh.go), so
+	// no transaction is ever held across a network call. User requests serialize
+	// behind worker writes; busy_timeout=5000 handles the wait.
 	database.SetMaxOpenConns(1)
 	database.SetMaxIdleConns(1)
 

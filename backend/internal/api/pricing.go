@@ -244,7 +244,7 @@ func createPrice(logger *slog.Logger, authService *app.AuthService, pricingServi
 		}
 		var request priceObservationRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		baseCommodityID := request.BaseCommodityID
@@ -297,7 +297,7 @@ func savePricingPolicy(logger *slog.Logger, authService *app.AuthService, pricin
 		}
 		var request pricingPolicyRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		policy, err := pricingService.SavePolicy(r.Context(), app.PricingPolicyInput{
@@ -347,7 +347,7 @@ func savePricingSourceAssignment(logger *slog.Logger, authService *app.AuthServi
 		}
 		var request pricingSourceAssignmentRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		assignment, err := pricingService.SaveSourceAssignment(r.Context(), app.PricingSourceAssignmentInput{
@@ -376,7 +376,7 @@ func runPricingRefresh(logger *slog.Logger, authService *app.AuthService, pricin
 		}
 		var request pricingRefreshRunRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		run, err := pricingService.RunRefresh(r.Context(), owner.ID, request.SourceID, request.Trigger)

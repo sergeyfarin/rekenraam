@@ -128,7 +128,7 @@ func createCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 
 		var request createCategoryRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -171,7 +171,7 @@ func updateCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 
 		var request updateCategoryRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -244,7 +244,7 @@ func categoryLifecycleMutation(logger *slog.Logger, authService *app.AuthService
 
 		var request categoryLifecycleRequest
 		if err := decodeOptionalJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

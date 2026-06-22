@@ -103,7 +103,7 @@ func createCurrency(logger *slog.Logger, authService *app.AuthService, currencyS
 
 		var request createCurrencyRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -134,7 +134,7 @@ func completeCurrencySetup(logger *slog.Logger, authService *app.AuthService, cu
 
 		var request completeCurrencySetupRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

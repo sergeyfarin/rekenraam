@@ -60,7 +60,7 @@ func saveUserPreferences(logger *slog.Logger, authService *app.AuthService, sett
 
 		var request userPreferencesRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

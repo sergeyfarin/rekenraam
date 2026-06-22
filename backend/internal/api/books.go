@@ -59,7 +59,7 @@ func createBook(logger *slog.Logger, authService *app.AuthService, bookService *
 
 		var request createBookRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

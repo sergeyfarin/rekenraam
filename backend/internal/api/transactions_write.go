@@ -17,7 +17,7 @@ func createTransaction(logger *slog.Logger, authService *app.AuthService, transa
 
 		var request transactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -53,7 +53,7 @@ func updateTransaction(logger *slog.Logger, authService *app.AuthService, transa
 
 		var request transactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -90,7 +90,7 @@ func postTransaction(logger *slog.Logger, authService *app.AuthService, transact
 
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -124,7 +124,7 @@ func voidTransaction(logger *slog.Logger, authService *app.AuthService, transact
 
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -170,7 +170,7 @@ func transactionLifecycleHandler(logger *slog.Logger, authService *app.AuthServi
 		}
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		transaction, err := mutate(r.Context(), app.TransactionLifecycleInput{
@@ -200,7 +200,7 @@ func correctTransaction(logger *slog.Logger, authService *app.AuthService, trans
 
 		var request transactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -255,7 +255,7 @@ func approveTransaction(logger *slog.Logger, authService *app.AuthService, trans
 
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

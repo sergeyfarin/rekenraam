@@ -47,7 +47,7 @@ func createReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 		}
 		var request transactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		impact, err := transactionService.ReconciliationImpactForCreate(r.Context(), app.CreateReconciliationImpactInput{
@@ -74,7 +74,7 @@ func updateReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 		}
 		var request transactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		impact, err := transactionService.ReconciliationImpactForUpdate(r.Context(), app.UpdateReconciliationImpactInput{

@@ -66,7 +66,7 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request loginRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

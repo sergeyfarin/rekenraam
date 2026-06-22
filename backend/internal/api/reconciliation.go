@@ -104,7 +104,7 @@ func startReconciliation(logger *slog.Logger, authService *app.AuthService, tran
 		}
 		var request startReconciliationRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		session, err := transactionService.StartReconciliation(r.Context(), app.StartReconciliationInput{
@@ -167,7 +167,7 @@ func reconciliationSelectionMutation(logger *slog.Logger, authService *app.AuthS
 		}
 		var request reconciliationSelectionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		input := app.ReconciliationSelectionInput{
@@ -208,7 +208,7 @@ func finishReconciliation(logger *slog.Logger, authService *app.AuthService, tra
 		}
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		session, err := transactionService.FinishReconciliation(r.Context(), app.FinishReconciliationInput{
@@ -239,7 +239,7 @@ func voidReconciliation(logger *slog.Logger, authService *app.AuthService, trans
 		}
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		session, err := transactionService.VoidReconciliationSession(r.Context(), app.VoidReconciliationInput{
@@ -299,7 +299,7 @@ func voidReconciliationCheckpoint(logger *slog.Logger, authService *app.AuthServ
 		}
 		var request voidTransactionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		checkpoint, err := transactionService.VoidReconciliationCheckpoint(r.Context(), app.VoidReconciliationInput{
@@ -330,7 +330,7 @@ func changePostingReconciliationStatus(logger *slog.Logger, authService *app.Aut
 		}
 		var request changePostingReconciliationStatusRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		transactions, err := transactionService.ChangePostingReconciliationStatus(r.Context(), app.ChangePostingReconciliationStatusInput{

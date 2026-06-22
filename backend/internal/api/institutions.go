@@ -125,7 +125,7 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 
 		var request institutionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -168,7 +168,7 @@ func updateInstitution(logger *slog.Logger, authService *app.AuthService, instit
 
 		var request institutionRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -264,7 +264,7 @@ func institutionLifecycleMutation(logger *slog.Logger, authService *app.AuthServ
 
 		var request institutionLifecycleRequest
 		if err := decodeOptionalJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

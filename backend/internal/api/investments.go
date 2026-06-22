@@ -358,7 +358,7 @@ func createInvestmentInstrument(logger *slog.Logger, authService *app.AuthServic
 		}
 		var request investmentInstrumentRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		instrument, err := investmentService.CreateInstrument(r.Context(), toInvestmentInstrumentInput(owner, r, request, 0))
@@ -400,7 +400,7 @@ func updateInvestmentInstrument(logger *slog.Logger, authService *app.AuthServic
 		}
 		var request investmentInstrumentRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		instrument, err := investmentService.UpdateInstrument(r.Context(), toInvestmentInstrumentInput(owner, r, request, instrumentID))
@@ -420,7 +420,7 @@ func createHoldingAccount(logger *slog.Logger, authService *app.AuthService, inv
 		}
 		var request holdingAccountRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		account, err := investmentService.CreateHoldingAccount(r.Context(), app.HoldingAccountInput{
@@ -468,7 +468,7 @@ func saveCostBasisProfile(logger *slog.Logger, authService *app.AuthService, inv
 		}
 		var request costBasisProfileRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		profile, err := investmentService.SaveCostBasisProfile(r.Context(), app.CostBasisProfileInput{
@@ -522,7 +522,7 @@ func saveDividendDefault(logger *slog.Logger, authService *app.AuthService, inve
 		}
 		var request dividendDefaultRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		dividendDefault, err := investmentService.SaveDividendDefault(r.Context(), app.DividendDefaultInput{
@@ -562,7 +562,7 @@ func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, 
 		}
 		var request investmentTradeRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		input := toInvestmentTradeInput(owner, r, request)
@@ -589,7 +589,7 @@ func createDividend(logger *slog.Logger, authService *app.AuthService, investmen
 		}
 		var request dividendRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		transaction, err := investmentService.Dividend(r.Context(), app.DividendInput{
@@ -616,7 +616,7 @@ func createReinvestedDividend(logger *slog.Logger, authService *app.AuthService,
 		}
 		var request reinvestedDividendRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		result, err := investmentService.ReinvestedDividend(r.Context(), app.ReinvestedDividendInput{
@@ -739,7 +739,7 @@ func saveInvestmentAutomationRules(logger *slog.Logger, authService *app.AuthSer
 		}
 		var request investmentAutomationRulesRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		rules := make([]app.InvestmentAutomationRuleInput, 0, len(request.Rules))

@@ -159,7 +159,7 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 
 		var request accountRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -211,7 +211,7 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 
 		var request accountRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -348,7 +348,7 @@ func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService,
 
 		var request accountLifecycleRequest
 		if err := decodeOptionalJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

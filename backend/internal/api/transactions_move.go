@@ -24,7 +24,7 @@ func moveTransaction(logger *slog.Logger, authService *app.AuthService, transact
 		}
 		var req moveRequest
 		if err := decodeJSONBody(r, &req); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		transaction, err := transactionService.MoveTransaction(r.Context(), app.MoveTransactionInput{
@@ -59,7 +59,7 @@ func movePosting(logger *slog.Logger, authService *app.AuthService, transactionS
 		}
 		var req moveRequest
 		if err := decodeJSONBody(r, &req); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 		transaction, err := transactionService.MovePosting(r.Context(), app.MovePostingInput{

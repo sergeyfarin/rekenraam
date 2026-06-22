@@ -65,7 +65,7 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService, options Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request createOwnerRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -138,6 +138,17 @@ func requestSessionCookieName(r *http.Request, options HandlerOptions) string {
 	return sessionCookieName
 }
 
+// errRequestTooLarge is returned by the decode helpers when the body exceeds 1 MB.
+var errRequestTooLarge = errors.New("request body too large")
+
+func writeDecodeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errRequestTooLarge) {
+		writeAPIError(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE", "request body must not exceed 1 MB")
+		return
+	}
+	writeDecodeError(w, err)
+}
+
 func decodeJSONBody(r *http.Request, destination any) error {
 	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
 	mediaType, _, err := mime.ParseMediaType(contentType)
@@ -145,10 +156,15 @@ func decodeJSONBody(r *http.Request, destination any) error {
 		return app.ValidationError{Message: "content type must be application/json"}
 	}
 
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(destination); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return errRequestTooLarge
+		}
 		return app.ValidationError{Message: "invalid request body"}
 	}
 
@@ -164,8 +180,13 @@ func decodeOptionalJSONBody(r *http.Request, destination any) error {
 		return nil
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return errRequestTooLarge
+		}
 		return app.ValidationError{Message: "invalid request body"}
 	}
 	if strings.TrimSpace(string(body)) == "" {

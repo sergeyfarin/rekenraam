@@ -92,7 +92,7 @@ func createTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 
 		var request tagRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -131,7 +131,7 @@ func updateTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 
 		var request tagRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 

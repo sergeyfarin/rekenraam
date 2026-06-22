@@ -34,7 +34,9 @@
       "Bash(node_modules/.bin/paraglide-js compile *)",
       "Bash(grep -v \"\\\\.d\\\\.ts$\")",
       "Bash(node_modules/.bin/svelte-kit sync *)",
-      "Bash(node_modules/.bin/svelte-check --tsconfig ./tsconfig.json)"
+      "Bash(node_modules/.bin/svelte-check --tsconfig ./tsconfig.json)",
+      "Bash(staticcheck ./...)",
+      "Bash(grep -v \"^--$\")"
     ]
   }
 }

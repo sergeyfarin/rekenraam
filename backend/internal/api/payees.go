@@ -100,7 +100,7 @@ func createPayee(logger *slog.Logger, authService *app.AuthService, payeeService
 
 		var request payeeRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -144,7 +144,7 @@ func updatePayee(logger *slog.Logger, authService *app.AuthService, payeeService
 
 		var request payeeRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
@@ -220,7 +220,7 @@ func payeeLifecycleMutation(logger *slog.Logger, authService *app.AuthService, p
 
 		var request payeeLifecycleRequest
 		if err := decodeJSONBody(r, &request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			writeDecodeError(w, err)
 			return
 		}
 
