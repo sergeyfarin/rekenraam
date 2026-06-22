@@ -69,16 +69,21 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 // logic bug in the caller, not a data problem.
 const maxPow10Scale = 60
 
+// pow10Cache holds precomputed 10^i for i in [0, maxPow10Scale].
+var pow10Cache = func() [maxPow10Scale + 1]*big.Int {
+	var t [maxPow10Scale + 1]*big.Int
+	t[0] = big.NewInt(1)
+	for i := 1; i <= maxPow10Scale; i++ {
+		t[i] = new(big.Int).Mul(t[i-1], big.NewInt(10))
+	}
+	return t
+}()
+
 func pow10(scale int) *big.Int {
 	if scale < 0 || scale > maxPow10Scale {
 		panic(fmt.Sprintf("pow10: scale %d out of range [0, %d]", scale, maxPow10Scale))
 	}
-	result := big.NewInt(1)
-	ten := big.NewInt(10)
-	for i := 0; i < scale; i++ {
-		result.Mul(result, ten)
-	}
-	return result
+	return new(big.Int).Set(pow10Cache[scale])
 }
 
 // periodScopedRefsFromTransaction returns CheckpointInvalidationRefs for all
