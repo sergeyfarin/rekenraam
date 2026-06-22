@@ -948,7 +948,7 @@ Implementation notes:
 
 ---
 
-## Step 8 — Category transactions route
+## Step 8 — Category transactions route ✅ DONE (2026-06-22)
 
 ### `frontend/src/lib/transactions/category-transactions.svelte`
 
@@ -983,13 +983,33 @@ Implementation notes:
 ### `frontend/src/routes/app/categories/[id]/+page.svelte`
 
 - Mounts `category-transactions.svelte`; embeds the editor side panel.
-- **Navigation:** make the category list row navigate to `/app/categories/[id]`
-  using the same **stretched-link** pattern as the account register (single `<a>`
-  with a covering `::after`; action `<button>`s as higher-stacked siblings, never
-  nested inside the `<a>`).
+- **Navigation:** category list row navigates to `/app/categories/[id]`
+  using the stretched-link pattern (single `<a>` with `after:absolute after:inset-0
+  after:z-0`; action buttons wrapped with `relative z-1`, never nested inside the `<a>`).
 
-**Verify Step 8:** `pnpm --dir frontend run check`; confirm category totals match a
-known split transaction.
+**Verify Step 8:** ✅ PASSED 2026-06-22
+
+```bash
+# svelte-check: 0 errors, 0 warnings across 2600 files
+npx svelte-check --tsconfig ./tsconfig.json
+
+# Vitest: 11/11 tests pass
+frontend/node_modules/.bin/vitest run
+```
+
+**Implementation notes:**
+- 17 new `category_tx_*` i18n messages added to `messages/settings/en.json`; Paraglide
+  regenerated with `npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide`.
+- `categoryAmounts(tx)` groups income/expense postings by `commodity_id`, rescales
+  all coefficients in a group to `maxScale` using `BigInt`, sums with activity-positive
+  sign (income negated, expense kept), then calls `formatQuantity` on the absolute
+  BigInt sum — no JS `number` involved at any step.
+- Counterpart label: asset/liability postings without a system role; "N accounts"
+  when more than two unique labels.
+- Category list stretched-link: `<article>` gets `relative`; name becomes an `<a>`
+  with `after:absolute after:inset-0 after:z-0`; action buttons div gets `relative z-1`.
+- Pre-existing `rounded-[var(--radius-control)]` warnings in the category list fixed
+  to canonical `rounded-(--radius-control)` in the same pass.
 
 ---
 

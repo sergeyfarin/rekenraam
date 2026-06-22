@@ -42,10 +42,22 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); keys=[k for k in d if 'register' in k.lower\\(\\) or 'account_register' in k.lower\\(\\)]; print\\(json.dumps\\({k:d[k] for k in keys}, indent=2\\)\\)\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); keys=[k for k in d if 'transaction' in k.lower\\(\\)]; print\\('\\\\n'.join\\(sorted\\(keys\\)[:60]\\)\\)\")",
       "Bash(python3 -c ' *)",
-      "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/\\\\[id\\\\]/register)"
+      "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/\\\\[id\\\\]/register)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); keys=[k for k in d if 'categor' in k.lower\\(\\) or 'register' in k.lower\\(\\) or 'transaction' in k.lower\\(\\)]; print\\(json.dumps\\({k:d[k] for k in sorted\\(keys\\)}, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/coder/Repos/rekenraam/frontend/messages/app/en.json'\\)\\); keys=[k for k in d if any\\(x in k.lower\\(\\) for x in ['categor','register','transact','category_tx','cat_tx']\\)]; print\\(json.dumps\\({k:d[k] for k in sorted\\(keys\\)}, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/coder/Repos/rekenraam/frontend/messages/app/en.json'\\)\\); print\\(list\\(d.keys\\(\\)\\)[:30]\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/coder/Repos/rekenraam/frontend/messages/settings/en.json'\\)\\); keys=[k for k in d if any\\(x in k.lower\\(\\) for x in ['categor','register','transact']\\)]; print\\(json.dumps\\({k:d[k] for k in sorted\\(keys\\)}, indent=2\\)\\)\")",
+      "Bash(npx @inlang/paraglide-js compile)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/coder/Repos/rekenraam/frontend/messages/settings/en.json'\\)\\); keys=[k for k in d if 'category_tx' in k]; print\\(keys\\)\")",
+      "Bash(npx @inlang/paraglide-js compile --project ./project.inlang)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('messages/settings/en.json'\\)\\); print\\('register_col_date' in d, 'category_tx_col_date' in d\\)\")",
+      "Bash(cp /home/coder/Repos/rekenraam/frontend/src/paraglide/messages/category_tx_*.js /home/coder/Repos/rekenraam/frontend/src/lib/paraglide/messages/ && ls /home/coder/Repos/rekenraam/frontend/src/lib/paraglide/messages/category_tx*)",
+      "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/categories/\\\\[id\\\\])"
     ],
     "additionalDirectories": [
-      "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]"
+      "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",
+      "/home/coder/Repos/rekenraam/frontend/src/paraglide/messages",
+      "/home/coder/Repos/rekenraam/frontend/src/routes/app/categories"
     ]
   }
 }

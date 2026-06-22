@@ -498,7 +498,12 @@
               {@const category = row.category}
               {@const hasTreeChildren = (treeChildCounts.get(category.id) ?? 0) > 0}
               {@const isCollapsed = collapsedCategoryIDs.has(category.id)}
-              <article class="grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.75fr)_minmax(7rem,0.45fr)_minmax(9rem,0.55fr)_7.25rem] lg:items-center">
+              <!--
+                Stretched-link pattern: the <a> for the category transactions page covers the
+                whole row via ::after. Action buttons sit at relative z-[1] so clicks on them
+                don't navigate. No interactive elements are nested inside the <a>.
+              -->
+              <article class="relative grid gap-3 px-4 py-3 transition hover:bg-row-hover lg:grid-cols-[minmax(12rem,1fr)_minmax(10rem,0.75fr)_minmax(7rem,0.45fr)_minmax(9rem,0.55fr)_7.25rem] lg:items-center">
                 <TreeNameCell
                   depth={row.depth}
                   expandable={hasTreeChildren}
@@ -511,7 +516,13 @@
                     <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent-soft text-accent">
                       <CategoryIcon icon={categoryIconName(category)} className="size-4" />
                     </span>
-                    <p class="min-w-0 truncate text-sm font-semibold text-foreground">{categoryDisplayName(category)}</p>
+                    <a
+                      href="/app/categories/{category.id}"
+                      class="min-w-0 truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:z-0"
+                      aria-label={m.category_tx_action_view_transactions({ name: categoryDisplayName(category) })}
+                    >
+                      {categoryDisplayName(category)}
+                    </a>
                   </div>
                   <p class="mt-1 truncate text-xs text-muted">
                     {#if category.is_builtin}
@@ -548,10 +559,11 @@
                   {/if}
                 </div>
 
-                <div class="flex min-w-0 items-center justify-start gap-1 lg:justify-end">
+                <!-- Action buttons are siblings at z-[1], above the stretched-link ::after overlay -->
+                <div class="relative z-1 flex min-w-0 items-center justify-start gap-1 lg:justify-end">
                   <button
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                     onclick={() => (editor = { type: 'edit', category })}
                     disabled={category.is_builtin}
                     aria-label={m.categories_action_edit({ name: categoryDisplayName(category) })}
@@ -563,7 +575,7 @@
                   {#if category.status === 'active'}
                     <button
                       type="button"
-                      class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                       onclick={() => handleArchiveCategory(category)}
                       disabled={category.is_builtin || (activeChildCounts.get(category.id) ?? 0) > 0 || actionPendingKey === `archive:${category.id}`}
                       aria-label={m.categories_action_archive({ name: categoryDisplayName(category) })}
@@ -574,7 +586,7 @@
                   {:else}
                     <button
                       type="button"
-                      class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-border bg-control text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50"
                       onclick={() => handleRestoreCategory(category)}
                       disabled={category.is_builtin || actionPendingKey === `restore:${category.id}`}
                       aria-label={m.categories_action_restore({ name: categoryDisplayName(category) })}
@@ -586,7 +598,7 @@
 
                   <button
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                     onclick={() => handleDeleteCategory(category)}
                     disabled={category.is_builtin || (anyChildCounts.get(category.id) ?? 0) > 0 || actionPendingKey === `delete:${category.id}`}
                     aria-label={m.categories_action_delete({ name: categoryDisplayName(category) })}
