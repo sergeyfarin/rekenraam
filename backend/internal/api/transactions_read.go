@@ -79,6 +79,51 @@ func accountRegister(logger *slog.Logger, authService *app.AuthService, transact
 	}
 }
 
+func listDeletedTransactions(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		query := r.URL.Query()
+		limit := 0
+		if query.Get("limit") != "" {
+			parsed, err := strconv.Atoi(query.Get("limit"))
+			if err != nil || parsed <= 0 {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "limit is invalid")
+				return
+			}
+			limit = parsed
+		}
+
+		result, err := transactionService.ListDeletedTransactions(r.Context(), app.ListDeletedTransactionsInput{
+			Limit:  limit,
+			Cursor: query.Get("cursor"),
+		})
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "list deleted transactions", err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, deletedTransactionsResponse{
+			Transactions: toDeletedTransactionResponses(result.Transactions),
+			NextCursor:   nullableCursor(result.NextCursor),
+		})
+	}
+}
+
+func toDeletedTransactionResponses(txns []app.DeletedTransaction) []deletedTransactionResponse {
+	responses := make([]deletedTransactionResponse, 0, len(txns))
+	for _, txn := range txns {
+		responses = append(responses, deletedTransactionResponse{
+			transactionResponse:            toTransactionResponse(txn.Transaction),
+			DeleteReason:                   txn.DeleteReason,
+			RestoreBlockedByReconciliation: txn.RestoreBlockedByReconciliation,
+		})
+	}
+	return responses
+}
+
 func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListTransactionsInput, bool) {
 	query := r.URL.Query()
 	accountID, ok := parseOptionalPositiveInt64(w, query.Get("account_id"), "account id")

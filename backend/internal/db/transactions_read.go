@@ -638,6 +638,112 @@ func nullStringText(value sql.NullString) string {
 	return value.String
 }
 
+// ListDeletedTransactions returns soft-deleted transactions ordered by
+// deleted_at DESC, id DESC with a deletion-time cursor for pagination.
+// Each record includes the delete_reason snapshot column.
+func (r *TransactionRepository) ListDeletedTransactions(ctx context.Context, params ListDeletedTransactionsParams) ([]DeletedTransactionRecord, error) {
+	where := []string{"t.book_id = ?", "t.deleted_at IS NOT NULL"}
+	args := []any{params.BookID}
+
+	if params.CursorDeletedAt != "" && params.CursorID > 0 {
+		where = append(where, `(
+			t.deleted_at < ?
+			OR (t.deleted_at = ? AND t.id < ?)
+		)`)
+		args = append(args, params.CursorDeletedAt, params.CursorDeletedAt, params.CursorID)
+	}
+
+	args = append(args, params.Limit)
+	query := `
+		SELECT
+			t.id,
+			t.book_id,
+			t.correction_of_transaction_id,
+			t.created_at,
+			t.created_by_user_id,
+			t.deleted_at,
+			tv.id,
+			tv.version_seq,
+			tv.supersedes_version_id,
+			tv.status,
+			tv.transaction_kind,
+			tv.transaction_date,
+			tv.transaction_day_sequence,
+			tv.payee_id,
+			tv.payee_name,
+			tv.description,
+			tv.external_ref_hint,
+			tv.note_markdown,
+			tv.metadata_json,
+			tv.needs_review,
+			tv.recorded_at,
+			tv.changed_by_user_id,
+			tv.change_reason,
+			COALESCE(t.delete_reason, '')
+		FROM transactions t
+		JOIN current_transaction_versions tv ON tv.transaction_id = t.id
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY t.deleted_at DESC, t.id DESC
+		LIMIT ?
+	`
+
+	rows, err := r.database.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list deleted transactions: %w", err)
+	}
+	defer rows.Close()
+
+	var records []DeletedTransactionRecord
+	for rows.Next() {
+		var rec DeletedTransactionRecord
+		if err := rows.Scan(
+			&rec.ID,
+			&rec.BookID,
+			&rec.CorrectionOfTransactionID,
+			&rec.CreatedAt,
+			&rec.CreatedByUserID,
+			&rec.DeletedAt,
+			&rec.VersionID,
+			&rec.VersionSeq,
+			&rec.SupersedesVersionID,
+			&rec.Status,
+			&rec.TransactionKind,
+			&rec.TransactionDate,
+			&rec.TransactionDaySequence,
+			&rec.PayeeID,
+			&rec.PayeeName,
+			&rec.Description,
+			&rec.ExternalRefHint,
+			&rec.NoteMarkdown,
+			&rec.MetadataJSON,
+			&rec.NeedsReview,
+			&rec.RecordedAt,
+			&rec.ChangedByUserID,
+			&rec.ChangeReason,
+			&rec.DeleteReason,
+		); err != nil {
+			return nil, fmt.Errorf("scan deleted transaction: %w", err)
+		}
+		records = append(records, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate deleted transactions: %w", err)
+	}
+
+	baseRecords := make([]TransactionRecord, len(records))
+	for i := range records {
+		baseRecords[i] = records[i].TransactionRecord
+	}
+	if err := r.loadTransactionChildren(ctx, baseRecords); err != nil {
+		return nil, err
+	}
+	for i := range records {
+		records[i].TransactionRecord = baseRecords[i]
+	}
+
+	return records, nil
+}
+
 // EncodeTransactionCursor encodes the 3-tuple (date, day_sequence, id) used
 // for stable same-day ordering of the global transaction list.
 func EncodeTransactionCursor(transactionDate string, daySequence int64, transactionID int64) string {
@@ -684,4 +790,36 @@ func EncodeRegisterCursor(entryDate string, daySequence int64, postingVersionID 
 func DecodeRegisterCursor(cursor string) (date string, daySequence int64, id int64, err error) {
 	// Register and transaction cursors share the same format; delegate.
 	return DecodeTransactionCursor(cursor)
+}
+
+// EncodeDeletionCursor encodes the 2-tuple (deleted_at, id) used for trash
+// pagination. deleted_at is an RFC3339 timestamp string.
+func EncodeDeletionCursor(deletedAt string, id int64) string {
+	if deletedAt == "" || id <= 0 {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s|%d", deletedAt, id)))
+}
+
+// DecodeDeletionCursor decodes a cursor produced by EncodeDeletionCursor.
+func DecodeDeletionCursor(cursor string) (deletedAt string, id int64, err error) {
+	cleaned := strings.TrimSpace(cursor)
+	if cleaned == "" {
+		return "", 0, nil
+	}
+	decoded, decErr := base64.RawURLEncoding.DecodeString(cleaned)
+	if decErr != nil {
+		return "", 0, fmt.Errorf("cursor is invalid")
+	}
+	idx := strings.LastIndex(string(decoded), "|")
+	if idx < 0 {
+		return "", 0, fmt.Errorf("cursor is invalid")
+	}
+	ts := string(decoded[:idx])
+	rest := string(decoded[idx+1:])
+	var txID int64
+	if _, scanErr := fmt.Sscanf(rest, "%d", &txID); scanErr != nil || txID <= 0 {
+		return "", 0, fmt.Errorf("cursor is invalid")
+	}
+	return ts, txID, nil
 }

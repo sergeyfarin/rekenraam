@@ -10,6 +10,8 @@ export type TransactionRequest = components['schemas']['TransactionRequest'];
 export type TransactionLifecycleRequest = components['schemas']['TransactionLifecycleRequest'];
 export type MoveRequest = components['schemas']['MoveRequest'];
 export type ReconciliationImpactResponse = components['schemas']['ReconciliationImpactResponse'];
+export type DeletedTransactionResponse = components['schemas']['DeletedTransactionResponse'];
+export type DeletedTransactionsResponse = components['schemas']['DeletedTransactionsResponse'];
 
 export type TransactionListOptions = {
   accountID?: number;
@@ -30,6 +32,7 @@ export type AccountRegisterInfiniteData = InfiniteData<AccountRegisterResponse, 
 
 export const transactionsQueryKey = ['api', 'transactions'] as const;
 export const accountRegisterQueryKey = ['api', 'account-register'] as const;
+export const deletedTransactionsQueryKey = ['api', 'transactions-deleted'] as const;
 
 export function transactionsQueryOptions(options: TransactionListOptions = {}) {
   return {
@@ -51,6 +54,7 @@ export function transactionsInfiniteQueryOptions(options: Omit<TransactionListOp
 }
 
 export type RegisterFilterOptions = Pick<TransactionListOptions, 'status' | 'afterDate' | 'beforeDate' | 'limit'>;
+export type DeletedTransactionsInfiniteData = InfiniteData<DeletedTransactionsResponse, string>;
 
 export function accountRegisterInfiniteQueryOptions(accountID: number, options: RegisterFilterOptions = {}) {
   return {
@@ -61,6 +65,42 @@ export function accountRegisterInfiniteQueryOptions(accountID: number, options: 
     getNextPageParam: (lastPage: AccountRegisterResponse) => lastPage.next_cursor || null,
     staleTime: 5_000
   };
+}
+
+export function deletedTransactionsInfiniteQueryOptions(limit?: number) {
+  return {
+    queryKey: [...deletedTransactionsQueryKey, 'infinite', { limit }] as const,
+    queryFn: ({ pageParam }: { pageParam: string }) =>
+      getDeletedTransactions({ limit, cursor: pageParam || undefined }),
+    initialPageParam: '',
+    getNextPageParam: (lastPage: DeletedTransactionsResponse) => lastPage.next_cursor || null,
+    staleTime: 5_000
+  };
+}
+
+export async function getDeletedTransactions(options: { limit?: number; cursor?: string } = {}): Promise<DeletedTransactionsResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/transactions/deleted', {
+      params: {
+        query: {
+          limit: options.limit,
+          cursor: options.cursor
+        }
+      }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
 }
 
 export async function getTransactions(options: TransactionListOptions = {}): Promise<TransactionsResponse> {

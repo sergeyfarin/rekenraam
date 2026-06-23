@@ -1258,3 +1258,159 @@ func TestCategoryIDFilter(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res2.Body).Decode(&errBody2))
 	assert.Equal(t, "VALIDATION_FAILED", errBody2.Error.Code)
 }
+
+func TestListDeletedTransactionsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	rent := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Rent","category_type":"expense"}`)
+
+	// Create two transactions and soft-delete both.
+	tx1 := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-10",
+		posting(checking.ID, -5000, 2, commodityID),
+		posting(groceries.ID, 5000, 2, commodityID),
+	), http.StatusCreated)
+	tx2 := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-12",
+		posting(checking.ID, -120000, 2, commodityID),
+		posting(rent.ID, 120000, 2, commodityID),
+	), http.StatusCreated)
+
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconvFormatInt(tx1.ID)+"/soft-delete",
+		`{"change_reason":"entered by mistake"}`, http.StatusOK)
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconvFormatInt(tx2.ID)+"/soft-delete",
+		`{"change_reason":"duplicate"}`, http.StatusOK)
+
+	// Deleted list should return both transactions.
+	deleted := listDeletedTransactionsForSession(t, handler, sessionCookie, "")
+	require.Len(t, deleted.Transactions, 2)
+
+	// Most-recently-deleted first (tx2 was deleted last).
+	assert.Equal(t, tx2.ID, deleted.Transactions[0].ID)
+	assert.Equal(t, tx1.ID, deleted.Transactions[1].ID)
+
+	// Delete reason is captured.
+	assert.Equal(t, "duplicate", deleted.Transactions[0].DeleteReason)
+	assert.Equal(t, "entered by mistake", deleted.Transactions[1].DeleteReason)
+
+	// Posted transactions are NOT restore-blocked unless there's a reconciliation checkpoint.
+	assert.False(t, deleted.Transactions[0].RestoreBlockedByReconciliation)
+	assert.False(t, deleted.Transactions[1].RestoreBlockedByReconciliation)
+
+	// Enriched posting fields present.
+	require.NotEmpty(t, deleted.Transactions[0].JournalEntries)
+	firstPosting := deleted.Transactions[0].JournalEntries[0].Postings[0]
+	assert.NotEmpty(t, firstPosting.AccountClass)
+	assert.NotEmpty(t, firstPosting.CommodityCode)
+
+	// Ordinary list returns zero (all deleted).
+	live := listTransactionsForSession(t, handler, sessionCookie, "")
+	assert.Empty(t, live.Transactions)
+
+	// Restore one and confirm it disappears from deleted list.
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconvFormatInt(tx1.ID)+"/restore",
+		`{"change_reason":"restored"}`, http.StatusOK)
+
+	deletedAfterRestore := listDeletedTransactionsForSession(t, handler, sessionCookie, "")
+	require.Len(t, deletedAfterRestore.Transactions, 1)
+	assert.Equal(t, tx2.ID, deletedAfterRestore.Transactions[0].ID)
+}
+
+func TestListDeletedTransactionsCursorPagination(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Expense","category_type":"expense"}`)
+
+	// Create 3 transactions and soft-delete them all.
+	ids := make([]int64, 3)
+	for i := range ids {
+		tx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-0"+strconv.Itoa(i+1),
+			posting(checking.ID, -1000, 2, commodityID),
+			posting(expense.ID, 1000, 2, commodityID),
+		), http.StatusCreated)
+		ids[i] = tx.ID
+		mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+			"/api/v1/transactions/"+strconvFormatInt(tx.ID)+"/soft-delete",
+			`{"change_reason":"cleanup"}`, http.StatusOK)
+	}
+
+	// Fetch first page of 2.
+	page1 := listDeletedTransactionsForSession(t, handler, sessionCookie, "?limit=2")
+	require.Len(t, page1.Transactions, 2)
+	require.NotNil(t, page1.NextCursor, "first page should have a next cursor")
+
+	// Fetch second page using cursor.
+	page2 := listDeletedTransactionsForSession(t, handler, sessionCookie, "?limit=2&cursor="+*page1.NextCursor)
+	require.Len(t, page2.Transactions, 1)
+	assert.Nil(t, page2.NextCursor, "last page should have no next cursor")
+
+	// All 3 IDs are present across both pages (no duplicates, no gaps).
+	allIDs := make([]int64, 0, 3)
+	for _, tx := range page1.Transactions {
+		allIDs = append(allIDs, tx.ID)
+	}
+	for _, tx := range page2.Transactions {
+		allIDs = append(allIDs, tx.ID)
+	}
+	require.Len(t, allIDs, 3)
+
+	// No duplicates.
+	seen := make(map[int64]bool)
+	for _, id := range allIDs {
+		assert.False(t, seen[id], "duplicate id %d across pages", id)
+		seen[id] = true
+	}
+}
+
+func TestListDeletedTransactionsVoidedRowNotRestoreBlocked(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Expense","category_type":"expense"}`)
+
+	tx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-01",
+		posting(checking.ID, -5000, 2, commodityID),
+		posting(expense.ID, 5000, 2, commodityID),
+	), http.StatusCreated)
+
+	// Void then soft-delete.
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconvFormatInt(tx.ID)+"/void",
+		`{"change_reason":"test void"}`, http.StatusOK)
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconvFormatInt(tx.ID)+"/soft-delete",
+		`{"change_reason":"cleanup"}`, http.StatusOK)
+
+	deleted := listDeletedTransactionsForSession(t, handler, sessionCookie, "")
+	require.Len(t, deleted.Transactions, 1)
+	assert.Equal(t, "voided", deleted.Transactions[0].Status)
+	// Voided+soft-deleted rows are never restore-blocked.
+	assert.False(t, deleted.Transactions[0].RestoreBlockedByReconciliation)
+}
+
+// listDeletedTransactionsForSession is a test helper that calls GET /api/v1/transactions/deleted.
+func listDeletedTransactionsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) deletedTransactionsResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions/deleted"+suffix, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var response deletedTransactionsResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}

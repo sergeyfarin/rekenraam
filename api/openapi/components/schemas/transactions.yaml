@@ -524,3 +524,32 @@ ReconciliationImpactResponse:
             type: string
             format: date
             description: The affected posting's entry date that falls within this checkpoint's reconciled period.
+DeletedTransactionResponse:
+  allOf:
+    - $ref: "../../openapi.yaml#/components/schemas/TransactionResponse"
+    - type: object
+      required:
+        - delete_reason
+        - restore_blocked_by_reconciliation
+      properties:
+        delete_reason:
+          type: string
+          description: Reason recorded at soft-delete time.
+        restore_blocked_by_reconciliation:
+          type: boolean
+          description: True when restoring this posted transaction would cross a reconciliation boundary. Always false for voided transactions.
+DeletedTransactionsResponse:
+  type: object
+  required:
+    - transactions
+    - next_cursor
+  properties:
+    transactions:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/DeletedTransactionResponse"
+    next_cursor:
+      type:
+        - string
+        - "null"
+      description: Opaque deletion-time cursor for the next page (deleted_at DESC, id DESC).

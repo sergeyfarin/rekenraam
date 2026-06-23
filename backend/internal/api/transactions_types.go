@@ -75,6 +75,17 @@ type transactionsResponse struct {
 	NextCursor   *string               `json:"next_cursor"`
 }
 
+type deletedTransactionResponse struct {
+	transactionResponse
+	DeleteReason                   string `json:"delete_reason"`
+	RestoreBlockedByReconciliation bool   `json:"restore_blocked_by_reconciliation"`
+}
+
+type deletedTransactionsResponse struct {
+	Transactions []deletedTransactionResponse `json:"transactions"`
+	NextCursor   *string                      `json:"next_cursor"`
+}
+
 type accountRegisterResponse struct {
 	Entries    []accountRegisterEntryResponse `json:"entries"`
 	NextCursor *string                        `json:"next_cursor"`

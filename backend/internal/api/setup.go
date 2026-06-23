@@ -146,7 +146,12 @@ func writeDecodeError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE", "request body must not exceed 1 MB")
 		return
 	}
-	writeDecodeError(w, err)
+	var validationError app.ValidationError
+	if errors.As(err, &validationError) {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+		return
+	}
+	writeAPIError(w, http.StatusBadRequest, "DECODE_ERROR", err.Error())
 }
 
 func decodeJSONBody(r *http.Request, destination any) error {

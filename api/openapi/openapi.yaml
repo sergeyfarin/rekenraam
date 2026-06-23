@@ -99,6 +99,8 @@ paths:
     $ref: "./paths/payee-restore.yaml"
   /api/v1/transactions:
     $ref: "./paths/transactions.yaml"
+  /api/v1/transactions/deleted:
+    $ref: "./paths/transactions-deleted.yaml"
   /api/v1/transactions/{transaction_id}:
     $ref: "./paths/transaction.yaml"
   /api/v1/transactions/{transaction_id}/post:
@@ -400,6 +402,10 @@ components:
       $ref: "./components/schemas/transactions.yaml#/MoveRequest"
     ReconciliationImpactResponse:
       $ref: "./components/schemas/transactions.yaml#/ReconciliationImpactResponse"
+    DeletedTransactionResponse:
+      $ref: "./components/schemas/transactions.yaml#/DeletedTransactionResponse"
+    DeletedTransactionsResponse:
+      $ref: "./components/schemas/transactions.yaml#/DeletedTransactionsResponse"
     ReconciliationPostingResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPostingResponse"
     ReconciliationSessionResponse:

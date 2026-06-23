@@ -4,6 +4,7 @@
   import Coins from '@lucide/svelte/icons/coins';
   import Palette from '@lucide/svelte/icons/palette';
   import Settings2 from '@lucide/svelte/icons/settings-2';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import { m } from '$lib/paraglide/messages.js';
 
   let { children } = $props<{ children?: Snippet }>();
@@ -28,6 +29,12 @@
       label: m.settings_nav_currencies(),
       icon: Coins,
       active: pathname.startsWith('/app/settings/currencies')
+    },
+    {
+      href: '/app/settings/trash',
+      label: m.settings_nav_trash(),
+      icon: Trash2,
+      active: pathname.startsWith('/app/settings/trash')
     }
   ]);
 </script>

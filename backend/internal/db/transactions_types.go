@@ -177,6 +177,21 @@ type ListTransactionsParams struct {
 	FilterEntryDate   bool
 }
 
+type ListDeletedTransactionsParams struct {
+	BookID           int64
+	CursorDeletedAt  string
+	CursorID         int64
+	Limit            int
+}
+
+// DeletedTransactionRecord is a TransactionRecord that also carries the snapshot
+// columns written at soft-delete time.
+type DeletedTransactionRecord struct {
+	TransactionRecord
+	DeleteReason string
+	DeletedAt    string
+}
+
 type CreateTransactionParams struct {
 	BookID                     int64
 	CorrectionOfTransactionID  sql.NullInt64

@@ -1013,7 +1013,7 @@ frontend/node_modules/.bin/vitest run
 
 ---
 
-## Step 9 — Trash / recovery (settings subpage)
+## Step 9 — Trash / recovery (settings subpage) ✅ DONE 2026-06-23
 
 A dedicated view to browse and restore soft-deleted transactions, with a
 recovery rule that protects reconciled periods. This step has both backend and
@@ -1094,6 +1094,32 @@ cd .. && pnpm --dir frontend run check
 Manually: soft-delete a recent transaction, open Settings → Trash, restore it in
 one click; soft-delete a transaction inside a reconciled period and confirm the
 restore warning fires and override is required.
+
+**Implementation notes (2026-06-23):**
+- New types added in `db/transactions_types.go`: `ListDeletedTransactionsParams`,
+  `DeletedTransactionRecord`.
+- `db/transactions_read.go`: `ListDeletedTransactions` queries `deleted_at IS NOT NULL`,
+  orders by `(deleted_at DESC, id DESC)`, cursor is `(deleted_at, id)`. Uses
+  `strings.LastIndex` (not `strings.Index`) to split the cursor because RFC3339
+  timestamps contain `:` but no `|`.
+- `app/transactions_service.go`: `isRestoreBlocked` short-circuits on `voided` before
+  calling `periodScopedRefsFromTransaction` — voided rows always return `false`.
+- Route `GET /api/v1/transactions/deleted` registered in `api/health.go` before
+  `GET /api/v1/transactions/{transaction_id}` so Go's mux does not match the literal
+  segment `/deleted` as a transaction_id path value.
+- Frontend trash page at `frontend/src/routes/app/settings/trash/+page.svelte`;
+  one-click restore for easy rows, reconciliation override modal for guarded rows.
+  `formatDeletedAt` accepts `string | undefined` because the generated OpenAPI schema
+  makes the field optional.
+- Pre-existing infinite recursion in `api/setup.go` `writeDecodeError` was fixed
+  as an incidental improvement: added `ValidationError` check and `DECODE_ERROR`
+  fallback before the fix caused stack overflows on wrong-content-type test requests.
+- Tests added: `TestListDeletedTransactionsEndpoint`, `TestListDeletedTransactionsCursorPagination`,
+  `TestListDeletedTransactionsVoidedRowNotRestoreBlocked` in `api/transactions_test.go`.
+- All i18n keys through Paraglide (`trash_*` namespace, `settings_nav_trash`,
+  `settings_card_trash_title/copy`).
+- Verification: `go test ./internal/app/ ./internal/db/ ./internal/api/` ✅,
+  `pnpm run check` (2623 files, 0 errors, 0 warnings) ✅, Vitest 11/11 ✅.
 
 ---
 

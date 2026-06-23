@@ -1,0 +1,33 @@
+get:
+  summary: List soft-deleted transactions (Trash)
+  description: >
+    Returns soft-deleted transactions ordered by deletion recency (deleted_at DESC, id DESC).
+    Each row includes a delete_reason snapshot and a restore_blocked_by_reconciliation flag
+    so the UI can distinguish easy one-click restores from guarded ones without per-row requests.
+    Excluded from the ordinary transaction list.
+  parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+      description: Maximum records per page (default 50, max 100).
+    - name: cursor
+      in: query
+      schema:
+        type: string
+      description: Opaque deletion-time cursor returned by a previous response.
+  responses:
+    "200":
+      description: Deleted transactions page
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/DeletedTransactionsResponse"
+    "401":
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

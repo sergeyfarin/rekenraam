@@ -259,6 +259,24 @@ type CreateReconciliationImpactInput struct {
 	Spec        TransactionInput
 }
 
+// DeletedTransaction is a Transaction with soft-delete snapshot fields and
+// a pre-computed restore guard flag.
+type DeletedTransaction struct {
+	Transaction
+	DeleteReason                      string
+	RestoreBlockedByReconciliation    bool
+}
+
+type ListDeletedTransactionsInput struct {
+	Limit  int
+	Cursor string
+}
+
+type ListDeletedTransactionsResult struct {
+	Transactions []DeletedTransaction
+	NextCursor   string
+}
+
 type UpdateReconciliationImpactInput struct {
 	OwnerUserID   int64
 	TransactionID int64

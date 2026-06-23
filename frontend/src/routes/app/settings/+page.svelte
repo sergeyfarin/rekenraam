@@ -6,6 +6,7 @@
   import Palette from '@lucide/svelte/icons/palette';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Clock from '@lucide/svelte/icons/clock';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import packageInfo from '../../../../package.json';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { currentBookQueryOptions } from '$lib/api/books';
@@ -151,6 +152,12 @@
       icon: Coins,
       title: m.settings_card_currencies_title(),
       copy: m.settings_card_currencies_copy()
+    },
+    {
+      href: '/app/settings/trash',
+      icon: Trash2,
+      title: m.settings_card_trash_title(),
+      copy: m.settings_card_trash_copy()
     }
   ];
 

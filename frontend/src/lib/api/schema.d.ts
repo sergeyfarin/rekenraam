@@ -4688,6 +4688,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List soft-deleted transactions (Trash)
+         * @description Returns soft-deleted transactions ordered by deletion recency (deleted_at DESC, id DESC). Each row includes a delete_reason snapshot and a restore_blocked_by_reconciliation flag so the UI can distinguish easy one-click restores from guarded ones without per-row requests. Excluded from the ordinary transaction list.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Maximum records per page (default 50, max 100). */
+                    limit?: number;
+                    /** @description Opaque deletion-time cursor returned by a previous response. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted transactions page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeletedTransactionsResponse"];
+                    };
+                };
+                /** @description Not authenticated */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions/{transaction_id}": {
         parameters: {
             query?: never;
@@ -7797,6 +7850,17 @@ export interface components {
                  */
                 entry_date: string;
             }[];
+        };
+        DeletedTransactionResponse: components["schemas"]["TransactionResponse"] & {
+            /** @description Reason recorded at soft-delete time. */
+            delete_reason: string;
+            /** @description True when restoring this posted transaction would cross a reconciliation boundary. Always false for voided transactions. */
+            restore_blocked_by_reconciliation: boolean;
+        };
+        DeletedTransactionsResponse: {
+            transactions: components["schemas"]["DeletedTransactionResponse"][];
+            /** @description Opaque deletion-time cursor for the next page (deleted_at DESC, id DESC). */
+            next_cursor: string | null;
         };
         ReconciliationPostingResponse: {
             /** Format: int64 */

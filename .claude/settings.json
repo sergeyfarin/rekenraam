@@ -52,7 +52,9 @@
       "Bash(npx @inlang/paraglide-js compile --project ./project.inlang)",
       "Bash(python3 -c \"import json; d=json.load\\(open\\('messages/settings/en.json'\\)\\); print\\('register_col_date' in d, 'category_tx_col_date' in d\\)\")",
       "Bash(cp /home/coder/Repos/rekenraam/frontend/src/paraglide/messages/category_tx_*.js /home/coder/Repos/rekenraam/frontend/src/lib/paraglide/messages/ && ls /home/coder/Repos/rekenraam/frontend/src/lib/paraglide/messages/category_tx*)",
-      "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/categories/\\\\[id\\\\])"
+      "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/categories/\\\\[id\\\\])",
+      "Bash(grep -E \"--- FAIL\")",
+      "Bash(git stash *)"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

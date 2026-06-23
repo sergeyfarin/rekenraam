@@ -121,6 +121,81 @@ func (s *TransactionService) Transaction(ctx context.Context, transactionID int6
 	return s.enrichOne(ctx, toTransaction(record))
 }
 
+func (s *TransactionService) ListDeletedTransactions(ctx context.Context, input ListDeletedTransactionsInput) (ListDeletedTransactionsResult, error) {
+	limit := input.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	var cursorDeletedAt string
+	var cursorID int64
+	if input.Cursor != "" {
+		var err error
+		cursorDeletedAt, cursorID, err = db.DecodeDeletionCursor(input.Cursor)
+		if err != nil {
+			return ListDeletedTransactionsResult{}, ValidationError{Message: "invalid cursor"}
+		}
+	}
+
+	records, err := s.repository.ListDeletedTransactions(ctx, db.ListDeletedTransactionsParams{
+		BookID:          BookID,
+		CursorDeletedAt: cursorDeletedAt,
+		CursorID:        cursorID,
+		Limit:           limit + 1,
+	})
+	if err != nil {
+		return ListDeletedTransactionsResult{}, fmt.Errorf("list deleted transactions: %w", err)
+	}
+
+	nextCursor := ""
+	if len(records) > limit {
+		records = records[:limit]
+		last := records[len(records)-1]
+		nextCursor = db.EncodeDeletionCursor(last.DeletedAt, last.ID)
+	}
+
+	txns := make([]Transaction, len(records))
+	for i, rec := range records {
+		txns[i] = toTransaction(rec.TransactionRecord)
+	}
+	if err := s.enrichPostings(ctx, txns); err != nil {
+		return ListDeletedTransactionsResult{}, err
+	}
+
+	result := make([]DeletedTransaction, len(records))
+	for i, rec := range records {
+		blocked, err := s.isRestoreBlocked(ctx, txns[i])
+		if err != nil {
+			return ListDeletedTransactionsResult{}, err
+		}
+		result[i] = DeletedTransaction{
+			Transaction:                   txns[i],
+			DeleteReason:                  rec.DeleteReason,
+			RestoreBlockedByReconciliation: blocked,
+		}
+	}
+
+	return ListDeletedTransactionsResult{
+		Transactions: result,
+		NextCursor:   nextCursor,
+	}, nil
+}
+
+// isRestoreBlocked returns true when restoring this soft-deleted posted
+// transaction would cross a reconciliation boundary (period-scoped rule).
+// Voided transactions are always false: they are out of the ledger and
+// restoring them only makes the row visible again.
+func (s *TransactionService) isRestoreBlocked(ctx context.Context, txn Transaction) (bool, error) {
+	if txn.Status == "voided" {
+		return false, nil
+	}
+	refs, err := s.periodScopedRefsFromTransaction(ctx, txn)
+	if err != nil {
+		return false, fmt.Errorf("check restore guard: %w", err)
+	}
+	return len(refs) > 0, nil
+}
+
 func (s *TransactionService) enrichOne(ctx context.Context, txn Transaction) (Transaction, error) {
 	slice := []Transaction{txn}
 	if err := s.enrichPostings(ctx, slice); err != nil {
