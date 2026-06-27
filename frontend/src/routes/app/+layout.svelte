@@ -10,6 +10,7 @@
   import Tags from '@lucide/svelte/icons/tags';
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import Receipt from '@lucide/svelte/icons/receipt';
+  import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -80,6 +81,7 @@
   const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
   const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
   const isTransactionsRoute = $derived($page.url.pathname.startsWith('/app/transactions'));
+  const isImportRoute = $derived($page.url.pathname.startsWith('/app/import'));
   const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
 
   const headerTitle = $derived(
@@ -89,9 +91,11 @@
         ? m.categories_title()
         : isTransactionsRoute
           ? m.transactions_page_title()
-          : isSettingsRoute
-            ? m.settings_title()
-            : m.app_shell_header_title()
+          : isImportRoute
+            ? m.import_title()
+            : isSettingsRoute
+              ? m.settings_title()
+              : m.app_shell_header_title()
   );
   const headerCopy = $derived(
     isAccountsRoute
@@ -100,9 +104,11 @@
         ? m.categories_shell_copy()
         : isTransactionsRoute
           ? m.transactions_page_copy()
-          : isSettingsRoute
-            ? m.settings_shell_copy()
-            : m.app_shell_header_copy()
+          : isImportRoute
+            ? m.import_shell_copy()
+            : isSettingsRoute
+              ? m.settings_shell_copy()
+              : m.app_shell_header_copy()
   );
 
   $effect(() => {
@@ -237,6 +243,18 @@
         >
           <Receipt size={16} aria-hidden="true" />
           {m.app_shell_nav_transactions()}
+        </a>
+        <a
+          href="/app/import"
+          aria-current={isImportRoute ? 'page' : undefined}
+          class:bg-selected={isImportRoute}
+          class:text-selected-foreground={isImportRoute}
+          class:bg-transparent={!isImportRoute}
+          class:text-foreground={!isImportRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <ArrowDownToLine size={16} aria-hidden="true" />
+          {m.import_nav()}
         </a>
         <a
           href="/app/settings"

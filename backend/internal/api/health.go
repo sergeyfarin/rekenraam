@@ -14,10 +14,10 @@ type healthResponse struct {
 
 func RegisterRoutes(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService) {
 
-	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
+	RegisterRoutesWithAuth(mux, logger, setupService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, HandlerOptions{})
 }
 
-func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, settingsService *app.SettingsService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, payeeService *app.PayeeService, transactionService *app.TransactionService, pricingService *app.PricingService, investmentService *app.InvestmentService, options HandlerOptions) {
+func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, settingsService *app.SettingsService, bookService *app.BookService, currencyService *app.CurrencyService, institutionService *app.InstitutionService, accountService *app.AccountService, tagService *app.TagService, categoryService *app.CategoryService, payeeService *app.PayeeService, transactionService *app.TransactionService, pricingService *app.PricingService, investmentService *app.InvestmentService, importService *app.ImportService, options HandlerOptions) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -169,6 +169,15 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("POST /api/v1/investments/event-suggestions/{suggestion_id}/accept", acceptInvestmentEventSuggestion(logger, authService, investmentService, options))
 		mux.HandleFunc("POST /api/v1/investments/event-suggestions/{suggestion_id}/ignore", ignoreInvestmentEventSuggestion(logger, authService, investmentService, options))
 		mux.HandleFunc("PUT /api/v1/investments/automation-rules", saveInvestmentAutomationRules(logger, authService, investmentService, options))
+	}
+	if authService != nil && importService != nil {
+		mux.HandleFunc("POST /api/v1/imports", startImport(logger, authService, importService, options))
+		mux.HandleFunc("GET /api/v1/imports", listImportBatches(logger, authService, importService))
+		mux.HandleFunc("GET /api/v1/imports/{batch_id}", getImportBatch(logger, authService, importService))
+		mux.HandleFunc("PATCH /api/v1/imports/{batch_id}", patchImportBatch(logger, authService, importService, options))
+		mux.HandleFunc("POST /api/v1/imports/{batch_id}/preview-commit", previewCommitImportBatch(logger, authService, importService))
+		mux.HandleFunc("POST /api/v1/imports/{batch_id}/commit", commitImportBatch(logger, authService, importService, options))
+		mux.HandleFunc("POST /api/v1/imports/{batch_id}/discard", discardImportBatch(logger, authService, importService, options))
 	}
 }
 

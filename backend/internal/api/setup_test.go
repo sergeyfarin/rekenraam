@@ -303,7 +303,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, db.NewCommodityRepository(database))
 	pricingService := app.NewPricingService(db.NewPricingRepository(database))
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, nil, options), database
+	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, nil, nil, options), database
 }
 
 func setSameOrigin(req *http.Request) {

@@ -1,0 +1,546 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+)
+
+var ErrImportBatchNotFound = errors.New("import batch not found")
+
+type ImportRepository struct {
+	database *sql.DB
+}
+
+func NewImportRepository(database *sql.DB) *ImportRepository {
+	return &ImportRepository{database: database}
+}
+
+// --- Record types ---
+
+type ImportBatchRecord struct {
+	ID               int64
+	BookID           int64
+	SourceKind       string
+	ProfileID        sql.NullInt64
+	Status           string
+	OriginalFilename string
+	SourceMetaJSON   string
+	CreatedAt        string
+}
+
+type ImportBatchEventRecord struct {
+	ID           int64
+	BatchID      int64
+	EventKind    string
+	DetailJSON   string
+	AuditEventID sql.NullInt64
+	CreatedAt    string
+}
+
+type ImportStagedRowRecord struct {
+	ID                    int64
+	BatchID               int64
+	BookID                int64
+	RowIndex              int
+	DedupeFingerprint     string
+	RawJSON               string
+	NormalizedJSON        string
+	DedupeStatus          string
+	ResolutionJSON        string
+	CommitStatus          string
+	CommittedTransactionID sql.NullInt64
+	CommitError           sql.NullString
+}
+
+type ImportCommitIdentityRecord struct {
+	ID                    int64
+	BookID                int64
+	DedupeFingerprint     string
+	CommittedTransactionID int64
+	SourceKind            string
+	AccountID             int64
+	CreatedAt             string
+}
+
+// --- Param types ---
+
+type CreateImportBatchParams struct {
+	BookID           int64
+	SourceKind       string
+	ProfileID        sql.NullInt64
+	OriginalFilename string
+	SourceMetaJSON   string
+	CreatedAt        string
+	// Audit
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+}
+
+type CreateImportStagedRowParams struct {
+	BatchID           int64
+	BookID            int64
+	RowIndex          int
+	DedupeFingerprint string
+	RawJSON           string
+	NormalizedJSON    string
+	DedupeStatus      string
+	ResolutionJSON    string
+}
+
+type UpdateImportBatchStatusParams struct {
+	BatchID    int64
+	Status     string
+	EventKind  string
+	DetailJSON string
+	// Audit (optional — some events carry an audit_event_id)
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OccurredAt    string
+}
+
+type UpdateImportStagedRowResolutionParams struct {
+	RowID          int64
+	DedupeStatus   string
+	ResolutionJSON string
+}
+
+type CommitImportStagedRowParams struct {
+	RowID                 int64
+	CommitStatus          string
+	CommittedTransactionID sql.NullInt64
+	CommitError           sql.NullString
+}
+
+type CreateImportCommitIdentityParams struct {
+	BookID                int64
+	DedupeFingerprint     string
+	CommittedTransactionID int64
+	SourceKind            string
+	AccountID             int64
+	CreatedAt             string
+}
+
+type ListImportBatchesParams struct {
+	BookID int64
+	Limit  int
+	// Cursor pagination: (created_at DESC, id DESC)
+	CursorCreatedAt string
+	CursorID        int64
+}
+
+type ListImportStagedRowsParams struct {
+	BatchID int64
+	Limit   int
+	// Cursor: row_index ASC
+	CursorRowIndex int
+	CursorID       int64
+}
+
+// --- Batch operations ---
+
+func (r *ImportRepository) CreateImportBatch(ctx context.Context, params CreateImportBatchParams) (ImportBatchRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("begin create import batch: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return ImportBatchRecord{}, err
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "import",
+		Operation:     "import.batch.create",
+		Reason:        "import batch created",
+	})
+	if err != nil {
+		return ImportBatchRecord{}, err
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO import_batches (book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at)
+		VALUES (?, ?, ?, 'previewing', ?, ?, ?)
+	`, params.BookID, params.SourceKind, params.ProfileID, params.OriginalFilename, params.SourceMetaJSON, params.CreatedAt)
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("insert import batch: %w", err)
+	}
+
+	batchID, err := result.LastInsertId()
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("read import batch id: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO import_batch_events (batch_id, event_kind, detail_json, audit_event_id, created_at)
+		VALUES (?, 'created', '{}', ?, ?)
+	`, batchID, auditEventID, params.CreatedAt); err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("insert import batch event: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("commit create import batch: %w", err)
+	}
+	committed = true
+
+	return ImportBatchRecord{
+		ID:               batchID,
+		BookID:           params.BookID,
+		SourceKind:       params.SourceKind,
+		ProfileID:        params.ProfileID,
+		Status:           "previewing",
+		OriginalFilename: params.OriginalFilename,
+		SourceMetaJSON:   params.SourceMetaJSON,
+		CreatedAt:        params.CreatedAt,
+	}, nil
+}
+
+func (r *ImportRepository) ImportBatchByID(ctx context.Context, bookID, batchID int64) (ImportBatchRecord, error) {
+	var rec ImportBatchRecord
+	err := r.database.QueryRowContext(ctx, `
+		SELECT id, book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at
+		FROM import_batches
+		WHERE id = ? AND book_id = ?
+	`, batchID, bookID).Scan(
+		&rec.ID, &rec.BookID, &rec.SourceKind, &rec.ProfileID, &rec.Status,
+		&rec.OriginalFilename, &rec.SourceMetaJSON, &rec.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ImportBatchRecord{}, ErrImportBatchNotFound
+	}
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("read import batch: %w", err)
+	}
+	return rec, nil
+}
+
+func (r *ImportRepository) ListImportBatches(ctx context.Context, params ListImportBatchesParams) ([]ImportBatchRecord, error) {
+	limit := params.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if params.CursorCreatedAt != "" && params.CursorID > 0 {
+		rows, err = r.database.QueryContext(ctx, `
+			SELECT id, book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at
+			FROM import_batches
+			WHERE book_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, params.BookID, params.CursorCreatedAt, params.CursorCreatedAt, params.CursorID, limit)
+	} else {
+		rows, err = r.database.QueryContext(ctx, `
+			SELECT id, book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at
+			FROM import_batches
+			WHERE book_id = ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, params.BookID, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list import batches: %w", err)
+	}
+	defer rows.Close()
+
+	var records []ImportBatchRecord
+	for rows.Next() {
+		var rec ImportBatchRecord
+		if err := rows.Scan(
+			&rec.ID, &rec.BookID, &rec.SourceKind, &rec.ProfileID, &rec.Status,
+			&rec.OriginalFilename, &rec.SourceMetaJSON, &rec.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan import batch: %w", err)
+		}
+		records = append(records, rec)
+	}
+	return records, rows.Err()
+}
+
+func (r *ImportRepository) UpdateImportBatchStatus(ctx context.Context, params UpdateImportBatchStatusParams) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin update import batch status: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	result, err := tx.ExecContext(ctx, `
+		UPDATE import_batches SET status = ? WHERE id = ?
+	`, params.Status, params.BatchID)
+	if err != nil {
+		return fmt.Errorf("update import batch status: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return ErrImportBatchNotFound
+	}
+
+	occurredAt := params.OccurredAt
+	var auditEventID sql.NullInt64
+	if params.ActorUserID > 0 && occurredAt != "" {
+		eid, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID:        0,
+			ActorUserID:   params.ActorUserID,
+			AuthSessionID: params.AuthSessionID,
+			OccurredAt:    occurredAt,
+			RequestID:     params.RequestID,
+			OriginType:    "import",
+			Operation:     "import.batch." + params.EventKind,
+			Reason:        params.EventKind,
+		})
+		if err != nil {
+			return err
+		}
+		auditEventID = sql.NullInt64{Int64: eid, Valid: true}
+	}
+
+	detailJSON := params.DetailJSON
+	if detailJSON == "" {
+		detailJSON = "{}"
+	}
+	eventCreatedAt := occurredAt
+	if eventCreatedAt == "" {
+		eventCreatedAt = params.OccurredAt
+	}
+	// Use a deterministic timestamp fallback by querying batch created_at
+	if eventCreatedAt == "" {
+		_ = r.database.QueryRowContext(ctx, `SELECT created_at FROM import_batches WHERE id = ?`, params.BatchID).Scan(&eventCreatedAt)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO import_batch_events (batch_id, event_kind, detail_json, audit_event_id, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, params.BatchID, params.EventKind, detailJSON, auditEventID, eventCreatedAt); err != nil {
+		return fmt.Errorf("insert import batch event: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit update import batch status: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+// --- Staged row operations ---
+
+func (r *ImportRepository) InsertImportStagedRows(ctx context.Context, rows []CreateImportStagedRowParams) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin insert staged rows: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO import_staged_rows
+			(batch_id, book_id, row_index, dedupe_fingerprint, raw_json, normalized_json, dedupe_status, resolution_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare insert staged row: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, row := range rows {
+		dedupeStatus := row.DedupeStatus
+		if dedupeStatus == "" {
+			dedupeStatus = "new"
+		}
+		resolutionJSON := row.ResolutionJSON
+		if resolutionJSON == "" {
+			resolutionJSON = "{}"
+		}
+		if _, err := stmt.ExecContext(ctx,
+			row.BatchID, row.BookID, row.RowIndex, row.DedupeFingerprint,
+			row.RawJSON, row.NormalizedJSON, dedupeStatus, resolutionJSON,
+		); err != nil {
+			return fmt.Errorf("insert staged row %d: %w", row.RowIndex, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit insert staged rows: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params ListImportStagedRowsParams) ([]ImportStagedRowRecord, error) {
+	limit := params.Limit
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+
+	var dbRows *sql.Rows
+	var err error
+
+	if params.CursorRowIndex > 0 || params.CursorID > 0 {
+		dbRows, err = r.database.QueryContext(ctx, `
+			SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
+			       raw_json, normalized_json, dedupe_status, resolution_json,
+			       commit_status, committed_transaction_id, commit_error
+			FROM import_staged_rows
+			WHERE batch_id = ? AND (row_index > ? OR (row_index = ? AND id > ?))
+			ORDER BY row_index ASC, id ASC
+			LIMIT ?
+		`, params.BatchID, params.CursorRowIndex, params.CursorRowIndex, params.CursorID, limit)
+	} else {
+		dbRows, err = r.database.QueryContext(ctx, `
+			SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
+			       raw_json, normalized_json, dedupe_status, resolution_json,
+			       commit_status, committed_transaction_id, commit_error
+			FROM import_staged_rows
+			WHERE batch_id = ?
+			ORDER BY row_index ASC, id ASC
+			LIMIT ?
+		`, params.BatchID, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list staged rows: %w", err)
+	}
+	defer dbRows.Close()
+
+	var records []ImportStagedRowRecord
+	for dbRows.Next() {
+		var rec ImportStagedRowRecord
+		if err := dbRows.Scan(
+			&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
+			&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
+			&rec.CommitStatus, &rec.CommittedTransactionID, &rec.CommitError,
+		); err != nil {
+			return nil, fmt.Errorf("scan staged row: %w", err)
+		}
+		records = append(records, rec)
+	}
+	return records, dbRows.Err()
+}
+
+func (r *ImportRepository) UpdateImportStagedRowResolution(ctx context.Context, params UpdateImportStagedRowResolutionParams) error {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE import_staged_rows
+		SET dedupe_status = ?, resolution_json = ?
+		WHERE id = ?
+	`, params.DedupeStatus, params.ResolutionJSON, params.RowID)
+	if err != nil {
+		return fmt.Errorf("update staged row resolution: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *ImportRepository) CommitImportStagedRow(ctx context.Context, params CommitImportStagedRowParams) error {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE import_staged_rows
+		SET commit_status = ?, committed_transaction_id = ?, commit_error = ?
+		WHERE id = ?
+	`, params.CommitStatus, params.CommittedTransactionID, params.CommitError, params.RowID)
+	if err != nil {
+		return fmt.Errorf("commit staged row: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// --- Commit identity operations ---
+
+func (r *ImportRepository) FindCommitIdentity(ctx context.Context, bookID int64, dedupeFingerprint string) (ImportCommitIdentityRecord, bool, error) {
+	var rec ImportCommitIdentityRecord
+	err := r.database.QueryRowContext(ctx, `
+		SELECT id, book_id, dedupe_fingerprint, committed_transaction_id, source_kind, account_id, created_at
+		FROM import_commit_identities
+		WHERE book_id = ? AND dedupe_fingerprint = ?
+	`, bookID, dedupeFingerprint).Scan(
+		&rec.ID, &rec.BookID, &rec.DedupeFingerprint, &rec.CommittedTransactionID,
+		&rec.SourceKind, &rec.AccountID, &rec.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ImportCommitIdentityRecord{}, false, nil
+	}
+	if err != nil {
+		return ImportCommitIdentityRecord{}, false, fmt.Errorf("find commit identity: %w", err)
+	}
+	return rec, true, nil
+}
+
+func (r *ImportRepository) CreateCommitIdentity(ctx context.Context, tx *sql.Tx, params CreateImportCommitIdentityParams) error {
+	_, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO import_commit_identities
+			(book_id, dedupe_fingerprint, committed_transaction_id, source_kind, account_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.DedupeFingerprint, params.CommittedTransactionID,
+		params.SourceKind, params.AccountID, params.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("create commit identity: %w", err)
+	}
+	return nil
+}
+
+func (r *ImportRepository) DB() *sql.DB {
+	return r.database
+}
+
+// CountStagedRowsByCommitStatus returns counts by commit_status for a batch.
+func (r *ImportRepository) CountStagedRowsByCommitStatus(ctx context.Context, batchID int64) (map[string]int, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT commit_status, COUNT(*) FROM import_staged_rows WHERE batch_id = ? GROUP BY commit_status
+	`, batchID)
+	if err != nil {
+		return nil, fmt.Errorf("count staged rows: %w", err)
+	}
+	defer rows.Close()
+
+	counts := map[string]int{}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("scan count: %w", err)
+		}
+		counts[status] = count
+	}
+	return counts, rows.Err()
+}
