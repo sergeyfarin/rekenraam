@@ -79,6 +79,92 @@ client) and was deferred as a known gap. Needs: path items for all 7 import rout
 replacing the handwritten `frontend/src/lib/api/imports.ts` interfaces. Conflicts with
 the OpenAPI-first convention (`docs/conventions.md` line 189).
 
+### T-08 No encrypted-secret store for reusable third-party credentials `[ ]`
+**File:** `backend/internal/config/config.go`, `backend/internal/app/auth.go`.
+
+The repo stores passwords as one-way argon2 *hashes* and the only third-party key
+(`OPEN_EXCHANGE_RATES_APP_ID`) as an **env var**. There is no facility to store a
+*reusable, reversible* secret a user pastes at runtime and we must replay to a
+provider (e.g. a Trading 212 API key). Online import (R7) needs one.
+**Planned fix:** `internal/secretbox` (AES-256-GCM, stdlib only) + a
+`REKENRAAM_SECRET_KEY` env var, designed in `docs/trading212-import-plan.md`
+(Slice 1). Built once, reused by every online provider. Listed here so the gap is
+visible outside the Trading 212 plan.
+
+### B-T212-INVST Trading 212 investment lots not imported `[ ]`
+**File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.
+
+Online import (R7, Trading 212) imports **cash-account movements** only. Instrument
+buy/sell fills are flagged `needs_attention` and not booked as lots, because the
+investments ledger UI does not exist yet — the same stance QIF takes on
+`!Type:Invst`. Revisit after the investments UI ships.
+
+### B-T212-SCHED Trading 212 scheduled auto-refresh `[ ]`
+**File:** `docs/trading212-import-plan.md` (Slice 4).
+
+R7 ships **manual "refresh now"** on the durable queue. A per-connection scheduled
+auto-refresh (daily domain trigger enqueuing `import.fetch.trading212`) is a thin
+follow-up on the same machinery — deferred to keep the first online slice small.
+
+### T-09 Durable work queue does not coalesce duplicate enqueues `[ ]`
+**File:** `backend/internal/db/background_work.go:27` (`EnqueueBackgroundWork`).
+
+`EnqueueBackgroundWork` is a plain `INSERT` — no uniqueness constraint and no
+`WHERE NOT EXISTS` on `(book_id, kind, payload)`. The FX-refresh plan
+(`docs/fx-refresh-implementation-plan.md`, Slice 1) describes "enqueue/coalesce"
+but only enqueue shipped; FX tolerates it because coverage work is idempotent.
+**Impact:** any caller that must not run twice concurrently (e.g. Trading 212
+"refresh now", T212 plan) has to guard at the service layer instead. **Fix:**
+add a partial unique index on un-completed work `(book_id, kind, payload_json)
+WHERE status IN ('pending','running')` and make enqueue `INSERT … ON CONFLICT DO
+NOTHING`, returning the existing item. Then the service-layer guards become
+defence-in-depth rather than the only protection.
+
+### T-10 Generic work queue methods live on `PricingRepository` `[ ]`
+**File:** `backend/internal/db/background_work.go` (all methods are
+`func (r *PricingRepository) …`).
+
+The queue is generic (`kind`-dispatched) but its repository methods hang off
+`*PricingRepository`. Any second consumer (the Trading 212 import worker, T212
+plan Slice 3) would have to depend on the pricing repository — a wrong dependency
+edge (`import → pricing`). **Fix (pure move):** extract a standalone
+`*db.BackgroundWorkRepository` over the same `*sql.DB`; have `PricingRepository`
+embed/delegate to it so existing call sites are untouched. Prerequisite for the
+import fetch worker.
+
+### I-01 Explicit lot allocations bypass the cost-basis method `[ ]`
+**File:** `backend/internal/db/investments.go:899` (`disposeLotsWithAuditTx`),
+`backend/internal/app/investments.go:802` (sell path passes `Allocations`).
+
+FIFO is enforced only on the **implicit** disposal path (`ORDER BY opened_on, id`,
+`ErrInsufficientLots` guards oversell). When a sell request carries explicit
+`LotAllocations`, the backend disposes exactly those lots with **no validation**
+that the selection is permitted for the account's cost-basis method — a client can
+sell newest-first under a "FIFO" account. Not reachable today (no sell UI), but a
+**hard gate before the investments sell UI** (`docs/investments-plan.md` Slice 1).
+**Fix:** derive the allocation server-side from the method for fifo/lifo; allow
+explicit allocations only for `specific_lot`, still validated for ownership/open
+status/quantity.
+
+### I-02 `lifo` / `average_cost` cost-basis methods accepted but not implemented `[ ]`
+**File:** `backend/internal/app/investments.go:1267` (validation),
+`backend/internal/db/investments.go:899` (disposal only does FIFO).
+
+The cost-basis method is validated against `{fifo, lifo, average_cost,
+specific_lot}` and stored on a profile, but **disposal only ever does FIFO**. A
+user can save a "LIFO" profile and a sell silently disposes FIFO — a
+correctness/trust bug. **Fix (investments plan Slice 1):** ship `fifo` +
+`specific_lot` working; make `lifo`/`average_cost` return a clear `NOT_IMPLEMENTED`
+error at profile-save time rather than silently doing FIFO.
+
+### I-03 Implement remaining cost-basis methods (lifo, average_cost) `[ ]`
+**File:** `backend/internal/db/investments.go` (`disposeLotsWithAuditTx`).
+
+Follow-up to I-02: implement `lifo` (`ORDER BY opened_on DESC, id DESC`) and
+`average_cost` (weighted-average disposal cost) once the read-side reporting
+semantics are decided (`docs/investments-plan.md` risk 2). Until then they are
+gated by I-02's error.
+
 ---
 
 ## Resolved (kept for traceability)

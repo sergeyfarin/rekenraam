@@ -118,7 +118,7 @@ Last reconciled with the codebase: 2026-06-27 (import Slice 1 added).
 |---|---|---|
 | Buy/sell with commodity-trading balancing | 🟡 | `app/investments.go`; lossless implied-price rounding (half-up). |
 | Dividend & reinvested-dividend (income/withholding defaults) | 🟡 | Shared input validation; commodity-consistency guarded. |
-| Lots & cost basis foundations | 🟦 | FIFO default intended; verify lot-matching enforcement before UI. |
+| Lots & cost basis foundations | 🟦 | FIFO enforced on the implicit path; **two gaps found** before UI: explicit allocations bypass the method (I-01), `lifo`/`average_cost` accepted-but-not-implemented (I-02). See `docs/investments-plan.md` Slice 1. |
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
 | **Investments UI** | ⬜ | |
 
@@ -136,3 +136,7 @@ Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, reconcile UI, reports UI,
 pricing UI, investments UI.
+
+Online import (R7) is planned but not started: Trading 212 is the first provider
+(`docs/trading212-import-plan.md`), which also introduces the `internal/secretbox`
+encrypted credential store the repo does not yet have.

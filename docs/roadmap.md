@@ -129,6 +129,12 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
 ### R7. Online ingestion + payee/category cleanup
 - Online sources implement the same adapter contract, driven by the durable work
   queue (ADR 0010) so refreshes are restart-safe — same model as FX coverage.
+- **First provider: Trading 212** (token-based public API, no OAuth/PSD2). Proves
+  the online model end-to-end: encrypted credential storage, durable polling,
+  provider-id dedupe, native-currency money. **Full design:
+  `docs/trading212-import-plan.md`.** Introduces the reusable `internal/secretbox`
+  credential store (the repo has no encrypted-secret store today) used by every
+  future online provider.
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
 
@@ -161,14 +167,19 @@ Backends exist; this is about exposing and completing them.
 Source assignment, manual price/FX entry, refresh history, source health — all
 have APIs (`/pricing/*`) and no screens yet.
 
-### R12. Investments UI + gains reporting
-- Holdings, lots, buy/sell/dividend entry over the existing investment service.
-- Verify FIFO lot-matching is enforced server-side before exposing sell flows
-  (gains must be computed, not free-form input).
+### R12. Investments UI + gains reporting — **next major feature** (gates Trading 212 import)
+- Backend is substantial and wired (24 routes); the work is **UI + a correctness
+  gate**. **Full design: `docs/investments-plan.md`.**
+- FIFO lot-matching verified: enforced on the implicit path, but explicit lot
+  allocations bypass the cost-basis method (I-01) and `lifo`/`average_cost` are
+  accepted-but-not-implemented (I-02). Both must be closed before the sell UI.
+- Holdings, lots, buy/sell/dividend entry over the existing investment service;
+  gains server-computed, never free-form.
 - Realized/unrealized gains reports; multi-currency reporting; report snapshots
   where reproducibility matters.
 - Corporate actions: provider events → reviewable suggestions; explicit
   automation rules required before auto-posting.
+- **Then** return to online import (R7 / Trading 212), lifting `B-T212-INVST`.
 
 ---
 

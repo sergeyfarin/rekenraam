@@ -57,7 +57,10 @@
       "Bash(git stash *)",
       "Bash(git rm *)",
       "Bash(grep -c '^```' docs/import-plan.md)",
-      "Bash(echo \"fences: $\\(grep -c '^```' docs/import-plan.md\\) \\(even=ok\\)\")"
+      "Bash(echo \"fences: $\\(grep -c '^```' docs/import-plan.md\\) \\(even=ok\\)\")",
+      "Bash(grep '\\\\.go$')",
+      "Bash(cd /home/coder/Repos/rekenraam/backend *)",
+      "Read(//home/coder/Repos/docs/**)"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",
