@@ -104,6 +104,7 @@ type UpdateImportBatchStatusParams struct {
 
 type UpdateImportStagedRowResolutionParams struct {
 	RowID          int64
+	BatchID        int64
 	DedupeStatus   string
 	ResolutionJSON string
 }
@@ -451,8 +452,8 @@ func (r *ImportRepository) UpdateImportStagedRowResolution(ctx context.Context, 
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE import_staged_rows
 		SET dedupe_status = ?, resolution_json = ?
-		WHERE id = ?
-	`, params.DedupeStatus, params.ResolutionJSON, params.RowID)
+		WHERE id = ? AND batch_id = ?
+	`, params.DedupeStatus, params.ResolutionJSON, params.RowID, params.BatchID)
 	if err != nil {
 		return fmt.Errorf("update staged row resolution: %w", err)
 	}
@@ -467,7 +468,19 @@ func (r *ImportRepository) UpdateImportStagedRowResolution(ctx context.Context, 
 }
 
 func (r *ImportRepository) CommitImportStagedRow(ctx context.Context, params CommitImportStagedRowParams) error {
-	result, err := r.database.ExecContext(ctx, `
+	return commitImportStagedRowExec(ctx, r.database, params)
+}
+
+func (r *ImportRepository) CommitImportStagedRowInTx(ctx context.Context, tx *sql.Tx, params CommitImportStagedRowParams) error {
+	return commitImportStagedRowExec(ctx, tx, params)
+}
+
+type execContexter interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func commitImportStagedRowExec(ctx context.Context, db execContexter, params CommitImportStagedRowParams) error {
+	result, err := db.ExecContext(ctx, `
 		UPDATE import_staged_rows
 		SET commit_status = ?, committed_transaction_id = ?, commit_error = ?
 		WHERE id = ?
@@ -506,8 +519,10 @@ func (r *ImportRepository) FindCommitIdentity(ctx context.Context, bookID int64,
 	return rec, true, nil
 }
 
+var ErrCommitIdentityConflict = errors.New("commit identity already exists for a different transaction")
+
 func (r *ImportRepository) CreateCommitIdentity(ctx context.Context, tx *sql.Tx, params CreateImportCommitIdentityParams) error {
-	_, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO import_commit_identities
 			(book_id, dedupe_fingerprint, committed_transaction_id, source_kind, account_id, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
@@ -515,6 +530,23 @@ func (r *ImportRepository) CreateCommitIdentity(ctx context.Context, tx *sql.Tx,
 		params.SourceKind, params.AccountID, params.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("create commit identity: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("create commit identity rows affected: %w", err)
+	}
+	if n == 0 {
+		// Row already existed (race or retry). Verify it points to the same transaction.
+		var existingTxnID int64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT committed_transaction_id FROM import_commit_identities
+			WHERE book_id = ? AND dedupe_fingerprint = ?
+		`, params.BookID, params.DedupeFingerprint).Scan(&existingTxnID); err != nil {
+			return fmt.Errorf("verify commit identity: %w", err)
+		}
+		if existingTxnID != params.CommittedTransactionID {
+			return ErrCommitIdentityConflict
+		}
 	}
 	return nil
 }

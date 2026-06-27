@@ -7,8 +7,9 @@
   import Panel from '$lib/components/panel.svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import { accountsQueryOptions } from '$lib/api/accounts';
+  import { currenciesQueryOptions } from '$lib/api/currencies';
+  import { categoriesQueryOptions } from '$lib/api/categories';
   import {
     startImport,
     getImportBatch,
@@ -41,6 +42,7 @@
   let rowResolutions = $state<Map<number, ImportResolution>>(new Map());
   let globalAccountId = $state<number | undefined>(undefined);
   let globalCommodityId = $state<number | undefined>(undefined);
+  let globalCategoryId = $state<number | undefined>(undefined);
 
   // Commit step
   let committing = $state(false);
@@ -59,9 +61,11 @@
 
   const accountsQuery = createQuery(() => accountsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
+  const categoriesQuery = createQuery(() => categoriesQueryOptions());
 
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
   const currencies = $derived(currenciesQuery.data?.currencies ?? []);
+  const categories = $derived(categoriesQuery.data?.categories ?? []);
 
   // ── Upload ─────────────────────────────────────────────────────────
   function handleFileChange(e: Event) {
@@ -105,7 +109,8 @@
       if (row.dedupe_status === 'excluded') continue;
       updateResolution(row.id, {
         account_id: globalAccountId,
-        commodity_id: globalCommodityId
+        commodity_id: globalCommodityId,
+        category_id: globalCategoryId
       });
     }
   }
@@ -250,9 +255,9 @@
       </p>
     {/if}
 
-    <!-- Global account/currency assignment -->
+    <!-- Global account/currency/category assignment -->
     <Panel>
-      <p class="text-sm font-semibold text-foreground">Apply to all rows</p>
+      <p class="text-sm font-semibold text-foreground">{m.import_preview_apply_all()}</p>
       <div class="mt-3 flex flex-wrap gap-3">
         <div class="flex flex-col gap-1">
           <label class="text-xs font-medium text-muted" for="global-account">
@@ -286,13 +291,29 @@
           </select>
         </div>
 
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-medium text-muted" for="global-category">
+            {m.import_preview_category_label()}
+          </label>
+          <select
+            id="global-category"
+            class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+            bind:value={globalCategoryId}
+          >
+            <option value={undefined}>{m.import_preview_category_placeholder()}</option>
+            {#each categories as category}
+              <option value={category.id}>{category.name}</option>
+            {/each}
+          </select>
+        </div>
+
         <div class="flex items-end">
           <button
             type="button"
             class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-medium text-foreground transition hover:bg-control-hover"
             onclick={applyGlobalAccount}
           >
-            Apply to all
+            {m.import_preview_apply_all()}
           </button>
         </div>
       </div>
@@ -311,7 +332,8 @@
               <th class="px-4 py-3 font-semibold text-muted">{m.import_preview_col_dedupe()}</th>
               <th class="px-4 py-3 font-semibold text-muted">{m.import_preview_account_label()}</th>
               <th class="px-4 py-3 font-semibold text-muted">{m.import_preview_currency_label()}</th>
-              <th class="px-4 py-3 font-semibold text-muted">Exclude</th>
+              <th class="px-4 py-3 font-semibold text-muted">{m.import_preview_col_category()}</th>
+              <th class="px-4 py-3 font-semibold text-muted">{m.import_preview_col_exclude()}</th>
             </tr>
           </thead>
           <tbody>
@@ -369,6 +391,25 @@
                       <option value="">—</option>
                       {#each currencies as currency}
                         <option value={currency.id}>{currency.code}</option>
+                      {/each}
+                    </select>
+                  {:else}
+                    <span class="text-xs text-muted">—</span>
+                  {/if}
+                </td>
+                <td class="px-4 py-2.5">
+                  {#if !isDuplicate}
+                    <select
+                      class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
+                      value={res.category_id}
+                      onchange={(e) =>
+                        updateResolution(row.id, {
+                          category_id: Number((e.currentTarget as HTMLSelectElement).value) || undefined
+                        })}
+                    >
+                      <option value="">—</option>
+                      {#each categories as category}
+                        <option value={category.id}>{category.name}</option>
                       {/each}
                     </select>
                   {:else}

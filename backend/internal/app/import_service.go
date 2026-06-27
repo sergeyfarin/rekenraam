@@ -242,6 +242,7 @@ func (s *ImportService) PatchImportBatch(ctx context.Context, input PatchImportB
 	for _, patch := range input.RowResolutions {
 		if err := s.repository.UpdateImportStagedRowResolution(ctx, db.UpdateImportStagedRowResolutionParams{
 			RowID:          patch.RowID,
+			BatchID:        input.BatchID,
 			DedupeStatus:   patch.DedupeStatus,
 			ResolutionJSON: patch.ResolutionJSON,
 		}); err != nil {
@@ -452,33 +453,37 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
-		// Record commit identity for idempotency.
+		// Record commit identity + mark row committed in a single tx.
+		// This ensures that if we crash after identity write, the staged row is also
+		// marked committed, so a retry sees commit_status=committed and skips it.
 		database := s.repository.DB()
 		tx, err := database.BeginTx(ctx, nil)
 		if err != nil {
 			return result, fmt.Errorf("begin commit identity tx row %d: %w", row.ID, err)
 		}
-		if err := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
+		identityErr := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
 			BookID:                 BookID,
 			DedupeFingerprint:      row.DedupeFingerprint,
 			CommittedTransactionID: txn.ID,
 			SourceKind:             batch.SourceKind,
 			AccountID:              resolution.AccountID,
 			CreatedAt:              nowStr,
-		}); err != nil {
+		})
+		if identityErr != nil {
 			_ = tx.Rollback()
-			return result, fmt.Errorf("create commit identity row %d: %w", row.ID, err)
+			return result, fmt.Errorf("create commit identity row %d: %w", row.ID, identityErr)
 		}
-		if err := tx.Commit(); err != nil {
-			return result, fmt.Errorf("commit identity tx row %d: %w", row.ID, err)
-		}
-
-		if err := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+		rowErr := s.repository.CommitImportStagedRowInTx(ctx, tx, db.CommitImportStagedRowParams{
 			RowID:                  row.ID,
 			CommitStatus:           "committed",
 			CommittedTransactionID: sql.NullInt64{Int64: txn.ID, Valid: true},
-		}); err != nil {
-			return result, fmt.Errorf("mark row committed %d: %w", row.ID, err)
+		})
+		if rowErr != nil {
+			_ = tx.Rollback()
+			return result, fmt.Errorf("mark row committed %d: %w", row.ID, rowErr)
+		}
+		if err := tx.Commit(); err != nil {
+			return result, fmt.Errorf("commit identity tx row %d: %w", row.ID, err)
 		}
 		result.CommittedCount++
 	}
@@ -613,15 +618,22 @@ func parseResolutionJSON(resolutionJSON string) (ImportRowResolution, error) {
 // For a simple bank account debit/credit, the two legs are:
 //   - account posting: the signed amount
 //   - category/offset posting: the negated amount (expense/income/transfer)
+//
+// When the row has QIF splits, each split becomes its own offset posting.
 func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowResolution) (TransactionInput, error) {
-	// Parse normalized JSON for date, amount, etc.
+	// Parse normalized JSON for date, amount, splits, etc.
 	var normalized struct {
-		Date        string `json:"date"`
-		Amount      string `json:"amount"`
-		PayeeHint   string `json:"payee_hint"`
-		Memo        string `json:"memo"`
-		ExternalRef string `json:"external_ref"`
+		Date         string `json:"date"`
+		Amount       string `json:"amount"`
+		PayeeHint    string `json:"payee_hint"`
+		Memo         string `json:"memo"`
+		ExternalRef  string `json:"external_ref"`
 		TransferHint string `json:"transfer_hint"`
+		Splits       []struct {
+			CategoryHint string `json:"category_hint"`
+			Amount       string `json:"amount"`
+			Memo         string `json:"memo"`
+		} `json:"splits"`
 	}
 	if err := json.Unmarshal([]byte(row.NormalizedJSON), &normalized); err != nil {
 		return TransactionInput{}, fmt.Errorf("parse normalized json: %w", err)
@@ -650,20 +662,42 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 		Memo:          normalized.Memo,
 	}
 
-	// Posting 2: the offset (category or transfer account), negated.
-	negCoeff := exact.Coefficient(new(big.Int).Neg(coeff.BigInt()).String())
-	var posting2 PostingInput
-	if resolution.CategoryID != nil {
-		posting2 = PostingInput{
+	var offsetPostings []PostingInput
+
+	if len(normalized.Splits) > 0 {
+		// Splits: one offset posting per split line, each with its own amount.
+		for _, split := range normalized.Splits {
+			splitCoeff, splitScale, err := parseDecimalAmount(split.Amount)
+			if err != nil {
+				return TransactionInput{}, fmt.Errorf("parse split amount %q: %w", split.Amount, err)
+			}
+			negSplitCoeff := exact.Coefficient(new(big.Int).Neg(splitCoeff.BigInt()).String())
+			if resolution.CategoryID == nil {
+				return TransactionInput{}, fmt.Errorf("missing category/transfer resolution for split")
+			}
+			offsetPostings = append(offsetPostings, PostingInput{
+				AccountID:     *resolution.CategoryID,
+				QuantityValue: negSplitCoeff,
+				QuantityScale: splitScale,
+				CommodityID:   resolution.CommodityID,
+				Memo:          split.Memo,
+			})
+		}
+	} else {
+		// No splits: single offset posting (category or transfer), negated.
+		negCoeff := exact.Coefficient(new(big.Int).Neg(coeff.BigInt()).String())
+		if resolution.CategoryID == nil {
+			return TransactionInput{}, fmt.Errorf("missing category/transfer resolution")
+		}
+		offsetPostings = append(offsetPostings, PostingInput{
 			AccountID:     *resolution.CategoryID,
 			QuantityValue: negCoeff,
 			QuantityScale: scale,
 			CommodityID:   resolution.CommodityID,
-		}
-	} else {
-		// No category resolved yet — cannot build balanced entry.
-		return TransactionInput{}, fmt.Errorf("missing category/transfer resolution")
+		})
 	}
+
+	postings := append([]PostingInput{posting1}, offsetPostings...)
 
 	payeeName := resolution.PayeeName
 	if payeeName == "" {
@@ -683,7 +717,7 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 			{
 				EntryDate: date,
 				EntryKind: "main",
-				Postings:  []PostingInput{posting1, posting2},
+				Postings:  postings,
 			},
 		},
 	}

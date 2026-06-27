@@ -15,7 +15,8 @@
   "import_upload_ms_money_steps": "In MS Money: open the account → File → Export → choose Loose QIF → save and upload here.",
 
   "import_preview_title": "Preview import",
-  "import_preview_copy": "Review the transactions below. Assign an account and currency to each import, then click Commit.",
+  "import_preview_copy": "Review the transactions below. Assign an account, currency, and default category to each import, then click Commit.",
+  "import_preview_apply_all": "Apply to all rows",
   "import_preview_rows_found": "{count} transactions found",
   "import_preview_col_date": "Date",
   "import_preview_col_payee": "Payee",
@@ -33,6 +34,8 @@
   "import_preview_currency_placeholder": "Select currency…",
   "import_preview_category_label": "Default category",
   "import_preview_category_placeholder": "Select category…",
+  "import_preview_col_category": "Category",
+  "import_preview_col_exclude": "Exclude",
   "import_preview_warnings_title": "Parsing warnings",
   "import_preview_no_rows": "No transactions found in the file.",
   "import_preview_loading": "Loading preview…",
