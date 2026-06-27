@@ -146,28 +146,35 @@ sell newest-first under a "FIFO" account. Not reachable today (no sell UI), but 
 explicit allocations only for `specific_lot`, still validated for ownership/open
 status/quantity.
 
-### I-02 `lifo` / `average_cost` cost-basis methods accepted but not implemented `[ ]`
+### I-02 Implement all four cost-basis methods + 3-tier method selection `[ ]`
 **File:** `backend/internal/app/investments.go:1267` (validation),
-`backend/internal/db/investments.go:899` (disposal only does FIFO).
+`backend/internal/db/investments.go:899` (`disposeLotsWithAuditTx`, only does FIFO),
+`backend/internal/app/investments.go` (`CreateHoldingAccount`, no method today).
 
 The cost-basis method is validated against `{fifo, lifo, average_cost,
-specific_lot}` and stored on a profile, but **disposal only ever does FIFO**. A
-user can save a "LIFO" profile and a sell silently disposes FIFO — a
-correctness/trust bug. **Fix (investments plan Slice 1):** ship `fifo` +
-`specific_lot` working; reject `lifo`/`average_cost` with a clear `NOT_IMPLEMENTED`
-error **at the sell/disposal path, not only at profile-save**. The schema CHECK
-permits all four values (`migrations/0001_initial_schema.sql:1017`) and existing/
-manually-inserted rows may already hold `lifo`/`average_cost`, so a profile-save
-guard alone still lets those fall through to FIFO at sell time. Disposal-path
-rejection is the actual correctness guarantee.
+specific_lot}` and stored on a profile, but **disposal only ever does FIFO** — a
+"LIFO" profile silently disposes FIFO (correctness/trust bug). **Decision (product):
+implement all four**, not gate. **Fix (investments plan Slice 1, see "Cost-basis
+methods"):** implement `lifo` (`ORDER BY opened_on DESC, id DESC`), `average_cost`
+(weighted-average, per-lot representation — model 2), and `specific_lot` alongside
+`fifo`; add **3-tier method selection** (per-transaction override → per-account
+default → global default), which needs an account-level method link
+(`CreateHoldingAccount` takes none today) and an explicit method field on the
+sell/sell-preview input. The disposal path still rejects any value outside the
+implemented set loudly (defence for future schema additions). One shared resolver +
+disposal calc used by preview and commit so they never diverge.
 
-### I-03 Implement remaining cost-basis methods (lifo, average_cost) `[ ]`
-**File:** `backend/internal/db/investments.go` (`disposeLotsWithAuditTx`).
+### I-03 Multi-method analytical gains reporting `[ ]`
+**File:** `docs/investments-plan.md` ("Cost-basis methods → Future"), Slice 4.
 
-Follow-up to I-02: implement `lifo` (`ORDER BY opened_on DESC, id DESC`) and
-`average_cost` (weighted-average disposal cost) once the read-side reporting
-semantics are decided (`docs/investments-plan.md` risk 2). Until then they are
-gated by I-02's error.
+Tax vs. performance reporting can need *different* cost-basis methods. This is
+**read-side only**: the authoritative method (I-02) drives lot disposal + the gain
+that posts to the ledger; analytical reports re-derive realized/unrealized gains
+under alternative methods from the immutable lot+disposal history **without
+posting**. Data-model requirement enforced now: keep full per-lot acquisition +
+disposal history (already true; do not collapse lots irreversibly — a reason to
+prefer the per-lot average-cost model). The reporting itself is designed when
+Slice 4's gains reporting is specified.
 
 ---
 

@@ -72,9 +72,96 @@ server-side before exposing sell flows." That verification is done — and it fo
    `{fifo, lifo, average_cost, specific_lot}` (`app/investments.go:1267`) and
    stored on a profile, but **disposal only ever does FIFO**. A user can save a
    "LIFO" profile and a sell will silently dispose FIFO — a correctness/trust bug.
+   **Resolution (per product decision):** implement all four authoritative methods
+   in Slice 1 rather than gating — see "Cost-basis methods" — plus a 3-tier
+   (global → account → per-transaction) method selection.
 
 These must be resolved (implement or constrain) **before** Slice 3 (sell UI).
-The cheapest honest fix is in Slice 1; see there.
+The honest fix is in Slice 1; see there.
+
+---
+
+## Cost-basis methods (model + 3-tier selection)
+
+The feature supports **four authoritative disposal methods** — `fifo`, `lifo`,
+`average_cost`, `specific_lot` — each of which actually consumes lots and posts the
+realized gain. There is exactly **one authoritative method per sale**: the disposal
+physically reduces specific lot quantities and the ledger is double-entry, so a
+single sale cannot post two contradictory cost bases. (Multi-method *reporting* is a
+separate, deferred concern — see "Future" below.)
+
+### 3-tier method selection
+
+The method effective for a given sale resolves by precedence, most specific wins:
+
+```
+per-transaction override   (this sale only; optional)
+        ↓ falls back to
+account default            (per holding account; optional)
+        ↓ falls back to
+global default             (book-wide; the existing default cost_basis_profile)
+```
+
+What exists vs. what Slice 1 adds:
+
+- **Global default — exists.** `DefaultCostBasisProfile` /
+  `EnsureDefaultCostBasisProfile` (`backend/internal/db/investments.go:544`) already
+  seed a default FIFO profile per book. Keep as the base tier.
+- **Account default — new.** `CreateHoldingAccount`
+  (`backend/internal/app/investments.go`) takes **no** method today. Add an optional
+  cost-basis method (or `cost_basis_profile_id`) on the holding account so a "T212
+  ISA" account can default to, say, average-cost while the rest of the book is FIFO.
+  Store it on the account (migration), nullable → "inherit global".
+- **Per-transaction override — new field.** The sell input carries `LotAllocations`
+  but no explicit *method*. Add an optional `cost_basis_method` to the sell (and
+  sell-preview) input; when set it overrides both defaults for that sale only.
+  `specific_lot` is effectively always a per-transaction choice (you pick lots),
+  but an explicit method field makes fifo/lifo/average overridable per sale too.
+- **Resolver** — one small server-side function `resolveCostBasisMethod(accountID,
+  txnOverride)` used by **both** sell-preview and sell-commit so the previewed and
+  posted method are always identical.
+
+### `average_cost` representation (decide consciously)
+
+Two valid models; pick one and document it, because it changes the lot read model
+the UI renders:
+
+1. **Pooled (Section-104-style):** maintain a single pooled cost + pooled quantity
+   per (account, instrument); a sale disposes at the pool's average and reduces the
+   pool. Individual lots collapse into the pool. Simplest for average-cost
+   jurisdictions; but it loses per-lot identity, which fifo/specific_lot need — so a
+   book mixing methods across accounts must keep per-lot data and derive the pool.
+2. **Per-lot with averaged disposal cost:** keep individual lots (as today), but on
+   an average-cost sale compute one weighted-average unit cost across open lots and
+   reduce each lot's remaining quantity pro rata at that cost.
+
+**Recommendation:** model (2) — keep per-lot data always, compute the average at
+disposal time. It coexists with fifo/lifo/specific_lot on the same lot tables, keeps
+the existing lot read model intact, and leaves pooled-reporting as a view. Confirm
+against the reporting requirements before implementing (Slice 1 test asserts the
+chosen model against a hand-computed example).
+
+### Future — multi-method *reporting* (deferred, design-only here)
+
+The user noted that tax vs. performance reporting can legitimately need *different*
+methods. This is real but does **not** mean multiple authoritative postings. The
+seam, recorded now so the data model does not preclude it later:
+
+- The **authoritative** method (above) drives lot disposal + the gain that posts to
+  the ledger. Unchanged.
+- **Analytical reports** re-derive realized/unrealized gains under *alternative*
+  methods directly from the immutable **lot + disposal history**, at report time,
+  **without posting** anything. A "gains under average-cost vs. FIFO" comparison is
+  a read-side computation, not a second ledger entry.
+- Requirement on the data model **now**: keep the full per-lot acquisition and
+  disposal history (already true) so any method can be recomputed after the fact.
+  Do **not** collapse lots irreversibly (another reason to prefer average-cost
+  model (2) above). This is the only thing this plan must protect; the reporting
+  itself is designed when Slice 4's gains reporting is specified.
+
+Tracked as **I-03** (was "implement remaining methods"; now repurposed to
+multi-method analytical reporting, since the four authoritative methods ship in
+Slice 1).
 
 ---
 
@@ -98,8 +185,8 @@ Close the gaps above so the read models the UI will show are trustworthy.
     validated for ownership, open status, and sufficient remaining quantity.
 - **New read-only sell-preview endpoint (required by the Slice 3 UI).** Today the
   only sell route is the **mutating** `POST /api/v1/investments/sell`
-  (`api/health.go:163`), and the service computes disposals *while creating the
-  transaction* (`app/investments.go:806`). The plan's "server computes the
+  (`backend/internal/api/health.go:163`), and the service computes disposals *while
+  creating the transaction* (`backend/internal/app/investments.go:806`). The plan's "server computes the
   allocation/gain, the UI previews it" is unsatisfiable without posting first or
   duplicating cost-basis logic in the frontend. **Add `POST
   /api/v1/investments/sell/preview`** (and a `PreviewSell` service method) that runs
@@ -108,29 +195,38 @@ Close the gaps above so the read models the UI will show are trustworthy.
   both call, so preview and commit can never diverge. Returns the derived
   allocation, realized gain, and any `ErrInsufficientLots`/method error the real
   sell would raise.
-- **I-02:** either **implement** `lifo` (`ORDER BY opened_on DESC, id DESC`) and
-  `average_cost` (single synthetic weighted-average cost) in
-  `disposeLotsWithAuditTx`, **or** narrow the *supported* method set to
-  `{fifo, specific_lot}` and make `lifo`/`average_cost` fail loudly. **Decision:**
-  ship `fifo` + `specific_lot` working; reject `lifo`/`average_cost` with a clear
-  `NOT_IMPLEMENTED` error. **Reject at BOTH points, not just profile-save:** the
-  schema CHECK already permits all four values
-  (`0001_initial_schema.sql:1017`) and the validator accepts them
-  (`app/investments.go:1267`), so existing rows and direct DB inserts can already
-  hold `lifo`/`average_cost`. The **sell/disposal path must therefore also reject**
-  an unsupported method — otherwise a pre-existing "LIFO" profile silently disposes
-  FIFO. Profile-save rejection is UX nicety; disposal-path rejection is the
-  correctness guarantee. File the remaining methods as a follow-up (I-03).
-- **Tests:** oversell rejected (`ErrInsufficientLots`); FIFO order asserted;
-  specific-lot disposal validates ownership/quantity; preview and commit produce
-  identical allocations/gains for the same input; **a sell against an account whose
-  stored method is `lifo`/`average_cost` is rejected at the disposal path** (not
-  silently FIFO), even when the profile predates the validator change; gains amounts
-  are server-computed and balance.
-- **Acceptance:** no API call can dispose lots in a way that contradicts the
-  account's declared cost-basis method; unsupported methods fail loudly **at
-  disposal**, regardless of how the profile row was created; the sell preview
-  matches the committed result exactly.
+- **I-02 — implement all four methods (decision: build, don't gate).** All four
+  schema-permitted methods become real, authoritative disposal logic in
+  `disposeLotsWithAuditTx`:
+  - `fifo` — existing (`ORDER BY opened_on, id`).
+  - `lifo` — `ORDER BY opened_on DESC, id DESC` (reverse FIFO).
+  - `average_cost` — dispose against a single weighted-average cost across all open
+    lots (pooled cost ÷ pooled quantity); reduce open-lot remaining quantities pro
+    rata. Decide the **representation** consciously (see "Cost-basis methods"
+    below) — pooled vs. individual-lots-with-averaged-cost — because it affects the
+    lot read model the UI shows.
+  - `specific_lot` — explicit allocations (already planned in I-01).
+  This supersedes the earlier "gate `lifo`/`average_cost`" decision: the user wants
+  all four available. The disposal path still **rejects any value outside the
+  implemented set** loudly (defence for future schema additions), but with all four
+  built nothing is gated in normal use.
+- **3-tier method resolution (new — see "Cost-basis methods" below for the model).**
+  The method for a given sale resolves: **per-transaction override → account default
+  → global default**. Today only the *global* default exists
+  (`DefaultCostBasisProfile`); **holding-account creation takes no method**
+  (`CreateHoldingAccount`, `app/investments.go`) and the sell input has no explicit
+  method field (only `LotAllocations`). Slice 1 adds the account-tier link and the
+  per-sale override field, plus the resolver.
+- **Tests:** oversell rejected (`ErrInsufficientLots`); FIFO **and** LIFO ordering
+  asserted; average-cost disposal matches a hand-computed weighted average;
+  specific-lot validates ownership/quantity; **method resolution** picks
+  transaction-override over account-default over global-default; preview and commit
+  produce identical allocations/gains; a method outside the implemented set is
+  rejected at the disposal path (not silently FIFO); gains are server-computed and
+  balance.
+- **Acceptance:** all four methods post correct, server-computed gains; the
+  effective method follows the 3-tier resolution; an unimplemented method value
+  fails loudly at disposal; the sell preview matches the committed result exactly.
 
 ### Slice 2 — Read-only investments UI (positions, lots, events)
 
@@ -157,10 +253,14 @@ The mutating surface — depends on Slice 1's gate.
 - Buy form (instrument autocomplete → quantity, price, fees, cash account).
 - Sell form: quantity + cost-basis method shown; the UI calls **`POST
   /investments/sell/preview`** (added in Slice 1) as the user edits and renders the
-  server-computed allocation/gain (`specific_lot` shows a lot picker; fifo/lifo show
-  the derived allocation read-only), then commits via `POST /investments/sell`.
-  Realized gain comes from the server, never entered. Preview and commit share the
-  same backend calc, so what the user sees is what posts.
+  server-computed allocation/gain. Per Slice 1's decision (`fifo` + `specific_lot`
+  ship; `lifo`/`average_cost` are gated): **`fifo`** shows the derived allocation
+  read-only; **`specific_lot`** shows a lot picker; an account whose stored method
+  is **`lifo`/`average_cost`** surfaces the planned `NOT_IMPLEMENTED` error inline
+  (the preview endpoint returns it) rather than rendering an allocation — so the UI
+  never implies a method the backend won't honour. Commit goes via `POST
+  /investments/sell`. Realized gain comes from the server, never entered; preview
+  and commit share the same backend calc, so what the user sees is what posts.
 - Dividend + reinvested-dividend forms using existing dividend-defaults
   (income/withholding).
 - **Tests:** e2e buy→sell→gain shows server-computed realized gain; oversell
@@ -213,9 +313,10 @@ With investments working, reopen `docs/trading212-import-plan.md`:
 1. **OpenAPI coverage is absent** (verified 2026-06-27): add all 23 existing
    investment paths (+ the new sell-preview = 24) to `api/openapi/openapi.yaml`
    before Slice 2. Not optional.
-2. **Average-cost semantics** (I-03) if implemented later: single weighted-average
-   lot vs. preserving individual lots with an average disposal cost — decide
-   against the reporting requirements, not ad hoc.
+2. **Average-cost representation:** pooled vs. per-lot-with-averaged-cost — decided
+   in "Cost-basis methods" (recommend per-lot, model 2) but **confirm against the
+   reporting requirements** before implementing in Slice 1; a Slice 1 test pins the
+   chosen model to a hand-computed example.
 3. **Market price availability** for unrealized gains depends on the pricing
    backend having instrument prices (distinct from FX). Read-only UI must degrade
    gracefully (cost-only) when no price exists rather than fabricate one.
