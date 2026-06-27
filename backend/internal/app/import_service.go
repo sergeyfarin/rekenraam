@@ -161,10 +161,7 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		return StartImportResult{}, fmt.Errorf("insert staged rows: %w", err)
 	}
 
-	stagedRows, err := s.repository.ListImportStagedRows(ctx, db.ListImportStagedRowsParams{
-		BatchID: batch.ID,
-		Limit:   len(dbRows) + 1,
-	})
+	stagedRows, err := s.repository.ListAllImportStagedRows(ctx, batch.ID)
 	if err != nil {
 		return StartImportResult{}, fmt.Errorf("list staged rows: %w", err)
 	}
@@ -266,10 +263,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 		return PreviewCommitResult{}, ErrImportBatchNotOpen
 	}
 
-	rows, err := s.repository.ListImportStagedRows(ctx, db.ListImportStagedRowsParams{
-		BatchID: input.BatchID,
-		Limit:   10000,
-	})
+	rows, err := s.repository.ListAllImportStagedRows(ctx, input.BatchID)
 	if err != nil {
 		return PreviewCommitResult{}, fmt.Errorf("list rows for preview: %w", err)
 	}
@@ -338,10 +332,7 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 		return CommitImportBatchResult{}, ErrImportBatchNotOpen
 	}
 
-	rows, err := s.repository.ListImportStagedRows(ctx, db.ListImportStagedRowsParams{
-		BatchID: input.BatchID,
-		Limit:   10000,
-	})
+	rows, err := s.repository.ListAllImportStagedRows(ctx, input.BatchID)
 	if err != nil {
 		return CommitImportBatchResult{}, fmt.Errorf("list rows for commit: %w", err)
 	}
@@ -614,6 +605,18 @@ func parseResolutionJSON(resolutionJSON string) (ImportRowResolution, error) {
 	return r, nil
 }
 
+// resolveOffsetAccount returns the account ID for the second posting leg.
+// Transfer rows use TransferAccountID; ordinary rows use CategoryID.
+func resolveOffsetAccount(resolution ImportRowResolution) (int64, error) {
+	if resolution.TransferAccountID != nil {
+		return *resolution.TransferAccountID, nil
+	}
+	if resolution.CategoryID != nil {
+		return *resolution.CategoryID, nil
+	}
+	return 0, fmt.Errorf("missing category or transfer account resolution")
+}
+
 // buildTransactionSpec constructs a balanced TransactionInput from a staged row + resolution.
 // For a simple bank account debit/credit, the two legs are:
 //   - account posting: the signed amount
@@ -664,19 +667,23 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 
 	var offsetPostings []PostingInput
 
+	// Resolve the offset account: transfer takes priority over category.
+	offsetAccountID, err := resolveOffsetAccount(resolution)
+	if err != nil {
+		return TransactionInput{}, err
+	}
+
 	if len(normalized.Splits) > 0 {
 		// Splits: one offset posting per split line, each with its own amount.
+		// All splits share the same resolved offset account (category or transfer).
 		for _, split := range normalized.Splits {
 			splitCoeff, splitScale, err := parseDecimalAmount(split.Amount)
 			if err != nil {
 				return TransactionInput{}, fmt.Errorf("parse split amount %q: %w", split.Amount, err)
 			}
 			negSplitCoeff := exact.Coefficient(new(big.Int).Neg(splitCoeff.BigInt()).String())
-			if resolution.CategoryID == nil {
-				return TransactionInput{}, fmt.Errorf("missing category/transfer resolution for split")
-			}
 			offsetPostings = append(offsetPostings, PostingInput{
-				AccountID:     *resolution.CategoryID,
+				AccountID:     offsetAccountID,
 				QuantityValue: negSplitCoeff,
 				QuantityScale: splitScale,
 				CommodityID:   resolution.CommodityID,
@@ -684,13 +691,10 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 			})
 		}
 	} else {
-		// No splits: single offset posting (category or transfer), negated.
+		// No splits: single offset posting (category or transfer account), negated.
 		negCoeff := exact.Coefficient(new(big.Int).Neg(coeff.BigInt()).String())
-		if resolution.CategoryID == nil {
-			return TransactionInput{}, fmt.Errorf("missing category/transfer resolution")
-		}
 		offsetPostings = append(offsetPostings, PostingInput{
-			AccountID:     *resolution.CategoryID,
+			AccountID:     offsetAccountID,
 			QuantityValue: negCoeff,
 			QuantityScale: scale,
 			CommodityID:   resolution.CommodityID,

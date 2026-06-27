@@ -398,6 +398,7 @@ func (r *ImportRepository) InsertImportStagedRows(ctx context.Context, rows []Cr
 	return nil
 }
 
+// ListImportStagedRows is the paginated API path; limit is clamped to 500 / default 200.
 func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params ListImportStagedRowsParams) ([]ImportStagedRowRecord, error) {
 	limit := params.Limit
 	if limit <= 0 || limit > 500 {
@@ -433,6 +434,29 @@ func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params List
 	}
 	defer dbRows.Close()
 
+	return scanImportStagedRows(dbRows)
+}
+
+// ListAllImportStagedRows returns every row for a batch with no limit.
+// Only for internal service operations (commit, preview) where partial reads would corrupt state.
+func (r *ImportRepository) ListAllImportStagedRows(ctx context.Context, batchID int64) ([]ImportStagedRowRecord, error) {
+	dbRows, err := r.database.QueryContext(ctx, `
+		SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
+		       raw_json, normalized_json, dedupe_status, resolution_json,
+		       commit_status, committed_transaction_id, commit_error
+		FROM import_staged_rows
+		WHERE batch_id = ?
+		ORDER BY row_index ASC, id ASC
+	`, batchID)
+	if err != nil {
+		return nil, fmt.Errorf("list all staged rows: %w", err)
+	}
+	defer dbRows.Close()
+
+	return scanImportStagedRows(dbRows)
+}
+
+func scanImportStagedRows(dbRows *sql.Rows) ([]ImportStagedRowRecord, error) {
 	var records []ImportStagedRowRecord
 	for dbRows.Next() {
 		var rec ImportStagedRowRecord

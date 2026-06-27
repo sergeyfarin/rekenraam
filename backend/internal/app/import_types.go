@@ -107,12 +107,13 @@ type ImportProfile struct {
 
 // ImportRowResolution carries the user-chosen account/category/payee for a staged row.
 type ImportRowResolution struct {
-	AccountID   int64  `json:"account_id,omitempty"`
-	CommodityID int64  `json:"commodity_id,omitempty"`
-	PayeeID     *int64 `json:"payee_id,omitempty"`
-	PayeeName   string `json:"payee_name,omitempty"`
-	CategoryID  *int64 `json:"category_id,omitempty"`
-	Exclude     bool   `json:"exclude,omitempty"`
+	AccountID         int64  `json:"account_id,omitempty"`
+	CommodityID       int64  `json:"commodity_id,omitempty"`
+	PayeeID           *int64 `json:"payee_id,omitempty"`
+	PayeeName         string `json:"payee_name,omitempty"`
+	CategoryID        *int64 `json:"category_id,omitempty"`
+	TransferAccountID *int64 `json:"transfer_account_id,omitempty"`
+	Exclude           bool   `json:"exclude,omitempty"`
 }
 
 // --- Input types for service methods ---

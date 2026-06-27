@@ -38,6 +38,7 @@ export interface ImportResolution {
   payee_id?: number;
   payee_name?: string;
   category_id?: number;
+  transfer_account_id?: number;
   exclude?: boolean;
 }
 

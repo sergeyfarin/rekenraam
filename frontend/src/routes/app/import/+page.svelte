@@ -38,11 +38,12 @@
   // Preview step
   let previewData = $state<StartImportResponse | null>(null);
   let batchId = $state<number | null>(null);
-  // Per-row resolution: accountId, commodityId, categoryId
+  // Per-row resolution: accountId, commodityId, categoryId / transferAccountId
   let rowResolutions = $state<Map<number, ImportResolution>>(new Map());
   let globalAccountId = $state<number | undefined>(undefined);
   let globalCommodityId = $state<number | undefined>(undefined);
   let globalCategoryId = $state<number | undefined>(undefined);
+  let globalTransferAccountId = $state<number | undefined>(undefined);
 
   // Commit step
   let committing = $state(false);
@@ -103,15 +104,27 @@
     rowResolutions = new Map(rowResolutions); // trigger reactivity
   }
 
+  function isTransferRow(row: ImportStagedRow): boolean {
+    return !!parseNormalized(row).transfer_hint;
+  }
+
   function applyGlobalAccount() {
     if (!previewData) return;
     for (const row of previewData.rows) {
       if (row.dedupe_status === 'excluded') continue;
-      updateResolution(row.id, {
-        account_id: globalAccountId,
-        commodity_id: globalCommodityId,
-        category_id: globalCategoryId
-      });
+      if (isTransferRow(row)) {
+        updateResolution(row.id, {
+          account_id: globalAccountId,
+          commodity_id: globalCommodityId,
+          transfer_account_id: globalTransferAccountId
+        });
+      } else {
+        updateResolution(row.id, {
+          account_id: globalAccountId,
+          commodity_id: globalCommodityId,
+          category_id: globalCategoryId
+        });
+      }
     }
   }
 
@@ -307,6 +320,22 @@
           </select>
         </div>
 
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-medium text-muted" for="global-transfer-account">
+            {m.import_preview_transfer_account_label()}
+          </label>
+          <select
+            id="global-transfer-account"
+            class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+            bind:value={globalTransferAccountId}
+          >
+            <option value={undefined}>{m.import_preview_transfer_account_placeholder()}</option>
+            {#each accounts as account}
+              <option value={account.id}>{account.name ?? account.code}</option>
+            {/each}
+          </select>
+        </div>
+
         <div class="flex items-end">
           <button
             type="button"
@@ -342,6 +371,7 @@
               {@const res = getResolution(row.id)}
               {@const isDuplicate = row.dedupe_status === 'duplicate'}
               {@const isExcluded = res.exclude || row.dedupe_status === 'excluded'}
+              {@const isTransfer = !!norm.transfer_hint}
               <tr
                 class:opacity-40={isDuplicate || isExcluded}
                 class="border-b border-border last:border-b-0"
@@ -399,19 +429,35 @@
                 </td>
                 <td class="px-4 py-2.5">
                   {#if !isDuplicate}
-                    <select
-                      class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
-                      value={res.category_id}
-                      onchange={(e) =>
-                        updateResolution(row.id, {
-                          category_id: Number((e.currentTarget as HTMLSelectElement).value) || undefined
-                        })}
-                    >
-                      <option value="">—</option>
-                      {#each categories as category}
-                        <option value={category.id}>{category.name}</option>
-                      {/each}
-                    </select>
+                    {#if isTransfer}
+                      <select
+                        class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
+                        value={res.transfer_account_id}
+                        onchange={(e) =>
+                          updateResolution(row.id, {
+                            transfer_account_id: Number((e.currentTarget as HTMLSelectElement).value) || undefined
+                          })}
+                      >
+                        <option value="">{norm.transfer_hint} →?</option>
+                        {#each accounts as account}
+                          <option value={account.id}>{account.name ?? account.code}</option>
+                        {/each}
+                      </select>
+                    {:else}
+                      <select
+                        class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
+                        value={res.category_id}
+                        onchange={(e) =>
+                          updateResolution(row.id, {
+                            category_id: Number((e.currentTarget as HTMLSelectElement).value) || undefined
+                          })}
+                      >
+                        <option value="">—</option>
+                        {#each categories as category}
+                          <option value={category.id}>{category.name}</option>
+                        {/each}
+                      </select>
+                    {/if}
                   {:else}
                     <span class="text-xs text-muted">—</span>
                   {/if}
