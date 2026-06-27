@@ -13,7 +13,7 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-27 (import Slice 1 added).
+Last reconciled with the codebase: 2026-06-27 (investments Slice 1 correctness gate complete).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -118,9 +118,12 @@ Last reconciled with the codebase: 2026-06-27 (import Slice 1 added).
 |---|---|---|
 | Buy/sell with commodity-trading balancing | 🟡 | `app/investments.go`; lossless implied-price rounding (half-up). |
 | Dividend & reinvested-dividend (income/withholding defaults) | 🟡 | Shared input validation; commodity-consistency guarded. |
-| Lots & cost basis foundations | 🟦 | FIFO enforced on the implicit path; **two gaps found** before UI: explicit allocations bypass the method (I-01), `lifo`/`average_cost` accepted-but-not-implemented (I-02). See `docs/investments-plan.md` Slice 1. |
+| Cost-basis method: fifo / lifo / average_cost / specific_lot | 🟡 | All four implemented in `db/investments.go`. Explicit allocations blocked for non-specific_lot (I-01 closed). lifo/average_cost now fully implemented (I-02 closed). Per-lot-own-rate average cost; closed lots absorb full remaining cost. |
+| 3-tier cost-basis method resolution | 🟡 | Per-transaction override → account default → global default → "fifo". `resolveCostBasisMethod` in `app/investments.go`. |
+| Account-level cost-basis method | 🟡 | `account_versions.cost_basis_method` (migration 0005). Exposed via account CRUD API. |
+| Sell preview endpoint | 🟡 | `POST /api/v1/investments/sell/preview` — read-only simulation using `SimulateDisposeLots` (always rolls back). Returns allocations + realized gain. |
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
-| **Investments UI** | ⬜ | |
+| **Investments UI** | ⬜ | Sell flow, position view, gains reporting. See `docs/investments-plan.md` Slice 2. |
 
 ## Cross-cutting — ✅ in place
 

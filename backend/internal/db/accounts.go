@@ -49,6 +49,7 @@ type AccountRecord struct {
 	ExternalRefHint       sql.NullString
 	CommentMarkdown       string
 	MetadataJSON          string
+	CostBasisMethod       sql.NullString
 }
 
 type AccountSpec struct {
@@ -69,6 +70,7 @@ type AccountSpec struct {
 	MetadataJSON          string
 	OpenedOn              string
 	ClosedOn              sql.NullString
+	CostBasisMethod       string
 }
 
 type ListAccountsParams struct {
@@ -979,10 +981,11 @@ func insertAccountVersion(ctx context.Context, tx *sql.Tx, params insertAccountV
 			external_ref_hint,
 			comment_markdown,
 			metadata_json,
-			change_audit_event_id
+			change_audit_event_id,
+			cost_basis_method
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
-	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.OpenedOn, nullableStringValue(params.Spec.ClosedOn), params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''))
+	`, params.AccountID, params.VersionSeq, params.EffectiveFrom, params.RecordedAt, params.ChangedByUserID, params.ChangeReason, params.Status, params.Spec.OpenedOn, nullableStringValue(params.Spec.ClosedOn), params.Spec.Code, params.Spec.Name, params.Spec.AccountClass, params.Spec.AccountKind, nullableInt64Value(params.Spec.ParentAccountID), nullableInt64Value(params.Spec.InstitutionID), params.Spec.CountryCode, nullableInt64Value(params.Spec.DefaultCommodityID), nullableInt64Value(params.Spec.QuantityScaleOverride), boolToInt(params.Spec.AllowsPostings), params.Spec.NumberLast4, params.Spec.ExternalRefHint, params.Spec.CommentMarkdown, params.Spec.MetadataJSON, params.ChangeAuditEventID, params.Spec.CostBasisMethod)
 	if err != nil {
 		return AccountRecord{}, fmt.Errorf("insert account version: %w", err)
 	}
@@ -1089,7 +1092,8 @@ func accountSelect(versionSource string, whereClause string) string {
 			av.number_last4,
 			av.external_ref_hint,
 			av.comment_markdown,
-			av.metadata_json
+			av.metadata_json,
+			av.cost_basis_method
 		FROM accounts a
 		JOIN ` + versionSource + ` av ON av.account_id = a.id
 	` + whereClause
@@ -1127,6 +1131,7 @@ func scanAccountRecord(row rowScanner, record *AccountRecord) error {
 		&record.ExternalRefHint,
 		&record.CommentMarkdown,
 		&record.MetadataJSON,
+		&record.CostBasisMethod,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound

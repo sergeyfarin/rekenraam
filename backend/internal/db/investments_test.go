@@ -282,36 +282,38 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 	require.NoError(t, err)
 
 	first, err := repository.DisposeLots(ctx, DisposeLotsParams{
-		BookID:        1,
-		AccountID:     accountID,
-		CommodityID:   instrument.CommodityID,
-		EventDate:     "2026-03-01",
-		QuantityValue: exact.New(1),
-		QuantityScale: 0,
-		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: exact.New(1), QuantityScale: 0}},
-		CreatedAt:     "2026-03-01T09:00:00Z",
-		ActorUserID:   ownerID,
-		OriginType:    "browser_api",
-		Operation:     "investment.lot.dispose",
-		ChangeReason:  "first sale",
+		BookID:          1,
+		AccountID:       accountID,
+		CommodityID:     instrument.CommodityID,
+		EventDate:       "2026-03-01",
+		QuantityValue:   exact.New(1),
+		QuantityScale:   0,
+		CostBasisMethod: "specific_lot",
+		Allocations:     []LotAllocation{{LotID: lot.ID, QuantityValue: exact.New(1), QuantityScale: 0}},
+		CreatedAt:       "2026-03-01T09:00:00Z",
+		ActorUserID:     ownerID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.dispose",
+		ChangeReason:    "first sale",
 	})
 	require.NoError(t, err)
 	require.Len(t, first, 1)
 	assert.Equal(t, int64(33), first[0].CostBasisValue)
 
 	second, err := repository.DisposeLots(ctx, DisposeLotsParams{
-		BookID:        1,
-		AccountID:     accountID,
-		CommodityID:   instrument.CommodityID,
-		EventDate:     "2026-04-01",
-		QuantityValue: exact.New(2),
-		QuantityScale: 0,
-		Allocations:   []LotAllocation{{LotID: lot.ID, QuantityValue: exact.New(2), QuantityScale: 0}},
-		CreatedAt:     "2026-04-01T09:00:00Z",
-		ActorUserID:   ownerID,
-		OriginType:    "browser_api",
-		Operation:     "investment.lot.dispose",
-		ChangeReason:  "final sale",
+		BookID:          1,
+		AccountID:       accountID,
+		CommodityID:     instrument.CommodityID,
+		EventDate:       "2026-04-01",
+		QuantityValue:   exact.New(2),
+		QuantityScale:   0,
+		CostBasisMethod: "specific_lot",
+		Allocations:     []LotAllocation{{LotID: lot.ID, QuantityValue: exact.New(2), QuantityScale: 0}},
+		CreatedAt:       "2026-04-01T09:00:00Z",
+		ActorUserID:     ownerID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.dispose",
+		ChangeReason:    "final sale",
 	})
 	require.NoError(t, err)
 	require.Len(t, second, 1)
@@ -645,4 +647,375 @@ func TestInvestmentInstrumentRejectsDuplicateCommodity(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrInvestmentInstrumentExists))
+}
+
+func createThreeLots(t *testing.T, database *sql.DB, ownerID, currencyID int64) (int64, int64, []InvestmentLotRecord) {
+	t.Helper()
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+	ctx := context.Background()
+	lotData := []struct {
+		date  string
+		qty   int64
+		basis int64
+	}{
+		{"2026-01-01", 100, 10000},
+		{"2026-02-01", 200, 25000},
+		{"2026-03-01", 150, 21000},
+	}
+	var lots []InvestmentLotRecord
+	for i, d := range lotData {
+		lot, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
+			BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+			OpenedOn: d.date, QuantityValue: exact.New(d.qty), QuantityScale: 0,
+			CostBasisValue: d.basis, CostBasisScale: 2, CostCommodityID: currencyID,
+			MetadataJSON: `{}`, CreatedAt: d.date + "T09:00:00Z", CreatedByUserID: ownerID,
+			OriginType: "browser_api", Operation: "investment.lot.acquire",
+			ChangeReason: "test lot " + strconv.Itoa(i+1), EventKind: "acquisition",
+		})
+		require.NoError(t, err)
+		lots = append(lots, lot)
+	}
+	return accountID, instrument.CommodityID, lots
+}
+
+func TestInvestmentLotsDisposeLIFO(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Sell 150 units LIFO: newest lot first (lot[2]=150, qty exactly matches)
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(150), QuantityScale: 0,
+		CostBasisMethod: "lifo", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "lifo sell",
+	})
+	require.NoError(t, err)
+	require.Len(t, disposals, 1)
+	// Should have disposed the newest lot (lot[2])
+	assert.Equal(t, lots[2].ID, disposals[0].LotID)
+	assert.Equal(t, exact.New(150), disposals[0].QuantityValue)
+	assert.Equal(t, int64(21000), disposals[0].CostBasisValue)
+
+	remaining, err := repo.ListLots(ctx, 1, accountID, commodityID)
+	require.NoError(t, err)
+	var open []InvestmentLotRecord
+	for _, l := range remaining {
+		if l.Status == "open" {
+			open = append(open, l)
+		}
+	}
+	require.Len(t, open, 2)
+	assert.Equal(t, lots[0].ID, open[0].ID)
+	assert.Equal(t, lots[1].ID, open[1].ID)
+}
+
+func TestInvestmentLotsDisposeLIFOCrossesLots(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Sell 200 units LIFO: 150 from lot[2], then 50 from lot[1]
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(200), QuantityScale: 0,
+		CostBasisMethod: "lifo", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "lifo cross lots",
+	})
+	require.NoError(t, err)
+	require.Len(t, disposals, 2)
+	assert.Equal(t, lots[2].ID, disposals[0].LotID)
+	assert.Equal(t, exact.New(150), disposals[0].QuantityValue)
+	assert.Equal(t, lots[1].ID, disposals[1].LotID)
+	assert.Equal(t, exact.New(50), disposals[1].QuantityValue)
+
+	// FIFO over same lots would give different first lot
+	remaining, _ := repo.ListLots(ctx, 1, accountID, commodityID)
+	var open []InvestmentLotRecord
+	for _, l := range remaining {
+		if l.Status == "open" {
+			open = append(open, l)
+		}
+	}
+	require.Len(t, open, 2)
+	// lot[0] (oldest) should still be fully open
+	assert.Equal(t, lots[0].ID, open[0].ID)
+	assert.Equal(t, exact.New(100), open[0].RemainingQuantityValue)
+}
+
+func TestInvestmentLotsLIFOAndFIFOProduceDifferentBasis(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Simulate FIFO for 100 units
+	fifoDisposals, err := repo.SimulateDisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(100), QuantityScale: 0,
+		CostBasisMethod: "fifo",
+	})
+	require.NoError(t, err)
+	var fifoBasis int64
+	for _, d := range fifoDisposals {
+		fifoBasis += d.CostBasisValue
+	}
+
+	// Simulate LIFO for 100 units (lots stay unchanged because SimulateDisposeLots rolls back)
+	lifoDisposals, err := repo.SimulateDisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(100), QuantityScale: 0,
+		CostBasisMethod: "lifo",
+	})
+	require.NoError(t, err)
+	var lifoBasis int64
+	for _, d := range lifoDisposals {
+		lifoBasis += d.CostBasisValue
+	}
+
+	assert.NotEqual(t, fifoBasis, lifoBasis, "FIFO and LIFO should produce different cost basis")
+}
+
+func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// pool: qty=450, basis=56000. sell qty=100 (= entire lot[0] of 100 qty).
+	// lot[0] closes fully -> disposed basis = lot[0].costBasis = 10000.
+	// per-lot-own-rate: dispose = lot.costBasis * take / lot.qty (truncate); full close takes entire lot cost.
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(100), QuantityScale: 0,
+		CostBasisMethod: "average_cost", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "avg cost sell",
+	})
+	require.NoError(t, err)
+	var totalDisposedBasis int64
+	for _, d := range disposals {
+		totalDisposedBasis += d.CostBasisValue
+	}
+	assert.Equal(t, int64(10000), totalDisposedBasis)
+
+	// Conservation: remaining basis + disposed = 56000
+	lots, err := repo.ListLots(ctx, 1, accountID, commodityID)
+	require.NoError(t, err)
+	var remainingBasis int64
+	for _, l := range lots {
+		remainingBasis += l.RemainingCostBasisValue
+	}
+	assert.Equal(t, int64(56000), remainingBasis+totalDisposedBasis)
+}
+
+func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// 3 lots of 1 unit each, total basis=10 (minor units) → average_cost sale of 2 units
+	// disposed_basis = 10 * 2 / 3 = 6 (truncate); residual = 0 (6 is exact... let's use 3 lots, basis 10)
+	// Actually: 10*2/3 = 6 (truncate). Per-lot: lot1 takes 1 unit → 10*1/2=5 (wait)
+	// Use: 3 lots of 1 qty, basis=[4,3,3]=10. Sell 2 units avg cost.
+	// disposed_total = 10*2/3 = 6 (truncate). lot1: 6*1/2=3, lot2 (last): 6-3=3.
+	// Remaining: lot3 has remaining_basis = 4 (lot3 untouched).
+	// Total remaining = original - disposed = 10 - 6 = 4.
+	for i, basis := range []int64{4, 3, 3} {
+		_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
+			BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+			OpenedOn: "2026-0" + strconv.Itoa(i+1) + "-01",
+			QuantityValue: exact.New(1), QuantityScale: 0,
+			CostBasisValue: basis, CostBasisScale: 2, CostCommodityID: currencyID,
+			MetadataJSON: `{}`, CreatedAt: "2026-0" + strconv.Itoa(i+1) + "-01T09:00:00Z",
+			CreatedByUserID: ownerID, OriginType: "browser_api",
+			Operation: "investment.lot.acquire", ChangeReason: "residual test",
+			EventKind: "acquisition",
+		})
+		require.NoError(t, err)
+	}
+
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(2), QuantityScale: 0,
+		CostBasisMethod: "average_cost", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "residual conservation test",
+	})
+	require.NoError(t, err)
+	var totalDisposed int64
+	for _, d := range disposals {
+		totalDisposed += d.CostBasisValue
+		assert.GreaterOrEqual(t, d.CostBasisValue, int64(0), "no lot should have negative disposed basis")
+	}
+
+	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	var remainingBasis int64
+	for _, l := range lots {
+		assert.GreaterOrEqual(t, l.RemainingCostBasisValue, int64(0), "no lot should have negative remaining basis")
+		remainingBasis += l.RemainingCostBasisValue
+	}
+	// Pool conservation: remaining + disposed == original total (10)
+	assert.Equal(t, int64(10), remainingBasis+totalDisposed)
+}
+
+func TestInvestmentLotsAverageCostClosedLotHasZeroBasis(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
+		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		OpenedOn: "2026-01-01", QuantityValue: exact.New(10), QuantityScale: 0,
+		CostBasisValue: 5000, CostBasisScale: 2, CostCommodityID: currencyID,
+		MetadataJSON: `{}`, CreatedAt: "2026-01-01T09:00:00Z", CreatedByUserID: ownerID,
+		OriginType: "browser_api", Operation: "investment.lot.acquire",
+		ChangeReason: "close basis test", EventKind: "acquisition",
+	})
+	require.NoError(t, err)
+
+	// Sell all 10 units — lot must close with zero remaining basis
+	_, err = repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(10), QuantityScale: 0,
+		CostBasisMethod: "average_cost", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "close basis",
+	})
+	require.NoError(t, err)
+
+	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	assert.Equal(t, "closed", lots[0].Status)
+	assert.Equal(t, int64(0), lots[0].RemainingCostBasisValue)
+}
+
+func TestInvestmentLotsAverageCostMismatchedScaleReturnsError(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Create two lots with different quantity scales (normally prevented by UI, but we test directly)
+	_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
+		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		OpenedOn: "2026-01-01", QuantityValue: exact.New(100), QuantityScale: 0,
+		CostBasisValue: 10000, CostBasisScale: 2, CostCommodityID: currencyID,
+		MetadataJSON: `{}`, CreatedAt: "2026-01-01T09:00:00Z", CreatedByUserID: ownerID,
+		OriginType: "browser_api", Operation: "investment.lot.acquire",
+		ChangeReason: "scale mismatch lot 1", EventKind: "acquisition",
+	})
+	require.NoError(t, err)
+	// Manually insert a lot with scale=2 to simulate divergence
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO investment_lots (
+			book_id, account_id, commodity_id, cost_commodity_id, opened_on,
+			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
+			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
+			status, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id
+		) VALUES (1, ?, ?, ?, '2026-02-01', 50, 2, 50, 2, 5000, 2, 5000, 2, 'open', '{}', '2026-02-01T09:00:00Z', ?, '2026-02-01T09:00:00Z', ?)
+	`, accountID, instrument.CommodityID, currencyID, ownerID, ownerID)
+	require.NoError(t, err)
+
+	_, err = repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(50), QuantityScale: 0,
+		CostBasisMethod: "average_cost", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "scale mismatch test",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scale")
+}
+
+func TestInvestmentLotsSpecificLotValidatesOwnershipAndQuantity(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Over-allocate a single lot
+	_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(999), QuantityScale: 0,
+		CostBasisMethod: "specific_lot",
+		Allocations: []LotAllocation{{LotID: lots[0].ID, QuantityValue: exact.New(999), QuantityScale: 0}},
+		CreatedAt: "2026-04-01T09:00:00Z", ActorUserID: ownerID,
+		OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "oversell specific",
+	})
+	require.ErrorIs(t, err, ErrInsufficientLots)
+}
+
+func TestInvestmentLotsExplicitAllocationsRejectedForFIFO(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(50), QuantityScale: 0,
+		CostBasisMethod: "fifo",
+		Allocations: []LotAllocation{{LotID: lots[0].ID, QuantityValue: exact.New(50), QuantityScale: 0}},
+		CreatedAt: "2026-04-01T09:00:00Z", ActorUserID: ownerID,
+		OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "fifo explicit reject",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "specific_lot")
+}
+
+func TestInvestmentLotsUnknownMethodReturnsError(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(10), QuantityScale: 0,
+		CostBasisMethod: "mystery_method", CreatedAt: "2026-04-01T09:00:00Z",
+		ActorUserID: ownerID, OriginType: "browser_api",
+		Operation: "investment.lot.dispose", ChangeReason: "unknown method",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not implemented")
+}
+
+func TestInvestmentLotsSimulateDoesNotMutateLots(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	before, err := repo.ListLots(ctx, 1, accountID, commodityID)
+	require.NoError(t, err)
+
+	_, err = repo.SimulateDisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(200), QuantityScale: 0,
+		CostBasisMethod: "fifo",
+	})
+	require.NoError(t, err)
+
+	after, err := repo.ListLots(ctx, 1, accountID, commodityID)
+	require.NoError(t, err)
+	require.Equal(t, len(before), len(after))
+	for i := range before {
+		assert.Equal(t, before[i].RemainingQuantityValue, after[i].RemainingQuantityValue)
+		assert.Equal(t, before[i].RemainingCostBasisValue, after[i].RemainingCostBasisValue)
+		assert.Equal(t, before[i].Status, after[i].Status)
+	}
 }

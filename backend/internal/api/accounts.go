@@ -37,6 +37,7 @@ type accountResponse struct {
 	ChangeReason          string          `json:"change_reason"`
 	CreatedAt             string          `json:"created_at"`
 	UpdatedAt             string          `json:"updated_at"`
+	CostBasisMethod       string          `json:"cost_basis_method,omitempty"`
 }
 
 type accountsResponse struct {
@@ -62,6 +63,7 @@ type accountRequest struct {
 	OpenedOn              string          `json:"opened_on"`
 	EffectiveFrom         string          `json:"effective_from"`
 	ChangeReason          string          `json:"change_reason"`
+	CostBasisMethod       string          `json:"cost_basis_method"`
 }
 
 type accountLifecycleRequest struct {
@@ -187,6 +189,7 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			OpenedOn:              request.OpenedOn,
 			EffectiveFrom:         request.EffectiveFrom,
 			ChangeReason:          request.ChangeReason,
+			CostBasisMethod:       request.CostBasisMethod,
 		})
 		if err != nil {
 			writeAccountServiceError(w, r, logger, "create account", err)
@@ -240,6 +243,7 @@ func updateAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 			OpenedOn:              request.OpenedOn,
 			EffectiveFrom:         request.EffectiveFrom,
 			ChangeReason:          request.ChangeReason,
+			CostBasisMethod:       request.CostBasisMethod,
 		})
 		if err != nil {
 			writeAccountServiceError(w, r, logger, "update account", err)
@@ -455,6 +459,7 @@ func toAccountResponse(account app.Account) accountResponse {
 		ChangeReason:          account.ChangeReason,
 		CreatedAt:             account.CreatedAt,
 		UpdatedAt:             account.UpdatedAt,
+		CostBasisMethod:       account.CostBasisMethod,
 	}
 }
 

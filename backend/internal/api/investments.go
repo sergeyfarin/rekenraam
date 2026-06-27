@@ -67,6 +67,7 @@ type holdingAccountRequest struct {
 	EffectiveFrom         string `json:"effective_from"`
 	QuantityScaleOverride *int   `json:"quantity_scale_override"`
 	ChangeReason          string `json:"change_reason"`
+	CostBasisMethod       string `json:"cost_basis_method"`
 }
 
 type costBasisProfileResponse struct {
@@ -150,6 +151,15 @@ type investmentTradeRequest struct {
 	Status           string                           `json:"status"`
 	LotAllocations   []investmentLotAllocationRequest `json:"lot_allocations"`
 	ChangeReason     string                           `json:"change_reason"`
+	CostBasisMethod  string                           `json:"cost_basis_method"`
+}
+
+type sellPreviewResponse struct {
+	CostBasisMethod string                          `json:"cost_basis_method"`
+	Allocations     []investmentLotDisposalResponse `json:"allocations"`
+	RealizedGain    int64                           `json:"realized_gain"`
+	CashAmountValue int64                           `json:"cash_amount_value"`
+	CashAmountScale int                             `json:"cash_amount_scale"`
 }
 
 type investmentLotAllocationRequest struct {
@@ -428,6 +438,7 @@ func createHoldingAccount(logger *slog.Logger, authService *app.AuthService, inv
 			InstrumentID: request.InstrumentID, Name: request.Name, ParentAccountID: request.ParentAccountID,
 			InstitutionID: request.InstitutionID, OpenedOn: request.OpenedOn, EffectiveFrom: request.EffectiveFrom,
 			QuantityScale: request.QuantityScaleOverride, ChangeReason: request.ChangeReason,
+			CostBasisMethod: request.CostBasisMethod,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "create holding account", err)
@@ -552,6 +563,33 @@ func buyInvestment(logger *slog.Logger, authService *app.AuthService, investment
 
 func sellInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
 	return investmentTradeMutation(logger, authService, investmentService, options, "sell")
+}
+
+func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request investmentTradeRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		input := toInvestmentTradeInput(owner, r, request)
+		preview, err := investmentService.PreviewSell(r.Context(), input)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview sell", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, sellPreviewResponse{
+			CostBasisMethod: preview.CostBasisMethod,
+			Allocations:     toInvestmentLotDisposalResponses(preview.Allocations),
+			RealizedGain:    preview.RealizedGain,
+			CashAmountValue: preview.CashAmountValue,
+			CashAmountScale: preview.CashAmountScale,
+		})
+	}
 }
 
 func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, action string) http.HandlerFunc {
@@ -831,7 +869,7 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 		CashAccountID: request.CashAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 		CashAmountValue: request.CashAmountValue, CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
-		ChangeReason: request.ChangeReason,
+		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
 	}
 }
 

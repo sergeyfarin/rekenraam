@@ -80,6 +80,7 @@ type Account struct {
 	ChangeReason          string
 	CreatedAt             string
 	UpdatedAt             string
+	CostBasisMethod       string
 }
 
 type ListAccountsInput struct {
@@ -114,6 +115,7 @@ type CreateAccountInput struct {
 	OpenedOn              string
 	EffectiveFrom         string
 	ChangeReason          string
+	CostBasisMethod       string
 }
 
 type UpdateAccountInput struct {
@@ -141,6 +143,7 @@ type UpdateAccountInput struct {
 	OpenedOn              string
 	EffectiveFrom         string
 	ChangeReason          string
+	CostBasisMethod       string
 }
 
 type AccountLifecycleInput struct {
@@ -268,6 +271,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 		ExternalRefHint:       input.ExternalRefHint,
 		CommentMarkdown:       input.CommentMarkdown,
 		MetadataJSON:          input.MetadataJSON,
+		CostBasisMethod:       input.CostBasisMethod,
 	})
 	if err != nil {
 		return Account{}, err
@@ -349,6 +353,7 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 		ExternalRefHint:       input.ExternalRefHint,
 		CommentMarkdown:       input.CommentMarkdown,
 		MetadataJSON:          input.MetadataJSON,
+		CostBasisMethod:       input.CostBasisMethod,
 	})
 	if err != nil {
 		return Account{}, err
@@ -616,6 +621,7 @@ type accountSpecInput struct {
 	ExternalRefHint       string
 	CommentMarkdown       string
 	MetadataJSON          string
+	CostBasisMethod       string
 }
 
 func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput) (db.AccountSpec, error) {
@@ -792,6 +798,11 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		return db.AccountSpec{}, err
 	}
 
+	costBasisMethod := strings.TrimSpace(input.CostBasisMethod)
+	if costBasisMethod != "" && !map[string]bool{"fifo": true, "lifo": true, "average_cost": true, "specific_lot": true}[costBasisMethod] {
+		return db.AccountSpec{}, ValidationError{Message: "cost basis method is invalid"}
+	}
+
 	return db.AccountSpec{
 		Code:                  code,
 		Name:                  name,
@@ -808,6 +819,7 @@ func (s *AccountService) accountSpec(ctx context.Context, input accountSpecInput
 		ExternalRefHint:       externalRefHint,
 		CommentMarkdown:       commentMarkdown,
 		MetadataJSON:          metadataJSON,
+		CostBasisMethod:       costBasisMethod,
 	}, nil
 }
 
@@ -1018,6 +1030,7 @@ func toAccount(record db.AccountRecord) Account {
 		ChangeReason:          record.ChangeReason,
 		CreatedAt:             record.CreatedAt,
 		UpdatedAt:             record.RecordedAt,
+		CostBasisMethod:       nullableString(record.CostBasisMethod),
 	}
 }
 

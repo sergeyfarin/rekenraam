@@ -9,7 +9,7 @@ deferred behind (`docs/trading212-import-plan.md`).
 Realises roadmap **R12 (Investments UI + gains reporting)**. Written for the
 Sonnet model to implement, grounded in the actual code as of 2026-06-27.
 
-Status: planning. Not yet started. Last updated 2026-06-27.
+Status: Slice 1 (correctness gate) **complete**. Slice 2 (sell UI) next. Last updated 2026-06-27.
 
 ---
 
@@ -166,7 +166,10 @@ invariants (and test each):
    `pooled_remaining_qty = Σ lot.remaining_quantity` over open lots for
    (account, instrument). The total disposed basis for a sale of quantity `q` is
    `disposed_basis_total = pooled_remaining_basis × q ÷ pooled_remaining_qty`
-   (big.Int, single division, half-up or truncate — pick and pin in a test).
+   (big.Int, single division, **truncate — `Quo`, matching `proratedCostBasis`**;
+   do not switch to half-up here or the residual-assignment rule would need to
+   absorb a negative residual on some inputs — truncate is the safe consistent
+   choice and must be pinned in a test).
 2. **Distribution across lots (FIFO order for determinism):** consume `q` across open
    lots oldest-first (only to decide *which lots' quantity* decrements — the *rate*
    is the pool rate, not each lot's own). Each lot's disposed basis is its share of
@@ -185,12 +188,20 @@ invariants (and test each):
    quantity and basis, so the history remains per-lot and any method can be
    recomputed later (see "Future").
 
+**Scale constraint for average-cost:** `disposeLotTx` already guards
+`quantityScale != lot.RemainingQuantityScale` and returns an error. The
+average-cost path must enforce that all open lots for (account, instrument) share
+the same `quantity_scale` before computing the pool; if scales diverge (unlikely
+given `HoldingAccount.QuantityScaleOverride`, but possible via direct lot edits),
+fail loudly rather than silently mis-compute. A test with mismatched-scale lots
+must confirm the error path.
+
 **Tests (Slice 1):** a 3-lot average-cost sale matches a hand-computed pool average;
 residual lands deterministically and `Σ disposed + Σ remaining == original pool`
 to the minor unit; a sale that exactly closes lots leaves zero remaining basis; a
 sale larger than the pool returns `ErrInsufficientLots`; average-cost and FIFO over
 the same lots produce *different* disposed-basis totals (proving the method actually
-changed behaviour).
+changed behaviour); mismatched quantity scales across open lots produce a hard error.
 
 ### Future — multi-method *reporting* (deferred, design-only here)
 
@@ -263,6 +274,20 @@ Close the gaps above so the read models the UI will show are trustworthy.
   all four available. The disposal path still **rejects any value outside the
   implemented set** loudly (defence for future schema additions), but with all four
   built nothing is gated in normal use.
+- **Required struct changes (name them explicitly so nothing is missed):**
+  - `db.DisposeLotsParams` — add `CostBasisMethod string` (passed through from the
+    resolver; `disposeLotsWithAuditTx` reads it to pick the branch).
+  - `app.InvestmentTradeInput` — add `CostBasisMethod string` (the per-transaction
+    override field from the sell/sell-preview request body).
+  - `app.HoldingAccountInput` — add `CostBasisMethod string` (nullable/optional;
+    empty = inherit global). Stored on the account (migration: add
+    `cost_basis_method TEXT` nullable to `accounts` or a separate
+    `holding_account_settings` table — prefer the accounts table nullable column to
+    avoid a join in the resolver).
+  - The `resolveCostBasisMethod(ctx, accountID, txnOverride string)` function lives
+    in the app layer; it reads the holding account's method (new column) and falls
+    back to `DefaultCostBasisProfile`. Both `Sell` and the new `PreviewSell` call it
+    before constructing `DisposeLotsParams`.
 - **3-tier method resolution (new — see "Cost-basis methods" below for the model).**
   The method for a given sale resolves: **per-transaction override → account default
   → global default**. Today only the *global* default exists
@@ -270,13 +295,18 @@ Close the gaps above so the read models the UI will show are trustworthy.
   (`CreateHoldingAccount`, `app/investments.go`) and the sell input has no explicit
   method field (only `LotAllocations`). Slice 1 adds the account-tier link and the
   per-sale override field, plus the resolver.
+- **Tests (note on existing coverage):** `TestInvestmentLotsProrateRoundingIntoFinalDisposal`
+  (`db/investments_test.go:258`) uses explicit `LotAllocations` and tests the *single-lot*
+  truncation residual path; it does **not** test the multi-lot average-cost pool or
+  LIFO ordering — those are new. Do not mistake existing coverage for the new
+  method tests. The rounding test remains valid and must keep passing.
 - **Tests:** oversell rejected (`ErrInsufficientLots`); FIFO **and** LIFO ordering
   asserted; average-cost disposal matches a hand-computed weighted average;
   specific-lot validates ownership/quantity; **method resolution** picks
   transaction-override over account-default over global-default; preview and commit
   produce identical allocations/gains; a method outside the implemented set is
   rejected at the disposal path (not silently FIFO); gains are server-computed and
-  balance.
+  balance; mismatched quantity scales under average-cost fail loudly.
 - **Acceptance:** all four methods post correct, server-computed gains; the
   effective method follows the 3-tier resolution; an unimplemented method value
   fails loudly at disposal; the sell preview matches the committed result exactly.
@@ -373,3 +403,19 @@ With investments working, reopen `docs/trading212-import-plan.md`:
 3. **Market price availability** for unrealized gains depends on the pricing
    backend having instrument prices (distinct from FX). Read-only UI must degrade
    gracefully (cost-only) when no price exists rather than fabricate one.
+4. **Migration placement for account-level `cost_basis_method`:** the nullable column
+   belongs on **`account_versions`** (not `accounts`), following the existing pattern
+   where all mutable account properties are versioned there. `accounts` is a thin
+   identity table; `account_versions` is append-only and carries the fields. Add
+   `cost_basis_method TEXT` nullable to `account_versions` (migration), add it to
+   `db.AccountSpec` (used by both `CreateAccountParams` and `UpdateAccountParams`)
+   and rebuild the `current_account_versions` view to include the new column.
+   The resolver reads it from `current_account_versions` via the existing
+   `AccountRecord` struct (add the field there too). Changing the account's
+   method creates a new account version (normal versioning behaviour).
+5. **`resolveCostBasisMethod` needs access to `DefaultCostBasisProfile`** (the global
+   tier). `DefaultCostBasisProfile` is a DB method on `InvestmentRepository`, so the
+   resolver lives in the app layer and takes the repository. Ensure `PreviewSell`
+   and `Sell` are both routed through the same resolver function and not
+   copy-pasted — the spec says "shared function so preview and commit never
+   diverge."

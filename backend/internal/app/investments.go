@@ -150,6 +150,7 @@ type HoldingAccountInput struct {
 	EffectiveFrom   string
 	QuantityScale   *int
 	ChangeReason    string
+	CostBasisMethod string
 }
 
 type CostBasisProfile struct {
@@ -236,6 +237,15 @@ type InvestmentTradeInput struct {
 	Status           string
 	LotAllocations   []InvestmentLotAllocationInput
 	ChangeReason     string
+	CostBasisMethod  string
+}
+
+type SellPreviewResult struct {
+	CostBasisMethod string
+	Allocations     []InvestmentLotDisposal
+	RealizedGain    int64
+	CashAmountValue int64
+	CashAmountScale int
 }
 
 type InvestmentLotAllocationInput struct {
@@ -563,6 +573,7 @@ func (s *InvestmentService) CreateHoldingAccount(ctx context.Context, input Hold
 		OpenedOn:              input.OpenedOn,
 		EffectiveFrom:         input.EffectiveFrom,
 		ChangeReason:          input.ChangeReason,
+		CostBasisMethod:       input.CostBasisMethod,
 	})
 }
 
@@ -751,6 +762,70 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
 }
 
+func (s *InvestmentService) resolveCostBasisMethod(ctx context.Context, holdingAccountID int64, txnOverride string) (string, error) {
+	if txnOverride != "" {
+		return txnOverride, nil
+	}
+	account, err := s.accountService.Account(ctx, holdingAccountID)
+	if err == nil && account.CostBasisMethod != "" {
+		return account.CostBasisMethod, nil
+	}
+	profile, err := s.repository.DefaultCostBasisProfile(ctx, BookID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return "fifo", nil
+		}
+		return "", fmt.Errorf("resolve cost basis method: %w", err)
+	}
+	return profile.Method, nil
+}
+
+func (s *InvestmentService) computeSellDisposals(ctx context.Context, input InvestmentTradeInput, method string) ([]db.LotDisposalRecord, error) {
+	allocations := make([]db.LotAllocation, 0, len(input.LotAllocations))
+	for _, a := range input.LotAllocations {
+		allocations = append(allocations, db.LotAllocation{LotID: a.LotID, QuantityValue: a.QuantityValue, QuantityScale: a.QuantityScale})
+	}
+	return s.repository.SimulateDisposeLots(ctx, db.DisposeLotsParams{
+		BookID:          BookID,
+		AccountID:       input.HoldingAccountID,
+		CommodityID:     input.CommodityID,
+		EventDate:       input.TransactionDate,
+		QuantityValue:   input.QuantityValue,
+		QuantityScale:   input.QuantityScale,
+		Allocations:     allocations,
+		CostBasisMethod: method,
+	})
+}
+
+func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTradeInput) (SellPreviewResult, error) {
+	if err := validateTradeInput(input); err != nil {
+		return SellPreviewResult{}, err
+	}
+	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	if err != nil {
+		return SellPreviewResult{}, err
+	}
+	disposals, err := s.computeSellDisposals(ctx, input, method)
+	if err != nil {
+		if errors.Is(err, db.ErrInsufficientLots) {
+			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
+		}
+		return SellPreviewResult{}, fmt.Errorf("preview sell disposals: %w", err)
+	}
+	var totalDisposedBasis int64
+	for _, d := range disposals {
+		totalDisposedBasis += d.CostBasisValue
+	}
+	realizedGain := input.CashAmountValue - totalDisposedBasis
+	return SellPreviewResult{
+		CostBasisMethod: method,
+		Allocations:     toInvestmentLotDisposals(disposals),
+		RealizedGain:    realizedGain,
+		CashAmountValue: input.CashAmountValue,
+		CashAmountScale: input.CashAmountScale,
+	}, nil
+}
+
 func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
 	if err := validateTradeInput(input); err != nil {
 		return InvestmentTradeResult{}, err
@@ -799,25 +874,30 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
 	allocations := make([]db.LotAllocation, 0, len(input.LotAllocations))
 	for _, allocation := range input.LotAllocations {
 		allocations = append(allocations, db.LotAllocation{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
 	}
 	transactionRecord, disposals, err := s.repository.CreateTransactionAndDisposeLots(ctx, transactionParams, db.DisposeLotsParams{
-		BookID:        BookID,
-		AccountID:     input.HoldingAccountID,
-		CommodityID:   input.CommodityID,
-		EventDate:     input.TransactionDate,
-		QuantityValue: input.QuantityValue,
-		QuantityScale: input.QuantityScale,
-		Allocations:   allocations,
-		CreatedAt:     s.now().UTC().Format(time.RFC3339),
-		ActorUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "investment.lot.dispose",
-		ChangeReason:  "disposed lots from sell transaction",
+		BookID:          BookID,
+		AccountID:       input.HoldingAccountID,
+		CommodityID:     input.CommodityID,
+		EventDate:       input.TransactionDate,
+		QuantityValue:   input.QuantityValue,
+		QuantityScale:   input.QuantityScale,
+		Allocations:     allocations,
+		CostBasisMethod: method,
+		CreatedAt:       s.now().UTC().Format(time.RFC3339),
+		ActorUserID:     input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		OriginType:      "browser_api",
+		Operation:       "investment.lot.dispose",
+		ChangeReason:    "disposed lots from sell transaction",
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrInsufficientLots) {

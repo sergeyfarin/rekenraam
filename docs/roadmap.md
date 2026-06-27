@@ -168,11 +168,12 @@ Source assignment, manual price/FX entry, refresh history, source health — all
 have APIs (`/pricing/*`) and no screens yet.
 
 ### R12. Investments UI + gains reporting — **next major feature** (gates Trading 212 import)
-- Backend is substantial and wired (24 routes); the work is **UI + a correctness
-  gate**. **Full design: `docs/investments-plan.md`.**
-- FIFO lot-matching verified: enforced on the implicit path, but explicit lot
-  allocations bypass the cost-basis method (I-01) and `lifo`/`average_cost` are
-  accepted-but-not-implemented (I-02). Both must be closed before the sell UI.
+- **Slice 1 (correctness gate) complete**: all four cost-basis methods implemented
+  (fifo/lifo/average_cost/specific_lot); I-01 and I-02 closed; 3-tier method
+  resolution wired; account-level `cost_basis_method` persisted; sell-preview
+  endpoint live. Full test coverage at db layer. **Full design: `docs/investments-plan.md`.**
+- **Slice 2 (sell UI) next**: holdings view, sell flow using `/investments/sell/preview`
+  for server-computed gain, position-level cost-basis method picker.
 - Holdings, lots, buy/sell/dividend entry over the existing investment service;
   gains server-computed, never free-form.
 - Realized/unrealized gains reports; multi-currency reporting; report snapshots
