@@ -84,11 +84,24 @@ The honest fix is in Slice 1; see there.
 ## Cost-basis methods (model + 3-tier selection)
 
 The feature supports **four authoritative disposal methods** — `fifo`, `lifo`,
-`average_cost`, `specific_lot` — each of which actually consumes lots and posts the
-realized gain. There is exactly **one authoritative method per sale**: the disposal
-physically reduces specific lot quantities and the ledger is double-entry, so a
-single sale cannot post two contradictory cost bases. (Multi-method *reporting* is a
-separate, deferred concern — see "Future" below.)
+`average_cost`, `specific_lot` — each of which consumes lots and **determines the
+realized gain** for the sale. There is exactly **one authoritative method per sale**:
+the disposal physically reduces specific lot quantities, so a single sale cannot have
+two contradictory cost bases. (Multi-method *reporting* is a separate, deferred
+concern — see "Future" below.)
+
+> **What "realized gain" means here today (verified).** The sell transaction posts
+> **four legs** — security out, security→trading, cash in, cash←trading
+> (`backend/internal/app/investments.go:790`) — and there is **no realized
+> gain/loss account**; the account taxonomy has no gain/loss kind
+> (`account_class IN (asset, liability, equity, income, expense)` only). Realized
+> gain is therefore **computed/recorded from the disposal records** (cash proceeds −
+> disposed cost basis), **not posted** to a dedicated gain account. The method drives
+> the *disposed cost basis*, which drives the gain figure shown/stored — it does not
+> add a ledger posting. **Posting realized gains to a gain/loss account is a separate
+> future decision** (needs a new account kind/mapping + a sell transaction-shape
+> change); tracked as **I-04**. This plan computes and surfaces gain; it does not
+> change the transaction shape.
 
 ### 3-tier method selection
 
@@ -121,25 +134,63 @@ What exists vs. what Slice 1 adds:
   txnOverride)` used by **both** sell-preview and sell-commit so the previewed and
   posted method are always identical.
 
-### `average_cost` representation (decide consciously)
+### `average_cost` representation — **DECIDED: per-lot, averaged at disposal (model 2)**
 
-Two valid models; pick one and document it, because it changes the lot read model
-the UI renders:
+This is **decided up front**, not left inside the implementation slice, because the
+math mutates persisted lot state and must not be improvised. Two models were
+considered:
 
-1. **Pooled (Section-104-style):** maintain a single pooled cost + pooled quantity
-   per (account, instrument); a sale disposes at the pool's average and reduces the
-   pool. Individual lots collapse into the pool. Simplest for average-cost
-   jurisdictions; but it loses per-lot identity, which fifo/specific_lot need — so a
-   book mixing methods across accounts must keep per-lot data and derive the pool.
-2. **Per-lot with averaged disposal cost:** keep individual lots (as today), but on
-   an average-cost sale compute one weighted-average unit cost across open lots and
-   reduce each lot's remaining quantity pro rata at that cost.
+1. **Pooled (Section-104-style):** a single pooled cost + quantity per (account,
+   instrument); sales dispose at the pool average and collapse individual lots.
+   Loses per-lot identity that fifo/lifo/specific_lot need on the same tables.
+2. **Per-lot with averaged disposal cost (chosen):** keep individual lots (as
+   today); on an average-cost sale, compute one weighted-average unit cost across
+   open lots and dispose the sold quantity across lots at *that pooled rate*.
 
-**Recommendation:** model (2) — keep per-lot data always, compute the average at
-disposal time. It coexists with fifo/lifo/specific_lot on the same lot tables, keeps
-the existing lot read model intact, and leaves pooled-reporting as a view. Confirm
-against the reporting requirements before implementing (Slice 1 test asserts the
-chosen model against a hand-computed example).
+Model 2 wins: it coexists with the other three methods on the existing
+`investment_lots` tables, keeps the lot read model intact, and leaves any
+pooled-reporting view derivable. **No further confirmation gates Slice 1** — the
+representation is fixed; only the reporting *views* (Slice 4 / I-03) remain open.
+
+### `average_cost` disposal algorithm + persistence invariants (specify, don't improvise)
+
+The existing helper `proratedCostBasis` (`backend/internal/db/investments.go:1599`,
+used by `disposeLotTx`) prorates basis **within a single lot** by truncating integer
+division (`Quo`), and `nextRemainingCost = remaining − disposed` keeps that one lot
+self-consistent. Average-cost is different: it disposes across **multiple** open lots
+at a **pool** rate, so disposed basis must be distributed back over lots **and the
+truncation residual assigned** so nothing leaks. The implementer MUST enforce these
+invariants (and test each):
+
+1. **Pool rate (no float):** `pooled_remaining_basis = Σ lot.remaining_cost_basis`;
+   `pooled_remaining_qty = Σ lot.remaining_quantity` over open lots for
+   (account, instrument). The total disposed basis for a sale of quantity `q` is
+   `disposed_basis_total = pooled_remaining_basis × q ÷ pooled_remaining_qty`
+   (big.Int, single division, half-up or truncate — pick and pin in a test).
+2. **Distribution across lots (FIFO order for determinism):** consume `q` across open
+   lots oldest-first (only to decide *which lots' quantity* decrements — the *rate*
+   is the pool rate, not each lot's own). Each lot's disposed basis is its share of
+   `disposed_basis_total`.
+3. **Residual assignment (exactness):** because integer division truncates, the sum
+   of per-lot disposed basis may be 1..n minor units short of `disposed_basis_total`.
+   Assign the residual deterministically (e.g. to the last lot touched) so that:
+   **`Σ disposed_basis = disposed_basis_total`** exactly, and for every lot
+   **`remaining_cost_basis_new = remaining_cost_basis_old − its_disposed_basis ≥ 0`**.
+4. **Pool conservation (the key invariant):** after the sale,
+   `Σ remaining_cost_basis + disposed_basis_total == pooled_remaining_basis_before`
+   exactly (no minor unit created or destroyed). A lot whose remaining quantity hits
+   zero is `closed`; its remaining basis must be zero at that point.
+5. **Disposal records + events:** each touched lot still writes an
+   `investment_lot_events` `disposal` row (as `disposeLotTx` does) with its share of
+   quantity and basis, so the history remains per-lot and any method can be
+   recomputed later (see "Future").
+
+**Tests (Slice 1):** a 3-lot average-cost sale matches a hand-computed pool average;
+residual lands deterministically and `Σ disposed + Σ remaining == original pool`
+to the minor unit; a sale that exactly closes lots leaves zero remaining basis; a
+sale larger than the pool returns `ErrInsufficientLots`; average-cost and FIFO over
+the same lots produce *different* disposed-basis totals (proving the method actually
+changed behaviour).
 
 ### Future — multi-method *reporting* (deferred, design-only here)
 
@@ -147,12 +198,14 @@ The user noted that tax vs. performance reporting can legitimately need *differe
 methods. This is real but does **not** mean multiple authoritative postings. The
 seam, recorded now so the data model does not preclude it later:
 
-- The **authoritative** method (above) drives lot disposal + the gain that posts to
-  the ledger. Unchanged.
+- The **authoritative** method (above) drives lot disposal and the realized-gain
+  figure computed from it. Unchanged.
 - **Analytical reports** re-derive realized/unrealized gains under *alternative*
   methods directly from the immutable **lot + disposal history**, at report time,
-  **without posting** anything. A "gains under average-cost vs. FIFO" comparison is
-  a read-side computation, not a second ledger entry.
+  **without mutating lots**. A "gains under average-cost vs. FIFO" comparison is a
+  read-side computation. (Neither the authoritative nor the analytical path posts a
+  gain to a ledger account today — gain is computed, not posted; see the realized-
+  gain note above and I-04.)
 - Requirement on the data model **now**: keep the full per-lot acquisition and
   disposal history (already true) so any method can be recomputed after the fact.
   Do **not** collapse lots irreversibly (another reason to prefer average-cost
@@ -201,10 +254,10 @@ Close the gaps above so the read models the UI will show are trustworthy.
   - `fifo` — existing (`ORDER BY opened_on, id`).
   - `lifo` — `ORDER BY opened_on DESC, id DESC` (reverse FIFO).
   - `average_cost` — dispose against a single weighted-average cost across all open
-    lots (pooled cost ÷ pooled quantity); reduce open-lot remaining quantities pro
-    rata. Decide the **representation** consciously (see "Cost-basis methods"
-    below) — pooled vs. individual-lots-with-averaged-cost — because it affects the
-    lot read model the UI shows.
+    lots (pooled cost ÷ pooled quantity). **Representation is decided** (per-lot,
+    model 2) and the **persistence invariants + residual rules are specified** in
+    "Cost-basis methods" above — implement to those exactly; do not improvise the
+    basis distribution.
   - `specific_lot` — explicit allocations (already planned in I-01).
   This supersedes the earlier "gate `lifo`/`average_cost`" decision: the user wants
   all four available. The disposal path still **rejects any value outside the
@@ -253,14 +306,14 @@ The mutating surface — depends on Slice 1's gate.
 - Buy form (instrument autocomplete → quantity, price, fees, cash account).
 - Sell form: quantity + cost-basis method shown; the UI calls **`POST
   /investments/sell/preview`** (added in Slice 1) as the user edits and renders the
-  server-computed allocation/gain. Per Slice 1's decision (`fifo` + `specific_lot`
-  ship; `lifo`/`average_cost` are gated): **`fifo`** shows the derived allocation
-  read-only; **`specific_lot`** shows a lot picker; an account whose stored method
-  is **`lifo`/`average_cost`** surfaces the planned `NOT_IMPLEMENTED` error inline
-  (the preview endpoint returns it) rather than rendering an allocation — so the UI
-  never implies a method the backend won't honour. Commit goes via `POST
-  /investments/sell`. Realized gain comes from the server, never entered; preview
-  and commit share the same backend calc, so what the user sees is what posts.
+  server-computed allocation/gain. All four methods ship (Slice 1): **`fifo`** and
+  **`lifo`** show the derived allocation read-only; **`average_cost`** shows the
+  pooled-average disposed basis + resulting gain read-only; **`specific_lot`** shows
+  a lot picker. The effective method follows the 3-tier resolution, overridable on
+  the form per sale. Commit goes via `POST /investments/sell`. Realized gain comes
+  from the server, never entered; preview and commit share the same backend calc, so
+  what the user sees is what posts. (Gain is *computed/displayed* from the disposal,
+  not posted to a gain account — see "Cost-basis methods".)
 - Dividend + reinvested-dividend forms using existing dividend-defaults
   (income/withholding).
 - **Tests:** e2e buy→sell→gain shows server-computed realized gain; oversell
@@ -313,10 +366,10 @@ With investments working, reopen `docs/trading212-import-plan.md`:
 1. **OpenAPI coverage is absent** (verified 2026-06-27): add all 23 existing
    investment paths (+ the new sell-preview = 24) to `api/openapi/openapi.yaml`
    before Slice 2. Not optional.
-2. **Average-cost representation:** pooled vs. per-lot-with-averaged-cost — decided
-   in "Cost-basis methods" (recommend per-lot, model 2) but **confirm against the
-   reporting requirements** before implementing in Slice 1; a Slice 1 test pins the
-   chosen model to a hand-computed example.
+2. **Realized-gain posting (I-04):** gain is currently *computed* from disposals,
+   not posted to a gain/loss account (none exists in the taxonomy). If product later
+   wants gain as a ledger movement, that is a separate transaction-shape + account-
+   mapping change — scope it with Slice 4 gains reporting, not inside this work.
 3. **Market price availability** for unrealized gains depends on the pricing
    backend having instrument prices (distinct from FX). Read-only UI must degrade
    gracefully (cost-only) when no price exists rather than fabricate one.

@@ -60,7 +60,8 @@
       "Bash(echo \"fences: $\\(grep -c '^```' docs/import-plan.md\\) \\(even=ok\\)\")",
       "Bash(grep '\\\\.go$')",
       "Bash(cd /home/coder/Repos/rekenraam/backend *)",
-      "Read(//home/coder/Repos/docs/**)"
+      "Read(//home/coder/Repos/docs/**)",
+      "Bash(grep -n 'ship `fifo` + `specific_lot`\\\\|gate `lifo`\\\\|fifo. + .specific_lot. working\\\\|NOT_IMPLEMENTED' docs/investments-plan.md)"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

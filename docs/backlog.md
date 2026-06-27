@@ -168,13 +168,28 @@ disposal calc used by preview and commit so they never diverge.
 **File:** `docs/investments-plan.md` ("Cost-basis methods → Future"), Slice 4.
 
 Tax vs. performance reporting can need *different* cost-basis methods. This is
-**read-side only**: the authoritative method (I-02) drives lot disposal + the gain
-that posts to the ledger; analytical reports re-derive realized/unrealized gains
-under alternative methods from the immutable lot+disposal history **without
-posting**. Data-model requirement enforced now: keep full per-lot acquisition +
-disposal history (already true; do not collapse lots irreversibly — a reason to
-prefer the per-lot average-cost model). The reporting itself is designed when
-Slice 4's gains reporting is specified.
+**read-side only**: the authoritative method (I-02) drives lot disposal and the
+realized-gain figure computed from it; analytical reports re-derive
+realized/unrealized gains under alternative methods from the immutable lot+disposal
+history **without mutating lots or posting**. Data-model requirement enforced now:
+keep full per-lot acquisition + disposal history (already true; do not collapse lots
+irreversibly — a reason to prefer the per-lot average-cost model). The reporting
+itself is designed when Slice 4's gains reporting is specified.
+
+### I-04 Realized gain is computed, not posted to a gain/loss account `[ ]`
+**File:** `backend/internal/app/investments.go:790` (sell transaction shape),
+`backend/migrations/0001_initial_schema.sql:224` (account_class enum).
+
+The sell transaction posts four legs (security out, security→trading, cash in,
+cash←trading) and **no realized gain/loss account** — the taxonomy has no gain/loss
+account kind (`account_class IN (asset, liability, equity, income, expense)`).
+Realized gain is **derivable** (cash proceeds − disposed cost basis from the disposal
+records) and the investments plan computes/surfaces it, but it is **not a ledger
+posting**. Posting realized gains (so reports/registers show gain as an income/equity
+movement) would need: a realized-gain account kind or convention, a per-instrument or
+book-level gain-account mapping, and a sell transaction-shape change to add the gain
+leg. Deferred as a conscious product/accounting decision, not an oversight. Revisit
+when gains reporting (Slice 4 / I-03) is specified, since the two interact.
 
 ---
 
