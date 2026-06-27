@@ -54,7 +54,10 @@
       "Bash(cp /home/coder/Repos/rekenraam/frontend/src/paraglide/messages/category_tx_*.js /home/coder/Repos/rekenraam/frontend/src/lib/paraglide/messages/ && ls /home/coder/Repos/rekenraam/frontend/src/lib/paraglide/messages/category_tx*)",
       "Bash(mkdir -p /home/coder/Repos/rekenraam/frontend/src/routes/app/categories/\\\\[id\\\\])",
       "Bash(grep -E \"--- FAIL\")",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(git rm *)",
+      "Bash(grep -c '^```' docs/import-plan.md)",
+      "Bash(echo \"fences: $\\(grep -c '^```' docs/import-plan.md\\) \\(even=ok\\)\")"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

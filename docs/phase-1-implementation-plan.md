@@ -1,8 +1,12 @@
-# Phase 1 Current Plan
+# Phase 1 Implementation Plan (historical — COMPLETE)
 
-Status: canonical near-term implementation tracker. Product requirements remain
-the high-level source of truth; this document owns current execution sequencing
-until Phase 1 is closed.
+Status: **historical.** Phase 1 (books, commodities, accounts, institutions,
+account/institution UI) is complete. This document is kept for the design
+rationale only; it is no longer the active tracker.
+
+- Active "what's next": `docs/roadmap.md`.
+- Active "what's done": `docs/implemented.md`.
+- Product source of truth: `docs/product-requirements.md`.
 
 ## Summary
 

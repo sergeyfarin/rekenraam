@@ -1,8 +1,11 @@
-# Transaction Table Implementation Plan
+# Transaction Table Implementation Plan (historical — COMPLETE)
 
-This plan is written to be executed by an LLM agent step by step. Each step lists
-exact files, the change to make, and a verification command that must pass before
-moving on. Do not skip verification. Every step leaves the app runnable.
+Status: **historical.** All steps (1–9) are DONE — see `docs/implemented.md`
+(Phase 2). Kept for the step-by-step design record and verification notes; it is
+no longer the active tracker. For current work see `docs/roadmap.md`.
+
+This plan was written to be executed step by step. Each step lists exact files,
+the change to make, and a verification command. Every step left the app runnable.
 
 ## Reading order before you start
 

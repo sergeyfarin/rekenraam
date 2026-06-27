@@ -1,0 +1,114 @@
+# Implemented Features
+
+This is the feature ledger: what Rekenraam actually ships today, by area, with
+backend and UI status tracked separately. It replaces the per-step trackers
+(`transaction-table-plan.md`, `phase-1-implementation-plan.md`,
+`setup-auth-implementation-plan.md`, `fx-refresh-implementation-plan.md`) as the
+single answer to "what is done."
+
+- **Source of truth for "what's next":** `docs/roadmap.md`.
+- **Source of truth for product intent and phase boundaries:**
+  `docs/product-requirements.md`.
+- **Technical debt and polish:** `docs/backlog.md`.
+
+Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
+
+Last reconciled with the codebase: 2026-06-27.
+
+## Foundation (Phase 0) — ✅ Complete
+
+| Capability | Status | Notes |
+|---|---|---|
+| SQLite migrations + schema version | ✅ | `backend/migrations/`, auto-run before serving. |
+| Connection PRAGMAs (WAL, FK, busy timeout) | ✅ | `db/sqlite.go`; single-connection contract documented. |
+| Browser first-run setup (owner → book → currencies → system accounts → categories) | ✅ | Persisted `setup_steps`, derived install state. |
+| Auth: Argon2id, sessions, CSRF, origin checks | ✅ | `app/auth.go`, `api/auth.go`; rehash-on-login, dual-scope throttling. |
+| Operator owner-recovery (backup-first, override) | ✅ | `recover-owner` command. |
+| `/api/v1` envelope, error codes, request IDs | ✅ | Inbound `X-Request-ID` honored. |
+| i18n boundary (Paraglide/Inlang) | ✅ | All UI copy and built-in labels keyed. |
+| Light/dark semantic theme tokens | ✅ | `settings/appearance`. |
+| OpenAPI-first contract + generated TS client | ✅ | `api/openapi/`, `frontend/src/lib/api/schema.d.ts`. |
+
+## Books, Commodities, Accounts (Phase 1) — ✅ Complete
+
+| Capability | Status | Notes |
+|---|---|---|
+| Single runtime book (`books.id CHECK (id = 1)`) | ✅ | No book selector by design. |
+| Embedded currency catalog + active-currency derivation | ✅ | Default currency is a preference, not a base currency. |
+| Currency setup & management UI | ✅ | `settings/currencies`. |
+| Commodity metadata (scale, max quantity scale) | ✅ | Lossless precision per ADR 0009. |
+| Institutions: CRUD, archive/restore, versions | ✅ (API) / 🟦 (UI) | Backend + API client complete; standalone management UI minimal. |
+| Accounts: classes, kinds, full lifecycle (close/reopen, archive/restore), versions | ✅ | `app/accounts.go`; append-only versioned tree. |
+| Account list + account detail UI | ✅ | `routes/app/accounts`. |
+| Account creation creates no balances | ✅ | Opening balances require posted transactions. |
+
+## Ledger Transactions (Phase 2) — ✅ Complete
+
+| Capability | Status | Notes |
+|---|---|---|
+| Transactions → versions → journal entries → postings model | ✅ | Immutable versioned ledger; debit-positive sign convention. |
+| Per-commodity, scale-aware double-entry balancing | ✅ | `transactions_validate.go`. |
+| Lifecycle: post, void, unvoid, soft-delete, restore, correct, approve | ✅ | See `docs/transaction-lifecycle` taxonomy. |
+| Same-day ordering (global + per-account register) | ✅ | `transactions_move.go`, day-sequence migration. |
+| Cursor pagination + FTS5 search | ✅ | Sanitized FTS phrase quoting. |
+| Categories as income/expense accounts | ✅ | `routes/app/categories`; built-in keys localized. |
+| Tags & payees: CRUD, archive/restore | ✅ | |
+| Transaction editor (splits, multi-commodity) | ✅ | `transaction-editor.svelte`. |
+| Global transactions page | ✅ | `routes/app/transactions`. |
+| Account register route | ✅ | `routes/app/accounts/[id]/register`. |
+| Category transactions route | ✅ | `routes/app/categories/[id]`. |
+| Trash / recovery (soft-delete browse + guarded restore) | ✅ | `settings/trash`. |
+
+## Reconciliation (Phase 3) — 🟦 Backend complete, UI pending
+
+| Capability | Status | Notes |
+|---|---|---|
+| Reconciliation sessions, checkpoints, finish/void | 🟡 | `app/reconciliation.go`; API complete. |
+| Period-scoped reconciliation guard (edit/void/restore/move) | ✅ | Wired across all mutation paths; balance assertion enforced in DB tx. |
+| Reconciliation-impact preview (named-checkpoint warnings) | ✅ | Surfaced in the transaction editor warning modal. |
+| **Dedicated reconcile workflow screen** | ⬜ | No reconcile UI route yet — see roadmap. |
+
+## Reports (Phase 3) — 🟡 Backend only
+
+| Capability | Status | Notes |
+|---|---|---|
+| Net worth read model | 🟡 | `GET /ledger/net-worth`; no reports UI route. |
+| Account balances read model | 🟡 | `GET /ledger/account-balances`; overflow-guarded (422 on precision limit). |
+| Category totals (spending) read model | 🟡 | `GET /ledger/category-totals`. |
+| **Reports UI (net worth / cashflow / spending)** | ⬜ | No `routes/app/reports`. |
+| Cashflow read model | ⬜ | Not yet a dedicated endpoint. |
+
+## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
+
+| Capability | Status | Notes |
+|---|---|---|
+| Durable background work queue (lease, retry, resume) | ✅ | ADR 0010; restart-safe. |
+| Demand-driven FX coverage (activate currency / backdated posting) | ✅ | Drafts/previews do not trigger downloads. |
+| Price observations (manual, provider, FX, trade-implied) | ✅ | Source/quote-type/adjustment-basis series; valuation date preserved. |
+| Pricing sources, policy, source assignments, health | 🟡 | Full API (`/pricing/*`); no management UI. |
+| Manual/scheduled refresh runs + history | 🟡 | API only. |
+| **Pricing/FX management UI** | ⬜ | |
+
+## Investments (Phase 6) — 🟡 Backend only
+
+| Capability | Status | Notes |
+|---|---|---|
+| Buy/sell with commodity-trading balancing | 🟡 | `app/investments.go`; lossless implied-price rounding (half-up). |
+| Dividend & reinvested-dividend (income/withholding defaults) | 🟡 | Shared input validation; commodity-consistency guarded. |
+| Lots & cost basis foundations | 🟦 | FIFO default intended; verify lot-matching enforcement before UI. |
+| Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
+| **Investments UI** | ⬜ | |
+
+## Cross-cutting — ✅ in place
+
+- Hybrid audit model: version/lifecycle tables record *what*; `audit_events`
+  records *who/when/how/why* (request + session attribution).
+- Backend-composed read models (no per-row frontend fan-out) per AGENTS.md.
+- Mobile-responsive core workflows including transaction entry.
+- Loading / empty / error / success states on shipped screens.
+
+## Not started (see roadmap)
+
+Import (CSV/OFX/QIF/etc.), exports (CSV/QIF), budgets, scheduled transactions,
+projected balances, loan/liability helpers, multi-currency reporting, report
+snapshots, reconcile UI, reports UI, pricing UI, investments UI.

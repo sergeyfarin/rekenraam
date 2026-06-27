@@ -21,6 +21,12 @@ Read these before making durable product or architecture changes:
 
 In case of conflict, earlier items in the list take precedence over later items. ADRs supersede all other documents once accepted. Agent guidance files (`AGENTS.md`, `.github/copilot-instructions.md`) are not product sources of truth; the documents above govern.
 
+For current execution state, read these (governed by the sources above):
+
+- `docs/roadmap.md` — prioritized next work and competitor gap analysis.
+- `docs/implemented.md` — what already ships (the feature ledger).
+- `docs/backlog.md` — technical debt and code-quality items.
+
 If a change introduces a durable new rule, update the relevant document in the same change.
 
 ## Working Rules

@@ -43,7 +43,13 @@ Area notes:
 
 ## Architecture Notes
 
-Active product requirements and staged feature sequencing are documented in [docs/product-requirements.md](docs/product-requirements.md).
+The current state of the project is tracked in three first-class documents:
+
+- [docs/roadmap.md](docs/roadmap.md) — what's next, prioritized, with competitor gap analysis.
+- [docs/implemented.md](docs/implemented.md) — the feature ledger of what ships today.
+- [docs/backlog.md](docs/backlog.md) — technical debt and code-quality items.
+
+Active product requirements and durable phase boundaries are documented in [docs/product-requirements.md](docs/product-requirements.md).
 
 Repo-wide conventions are documented in [docs/conventions.md](docs/conventions.md).
 
