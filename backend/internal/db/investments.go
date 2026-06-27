@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"rekenraam/backend/internal/exact"
 )
@@ -16,6 +17,7 @@ var (
 	ErrCostBasisProfileExists     = errors.New("cost basis profile already exists")
 	ErrDividendDefaultExists      = errors.New("dividend default already exists")
 	ErrInsufficientLots           = errors.New("insufficient lots")
+	ErrInvalidDisposalParams      = errors.New("invalid disposal parameters")
 )
 
 type InvestmentRepository struct {
@@ -881,17 +883,28 @@ func (r *InvestmentRepository) DisposeLots(ctx context.Context, params DisposeLo
 }
 
 func (r *InvestmentRepository) SimulateDisposeLots(ctx context.Context, params DisposeLotsParams) ([]LotDisposalRecord, error) {
-	// Use a dedicated connection so we can toggle FK enforcement without affecting other connections.
+	// Use a dedicated connection so toggling FK enforcement is connection-scoped.
 	conn, err := r.database.Conn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("acquire connection for simulate: %w", err)
 	}
-	defer conn.Close()
-	// FK must be disabled outside a transaction (SQLite limitation). Safe here because we always roll back.
+	// FK must be disabled outside a transaction (SQLite limitation). Always rolled back so safe.
 	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		conn.Close()
 		return nil, fmt.Errorf("disable fk for simulate: %w", err)
 	}
-	defer conn.ExecContext(ctx, "PRAGMA foreign_keys = ON") //nolint:errcheck
+	// Re-enable FK on the connection before returning it to the pool. Use a fresh context so a
+	// cancelled request context cannot prevent the re-enable; if it still fails, discard the
+	// connection by closing it so the poisoned connection is never reused.
+	defer func() {
+		reenableCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := conn.ExecContext(reenableCtx, "PRAGMA foreign_keys = ON"); err != nil {
+			conn.Close()
+			return
+		}
+		conn.Close()
+	}()
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin simulate dispose lots: %w", err)
@@ -939,14 +952,14 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 		method = "fifo"
 	}
 	if !validCostBasisMethods[method] {
-		return nil, fmt.Errorf("cost basis method %q is not implemented", method)
+		return nil, fmt.Errorf("%w: cost basis method %q is not supported", ErrInvalidDisposalParams, method)
 	}
 
 	if method == "specific_lot" {
 		return disposeSpecificLotsTx(ctx, tx, params, auditEventID)
 	}
 	if len(params.Allocations) > 0 {
-		return nil, fmt.Errorf("explicit lot allocations are only permitted for specific_lot cost basis method")
+		return nil, fmt.Errorf("%w: explicit lot allocations are only permitted for specific_lot cost basis method", ErrInvalidDisposalParams)
 	}
 	if method == "average_cost" {
 		return disposeAverageCostTx(ctx, tx, params, auditEventID)
@@ -956,7 +969,18 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 
 func disposeSpecificLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64) ([]LotDisposalRecord, error) {
 	if len(params.Allocations) == 0 {
-		return nil, fmt.Errorf("specific_lot method requires explicit lot allocations")
+		return nil, fmt.Errorf("%w: specific_lot method requires explicit lot allocations", ErrInvalidDisposalParams)
+	}
+	// Verify sum(allocations) == params.QuantityValue so lot events stay consistent with the transaction quantity.
+	allocationTotal := new(big.Int)
+	for _, a := range params.Allocations {
+		if a.QuantityScale != params.QuantityScale {
+			return nil, fmt.Errorf("%w: specific_lot allocation scale %d does not match sale scale %d", ErrInvalidDisposalParams, a.QuantityScale, params.QuantityScale)
+		}
+		allocationTotal.Add(allocationTotal, a.QuantityValue.BigInt())
+	}
+	if allocationTotal.Cmp(params.QuantityValue.BigInt()) != 0 {
+		return nil, fmt.Errorf("%w: specific_lot allocations total %s does not equal sale quantity %s", ErrInvalidDisposalParams, allocationTotal, params.QuantityValue)
 	}
 	disposals := make([]LotDisposalRecord, 0, len(params.Allocations))
 	for _, allocation := range params.Allocations {
@@ -1065,31 +1089,45 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	commonScale := lots[0].quantityScale
 	for _, lot := range lots[1:] {
 		if lot.quantityScale != commonScale {
-			return nil, fmt.Errorf("average_cost disposal requires all open lots to share the same quantity scale")
+			return nil, fmt.Errorf("%w: average_cost disposal requires all open lots to share the same quantity scale", ErrInvalidDisposalParams)
 		}
 	}
 	if params.QuantityScale != commonScale {
-		return nil, fmt.Errorf("average_cost disposal: sale quantity scale %d does not match lot scale %d", params.QuantityScale, commonScale)
+		return nil, fmt.Errorf("%w: average_cost disposal: sale quantity scale %d does not match lot scale %d", ErrInvalidDisposalParams, params.QuantityScale, commonScale)
 	}
 
-	// Compute pool total quantity to check for oversell.
+	// Compute pool totals.
 	pooledQty := new(big.Int)
+	pooledBasis := new(big.Int)
 	for _, lot := range lots {
 		pooledQty.Add(pooledQty, lot.quantityValue.BigInt())
+		pooledBasis.Add(pooledBasis, big.NewInt(lot.costBasisValue))
 	}
 	sellQty := params.QuantityValue.BigInt()
 	if sellQty.Cmp(pooledQty) > 0 {
 		return nil, ErrInsufficientLots
 	}
 
-	// Distribute quantity across lots (FIFO order for determinism).
-	// Each lot's disposed basis = lot.costBasisValue * take / lot.quantityValue (truncate).
-	// The last unit of each closing lot absorbs truncation so remaining basis stays non-negative.
-	// Closed lots transfer their full remaining basis to disposed (residual included).
+	// Total disposed basis at pool rate (truncate): pooledBasis * sellQty / pooledQty.
+	disposedBasisTotal := new(big.Int).Mul(pooledBasis, sellQty)
+	disposedBasisTotal.Quo(disposedBasisTotal, pooledQty)
+
+	// Distribute across lots (FIFO for determinism).
+	//
+	// Reported basis (investor tax record): pool-rate fraction per lot.
+	//   reportedBasis_i = pooledBasis * take_i / pooledQty  (truncate)
+	// Last lot touched absorbs the integer-division residual so Σ reported == disposedBasisTotal.
+	//
+	// DB-written remaining basis: per-lot-own-rate reduction.
+	//   lotDeduction_i = lot.costBasisValue * take_i / lotQty  (truncate)
+	// This is always ≤ lot.costBasisValue so remaining stays non-negative (DB trigger enforced).
+	// The two numbers differ when lots were acquired at different prices; that gap is the
+	// redistribution effect of average-cost blending and is absorbed at the pool level.
 	disposals := make([]LotDisposalRecord, 0)
 	remainingQty := new(big.Int).Set(sellQty)
+	reportedBasisRemaining := new(big.Int).Set(disposedBasisTotal)
 
-	for _, lot := range lots {
+	for i, lot := range lots {
 		if remainingQty.Sign() <= 0 {
 			break
 		}
@@ -1099,27 +1137,38 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			take.Set(remainingQty)
 		}
 
-		var lotBasis int64
-		if take.Cmp(lotQty) == 0 {
-			// Entire lot closes: disposed basis is the full remaining cost (avoids truncation residual).
-			lotBasis = lot.costBasisValue
+		// Investor-facing reported basis for this lot (pool rate).
+		isLast := i == len(lots)-1 || take.Cmp(remainingQty) == 0
+		var reportedBasis int64
+		if isLast {
+			reportedBasis = reportedBasisRemaining.Int64()
 		} else {
-			// Partial disposal: pool-rate approach per lot — lot.costBasisValue * take / lotQty (truncate).
-			b := new(big.Int).Mul(big.NewInt(lot.costBasisValue), take)
-			b.Quo(b, lotQty)
-			lotBasis = b.Int64()
+			rb := new(big.Int).Mul(pooledBasis, take)
+			rb.Quo(rb, pooledQty)
+			reportedBasis = rb.Int64()
+		}
+
+		// DB deduction: per-lot-own-rate, capped to lot's cost (non-negative remaining guaranteed).
+		var lotDeduction int64
+		if take.Cmp(lotQty) == 0 {
+			lotDeduction = lot.costBasisValue
+		} else {
+			d := new(big.Int).Mul(big.NewInt(lot.costBasisValue), take)
+			d.Quo(d, lotQty)
+			lotDeduction = d.Int64()
 		}
 
 		takeCoeff, err := exact.FromBig(take)
 		if err != nil {
 			return nil, err
 		}
-		disposal, err := disposeAverageCostLotTx(ctx, tx, params, lot, takeCoeff, lotBasis, auditEventID)
+		disposal, err := disposeAverageCostLotTx(ctx, tx, params, lot, takeCoeff, lotDeduction, reportedBasis, auditEventID)
 		if err != nil {
 			return nil, err
 		}
 		disposals = append(disposals, disposal)
 		remainingQty.Sub(remainingQty, take)
+		reportedBasisRemaining.Sub(reportedBasisRemaining, big.NewInt(reportedBasis))
 	}
 	if remainingQty.Sign() > 0 {
 		return nil, ErrInsufficientLots
@@ -1127,12 +1176,15 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	return disposals, nil
 }
 
-func disposeAverageCostLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot avgCostLotRef, quantityTaken exact.Coefficient, disposedBasis int64, auditEventID int64) (LotDisposalRecord, error) {
+// disposeAverageCostLotTx writes the DB update and lot event for one lot in an average-cost disposal.
+// lotDeduction: amount to subtract from remaining_cost_basis_value (per-lot-own-rate; always ≤ lot.costBasisValue).
+// reportedBasis: pool-rate basis written to the lot event and returned in LotDisposalRecord (investor's tax record).
+func disposeAverageCostLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot avgCostLotRef, quantityTaken exact.Coefficient, lotDeduction int64, reportedBasis int64, auditEventID int64) (LotDisposalRecord, error) {
 	nextRemainingQty, err := exact.FromBig(new(big.Int).Sub(lot.quantityValue.BigInt(), quantityTaken.BigInt()))
 	if err != nil {
 		return LotDisposalRecord{}, err
 	}
-	nextRemainingCost := lot.costBasisValue - disposedBasis
+	nextRemainingCost := lot.costBasisValue - lotDeduction
 	status := "open"
 	if nextRemainingQty.Sign() == 0 {
 		status = "closed"
@@ -1152,14 +1204,14 @@ func disposeAverageCostLotTx(ctx context.Context, tx *sql.Tx, params DisposeLots
 			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
 		)
 		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)
-	`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityTaken.Negated(), lot.quantityScale, -disposedBasis, lot.costBasisScale, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
+	`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityTaken.Negated(), lot.quantityScale, -reportedBasis, lot.costBasisScale, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert average-cost disposal lot event: %w", err)
 	}
 	return LotDisposalRecord{
 		LotID:          lot.id,
 		QuantityValue:  quantityTaken,
 		QuantityScale:  lot.quantityScale,
-		CostBasisValue: disposedBasis,
+		CostBasisValue: reportedBasis,
 		CostBasisScale: lot.costBasisScale,
 	}, nil
 }

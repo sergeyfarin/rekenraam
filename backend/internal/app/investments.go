@@ -810,6 +810,9 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
 		}
+		if errors.Is(err, db.ErrInvalidDisposalParams) {
+			return SellPreviewResult{}, ValidationError{Message: err.Error()}
+		}
 		return SellPreviewResult{}, fmt.Errorf("preview sell disposals: %w", err)
 	}
 	var totalDisposedBasis int64
@@ -902,6 +905,9 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	if err != nil {
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
+		}
+		if errors.Is(err, db.ErrInvalidDisposalParams) {
+			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
 		}
 		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
 	}
@@ -1421,6 +1427,10 @@ func cleanDividendDefaultSpec(input DividendDefaultInput, now time.Time) (db.Div
 	}, nil
 }
 
+var validCostBasisMethods = map[string]bool{
+	"fifo": true, "lifo": true, "average_cost": true, "specific_lot": true,
+}
+
 func validateTradeInput(input InvestmentTradeInput) error {
 	if input.OwnerUserID <= 0 {
 		return ValidationError{Message: "owner user is required"}
@@ -1439,6 +1449,16 @@ func validateTradeInput(input InvestmentTradeInput) error {
 	}
 	if input.CashAmountValue <= 0 {
 		return ValidationError{Message: "cash amount is required"}
+	}
+	method := strings.TrimSpace(input.CostBasisMethod)
+	if method != "" && !validCostBasisMethods[method] {
+		return ValidationError{Message: "cost basis method is invalid"}
+	}
+	if len(input.LotAllocations) > 0 && method != "specific_lot" {
+		return ValidationError{Message: "lot allocations are only permitted with specific_lot cost basis method"}
+	}
+	if method == "specific_lot" && len(input.LotAllocations) == 0 {
+		return ValidationError{Message: "specific_lot cost basis method requires lot allocations"}
 	}
 	return nil
 }

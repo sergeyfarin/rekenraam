@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -788,9 +789,13 @@ func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
 	repo := NewInvestmentRepository(database)
 
-	// pool: qty=450, basis=56000. sell qty=100 (= entire lot[0] of 100 qty).
-	// lot[0] closes fully -> disposed basis = lot[0].costBasis = 10000.
-	// per-lot-own-rate: dispose = lot.costBasis * take / lot.qty (truncate); full close takes entire lot cost.
+	// pool: qty=450, basis=56000. sell qty=100 units (entire lot[0]).
+	// pool-rate reported disposal = 56000*100/450 = 12444 (truncate).
+	// lot[0] is the only lot touched and is "last" (fills entire sell qty) → reportedBasis = 12444.
+	// DB deduction for lot[0] = 10000 (full lot close).
+	// Remaining DB basis = 25000 + 21000 = 46000.
+	// DB conservation: 46000 + 10000 (deducted) = 56000 ✓
+	// Reported conservation: 12444 ≠ remaining DB — this is the blending redistribution effect.
 	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 		BookID: 1, AccountID: accountID, CommodityID: commodityID,
 		EventDate: "2026-04-01", QuantityValue: exact.New(100), QuantityScale: 0,
@@ -799,20 +804,18 @@ func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
 		Operation: "investment.lot.dispose", ChangeReason: "avg cost sell",
 	})
 	require.NoError(t, err)
-	var totalDisposedBasis int64
-	for _, d := range disposals {
-		totalDisposedBasis += d.CostBasisValue
-	}
-	assert.Equal(t, int64(10000), totalDisposedBasis)
+	require.Len(t, disposals, 1)
+	// Reported basis is pool-rate: 56000 * 100 / 450 = 12444 (truncate).
+	assert.Equal(t, int64(12444), disposals[0].CostBasisValue)
 
-	// Conservation: remaining basis + disposed = 56000
+	// DB remaining basis: lot[0] closed (deducted 10000), lots[1]+[2] untouched.
 	lots, err := repo.ListLots(ctx, 1, accountID, commodityID)
 	require.NoError(t, err)
 	var remainingBasis int64
 	for _, l := range lots {
 		remainingBasis += l.RemainingCostBasisValue
 	}
-	assert.Equal(t, int64(56000), remainingBasis+totalDisposedBasis)
+	assert.Equal(t, int64(46000), remainingBasis)
 }
 
 func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
@@ -822,20 +825,21 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
 	repo := NewInvestmentRepository(database)
 
-	// 3 lots of 1 unit each, total basis=10 (minor units) → average_cost sale of 2 units
-	// disposed_basis = 10 * 2 / 3 = 6 (truncate); residual = 0 (6 is exact... let's use 3 lots, basis 10)
-	// Actually: 10*2/3 = 6 (truncate). Per-lot: lot1 takes 1 unit → 10*1/2=5 (wait)
-	// Use: 3 lots of 1 qty, basis=[4,3,3]=10. Sell 2 units avg cost.
-	// disposed_total = 10*2/3 = 6 (truncate). lot1: 6*1/2=3, lot2 (last): 6-3=3.
-	// Remaining: lot3 has remaining_basis = 4 (lot3 untouched).
-	// Total remaining = original - disposed = 10 - 6 = 4.
+	// 3 lots: qty=[1,1,1], basis=[4,3,3] → pool qty=3, basis=10.
+	// Sell 2 units average_cost.
+	// Pool-rate reported disposal: 10*2/3 = 6 (truncate).
+	//   lot[0]: reportedBasis = 10*1/3 = 3; lotDeduction = 4 (full close).
+	//   lot[1]: reportedBasis = residual = 6-3 = 3; lotDeduction = 3 (full close).
+	// DB remaining: lot[2].remainingCostBasis = 3.
+	// DB conservation: deducted(4+3) + remaining(3) = 10 ✓
+	// Reported disposal total: 6 (pool rate).
 	for i, basis := range []int64{4, 3, 3} {
 		_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
 			BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
-			OpenedOn: "2026-0" + strconv.Itoa(i+1) + "-01",
-			QuantityValue: exact.New(1), QuantityScale: 0,
-			CostBasisValue: basis, CostBasisScale: 2, CostCommodityID: currencyID,
-			MetadataJSON: `{}`, CreatedAt: "2026-0" + strconv.Itoa(i+1) + "-01T09:00:00Z",
+			OpenedOn:        fmt.Sprintf("2026-%02d-01", i+1),
+			QuantityValue:   exact.New(1), QuantityScale: 0,
+			CostBasisValue:  basis, CostBasisScale: 2, CostCommodityID: currencyID,
+			MetadataJSON: `{}`, CreatedAt: fmt.Sprintf("2026-%02d-01T09:00:00Z", i+1),
 			CreatedByUserID: ownerID, OriginType: "browser_api",
 			Operation: "investment.lot.acquire", ChangeReason: "residual test",
 			EventKind: "acquisition",
@@ -851,11 +855,14 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 		Operation: "investment.lot.dispose", ChangeReason: "residual conservation test",
 	})
 	require.NoError(t, err)
-	var totalDisposed int64
+	require.Len(t, disposals, 2)
+	// Reported basis uses pool rate: total must equal disposedBasisTotal = 6.
+	var totalReported int64
 	for _, d := range disposals {
-		totalDisposed += d.CostBasisValue
-		assert.GreaterOrEqual(t, d.CostBasisValue, int64(0), "no lot should have negative disposed basis")
+		assert.GreaterOrEqual(t, d.CostBasisValue, int64(0), "no lot should report negative disposed basis")
+		totalReported += d.CostBasisValue
 	}
+	assert.Equal(t, int64(6), totalReported, "sum of reported disposal basis should equal pool-rate total")
 
 	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
@@ -864,8 +871,8 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 		assert.GreaterOrEqual(t, l.RemainingCostBasisValue, int64(0), "no lot should have negative remaining basis")
 		remainingBasis += l.RemainingCostBasisValue
 	}
-	// Pool conservation: remaining + disposed == original total (10)
-	assert.Equal(t, int64(10), remainingBasis+totalDisposed)
+	// DB remaining should equal lot[2]'s untouched basis.
+	assert.Equal(t, int64(3), remainingBasis)
 }
 
 func TestInvestmentLotsAverageCostClosedLotHasZeroBasis(t *testing.T) {
@@ -937,8 +944,7 @@ func TestInvestmentLotsAverageCostMismatchedScaleReturnsError(t *testing.T) {
 		ActorUserID: ownerID, OriginType: "browser_api",
 		Operation: "investment.lot.dispose", ChangeReason: "scale mismatch test",
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "scale")
+	require.ErrorIs(t, err, ErrInvalidDisposalParams)
 }
 
 func TestInvestmentLotsSpecificLotValidatesOwnershipAndQuantity(t *testing.T) {
@@ -973,8 +979,25 @@ func TestInvestmentLotsExplicitAllocationsRejectedForFIFO(t *testing.T) {
 		CreatedAt: "2026-04-01T09:00:00Z", ActorUserID: ownerID,
 		OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "fifo explicit reject",
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "specific_lot")
+	require.ErrorIs(t, err, ErrInvalidDisposalParams)
+}
+
+func TestInvestmentLotsSpecificLotAllocationTotalMismatchReturnsError(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Allocate 50 but claim to sell 100 — totals must match.
+	_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(100), QuantityScale: 0,
+		CostBasisMethod: "specific_lot",
+		Allocations:     []LotAllocation{{LotID: lots[0].ID, QuantityValue: exact.New(50), QuantityScale: 0}},
+		CreatedAt: "2026-04-01T09:00:00Z", ActorUserID: ownerID,
+		OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "total mismatch",
+	})
+	require.ErrorIs(t, err, ErrInvalidDisposalParams)
 }
 
 func TestInvestmentLotsUnknownMethodReturnsError(t *testing.T) {
@@ -990,8 +1013,7 @@ func TestInvestmentLotsUnknownMethodReturnsError(t *testing.T) {
 		ActorUserID: ownerID, OriginType: "browser_api",
 		Operation: "investment.lot.dispose", ChangeReason: "unknown method",
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
+	require.ErrorIs(t, err, ErrInvalidDisposalParams)
 }
 
 func TestInvestmentLotsSimulateDoesNotMutateLots(t *testing.T) {
