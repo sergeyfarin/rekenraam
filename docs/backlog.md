@@ -54,6 +54,31 @@ transactions/trash tables now use infinite-query options — audit the remaining
 list helpers (reconciliation, pricing runs) to confirm they paginate or show a
 hidden-results count rather than silently truncating.
 
+### T-06 Import crash-consistency hole between ledger tx and identity write `[ ]`
+**File:** `backend/internal/app/import_service.go` — `CommitImportBatch`, around line 420.
+
+`CreateTransaction` commits its own internal DB transaction. The `import_commit_identities`
+write and staged-row mark-committed happen in a separate transaction immediately after.
+A crash between the two leaves an orphan posted ledger transaction with no identity row,
+so a retry will duplicate it (the idempotency pre-check finds nothing). The fix requires
+`CreateTransaction` to accept a caller-supplied `*sql.Tx` so the identity insert can join
+the same transaction — a refactor that touches the transaction service signature. Deferred
+because (a) real crashes are rare in practice, (b) the duplicate surfaces in the
+`needs_review` queue where the user can catch it, and (c) the refactor is non-trivial.
+When addressed, remove the `DB()` accessor on `ImportRepository` as it will no longer
+be needed.
+
+### T-07 Import endpoints missing from OpenAPI spec `[ ]`
+**File:** `backend/api/openapi/openapi.yaml` — no `/api/v1/imports` paths exist.
+
+The import API uses raw `fetch` on the frontend (multipart upload doesn't fit the typed
+client) and was deferred as a known gap. Needs: path items for all 7 import routes
+(`POST /imports`, `GET /imports`, `GET /imports/{batch_id}`, `PATCH /imports/{batch_id}`,
+`POST /imports/{batch_id}/preview-commit`, `POST /imports/{batch_id}/commit`,
+`POST /imports/{batch_id}/discard`), request/response schemas, and generated TS types
+replacing the handwritten `frontend/src/lib/api/imports.ts` interfaces. Conflicts with
+the OpenAPI-first convention (`docs/conventions.md` line 189).
+
 ---
 
 ## Resolved (kept for traceability)

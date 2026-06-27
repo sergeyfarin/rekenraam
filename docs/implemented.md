@@ -13,7 +13,7 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-27.
+Last reconciled with the codebase: 2026-06-27 (import Slice 1 added).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -58,6 +58,29 @@ Last reconciled with the codebase: 2026-06-27.
 | Account register route | ✅ | `routes/app/accounts/[id]/register`. |
 | Category transactions route | ✅ | `routes/app/categories/[id]`. |
 | Trash / recovery (soft-delete browse + guarded restore) | ✅ | `settings/trash`. |
+
+## Import Pipeline (Phase 4, Slice 1) — 🟦 Core pipeline + QIF shipped
+
+| Capability | Status | Notes |
+|---|---|---|
+| `SourceAdapter` interface + auto-detect registry | ✅ | `app/import_adapter.go`; confidence-ranked selection. |
+| QIF parser (full field set, splits, transfers, investment entries) | ✅ | `app/import_qif.go`; handles MS Money loose-QIF export format. |
+| Import pipeline: parse → normalize → dedupe → stage → commit | ✅ | `app/import_service.go`. |
+| SHA-256 fingerprint deduplication (within-batch + ledger-level) | ✅ | `import_commit_identities` table; `INSERT OR IGNORE` with conflict detection. |
+| 5 new DB tables + goose migration | ✅ | `migrations/0004_import_core.sql`. |
+| 7 REST endpoints (`/api/v1/imports/*`) | ✅ | `api/imports.go`; auth-gated, CSRF-protected. |
+| Transfer detection: QIF `[Account]` → `transfer_account_id` routing | ✅ | Parsed to `transfer_hint`; per-row account selector in preview UI. |
+| Partial-commit semantics (per-row DB tx, failures don't block others) | ✅ | |
+| Preview UI: upload → per-row account / currency / category / transfer-account assignment | ✅ | `routes/app/import/+page.svelte`. |
+| Commit result UI with skip/fail counts | ✅ | |
+| Import nav link in app shell | ✅ | |
+| **OpenAPI spec for import endpoints** | ⬜ | Tracked as T-07; frontend uses handwritten types. |
+| **Per-split category mapping** | ⬜ | All splits post to single category; per-split routing deferred to R6. |
+| **CSV adapter** | ⬜ | R5. |
+| **OFX/QFX adapter** | ⬜ | R6. |
+| **Import history / audit trail UI** | ⬜ | R6. |
+| **Batch rollback (void all committed rows)** | ⬜ | R6. |
+| **Import profiles (saved column/account mappings)** | ⬜ | R5. |
 
 ## Reconciliation (Phase 3) — 🟦 Backend complete, UI pending
 
@@ -109,6 +132,7 @@ Last reconciled with the codebase: 2026-06-27.
 
 ## Not started (see roadmap)
 
-Import (CSV/OFX/QIF/etc.), exports (CSV/QIF), budgets, scheduled transactions,
-projected balances, loan/liability helpers, multi-currency reporting, report
-snapshots, reconcile UI, reports UI, pricing UI, investments UI.
+Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
+scheduled transactions, projected balances, loan/liability helpers,
+multi-currency reporting, report snapshots, reconcile UI, reports UI,
+pricing UI, investments UI.

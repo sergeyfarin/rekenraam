@@ -91,14 +91,28 @@ review → commit) where file uploads and future online feeds are both "sources"
 and each format/provider is a swappable adapter + saved profile. Nothing touches
 the ledger unreviewed. **Full design: `docs/import-plan.md`.**
 
-### R4. Pipeline + QIF import (MS Money migration) — first value
-The first slice lands the parser interface + staging/preview/commit pipeline and
-ships the **QIF adapter** — which doubles as the MS Money migration path
-(MS Money exports per-account loose QIF; its `.mny` has no clean export).
-- Modular `SourceAdapter` interface + registry; QIF implemented, others later.
-- Preview → account/currency mapping → commit via the transaction service
-  (`OriginType=import`, `needs_review=true`), reusing the existing review queue.
-- Source-metadata retention; `source_fingerprint` dedupe makes re-imports a no-op.
+### R4. Pipeline + QIF import (MS Money migration) — ✅ Slice 1 shipped
+The first slice landed the parser interface + staging/preview/commit pipeline
+and the **QIF adapter** — the MS Money migration path (MS Money exports
+per-account loose QIF; its `.mny` has no clean export).
+
+Shipped:
+- `SourceAdapter` interface + registry; `QIFAdapter` handling all standard field
+  codes including splits, transfers (`[Account]` syntax), and investment warnings.
+- SHA-256 fingerprint dedupe: within-batch + ledger-level (`import_commit_identities`).
+- 5 DB tables (`import_batches`, `import_batch_events`, `import_staged_rows`,
+  `import_commit_identities`, `import_profiles`) with goose migration `0004_import_core.sql`.
+- 7 REST endpoints: `POST /imports`, `GET /imports`, `GET /imports/{id}`,
+  `PATCH /imports/{id}`, `POST /imports/{id}/preview-commit`,
+  `POST /imports/{id}/commit`, `POST /imports/{id}/discard`.
+- Upload → preview (per-row account / currency / category / transfer-account
+  assignment) → commit → result UI at `routes/app/import`.
+- Transfer detection: rows with a QIF `[Account]` transfer hint show an account
+  picker in the preview and route to `transfer_account_id` in the resolution.
+- Partial-commit semantics: each row commits in its own DB transaction; failures
+  don't block the rest.
+- Known gaps carried to backlog: crash-consistency hole (T-06), OpenAPI spec (T-07),
+  per-split category routing deferred to R6.
 
 ### R5. CSV + provider profiles
 CSV/XLSX differ wildly per bank, so column mapping is **saved profile data, not
@@ -108,6 +122,9 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
 ### R6. XLSX, OFX/QFX, duplicate-review depth
 - XLSX adapter (reuses the CSV row pipeline); OFX/QFX (FITID dedupe).
 - Richer duplicate review, import audit-trail/history, batch rollback (via void).
+- Per-split category mapping: currently all splits post to a single user-selected
+  category; R6 should show per-split category selectors in the preview UI and route
+  each split to its own `CategoryID` derived from `category_hint` in normalized JSON.
 
 ### R7. Online ingestion + payee/category cleanup
 - Online sources implement the same adapter contract, driven by the durable work
