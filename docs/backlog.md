@@ -69,7 +69,7 @@ When addressed, remove the `DB()` accessor on `ImportRepository` as it will no l
 be needed.
 
 ### T-07 Import endpoints missing from OpenAPI spec `[ ]`
-**File:** `backend/api/openapi/openapi.yaml` — no `/api/v1/imports` paths exist.
+**File:** `api/openapi/openapi.yaml` — no `/api/v1/imports` paths exist.
 
 The import API uses raw `fetch` on the frontend (multipart upload doesn't fit the typed
 client) and was deferred as a known gap. Needs: path items for all 7 import routes
@@ -154,8 +154,12 @@ The cost-basis method is validated against `{fifo, lifo, average_cost,
 specific_lot}` and stored on a profile, but **disposal only ever does FIFO**. A
 user can save a "LIFO" profile and a sell silently disposes FIFO — a
 correctness/trust bug. **Fix (investments plan Slice 1):** ship `fifo` +
-`specific_lot` working; make `lifo`/`average_cost` return a clear `NOT_IMPLEMENTED`
-error at profile-save time rather than silently doing FIFO.
+`specific_lot` working; reject `lifo`/`average_cost` with a clear `NOT_IMPLEMENTED`
+error **at the sell/disposal path, not only at profile-save**. The schema CHECK
+permits all four values (`migrations/0001_initial_schema.sql:1017`) and existing/
+manually-inserted rows may already hold `lifo`/`average_cost`, so a profile-save
+guard alone still lets those fall through to FIFO at sell time. Disposal-path
+rejection is the actual correctness guarantee.
 
 ### I-03 Implement remaining cost-basis methods (lifo, average_cost) `[ ]`
 **File:** `backend/internal/db/investments.go` (`disposeLotsWithAuditTx`).

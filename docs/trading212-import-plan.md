@@ -216,7 +216,7 @@ type trading212FetchPayload struct {
 
 ## API surface (additions; OpenAPI-first per `conventions.md`)
 
-Add these to `backend/api/openapi/openapi.yaml` **and** generate types — and while
+Add these to `api/openapi/openapi.yaml` **and** generate types — and while
 here, close **T-07** by adding the seven existing import paths too (see backlog).
 
 Connections (`/api/v1/import-connections`):
