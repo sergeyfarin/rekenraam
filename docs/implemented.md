@@ -13,7 +13,7 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-27 (investments Slice 2 read-only UI complete).
+Last reconciled with the codebase: 2026-06-28 (investments Slice 3 buy/sell/dividend entry UI complete).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -125,8 +125,8 @@ Last reconciled with the codebase: 2026-06-27 (investments Slice 2 read-only UI 
 | OpenAPI spec for all 24 investment endpoints | ✅ | `api/openapi/components/schemas/investments.yaml` + 14 path files. Generated TS types in `schema.d.ts`. |
 | Investments portfolio page (positions + lot drill-down) | ✅ | `routes/app/investments/+page.svelte`. Positions table; click a row to see open lots. Degrades gracefully when no market price. Investments nav link in app shell. |
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
-| **Buy / sell / dividend entry UI** | ⬜ | Sell preview wired in backend; UI forms pending. See `docs/investments-plan.md` Slice 3. |
-| **Gains reporting** | ⬜ | Slice 4. |
+| Buy / sell / dividend entry UI | ✅ | Buy form; sell form with server-computed preview + specific-lot picker; dividend + reinvested-dividend forms. Modal over positions page. |
+| **Gains reporting** | ⬜ | Slice 4: `GET /investments/gains` (realized from lot events + cash proceeds join; unrealized from positions × price). Gains tab + suggestion review UI. See `docs/investments-plan.md` Slice 4. |
 
 ## Cross-cutting — ✅ in place
 

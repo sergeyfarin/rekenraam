@@ -175,13 +175,17 @@ have APIs (`/pricing/*`) and no screens yet.
 - **Slice 2 (read-only UI) complete**: OpenAPI spec for all 24 investment endpoints;
   generated TS types; `routes/app/investments` positions page with lot drill-down;
   nav link in app shell. Degrades gracefully when no market price.
-- **Slice 3 (buy/sell/dividend entry UI) next**: buy form; sell form using
+- **Slice 3 (buy/sell/dividend entry UI) complete**: buy form; sell form using
   `/investments/sell/preview` for server-computed allocation/gain; specific-lot
   picker; dividend + reinvested-dividend forms.
-- Realized/unrealized gains reports; multi-currency reporting; report snapshots
-  where reproducibility matters.
-- Corporate actions: provider events → reviewable suggestions; explicit
-  automation rules required before auto-posting.
+- **Slice 4 (gains reporting + provider-event review UI) next**: `GET
+  /investments/gains` read model (realized from `investment_lot_events` + cash
+  proceeds join; unrealized from positions × latest price); gains tab in the
+  investments screen; suggestion review UI (accept/ignore cards over the existing
+  endpoints); automation rules management. Full design: `docs/investments-plan.md`
+  Slice 4.
+- Report snapshots deferred past Slice 4 (immutable event log makes past-date
+  queries already reproducible; explicit snapshot store deferred).
 - **Then** return to online import (R7 / Trading 212), lifting `B-T212-INVST`.
 
 ---
