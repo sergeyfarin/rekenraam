@@ -169,7 +169,9 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, setupServic
 		mux.HandleFunc("GET /api/v1/investments/event-suggestions", listInvestmentEventSuggestions(logger, authService, investmentService))
 		mux.HandleFunc("POST /api/v1/investments/event-suggestions/{suggestion_id}/accept", acceptInvestmentEventSuggestion(logger, authService, investmentService, options))
 		mux.HandleFunc("POST /api/v1/investments/event-suggestions/{suggestion_id}/ignore", ignoreInvestmentEventSuggestion(logger, authService, investmentService, options))
+		mux.HandleFunc("GET /api/v1/investments/automation-rules", listInvestmentAutomationRules(logger, authService, investmentService))
 		mux.HandleFunc("PUT /api/v1/investments/automation-rules", saveInvestmentAutomationRules(logger, authService, investmentService, options))
+		mux.HandleFunc("GET /api/v1/investments/gains", listInvestmentGains(logger, authService, investmentService))
 	}
 	if authService != nil && importService != nil {
 		mux.HandleFunc("POST /api/v1/imports", startImport(logger, authService, importService, options))

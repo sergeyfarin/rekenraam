@@ -930,3 +930,127 @@ InvestmentAutomationRulesRequest:
         $ref: "#/InvestmentAutomationRuleRequest"
     change_reason:
       type: string
+
+RealizedGainEntry:
+  type: object
+  required:
+    - account_id
+    - commodity_id
+    - cost_commodity_id
+    - disposal_date
+    - quantity_value
+    - quantity_scale
+    - disposed_basis_value
+    - disposed_basis_scale
+    - proceeds_value
+    - proceeds_scale
+    - realized_gain_value
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+    disposal_date:
+      type: string
+      format: date
+    transaction_id:
+      type: integer
+      format: int64
+      description: The sell transaction ID, if one exists.
+    quantity_value:
+      type: string
+      description: Disposed quantity as a base-10 integer string.
+    quantity_scale:
+      type: integer
+    disposed_basis_value:
+      type: integer
+      format: int64
+      description: Disposed cost basis in minor units at disposed_basis_scale.
+    disposed_basis_scale:
+      type: integer
+    proceeds_value:
+      type: integer
+      format: int64
+      description: Cash proceeds in minor units at proceeds_scale.
+    proceeds_scale:
+      type: integer
+    realized_gain_value:
+      type: integer
+      format: int64
+      description: proceeds_value − disposed_basis (aligned to proceeds_scale).
+
+UnrealizedGainEntry:
+  type: object
+  required:
+    - account_id
+    - commodity_id
+    - cost_commodity_id
+    - quantity_value
+    - quantity_scale
+    - remaining_cost_basis_value
+    - remaining_cost_basis_scale
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+      description: Remaining quantity as a base-10 integer string.
+    quantity_scale:
+      type: integer
+    remaining_cost_basis_value:
+      type: integer
+      format: int64
+    remaining_cost_basis_scale:
+      type: integer
+    latest_price_value:
+      type: integer
+      format: int64
+      description: Omitted when no price observation exists.
+    latest_price_scale:
+      type: integer
+      description: Omitted when no price observation exists.
+    latest_price_date:
+      type: string
+      format: date
+      description: Omitted when no price observation exists.
+    market_value_value:
+      type: integer
+      format: int64
+      description: quantity × latest_price. Omitted when no price exists.
+    market_value_scale:
+      type: integer
+      description: Omitted when no price exists.
+    unrealized_gain_value:
+      type: integer
+      format: int64
+      description: market_value − remaining_cost_basis. Omitted when no price exists.
+    unrealized_gain_scale:
+      type: integer
+      description: Omitted when no price exists.
+
+InvestmentGainsResponse:
+  type: object
+  required:
+    - realized
+    - unrealized
+  properties:
+    realized:
+      type: array
+      items:
+        $ref: "#/RealizedGainEntry"
+    unrealized:
+      type: array
+      items:
+        $ref: "#/UnrealizedGainEntry"

@@ -10,11 +10,14 @@
     investmentPositionsQueryOptions,
     investmentLotsQueryOptions,
     investmentInstrumentsQueryOptions,
+    investmentEventSuggestionsQueryOptions,
     type InvestmentPositionResponse
   } from '$lib/api/investments';
   import BuyForm from '$lib/investments/buy-form.svelte';
   import SellForm from '$lib/investments/sell-form.svelte';
   import DividendForm from '$lib/investments/dividend-form.svelte';
+  import GainsReport from '$lib/investments/gains-report.svelte';
+  import EventSuggestions from '$lib/investments/event-suggestions.svelte';
   import { parseISO } from 'date-fns';
   import { formatScaledValue } from './investment-labels';
   import { m } from '$lib/paraglide/messages.js';
@@ -96,10 +99,50 @@
   function onTradeSaved() {
     closeModal();
   }
+
+  // Tab navigation
+  type Tab = 'portfolio' | 'gains' | 'suggestions';
+  let activeTab = $state<Tab>('portfolio');
+
+  // Badge: count pending suggestions
+  const suggestionsQuery = createQuery(() => ({
+    ...investmentEventSuggestionsQueryOptions(),
+    // Don't throw; silently omit badge on error
+    throwOnError: false
+  }));
+  const pendingCount = $derived(
+    (suggestionsQuery.data?.suggestions ?? []).filter((s) => s.status === 'suggested').length
+  );
 </script>
 
 <div>
   <div class="p-4 sm:p-6 lg:p-8">
+    <!-- Tab navigation -->
+    <div class="mb-5 flex items-center gap-1 border-b border-border">
+      {#each (['portfolio', 'gains', 'suggestions'] as const) as tab}
+        <button
+          type="button"
+          onclick={() => { activeTab = tab; }}
+          class="relative -mb-px flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition
+            {activeTab === tab
+              ? 'border-b-2 border-foreground text-foreground'
+              : 'text-muted hover:text-foreground'}"
+        >
+          {#if tab === 'portfolio'}{m.investments_tab_portfolio()}
+          {:else if tab === 'gains'}{m.investments_tab_gains()}
+          {:else}{m.investments_tab_suggestions()}
+          {/if}
+          {#if tab === 'suggestions' && pendingCount > 0}
+            <span class="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
+              {pendingCount}
+            </span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+
+    <!-- Portfolio tab action buttons -->
+    {#if activeTab === 'portfolio'}
     <!-- Action buttons -->
     <div class="mb-4 flex flex-wrap gap-2">
       <button
@@ -273,6 +316,17 @@
           </aside>
         {/if}
       </div>
+    {/if}
+    {/if}
+
+    <!-- Gains tab -->
+    {#if activeTab === 'gains'}
+      <GainsReport />
+    {/if}
+
+    <!-- Suggestions tab -->
+    {#if activeTab === 'suggestions'}
+      <EventSuggestions {csrfToken} />
     {/if}
   </div>
 </div>

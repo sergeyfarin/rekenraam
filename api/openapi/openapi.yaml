@@ -191,6 +191,8 @@ paths:
     $ref: "./paths/investments-event-suggestion-ignore.yaml"
   /api/v1/investments/automation-rules:
     $ref: "./paths/investments-automation-rules.yaml"
+  /api/v1/investments/gains:
+    $ref: "./paths/investments-gains.yaml"
 components:
   headers:
     XRequestID:
@@ -554,6 +556,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentAutomationRuleRequest"
     InvestmentAutomationRulesRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentAutomationRulesRequest"
+    RealizedGainEntry:
+      $ref: "./components/schemas/investments.yaml#/RealizedGainEntry"
+    UnrealizedGainEntry:
+      $ref: "./components/schemas/investments.yaml#/UnrealizedGainEntry"
+    InvestmentGainsResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentGainsResponse"
     ErrorBody:
       $ref: "./components/schemas/errors.yaml#/ErrorBody"
     ErrorResponse:

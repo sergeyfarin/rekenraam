@@ -769,6 +769,20 @@ func eventSuggestionStatusMutation(logger *slog.Logger, authService *app.AuthSer
 	}))
 }
 
+func listInvestmentAutomationRules(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		rules, err := investmentService.ListAutomationRules(r.Context())
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "list investment automation rules", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, investmentAutomationRulesResponse{Rules: toInvestmentAutomationRuleResponses(rules)})
+	}
+}
+
 func saveInvestmentAutomationRules(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -985,4 +999,100 @@ func toInvestmentAutomationRuleResponses(rules []app.InvestmentAutomationRule) [
 		responses = append(responses, toInvestmentAutomationRuleResponse(rule))
 	}
 	return responses
+}
+
+type realizedGainResponse struct {
+	AccountID          int64             `json:"account_id"`
+	CommodityID        int64             `json:"commodity_id"`
+	CostCommodityID    int64             `json:"cost_commodity_id"`
+	DisposalDate       string            `json:"disposal_date"`
+	TransactionID      *int64            `json:"transaction_id,omitempty"`
+	QuantityValue      exact.Coefficient `json:"quantity_value"`
+	QuantityScale      int               `json:"quantity_scale"`
+	DisposedBasisValue int64             `json:"disposed_basis_value"`
+	DisposedBasisScale int               `json:"disposed_basis_scale"`
+	ProceedsValue      int64             `json:"proceeds_value"`
+	ProceedsScale      int               `json:"proceeds_scale"`
+	RealizedGainValue  int64             `json:"realized_gain_value"`
+}
+
+type unrealizedGainResponse struct {
+	AccountID               int64             `json:"account_id"`
+	CommodityID             int64             `json:"commodity_id"`
+	CostCommodityID         int64             `json:"cost_commodity_id"`
+	QuantityValue           exact.Coefficient `json:"quantity_value"`
+	QuantityScale           int               `json:"quantity_scale"`
+	RemainingCostBasisValue int64             `json:"remaining_cost_basis_value"`
+	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
+	LatestPriceValue        *int64            `json:"latest_price_value,omitempty"`
+	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
+	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
+	MarketValueValue        *int64            `json:"market_value_value,omitempty"`
+	MarketValueScale        *int              `json:"market_value_scale,omitempty"`
+	UnrealizedGainValue     *int64            `json:"unrealized_gain_value,omitempty"`
+	UnrealizedGainScale     *int              `json:"unrealized_gain_scale,omitempty"`
+}
+
+type investmentGainsResponse struct {
+	Realized   []realizedGainResponse   `json:"realized"`
+	Unrealized []unrealizedGainResponse `json:"unrealized"`
+}
+
+func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		params := app.GainsReportParams{
+			From: r.URL.Query().Get("from"),
+			To:   r.URL.Query().Get("to"),
+		}
+		realized, err := investmentService.ListRealizedGains(r.Context(), params)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "list realized gains", err)
+			return
+		}
+		unrealized, err := investmentService.ListUnrealizedGains(r.Context())
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "list unrealized gains", err)
+			return
+		}
+		realizedResponses := make([]realizedGainResponse, 0, len(realized))
+		for _, e := range realized {
+			realizedResponses = append(realizedResponses, realizedGainResponse{
+				AccountID:          e.AccountID,
+				CommodityID:        e.CommodityID,
+				CostCommodityID:    e.CostCommodityID,
+				DisposalDate:       e.DisposalDate,
+				TransactionID:      e.TransactionID,
+				QuantityValue:      e.QuantityValue,
+				QuantityScale:      e.QuantityScale,
+				DisposedBasisValue: e.DisposedBasisValue,
+				DisposedBasisScale: e.DisposedBasisScale,
+				ProceedsValue:      e.ProceedsValue,
+				ProceedsScale:      e.ProceedsScale,
+				RealizedGainValue:  e.RealizedGainValue,
+			})
+		}
+		unrealizedResponses := make([]unrealizedGainResponse, 0, len(unrealized))
+		for _, e := range unrealized {
+			unrealizedResponses = append(unrealizedResponses, unrealizedGainResponse{
+				AccountID:               e.AccountID,
+				CommodityID:             e.CommodityID,
+				CostCommodityID:         e.CostCommodityID,
+				QuantityValue:           e.QuantityValue,
+				QuantityScale:           e.QuantityScale,
+				RemainingCostBasisValue: e.RemainingCostBasisValue,
+				RemainingCostBasisScale: e.RemainingCostBasisScale,
+				LatestPriceValue:        e.LatestPriceValue,
+				LatestPriceScale:        e.LatestPriceScale,
+				LatestPriceDate:         e.LatestPriceDate,
+				MarketValueValue:        e.MarketValueValue,
+				MarketValueScale:        e.MarketValueScale,
+				UnrealizedGainValue:     e.UnrealizedGainValue,
+				UnrealizedGainScale:     e.UnrealizedGainScale,
+			})
+		}
+		writeJSON(w, http.StatusOK, investmentGainsResponse{Realized: realizedResponses, Unrealized: unrealizedResponses})
+	}
 }

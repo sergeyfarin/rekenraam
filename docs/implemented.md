@@ -13,7 +13,7 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-28 (investments Slice 3 buy/sell/dividend entry UI complete).
+Last reconciled with the codebase: 2026-06-28 (investments Slice 4 complete — gains reporting + provider-event suggestions UI).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -112,7 +112,7 @@ Last reconciled with the codebase: 2026-06-28 (investments Slice 3 buy/sell/divi
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
 | **Pricing/FX management UI** | ⬜ | |
 
-## Investments (Phase 6) — 🟦 Backend + read-only UI
+## Investments (Phase 6) — ✅ Core complete
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -126,7 +126,9 @@ Last reconciled with the codebase: 2026-06-28 (investments Slice 3 buy/sell/divi
 | Investments portfolio page (positions + lot drill-down) | ✅ | `routes/app/investments/+page.svelte`. Positions table; click a row to see open lots. Degrades gracefully when no market price. Investments nav link in app shell. |
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
 | Buy / sell / dividend entry UI | ✅ | Buy form; sell form with server-computed preview + specific-lot picker; dividend + reinvested-dividend forms. Modal over positions page. |
-| **Gains reporting** | ⬜ | Slice 4: `GET /investments/gains` (realized from lot events + cash proceeds join; unrealized from positions × price). Gains tab + suggestion review UI. See `docs/investments-plan.md` Slice 4. |
+| **Gains reporting** | ✅ | `GET /api/v1/investments/gains` — realized gains (lot events × cash proceeds join, FIFO arithmetic, date-range filter) + unrealized gains (positions × latest price). Portfolio/Gains/Suggestions tab UI. Sign convention: disposed_basis_value is stored negative; gain = proceeds + disposed_basis. |
+| **Provider-event suggestions UI** | ✅ | Suggestions tab: pending suggestions with Accept/Ignore actions; history section. Uses `POST .../accept` and `.../ignore`. |
+| **Automation rules list** | ✅ | `GET /api/v1/investments/automation-rules`; rules listed in Suggestions tab (read-only; PUT replaces full set). |
 
 ## Cross-cutting — ✅ in place
 
@@ -141,7 +143,7 @@ Last reconciled with the codebase: 2026-06-28 (investments Slice 3 buy/sell/divi
 Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, reconcile UI, reports UI,
-pricing UI, investment buy/sell/dividend UI, investment gains reporting.
+pricing UI.
 
 Online import (R7) is planned but not started: Trading 212 is the first provider
 (`docs/trading212-import-plan.md`), which also introduces the `internal/secretbox`

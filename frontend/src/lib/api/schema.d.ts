@@ -8466,7 +8466,48 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List investment automation rules */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Automation rules */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentAutomationRulesResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         /** Save (replace) investment automation rules */
         put: {
             parameters: {
@@ -8536,6 +8577,71 @@ export interface paths {
                 };
             };
         };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/gains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List realized and unrealized investment gains
+         * @description Returns all realized gains (from closed lot disposal events) and unrealized gains (from open positions vs. latest price). Realized gains can be filtered by disposal date. Unrealized gain fields are omitted when no price observation exists for the instrument.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Start date filter for realized gains (ISO date, inclusive) */
+                    from?: string;
+                    /** @description End date filter for realized gains (ISO date, inclusive) */
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Realized and unrealized gains */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentGainsResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -10241,6 +10347,85 @@ export interface components {
         InvestmentAutomationRulesRequest: {
             rules: components["schemas"]["InvestmentAutomationRuleRequest"][];
             change_reason?: string;
+        };
+        RealizedGainEntry: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** Format: date */
+            disposal_date: string;
+            /**
+             * Format: int64
+             * @description The sell transaction ID, if one exists.
+             */
+            transaction_id?: number;
+            /** @description Disposed quantity as a base-10 integer string. */
+            quantity_value: string;
+            quantity_scale: number;
+            /**
+             * Format: int64
+             * @description Disposed cost basis in minor units at disposed_basis_scale.
+             */
+            disposed_basis_value: number;
+            disposed_basis_scale: number;
+            /**
+             * Format: int64
+             * @description Cash proceeds in minor units at proceeds_scale.
+             */
+            proceeds_value: number;
+            proceeds_scale: number;
+            /**
+             * Format: int64
+             * @description proceeds_value − disposed_basis (aligned to proceeds_scale).
+             */
+            realized_gain_value: number;
+        };
+        UnrealizedGainEntry: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** @description Remaining quantity as a base-10 integer string. */
+            quantity_value: string;
+            quantity_scale: number;
+            /** Format: int64 */
+            remaining_cost_basis_value: number;
+            remaining_cost_basis_scale: number;
+            /**
+             * Format: int64
+             * @description Omitted when no price observation exists.
+             */
+            latest_price_value?: number;
+            /** @description Omitted when no price observation exists. */
+            latest_price_scale?: number;
+            /**
+             * Format: date
+             * @description Omitted when no price observation exists.
+             */
+            latest_price_date?: string;
+            /**
+             * Format: int64
+             * @description quantity × latest_price. Omitted when no price exists.
+             */
+            market_value_value?: number;
+            /** @description Omitted when no price exists. */
+            market_value_scale?: number;
+            /**
+             * Format: int64
+             * @description market_value − remaining_cost_basis. Omitted when no price exists.
+             */
+            unrealized_gain_value?: number;
+            /** @description Omitted when no price exists. */
+            unrealized_gain_scale?: number;
+        };
+        InvestmentGainsResponse: {
+            realized: components["schemas"]["RealizedGainEntry"][];
+            unrealized: components["schemas"]["UnrealizedGainEntry"][];
         };
         ErrorBody: {
             /** @enum {string} */

@@ -18,10 +18,22 @@ export type InvestmentTradeRequest = components['schemas']['InvestmentTradeReque
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
 export type CostBasisMethod = components['schemas']['CostBasisMethod'];
+export type InvestmentGainsResponse = components['schemas']['InvestmentGainsResponse'];
+export type RealizedGainEntry = components['schemas']['RealizedGainEntry'];
+export type UnrealizedGainEntry = components['schemas']['UnrealizedGainEntry'];
+export type InvestmentEventSuggestionResponse = components['schemas']['InvestmentEventSuggestionResponse'];
+export type InvestmentEventSuggestionsResponse = components['schemas']['InvestmentEventSuggestionsResponse'];
+export type InvestmentAutomationRuleResponse = components['schemas']['InvestmentAutomationRuleResponse'];
+export type InvestmentAutomationRulesResponse = components['schemas']['InvestmentAutomationRulesResponse'];
+export type InvestmentAutomationRulesRequest = components['schemas']['InvestmentAutomationRulesRequest'];
+export type InvestmentAutomationRuleRequest = components['schemas']['InvestmentAutomationRuleRequest'];
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
 export const investmentInstrumentsQueryKey = ['api', 'investments', 'instruments'] as const;
+export const investmentGainsQueryKey = ['api', 'investments', 'gains'] as const;
+export const investmentEventSuggestionsQueryKey = ['api', 'investments', 'event-suggestions'] as const;
+export const investmentAutomationRulesQueryKey = ['api', 'investments', 'automation-rules'] as const;
 
 export function investmentPositionsQueryOptions() {
   return {
@@ -249,6 +261,162 @@ export async function recordReinvestedDividend(
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/reinvested-dividend', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export function investmentGainsQueryOptions(from?: string, to?: string) {
+  return {
+    queryKey: [...investmentGainsQueryKey, { from, to }] as const,
+    queryFn: () => getInvestmentGains(from, to),
+    staleTime: 30_000
+  };
+}
+
+export function investmentEventSuggestionsQueryOptions() {
+  return {
+    queryKey: investmentEventSuggestionsQueryKey,
+    queryFn: () => getInvestmentEventSuggestions(),
+    staleTime: 15_000
+  };
+}
+
+export function investmentAutomationRulesQueryOptions() {
+  return {
+    queryKey: investmentAutomationRulesQueryKey,
+    queryFn: () => getInvestmentAutomationRules(),
+    staleTime: 60_000
+  };
+}
+
+export async function getInvestmentGains(from?: string, to?: string): Promise<InvestmentGainsResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/investments/gains', {
+      params: { query: { from, to } }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function getInvestmentEventSuggestions(): Promise<InvestmentEventSuggestionsResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/investments/event-suggestions');
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function getInvestmentAutomationRules(): Promise<InvestmentAutomationRulesResponse> {
+  try {
+    const result = await apiClient.GET('/api/v1/investments/automation-rules');
+
+    if (result.data !== undefined) {
+      return result.data;
+    }
+
+    throw toAPIClientError(result.response, result.error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function acceptEventSuggestion(
+  suggestionId: number,
+  csrfToken: string
+): Promise<InvestmentEventSuggestionResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/event-suggestions/{suggestion_id}/accept',
+      {
+        params: { path: { suggestion_id: suggestionId }, header: { 'X-CSRF-Token': csrfToken } }
+      }
+    );
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function ignoreEventSuggestion(
+  suggestionId: number,
+  csrfToken: string
+): Promise<InvestmentEventSuggestionResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/event-suggestions/{suggestion_id}/ignore',
+      {
+        params: { path: { suggestion_id: suggestionId }, header: { 'X-CSRF-Token': csrfToken } }
+      }
+    );
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function saveAutomationRules(
+  input: InvestmentAutomationRulesRequest,
+  csrfToken: string
+): Promise<InvestmentAutomationRulesResponse> {
+  try {
+    const { data, error, response } = await apiClient.PUT('/api/v1/investments/automation-rules', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });

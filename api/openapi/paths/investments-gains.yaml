@@ -1,0 +1,50 @@
+get:
+  summary: List realized and unrealized investment gains
+  description: >
+    Returns all realized gains (from closed lot disposal events) and unrealized
+    gains (from open positions vs. latest price). Realized gains can be filtered
+    by disposal date. Unrealized gain fields are omitted when no price observation
+    exists for the instrument.
+  parameters:
+    - name: from
+      in: query
+      required: false
+      description: Start date filter for realized gains (ISO date, inclusive)
+      schema:
+        type: string
+        format: date
+    - name: to
+      in: query
+      required: false
+      description: End date filter for realized gains (ISO date, inclusive)
+      schema:
+        type: string
+        format: date
+  responses:
+    "200":
+      description: Realized and unrealized gains
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentGainsResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

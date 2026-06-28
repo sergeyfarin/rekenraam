@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1532,6 +1533,33 @@ func (r *InvestmentRepository) SetSuggestionStatus(ctx context.Context, bookID i
 	return record, nil
 }
 
+func (r *InvestmentRepository) ListAutomationRules(ctx context.Context, bookID int64) ([]AutomationRuleRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, book_id, source_id, instrument_id, event_family, mode, confidence_threshold_bps,
+			required_accounts_json, status, effective_from, effective_to,
+			created_at, created_by_user_id, updated_at, updated_by_user_id
+		FROM investment_automation_rules
+		WHERE book_id = ?
+		ORDER BY created_at DESC, id DESC
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list automation rules: %w", err)
+	}
+	defer rows.Close()
+	var records []AutomationRuleRecord
+	for rows.Next() {
+		var record AutomationRuleRecord
+		if err := rows.Scan(&record.ID, &record.BookID, &record.SourceID, &record.InstrumentID, &record.EventFamily, &record.Mode, &record.ConfidenceThresholdBPS, &record.RequiredAccountsJSON, &record.Status, &record.EffectiveFrom, &record.EffectiveTo, &record.CreatedAt, &record.CreatedByUserID, &record.UpdatedAt, &record.UpdatedByUserID); err != nil {
+			return nil, fmt.Errorf("scan automation rule: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate automation rules: %w", err)
+	}
+	return records, nil
+}
+
 func (r *InvestmentRepository) SaveAutomationRule(ctx context.Context, params SaveAutomationRuleParams) (AutomationRuleRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
@@ -1892,6 +1920,230 @@ func automationRuleByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, ruleID 
 		return AutomationRuleRecord{}, fmt.Errorf("scan automation rule: %w", err)
 	}
 	return record, nil
+}
+
+type RealizedGainsParams struct {
+	From string // optional ISO date, inclusive; empty = unbounded
+	To   string // optional ISO date, inclusive; empty = unbounded
+}
+
+type RealizedGainRecord struct {
+	AccountID          int64
+	CommodityID        int64
+	CostCommodityID    int64
+	DisposalDate       string
+	TransactionID      sql.NullInt64
+	QuantityValue      exact.Coefficient
+	QuantityScale      int
+	DisposedBasisValue int64
+	DisposedBasisScale int
+	ProceedsValue      int64
+	ProceedsScale      int
+	RealizedGainValue  int64
+}
+
+// ListRealizedGains returns one row per disposal event (investment_lot_events with
+// event_kind='disposal'). Cash proceeds are read from the matching sell transaction
+// posting: the posting whose commodity_id matches the lot's cost_commodity_id and
+// whose account does not have system_role='commodity_trading' (i.e. the real cash
+// account). Realized gain = proceeds - disposed_basis, aligned to the proceeds scale.
+func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int64, params RealizedGainsParams) ([]RealizedGainRecord, error) {
+	args := []any{bookID}
+	dateFilter := ""
+	if params.From != "" {
+		dateFilter += " AND le.event_date >= ?"
+		args = append(args, params.From)
+	}
+	if params.To != "" {
+		dateFilter += " AND le.event_date <= ?"
+		args = append(args, params.To)
+	}
+
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT
+			lot.account_id,
+			lot.commodity_id,
+			lot.cost_commodity_id,
+			le.event_date,
+			le.transaction_id,
+			le.quantity_value,
+			le.quantity_scale,
+			le.cost_basis_value,
+			le.cost_basis_scale,
+			MAX(CASE
+				WHEN cash_pv.commodity_id = lot.cost_commodity_id
+					AND cash_pv.quantity_value > '0'
+					AND NOT EXISTS (
+						SELECT 1 FROM accounts a
+						WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
+					)
+				THEN cash_pv.quantity_value
+				ELSE NULL
+			END) AS proceeds_value,
+			MAX(CASE
+				WHEN cash_pv.commodity_id = lot.cost_commodity_id
+					AND cash_pv.quantity_value > '0'
+					AND NOT EXISTS (
+						SELECT 1 FROM accounts a
+						WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
+					)
+				THEN cash_pv.quantity_scale
+				ELSE NULL
+			END) AS proceeds_scale
+		FROM investment_lot_events le
+		JOIN investment_lots lot ON lot.id = le.lot_id
+		LEFT JOIN current_transaction_versions tv ON tv.transaction_id = le.transaction_id
+		LEFT JOIN journal_entries je ON je.transaction_version_id = tv.id
+		LEFT JOIN posting_versions cash_pv ON cash_pv.journal_entry_id = je.id
+		WHERE lot.book_id = ?
+			AND le.event_kind = 'disposal'
+			`+dateFilter+`
+		GROUP BY le.id
+		ORDER BY le.event_date DESC, le.id DESC
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list realized gains: %w", err)
+	}
+	defer rows.Close()
+
+	var records []RealizedGainRecord
+	for rows.Next() {
+		var record RealizedGainRecord
+		var proceedsValueStr sql.NullString
+		var proceedsScale sql.NullInt64
+		if err := rows.Scan(
+			&record.AccountID, &record.CommodityID, &record.CostCommodityID,
+			&record.DisposalDate, &record.TransactionID,
+			&record.QuantityValue, &record.QuantityScale,
+			&record.DisposedBasisValue, &record.DisposedBasisScale,
+			&proceedsValueStr, &proceedsScale,
+		); err != nil {
+			return nil, fmt.Errorf("scan realized gain: %w", err)
+		}
+		if proceedsValueStr.Valid && proceedsScale.Valid {
+			// Parse proceeds as int64 (they fit: same scale as currency minor units)
+			proceeds, err := strconv.ParseInt(proceedsValueStr.String, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse proceeds value %q: %w", proceedsValueStr.String, err)
+			}
+			record.ProceedsValue = proceeds
+			record.ProceedsScale = int(proceedsScale.Int64)
+		} else {
+			// No matching transaction or posting found (e.g. manual lot creation)
+			record.ProceedsValue = 0
+			record.ProceedsScale = record.DisposedBasisScale
+		}
+		// Align disposed basis to proceeds scale for gain computation.
+		disposedAtProceedsScale := record.DisposedBasisValue
+		if record.DisposedBasisScale != record.ProceedsScale {
+			diff := record.ProceedsScale - record.DisposedBasisScale
+			if diff > 0 {
+				factor := int64(1)
+				for i := 0; i < diff; i++ {
+					factor *= 10
+				}
+				disposedAtProceedsScale = record.DisposedBasisValue * factor
+			} else {
+				factor := int64(1)
+				for i := 0; i < -diff; i++ {
+					factor *= 10
+				}
+				disposedAtProceedsScale = record.DisposedBasisValue / factor
+			}
+		}
+		// disposed_basis_value is stored as a negative number (the lot event records the
+		// deduction from cost basis). Gain = proceeds − |cost| = proceeds + disposed_basis.
+		record.RealizedGainValue = record.ProceedsValue + disposedAtProceedsScale
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate realized gains: %w", err)
+	}
+	return records, nil
+}
+
+type UnrealizedGainRecord struct {
+	AccountID               int64
+	CommodityID             int64
+	CostCommodityID         int64
+	QuantityValue           exact.Coefficient
+	QuantityScale           int
+	RemainingCostBasisValue int64
+	RemainingCostBasisScale int
+	LatestPriceValue        sql.NullInt64
+	LatestPriceScale        sql.NullInt64
+	LatestPriceDate         sql.NullString
+	MarketValueValue        *int64
+	MarketValueScale        *int
+	UnrealizedGainValue     *int64
+	UnrealizedGainScale     *int
+}
+
+// PositionsWithGains returns all open positions with unrealized gain computed when a
+// price observation is available. Nil gain fields mean no price is known.
+func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID int64) ([]UnrealizedGainRecord, error) {
+	positions, err := r.Positions(ctx, bookID)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]UnrealizedGainRecord, 0, len(positions))
+	for _, pos := range positions {
+		record := UnrealizedGainRecord{
+			AccountID:               pos.AccountID,
+			CommodityID:             pos.CommodityID,
+			CostCommodityID:         pos.CostCommodityID,
+			QuantityValue:           pos.QuantityValue,
+			QuantityScale:           pos.QuantityScale,
+			RemainingCostBasisValue: pos.RemainingCostBasisValue,
+			RemainingCostBasisScale: pos.RemainingCostBasisScale,
+			LatestPriceValue:        pos.LatestPriceValue,
+			LatestPriceScale:        pos.LatestPriceScale,
+			LatestPriceDate:         pos.LatestPriceDate,
+		}
+		if pos.LatestPriceValue.Valid && pos.LatestPriceScale.Valid {
+			// market_value = quantity × price, computed in big.Int to avoid float
+			// quantity is exact.Coefficient (big.Int-backed); price is int64
+			priceScale := int(pos.LatestPriceScale.Int64)
+			totalScale := pos.QuantityScale + priceScale
+			qtyBig := pos.QuantityValue.BigInt()
+			marketBig := new(big.Int).Mul(qtyBig, big.NewInt(pos.LatestPriceValue.Int64))
+
+			// Scale down to the cost basis scale for comparison.
+			// Both quantity×price and cost_basis must be at the same scale for subtraction.
+			// Common scale = totalScale; cost basis at RemainingCostBasisScale.
+			// We normalise both to the larger scale.
+			costBig := big.NewInt(pos.RemainingCostBasisValue)
+			costScale := pos.RemainingCostBasisScale
+
+			// Align: bring the lower-scale value up.
+			gainScale := totalScale
+			if costScale > gainScale {
+				gainScale = costScale
+			}
+			if totalScale < gainScale {
+				diff := gainScale - totalScale
+				factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(diff)), nil)
+				marketBig.Mul(marketBig, factor)
+			}
+			if costScale < gainScale {
+				diff := gainScale - costScale
+				factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(diff)), nil)
+				costBig.Mul(costBig, factor)
+			}
+
+			gainBig := new(big.Int).Sub(marketBig, costBig)
+			if marketBig.IsInt64() && gainBig.IsInt64() {
+				mv := marketBig.Int64()
+				gain := gainBig.Int64()
+				record.MarketValueValue = &mv
+				record.MarketValueScale = &gainScale
+				record.UnrealizedGainValue = &gain
+				record.UnrealizedGainScale = &gainScale
+			}
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 func boolInt(value bool) int {

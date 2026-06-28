@@ -9,7 +9,7 @@ deferred behind (`docs/trading212-import-plan.md`).
 Realises roadmap **R12 (Investments UI + gains reporting)**. Written for the
 Sonnet model to implement, grounded in the actual code as of 2026-06-27.
 
-Status: Slices 1, 2, and 3 **complete**. Slice 4 (gains reporting + provider-event review UI) **in progress**. Last updated 2026-06-28.
+Status: Slices 1, 2, 3, and 4 **complete**. Last updated 2026-06-28.
 
 ---
 

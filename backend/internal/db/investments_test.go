@@ -1041,3 +1041,143 @@ func TestInvestmentLotsSimulateDoesNotMutateLots(t *testing.T) {
 		assert.Equal(t, before[i].Status, after[i].Status)
 	}
 }
+
+func TestListRealizedGainsNilProceedsWhenNoTransaction(t *testing.T) {
+	// When lots are disposed without an associated transaction (TransactionID=0),
+	// proceeds are unknown → ProceedsValue=0 and RealizedGainValue = −disposed_basis.
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Dispose 100 units (cost basis 10000 at scale 2 = 100.00 EUR) with no transaction.
+	_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+		BookID: 1, AccountID: accountID, CommodityID: commodityID,
+		TransactionID: 0, EventDate: "2026-04-01",
+		QuantityValue: exact.New(100), QuantityScale: 0,
+		CostBasisMethod: "fifo",
+		CreatedAt: "2026-04-01T10:00:00Z", ActorUserID: ownerID,
+		OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "test",
+	})
+	require.NoError(t, err)
+
+	gains, err := repo.ListRealizedGains(ctx, 1, RealizedGainsParams{})
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+
+	g := gains[0]
+	assert.Equal(t, accountID, g.AccountID)
+	assert.Equal(t, commodityID, g.CommodityID)
+	assert.Equal(t, "2026-04-01", g.DisposalDate)
+	assert.Equal(t, int64(0), g.ProceedsValue)
+	// Disposal events store cost_basis_value as negative (the basis deducted from the lot).
+	assert.Equal(t, int64(-10000), g.DisposedBasisValue)
+	// Gain = proceeds + disposed_basis = 0 + (−10000) = −10000 (a loss of €100.00).
+	assert.Equal(t, int64(-10000), g.RealizedGainValue)
+}
+
+func TestListRealizedGainsDateFilter(t *testing.T) {
+	// Two disposals on different dates; verify From/To filter includes/excludes correctly.
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	for _, date := range []string{"2026-04-01", "2026-05-01"} {
+		_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+			BookID: 1, AccountID: accountID, CommodityID: commodityID,
+			TransactionID: 0, EventDate: date,
+			QuantityValue: exact.New(10), QuantityScale: 0,
+			CostBasisMethod: "fifo",
+			CreatedAt: date + "T10:00:00Z", ActorUserID: ownerID,
+			OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: date,
+		})
+		require.NoError(t, err)
+	}
+
+	// Both included when no filter.
+	all, err := repo.ListRealizedGains(ctx, 1, RealizedGainsParams{})
+	require.NoError(t, err)
+	assert.Len(t, all, 2)
+
+	// Only the April disposal is within From/To.
+	filtered, err := repo.ListRealizedGains(ctx, 1, RealizedGainsParams{
+		From: "2026-04-01",
+		To:   "2026-04-30",
+	})
+	require.NoError(t, err)
+	require.Len(t, filtered, 1)
+	assert.Equal(t, "2026-04-01", filtered[0].DisposalDate)
+}
+
+func TestPositionsWithGainsNilWhenNoPrice(t *testing.T) {
+	// A position without a price observation must have nil gain fields.
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	_ = accountID
+	repo := NewInvestmentRepository(database)
+
+	gains, err := repo.PositionsWithGains(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+	assert.Equal(t, commodityID, gains[0].CommodityID)
+	assert.Nil(t, gains[0].MarketValueValue, "expected nil market value when no price")
+	assert.Nil(t, gains[0].UnrealizedGainValue, "expected nil gain when no price")
+}
+
+func TestPositionsWithGainsComputedCorrectly(t *testing.T) {
+	// 100 units at cost 10 000 minor units (scale 2) = €100.00.
+	// Price observation: 200 minor units (scale 2) = €2.00 per unit → market €200.00.
+	// Expected unrealized gain: €200.00 − €100.00 = €100.00 at the combined scale.
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	_ = accountID
+	repo := NewInvestmentRepository(database)
+	pricingRepo := NewPricingRepository(database)
+
+	manualSourceID, err := pricingRepo.ManualSourceID(ctx)
+	require.NoError(t, err)
+
+	// Record a price observation: 200 minor units at scale 2 = €2.00 per unit.
+	_, err = pricingRepo.CreatePriceObservation(ctx, CreatePriceObservationParams{
+		BookID: 1, ActorUserID: ownerID, RequestID: "request-price",
+		OriginType: "browser_api", Operation: "pricing.price.create",
+		CreatedAt: "2026-04-01T12:00:00Z", ChangeReason: "test price",
+		Spec: PriceObservationSpec{
+			BaseCommodityID:    commodityID,
+			QuoteCommodityID:   currencyID,
+			QuoteType:          "manual",
+			AdjustmentBasis:    "raw",
+			PriceValue:         200,
+			PriceScale:         2,
+			BaseQuantityValue:  1,
+			BaseQuantityScale:  0,
+			ValuationDate:      "2026-04-01",
+			ObservedAt:         sql.NullString{String: "2026-04-01T12:00:00Z", Valid: true},
+			SourceID:           sql.NullInt64{Int64: manualSourceID, Valid: true},
+			IsManual:           true,
+			DerivationJSON:     `{}`,
+			SeriesMetadataJSON: `{}`,
+			MetadataJSON:       `{}`,
+		},
+	})
+	require.NoError(t, err)
+
+	gains, err := repo.PositionsWithGains(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+
+	g := gains[0]
+	require.NotNil(t, g.MarketValueValue, "expected market value to be set when price exists")
+	require.NotNil(t, g.UnrealizedGainValue)
+
+	// quantity_value = 100+200+150 = 450 at scale 0; price = 200 at scale 2.
+	// market = 450 × 200 = 90 000 at scale 0+2=2 → 90 000 / 100 = €900.00.
+	// cost = 10000+25000+21000 = 56 000 at scale 2.
+	// gain = 90 000 − 56 000 = 34 000 at scale 2.
+	assert.Equal(t, int64(90000), *g.MarketValueValue)
+	assert.Equal(t, int64(34000), *g.UnrealizedGainValue)
+	assert.Equal(t, 2, *g.UnrealizedGainScale)
+}

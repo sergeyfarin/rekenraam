@@ -1168,6 +1168,14 @@ func (s *InvestmentService) setSuggestionStatus(ctx context.Context, ownerUserID
 	return toInvestmentEventSuggestion(record), nil
 }
 
+func (s *InvestmentService) ListAutomationRules(ctx context.Context) ([]InvestmentAutomationRule, error) {
+	records, err := s.repository.ListAutomationRules(ctx, BookID)
+	if err != nil {
+		return nil, fmt.Errorf("list automation rules: %w", err)
+	}
+	return toInvestmentAutomationRules(records), nil
+}
+
 func (s *InvestmentService) SaveAutomationRules(ctx context.Context, input SaveAutomationRulesInput) ([]InvestmentAutomationRule, error) {
 	if input.OwnerUserID <= 0 {
 		return nil, ValidationError{Message: "owner user is required"}
@@ -1690,6 +1698,14 @@ func toInvestmentAutomationRule(record db.AutomationRuleRecord) InvestmentAutoma
 	}
 }
 
+func toInvestmentAutomationRules(records []db.AutomationRuleRecord) []InvestmentAutomationRule {
+	rules := make([]InvestmentAutomationRule, 0, len(records))
+	for _, record := range records {
+		rules = append(rules, toInvestmentAutomationRule(record))
+	}
+	return rules
+}
+
 func defaultOperation(value string, fallback string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -1748,4 +1764,101 @@ func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coeff
 		return 0, fmt.Errorf("scaled division overflow")
 	}
 	return q.Int64(), nil
+}
+
+// GainsReportParams filters for the realized gains query.
+type GainsReportParams struct {
+	From string // optional ISO date, inclusive
+	To   string // optional ISO date, inclusive
+}
+
+// RealizedGainEntry is one disposal event with its cash proceeds and gain.
+type RealizedGainEntry struct {
+	AccountID          int64
+	CommodityID        int64
+	CostCommodityID    int64
+	DisposalDate       string
+	TransactionID      *int64
+	QuantityValue      exact.Coefficient
+	QuantityScale      int
+	DisposedBasisValue int64
+	DisposedBasisScale int
+	ProceedsValue      int64
+	ProceedsScale      int
+	RealizedGainValue  int64
+}
+
+// UnrealizedGainEntry is an open position with unrealized gain when a price is available.
+type UnrealizedGainEntry struct {
+	AccountID               int64
+	CommodityID             int64
+	CostCommodityID         int64
+	QuantityValue           exact.Coefficient
+	QuantityScale           int
+	RemainingCostBasisValue int64
+	RemainingCostBasisScale int
+	LatestPriceValue        *int64
+	LatestPriceScale        *int
+	LatestPriceDate         string
+	MarketValueValue        *int64
+	MarketValueScale        *int
+	UnrealizedGainValue     *int64
+	UnrealizedGainScale     *int
+}
+
+func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsReportParams) ([]RealizedGainEntry, error) {
+	records, err := s.repository.ListRealizedGains(ctx, BookID, db.RealizedGainsParams{From: params.From, To: params.To})
+	if err != nil {
+		return nil, fmt.Errorf("list realized gains: %w", err)
+	}
+	entries := make([]RealizedGainEntry, 0, len(records))
+	for _, r := range records {
+		entries = append(entries, RealizedGainEntry{
+			AccountID:          r.AccountID,
+			CommodityID:        r.CommodityID,
+			CostCommodityID:    r.CostCommodityID,
+			DisposalDate:       r.DisposalDate,
+			TransactionID:      nullableSQLInt64Ptr(r.TransactionID),
+			QuantityValue:      r.QuantityValue,
+			QuantityScale:      r.QuantityScale,
+			DisposedBasisValue: r.DisposedBasisValue,
+			DisposedBasisScale: r.DisposedBasisScale,
+			ProceedsValue:      r.ProceedsValue,
+			ProceedsScale:      r.ProceedsScale,
+			RealizedGainValue:  r.RealizedGainValue,
+		})
+	}
+	return entries, nil
+}
+
+func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]UnrealizedGainEntry, error) {
+	records, err := s.repository.PositionsWithGains(ctx, BookID)
+	if err != nil {
+		return nil, fmt.Errorf("list unrealized gains: %w", err)
+	}
+	entries := make([]UnrealizedGainEntry, 0, len(records))
+	for _, r := range records {
+		var priceScale *int
+		if r.LatestPriceScale.Valid {
+			s := int(r.LatestPriceScale.Int64)
+			priceScale = &s
+		}
+		entries = append(entries, UnrealizedGainEntry{
+			AccountID:               r.AccountID,
+			CommodityID:             r.CommodityID,
+			CostCommodityID:         r.CostCommodityID,
+			QuantityValue:           r.QuantityValue,
+			QuantityScale:           r.QuantityScale,
+			RemainingCostBasisValue: r.RemainingCostBasisValue,
+			RemainingCostBasisScale: r.RemainingCostBasisScale,
+			LatestPriceValue:        nullableSQLInt64Ptr(r.LatestPriceValue),
+			LatestPriceScale:        priceScale,
+			LatestPriceDate:         nullableString(r.LatestPriceDate),
+			MarketValueValue:        r.MarketValueValue,
+			MarketValueScale:        r.MarketValueScale,
+			UnrealizedGainValue:     r.UnrealizedGainValue,
+			UnrealizedGainScale:     r.UnrealizedGainScale,
+		})
+	}
+	return entries, nil
 }

@@ -41,7 +41,7 @@ Reference apps for a self-hosted Microsoft Money / Quicken successor. ✅ = soli
 | Investment lots & cost basis | 🟦 | ✅ | ✅ | ⬜ | partial | ✅ |
 | Dividends / corporate actions | 🟦 | ✅ | ✅ | ⬜ | ⬜ | partial |
 | Price/FX history + scheduled refresh | 🟦 | ✅ | ✅ | ⬜ | ✅ | partial |
-| Realized/unrealized gains reporting | ⬜ | ✅ | ✅ | ⬜ | ⬜ | partial |
+| Realized/unrealized gains reporting | ✅ | ✅ | ✅ | ⬜ | ⬜ | partial |
 | Payee/category cleanup & merge | ⬜ | ✅ | partial | ✅ | ✅ | partial |
 | Self-hosted, single binary, no telemetry | ✅ | ⬜ | ✅ | ⬜ | ✅ | ✅ |
 | Mobile-responsive web | ✅ | app | ⬜ | ✅ | ✅ | ⬜ |
@@ -167,26 +167,13 @@ Backends exist; this is about exposing and completing them.
 Source assignment, manual price/FX entry, refresh history, source health — all
 have APIs (`/pricing/*`) and no screens yet.
 
-### R12. Investments UI + gains reporting — **in progress** (gates Trading 212 import)
-- **Slice 1 (correctness gate) complete**: all four cost-basis methods implemented
-  (fifo/lifo/average_cost/specific_lot); I-01 and I-02 closed; 3-tier method
-  resolution wired; account-level `cost_basis_method` persisted; sell-preview
-  endpoint live. Full test coverage at db layer. **Full design: `docs/investments-plan.md`.**
-- **Slice 2 (read-only UI) complete**: OpenAPI spec for all 24 investment endpoints;
-  generated TS types; `routes/app/investments` positions page with lot drill-down;
-  nav link in app shell. Degrades gracefully when no market price.
-- **Slice 3 (buy/sell/dividend entry UI) complete**: buy form; sell form using
-  `/investments/sell/preview` for server-computed allocation/gain; specific-lot
-  picker; dividend + reinvested-dividend forms.
-- **Slice 4 (gains reporting + provider-event review UI) next**: `GET
-  /investments/gains` read model (realized from `investment_lot_events` + cash
-  proceeds join; unrealized from positions × latest price); gains tab in the
-  investments screen; suggestion review UI (accept/ignore cards over the existing
-  endpoints); automation rules management. Full design: `docs/investments-plan.md`
-  Slice 4.
-- Report snapshots deferred past Slice 4 (immutable event log makes past-date
-  queries already reproducible; explicit snapshot store deferred).
-- **Then** return to online import (R7 / Trading 212), lifting `B-T212-INVST`.
+### R12. Investments UI + gains reporting — **complete** (unblocks Trading 212 import)
+- **Slice 1 (correctness gate) complete**: all four cost-basis methods (fifo/lifo/average_cost/specific_lot); I-01 and I-02 closed; 3-tier method resolution; account-level `cost_basis_method`; sell-preview endpoint. Full test coverage.
+- **Slice 2 (read-only UI) complete**: OpenAPI spec for all 24 investment endpoints; generated TS types; positions page with lot drill-down; nav link.
+- **Slice 3 (buy/sell/dividend entry UI) complete**: buy form; sell form with server-computed preview + specific-lot picker; dividend + reinvested-dividend forms.
+- **Slice 4 (gains reporting + provider-event review UI) complete**: `GET /investments/gains` (realized from `investment_lot_events` + cash proceeds join; unrealized from positions × latest price; sign: disposed_basis_value stored negative, gain = proceeds + disposed_basis); Portfolio/Gains/Suggestions tabs; suggestions accept/ignore cards; `GET /investments/automation-rules`; 4 DB-layer tests.
+- Report snapshots deferred (immutable event log makes past-date queries reproducible; explicit snapshot store deferred).
+- **Next**: online import (R7 / Trading 212), lifting `B-T212-INVST`. Full design: `docs/investments-plan.md`.
 
 ---
 
