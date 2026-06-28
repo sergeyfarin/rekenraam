@@ -113,32 +113,6 @@ R7 ships **manual "refresh now"** on the durable queue. A per-connection schedul
 auto-refresh (daily domain trigger enqueuing `import.fetch.trading212`) is a thin
 follow-up on the same machinery — deferred to keep the first online slice small.
 
-### T-09 Durable work queue does not coalesce duplicate enqueues `[ ]`
-**File:** `backend/internal/db/background_work.go:27` (`EnqueueBackgroundWork`).
-
-`EnqueueBackgroundWork` is a plain `INSERT` — no uniqueness constraint and no
-`WHERE NOT EXISTS` on `(book_id, kind, payload)`. The FX-refresh plan
-(`docs/fx-refresh-implementation-plan.md`, Slice 1) describes "enqueue/coalesce"
-but only enqueue shipped; FX tolerates it because coverage work is idempotent.
-**Impact:** any caller that must not run twice concurrently (e.g. Trading 212
-"refresh now", T212 plan) has to guard at the service layer instead. **Fix:**
-add a partial unique index on un-completed work `(book_id, kind, payload_json)
-WHERE status IN ('pending','running')` and make enqueue `INSERT … ON CONFLICT DO
-NOTHING`, returning the existing item. Then the service-layer guards become
-defence-in-depth rather than the only protection.
-
-### T-10 Generic work queue methods live on `PricingRepository` `[ ]`
-**File:** `backend/internal/db/background_work.go` (all methods are
-`func (r *PricingRepository) …`).
-
-The queue is generic (`kind`-dispatched) but its repository methods hang off
-`*PricingRepository`. Any second consumer (the Trading 212 import worker, T212
-plan Slice 3) would have to depend on the pricing repository — a wrong dependency
-edge (`import → pricing`). **Fix (pure move):** extract a standalone
-`*db.BackgroundWorkRepository` over the same `*sql.DB`; have `PricingRepository`
-embed/delegate to it so existing call sites are untouched. Prerequisite for the
-import fetch worker.
-
 > **I-03 and I-04 are open *product/accounting decisions*, not blockers.** Both
 > were deliberately scoped out of the shipped investments feature (R12) and neither
 > gates anything currently planned. They become actionable only if/when the related
@@ -219,3 +193,11 @@ Backend review polish (formerly root `review2206.md`) is also resolved:
 single-connection contract documented at `SetMaxOpenConns(1)`, request bodies use
 `http.MaxBytesReader`, `pow10` cache landed, and inbound `X-Request-ID` is
 honored.
+
+**T-09/T-10 background work queue extraction — closed.** The generic queue now has
+its own `db.BackgroundWorkRepository`, while `PricingRepository` embeds it so
+existing pricing call sites remain intact. `EnqueueBackgroundWork` coalesces exact
+active duplicates through a partial unique index on `(book_id, kind, payload_json)
+WHERE status IN ('pending','running')`, returns the existing active item on
+conflict, and permits equivalent work to be enqueued again after completion. The
+FX trigger producers were recreated conflict-aware in the same migration.

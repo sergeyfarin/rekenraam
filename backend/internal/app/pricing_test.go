@@ -201,7 +201,7 @@ func TestFXCoverageBackfillsHistoricalPublicationDatesIdempotently(t *testing.T)
 func TestBackgroundWorkExpiredLeaseCanBeReclaimed(t *testing.T) {
 	ctx := context.Background()
 	database, _ := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
-	repository := db.NewPricingRepository(database)
+	repository := db.NewBackgroundWorkRepository(database)
 	_, err := repository.EnqueueBackgroundWork(ctx, BookID, "test.work", `{}`, "2026-06-12T00:00:00Z")
 	require.NoError(t, err)
 
@@ -217,6 +217,30 @@ func TestBackgroundWorkExpiredLeaseCanBeReclaimed(t *testing.T) {
 	assert.Equal(t, first.ID, reclaimed.ID)
 	assert.Equal(t, 2, reclaimed.Attempts)
 	require.NoError(t, repository.CompleteBackgroundWork(ctx, reclaimed.ID, "worker-two", "2026-06-12T01:07:00Z"))
+}
+
+func TestBackgroundWorkEnqueueCoalescesActiveDuplicates(t *testing.T) {
+	ctx := context.Background()
+	database, _ := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
+	repository := db.NewBackgroundWorkRepository(database)
+
+	first, err := repository.EnqueueBackgroundWork(ctx, BookID, "test.work", `{"id":1}`, "2026-06-12T00:00:00Z")
+	require.NoError(t, err)
+
+	duplicate, err := repository.EnqueueBackgroundWork(ctx, BookID, "test.work", `{"id":1}`, "2026-06-12T00:01:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, duplicate.ID)
+	assert.Equal(t, first.AvailableAt, duplicate.AvailableAt)
+
+	claimed, err := repository.ClaimBackgroundWork(ctx, "test.work", "worker-one", "2026-06-12T01:00:00Z", "2026-06-12T01:05:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, claimed.ID)
+	require.NoError(t, repository.CompleteBackgroundWork(ctx, claimed.ID, "worker-one", "2026-06-12T01:01:00Z"))
+
+	next, err := repository.EnqueueBackgroundWork(ctx, BookID, "test.work", `{"id":1}`, "2026-06-12T02:00:00Z")
+	require.NoError(t, err)
+	assert.NotEqual(t, first.ID, next.ID)
+	assert.Equal(t, "2026-06-12T02:00:00Z", next.AvailableAt)
 }
 
 type fakeFXRate struct {

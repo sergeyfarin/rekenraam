@@ -10,6 +10,7 @@ import (
 
 type PricingRepository struct {
 	database *sql.DB
+	*BackgroundWorkRepository
 }
 
 type MarketDataSourceRecord struct {
@@ -263,7 +264,10 @@ type PricingRefreshStateSpec struct {
 }
 
 func NewPricingRepository(database *sql.DB) *PricingRepository {
-	return &PricingRepository{database: database}
+	return &PricingRepository{
+		database:                 database,
+		BackgroundWorkRepository: NewBackgroundWorkRepository(database),
+	}
 }
 
 func (r *PricingRepository) FXCoverageStartDates(ctx context.Context, bookID int64) ([]PricingCurrencyCoverageRecord, error) {

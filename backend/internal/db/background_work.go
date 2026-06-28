@@ -24,23 +24,63 @@ type BackgroundWorkItemRecord struct {
 	CompletedAt    sql.NullString
 }
 
-func (r *PricingRepository) EnqueueBackgroundWork(ctx context.Context, bookID int64, kind string, payloadJSON string, availableAt string) (BackgroundWorkItemRecord, error) {
-	result, err := r.database.ExecContext(ctx, `
+type BackgroundWorkRepository struct {
+	database *sql.DB
+}
+
+func NewBackgroundWorkRepository(database *sql.DB) *BackgroundWorkRepository {
+	return &BackgroundWorkRepository{database: database}
+}
+
+func (r *BackgroundWorkRepository) EnqueueBackgroundWork(ctx context.Context, bookID int64, kind string, payloadJSON string, availableAt string) (BackgroundWorkItemRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return BackgroundWorkItemRecord{}, fmt.Errorf("begin background work enqueue: %w", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `
 		INSERT INTO background_work_items (
 			book_id, kind, payload_json, available_at, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(book_id, kind, payload_json) WHERE status IN ('pending', 'running') DO NOTHING
 	`, bookID, kind, payloadJSON, availableAt, availableAt, availableAt)
 	if err != nil {
 		return BackgroundWorkItemRecord{}, fmt.Errorf("enqueue background work: %w", err)
 	}
-	id, err := result.LastInsertId()
+	rows, err := result.RowsAffected()
 	if err != nil {
-		return BackgroundWorkItemRecord{}, fmt.Errorf("read background work id: %w", err)
+		return BackgroundWorkItemRecord{}, fmt.Errorf("read background work enqueue rows: %w", err)
+	}
+	var id int64
+	if rows == 1 {
+		id, err = result.LastInsertId()
+		if err != nil {
+			return BackgroundWorkItemRecord{}, fmt.Errorf("read background work id: %w", err)
+		}
+	} else {
+		err = tx.QueryRowContext(ctx, `
+			SELECT id
+			FROM background_work_items
+			WHERE book_id = ? AND kind = ? AND payload_json = ?
+			  AND status IN ('pending', 'running')
+			ORDER BY id
+			LIMIT 1
+		`, bookID, kind, payloadJSON).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return BackgroundWorkItemRecord{}, ErrNotFound
+		}
+		if err != nil {
+			return BackgroundWorkItemRecord{}, fmt.Errorf("read existing background work id: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return BackgroundWorkItemRecord{}, fmt.Errorf("commit background work enqueue: %w", err)
 	}
 	return r.BackgroundWorkByID(ctx, id)
 }
 
-func (r *PricingRepository) ClaimBackgroundWork(ctx context.Context, kind string, leaseOwner string, now string, leaseExpiresAt string) (BackgroundWorkItemRecord, error) {
+func (r *BackgroundWorkRepository) ClaimBackgroundWork(ctx context.Context, kind string, leaseOwner string, now string, leaseExpiresAt string) (BackgroundWorkItemRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return BackgroundWorkItemRecord{}, fmt.Errorf("begin background work claim: %w", err)
@@ -86,7 +126,7 @@ func (r *PricingRepository) ClaimBackgroundWork(ctx context.Context, kind string
 	return r.BackgroundWorkByID(ctx, id)
 }
 
-func (r *PricingRepository) CompleteBackgroundWork(ctx context.Context, id int64, leaseOwner string, now string) error {
+func (r *BackgroundWorkRepository) CompleteBackgroundWork(ctx context.Context, id int64, leaseOwner string, now string) error {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE background_work_items
 		SET status = 'completed', completed_at = ?, updated_at = ?,
@@ -99,7 +139,7 @@ func (r *PricingRepository) CompleteBackgroundWork(ctx context.Context, id int64
 	return requireOneBackgroundWorkRow(result)
 }
 
-func (r *PricingRepository) RetryBackgroundWork(ctx context.Context, id int64, leaseOwner string, availableAt string, now string, workError string) error {
+func (r *BackgroundWorkRepository) RetryBackgroundWork(ctx context.Context, id int64, leaseOwner string, availableAt string, now string, workError string) error {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE background_work_items
 		SET status = 'pending', available_at = ?, updated_at = ?, last_error = ?,
@@ -112,7 +152,7 @@ func (r *PricingRepository) RetryBackgroundWork(ctx context.Context, id int64, l
 	return requireOneBackgroundWorkRow(result)
 }
 
-func (r *PricingRepository) FailBackgroundWork(ctx context.Context, id int64, leaseOwner string, now string, workError string) error {
+func (r *BackgroundWorkRepository) FailBackgroundWork(ctx context.Context, id int64, leaseOwner string, now string, workError string) error {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE background_work_items
 		SET status = 'failed', updated_at = ?, last_error = ?,
@@ -125,7 +165,7 @@ func (r *PricingRepository) FailBackgroundWork(ctx context.Context, id int64, le
 	return requireOneBackgroundWorkRow(result)
 }
 
-func (r *PricingRepository) BackgroundWorkByID(ctx context.Context, id int64) (BackgroundWorkItemRecord, error) {
+func (r *BackgroundWorkRepository) BackgroundWorkByID(ctx context.Context, id int64) (BackgroundWorkItemRecord, error) {
 	var item BackgroundWorkItemRecord
 	err := r.database.QueryRowContext(ctx, `
 		SELECT id, book_id, kind, payload_version, payload_json, status, attempts,
