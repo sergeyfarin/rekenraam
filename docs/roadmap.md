@@ -10,10 +10,12 @@ competitor-driven feature gap analysis.
 - **Long-lived decisions:** `docs/adrs/`, `docs/conventions.md`,
   `docs/early-architecture-decisions.md`.
 
-Status as of 2026-06-27: Phases 0–2 ship end-to-end. Phase 3 has a complete
+Status as of 2026-06-28: Phases 0–2 ship end-to-end. Phase 3 has a complete
 backend (reconciliation engine, ledger read models) but no reconcile/reports UI.
-Phases 4–6 are mostly unstarted; FX/pricing and investments have backend
-foundations only.
+Phase 4 import has its core pipeline + QIF adapter shipped (Slice 1). Phase 6
+**investments shipped end-to-end** (R12: all four cost-basis methods, sell preview,
+gains reporting, provider-event review UI); FX/pricing still has backend foundations
+only. Phase 5 (budgets, recurring) is unstarted.
 
 ---
 
@@ -38,8 +40,8 @@ Reference apps for a self-hosted Microsoft Money / Quicken successor. ✅ = soli
 | Scheduled / recurring transactions | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ |
 | Projected balances / forecasting | ⬜ | ✅ | partial | ✅ | partial | ⬜ |
 | Loans / amortization helpers | ⬜ | ✅ | ✅ | ⬜ | ⬜ | ✅ |
-| Investment lots & cost basis | 🟦 | ✅ | ✅ | ⬜ | partial | ✅ |
-| Dividends / corporate actions | 🟦 | ✅ | ✅ | ⬜ | ⬜ | partial |
+| Investment lots & cost basis | ✅ | ✅ | ✅ | ⬜ | partial | ✅ |
+| Dividends / corporate actions | ✅ | ✅ | ✅ | ⬜ | ⬜ | partial |
 | Price/FX history + scheduled refresh | 🟦 | ✅ | ✅ | ⬜ | ✅ | partial |
 | Realized/unrealized gains reporting | ✅ | ✅ | ✅ | ⬜ | ⬜ | partial |
 | Payee/category cleanup & merge | ⬜ | ✅ | partial | ✅ | ✅ | partial |
@@ -51,8 +53,9 @@ Firefly and ahead of YNAB on accounting correctness. The decisive missing pieces
 for an everyday Money/Quicken replacement are, in order: (1) reconcile + reports
 UI to expose the engine that already exists, (2) import — the single biggest
 manual-entry reducer every competitor ships, (3) budgets and recurring
-transactions, the daily-driver planning loop, and (4) surfacing the
-investment/FX backends. Exports are table stakes and cheap.
+transactions, the daily-driver planning loop, and (4) surfacing the remaining
+FX/pricing backend (investments now ship end-to-end with UI). Exports are table
+stakes and cheap.
 
 ---
 

@@ -1,16 +1,13 @@
 # Transaction Ledger Core Plan
 
-Status: transaction-ledger design reference. It is not the immediate
-implementation focus until the Phase 1 UI contract closeout in
-`docs/phase-1-implementation-plan.md` is complete.
+Status: **design reference — implemented.** The transaction-ledger schema,
+lifecycle, reconciliation guard, and API slice described here all shipped (Phase 2,
+see `implemented.md`). This document is kept for the schema/design rationale only;
+it is not an active tracker. For current state see `docs/implemented.md`; for
+what's next, `docs/roadmap.md`.
 
 This document updates the transaction schema proposal after the tags,
-categories, accounts, commodities, and system-account discussions. Backend
-transaction and reconciliation foundations have started, but the next product
-focus remains Phase 1 account/institution UI and API-client contract closeout.
-Before expanding transaction UI or reporting work, accept or update this plan,
-then keep migrations, OpenAPI, backend services, frontend API helpers, and tests
-aligned with it.
+categories, accounts, commodities, and system-account discussions.
 
 ## Source Of Truth Updates Already Locked
 

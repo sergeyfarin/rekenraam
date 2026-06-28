@@ -95,9 +95,16 @@ visible outside the Trading 212 plan.
 **File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.
 
 Online import (R7, Trading 212) imports **cash-account movements** only. Instrument
-buy/sell fills are flagged `needs_attention` and not booked as lots, because the
-investments ledger UI does not exist yet — the same stance QIF takes on
-`!Type:Invst`. Revisit after the investments UI ships.
+buy/sell fills are flagged `needs_attention` and not booked as lots — the same
+stance QIF takes on `!Type:Invst`.
+
+**No longer blocked.** The original blocker (no investments ledger UI) is gone: the
+investments feature shipped end-to-end (R12, all four cost-basis methods, sell
+preview, gains reporting — see `implemented.md`). This is now a scoped task inside
+the Trading 212 work itself (`investments-plan.md` Slice 5): map order fills to
+buys/sells and dividends to investment events through the now-UI-backed investment
+service. It remains open only because R7/Trading 212 is itself deferred, not because
+a prerequisite is missing.
 
 ### B-T212-SCHED Trading 212 scheduled auto-refresh `[ ]`
 **File:** `docs/trading212-import-plan.md` (Slice 4).
@@ -132,40 +139,14 @@ edge (`import → pricing`). **Fix (pure move):** extract a standalone
 embed/delegate to it so existing call sites are untouched. Prerequisite for the
 import fetch worker.
 
-### I-01 Explicit lot allocations bypass the cost-basis method `[ ]`
-**File:** `backend/internal/db/investments.go:899` (`disposeLotsWithAuditTx`),
-`backend/internal/app/investments.go:802` (sell path passes `Allocations`).
-
-FIFO is enforced only on the **implicit** disposal path (`ORDER BY opened_on, id`,
-`ErrInsufficientLots` guards oversell). When a sell request carries explicit
-`LotAllocations`, the backend disposes exactly those lots with **no validation**
-that the selection is permitted for the account's cost-basis method — a client can
-sell newest-first under a "FIFO" account. Not reachable today (no sell UI), but a
-**hard gate before the investments sell UI** (`docs/investments-plan.md` Slice 1).
-**Fix:** derive the allocation server-side from the method for fifo/lifo; allow
-explicit allocations only for `specific_lot`, still validated for ownership/open
-status/quantity.
-
-### I-02 Implement all four cost-basis methods + 3-tier method selection `[ ]`
-**File:** `backend/internal/app/investments.go:1267` (validation),
-`backend/internal/db/investments.go:899` (`disposeLotsWithAuditTx`, only does FIFO),
-`backend/internal/app/investments.go` (`CreateHoldingAccount`, no method today).
-
-The cost-basis method is validated against `{fifo, lifo, average_cost,
-specific_lot}` and stored on a profile, but **disposal only ever does FIFO** — a
-"LIFO" profile silently disposes FIFO (correctness/trust bug). **Decision (product):
-implement all four**, not gate. **Fix (investments plan Slice 1, see "Cost-basis
-methods"):** implement `lifo` (`ORDER BY opened_on DESC, id DESC`), `average_cost`
-(weighted-average, per-lot representation — model 2), and `specific_lot` alongside
-`fifo`; add **3-tier method selection** (per-transaction override → per-account
-default → global default), which needs an account-level method link
-(`CreateHoldingAccount` takes none today) and an explicit method field on the
-sell/sell-preview input. The disposal path still rejects any value outside the
-implemented set loudly (defence for future schema additions). One shared resolver +
-disposal calc used by preview and commit so they never diverge.
+> **I-03 and I-04 are open *product/accounting decisions*, not blockers.** Both
+> were deliberately scoped out of the shipped investments feature (R12) and neither
+> gates anything currently planned. They become actionable only if/when the related
+> reporting or accounting need is prioritized — recorded here so the choice is made
+> consciously rather than by omission.
 
 ### I-03 Multi-method analytical gains reporting `[ ]`
-**File:** `docs/investments-plan.md` ("Cost-basis methods → Future"), Slice 4.
+**File:** `docs/investments-plan.md` ("Cost-basis methods → Future").
 
 Tax vs. performance reporting can need *different* cost-basis methods. This is
 **read-side only**: the authoritative method (I-02) drives lot disposal and the
@@ -173,8 +154,10 @@ realized-gain figure computed from it; analytical reports re-derive
 realized/unrealized gains under alternative methods from the immutable lot+disposal
 history **without mutating lots or posting**. Data-model requirement enforced now:
 keep full per-lot acquisition + disposal history (already true; do not collapse lots
-irreversibly — a reason to prefer the per-lot average-cost model). The reporting
-itself is designed when Slice 4's gains reporting is specified.
+irreversibly — a reason to prefer the per-lot average-cost model). Slice 4 shipped
+single-method (authoritative) gains reporting; this *multi-method analytical* layer
+is the remaining, deferred read-side extension, designed if/when comparative
+tax-vs-performance reporting is prioritized.
 
 ### I-04 Realized gain is computed, not posted to a gain/loss account `[ ]`
 **File:** `backend/internal/app/investments.go:790` (sell transaction shape),
@@ -188,12 +171,29 @@ records) and the investments plan computes/surfaces it, but it is **not a ledger
 posting**. Posting realized gains (so reports/registers show gain as an income/equity
 movement) would need: a realized-gain account kind or convention, a per-instrument or
 book-level gain-account mapping, and a sell transaction-shape change to add the gain
-leg. Deferred as a conscious product/accounting decision, not an oversight. Revisit
-when gains reporting (Slice 4 / I-03) is specified, since the two interact.
+leg. Deferred as a conscious product/accounting decision, not an oversight. The
+shipped gains report (Slice 4) surfaces realized gain as a *computed* figure; promoting
+it to a *posted* ledger movement is the open decision here, interacting with I-03.
 
 ---
 
 ## Resolved (kept for traceability)
+
+**Investments correctness gate (I-01, I-02) — closed by the investments feature
+(R12, Slice 1).** Both holes the FIFO audit found are fixed in code:
+
+- **I-01 (explicit allocations bypassed the method):** `disposeLotsWithAuditTx`
+  (`backend/internal/db/investments.go`) now permits explicit `LotAllocations` only
+  for `specific_lot` (validated for ownership, open status, and matching quantity);
+  fifo/lifo/average_cost derive their allocation server-side. A client can no longer
+  sell newest-first under a FIFO account.
+- **I-02 (only FIFO was implemented):** all four methods — `fifo`, `lifo`
+  (`ORDER BY opened_on DESC, id DESC`), `average_cost` (per-lot weighted-average,
+  model 2), `specific_lot` — are real, with a `resolveCostBasisMethod` resolver
+  implementing 3-tier selection (per-transaction → `account_versions.cost_basis_method`
+  (migration 0005) → global default). A `POST /investments/sell/preview` endpoint shares
+  the disposal calc with commit so they never diverge; an unimplemented method value
+  fails loudly. Full DB + app test coverage.
 
 The original code-quality audit (formerly root `backlog.md`, items B-01…B-22)
 is fully closed: 20 fixed, 2 by-design. Highlights, so the fixes aren't

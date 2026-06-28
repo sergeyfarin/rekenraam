@@ -14,11 +14,13 @@ ADR 0010 (durable background work), and `docs/conventions.md`. Aligns with the
 FX-refresh precedent in `docs/fx-refresh-implementation-plan.md`, which is the
 template for the durable-fetch machinery here.
 
-Status: **deferred behind investments.** Planning complete; implementation paused
-until the investments feature is fully working including UI (`docs/investments-plan.md`).
-Trading 212 is a brokerage — importing it meaningfully needs the lot/event
-machinery the investments feature owns (see `B-T212-INVST`). Resume here after
-investments Slice 4. Last updated 2026-06-27.
+Status: **planning complete; ready to implement when R7 is prioritized.** The
+prerequisite that paused this work — a fully working investments feature including
+UI — is now **met** (`docs/investments-plan.md` Slices 1–4 shipped, R12). Trading 212
+is a brokerage, so booking its instrument fills as lots needs that lot/event
+machinery, which now exists. What remains is the online-import work itself (R7),
+which is sequenced after the near-term roadmap; this plan is no longer blocked by a
+missing dependency. Last updated 2026-06-28.
 
 ---
 
@@ -395,7 +397,9 @@ the code — a slice is not done until its docs reflect it.
 ### Slice 4 (follow-up, scoped not built here)
 - Scheduled auto-refresh toggle per connection (B-T212-SCHED): a domain trigger
   enqueues `import.fetch.trading212` on a daily cadence, same machinery.
-- Investment lot import once the investments UI exists (B-T212-INVST).
+- Investment lot import (B-T212-INVST): map order fills to buys/sells and dividends
+  to investment events through the investment service (its UI now ships — R12), so
+  this is buildable as part of this work rather than blocked on a prerequisite.
 
 ---
 

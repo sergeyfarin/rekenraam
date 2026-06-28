@@ -8,7 +8,9 @@ Governed by `docs/product-requirements.md` (Phase 4) and `docs/roadmap.md`
 (R4–R7). Aligns with `docs/conventions.md`, `docs/early-architecture-decisions.md`,
 and the ADRs (notably ADR 0010 durable background work).
 
-Status: planning. Not yet started. Last updated 2026-06-27.
+Status: **Slice 1 (pipeline + QIF) shipped** (roadmap R4 — see `implemented.md`,
+Import Pipeline). Slices 2+ (CSV, profiles, XLSX/OFX/QFX, online) are planning, in
+roadmap order R5–R7. Last updated 2026-06-28.
 
 ---
 
@@ -364,7 +366,7 @@ localized like all copy.
 Each slice leaves the app runnable, tested, documented. Slices map to roadmap
 R4–R7.
 
-### Slice 1 — Pipeline + QIF (MS Money migration) — *first value*
+### Slice 1 — Pipeline + QIF (MS Money migration) — ✅ shipped
 - `0004_import_core.sql`: `import_batches`, `import_batch_events`,
   `import_staged_rows` (with `book_id`), `import_commit_identities`,
   `import_profiles`.

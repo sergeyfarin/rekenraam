@@ -1,5 +1,10 @@
 # FX Refresh And Durable Work Implementation Plan
 
+Status: **backend shipped** (the durable work queue + demand-driven FX coverage are
+implemented — see `implemented.md`, "FX & Pricing"; ADR 0010). No management UI yet
+(roadmap R11). Kept for the design rationale; current state lives in `implemented.md`
+and `roadmap.md`.
+
 This plan implements ADR 0010 in independently shippable slices. Each slice keeps
 the app runnable and uses the existing generic pricing observation model.
 

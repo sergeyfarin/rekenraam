@@ -9,7 +9,20 @@ deferred behind (`docs/trading212-import-plan.md`).
 Realises roadmap **R12 (Investments UI + gains reporting)**. Written for the
 Sonnet model to implement, grounded in the actual code as of 2026-06-27.
 
-Status: Slices 1, 2, 3, and 4 **complete**. Last updated 2026-06-28.
+Status: Slices 1, 2, 3, and 4 **complete** (R12 shipped). Last updated 2026-06-28.
+
+> **Outcome (kept as the design record).** This plan is **done** through Slice 4 —
+> see `implemented.md` (Investments) and `roadmap.md` R12 for the shipped state. The
+> "Current state", "Correctness gaps", and "Risks" sections below describe the
+> situation **as the plan was written (2026-06-27)** and are retained for rationale;
+> they are no longer accurate as a status report. What actually changed:
+> - **I-01 / I-02 closed** — all four cost-basis methods implemented, explicit
+>   allocations gated to `specific_lot`, 3-tier resolver, sell-preview endpoint.
+>   (Backlog "Resolved".)
+> - **OpenAPI coverage added** — all investment paths incl. `/investments/gains` now
+>   in `api/openapi/` with generated TS types; risk #1 below is resolved.
+> - **Slice 5 (Trading 212 lots, `B-T212-INVST`)** is the only remaining work, and it
+>   lives in `docs/trading212-import-plan.md`, deferred with R7.
 
 ---
 
@@ -770,9 +783,10 @@ With investments working, reopen `docs/trading212-import-plan.md`:
 
 ## Risks / open questions
 
-1. **OpenAPI coverage is absent** (verified 2026-06-27): add all 23 existing
+1. ~~**OpenAPI coverage is absent** (verified 2026-06-27): add all 23 existing
    investment paths (+ the new sell-preview = 24) to `api/openapi/openapi.yaml`
-   before Slice 2. Not optional.
+   before Slice 2.~~ **Resolved** — all investment paths (incl. `/investments/gains`)
+   are now in `api/openapi/` with generated TS types.
 2. **Realized-gain posting (I-04):** gain is currently *computed* from disposals,
    not posted to a gain/loss account (none exists in the taxonomy). If product later
    wants gain as a ledger movement, that is a separate transaction-shape + account-

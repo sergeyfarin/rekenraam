@@ -1,8 +1,8 @@
 # Accounts And Institutions System Design Reference
 
-Status: design reference for account and institution behavior. It is not the
-active next-step tracker; current sequencing lives in
-`docs/phase-1-implementation-plan.md`.
+Status: design reference for account and institution behavior — **implemented**
+(Phase 1, see `docs/implemented.md`). It is not an active tracker; current state
+lives in `docs/implemented.md` and what's next in `docs/roadmap.md`.
 
 This document records the account and institution design that guided the
 implemented backend slices and remains useful for later transaction,
