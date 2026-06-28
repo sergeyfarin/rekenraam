@@ -44,8 +44,7 @@ func sessionStatus(logger *slog.Logger, authService *app.AuthService) http.Handl
 		token := readSessionToken(r)
 		status, err := authService.Session(r.Context(), token)
 		if err != nil {
-			logger.ErrorContext(r.Context(), "read auth session", slog.Any("err", err))
-			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			writeAuthServiceError(w, r, logger, "read auth session", err)
 			return
 		}
 
@@ -76,26 +75,7 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 			ClientIP: loginClientIP(r, options),
 		})
 		if err != nil {
-			var validationError app.ValidationError
-			var rateLimitError app.RateLimitError
-			switch {
-			case errors.As(err, &validationError):
-				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
-			case errors.As(err, &rateLimitError):
-				retryAfterSecs := int(math.Ceil(rateLimitError.RetryAfter.Seconds()))
-				if retryAfterSecs < 1 {
-					retryAfterSecs = 1
-				}
-				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
-				writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
-			case errors.Is(err, app.ErrSetupRequired):
-				writeAPIError(w, http.StatusConflict, "SETUP_REQUIRED", "owner setup is required before login")
-			case errors.Is(err, app.ErrInvalidCredentials):
-				writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid username or password")
-			default:
-				logger.ErrorContext(r.Context(), "login owner", slog.Any("err", err))
-				writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
-			}
+			writeAuthServiceError(w, r, logger, "login owner", err)
 			return
 		}
 
@@ -107,16 +87,37 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 }
 
 func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := authService.Logout(r.Context(), readSessionToken(r)); err != nil {
-			logger.ErrorContext(r.Context(), "logout owner", slog.Any("err", err))
-			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			writeAuthServiceError(w, r, logger, "logout owner", err)
 			return
 		}
 
 		clearSessionCookie(w, r, options)
 		w.WriteHeader(http.StatusNoContent)
 	}))
+}
+
+func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	var validationError app.ValidationError
+	var rateLimitError app.RateLimitError
+	switch {
+	case errors.As(err, &validationError):
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.As(err, &rateLimitError):
+		retryAfterSecs := int(math.Ceil(rateLimitError.RetryAfter.Seconds()))
+		if retryAfterSecs < 1 {
+			retryAfterSecs = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
+		writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
+	case errors.Is(err, app.ErrSetupRequired):
+		writeAPIError(w, http.StatusConflict, "SETUP_REQUIRED", "owner setup is required before login")
+	case errors.Is(err, app.ErrInvalidCredentials):
+		writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid username or password")
+	default:
+		writeServiceInternalError(w, r, logger, action, err)
+	}
 }
 
 func readSessionToken(r *http.Request) string {
@@ -175,7 +176,7 @@ func requireSameOrigin(options HandlerOptions, next http.Handler) http.HandlerFu
 	}
 }
 
-func requireAuthenticatedMutation(authService *app.AuthService, options HandlerOptions, next http.Handler) http.HandlerFunc {
+func requireAuthenticatedMutation(logger *slog.Logger, authService *app.AuthService, options HandlerOptions, next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if authService == nil {
 			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
@@ -195,7 +196,7 @@ func requireAuthenticatedMutation(authService *app.AuthService, options HandlerO
 
 		status, err := authService.Session(r.Context(), token)
 		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			writeServiceInternalError(w, r, logger, "read auth session", err)
 			return
 		}
 		if !status.Authenticated {

@@ -361,7 +361,7 @@ func listInvestmentInstruments(logger *slog.Logger, authService *app.AuthService
 }
 
 func createInvestmentInstrument(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -399,7 +399,7 @@ func readInvestmentInstrument(logger *slog.Logger, authService *app.AuthService,
 }
 
 func updateInvestmentInstrument(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -423,7 +423,7 @@ func updateInvestmentInstrument(logger *slog.Logger, authService *app.AuthServic
 }
 
 func createHoldingAccount(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -464,7 +464,7 @@ func listCostBasisProfiles(logger *slog.Logger, authService *app.AuthService, in
 }
 
 func saveCostBasisProfile(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, profileIDFromPath bool) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -518,7 +518,7 @@ func listDividendDefaults(logger *slog.Logger, authService *app.AuthService, inv
 }
 
 func saveDividendDefault(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, defaultIDFromPath bool) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -593,7 +593,7 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 }
 
 func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, action string) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -620,7 +620,7 @@ func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, 
 }
 
 func createDividend(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -647,7 +647,7 @@ func createDividend(logger *slog.Logger, authService *app.AuthService, investmen
 }
 
 func createReinvestedDividend(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -745,7 +745,7 @@ func ignoreInvestmentEventSuggestion(logger *slog.Logger, authService *app.AuthS
 }
 
 func eventSuggestionStatusMutation(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, action string) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -784,7 +784,7 @@ func listInvestmentAutomationRules(logger *slog.Logger, authService *app.AuthSer
 }
 
 func saveInvestmentAutomationRules(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -846,8 +846,7 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 	case errors.Is(err, app.ErrAutomationRuleNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment automation rule not found")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 
@@ -1040,8 +1039,8 @@ type realizedGainTotalResponse struct {
 }
 
 type investmentGainsResponse struct {
-	Realized       []realizedGainResponse     `json:"realized"`
-	Unrealized     []unrealizedGainResponse   `json:"unrealized"`
+	Realized       []realizedGainResponse      `json:"realized"`
+	Unrealized     []unrealizedGainResponse    `json:"unrealized"`
 	RealizedTotals []realizedGainTotalResponse `json:"realized_totals"`
 }
 

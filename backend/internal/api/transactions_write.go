@@ -9,7 +9,7 @@ import (
 )
 
 func createTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -41,7 +41,7 @@ func createTransaction(logger *slog.Logger, authService *app.AuthService, transa
 }
 
 func updateTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -78,7 +78,7 @@ func updateTransaction(logger *slog.Logger, authService *app.AuthService, transa
 }
 
 func postTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -112,7 +112,7 @@ func postTransaction(logger *slog.Logger, authService *app.AuthService, transact
 }
 
 func voidTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -159,7 +159,7 @@ func restoreTransaction(logger *slog.Logger, authService *app.AuthService, trans
 }
 
 func transactionLifecycleHandler(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions, action string, mutate func(context.Context, app.TransactionLifecycleInput) (app.Transaction, error)) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -188,7 +188,7 @@ func transactionLifecycleHandler(logger *slog.Logger, authService *app.AuthServi
 }
 
 func correctTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -224,7 +224,7 @@ func correctTransaction(logger *slog.Logger, authService *app.AuthService, trans
 }
 
 func deleteDraftTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := authenticatedMutationOwner(w, r); !ok {
 			return
 		}
@@ -243,7 +243,7 @@ func deleteDraftTransaction(logger *slog.Logger, authService *app.AuthService, t
 }
 
 func approveTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return

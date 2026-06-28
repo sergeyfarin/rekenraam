@@ -93,7 +93,7 @@ type changePostingReconciliationStatusRequest struct {
 }
 
 func startReconciliation(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -156,7 +156,7 @@ func previewReconciliation(logger *slog.Logger, authService *app.AuthService, tr
 }
 
 func reconciliationSelectionMutation(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions, preview bool) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -197,7 +197,7 @@ func reconciliationSelectionMutation(logger *slog.Logger, authService *app.AuthS
 }
 
 func finishReconciliation(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -228,7 +228,7 @@ func finishReconciliation(logger *slog.Logger, authService *app.AuthService, tra
 }
 
 func voidReconciliation(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -288,7 +288,7 @@ func listReconciliationCheckpoints(logger *slog.Logger, authService *app.AuthSer
 }
 
 func voidReconciliationCheckpoint(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -319,7 +319,7 @@ func voidReconciliationCheckpoint(logger *slog.Logger, authService *app.AuthServ
 }
 
 func changePostingReconciliationStatus(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return

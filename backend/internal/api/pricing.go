@@ -237,7 +237,7 @@ func listPrices(logger *slog.Logger, authService *app.AuthService, pricingServic
 }
 
 func createPrice(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -290,7 +290,7 @@ func getPricingPolicy(logger *slog.Logger, authService *app.AuthService, pricing
 }
 
 func savePricingPolicy(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -332,7 +332,7 @@ func listPricingSourceAssignments(logger *slog.Logger, authService *app.AuthServ
 }
 
 func savePricingSourceAssignment(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions, assignmentIDFromPath bool) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -369,7 +369,7 @@ func savePricingSourceAssignment(logger *slog.Logger, authService *app.AuthServi
 }
 
 func runPricingRefresh(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -426,8 +426,7 @@ func writePricingServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 	case errors.Is(err, app.ErrPricingAssignmentNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing source assignment not found")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

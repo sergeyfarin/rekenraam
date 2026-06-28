@@ -36,7 +36,6 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 	case errors.Is(err, app.ErrReconciliationPosting):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "reconciliation posting is invalid")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }

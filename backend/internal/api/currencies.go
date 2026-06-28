@@ -85,8 +85,7 @@ func listCurrencies(logger *slog.Logger, authService *app.AuthService, currencyS
 
 		currencies, err := currencyService.ListCurrencies(r.Context())
 		if err != nil {
-			logger.ErrorContext(r.Context(), "list currencies", slog.Any("err", err))
-			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			writeCurrencyServiceError(w, r, logger, "list currencies", err)
 			return
 		}
 
@@ -95,7 +94,7 @@ func listCurrencies(logger *slog.Logger, authService *app.AuthService, currencyS
 }
 
 func createCurrency(logger *slog.Logger, authService *app.AuthService, currencyService *app.CurrencyService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -126,7 +125,7 @@ func createCurrency(logger *slog.Logger, authService *app.AuthService, currencyS
 }
 
 func completeCurrencySetup(logger *slog.Logger, authService *app.AuthService, currencyService *app.CurrencyService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -161,7 +160,7 @@ func completeCurrencySetup(logger *slog.Logger, authService *app.AuthService, cu
 }
 
 func setDefaultCurrency(logger *slog.Logger, authService *app.AuthService, currencyService *app.CurrencyService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -204,8 +203,7 @@ func writeCurrencyServiceError(w http.ResponseWriter, r *http.Request, logger *s
 	case errors.Is(err, app.ErrCurrenciesAlreadySetup):
 		writeAPIError(w, http.StatusConflict, "SETUP_ALREADY_COMPLETE", "currency setup is already complete")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

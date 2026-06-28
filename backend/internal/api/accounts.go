@@ -153,7 +153,7 @@ func listAccountVersions(logger *slog.Logger, authService *app.AuthService, acco
 }
 
 func createAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -201,7 +201,7 @@ func createAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 }
 
 func updateAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -315,7 +315,7 @@ func restoreAccount(logger *slog.Logger, authService *app.AuthService, accountSe
 }
 
 func deleteAccount(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -339,7 +339,7 @@ func deleteAccount(logger *slog.Logger, authService *app.AuthService, accountSer
 }
 
 func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions, action string, mutate func(app.Owner, int64, accountLifecycleRequest, *http.Request) (app.Account, error)) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -367,7 +367,7 @@ func accountLifecycleMutation(logger *slog.Logger, authService *app.AuthService,
 }
 
 func completeSystemAccountsSetup(logger *slog.Logger, authService *app.AuthService, accountService *app.AccountService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -426,8 +426,7 @@ func writeAccountServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 	case errors.Is(err, app.ErrSetupAlreadyComplete):
 		writeAPIError(w, http.StatusConflict, "SETUP_ALREADY_COMPLETE", "system accounts setup is already complete")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

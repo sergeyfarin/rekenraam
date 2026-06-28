@@ -120,7 +120,7 @@ func readCategory(logger *slog.Logger, authService *app.AuthService, categorySer
 }
 
 func createCategory(logger *slog.Logger, authService *app.AuthService, categoryService *app.CategoryService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -158,7 +158,7 @@ func createCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 }
 
 func updateCategory(logger *slog.Logger, authService *app.AuthService, categoryService *app.CategoryService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -231,7 +231,7 @@ func restoreCategory(logger *slog.Logger, authService *app.AuthService, category
 }
 
 func categoryLifecycleMutation(logger *slog.Logger, authService *app.AuthService, categoryService *app.CategoryService, options HandlerOptions, action string, mutate func(app.Owner, int64, *http.Request, categoryLifecycleRequest) (app.Category, error)) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -259,7 +259,7 @@ func categoryLifecycleMutation(logger *slog.Logger, authService *app.AuthService
 }
 
 func deleteCategory(logger *slog.Logger, authService *app.AuthService, categoryService *app.CategoryService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -287,7 +287,7 @@ func deleteCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 }
 
 func completeCategoriesSetup(logger *slog.Logger, authService *app.AuthService, categoryService *app.CategoryService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -342,8 +342,7 @@ func writeCategoryServiceError(w http.ResponseWriter, r *http.Request, logger *s
 	case errors.Is(err, app.ErrSetupAlreadyComplete):
 		writeAPIError(w, http.StatusConflict, "SETUP_ALREADY_COMPLETE", "categories setup is already complete")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

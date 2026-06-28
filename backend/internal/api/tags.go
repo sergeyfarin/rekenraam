@@ -84,7 +84,7 @@ func readTag(logger *slog.Logger, authService *app.AuthService, tagService *app.
 }
 
 func createTag(logger *slog.Logger, authService *app.AuthService, tagService *app.TagService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -118,7 +118,7 @@ func createTag(logger *slog.Logger, authService *app.AuthService, tagService *ap
 }
 
 func updateTag(logger *slog.Logger, authService *app.AuthService, tagService *app.TagService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -182,7 +182,7 @@ func restoreTag(logger *slog.Logger, authService *app.AuthService, tagService *a
 }
 
 func tagLifecycleMutation(logger *slog.Logger, authService *app.AuthService, tagService *app.TagService, options HandlerOptions, action string, mutate func(app.Owner, int64, *http.Request) (app.Tag, error)) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -225,8 +225,7 @@ func writeTagServiceError(w http.ResponseWriter, r *http.Request, logger *slog.L
 	case errors.Is(err, app.ErrTagArchived):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "archived tag cannot be updated")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

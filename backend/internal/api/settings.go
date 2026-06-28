@@ -42,8 +42,7 @@ func userPreferences(logger *slog.Logger, authService *app.AuthService, settings
 
 		preferences, err := settingsService.Preferences(r.Context(), owner.ID)
 		if err != nil {
-			logger.ErrorContext(r.Context(), "read user preferences", slog.Any("err", err))
-			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			writeSettingsServiceError(w, r, logger, "read user preferences", err)
 			return
 		}
 
@@ -52,7 +51,7 @@ func userPreferences(logger *slog.Logger, authService *app.AuthService, settings
 }
 
 func saveUserPreferences(logger *slog.Logger, authService *app.AuthService, settingsService *app.SettingsService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -72,14 +71,7 @@ func saveUserPreferences(logger *slog.Logger, authService *app.AuthService, sett
 			ChangeReason:  request.ChangeReason,
 		})
 		if err != nil {
-			var validationError app.ValidationError
-			switch {
-			case errors.As(err, &validationError):
-				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
-			default:
-				logger.ErrorContext(r.Context(), "save user preferences", slog.Any("err", err))
-				writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
-			}
+			writeSettingsServiceError(w, r, logger, "save user preferences", err)
 			return
 		}
 
@@ -183,6 +175,16 @@ func writeCurrencySettingsPageError(w http.ResponseWriter, r *http.Request, logg
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "book not found")
 	default:
 		writePricingServiceError(w, r, logger, action, err)
+	}
+}
+
+func writeSettingsServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	var validationError app.ValidationError
+	switch {
+	case errors.As(err, &validationError):
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	default:
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

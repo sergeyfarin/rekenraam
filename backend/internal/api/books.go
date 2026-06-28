@@ -36,13 +36,7 @@ func currentBook(logger *slog.Logger, authService *app.AuthService, bookService 
 
 		book, err := bookService.CurrentBook(r.Context())
 		if err != nil {
-			switch {
-			case errors.Is(err, app.ErrBookNotFound):
-				writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "book not found")
-			default:
-				logger.ErrorContext(r.Context(), "read current book", slog.Any("err", err))
-				writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
-			}
+			writeBookServiceError(w, r, logger, "read current book", err)
 			return
 		}
 
@@ -51,7 +45,7 @@ func currentBook(logger *slog.Logger, authService *app.AuthService, bookService 
 }
 
 func createBook(logger *slog.Logger, authService *app.AuthService, bookService *app.BookService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -73,16 +67,7 @@ func createBook(logger *slog.Logger, authService *app.AuthService, bookService *
 			Name:          request.Name,
 		})
 		if err != nil {
-			var validationError app.ValidationError
-			switch {
-			case errors.As(err, &validationError):
-				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
-			case errors.Is(err, app.ErrBookAlreadyExists):
-				writeAPIError(w, http.StatusConflict, "CONFLICT", "book already exists")
-			default:
-				logger.ErrorContext(r.Context(), "create setup book", slog.Any("err", err))
-				writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
-			}
+			writeBookServiceError(w, r, logger, "create setup book", err)
 			return
 		}
 
@@ -116,8 +101,7 @@ func authenticatedOwner(w http.ResponseWriter, r *http.Request, logger *slog.Log
 
 	status, err := authService.Session(r.Context(), readSessionToken(r))
 	if err != nil {
-		logger.ErrorContext(r.Context(), "read authenticated owner", slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeAuthServiceError(w, r, logger, "read authenticated owner", err)
 		return app.Owner{}, false
 	}
 	if !status.Authenticated || status.User == nil {
@@ -126,6 +110,20 @@ func authenticatedOwner(w http.ResponseWriter, r *http.Request, logger *slog.Log
 	}
 
 	return *status.User, true
+}
+
+func writeBookServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	var validationError app.ValidationError
+	switch {
+	case errors.As(err, &validationError):
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.Is(err, app.ErrBookNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "book not found")
+	case errors.Is(err, app.ErrBookAlreadyExists):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "book already exists")
+	default:
+		writeServiceInternalError(w, r, logger, action, err)
+	}
 }
 
 func toBookResponse(book app.Book) bookResponse {

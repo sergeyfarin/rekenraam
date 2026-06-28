@@ -92,7 +92,7 @@ func readPayee(logger *slog.Logger, authService *app.AuthService, payeeService *
 }
 
 func createPayee(logger *slog.Logger, authService *app.AuthService, payeeService *app.PayeeService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -131,7 +131,7 @@ func createPayee(logger *slog.Logger, authService *app.AuthService, payeeService
 }
 
 func updatePayee(logger *slog.Logger, authService *app.AuthService, payeeService *app.PayeeService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -208,7 +208,7 @@ func restorePayee(logger *slog.Logger, authService *app.AuthService, payeeServic
 }
 
 func payeeLifecycleMutation(logger *slog.Logger, authService *app.AuthService, payeeService *app.PayeeService, options HandlerOptions, action string, mutate func(app.Owner, int64, *http.Request, payeeLifecycleRequest) (app.Payee, error)) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -254,8 +254,7 @@ func writePayeeServiceError(w http.ResponseWriter, r *http.Request, logger *slog
 	case errors.Is(err, app.ErrPayeeExists):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "payee already exists")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

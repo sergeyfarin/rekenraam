@@ -117,7 +117,7 @@ func listInstitutionVersions(logger *slog.Logger, authService *app.AuthService, 
 }
 
 func createInstitution(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -155,7 +155,7 @@ func createInstitution(logger *slog.Logger, authService *app.AuthService, instit
 }
 
 func updateInstitution(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -227,7 +227,7 @@ func restoreInstitution(logger *slog.Logger, authService *app.AuthService, insti
 }
 
 func deleteInstitution(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -251,7 +251,7 @@ func deleteInstitution(logger *slog.Logger, authService *app.AuthService, instit
 }
 
 func institutionLifecycleMutation(logger *slog.Logger, authService *app.AuthService, institutionService *app.InstitutionService, options HandlerOptions, action string, mutate func(app.Owner, int64, institutionLifecycleRequest, *http.Request) (app.Institution, error)) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -298,8 +298,7 @@ func writeInstitutionServiceError(w http.ResponseWriter, r *http.Request, logger
 	case errors.Is(err, app.ErrInstitutionDeleteNotAllowed):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "institution cannot be deleted while accounts reference it")
 	default:
-		logger.ErrorContext(r.Context(), action, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

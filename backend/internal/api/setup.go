@@ -52,8 +52,7 @@ func setupStatus(logger *slog.Logger, setupService *app.SetupService) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		status, err := setupService.Status(r.Context())
 		if err != nil {
-			logger.ErrorContext(r.Context(), "read setup status", slog.Any("err", err))
-			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+			writeSetupServiceError(w, r, logger, "read setup status", err)
 			return
 		}
 
@@ -75,16 +74,7 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService, options Ha
 			TimeZone: request.TimeZone,
 		})
 		if err != nil {
-			var validationError app.ValidationError
-			switch {
-			case errors.As(err, &validationError):
-				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
-			case errors.Is(err, app.ErrSetupAlreadyComplete):
-				writeAPIError(w, http.StatusConflict, "SETUP_ALREADY_COMPLETE", "setup owner is already complete")
-			default:
-				logger.ErrorContext(r.Context(), "create setup owner", slog.Any("err", err))
-				writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
-			}
+			writeSetupServiceError(w, r, logger, "create setup owner", err)
 			return
 		}
 
@@ -96,6 +86,18 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService, options Ha
 			},
 			Setup: toSetupStatusResponse(result.SetupStatus),
 		})
+	}
+}
+
+func writeSetupServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	var validationError app.ValidationError
+	switch {
+	case errors.As(err, &validationError):
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.Is(err, app.ErrSetupAlreadyComplete):
+		writeAPIError(w, http.StatusConflict, "SETUP_ALREADY_COMPLETE", "setup owner is already complete")
+	default:
+		writeServiceInternalError(w, r, logger, action, err)
 	}
 }
 

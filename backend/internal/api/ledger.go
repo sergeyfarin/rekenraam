@@ -144,8 +144,7 @@ func writeLedgerServiceError(w http.ResponseWriter, r *http.Request, logger *slo
 	case errors.As(err, &overflowErr):
 		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", overflowErr.Error())
 	default:
-		logger.Error(operation, "error", err, "request_id", RequestIDFromContext(r.Context()))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, operation, err)
 	}
 }
 

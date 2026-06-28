@@ -14,28 +14,28 @@ import (
 // --- Response types ---
 
 type importBatchResponse struct {
-	ID               int64   `json:"id"`
-	BookID           int64   `json:"book_id"`
-	SourceKind       string  `json:"source_kind"`
-	ProfileID        *int64  `json:"profile_id,omitempty"`
-	Status           string  `json:"status"`
-	OriginalFilename string  `json:"original_filename"`
-	SourceMetaJSON   string  `json:"source_meta"`
-	CreatedAt        string  `json:"created_at"`
+	ID               int64  `json:"id"`
+	BookID           int64  `json:"book_id"`
+	SourceKind       string `json:"source_kind"`
+	ProfileID        *int64 `json:"profile_id,omitempty"`
+	Status           string `json:"status"`
+	OriginalFilename string `json:"original_filename"`
+	SourceMetaJSON   string `json:"source_meta"`
+	CreatedAt        string `json:"created_at"`
 }
 
 type importStagedRowResponse struct {
-	ID                    int64   `json:"id"`
-	BatchID               int64   `json:"batch_id"`
-	RowIndex              int     `json:"row_index"`
-	DedupeFingerprint     string  `json:"dedupe_fingerprint"`
-	NormalizedJSON        string  `json:"normalized"`
-	RawJSON               string  `json:"raw"`
-	DedupeStatus          string  `json:"dedupe_status"`
-	ResolutionJSON        string  `json:"resolution"`
-	CommitStatus          string  `json:"commit_status"`
+	ID                     int64  `json:"id"`
+	BatchID                int64  `json:"batch_id"`
+	RowIndex               int    `json:"row_index"`
+	DedupeFingerprint      string `json:"dedupe_fingerprint"`
+	NormalizedJSON         string `json:"normalized"`
+	RawJSON                string `json:"raw"`
+	DedupeStatus           string `json:"dedupe_status"`
+	ResolutionJSON         string `json:"resolution"`
+	CommitStatus           string `json:"commit_status"`
 	CommittedTransactionID *int64 `json:"committed_transaction_id,omitempty"`
-	CommitError           string  `json:"commit_error,omitempty"`
+	CommitError            string `json:"commit_error,omitempty"`
 }
 
 type parseWarningResponse struct {
@@ -92,8 +92,8 @@ type commitImportBatchResponse struct {
 }
 
 type previewCommitResponse struct {
-	IncludableCount      int                         `json:"includable_count"`
-	DuplicateCount       int                         `json:"duplicate_count"`
+	IncludableCount      int                           `json:"includable_count"`
+	DuplicateCount       int                           `json:"duplicate_count"`
 	ReconciliationIssues []reconciliationIssueResponse `json:"reconciliation_issues"`
 }
 
@@ -105,7 +105,7 @@ type reconciliationIssueResponse struct {
 // --- Handlers ---
 
 func startImport(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -191,7 +191,7 @@ func getImportBatch(logger *slog.Logger, authService *app.AuthService, importSer
 }
 
 func patchImportBatch(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -278,7 +278,7 @@ func previewCommitImportBatch(logger *slog.Logger, authService *app.AuthService,
 }
 
 func commitImportBatch(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -319,7 +319,7 @@ func commitImportBatch(logger *slog.Logger, authService *app.AuthService, import
 }
 
 func discardImportBatch(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
 			return
@@ -397,8 +397,7 @@ func writeImportServiceError(w http.ResponseWriter, r *http.Request, logger *slo
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", ve.Message)
 			return
 		}
-		logger.ErrorContext(r.Context(), op, slog.Any("err", err))
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		writeServiceInternalError(w, r, logger, op, err)
 	}
 }
 
@@ -447,17 +446,17 @@ func toImportStagedRowResponse(row app.ImportStagedRow) importStagedRowResponse 
 		resolution = "{}"
 	}
 	return importStagedRowResponse{
-		ID:                    row.ID,
-		BatchID:               row.BatchID,
-		RowIndex:              row.RowIndex,
-		DedupeFingerprint:     row.DedupeFingerprint,
-		NormalizedJSON:        normalized,
-		RawJSON:               raw,
-		DedupeStatus:          row.DedupeStatus,
-		ResolutionJSON:        resolution,
-		CommitStatus:          row.CommitStatus,
+		ID:                     row.ID,
+		BatchID:                row.BatchID,
+		RowIndex:               row.RowIndex,
+		DedupeFingerprint:      row.DedupeFingerprint,
+		NormalizedJSON:         normalized,
+		RawJSON:                raw,
+		DedupeStatus:           row.DedupeStatus,
+		ResolutionJSON:         resolution,
+		CommitStatus:           row.CommitStatus,
 		CommittedTransactionID: row.CommittedTransactionID,
-		CommitError:           row.CommitError,
+		CommitError:            row.CommitError,
 	}
 }
 

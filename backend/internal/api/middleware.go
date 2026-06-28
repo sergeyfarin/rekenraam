@@ -48,6 +48,14 @@ func writeAPIError(w http.ResponseWriter, status int, code string, message strin
 	})
 }
 
+func writeServiceInternalError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.ErrorContext(r.Context(), action, slog.Any("err", err))
+	writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+}
+
 func RequestIDFromContext(ctx context.Context) string {
 	requestID, _ := ctx.Value(requestIDKey{}).(string)
 	return requestID
