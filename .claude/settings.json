@@ -66,7 +66,9 @@
       "Bash(grep -E \"\\\\.svelte$\")",
       "Bash(ls backend/internal/app/reconciliation*test* backend/internal/api/reconciliation*test*)",
       "Bash(grep -rc \"func Test\" backend/internal/app/reconciliation_test.go backend/internal/api/reconciliation_test.go)",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(awk -F: '{s+=$2} END {print s}')"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

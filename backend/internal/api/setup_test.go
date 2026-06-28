@@ -285,7 +285,8 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	authService := app.NewAuthService(authRepository, logger)
 	settingsService := app.NewSettingsService(db.NewSettingsRepository(database))
 	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
-	currencyService := app.NewCurrencyService(db.NewCommodityRepository(database), setupService)
+	commodityRepository := db.NewCommodityRepository(database)
+	currencyService := app.NewCurrencyService(commodityRepository, setupService)
 	currencyService.SetNowForTest(func() time.Time {
 		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	})
@@ -300,10 +301,27 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	})
 	payeeRepository := db.NewPayeeRepository(database)
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
-	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, db.NewCommodityRepository(database))
+	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database))
+	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
+	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository)
 
-	return NewHandler(logger, http.NotFoundHandler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, nil, nil, options), database
+	return NewHandler(logger, http.NotFoundHandler(), Services{
+		Setup:       setupService,
+		Auth:        authService,
+		Settings:    settingsService,
+		Book:        bookService,
+		Currency:    currencyService,
+		Institution: institutionService,
+		Account:     accountService,
+		Tag:         tagService,
+		Category:    categoryService,
+		Payee:       payeeService,
+		Transaction: transactionService,
+		Pricing:     pricingService,
+		Investment:  investmentService,
+		Import:      importService,
+	}, options), database
 }
 
 func setSameOrigin(req *http.Request) {

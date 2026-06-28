@@ -80,7 +80,22 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository)
 	pricingService.StartScheduler(ctx, logger)
 	pricingService.StartBackgroundWorker(ctx, logger)
-	handler := api.NewHandler(logger, web.Handler(), setupService, authService, settingsService, bookService, currencyService, institutionService, accountService, tagService, categoryService, payeeService, transactionService, pricingService, investmentService, importService, api.HandlerOptions{
+	handler := api.NewHandler(logger, web.Handler(), api.Services{
+		Setup:       setupService,
+		Auth:        authService,
+		Settings:    settingsService,
+		Book:        bookService,
+		Currency:    currencyService,
+		Institution: institutionService,
+		Account:     accountService,
+		Tag:         tagService,
+		Category:    categoryService,
+		Payee:       payeeService,
+		Transaction: transactionService,
+		Pricing:     pricingService,
+		Investment:  investmentService,
+		Import:      importService,
+	}, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
 	})
