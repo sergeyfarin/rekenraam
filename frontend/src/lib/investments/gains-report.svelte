@@ -5,7 +5,6 @@
   import {
     investmentGainsQueryOptions,
     investmentInstrumentsQueryOptions,
-    type RealizedGainEntry,
     type UnrealizedGainEntry
   } from '$lib/api/investments';
   import { formatScaledValue } from './investment-labels';
@@ -45,13 +44,8 @@
 
   const realized = $derived(gainsQuery.data?.realized ?? []);
   const unrealized = $derived(gainsQuery.data?.unrealized ?? []);
-
-  const realizedTotal = $derived(
-    realized.reduce((sum: bigint, e: RealizedGainEntry) => sum + BigInt(e.realized_gain_value), 0n)
-  );
-
-  // Use first entry's scale for total display (they should be same cost commodity)
-  const realizedTotalScale = $derived(realized[0]?.proceeds_scale ?? 2);
+  // Totals are pre-aggregated by the backend, grouped by cost_commodity_id + scale.
+  const realizedTotals = $derived(gainsQuery.data?.realized_totals ?? []);
 
   function formatGain(value: number | bigint, scale: number): string {
     return formatScaledValue(String(value), scale, locale);
@@ -205,16 +199,18 @@
               {/each}
             </tbody>
             <tfoot>
-              <tr class="border-t-2 border-border bg-surface-strong/30">
-                <td colspan="5" class="py-3 pl-5 pr-3 text-sm font-semibold text-foreground">
-                  {m.investments_gains_realized_total()}
-                </td>
-                <td class="py-3 pl-3 pr-5 text-right font-mono font-semibold">
-                  <span class={gainClass(realizedTotal)}>
-                    {formatGain(realizedTotal, realizedTotalScale)}
-                  </span>
-                </td>
-              </tr>
+              {#each realizedTotals as tot (tot.cost_commodity_id + '_' + tot.total_gain_scale)}
+                <tr class="border-t-2 border-border bg-surface-strong/30">
+                  <td colspan="5" class="py-3 pl-5 pr-3 text-sm font-semibold text-foreground">
+                    {m.investments_gains_realized_total()}
+                  </td>
+                  <td class="py-3 pl-3 pr-5 text-right font-mono font-semibold">
+                    <span class={gainClass(tot.total_gain_value)}>
+                      {formatGain(tot.total_gain_value, tot.total_gain_scale)}
+                    </span>
+                  </td>
+                </tr>
+              {/each}
             </tfoot>
           </table>
         </div>

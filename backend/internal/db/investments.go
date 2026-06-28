@@ -274,6 +274,10 @@ type InvestmentPositionRecord struct {
 	LatestPriceValue        sql.NullInt64
 	LatestPriceScale        sql.NullInt64
 	LatestPriceDate         sql.NullString
+	// base_quantity fields from price_observations: price is (PriceValue/base_quantity) per unit.
+	// Defaults: base_quantity_value=1, base_quantity_scale=0 (price is per 1 unit).
+	LatestPriceBaseQuantityValue sql.NullInt64
+	LatestPriceBaseQuantityScale sql.NullInt64
 }
 
 type InvestmentProviderEventRecord struct {
@@ -1334,7 +1338,27 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.voided_at IS NULL
 				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
-			) AS latest_price_date
+			) AS latest_price_date,
+			(
+				SELECT po.base_quantity_value
+				FROM price_observations po
+				WHERE po.book_id = lot.book_id
+					AND po.base_commodity_id = lot.commodity_id
+					AND po.quote_commodity_id = lot.cost_commodity_id
+					AND po.voided_at IS NULL
+				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				LIMIT 1
+			) AS latest_price_base_quantity_value,
+			(
+				SELECT po.base_quantity_scale
+				FROM price_observations po
+				WHERE po.book_id = lot.book_id
+					AND po.base_commodity_id = lot.commodity_id
+					AND po.quote_commodity_id = lot.cost_commodity_id
+					AND po.voided_at IS NULL
+				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				LIMIT 1
+			) AS latest_price_base_quantity_scale
 		FROM investment_lots lot
 		WHERE lot.book_id = ?
 			AND lot.status = 'open'
@@ -1361,7 +1385,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		var quantityScale int
 		var costValue int64
 		var costScale int
-		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate); err != nil {
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale); err != nil {
 			return nil, fmt.Errorf("scan investment position: %w", err)
 		}
 		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
@@ -1948,58 +1972,96 @@ type RealizedGainRecord struct {
 // whose account does not have system_role='commodity_trading' (i.e. the real cash
 // account). Realized gain = proceeds - disposed_basis, aligned to the proceeds scale.
 func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int64, params RealizedGainsParams) ([]RealizedGainRecord, error) {
-	args := []any{bookID}
+	// cteArgs: just bookID (for the cash_proceeds CTE WHERE clause)
+	// outerArgs: bookID + optional date params (for the outer WHERE clause)
 	dateFilter := ""
+	outerArgs := []any{bookID}
 	if params.From != "" {
 		dateFilter += " AND le.event_date >= ?"
-		args = append(args, params.From)
+		outerArgs = append(outerArgs, params.From)
 	}
 	if params.To != "" {
 		dateFilter += " AND le.event_date <= ?"
-		args = append(args, params.To)
+		outerArgs = append(outerArgs, params.To)
 	}
+	// CTE is parameterized first; args = [cteBookID, outerBookID, ...dateparams]
+	args := append([]any{bookID}, outerArgs...)
 
+	// Aggregate disposal events at the transaction level so that a single sell
+	// transaction that disposes multiple lots produces one realized-gain row (not
+	// one per lot). Cash proceeds appear once on the transaction and must not be
+	// counted per lot event.
+	//
+	// For manual disposals (transaction_id IS NULL) we preserve each lot event as
+	// its own row by grouping on lot_event_id.
+	//
+	// Group key: (transaction_id, account_id, commodity_id, cost_commodity_id, event_date).
+	// NULLs in GROUP BY compare unequal in SQL, so NULL transaction_id rows each
+	// form their own group — which is the desired behaviour.
 	rows, err := r.database.QueryContext(ctx, `
+		WITH cash_proceeds AS (
+			-- One row per (transaction_id, cost_commodity_id): the cash received.
+			-- Filtered to postings that are NOT the commodity_trading leg.
+			SELECT
+				le2.transaction_id,
+				lot2.cost_commodity_id,
+				MAX(CASE
+					WHEN cash_pv.commodity_id = lot2.cost_commodity_id
+						AND cash_pv.quantity_value > '0'
+						AND NOT EXISTS (
+							SELECT 1 FROM accounts a
+							WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
+						)
+					THEN cash_pv.quantity_value
+					ELSE NULL
+				END) AS proceeds_value,
+				MAX(CASE
+					WHEN cash_pv.commodity_id = lot2.cost_commodity_id
+						AND cash_pv.quantity_value > '0'
+						AND NOT EXISTS (
+							SELECT 1 FROM accounts a
+							WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
+						)
+					THEN cash_pv.quantity_scale
+					ELSE NULL
+				END) AS proceeds_scale
+			FROM investment_lot_events le2
+			JOIN investment_lots lot2 ON lot2.id = le2.lot_id
+			JOIN current_transaction_versions tv2 ON tv2.transaction_id = le2.transaction_id
+			JOIN journal_entries je2 ON je2.transaction_version_id = tv2.id
+			JOIN posting_versions cash_pv ON cash_pv.journal_entry_id = je2.id
+			WHERE lot2.book_id = ?
+				AND le2.event_kind = 'disposal'
+				AND le2.transaction_id IS NOT NULL
+			GROUP BY le2.transaction_id, lot2.cost_commodity_id
+		)
 		SELECT
 			lot.account_id,
 			lot.commodity_id,
 			lot.cost_commodity_id,
 			le.event_date,
 			le.transaction_id,
-			le.quantity_value,
+			SUM(CAST(le.quantity_value AS INTEGER)) AS total_quantity_value,
 			le.quantity_scale,
-			le.cost_basis_value,
+			SUM(le.cost_basis_value)               AS total_cost_basis_value,
 			le.cost_basis_scale,
-			MAX(CASE
-				WHEN cash_pv.commodity_id = lot.cost_commodity_id
-					AND cash_pv.quantity_value > '0'
-					AND NOT EXISTS (
-						SELECT 1 FROM accounts a
-						WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
-					)
-				THEN cash_pv.quantity_value
-				ELSE NULL
-			END) AS proceeds_value,
-			MAX(CASE
-				WHEN cash_pv.commodity_id = lot.cost_commodity_id
-					AND cash_pv.quantity_value > '0'
-					AND NOT EXISTS (
-						SELECT 1 FROM accounts a
-						WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
-					)
-				THEN cash_pv.quantity_scale
-				ELSE NULL
-			END) AS proceeds_scale
+			cp.proceeds_value,
+			cp.proceeds_scale
 		FROM investment_lot_events le
 		JOIN investment_lots lot ON lot.id = le.lot_id
-		LEFT JOIN current_transaction_versions tv ON tv.transaction_id = le.transaction_id
-		LEFT JOIN journal_entries je ON je.transaction_version_id = tv.id
-		LEFT JOIN posting_versions cash_pv ON cash_pv.journal_entry_id = je.id
+		LEFT JOIN cash_proceeds cp
+			ON cp.transaction_id = le.transaction_id
+			AND cp.cost_commodity_id = lot.cost_commodity_id
 		WHERE lot.book_id = ?
 			AND le.event_kind = 'disposal'
 			`+dateFilter+`
-		GROUP BY le.id
-		ORDER BY le.event_date DESC, le.id DESC
+		GROUP BY
+			COALESCE(le.transaction_id, le.id),
+			lot.account_id,
+			lot.commodity_id,
+			lot.cost_commodity_id,
+			le.event_date
+		ORDER BY le.event_date DESC, MIN(le.id) DESC
 	`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list realized gains: %w", err)
@@ -2011,15 +2073,19 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		var record RealizedGainRecord
 		var proceedsValueStr sql.NullString
 		var proceedsScale sql.NullInt64
+		// quantity_value in disposal events is stored negated (reduction of holding).
+		// We scan into a temporary and negate to expose the sold quantity as positive.
+		var rawQuantityValue exact.Coefficient
 		if err := rows.Scan(
 			&record.AccountID, &record.CommodityID, &record.CostCommodityID,
 			&record.DisposalDate, &record.TransactionID,
-			&record.QuantityValue, &record.QuantityScale,
+			&rawQuantityValue, &record.QuantityScale,
 			&record.DisposedBasisValue, &record.DisposedBasisScale,
 			&proceedsValueStr, &proceedsScale,
 		); err != nil {
 			return nil, fmt.Errorf("scan realized gain: %w", err)
 		}
+		record.QuantityValue = rawQuantityValue.Negated()
 		if proceedsValueStr.Valid && proceedsScale.Valid {
 			// Parse proceeds as int64 (they fit: same scale as currency minor units)
 			proceeds, err := strconv.ParseInt(proceedsValueStr.String, 10, 64)
@@ -2101,27 +2167,46 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			LatestPriceDate:         pos.LatestPriceDate,
 		}
 		if pos.LatestPriceValue.Valid && pos.LatestPriceScale.Valid {
-			// market_value = quantity × price, computed in big.Int to avoid float
-			// quantity is exact.Coefficient (big.Int-backed); price is int64
-			priceScale := int(pos.LatestPriceScale.Int64)
-			totalScale := pos.QuantityScale + priceScale
-			qtyBig := pos.QuantityValue.BigInt()
-			marketBig := new(big.Int).Mul(qtyBig, big.NewInt(pos.LatestPriceValue.Int64))
+			// market_value = quantity × (price_value / base_quantity_value)
+			// All arithmetic in big.Int to avoid float loss.
+			//
+			// price_observations stores: price_value at price_scale, and base_quantity_value
+			// at base_quantity_scale. The per-unit price is price_value/base_quantity_value
+			// at scale (price_scale - base_quantity_scale).
+			//
+			// market_numerator   = qty × price_value  (integer product)
+			// market_denominator = base_quantity_value (integer divisor)
+			// market_scale       = qty_scale + price_scale - base_quantity_scale
+			//
+			// Defaults when base_quantity fields are NULL: value=1, scale=0.
+			baseQtyValue := int64(1)
+			baseQtyScale := 0
+			if pos.LatestPriceBaseQuantityValue.Valid {
+				baseQtyValue = pos.LatestPriceBaseQuantityValue.Int64
+			}
+			if pos.LatestPriceBaseQuantityScale.Valid {
+				baseQtyScale = int(pos.LatestPriceBaseQuantityScale.Int64)
+			}
+			if baseQtyValue <= 0 {
+				baseQtyValue = 1
+			}
 
-			// Scale down to the cost basis scale for comparison.
-			// Both quantity×price and cost_basis must be at the same scale for subtraction.
-			// Common scale = totalScale; cost basis at RemainingCostBasisScale.
-			// We normalise both to the larger scale.
+			priceScale := int(pos.LatestPriceScale.Int64)
+			marketScale := pos.QuantityScale + priceScale - baseQtyScale
+
+			qtyBig := pos.QuantityValue.BigInt()
+			numeratorBig := new(big.Int).Mul(qtyBig, big.NewInt(pos.LatestPriceValue.Int64))
+			marketBig := new(big.Int).Quo(numeratorBig, big.NewInt(baseQtyValue)) // integer division
+
+			// Align market and cost to the larger scale for subtraction.
 			costBig := big.NewInt(pos.RemainingCostBasisValue)
 			costScale := pos.RemainingCostBasisScale
-
-			// Align: bring the lower-scale value up.
-			gainScale := totalScale
+			gainScale := marketScale
 			if costScale > gainScale {
 				gainScale = costScale
 			}
-			if totalScale < gainScale {
-				diff := gainScale - totalScale
+			if marketScale < gainScale {
+				diff := gainScale - marketScale
 				factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(diff)), nil)
 				marketBig.Mul(marketBig, factor)
 			}

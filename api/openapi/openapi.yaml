@@ -560,6 +560,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/RealizedGainEntry"
     UnrealizedGainEntry:
       $ref: "./components/schemas/investments.yaml#/UnrealizedGainEntry"
+    RealizedGainTotal:
+      $ref: "./components/schemas/investments.yaml#/RealizedGainTotal"
     InvestmentGainsResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentGainsResponse"
     ErrorBody:

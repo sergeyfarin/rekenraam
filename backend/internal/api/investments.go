@@ -1033,9 +1033,16 @@ type unrealizedGainResponse struct {
 	UnrealizedGainScale     *int              `json:"unrealized_gain_scale,omitempty"`
 }
 
+type realizedGainTotalResponse struct {
+	CostCommodityID int64 `json:"cost_commodity_id"`
+	TotalGainValue  int64 `json:"total_gain_value"`
+	TotalGainScale  int   `json:"total_gain_scale"`
+}
+
 type investmentGainsResponse struct {
-	Realized   []realizedGainResponse   `json:"realized"`
-	Unrealized []unrealizedGainResponse `json:"unrealized"`
+	Realized       []realizedGainResponse     `json:"realized"`
+	Unrealized     []unrealizedGainResponse   `json:"unrealized"`
+	RealizedTotals []realizedGainTotalResponse `json:"realized_totals"`
 }
 
 func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
@@ -1093,6 +1100,34 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				UnrealizedGainScale:     e.UnrealizedGainScale,
 			})
 		}
-		writeJSON(w, http.StatusOK, investmentGainsResponse{Realized: realizedResponses, Unrealized: unrealizedResponses})
+
+		// Compute realized totals grouped by (cost_commodity_id, proceeds_scale).
+		// All entries sharing the same currency and scale can be summed directly.
+		type totalKey struct {
+			costCommodityID int64
+			scale           int
+		}
+		totalsMap := map[totalKey]int64{}
+		var totalsOrder []totalKey
+		for _, e := range realized {
+			k := totalKey{e.CostCommodityID, e.ProceedsScale}
+			if _, exists := totalsMap[k]; !exists {
+				totalsOrder = append(totalsOrder, k)
+			}
+			totalsMap[k] += e.RealizedGainValue
+		}
+		realizedTotals := make([]realizedGainTotalResponse, 0, len(totalsOrder))
+		for _, k := range totalsOrder {
+			realizedTotals = append(realizedTotals, realizedGainTotalResponse{
+				CostCommodityID: k.costCommodityID,
+				TotalGainValue:  totalsMap[k],
+				TotalGainScale:  k.scale,
+			})
+		}
+		writeJSON(w, http.StatusOK, investmentGainsResponse{
+			Realized:       realizedResponses,
+			Unrealized:     unrealizedResponses,
+			RealizedTotals: realizedTotals,
+		})
 	}
 }

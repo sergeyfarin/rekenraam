@@ -1110,6 +1110,50 @@ func TestListRealizedGainsDateFilter(t *testing.T) {
 	assert.Equal(t, "2026-04-01", filtered[0].DisposalDate)
 }
 
+func TestListRealizedGainsMultiLotSaleProducesOneRow(t *testing.T) {
+	// A sell transaction that disposes two lots must produce one realized-gains row,
+	// not two. The full sale proceeds appear once on the transaction; the old per-lot
+	// query would have duplicated them, inflating gains.
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	// Insert a bare transaction row to satisfy the FK constraint.
+	result, err := database.ExecContext(ctx, `
+		INSERT INTO transactions (book_id, created_at, created_by_user_id)
+		VALUES (1, '2026-04-01T10:00:00Z', ?)`, ownerID)
+	require.NoError(t, err)
+	txID, err := result.LastInsertId()
+	require.NoError(t, err)
+
+	// Dispose two separate lots of 50 units each, both referencing the same transaction.
+	for _, qty := range []int64{50, 50} {
+		_, err := repo.DisposeLots(ctx, DisposeLotsParams{
+			BookID: 1, AccountID: accountID, CommodityID: commodityID,
+			TransactionID: txID, EventDate: "2026-04-01",
+			QuantityValue: exact.New(qty), QuantityScale: 0,
+			CostBasisMethod: "fifo",
+			CreatedAt: "2026-04-01T10:00:00Z", ActorUserID: ownerID,
+			OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "multi-lot sell",
+		})
+		require.NoError(t, err)
+	}
+
+	gains, err := repo.ListRealizedGains(ctx, 1, RealizedGainsParams{})
+	require.NoError(t, err)
+
+	// The two disposals share one transaction_id → they must aggregate into one row.
+	require.Len(t, gains, 1, "expected one gains row for a multi-lot sell transaction")
+
+	g := gains[0]
+	// Sold qty = 50 + 50 = 100 (positive, negated back).
+	assert.Equal(t, exact.New(100), g.QuantityValue)
+	// disposed_basis: first 50 from lot-1 (basis 10000 × 50/100 = 5000, negative) +
+	//                 next 50 from lot-1 remainder (basis 5000, negative) = −10000.
+	assert.Equal(t, int64(-10000), g.DisposedBasisValue)
+}
+
 func TestPositionsWithGainsNilWhenNoPrice(t *testing.T) {
 	// A position without a price observation must have nil gain fields.
 	ctx := context.Background()
@@ -1124,6 +1168,86 @@ func TestPositionsWithGainsNilWhenNoPrice(t *testing.T) {
 	assert.Equal(t, commodityID, gains[0].CommodityID)
 	assert.Nil(t, gains[0].MarketValueValue, "expected nil market value when no price")
 	assert.Nil(t, gains[0].UnrealizedGainValue, "expected nil gain when no price")
+}
+
+func TestPositionsWithGainsBaseQuantityNormalized(t *testing.T) {
+	// Price stored as 150 EUR at base_quantity=100, base_quantity_scale=0.
+	// Per-unit price = 150/100 = €1.50.
+	// Position: 450 units at cost 56 000 (scale 2) = €560.00.
+	// Market = 450 × (150/100) = 675 at scale 2 = €675.00.
+	// Gain = 675 00 − 56 000 = ... but scale needs to match.
+	// market_scale = qty_scale(0) + price_scale(2) − base_qty_scale(0) = 2
+	// market_numerator = 450 × 150 = 67 500; denominator = 100 → market = 675 at scale 2.
+	// cost = 56 000 at scale 2; gain = 675 − 560 = ... wait, 675 - 56000 is at scale 2:
+	// market = 67500/100 = 675 at scale 2 = €6.75 (NOT €675).
+	// That's the actual per-unit calc: per-unit price €1.50 × 450 units = €675, but
+	// at scale 2 that's 67500 minor units. Let me re-derive with integer math:
+	// market_numerator = 450 × 150 = 67500; divide by 100 = 675 (integer).
+	// So market = 675 at scale 2 = €6.75? No — 675 / 10^2 = 6.75 EUR. That's wrong.
+	//
+	// Let me re-read the scale logic: market_scale = qty_scale + price_scale - base_qty_scale.
+	// qty=450 (scale 0), price=150 (scale 2), base_qty=100 (scale 0):
+	// market_scale = 0 + 2 - 0 = 2.
+	// market = 450 × 150 / 100 = 675 at scale 2 → 675 / 10^2 = €6.75.
+	//
+	// But the real economic answer: 450 units × (150 EUR / 100 shares) = 450 × 1.50 = €675.
+	// The mismatch: price_value=150 at price_scale=2 means price = 150 / 10^2 = €1.50.
+	// base_quantity=100 at base_qty_scale=0 means per 100 shares.
+	// per-unit price = (150 / 10^2) / (100 / 10^0) = (1.50 EUR) / 100 = 0.015 EUR/share.
+	// market = 450 × 0.015 = €6.75 = 675 at scale 2. ✓
+	//
+	// So for a simpler test: price=200 at scale 2, base_qty=1 scale 0 (per-unit, same as before).
+	// This test uses base_qty=100 and verifies the division happens.
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	_ = accountID
+	repo := NewInvestmentRepository(database)
+	pricingRepo := NewPricingRepository(database)
+
+	manualSourceID, err := pricingRepo.ManualSourceID(ctx)
+	require.NoError(t, err)
+
+	// Price: 20000 (scale 4) per 100 shares (base_qty=100, base_qty_scale=0).
+	// Per-unit price = 20000 / 10^4 / (100 / 10^0) = 2.0000 / 100 = €0.02/share.
+	// market_scale = 0 + 4 - 0 = 4.
+	// market_numerator = 450 × 20000 = 9_000_000; denominator = 100 → market = 90_000 at scale 4.
+	// 90000 / 10^4 = €9.00.
+	// cost = 56000 at scale 2; aligned to scale 4: 56000 × 100 = 5_600_000.
+	// gain = 90000 − 5_600_000 = −5_510_000 at scale 4.
+	_, err = pricingRepo.CreatePriceObservation(ctx, CreatePriceObservationParams{
+		BookID: 1, ActorUserID: ownerID, RequestID: "request-price-base-qty",
+		OriginType: "browser_api", Operation: "pricing.price.create",
+		CreatedAt: "2026-04-01T12:00:00Z", ChangeReason: "test base qty",
+		Spec: PriceObservationSpec{
+			BaseCommodityID:    commodityID,
+			QuoteCommodityID:   currencyID,
+			QuoteType:          "manual",
+			AdjustmentBasis:    "raw",
+			PriceValue:         20000,
+			PriceScale:         4,
+			BaseQuantityValue:  100,
+			BaseQuantityScale:  0,
+			ValuationDate:      "2026-04-01",
+			ObservedAt:         sql.NullString{String: "2026-04-01T12:00:00Z", Valid: true},
+			SourceID:           sql.NullInt64{Int64: manualSourceID, Valid: true},
+			IsManual:           true,
+			DerivationJSON:     `{}`,
+			SeriesMetadataJSON: `{}`,
+			MetadataJSON:       `{}`,
+		},
+	})
+	require.NoError(t, err)
+
+	gains, err := repo.PositionsWithGains(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+
+	g := gains[0]
+	require.NotNil(t, g.MarketValueValue)
+	// market = 450 × 20000 / 100 = 90000 at scale 4.
+	assert.Equal(t, int64(90000), *g.MarketValueValue)
+	assert.Equal(t, 4, *g.MarketValueScale)
 }
 
 func TestPositionsWithGainsComputedCorrectly(t *testing.T) {

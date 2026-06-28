@@ -1040,11 +1040,29 @@ UnrealizedGainEntry:
       type: integer
       description: Omitted when no price exists.
 
+RealizedGainTotal:
+  type: object
+  required:
+    - cost_commodity_id
+    - total_gain_value
+    - total_gain_scale
+  properties:
+    cost_commodity_id:
+      type: integer
+      format: int64
+    total_gain_value:
+      type: integer
+      format: int64
+      description: Sum of realized_gain_value for all entries sharing this cost_commodity_id and scale.
+    total_gain_scale:
+      type: integer
+
 InvestmentGainsResponse:
   type: object
   required:
     - realized
     - unrealized
+    - realized_totals
   properties:
     realized:
       type: array
@@ -1054,3 +1072,8 @@ InvestmentGainsResponse:
       type: array
       items:
         $ref: "#/UnrealizedGainEntry"
+    realized_totals:
+      type: array
+      description: Pre-aggregated totals by cost commodity, suitable for display.
+      items:
+        $ref: "#/RealizedGainTotal"

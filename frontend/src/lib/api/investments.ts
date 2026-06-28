@@ -21,6 +21,7 @@ export type CostBasisMethod = components['schemas']['CostBasisMethod'];
 export type InvestmentGainsResponse = components['schemas']['InvestmentGainsResponse'];
 export type RealizedGainEntry = components['schemas']['RealizedGainEntry'];
 export type UnrealizedGainEntry = components['schemas']['UnrealizedGainEntry'];
+export type RealizedGainTotal = components['schemas']['RealizedGainTotal'];
 export type InvestmentEventSuggestionResponse = components['schemas']['InvestmentEventSuggestionResponse'];
 export type InvestmentEventSuggestionsResponse = components['schemas']['InvestmentEventSuggestionsResponse'];
 export type InvestmentAutomationRuleResponse = components['schemas']['InvestmentAutomationRuleResponse'];

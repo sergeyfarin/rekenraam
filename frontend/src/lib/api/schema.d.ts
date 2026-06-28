@@ -10423,9 +10423,21 @@ export interface components {
             /** @description Omitted when no price exists. */
             unrealized_gain_scale?: number;
         };
+        RealizedGainTotal: {
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /**
+             * Format: int64
+             * @description Sum of realized_gain_value for all entries sharing this cost_commodity_id and scale.
+             */
+            total_gain_value: number;
+            total_gain_scale: number;
+        };
         InvestmentGainsResponse: {
             realized: components["schemas"]["RealizedGainEntry"][];
             unrealized: components["schemas"]["UnrealizedGainEntry"][];
+            /** @description Pre-aggregated totals by cost commodity, suitable for display. */
+            realized_totals: components["schemas"]["RealizedGainTotal"][];
         };
         ErrorBody: {
             /** @enum {string} */
