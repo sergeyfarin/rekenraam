@@ -123,6 +123,16 @@ paths:
     $ref: "./paths/transaction-id-reconciliation-impact.yaml"
   /api/v1/transactions/reconciliation-impact:
     $ref: "./paths/transaction-reconciliation-impact.yaml"
+  /api/v1/imports:
+    $ref: "./paths/imports.yaml"
+  /api/v1/imports/{batch_id}:
+    $ref: "./paths/import.yaml"
+  /api/v1/imports/{batch_id}/preview-commit:
+    $ref: "./paths/import-preview-commit.yaml"
+  /api/v1/imports/{batch_id}/commit:
+    $ref: "./paths/import-commit.yaml"
+  /api/v1/imports/{batch_id}/discard:
+    $ref: "./paths/import-discard.yaml"
   /api/v1/accounts/{account_id}/postings/{posting_line_id}/move:
     $ref: "./paths/posting-move.yaml"
   /api/v1/reconciliations/{reconciliation_id}:
@@ -239,6 +249,13 @@ components:
     TransactionID:
       in: path
       name: transaction_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ImportBatchID:
+      in: path
+      name: batch_id
       required: true
       schema:
         type: integer
@@ -476,6 +493,44 @@ components:
       $ref: "./components/schemas/transactions.yaml#/DeletedTransactionResponse"
     DeletedTransactionsResponse:
       $ref: "./components/schemas/transactions.yaml#/DeletedTransactionsResponse"
+    ImportBatchStatus:
+      $ref: "./components/schemas/imports.yaml#/ImportBatchStatus"
+    ImportDedupeStatus:
+      $ref: "./components/schemas/imports.yaml#/ImportDedupeStatus"
+    ImportCommitStatus:
+      $ref: "./components/schemas/imports.yaml#/ImportCommitStatus"
+    ImportBatchResponse:
+      $ref: "./components/schemas/imports.yaml#/ImportBatchResponse"
+    ImportStagedSplit:
+      $ref: "./components/schemas/imports.yaml#/ImportStagedSplit"
+    ImportNormalizedRow:
+      $ref: "./components/schemas/imports.yaml#/ImportNormalizedRow"
+    ImportResolution:
+      $ref: "./components/schemas/imports.yaml#/ImportResolution"
+    ImportStagedRowResponse:
+      $ref: "./components/schemas/imports.yaml#/ImportStagedRowResponse"
+    ParseWarning:
+      $ref: "./components/schemas/imports.yaml#/ParseWarning"
+    ImportSourceMeta:
+      $ref: "./components/schemas/imports.yaml#/ImportSourceMeta"
+    StartImportResponse:
+      $ref: "./components/schemas/imports.yaml#/StartImportResponse"
+    GetImportBatchResponse:
+      $ref: "./components/schemas/imports.yaml#/GetImportBatchResponse"
+    ListImportBatchesResponse:
+      $ref: "./components/schemas/imports.yaml#/ListImportBatchesResponse"
+    RowResolutionPatch:
+      $ref: "./components/schemas/imports.yaml#/RowResolutionPatch"
+    PatchImportBatchRequest:
+      $ref: "./components/schemas/imports.yaml#/PatchImportBatchRequest"
+    CommitImportBatchRequest:
+      $ref: "./components/schemas/imports.yaml#/CommitImportBatchRequest"
+    CommitImportBatchResponse:
+      $ref: "./components/schemas/imports.yaml#/CommitImportBatchResponse"
+    ImportReconciliationIssue:
+      $ref: "./components/schemas/imports.yaml#/ImportReconciliationIssue"
+    PreviewCommitResponse:
+      $ref: "./components/schemas/imports.yaml#/PreviewCommitResponse"
     ReconciliationPostingResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPostingResponse"
     ReconciliationSessionResponse:

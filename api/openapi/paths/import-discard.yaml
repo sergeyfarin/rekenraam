@@ -1,0 +1,42 @@
+post:
+  summary: Discard import batch
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ImportBatchID"
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  responses:
+    "204":
+      description: Import batch discarded
+    "400":
+      description: Invalid batch id
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Import batch not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Import batch is not open
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

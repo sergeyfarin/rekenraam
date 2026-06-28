@@ -68,16 +68,12 @@ because (a) real crashes are rare in practice, (b) the duplicate surfaces in the
 When addressed, remove the `DB()` accessor on `ImportRepository` as it will no longer
 be needed.
 
-### T-07 Import endpoints missing from OpenAPI spec `[ ]`
-**File:** `api/openapi/openapi.yaml` — no `/api/v1/imports` paths exist.
+### T-07 Import endpoints missing from OpenAPI spec `[x]`
+**File:** `api/openapi/openapi.yaml`, `api/openapi/components/schemas/imports.yaml`.
 
-The import API uses raw `fetch` on the frontend (multipart upload doesn't fit the typed
-client) and was deferred as a known gap. Needs: path items for all 7 import routes
-(`POST /imports`, `GET /imports`, `GET /imports/{batch_id}`, `PATCH /imports/{batch_id}`,
-`POST /imports/{batch_id}/preview-commit`, `POST /imports/{batch_id}/commit`,
-`POST /imports/{batch_id}/discard`), request/response schemas, and generated TS types
-replacing the handwritten `frontend/src/lib/api/imports.ts` interfaces. Conflicts with
-the OpenAPI-first convention (`docs/conventions.md` line 189).
+Closed by adding path items for all 7 import routes, import request/response schemas,
+and generated TS types. The frontend import helper still uses raw `fetch` for multipart
+upload, but its public DTO types now come from `frontend/src/lib/api/schema.d.ts`.
 
 ### T-08 No encrypted-secret store for reusable third-party credentials `[ ]`
 **File:** `backend/internal/config/config.go`, `backend/internal/app/auth.go`.

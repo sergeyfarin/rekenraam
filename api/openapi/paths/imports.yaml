@@ -1,0 +1,76 @@
+get:
+  summary: List import batches
+  parameters:
+    - in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+    - in: query
+      name: cursor
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Import batches
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ListImportBatchesResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Start import batch
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          required:
+            - file
+          properties:
+            file:
+              type: string
+              format: binary
+  responses:
+    "201":
+      description: Import batch staged for preview
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/StartImportResponse"
+    "400":
+      description: Invalid multipart form, missing file, or unsupported file format
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

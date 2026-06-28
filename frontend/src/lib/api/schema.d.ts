@@ -5560,6 +5560,515 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List import batches */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import batches */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListImportBatchesResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Start import batch */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Import batch staged for preview */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StartImportResponse"];
+                    };
+                };
+                /** @description Invalid multipart form, missing file, or unsupported file format */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: components["parameters"]["ImportBatchID"];
+            };
+            cookie?: never;
+        };
+        /** Get import batch */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    batch_id: components["parameters"]["ImportBatchID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import batch with staged rows */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GetImportBatchResponse"];
+                    };
+                };
+                /** @description Invalid batch id or query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update import row resolutions */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: components["parameters"]["ImportBatchID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PatchImportBatchRequest"];
+                };
+            };
+            responses: {
+                /** @description Import row resolutions updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch is not open */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/preview-commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview import commit */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    batch_id: components["parameters"]["ImportBatchID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import commit preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PreviewCommitResponse"];
+                    };
+                };
+                /** @description Invalid batch id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch is not open */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit import batch */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: components["parameters"]["ImportBatchID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CommitImportBatchRequest"];
+                };
+            };
+            responses: {
+                /** @description Import batch committed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CommitImportBatchResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch is not open */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard import batch */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: components["parameters"]["ImportBatchID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import batch discarded */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid batch id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch is not open */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{account_id}/postings/{posting_line_id}/move": {
         parameters: {
             query?: never;
@@ -9772,6 +10281,137 @@ export interface components {
             /** @description Opaque deletion-time cursor for the next page (deleted_at DESC, id DESC). */
             next_cursor: string | null;
         };
+        /** @enum {string} */
+        ImportBatchStatus: "previewing" | "committed" | "partially_committed" | "discarded" | "failed";
+        /** @enum {string} */
+        ImportDedupeStatus: "new" | "duplicate" | "needs_attention" | "excluded";
+        /** @enum {string} */
+        ImportCommitStatus: "pending" | "committed" | "skipped" | "failed";
+        ImportBatchResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            book_id: number;
+            /** @description Source adapter kind selected for the uploaded file. */
+            source_kind: string;
+            /** Format: int64 */
+            profile_id?: number;
+            status: components["schemas"]["ImportBatchStatus"];
+            original_filename: string;
+            /** @description JSON object string containing persisted source metadata. */
+            source_meta: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ImportStagedSplit: {
+            category_hint: string;
+            amount: string;
+            memo: string;
+        };
+        ImportNormalizedRow: {
+            /** Format: date */
+            date: string;
+            amount: string;
+            commodity_hint: string;
+            payee_hint: string;
+            category_hint: string;
+            account_hint: string;
+            transfer_hint: string;
+            memo: string;
+            external_ref: string;
+            splits: components["schemas"]["ImportStagedSplit"][];
+        };
+        ImportResolution: {
+            /** Format: int64 */
+            account_id?: number;
+            /** Format: int64 */
+            commodity_id?: number;
+            /** Format: int64 */
+            payee_id?: number;
+            payee_name?: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** Format: int64 */
+            transfer_account_id?: number;
+            exclude?: boolean;
+        };
+        ImportStagedRowResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            batch_id: number;
+            row_index: number;
+            dedupe_fingerprint: string;
+            /** @description JSON string matching ImportNormalizedRow. */
+            normalized: string;
+            /** @description JSON string containing source-specific row data. */
+            raw: string;
+            dedupe_status: components["schemas"]["ImportDedupeStatus"];
+            /** @description JSON string matching ImportResolution. */
+            resolution: string;
+            commit_status: components["schemas"]["ImportCommitStatus"];
+            /** Format: int64 */
+            committed_transaction_id?: number;
+            commit_error?: string;
+        };
+        ParseWarning: {
+            row_index: number;
+            message: string;
+        };
+        ImportSourceMeta: {
+            account_hints: string[];
+            currency_hints: string[];
+            /** Format: date */
+            date_from?: string;
+            /** Format: date */
+            date_to?: string;
+        };
+        StartImportResponse: {
+            batch: components["schemas"]["ImportBatchResponse"];
+            rows: components["schemas"]["ImportStagedRowResponse"][];
+            warnings: components["schemas"]["ParseWarning"][];
+            meta: components["schemas"]["ImportSourceMeta"];
+        };
+        GetImportBatchResponse: {
+            batch: components["schemas"]["ImportBatchResponse"];
+            rows: components["schemas"]["ImportStagedRowResponse"][];
+            next_cursor: string | null;
+        };
+        ListImportBatchesResponse: {
+            batches: components["schemas"]["ImportBatchResponse"][];
+            next_cursor: string | null;
+        };
+        RowResolutionPatch: {
+            /** Format: int64 */
+            row_id: number;
+            dedupe_status?: components["schemas"]["ImportDedupeStatus"];
+            /** @description JSON string matching ImportResolution. */
+            resolution?: string;
+        };
+        PatchImportBatchRequest: {
+            row_resolutions: components["schemas"]["RowResolutionPatch"][];
+        };
+        CommitImportBatchRequest: {
+            reconciliation_override?: boolean;
+        };
+        CommitImportBatchResponse: {
+            /** Format: int64 */
+            batch_id: number;
+            status: components["schemas"]["ImportBatchStatus"];
+            total_rows: number;
+            committed_count: number;
+            skipped_count: number;
+            failed_count: number;
+        };
+        ImportReconciliationIssue: {
+            row_index: number;
+            checkpoint_ids: number[];
+        };
+        PreviewCommitResponse: {
+            includable_count: number;
+            duplicate_count: number;
+            reconciliation_issues: components["schemas"]["ImportReconciliationIssue"][];
+        };
         ReconciliationPostingResponse: {
             /** Format: int64 */
             posting_id: number;
@@ -10456,6 +11096,7 @@ export interface components {
         CategoryID: number;
         PayeeID: number;
         TransactionID: number;
+        ImportBatchID: number;
         ReconciliationID: number;
         ReconciliationCheckpointID: number;
         InstrumentID: number;

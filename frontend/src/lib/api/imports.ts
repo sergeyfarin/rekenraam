@@ -1,114 +1,24 @@
 import { APIClientError, toNetworkError } from '$lib/api/client';
+import type { components } from '$lib/api/schema';
 
-// --- Types matching backend API responses ---
-
-export interface ImportBatch {
-  id: number;
-  book_id: number;
-  source_kind: string;
-  profile_id?: number;
-  status: 'previewing' | 'committed' | 'partially_committed' | 'discarded' | 'failed';
-  original_filename: string;
-  source_meta: string;
-  created_at: string;
-}
-
-export interface NormalizedRow {
-  date: string;
-  amount: string;
-  commodity_hint: string;
-  payee_hint: string;
-  category_hint: string;
-  account_hint: string;
-  transfer_hint: string;
-  memo: string;
-  external_ref: string;
-  splits: StagedSplit[];
-}
-
-export interface StagedSplit {
-  category_hint: string;
-  amount: string;
-  memo: string;
-}
-
-export interface ImportResolution {
-  account_id?: number;
-  commodity_id?: number;
-  payee_id?: number;
-  payee_name?: string;
-  category_id?: number;
-  transfer_account_id?: number;
-  exclude?: boolean;
-}
-
-export interface ImportStagedRow {
-  id: number;
-  batch_id: number;
-  row_index: number;
-  dedupe_fingerprint: string;
-  normalized: string; // JSON string
-  raw: string; // JSON string
-  dedupe_status: 'new' | 'duplicate' | 'needs_attention' | 'excluded';
-  resolution: string; // JSON string
-  commit_status: 'pending' | 'committed' | 'skipped' | 'failed';
-  committed_transaction_id?: number;
-  commit_error?: string;
-}
-
-export interface ParseWarning {
-  row_index: number;
-  message: string;
-}
-
-export interface SourceMeta {
-  account_hints: string[];
-  currency_hints: string[];
-  date_from?: string;
-  date_to?: string;
-}
-
-export interface StartImportResponse {
-  batch: ImportBatch;
-  rows: ImportStagedRow[];
-  warnings: ParseWarning[];
-  meta: SourceMeta;
-}
-
-export interface GetImportBatchResponse {
-  batch: ImportBatch;
-  rows: ImportStagedRow[];
-  next_cursor?: string;
-}
-
-export interface ListImportBatchesResponse {
-  batches: ImportBatch[];
-  next_cursor?: string;
-}
+export type ImportBatch = components['schemas']['ImportBatchResponse'];
+export type NormalizedRow = components['schemas']['ImportNormalizedRow'];
+export type StagedSplit = components['schemas']['ImportStagedSplit'];
+export type ImportResolution = components['schemas']['ImportResolution'];
+export type ImportStagedRow = components['schemas']['ImportStagedRowResponse'];
+export type ParseWarning = components['schemas']['ParseWarning'];
+export type SourceMeta = components['schemas']['ImportSourceMeta'];
+export type StartImportResponse = components['schemas']['StartImportResponse'];
+export type GetImportBatchResponse = components['schemas']['GetImportBatchResponse'];
+export type ListImportBatchesResponse = components['schemas']['ListImportBatchesResponse'];
+export type CommitImportBatchRequest = components['schemas']['CommitImportBatchRequest'];
+export type CommitImportBatchResponse = components['schemas']['CommitImportBatchResponse'];
+export type PreviewCommitResponse = components['schemas']['PreviewCommitResponse'];
 
 export interface RowResolutionPatch {
   row_id: number;
-  dedupe_status?: string;
+  dedupe_status?: components['schemas']['ImportDedupeStatus'];
   resolution?: ImportResolution;
-}
-
-export interface CommitImportBatchRequest {
-  reconciliation_override?: boolean;
-}
-
-export interface CommitImportBatchResponse {
-  batch_id: number;
-  status: string;
-  total_rows: number;
-  committed_count: number;
-  skipped_count: number;
-  failed_count: number;
-}
-
-export interface PreviewCommitResponse {
-  includable_count: number;
-  duplicate_count: number;
-  reconciliation_issues: Array<{ row_index: number; checkpoint_ids: number[] }>;
 }
 
 // --- API helpers ---

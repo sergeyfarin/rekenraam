@@ -74,7 +74,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Preview UI: upload → per-row account / currency / category / transfer-account assignment | ✅ | `routes/app/import/+page.svelte`. |
 | Commit result UI with skip/fail counts | ✅ | |
 | Import nav link in app shell | ✅ | |
-| **OpenAPI spec for import endpoints** | ⬜ | Tracked as T-07; frontend uses handwritten types. |
+| OpenAPI spec for import endpoints | ✅ | T-07 closed; all 7 import routes documented and frontend DTOs come from generated `schema.d.ts`. |
 | **Per-split category mapping** | ⬜ | All splits post to single category; per-split routing deferred to R6. |
 | **CSV adapter** | ⬜ | R5. |
 | **OFX/QFX adapter** | ⬜ | R6. |
