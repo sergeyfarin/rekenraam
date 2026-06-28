@@ -2,14 +2,19 @@
   import { createQuery } from '@tanstack/svelte-query';
   import TrendingUp from '@lucide/svelte/icons/trending-up';
   import X from '@lucide/svelte/icons/x';
+  import Plus from '@lucide/svelte/icons/plus';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
+  import { authSessionQueryOptions } from '$lib/api/auth';
   import {
     investmentPositionsQueryOptions,
     investmentLotsQueryOptions,
     investmentInstrumentsQueryOptions,
     type InvestmentPositionResponse
   } from '$lib/api/investments';
+  import BuyForm from '$lib/investments/buy-form.svelte';
+  import SellForm from '$lib/investments/sell-form.svelte';
+  import DividendForm from '$lib/investments/dividend-form.svelte';
   import { parseISO } from 'date-fns';
   import { formatScaledValue } from './investment-labels';
   import { m } from '$lib/paraglide/messages.js';
@@ -23,6 +28,9 @@
   function formatDate(iso: string): string {
     return dateFormatter.format(parseISO(iso));
   }
+
+  const sessionQuery = createQuery(() => authSessionQueryOptions());
+  const csrfToken = $derived(sessionQuery.data?.csrf_token ?? '');
 
   const positionsQuery = createQuery(() => investmentPositionsQueryOptions());
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
@@ -72,10 +80,59 @@
   const isError = $derived(positionsQuery.isError || instrumentsQuery.isError);
   const positions = $derived(positionsQuery.data?.positions ?? []);
   const openPositions = $derived(positions.filter((p) => Number(p.quantity_value) !== 0));
+
+  // Trade form modal
+  type TradeModal = 'buy' | 'sell' | 'dividend' | 'reinvested' | null;
+  let activeModal = $state<TradeModal>(null);
+
+  function openModal(modal: TradeModal) {
+    activeModal = modal;
+  }
+
+  function closeModal() {
+    activeModal = null;
+  }
+
+  function onTradeSaved() {
+    closeModal();
+  }
 </script>
 
 <div>
   <div class="p-4 sm:p-6 lg:p-8">
+    <!-- Action buttons -->
+    <div class="mb-4 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onclick={() => openModal('buy')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90"
+      >
+        <Plus size={14} aria-hidden="true" />
+        {m.investments_record_buy()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('sell')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_sell()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('dividend')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_dividend()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('reinvested')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_reinvested()}
+      </button>
+    </div>
+
     {#if isLoading}
       <Panel>
         <p class="text-sm text-muted">{m.investments_loading()}</p>
@@ -219,3 +276,32 @@
     {/if}
   </div>
 </div>
+
+<!-- Trade form modal -->
+{#if activeModal !== null}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm"
+    role="presentation"
+    onclick={closeModal}
+  ></div>
+
+  <!-- Modal panel -->
+  <div
+    class="fixed inset-x-4 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel) sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-panel)"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="p-6">
+      {#if activeModal === 'buy'}
+        <BuyForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'sell'}
+        <SellForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'dividend'}
+        <DividendForm mode="cash" {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'reinvested'}
+        <DividendForm mode="reinvested" {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {/if}
+    </div>
+  </div>
+{/if}
