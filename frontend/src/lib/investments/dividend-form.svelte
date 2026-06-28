@@ -189,6 +189,11 @@
     return { value: BigInt(coefficient), scale };
   }
 
+  function toSafeInt(v: bigint): number | null {
+    if (v > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    return Number(v);
+  }
+
   const canSubmitCash = $derived(
     cashAccountID !== '' &&
     !!cashCommodityID &&
@@ -214,12 +219,24 @@
     const amount = parseDecimalField(amountStr);
     if (amount.value === null) return;
 
+    const amountInt = toSafeInt(amount.value);
+    if (amountInt === null) {
+      formError = new Error(m.investments_form_amount_too_large());
+      return;
+    }
+
     pending = true;
     formError = undefined;
 
     try {
       if (mode === 'cash') {
         const withholding = showWithholding && withholdingStr.trim() ? parseDecimalField(withholdingStr) : { value: null, scale: 0 };
+        const withholdingInt = withholding.value !== null ? toSafeInt(withholding.value) : null;
+        if (withholding.value !== null && withholdingInt === null) {
+          formError = new Error(m.investments_form_amount_too_large());
+          pending = false;
+          return;
+        }
         await recordDividend(
           {
             transaction_date: transactionDate,
@@ -227,12 +244,12 @@
             cash_account_id: Number(cashAccountID),
             cash_commodity_id: cashCommodityID,
             income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            amount_value: Number(amount.value),
+            amount_value: amountInt,
             amount_scale: amount.scale,
-            withholding_value: withholding.value !== null ? Number(withholding.value) : undefined,
-            withholding_scale: withholding.value !== null ? withholding.scale : undefined,
+            withholding_value: withholdingInt !== null ? withholdingInt : undefined,
+            withholding_scale: withholdingInt !== null ? withholding.scale : undefined,
             withholding_account_id:
-              withholding.value !== null && withholdingAccountID
+              withholdingInt !== null && withholdingAccountID
                 ? Number(withholdingAccountID)
                 : undefined,
             memo: memo.trim() || undefined
@@ -243,6 +260,12 @@
         if (!selectedInstrument) return;
         const qty = parseDecimalField(quantityStr);
         if (qty.value === null) return;
+        const qtyInt = toSafeInt(qty.value);
+        if (qtyInt === null) {
+          formError = new Error(m.investments_form_amount_too_large());
+          pending = false;
+          return;
+        }
 
         await recordReinvestedDividend(
           {
@@ -250,9 +273,9 @@
             commodity_id: selectedInstrument.commodity_id,
             holding_account_id: Number(holdingAccountID),
             income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            quantity_value: Number(qty.value),
+            quantity_value: qtyInt,
             quantity_scale: qty.scale,
-            amount_value: Number(amount.value),
+            amount_value: amountInt,
             amount_scale: amount.scale,
             cash_commodity_id: cashCommodityID,
             memo: memo.trim() || undefined
@@ -328,7 +351,7 @@
               class="w-full px-3 py-2 text-left text-sm hover:bg-surface-strong/40 focus:bg-surface-strong/40"
               onclick={() => selectInstrument(inst)}
             >
-              <span class="font-medium">{inst.symbol ?? inst.code}</span>
+              <span class="font-medium">{inst.symbol ?? inst.commodity_code}</span>
               <span class="ml-2 text-muted">{inst.display_name}</span>
             </button>
           </li>

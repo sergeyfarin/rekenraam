@@ -130,6 +130,13 @@
     return { value: BigInt(coefficient), scale };
   }
 
+  // BigInt → safe JS number. Rejects coefficients that exceed Number.MAX_SAFE_INTEGER
+  // (2^53 − 1), which would be silently corrupted by Number(). Returns null on overflow.
+  function toSafeInt(v: bigint): number | null {
+    if (v > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    return Number(v);
+  }
+
   const canSubmit = $derived(
     !!selectedInstrument &&
     holdingAccountID !== '' &&
@@ -151,6 +158,13 @@
       return;
     }
 
+    const qtyInt = toSafeInt(qty.value);
+    const cashInt = toSafeInt(cash.value);
+    if (qtyInt === null || cashInt === null) {
+      formError = new Error(m.investments_form_amount_too_large());
+      return;
+    }
+
     pending = true;
     formError = undefined;
 
@@ -161,9 +175,9 @@
           commodity_id: selectedInstrument.commodity_id,
           holding_account_id: Number(holdingAccountID),
           cash_account_id: Number(cashAccountID),
-          quantity_value: Number(qty.value),
+          quantity_value: qtyInt,
           quantity_scale: qty.scale,
-          cash_amount_value: Number(cash.value),
+          cash_amount_value: cashInt,
           cash_amount_scale: cash.scale,
           cash_commodity_id: cashCommodityID,
           memo: memo.trim() || undefined
@@ -228,7 +242,7 @@
               class="w-full px-3 py-2 text-left text-sm hover:bg-surface-strong/40 focus:bg-surface-strong/40"
               onclick={() => selectInstrument(inst)}
             >
-              <span class="font-medium">{inst.symbol ?? inst.code}</span>
+              <span class="font-medium">{inst.symbol ?? inst.commodity_code}</span>
               <span class="ml-2 text-muted">{inst.display_name}</span>
             </button>
           </li>

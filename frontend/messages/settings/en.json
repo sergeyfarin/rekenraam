@@ -786,6 +786,7 @@
   "investments_form_memo": "Memo",
   "investments_form_cancel": "Cancel",
   "investments_form_invalid_number": "Please enter valid numbers for quantity and amount.",
+  "investments_form_amount_too_large": "Amount is too large to represent exactly. Please enter a smaller value.",
   "investments_form_optional": "optional",
   "investments_form_dividend_amount": "Dividend amount",
   "investments_form_income_account": "Income account",
