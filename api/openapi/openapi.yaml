@@ -133,6 +133,10 @@ paths:
     $ref: "./paths/import-commit.yaml"
   /api/v1/imports/{batch_id}/discard:
     $ref: "./paths/import-discard.yaml"
+  /api/v1/import-connections:
+    $ref: "./paths/import-connections.yaml"
+  /api/v1/import-connections/{connection_id}:
+    $ref: "./paths/import-connection.yaml"
   /api/v1/accounts/{account_id}/postings/{posting_line_id}/move:
     $ref: "./paths/posting-move.yaml"
   /api/v1/reconciliations/{reconciliation_id}:
@@ -256,6 +260,13 @@ components:
     ImportBatchID:
       in: path
       name: batch_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ImportConnectionID:
+      in: path
+      name: connection_id
       required: true
       schema:
         type: integer
@@ -531,6 +542,14 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportReconciliationIssue"
     PreviewCommitResponse:
       $ref: "./components/schemas/imports.yaml#/PreviewCommitResponse"
+    ImportConnectionResponse:
+      $ref: "./components/schemas/import-connections.yaml#/ImportConnectionResponse"
+    ListImportConnectionsResponse:
+      $ref: "./components/schemas/import-connections.yaml#/ListImportConnectionsResponse"
+    CreateImportConnectionRequest:
+      $ref: "./components/schemas/import-connections.yaml#/CreateImportConnectionRequest"
+    UpdateImportConnectionRequest:
+      $ref: "./components/schemas/import-connections.yaml#/UpdateImportConnectionRequest"
     ReconciliationPostingResponse:
       $ref: "./components/schemas/reconciliation.yaml#/ReconciliationPostingResponse"
     ReconciliationSessionResponse:

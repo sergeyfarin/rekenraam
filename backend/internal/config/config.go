@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/netip"
 	"os"
@@ -14,6 +15,11 @@ type Config struct {
 	TrustProxyHeaders      bool
 	TrustedProxyCIDRs      []netip.Prefix
 	OpenExchangeRatesAppID string
+	// SecretKey is a 32-byte AES-256 key (base64-encoded) used to seal online
+	// provider credentials at rest. Required when any import connection exists;
+	// the server starts without it but returns CONFIG_REQUIRED if unset when
+	// a connection operation is attempted.
+	SecretKey []byte
 }
 
 func Load() (Config, error) {
@@ -40,6 +46,11 @@ func Load() (Config, error) {
 		}
 	}
 
+	secretKey, err := loadSecretKey()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		AppEnv:                 appEnv,
 		HTTPAddr:               env("HTTP_ADDR", ":16888"),
@@ -47,7 +58,26 @@ func Load() (Config, error) {
 		TrustProxyHeaders:      trustProxyHeaders,
 		TrustedProxyCIDRs:      trustedProxyCIDRs,
 		OpenExchangeRatesAppID: strings.TrimSpace(os.Getenv("OPEN_EXCHANGE_RATES_APP_ID")),
+		SecretKey:              secretKey,
 	}, nil
+}
+
+// loadSecretKey reads REKENRAAM_SECRET_KEY from the environment.
+// The value must be base64-encoded standard encoding of exactly 32 bytes.
+// An absent key is allowed (returns nil); an invalid value is a hard error.
+func loadSecretKey() ([]byte, error) {
+	raw := strings.TrimSpace(os.Getenv("REKENRAAM_SECRET_KEY"))
+	if raw == "" {
+		return nil, nil
+	}
+	key, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("REKENRAAM_SECRET_KEY: invalid base64: %w", err)
+	}
+	if len(key) != 32 {
+		return nil, fmt.Errorf("REKENRAAM_SECRET_KEY: must decode to exactly 32 bytes (got %d)", len(key))
+	}
+	return key, nil
 }
 
 func env(key, fallback string) string {

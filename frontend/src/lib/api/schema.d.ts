@@ -6069,6 +6069,307 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List import connections */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description List of import connections (API keys are masked) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListImportConnectionsResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create an import connection */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateImportConnectionRequest"];
+                };
+            };
+            responses: {
+                /** @description Connection created and API key validated */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportConnectionResponse"];
+                    };
+                };
+                /** @description Validation failed */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description A connection with this name already exists for this source */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider rejected the API key */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: components["parameters"]["ImportConnectionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an import connection */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    connection_id: components["parameters"]["ImportConnectionID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connection deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Connection not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update an import connection (rename or rotate key) */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    connection_id: components["parameters"]["ImportConnectionID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateImportConnectionRequest"];
+                };
+            };
+            responses: {
+                /** @description Connection updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportConnectionResponse"];
+                    };
+                };
+                /** @description Validation failed */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Connection not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description A connection with this name already exists for this source */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider rejected the new API key */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/accounts/{account_id}/postings/{posting_line_id}/move": {
         parameters: {
             query?: never;
@@ -10412,6 +10713,55 @@ export interface components {
             duplicate_count: number;
             reconciliation_issues: components["schemas"]["ImportReconciliationIssue"][];
         };
+        ImportConnectionResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            book_id: number;
+            /** @description Provider source kind (e.g. "trading212"). */
+            source: string;
+            /** @description Human-readable label for this connection. */
+            display_name: string;
+            /** @description Masked hint of the stored API key, e.g. ••••ab12. The plaintext key is never returned. */
+            key_hint: string;
+            /** @description JSON string with non-secret provider configuration. */
+            config: string;
+            /**
+             * @description Status of the most recent durable fetch, empty if never fetched.
+             * @enum {string}
+             */
+            last_fetch_status: "" | "fetching" | "ready" | "failed";
+            /**
+             * Format: date-time
+             * @description Timestamp of the last completed fetch, omitted if never fetched.
+             */
+            last_fetched_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ListImportConnectionsResponse: {
+            connections: components["schemas"]["ImportConnectionResponse"][];
+        };
+        CreateImportConnectionRequest: {
+            /** @description Provider source kind (e.g. "trading212"). */
+            source: string;
+            /** @description Human-readable label for this connection. */
+            display_name: string;
+            /** @description Provider API key. Sealed at rest; never returned in any response. */
+            api_key: string;
+            /** @description Optional JSON string of non-secret provider configuration. */
+            config?: string;
+        };
+        UpdateImportConnectionRequest: {
+            /** @description New display name. */
+            display_name: string;
+            /** @description If provided, rotates the stored API key after probing the provider. */
+            api_key?: string;
+            /** @description Optional JSON string of non-secret provider configuration. */
+            config?: string;
+        };
         ReconciliationPostingResponse: {
             /** Format: int64 */
             posting_id: number;
@@ -11097,6 +11447,7 @@ export interface components {
         PayeeID: number;
         TransactionID: number;
         ImportBatchID: number;
+        ImportConnectionID: number;
         ReconciliationID: number;
         ReconciliationCheckpointID: number;
         InstrumentID: number;

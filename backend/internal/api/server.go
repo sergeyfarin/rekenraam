@@ -14,20 +14,21 @@ type HandlerOptions struct {
 }
 
 type Services struct {
-	Setup       *app.SetupService
-	Auth        *app.AuthService
-	Settings    *app.SettingsService
-	Book        *app.BookService
-	Currency    *app.CurrencyService
-	Institution *app.InstitutionService
-	Account     *app.AccountService
-	Tag         *app.TagService
-	Category    *app.CategoryService
-	Payee       *app.PayeeService
-	Transaction *app.TransactionService
-	Pricing     *app.PricingService
-	Investment  *app.InvestmentService
-	Import      *app.ImportService
+	Setup            *app.SetupService
+	Auth             *app.AuthService
+	Settings         *app.SettingsService
+	Book             *app.BookService
+	Currency         *app.CurrencyService
+	Institution      *app.InstitutionService
+	Account          *app.AccountService
+	Tag              *app.TagService
+	Category         *app.CategoryService
+	Payee            *app.PayeeService
+	Transaction      *app.TransactionService
+	Pricing          *app.PricingService
+	Investment       *app.InvestmentService
+	Import           *app.ImportService
+	ImportConnection *app.ImportConnectionService
 }
 
 func NewHandler(logger *slog.Logger, webHandler http.Handler, services Services, options HandlerOptions) http.Handler {

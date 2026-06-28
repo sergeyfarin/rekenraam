@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Upload from '@lucide/svelte/icons/upload';
   import CheckCircle from '@lucide/svelte/icons/circle-check';
   import AlertCircle from '@lucide/svelte/icons/circle-alert';
   import Info from '@lucide/svelte/icons/info';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Plus from '@lucide/svelte/icons/plus';
   import Panel from '$lib/components/panel.svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
@@ -23,6 +25,13 @@
     type CommitImportBatchResponse,
     type ImportResolution
   } from '$lib/api/imports';
+  import {
+    listImportConnections,
+    createImportConnection,
+    deleteImportConnection,
+    importConnectionsQueryKey,
+    type ImportConnection
+  } from '$lib/api/connections';
   import { m } from '$lib/paraglide/messages.js';
 
   // ── Page state ─────────────────────────────────────────────────────
@@ -200,6 +209,74 @@
     selectedFile = null;
     commitResult = null;
   }
+
+  // ── Connections ────────────────────────────────────────────────────
+  const queryClient = useQueryClient();
+
+  const connectionsQuery = createQuery(() => ({
+    queryKey: importConnectionsQueryKey,
+    queryFn: () => listImportConnections(),
+    retry: false
+  }));
+
+  const connections = $derived(connectionsQuery.data?.connections ?? []);
+  const connectionsConfigError = $derived(
+    connectionsQuery.isError && (connectionsQuery.error as { code?: string })?.code === 'CONFIG_REQUIRED'
+  );
+
+  // Add-connection form
+  let showAddConnection = $state(false);
+  let newConnName = $state('');
+  let newConnKey = $state('');
+  let addingConnection = $state(false);
+  let addConnectionError = $state<unknown>(undefined);
+
+  // Delete connection
+  let deletingConnectionId = $state<number | null>(null);
+  let confirmDeleteConnectionId = $state<number | null>(null);
+  let deleteConnectionError = $state<unknown>(undefined);
+
+  async function handleAddConnection() {
+    if (!newConnName.trim() || !newConnKey.trim()) return;
+    addingConnection = true;
+    addConnectionError = undefined;
+    try {
+      await createImportConnection(
+        { source: 'trading212', display_name: newConnName.trim(), api_key: newConnKey.trim() },
+        csrfToken
+      );
+      await queryClient.invalidateQueries({ queryKey: importConnectionsQueryKey });
+      showAddConnection = false;
+      newConnName = '';
+      newConnKey = '';
+    } catch (err) {
+      addConnectionError = err;
+    } finally {
+      addingConnection = false;
+    }
+  }
+
+  async function handleDeleteConnection(id: number) {
+    deletingConnectionId = id;
+    deleteConnectionError = undefined;
+    try {
+      await deleteImportConnection(id, csrfToken);
+      await queryClient.invalidateQueries({ queryKey: importConnectionsQueryKey });
+      confirmDeleteConnectionId = null;
+    } catch (err) {
+      deleteConnectionError = err;
+    } finally {
+      deletingConnectionId = null;
+    }
+  }
+
+  function fetchStatusLabel(conn: ImportConnection): string {
+    if (!conn.last_fetch_status) return m.import_connections_status_never();
+    if (conn.last_fetch_status === 'fetching') return m.import_connections_status_fetching();
+    if (conn.last_fetch_status === 'ready') return m.import_connections_status_ready();
+    if (conn.last_fetch_status === 'failed') return m.import_connections_status_failed();
+    return m.import_connections_status_never();
+  }
 </script>
 
 <!-- Upload step -->
@@ -240,6 +317,160 @@
     <Panel variant="subtle">
       <p class="text-sm font-semibold text-foreground">{m.import_upload_ms_money_help()}</p>
       <p class="mt-2 text-sm leading-6 text-muted">{m.import_upload_ms_money_steps()}</p>
+    </Panel>
+
+    <!-- Online connections panel -->
+    <Panel>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-foreground">{m.import_connections_title()}</p>
+          <p class="mt-1 text-sm text-muted">{m.import_connections_copy()}</p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-medium text-foreground transition hover:bg-control-hover"
+          onclick={() => { showAddConnection = !showAddConnection; addConnectionError = undefined; }}
+        >
+          <Plus size={14} aria-hidden="true" />
+          {m.import_connections_add()}
+        </button>
+      </div>
+
+      {#if connectionsConfigError}
+        <p class="mt-4 text-sm text-warning">{m.import_connections_error_config()}</p>
+      {:else if connectionsQuery.isError}
+        <p class="mt-4 text-sm text-warning">{m.import_connections_error_generic()}</p>
+      {:else if connections.length === 0 && !showAddConnection}
+        <p class="mt-4 text-sm text-muted">{m.import_connections_empty()}</p>
+      {:else if connections.length > 0}
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border text-left">
+                <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_name()}</th>
+                <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_source()}</th>
+                <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_key()}</th>
+                <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_status()}</th>
+                <th class="pb-2 font-semibold text-muted">{m.import_connections_col_actions()}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each connections as conn (conn.id)}
+                <tr class="border-b border-border last:border-b-0">
+                  <td class="py-2.5 pr-4 font-medium text-foreground">{conn.display_name}</td>
+                  <td class="py-2.5 pr-4 text-muted">{conn.source}</td>
+                  <td class="py-2.5 pr-4 font-mono text-xs text-muted">{conn.key_hint}</td>
+                  <td class="py-2.5 pr-4 text-muted">{fetchStatusLabel(conn)}</td>
+                  <td class="py-2.5">
+                    {#if confirmDeleteConnectionId === conn.id}
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-muted">{m.import_connections_delete_confirm()}</span>
+                        <button
+                          type="button"
+                          class="text-xs text-muted hover:text-foreground"
+                          onclick={() => { confirmDeleteConnectionId = null; deleteConnectionError = undefined; }}
+                        >
+                          {m.import_connections_delete_cancel()}
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded-(--radius-control) bg-foreground px-2.5 py-1 text-xs font-semibold text-background transition hover:opacity-90 disabled:opacity-60"
+                          onclick={() => handleDeleteConnection(conn.id)}
+                          disabled={deletingConnectionId === conn.id}
+                        >
+                          <Trash2 size={12} aria-hidden="true" />
+                          {m.import_connections_delete_confirm_button()}
+                        </button>
+                      </div>
+                    {:else}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-(--radius-control) border border-border px-2.5 py-1 text-xs font-medium text-muted transition hover:bg-control-hover hover:text-foreground"
+                        onclick={() => { confirmDeleteConnectionId = conn.id; deleteConnectionError = undefined; }}
+                      >
+                        <Trash2 size={12} aria-hidden="true" />
+                        {m.import_connections_delete()}
+                      </button>
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+
+      {#if deleteConnectionError}
+        <p class="mt-3 text-sm text-warning">{m.import_connections_delete_error()}</p>
+      {/if}
+
+      <!-- Add connection form -->
+      {#if showAddConnection}
+        <div class="mt-5 border-t border-border pt-5">
+          <p class="text-sm font-semibold text-foreground">{m.import_connections_add_title()}</p>
+          <div class="mt-4 space-y-4">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-medium text-muted" for="conn-name">
+                {m.import_connections_add_name_label()}
+              </label>
+              <input
+                id="conn-name"
+                type="text"
+                class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                placeholder={m.import_connections_add_name_placeholder()}
+                bind:value={newConnName}
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-medium text-muted" for="conn-key">
+                {m.import_connections_add_key_label()}
+              </label>
+              <input
+                id="conn-key"
+                type="password"
+                autocomplete="new-password"
+                class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                placeholder={m.import_connections_add_key_placeholder()}
+                bind:value={newConnKey}
+              />
+              <p class="text-xs text-muted">{m.import_connections_add_key_help()}</p>
+            </div>
+
+            {#if addConnectionError}
+              {@const errCode = (addConnectionError as { code?: string })?.code}
+              <p class="text-sm text-warning">
+                {#if errCode === 'PROVIDER_ERROR'}
+                  {m.import_connections_error_provider()}
+                {:else if errCode === 'CONFIG_REQUIRED'}
+                  {m.import_connections_error_config()}
+                {:else if errCode === 'CONFLICT'}
+                  {m.import_connections_error_duplicate()}
+                {:else}
+                  {m.import_connections_error_generic()}
+                {/if}
+              </p>
+            {/if}
+
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                onclick={handleAddConnection}
+                disabled={addingConnection || !newConnName.trim() || !newConnKey.trim()}
+              >
+                {addingConnection ? m.import_connections_add_submitting() : m.import_connections_add_submit()}
+              </button>
+              <button
+                type="button"
+                class="text-sm text-muted hover:text-foreground"
+                onclick={() => { showAddConnection = false; addConnectionError = undefined; newConnName = ''; newConnKey = ''; }}
+              >
+                {m.import_discard_cancel()}
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
     </Panel>
   </div>
 

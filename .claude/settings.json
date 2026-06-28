@@ -69,7 +69,12 @@
       "Bash(pnpm exec *)",
       "Bash(sort -t: -k2 -rn)",
       "Bash(awk -F: '{s+=$2} END {print s}')",
-      "Bash(echo \"BUILD_EXIT=$?\")"
+      "Bash(echo \"BUILD_EXIT=$?\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d.keys\\(\\)]\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/coder/Repos/rekenraam/frontend/messages/app/en.json'\\)\\); keys = [k for k in d.keys\\(\\) if k.startswith\\('import'\\)]; print\\('\\\\n'.join\\(keys[:30]\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k,':',v\\) for k,v in d.get\\('scripts',{}\\).items\\(\\)]\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); keys=[k for k in d.keys\\(\\) if k.startswith\\('import'\\)]; print\\('\\\\n'.join\\(keys\\)\\)\")",
+      "Bash(go run *)"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

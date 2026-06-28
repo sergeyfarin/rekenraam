@@ -14,13 +14,13 @@ ADR 0010 (durable background work), and `docs/conventions.md`. Aligns with the
 FX-refresh precedent in `docs/fx-refresh-implementation-plan.md`, which is the
 template for the durable-fetch machinery here.
 
-Status: **planning complete; ready to implement when R7 is prioritized.** The
-prerequisite that paused this work — a fully working investments feature including
-UI — is now **met** (`docs/investments-plan.md` Slices 1–4 shipped, R12). Trading 212
-is a brokerage, so booking its instrument fills as lots needs that lot/event
-machinery, which now exists. What remains is the online-import work itself (R7),
-which is sequenced after the near-term roadmap; this plan is no longer blocked by a
-missing dependency. Last updated 2026-06-28.
+Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28.** Slices 2–4 pending.
+
+Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
+migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
+(probe-before-store, key masking), 4 REST endpoints (`/api/v1/import-connections`),
+OpenAPI coverage, generated TS types, `$lib/api/connections.ts` client, connections UI
+on the import page (masked list, add form, delete with confirm). Last updated 2026-06-28.
 
 ---
 

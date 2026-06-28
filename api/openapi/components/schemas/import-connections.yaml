@@ -1,0 +1,94 @@
+ImportConnectionResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - source
+    - display_name
+    - key_hint
+    - config
+    - last_fetch_status
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    source:
+      type: string
+      description: Provider source kind (e.g. "trading212").
+    display_name:
+      type: string
+      description: Human-readable label for this connection.
+    key_hint:
+      type: string
+      description: "Masked hint of the stored API key, e.g. ••••ab12. The plaintext key is never returned."
+    config:
+      type: string
+      description: JSON string with non-secret provider configuration.
+    last_fetch_status:
+      type: string
+      enum:
+        - ""
+        - fetching
+        - ready
+        - failed
+      description: Status of the most recent durable fetch, empty if never fetched.
+    last_fetched_at:
+      type: string
+      format: date-time
+      description: Timestamp of the last completed fetch, omitted if never fetched.
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+ListImportConnectionsResponse:
+  type: object
+  required:
+    - connections
+  properties:
+    connections:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportConnectionResponse"
+
+CreateImportConnectionRequest:
+  type: object
+  required:
+    - source
+    - display_name
+    - api_key
+  properties:
+    source:
+      type: string
+      description: Provider source kind (e.g. "trading212").
+    display_name:
+      type: string
+      description: Human-readable label for this connection.
+    api_key:
+      type: string
+      description: Provider API key. Sealed at rest; never returned in any response.
+    config:
+      type: string
+      description: Optional JSON string of non-secret provider configuration.
+
+UpdateImportConnectionRequest:
+  type: object
+  required:
+    - display_name
+  properties:
+    display_name:
+      type: string
+      description: New display name.
+    api_key:
+      type: string
+      description: If provided, rotates the stored API key after probing the provider.
+    config:
+      type: string
+      description: Optional JSON string of non-secret provider configuration.

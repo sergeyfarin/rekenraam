@@ -1,0 +1,78 @@
+get:
+  summary: List import connections
+  responses:
+    "200":
+      description: List of import connections (API keys are masked)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ListImportConnectionsResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Create an import connection
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CreateImportConnectionRequest"
+  responses:
+    "201":
+      description: Connection created and API key validated
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ImportConnectionResponse"
+    "400":
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: A connection with this name already exists for this source
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "502":
+      description: Provider rejected the API key
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

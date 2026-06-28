@@ -130,15 +130,18 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   category; R6 should show per-split category selectors in the preview UI and route
   each split to its own `CategoryID` derived from `category_hint` in normalized JSON.
 
-### R7. Online ingestion + payee/category cleanup
+### R7. Online ingestion + payee/category cleanup — 🟦 Slice 1 shipped
 - Online sources implement the same adapter contract, driven by the durable work
   queue (ADR 0010) so refreshes are restart-safe — same model as FX coverage.
 - **First provider: Trading 212** (token-based public API, no OAuth/PSD2). Proves
   the online model end-to-end: encrypted credential storage, durable polling,
   provider-id dedupe, native-currency money. **Full design:
-  `docs/trading212-import-plan.md`.** Introduces the reusable `internal/secretbox`
-  credential store (the repo has no encrypted-secret store today) used by every
-  future online provider.
+  `docs/trading212-import-plan.md`.**
+- **Slice 1 shipped (2026-06-28):** `internal/secretbox` credential store, `import_connections`
+  table (migration `0007`), `ImportConnectionService` with probe-before-store + key masking,
+  4 REST endpoints, OpenAPI, TS types, connections UI (masked list + add + delete).
+- **Remaining:** Slice 2 (T212 HTTP fetcher + real `ConnectionProber`), Slice 3 (fetch worker),
+  Slice 4 (online-batch `POST /imports` JSON branch + polling UI).
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
 

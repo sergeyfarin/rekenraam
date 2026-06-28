@@ -156,6 +156,13 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/preview-commit", previewCommitImportBatch(logger, services.Auth, services.Import))
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/commit", commitImportBatch(logger, services.Auth, services.Import, options))
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/discard", discardImportBatch(logger, services.Auth, services.Import, options))
+
+	if services.ImportConnection != nil {
+		mux.HandleFunc("GET /api/v1/import-connections", listImportConnections(logger, services.Auth, services.ImportConnection))
+		mux.HandleFunc("POST /api/v1/import-connections", createImportConnection(logger, services.Auth, services.ImportConnection, options))
+		mux.HandleFunc("PATCH /api/v1/import-connections/{connection_id}", updateImportConnection(logger, services.Auth, services.ImportConnection, options))
+		mux.HandleFunc("DELETE /api/v1/import-connections/{connection_id}", deleteImportConnection(logger, services.Auth, services.ImportConnection, options))
+	}
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {

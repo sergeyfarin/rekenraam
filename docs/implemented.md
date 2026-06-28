@@ -59,6 +59,23 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Category transactions route | ✅ | `routes/app/categories/[id]`. |
 | Trash / recovery (soft-delete browse + guarded restore) | ✅ | `settings/trash`. |
 
+## Online Connections (R7, Slice 1) — ✅ Credential store + CRUD shipped
+
+| Capability | Status | Notes |
+|---|---|---|
+| `internal/secretbox` (AES-256-GCM, random nonce, base64 wire format) | ✅ | `backend/internal/secretbox/secretbox.go`; pure stdlib, 11-test suite. |
+| `REKENRAAM_SECRET_KEY` config (base64 32-byte key, optional boot) | ✅ | `internal/config/config.go`; absent = nil (boots); invalid = hard error. |
+| Migration `0007_online_import.sql` | ✅ | `import_connections` table + `connection_id` FK on `import_batches`. |
+| `ImportConnectionRepository` (CRUD) | ✅ | `internal/db/import_connections.go`; conditional key rotation on update. |
+| `ImportConnectionService` (probe-before-store, key masking) | ✅ | `internal/app/import_connections.go`; `ConnectionProber` interface; `NoOpProber` for Slice 1. |
+| 4 REST endpoints (`GET/POST /import-connections`, `PATCH/DELETE /{id}`) | ✅ | `internal/api/import_connections.go`; `CONFIG_REQUIRED`/`PROVIDER_ERROR`/`CONFLICT` error codes. |
+| OpenAPI spec + generated TS types | ✅ | `api/openapi/components/schemas/import-connections.yaml` + path files; `schema.d.ts` regenerated. |
+| Frontend connections client | ✅ | `frontend/src/lib/api/connections.ts`; typed against generated schema. |
+| Connections UI on import page | ✅ | Masked key hint list, add-connection form (probe-then-store), inline delete confirm. |
+| **Slice 2: Trading 212 HTTP fetcher + adapter** | ⬜ | `internal/onlinesource/trading212`; real `ConnectionProber`. |
+| **Slice 3: Durable fetch worker** | ⬜ | `kind="import.fetch.trading212"` work item + cursor. |
+| **Slice 4: Online-import batch flow** | ⬜ | `POST /imports` JSON branch; UI polling; incremental re-fetch. |
+
 ## Import Pipeline (Phase 4, Slice 1) — 🟦 Core pipeline + QIF shipped
 
 | Capability | Status | Notes |

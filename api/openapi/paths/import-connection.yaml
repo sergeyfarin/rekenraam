@@ -1,0 +1,100 @@
+parameters:
+  - $ref: "../openapi.yaml#/components/parameters/ImportConnectionID"
+patch:
+  summary: Update an import connection (rename or rotate key)
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/UpdateImportConnectionRequest"
+  responses:
+    "200":
+      description: Connection updated
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ImportConnectionResponse"
+    "400":
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Connection not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: A connection with this name already exists for this source
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "502":
+      description: Provider rejected the new API key
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+delete:
+  summary: Delete an import connection
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  responses:
+    "204":
+      description: Connection deleted
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Connection not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
