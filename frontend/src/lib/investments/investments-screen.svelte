@@ -1,9 +1,7 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import TrendingUp from '@lucide/svelte/icons/trending-up';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import X from '@lucide/svelte/icons/x';
-  import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
   import {
@@ -12,7 +10,8 @@
     investmentInstrumentsQueryOptions,
     type InvestmentPositionResponse
   } from '$lib/api/investments';
-  import { formatScaledValue, lotStatusLabel } from './investment-labels';
+  import { formatScaledValue } from './investment-labels';
+  import { m } from '$lib/paraglide/messages.js';
 
   const locale = 'en';
 
@@ -21,12 +20,13 @@
 
   let selectedPosition = $state<InvestmentPositionResponse | null>(null);
 
-  const lotsQuery = createQuery(() =>
-    investmentLotsQueryOptions(
+  const lotsQuery = createQuery(() => ({
+    ...investmentLotsQueryOptions(
       selectedPosition?.account_id,
       selectedPosition?.commodity_id
-    )
-  );
+    ),
+    enabled: selectedPosition !== null
+  }));
 
   const instrumentsByID = $derived.by(() => {
     const map = new Map<number, string>();
@@ -48,6 +48,17 @@
     selectedPosition = null;
   }
 
+  function lotStatusLabel(status: string): string {
+    switch (status) {
+      case 'open':
+        return m.investments_lot_status_open();
+      case 'closed':
+        return m.investments_lot_status_closed();
+      default:
+        return status;
+    }
+  }
+
   const isLoading = $derived(positionsQuery.isPending || instrumentsQuery.isPending);
   const isError = $derived(positionsQuery.isError || instrumentsQuery.isError);
   const positions = $derived(positionsQuery.data?.positions ?? []);
@@ -55,22 +66,20 @@
 </script>
 
 <div>
-  <PageHeader eyebrow="Portfolio" title="Investments" />
-
   <div class="p-4 sm:p-6 lg:p-8">
     {#if isLoading}
       <Panel>
-        <p class="text-sm text-muted">Loading positions…</p>
+        <p class="text-sm text-muted">{m.investments_loading()}</p>
       </Panel>
     {:else if isError}
       <StatePanel
-        title="Could not load investments"
-        copy="Check your connection and reload."
+        title={m.investments_error_title()}
+        copy={m.investments_error_copy()}
       />
     {:else if openPositions.length === 0}
       <StatePanel
-        title="No open positions"
-        copy="Record a buy to see your portfolio here."
+        title={m.investments_empty_title()}
+        copy={m.investments_empty_copy()}
       />
     {:else}
       <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:gap-6">
@@ -81,10 +90,10 @@
               <table class="min-w-full text-sm">
                 <thead>
                   <tr class="border-b border-border bg-surface-strong/40">
-                    <th class="py-3 pl-5 pr-3 text-left font-semibold text-foreground">Instrument</th>
-                    <th class="px-3 py-3 text-right font-semibold text-foreground">Quantity</th>
-                    <th class="px-3 py-3 text-right font-semibold text-foreground">Cost basis</th>
-                    <th class="py-3 pl-3 pr-5 text-right font-semibold text-foreground">Market value</th>
+                    <th class="py-3 pl-5 pr-3 text-left font-semibold text-foreground">{m.investments_col_instrument()}</th>
+                    <th class="px-3 py-3 text-right font-semibold text-foreground">{m.investments_col_quantity()}</th>
+                    <th class="px-3 py-3 text-right font-semibold text-foreground">{m.investments_col_cost_basis()}</th>
+                    <th class="py-3 pl-3 pr-5 text-right font-semibold text-foreground">{m.investments_col_latest_price()}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -94,8 +103,8 @@
                       onclick={() => selectPosition(pos)}
                       role="button"
                       tabindex="0"
-                      onkeydown={(e) => e.key === 'Enter' && selectPosition(pos)}
-                      aria-label={`View lots for ${instrumentName(pos.commodity_id)}`}
+                      onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectPosition(pos)}
+                      aria-label={m.investments_row_aria({ name: instrumentName(pos.commodity_id) })}
                     >
                       <td class="py-3 pl-5 pr-3">
                         <div class="flex items-center gap-2">
@@ -145,24 +154,24 @@
               <Panel>
                 <div class="mb-4 flex items-center justify-between">
                   <h2 class="text-base font-semibold text-foreground">
-                    {instrumentName(selectedPosition.commodity_id)} — Lots
+                    {instrumentName(selectedPosition.commodity_id)} — {m.investments_lots_title()}
                   </h2>
                   <button
                     type="button"
                     onclick={closeDetail}
                     class="rounded p-1 text-muted transition hover:text-foreground"
-                    aria-label="Close lot detail"
+                    aria-label={m.investments_lots_close()}
                   >
                     <X size={16} aria-hidden="true" />
                   </button>
                 </div>
 
                 {#if lotsQuery.isPending}
-                  <p class="text-sm text-muted">Loading lots…</p>
+                  <p class="text-sm text-muted">{m.investments_lots_loading()}</p>
                 {:else if lotsQuery.isError}
-                  <p class="text-sm text-destructive">Could not load lots.</p>
+                  <p class="text-sm text-destructive">{m.investments_lots_error()}</p>
                 {:else if (lotsQuery.data?.lots ?? []).length === 0}
-                  <p class="text-sm text-muted">No lots found.</p>
+                  <p class="text-sm text-muted">{m.investments_lots_empty()}</p>
                 {:else}
                   <div class="space-y-3">
                     {#each lotsQuery.data!.lots as lot (lot.id)}
@@ -176,15 +185,15 @@
                           </span>
                         </div>
                         <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                          <span class="text-muted">Remaining qty</span>
+                          <span class="text-muted">{m.investments_lot_remaining_qty()}</span>
                           <span class="text-right font-mono text-foreground">
                             {formatScaledValue(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)}
                           </span>
-                          <span class="text-muted">Cost basis</span>
+                          <span class="text-muted">{m.investments_lot_cost_basis()}</span>
                           <span class="text-right font-mono text-foreground">
                             {formatScaledValue(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale)}
                           </span>
-                          <span class="text-muted">Original qty</span>
+                          <span class="text-muted">{m.investments_lot_original_qty()}</span>
                           <span class="text-right font-mono text-muted">
                             {formatScaledValue(lot.quantity_value, lot.quantity_scale, locale)}
                           </span>

@@ -97,7 +97,9 @@
             ? m.import_title()
             : isSettingsRoute
               ? m.settings_title()
-              : m.app_shell_header_title()
+              : isInvestmentsRoute
+                ? m.investments_title()
+                : m.app_shell_header_title()
   );
   const headerCopy = $derived(
     isAccountsRoute
@@ -110,7 +112,9 @@
             ? m.import_shell_copy()
             : isSettingsRoute
               ? m.settings_shell_copy()
-              : m.app_shell_header_copy()
+              : isInvestmentsRoute
+                ? m.investments_shell_copy()
+                : m.app_shell_header_copy()
   );
 
   $effect(() => {
@@ -256,7 +260,7 @@
           class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
         >
           <TrendingUp size={16} aria-hidden="true" />
-          Investments
+          {m.investments_nav()}
         </a>
         <a
           href="/app/import"
