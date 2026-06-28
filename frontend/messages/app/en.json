@@ -75,5 +75,62 @@
 
   "import_error_no_adapter": "This file format is not supported. Please upload a QIF file.",
   "import_error_generic": "Import failed. Please try again.",
-  "import_retry": "Try again"
+  "import_retry": "Try again",
+
+  "reconcile_title": "Reconcile",
+  "reconcile_nav": "Reconcile",
+  "reconcile_shell_copy": "Match an account against a statement: clear the postings that appear on it, then finish when the difference is zero.",
+
+  "reconcile_start_title": "Start a reconciliation",
+  "reconcile_start_copy": "Pick an account, then enter the closing date and balance from your statement.",
+  "reconcile_start_account_label": "Account",
+  "reconcile_start_account_placeholder": "Choose an account",
+  "reconcile_start_no_accounts": "No reconcilable accounts. Create a cash or liability account first.",
+  "reconcile_start_no_commodity": "This account has no default currency. Set one on the account before reconciling it.",
+  "reconcile_start_currency_label": "Currency",
+  "reconcile_start_date_label": "Statement closing date",
+  "reconcile_start_balance_label": "Statement ending balance",
+  "reconcile_start_balance_help": "The closing balance shown on the statement, including a minus sign for a negative balance.",
+  "reconcile_start_submit": "Start reconciling",
+  "reconcile_start_submitting": "Starting…",
+  "reconcile_start_invalid_balance": "Enter a valid amount, for example 1234.56.",
+
+  "reconcile_session_title": "Clear postings",
+  "reconcile_session_copy": "Tick each posting that appears on the statement. The difference updates as you go.",
+  "reconcile_session_account": "Account",
+  "reconcile_session_statement_date": "Statement date",
+  "reconcile_session_col_clear": "Cleared",
+  "reconcile_session_col_date": "Date",
+  "reconcile_session_col_detail": "Payee / description",
+  "reconcile_session_col_amount": "Amount",
+  "reconcile_session_empty_title": "Nothing to reconcile",
+  "reconcile_session_empty_copy": "There are no postings in this account for the statement period.",
+  "reconcile_session_error_title": "Could not load the reconciliation",
+  "reconcile_session_error_copy": "Something went wrong loading this reconciliation session.",
+  "reconcile_session_retry": "Try again",
+
+  "reconcile_summary_statement_balance": "Statement balance",
+  "reconcile_summary_starting_balance": "Starting balance",
+  "reconcile_summary_cleared_balance": "Cleared balance",
+  "reconcile_summary_difference": "Difference",
+  "reconcile_summary_balanced": "Balanced",
+  "reconcile_summary_unbalanced": "Not yet balanced",
+
+  "reconcile_reason_label": "Reason",
+  "reconcile_reason_placeholder": "Reason for this reconciliation",
+  "reconcile_finish": "Finish reconciliation",
+  "reconcile_finishing": "Finishing…",
+  "reconcile_finish_hint": "Finishing is available once the difference is zero.",
+  "reconcile_finish_needs_reason": "Enter a reason to finish.",
+  "reconcile_void": "Discard",
+  "reconcile_voiding": "Discarding…",
+
+  "reconcile_finished_title": "Reconciliation complete",
+  "reconcile_finished_copy": "This account is reconciled through the statement date. A checkpoint was recorded.",
+  "reconcile_finished_again": "Reconcile another account",
+
+  "reconcile_checkpoints_title": "Reconciled through",
+  "reconcile_checkpoints_empty": "This account has not been reconciled yet.",
+  "reconcile_checkpoints_col_date": "Date",
+  "reconcile_checkpoints_col_balance": "Balance"
 }

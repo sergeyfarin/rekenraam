@@ -63,7 +63,10 @@
       "Read(//home/coder/Repos/docs/**)",
       "Bash(grep -n 'ship `fifo` + `specific_lot`\\\\|gate `lifo`\\\\|fifo. + .specific_lot. working\\\\|NOT_IMPLEMENTED' docs/investments-plan.md)",
       "Bash(awk '/CREATE TABLE.*investment_lots/,/^;/' /home/coder/Repos/rekenraam/backend/migrations/0001_initial_schema.sql)",
-      "Bash(grep -E \"\\\\.svelte$\")"
+      "Bash(grep -E \"\\\\.svelte$\")",
+      "Bash(ls backend/internal/app/reconciliation*test* backend/internal/api/reconciliation*test*)",
+      "Bash(grep -rc \"func Test\" backend/internal/app/reconciliation_test.go backend/internal/api/reconciliation_test.go)",
+      "Bash(pnpm exec *)"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

@@ -13,7 +13,7 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-28 (investments Slice 4 complete — gains reporting + provider-event suggestions UI).
+Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped — `routes/app/reconcile`).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -82,14 +82,15 @@ Last reconciled with the codebase: 2026-06-28 (investments Slice 4 complete — 
 | **Batch rollback (void all committed rows)** | ⬜ | R6. |
 | **Import profiles (saved column/account mappings)** | ⬜ | R5. |
 
-## Reconciliation (Phase 3) — 🟦 Backend complete, UI pending
+## Reconciliation (Phase 3) — ✅ Core workflow shipped
 
 | Capability | Status | Notes |
 |---|---|---|
-| Reconciliation sessions, checkpoints, finish/void | 🟡 | `app/reconciliation.go`; API complete. |
+| Reconciliation sessions, checkpoints, finish/void | ✅ | `app/reconciliation.go`; API + UI. |
 | Period-scoped reconciliation guard (edit/void/restore/move) | ✅ | Wired across all mutation paths; balance assertion enforced in DB tx. |
 | Reconciliation-impact preview (named-checkpoint warnings) | ✅ | Surfaced in the transaction editor warning modal. |
-| **Dedicated reconcile workflow screen** | ⬜ | No reconcile UI route yet — see roadmap. |
+| **Dedicated reconcile workflow screen** | ✅ | `routes/app/reconcile` (R1): pick account → statement date/balance → clear postings against a server-authoritative live difference → finish only at zero, or discard. Prior active checkpoints shown read-only. Reuses the existing typed client (`lib/api/reconciliation.ts`). |
+| Void-checkpoint controls / out-of-session mark-cleared UI | ⬜ | API exists; deferred beyond the R1 trust loop. |
 
 ## Reports (Phase 3) — 🟡 Backend only
 

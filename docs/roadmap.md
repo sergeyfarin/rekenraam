@@ -10,9 +10,9 @@ competitor-driven feature gap analysis.
 - **Long-lived decisions:** `docs/adrs/`, `docs/conventions.md`,
   `docs/early-architecture-decisions.md`.
 
-Status as of 2026-06-28: Phases 0–2 ship end-to-end. Phase 3 has a complete
-backend (reconciliation engine, ledger read models) but no reconcile/reports UI.
-Phase 4 import has its core pipeline + QIF adapter shipped (Slice 1). Phase 6
+Status as of 2026-06-28: Phases 0–2 ship end-to-end. Phase 3's reconcile workflow
+UI now ships (R1); the reports UI (R2) is still pending over a complete read-model
+backend. Phase 4 import has its core pipeline + QIF adapter shipped (Slice 1). Phase 6
 **investments shipped end-to-end** (R12: all four cost-basis methods, sell preview,
 gains reporting, provider-event review UI); FX/pricing still has backend foundations
 only. Phase 5 (budgets, recurring) is unstarted.
@@ -29,7 +29,7 @@ Reference apps for a self-hosted Microsoft Money / Quicken successor. ✅ = soli
 | Double-entry ledger | ✅ | partial | ✅ | ⬜ (envelope) | ✅ | partial |
 | Multi-currency accounts | ✅ | ✅ | ✅ | limited | ✅ | ✅ |
 | Account register + same-day order | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Reconciliation workflow | 🟦 (no UI) | ✅ | ✅ | ⬜ | ✅ | ✅ |
+| Reconciliation workflow | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ |
 | Core reports (net worth/cashflow/spending) | 🟦 (no UI) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Saved/custom reports | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ |
 | CSV import | ⬜ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -64,14 +64,15 @@ stakes and cheap.
 The backend already computes reconciliation and reports; the gap is purely UI.
 This is the highest-leverage work because it exposes shipped engines.
 
-### R1. Reconciliation workflow UI
-Competitors (Quicken, GnuCash, MMEX) all gate "is my balance real?" on a
-reconcile screen. The engine, guard, and impact previews exist (`app/reconciliation.go`,
-`/reconciliations/*`); only the UI is missing.
+### R1. Reconciliation workflow UI — ✅ shipped
+The core reconcile loop ships at `routes/app/reconcile` (`implemented.md`):
 - Start-reconciliation flow (statement date + ending balance) per account.
-- Clear/unclear postings against a running cleared balance; live difference.
-- Finish (asserts difference = 0) and void-checkpoint controls.
-- Surface the period-scoped guard warnings already returned by the API.
+- Clear/unclear postings against a server-authoritative live difference.
+- Finish enabled only when the difference is zero (the backend asserts it); discard
+  to abandon.
+- Prior active checkpoints shown read-only as reconciled-through context.
+- **Deferred (follow-up):** void-checkpoint controls and out-of-session
+  mark-cleared UI (APIs exist); these sit outside the R1 trust loop.
 
 ### R2. Reports UI
 Read models exist (`/ledger/net-worth`, `/account-balances`, `/category-totals`).

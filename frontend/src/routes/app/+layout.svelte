@@ -10,6 +10,7 @@
   import Tags from '@lucide/svelte/icons/tags';
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import Receipt from '@lucide/svelte/icons/receipt';
+  import Scale from '@lucide/svelte/icons/scale';
   import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
   import TrendingUp from '@lucide/svelte/icons/trending-up';
   import APIFormError from '$lib/components/api-form-error.svelte';
@@ -82,6 +83,7 @@
   const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
   const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
   const isTransactionsRoute = $derived($page.url.pathname.startsWith('/app/transactions'));
+  const isReconcileRoute = $derived($page.url.pathname.startsWith('/app/reconcile'));
   const isImportRoute = $derived($page.url.pathname.startsWith('/app/import'));
   const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
   const isInvestmentsRoute = $derived($page.url.pathname.startsWith('/app/investments'));
@@ -93,13 +95,15 @@
         ? m.categories_title()
         : isTransactionsRoute
           ? m.transactions_page_title()
-          : isImportRoute
-            ? m.import_title()
-            : isSettingsRoute
-              ? m.settings_title()
-              : isInvestmentsRoute
-                ? m.investments_title()
-                : m.app_shell_header_title()
+          : isReconcileRoute
+            ? m.reconcile_title()
+            : isImportRoute
+              ? m.import_title()
+              : isSettingsRoute
+                ? m.settings_title()
+                : isInvestmentsRoute
+                  ? m.investments_title()
+                  : m.app_shell_header_title()
   );
   const headerCopy = $derived(
     isAccountsRoute
@@ -108,13 +112,15 @@
         ? m.categories_shell_copy()
         : isTransactionsRoute
           ? m.transactions_page_copy()
-          : isImportRoute
-            ? m.import_shell_copy()
-            : isSettingsRoute
-              ? m.settings_shell_copy()
-              : isInvestmentsRoute
-                ? m.investments_shell_copy()
-                : m.app_shell_header_copy()
+          : isReconcileRoute
+            ? m.reconcile_shell_copy()
+            : isImportRoute
+              ? m.import_shell_copy()
+              : isSettingsRoute
+                ? m.settings_shell_copy()
+                : isInvestmentsRoute
+                  ? m.investments_shell_copy()
+                  : m.app_shell_header_copy()
   );
 
   $effect(() => {
@@ -249,6 +255,18 @@
         >
           <Receipt size={16} aria-hidden="true" />
           {m.app_shell_nav_transactions()}
+        </a>
+        <a
+          href="/app/reconcile"
+          aria-current={isReconcileRoute ? 'page' : undefined}
+          class:bg-selected={isReconcileRoute}
+          class:text-selected-foreground={isReconcileRoute}
+          class:bg-transparent={!isReconcileRoute}
+          class:text-foreground={!isReconcileRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <Scale size={16} aria-hidden="true" />
+          {m.reconcile_nav()}
         </a>
         <a
           href="/app/investments"
