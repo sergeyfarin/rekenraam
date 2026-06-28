@@ -11,6 +11,7 @@
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
   import Receipt from '@lucide/svelte/icons/receipt';
   import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
+  import TrendingUp from '@lucide/svelte/icons/trending-up';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -83,6 +84,7 @@
   const isTransactionsRoute = $derived($page.url.pathname.startsWith('/app/transactions'));
   const isImportRoute = $derived($page.url.pathname.startsWith('/app/import'));
   const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
+  const isInvestmentsRoute = $derived($page.url.pathname.startsWith('/app/investments'));
 
   const headerTitle = $derived(
     isAccountsRoute
@@ -243,6 +245,18 @@
         >
           <Receipt size={16} aria-hidden="true" />
           {m.app_shell_nav_transactions()}
+        </a>
+        <a
+          href="/app/investments"
+          aria-current={isInvestmentsRoute ? 'page' : undefined}
+          class:bg-selected={isInvestmentsRoute}
+          class:text-selected-foreground={isInvestmentsRoute}
+          class:bg-transparent={!isInvestmentsRoute}
+          class:text-foreground={!isInvestmentsRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <TrendingUp size={16} aria-hidden="true" />
+          Investments
         </a>
         <a
           href="/app/import"

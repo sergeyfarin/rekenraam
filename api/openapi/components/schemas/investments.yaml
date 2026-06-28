@@ -1,0 +1,932 @@
+CostBasisMethod:
+  type: string
+  enum:
+    - fifo
+    - lifo
+    - average_cost
+    - specific_lot
+
+InstrumentType:
+  type: string
+  enum:
+    - equity
+    - etf
+    - fund
+    - bond
+    - crypto
+    - other
+
+InvestmentInstrumentResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - commodity_id
+    - commodity_code
+    - instrument_type
+    - display_name
+    - quantity_scale
+    - price_scale
+    - status
+    - identifiers
+    - metadata
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    commodity_code:
+      type: string
+    instrument_type:
+      type: string
+    display_name:
+      type: string
+    symbol:
+      type: string
+    exchange_code:
+      type: string
+    mic:
+      type: string
+    issuer:
+      type: string
+    country_code:
+      type: string
+    quote_commodity_id:
+      type: integer
+      format: int64
+    trading_commodity_id:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    price_scale:
+      type: integer
+    status:
+      type: string
+    identifiers:
+      type: object
+      additionalProperties: true
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+InvestmentInstrumentsResponse:
+  type: object
+  required:
+    - instruments
+  properties:
+    instruments:
+      type: array
+      items:
+        $ref: "#/InvestmentInstrumentResponse"
+
+InvestmentInstrumentRequest:
+  type: object
+  required:
+    - instrument_type
+    - display_name
+    - quantity_scale
+    - price_scale
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    commodity_code:
+      type: string
+    instrument_type:
+      type: string
+    display_name:
+      type: string
+    symbol:
+      type: string
+    exchange_code:
+      type: string
+    mic:
+      type: string
+    issuer:
+      type: string
+    country_code:
+      type: string
+    quote_commodity_id:
+      type: integer
+      format: int64
+    trading_commodity_id:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    price_scale:
+      type: integer
+    identifiers:
+      type: object
+      additionalProperties: true
+    metadata:
+      type: object
+      additionalProperties: true
+    effective_from:
+      type: string
+      format: date
+    change_reason:
+      type: string
+
+HoldingAccountRequest:
+  type: object
+  required:
+    - instrument_id
+    - name
+    - opened_on
+  properties:
+    instrument_id:
+      type: integer
+      format: int64
+    name:
+      type: string
+    parent_account_id:
+      type: integer
+      format: int64
+    institution_id:
+      type: integer
+      format: int64
+    opened_on:
+      type: string
+      format: date
+    effective_from:
+      type: string
+      format: date
+    quantity_scale_override:
+      type: integer
+    change_reason:
+      type: string
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+
+CostBasisProfileResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - name
+    - method
+    - is_default
+    - status
+    - description
+    - metadata
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    name:
+      type: string
+    method:
+      $ref: "#/CostBasisMethod"
+    is_default:
+      type: boolean
+    status:
+      type: string
+    description:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+CostBasisProfilesResponse:
+  type: object
+  required:
+    - profiles
+  properties:
+    profiles:
+      type: array
+      items:
+        $ref: "#/CostBasisProfileResponse"
+
+CostBasisProfileRequest:
+  type: object
+  required:
+    - name
+    - method
+  properties:
+    name:
+      type: string
+    method:
+      $ref: "#/CostBasisMethod"
+    is_default:
+      type: boolean
+    status:
+      type: string
+    description:
+      type: string
+    metadata:
+      type: object
+      additionalProperties: true
+    change_reason:
+      type: string
+
+DividendDefaultResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - income_account_id
+    - status
+    - effective_from
+    - metadata
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    income_account_id:
+      type: integer
+      format: int64
+    withholding_account_id:
+      type: integer
+      format: int64
+    default_withholding_value:
+      type: integer
+      format: int64
+    default_withholding_scale:
+      type: integer
+    withholding_rate_bps:
+      type: integer
+      format: int64
+    tax_country_code:
+      type: string
+    tax_treatment:
+      type: string
+    status:
+      type: string
+    effective_from:
+      type: string
+      format: date
+    effective_to:
+      type: string
+      format: date
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+DividendDefaultsResponse:
+  type: object
+  required:
+    - defaults
+  properties:
+    defaults:
+      type: array
+      items:
+        $ref: "#/DividendDefaultResponse"
+
+DividendDefaultRequest:
+  type: object
+  required:
+    - income_account_id
+    - status
+    - effective_from
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    income_account_id:
+      type: integer
+      format: int64
+    withholding_account_id:
+      type: integer
+      format: int64
+    default_withholding_value:
+      type: integer
+      format: int64
+    default_withholding_scale:
+      type: integer
+    withholding_rate_bps:
+      type: integer
+      format: int64
+    tax_country_code:
+      type: string
+    tax_treatment:
+      type: string
+    status:
+      type: string
+    effective_from:
+      type: string
+      format: date
+    effective_to:
+      type: string
+      format: date
+    metadata:
+      type: object
+      additionalProperties: true
+    change_reason:
+      type: string
+
+InvestmentLotAllocationRequest:
+  type: object
+  required:
+    - lot_id
+    - quantity_value
+    - quantity_scale
+  properties:
+    lot_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+      description: Exact quantity integer coefficient.
+    quantity_scale:
+      type: integer
+
+InvestmentTradeRequest:
+  type: object
+  required:
+    - transaction_date
+    - commodity_id
+    - holding_account_id
+    - quantity_value
+    - quantity_scale
+    - cash_amount_value
+    - cash_amount_scale
+    - cash_commodity_id
+  properties:
+    transaction_date:
+      type: string
+      format: date
+    commodity_id:
+      type: integer
+      format: int64
+    holding_account_id:
+      type: integer
+      format: int64
+    cash_account_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    cash_amount_value:
+      type: integer
+      format: int64
+    cash_amount_scale:
+      type: integer
+    cash_commodity_id:
+      type: integer
+      format: int64
+    memo:
+      type: string
+    payee_id:
+      type: integer
+      format: int64
+    status:
+      type: string
+    lot_allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotAllocationRequest"
+    change_reason:
+      type: string
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+
+InvestmentLotDisposalResponse:
+  type: object
+  required:
+    - lot_id
+    - quantity_value
+    - quantity_scale
+    - cost_basis_value
+    - cost_basis_scale
+  properties:
+    lot_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    cost_basis_value:
+      type: integer
+      format: int64
+    cost_basis_scale:
+      type: integer
+
+InvestmentTradeResponse:
+  type: object
+  required:
+    - transaction
+    - allocations
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    lot_id:
+      type: integer
+      format: int64
+      description: Created lot ID for buy transactions.
+    allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotDisposalResponse"
+
+SellPreviewResponse:
+  type: object
+  required:
+    - cost_basis_method
+    - allocations
+    - realized_gain
+    - cash_amount_value
+    - cash_amount_scale
+  properties:
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+    allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotDisposalResponse"
+    realized_gain:
+      type: integer
+      format: int64
+      description: Realized gain in the cost commodity minor units (cash proceeds minus disposed cost basis).
+    cash_amount_value:
+      type: integer
+      format: int64
+    cash_amount_scale:
+      type: integer
+
+DividendRequest:
+  type: object
+  required:
+    - transaction_date
+    - cash_account_id
+    - cash_commodity_id
+    - amount_value
+    - amount_scale
+  properties:
+    transaction_date:
+      type: string
+      format: date
+    commodity_id:
+      type: integer
+      format: int64
+    cash_account_id:
+      type: integer
+      format: int64
+    cash_commodity_id:
+      type: integer
+      format: int64
+    income_account_id:
+      type: integer
+      format: int64
+    amount_value:
+      type: integer
+      format: int64
+    amount_scale:
+      type: integer
+    withholding_value:
+      type: integer
+      format: int64
+    withholding_scale:
+      type: integer
+    withholding_account_id:
+      type: integer
+      format: int64
+    memo:
+      type: string
+    payee_id:
+      type: integer
+      format: int64
+    status:
+      type: string
+    change_reason:
+      type: string
+
+ReinvestedDividendRequest:
+  type: object
+  required:
+    - transaction_date
+    - commodity_id
+    - holding_account_id
+    - quantity_value
+    - quantity_scale
+    - amount_value
+    - amount_scale
+    - cash_commodity_id
+  properties:
+    transaction_date:
+      type: string
+      format: date
+    commodity_id:
+      type: integer
+      format: int64
+    holding_account_id:
+      type: integer
+      format: int64
+    income_account_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    amount_value:
+      type: integer
+      format: int64
+    amount_scale:
+      type: integer
+    cash_commodity_id:
+      type: integer
+      format: int64
+    memo:
+      type: string
+    payee_id:
+      type: integer
+      format: int64
+    status:
+      type: string
+    change_reason:
+      type: string
+
+InvestmentLotResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - account_id
+    - commodity_id
+    - opened_on
+    - status
+    - quantity_value
+    - quantity_scale
+    - remaining_quantity_value
+    - remaining_quantity_scale
+    - cost_basis_value
+    - cost_basis_scale
+    - remaining_cost_basis_value
+    - remaining_cost_basis_scale
+    - cost_commodity_id
+    - metadata
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    opened_on:
+      type: string
+      format: date
+    source_transaction_id:
+      type: integer
+      format: int64
+    status:
+      type: string
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    remaining_quantity_value:
+      type: integer
+      format: int64
+    remaining_quantity_scale:
+      type: integer
+    cost_basis_value:
+      type: integer
+      format: int64
+    cost_basis_scale:
+      type: integer
+    remaining_cost_basis_value:
+      type: integer
+      format: int64
+    remaining_cost_basis_scale:
+      type: integer
+    cost_commodity_id:
+      type: integer
+      format: int64
+    metadata:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+InvestmentLotsResponse:
+  type: object
+  required:
+    - lots
+  properties:
+    lots:
+      type: array
+      items:
+        $ref: "#/InvestmentLotResponse"
+
+InvestmentPositionResponse:
+  type: object
+  required:
+    - account_id
+    - commodity_id
+    - quantity_value
+    - quantity_scale
+    - remaining_cost_basis_value
+    - remaining_cost_basis_scale
+    - cost_commodity_id
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    remaining_cost_basis_value:
+      type: integer
+      format: int64
+    remaining_cost_basis_scale:
+      type: integer
+    cost_commodity_id:
+      type: integer
+      format: int64
+    latest_price_value:
+      type: integer
+      format: int64
+    latest_price_scale:
+      type: integer
+    latest_price_date:
+      type: string
+      format: date
+
+InvestmentPositionsResponse:
+  type: object
+  required:
+    - positions
+  properties:
+    positions:
+      type: array
+      items:
+        $ref: "#/InvestmentPositionResponse"
+
+InvestmentProviderEventResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - source_id
+    - event_family
+    - event_date
+    - status
+    - normalized
+    - raw
+    - created_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    source_id:
+      type: integer
+      format: int64
+    provider_event_id:
+      type: string
+    instrument_id:
+      type: integer
+      format: int64
+    event_family:
+      type: string
+    event_date:
+      type: string
+      format: date
+    status:
+      type: string
+    normalized:
+      type: object
+      additionalProperties: true
+    raw:
+      type: object
+      additionalProperties: true
+    created_at:
+      type: string
+      format: date-time
+
+InvestmentProviderEventsResponse:
+  type: object
+  required:
+    - events
+  properties:
+    events:
+      type: array
+      items:
+        $ref: "#/InvestmentProviderEventResponse"
+
+InvestmentEventSuggestionResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - provider_event_id
+    - confidence_bps
+    - status
+    - proposed_transaction
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    provider_event_id:
+      type: integer
+      format: int64
+    instrument_id:
+      type: integer
+      format: int64
+    confidence_bps:
+      type: integer
+    status:
+      type: string
+    proposed_transaction:
+      type: object
+      additionalProperties: true
+    generated_transaction_id:
+      type: integer
+      format: int64
+    failure_reason:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+InvestmentEventSuggestionsResponse:
+  type: object
+  required:
+    - suggestions
+  properties:
+    suggestions:
+      type: array
+      items:
+        $ref: "#/InvestmentEventSuggestionResponse"
+
+InvestmentAutomationRuleResponse:
+  type: object
+  required:
+    - id
+    - book_id
+    - event_family
+    - mode
+    - confidence_threshold_bps
+    - required_accounts
+    - status
+    - effective_from
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    book_id:
+      type: integer
+      format: int64
+    source_id:
+      type: integer
+      format: int64
+    instrument_id:
+      type: integer
+      format: int64
+    event_family:
+      type: string
+    mode:
+      type: string
+    confidence_threshold_bps:
+      type: integer
+    required_accounts:
+      type: object
+      additionalProperties: true
+    status:
+      type: string
+    effective_from:
+      type: string
+      format: date
+    effective_to:
+      type: string
+      format: date
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
+InvestmentAutomationRulesResponse:
+  type: object
+  required:
+    - rules
+  properties:
+    rules:
+      type: array
+      items:
+        $ref: "#/InvestmentAutomationRuleResponse"
+
+InvestmentAutomationRuleRequest:
+  type: object
+  required:
+    - event_family
+    - mode
+    - status
+    - effective_from
+  properties:
+    id:
+      type: integer
+      format: int64
+    source_id:
+      type: integer
+      format: int64
+    instrument_id:
+      type: integer
+      format: int64
+    event_family:
+      type: string
+    mode:
+      type: string
+    confidence_threshold_bps:
+      type: integer
+    required_accounts:
+      type: object
+      additionalProperties: true
+    status:
+      type: string
+    effective_from:
+      type: string
+      format: date
+    effective_to:
+      type: string
+      format: date
+
+InvestmentAutomationRulesRequest:
+  type: object
+  required:
+    - rules
+  properties:
+    rules:
+      type: array
+      items:
+        $ref: "#/InvestmentAutomationRuleRequest"
+    change_reason:
+      type: string

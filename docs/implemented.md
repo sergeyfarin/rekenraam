@@ -13,7 +13,7 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-27 (investments Slice 1 correctness gate complete).
+Last reconciled with the codebase: 2026-06-27 (investments Slice 2 read-only UI complete).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -112,18 +112,21 @@ Last reconciled with the codebase: 2026-06-27 (investments Slice 1 correctness g
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
 | **Pricing/FX management UI** | ⬜ | |
 
-## Investments (Phase 6) — 🟡 Backend only
+## Investments (Phase 6) — 🟦 Backend + read-only UI
 
 | Capability | Status | Notes |
 |---|---|---|
-| Buy/sell with commodity-trading balancing | 🟡 | `app/investments.go`; lossless implied-price rounding (half-up). |
-| Dividend & reinvested-dividend (income/withholding defaults) | 🟡 | Shared input validation; commodity-consistency guarded. |
-| Cost-basis method: fifo / lifo / average_cost / specific_lot | 🟡 | All four implemented in `db/investments.go`. Explicit allocations blocked for non-specific_lot (I-01 closed). lifo/average_cost now fully implemented (I-02 closed). Per-lot-own-rate average cost; closed lots absorb full remaining cost. |
-| 3-tier cost-basis method resolution | 🟡 | Per-transaction override → account default → global default → "fifo". `resolveCostBasisMethod` in `app/investments.go`. |
-| Account-level cost-basis method | 🟡 | `account_versions.cost_basis_method` (migration 0005). Exposed via account CRUD API. |
-| Sell preview endpoint | 🟡 | `POST /api/v1/investments/sell/preview` — read-only simulation using `SimulateDisposeLots` (always rolls back). Returns allocations + realized gain. |
+| Buy/sell with commodity-trading balancing | ✅ | `app/investments.go`; lossless implied-price rounding (half-up). |
+| Dividend & reinvested-dividend (income/withholding defaults) | ✅ | Shared input validation; commodity-consistency guarded. |
+| Cost-basis method: fifo / lifo / average_cost / specific_lot | ✅ | All four implemented in `db/investments.go`. Explicit allocations blocked for non-specific_lot (I-01 closed). lifo/average_cost now fully implemented (I-02 closed). Per-lot-own-rate average cost; closed lots absorb full remaining cost. |
+| 3-tier cost-basis method resolution | ✅ | Per-transaction override → account default → global default → "fifo". `resolveCostBasisMethod` in `app/investments.go`. |
+| Account-level cost-basis method | ✅ | `account_versions.cost_basis_method` (migration 0005). Exposed via account CRUD API. |
+| Sell preview endpoint | ✅ | `POST /api/v1/investments/sell/preview` — read-only simulation using `SimulateDisposeLots` (always rolls back). Returns allocations + realized gain. |
+| OpenAPI spec for all 24 investment endpoints | ✅ | `api/openapi/components/schemas/investments.yaml` + 14 path files. Generated TS types in `schema.d.ts`. |
+| Investments portfolio page (positions + lot drill-down) | ✅ | `routes/app/investments/+page.svelte`. Positions table; click a row to see open lots. Degrades gracefully when no market price. Investments nav link in app shell. |
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
-| **Investments UI** | ⬜ | Sell flow, position view, gains reporting. See `docs/investments-plan.md` Slice 2. |
+| **Buy / sell / dividend entry UI** | ⬜ | Sell preview wired in backend; UI forms pending. See `docs/investments-plan.md` Slice 3. |
+| **Gains reporting** | ⬜ | Slice 4. |
 
 ## Cross-cutting — ✅ in place
 
@@ -138,7 +141,7 @@ Last reconciled with the codebase: 2026-06-27 (investments Slice 1 correctness g
 Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, reconcile UI, reports UI,
-pricing UI, investments UI.
+pricing UI, investment buy/sell/dividend UI, investment gains reporting.
 
 Online import (R7) is planned but not started: Trading 212 is the first provider
 (`docs/trading212-import-plan.md`), which also introduces the `internal/secretbox`

@@ -1,0 +1,52 @@
+get:
+  summary: List investment lots
+  parameters:
+    - in: query
+      name: account_id
+      schema:
+        type: integer
+        format: int64
+      description: Filter lots by holding account.
+    - in: query
+      name: commodity_id
+      schema:
+        type: integer
+        format: int64
+      description: Filter lots by instrument commodity.
+  responses:
+    "200":
+      description: Investment lots
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentLotsResponse"
+    "400":
+      description: Invalid query parameter
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -151,6 +151,46 @@ paths:
     $ref: "./paths/pricing-refresh-runs.yaml"
   /api/v1/pricing/source-health:
     $ref: "./paths/pricing-source-health.yaml"
+  /api/v1/investments/search:
+    $ref: "./paths/investments-search.yaml"
+  /api/v1/investments/instruments:
+    $ref: "./paths/investments-instruments.yaml"
+  /api/v1/investments/instruments/{instrument_id}:
+    $ref: "./paths/investments-instrument.yaml"
+  /api/v1/investments/holding-accounts:
+    $ref: "./paths/investments-holding-accounts.yaml"
+  /api/v1/investments/positions:
+    $ref: "./paths/investments-positions.yaml"
+  /api/v1/investments/lots:
+    $ref: "./paths/investments-lots.yaml"
+  /api/v1/investments/cost-basis-profiles:
+    $ref: "./paths/investments-cost-basis-profiles.yaml"
+  /api/v1/investments/cost-basis-profiles/{profile_id}:
+    $ref: "./paths/investments-cost-basis-profile.yaml"
+  /api/v1/investments/dividend-defaults:
+    $ref: "./paths/investments-dividend-defaults.yaml"
+  /api/v1/investments/dividend-defaults/{default_id}:
+    $ref: "./paths/investments-dividend-default.yaml"
+  /api/v1/investments/buy:
+    $ref: "./paths/investments-buy.yaml"
+  /api/v1/investments/sell:
+    $ref: "./paths/investments-sell.yaml"
+  /api/v1/investments/sell/preview:
+    $ref: "./paths/investments-sell-preview.yaml"
+  /api/v1/investments/dividend:
+    $ref: "./paths/investments-dividend.yaml"
+  /api/v1/investments/reinvested-dividend:
+    $ref: "./paths/investments-reinvested-dividend.yaml"
+  /api/v1/investments/events:
+    $ref: "./paths/investments-events.yaml"
+  /api/v1/investments/event-suggestions:
+    $ref: "./paths/investments-event-suggestions.yaml"
+  /api/v1/investments/event-suggestions/{suggestion_id}/accept:
+    $ref: "./paths/investments-event-suggestion-accept.yaml"
+  /api/v1/investments/event-suggestions/{suggestion_id}/ignore:
+    $ref: "./paths/investments-event-suggestion-ignore.yaml"
+  /api/v1/investments/automation-rules:
+    $ref: "./paths/investments-automation-rules.yaml"
 components:
   headers:
     XRequestID:
@@ -211,6 +251,34 @@ components:
     ReconciliationCheckpointID:
       in: path
       name: checkpoint_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    InstrumentID:
+      in: path
+      name: instrument_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ProfileID:
+      in: path
+      name: profile_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    DividendDefaultID:
+      in: path
+      name: default_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+    SuggestionID:
+      in: path
+      name: suggestion_id
       required: true
       schema:
         type: integer
@@ -426,6 +494,66 @@ components:
       $ref: "./components/schemas/auth-responses.yaml#/LoginResponse"
     CreateOwnerResponse:
       $ref: "./components/schemas/auth-responses.yaml#/CreateOwnerResponse"
+    CostBasisMethod:
+      $ref: "./components/schemas/investments.yaml#/CostBasisMethod"
+    InvestmentInstrumentResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentInstrumentResponse"
+    InvestmentInstrumentsResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentInstrumentsResponse"
+    InvestmentInstrumentRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentInstrumentRequest"
+    HoldingAccountRequest:
+      $ref: "./components/schemas/investments.yaml#/HoldingAccountRequest"
+    CostBasisProfileResponse:
+      $ref: "./components/schemas/investments.yaml#/CostBasisProfileResponse"
+    CostBasisProfilesResponse:
+      $ref: "./components/schemas/investments.yaml#/CostBasisProfilesResponse"
+    CostBasisProfileRequest:
+      $ref: "./components/schemas/investments.yaml#/CostBasisProfileRequest"
+    DividendDefaultResponse:
+      $ref: "./components/schemas/investments.yaml#/DividendDefaultResponse"
+    DividendDefaultsResponse:
+      $ref: "./components/schemas/investments.yaml#/DividendDefaultsResponse"
+    DividendDefaultRequest:
+      $ref: "./components/schemas/investments.yaml#/DividendDefaultRequest"
+    InvestmentLotAllocationRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentLotAllocationRequest"
+    InvestmentTradeRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTradeRequest"
+    InvestmentLotDisposalResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentLotDisposalResponse"
+    InvestmentTradeResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTradeResponse"
+    SellPreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/SellPreviewResponse"
+    DividendRequest:
+      $ref: "./components/schemas/investments.yaml#/DividendRequest"
+    ReinvestedDividendRequest:
+      $ref: "./components/schemas/investments.yaml#/ReinvestedDividendRequest"
+    InvestmentLotResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentLotResponse"
+    InvestmentLotsResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentLotsResponse"
+    InvestmentPositionResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentPositionResponse"
+    InvestmentPositionsResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentPositionsResponse"
+    InvestmentProviderEventResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentProviderEventResponse"
+    InvestmentProviderEventsResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentProviderEventsResponse"
+    InvestmentEventSuggestionResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentEventSuggestionResponse"
+    InvestmentEventSuggestionsResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentEventSuggestionsResponse"
+    InvestmentAutomationRuleResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentAutomationRuleResponse"
+    InvestmentAutomationRulesResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentAutomationRulesResponse"
+    InvestmentAutomationRuleRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentAutomationRuleRequest"
+    InvestmentAutomationRulesRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentAutomationRulesRequest"
     ErrorBody:
       $ref: "./components/schemas/errors.yaml#/ErrorBody"
     ErrorResponse:
