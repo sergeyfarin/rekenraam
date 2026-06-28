@@ -10,10 +10,19 @@
     investmentInstrumentsQueryOptions,
     type InvestmentPositionResponse
   } from '$lib/api/investments';
+  import { parseISO } from 'date-fns';
   import { formatScaledValue } from './investment-labels';
   import { m } from '$lib/paraglide/messages.js';
+  import { getLocale } from '$lib/paraglide/runtime.js';
 
-  const locale = 'en';
+  const locale = $derived(getLocale());
+  const dateFormatter = $derived(
+    new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' })
+  );
+
+  function formatDate(iso: string): string {
+    return dateFormatter.format(parseISO(iso));
+  }
 
   const positionsQuery = createQuery(() => investmentPositionsQueryOptions());
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
@@ -124,7 +133,7 @@
                             {formatScaledValue(pos.latest_price_value, pos.latest_price_scale, locale)}
                           </span>
                           {#if pos.latest_price_date}
-                            <span class="ml-1 text-xs text-muted">{pos.latest_price_date}</span>
+                            <span class="ml-1 text-xs text-muted">{formatDate(pos.latest_price_date)}</span>
                           {/if}
                         {:else}
                           <span class="text-muted">—</span>
@@ -142,7 +151,7 @@
         {#if selectedPosition}
           <aside
             class="fixed inset-0 z-30 overflow-y-auto bg-surface lg:relative lg:inset-auto lg:z-auto lg:overflow-visible"
-            aria-label="Lot detail"
+            aria-label={m.investments_lots_detail_label()}
           >
             <div
               class="fixed inset-0 bg-background/50 lg:hidden"
@@ -177,7 +186,7 @@
                     {#each lotsQuery.data!.lots as lot (lot.id)}
                       <div class="rounded-(--radius-panel) border border-border p-3 text-sm">
                         <div class="flex items-center justify-between gap-2">
-                          <span class="font-medium text-foreground">{lot.opened_on}</span>
+                          <span class="font-medium text-foreground">{formatDate(lot.opened_on)}</span>
                           <span
                             class="rounded-full px-2 py-0.5 text-xs font-medium {lot.status === 'open' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted/30 text-muted'}"
                           >

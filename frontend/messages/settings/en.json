@@ -746,6 +746,7 @@
   "investments_lot_status_open": "Open",
   "investments_lot_status_closed": "Closed",
   "investments_lot_status_partial": "Partial",
+  "investments_lots_detail_label": "Lot detail",
 
   "settings_nav_trash": "Trash",
   "settings_card_trash_title": "Trash",
