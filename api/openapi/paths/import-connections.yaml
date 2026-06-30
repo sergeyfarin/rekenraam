@@ -35,7 +35,11 @@ post:
           $ref: "../openapi.yaml#/components/schemas/CreateImportConnectionRequest"
   responses:
     "201":
-      description: Connection created and API key validated
+      description: >-
+        Connection created. The API key is saved but not verified against the
+        provider — the current build always probes successfully (no-op
+        prober); a 502 PROVIDER_ERROR will only occur once a real provider
+        prober is wired in.
       content:
         application/json:
           schema:

@@ -295,6 +295,51 @@ func TestCreateImportConnection_ValidationErrors(t *testing.T) {
 	}
 }
 
+func TestCreateImportConnection_DisplayNameIsTrimmed(t *testing.T) {
+	svc := newTestConnectionService(t, testKey(), NoOpProber{})
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1,
+		SourceKind:  "trading212",
+		DisplayName: "  My ISA  ",
+		APIKey:      "api-key-abcd",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "My ISA", conn.DisplayName)
+}
+
+func TestCreateImportConnection_InvalidConfigJSONRejected(t *testing.T) {
+	svc := newTestConnectionService(t, testKey(), NoOpProber{})
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1,
+		SourceKind:  "trading212",
+		DisplayName: "Bad Config",
+		APIKey:      "api-key-abcd",
+		ConfigJSON:  "{not valid json",
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+}
+
+func TestUpdateImportConnection_DisplayNameIsTrimmedAndInvalidConfigRejected(t *testing.T) {
+	svc := newTestConnectionService(t, testKey(), NoOpProber{})
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "Original", APIKey: "api-key-abcd",
+	})
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1, ID: conn.ID, DisplayName: "  Renamed  ",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed", updated.DisplayName)
+
+	_, err = svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1, ID: conn.ID, DisplayName: "Renamed", ConfigJSON: "{not valid json",
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+}
+
 func TestOpenSecret_ReturnsPlaintext(t *testing.T) {
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 

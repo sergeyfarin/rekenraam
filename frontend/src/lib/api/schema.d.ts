@@ -6132,7 +6132,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Connection created and API key validated */
+                /** @description Connection created. The API key is saved but not verified against the provider — the current build always probes successfully (no-op prober); a 502 PROVIDER_ERROR will only occur once a real provider prober is wired in. */
                 201: {
                     headers: {
                         [name: string]: unknown;
@@ -11431,7 +11431,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

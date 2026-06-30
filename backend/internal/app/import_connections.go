@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -103,6 +104,10 @@ func (s *ImportConnectionService) CreateImportConnection(ctx context.Context, in
 	if err := validateConnectionInput(input.DisplayName, input.SourceKind, input.APIKey); err != nil {
 		return ImportConnection{}, err
 	}
+	if err := validateConfigJSON(input.ConfigJSON); err != nil {
+		return ImportConnection{}, err
+	}
+	displayName := strings.TrimSpace(input.DisplayName)
 
 	// Probe before storing anything — if the key is bad we store nothing.
 	if err := s.prober.Probe(ctx, input.SourceKind, input.APIKey); err != nil {
@@ -130,7 +135,7 @@ func (s *ImportConnectionService) CreateImportConnection(ctx context.Context, in
 	rec, err := s.repository.CreateImportConnection(ctx, db.CreateImportConnectionParams{
 		BookID:           BookID,
 		SourceKind:       input.SourceKind,
-		DisplayName:      input.DisplayName,
+		DisplayName:      displayName,
 		SecretCiphertext: ciphertext,
 		ConfigJSON:       configJSON,
 		CreatedAt:        now,
@@ -190,6 +195,10 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	if strings.TrimSpace(input.DisplayName) == "" {
 		return ImportConnection{}, ValidationError{Message: "display_name is required"}
 	}
+	if err := validateConfigJSON(input.ConfigJSON); err != nil {
+		return ImportConnection{}, err
+	}
+	displayName := strings.TrimSpace(input.DisplayName)
 
 	existing, err := s.repository.ImportConnectionByID(ctx, input.ID, BookID)
 	if err != nil {
@@ -236,7 +245,7 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	rec, err := s.repository.UpdateImportConnection(ctx, db.UpdateImportConnectionParams{
 		ID:               input.ID,
 		BookID:           BookID,
-		DisplayName:      input.DisplayName,
+		DisplayName:      displayName,
 		SecretCiphertext: newCiphertext,
 		ConfigJSON:       configJSON,
 		UpdatedAt:        now,
@@ -317,6 +326,19 @@ func validateConnectionInput(displayName, sourceKind, apiKey string) error {
 	}
 	if strings.TrimSpace(apiKey) == "" {
 		return ValidationError{Message: "api_key is required"}
+	}
+	return nil
+}
+
+// validateConfigJSON rejects malformed JSON before it reaches the
+// json_valid(config_json) CHECK constraint, so callers get a 400
+// VALIDATION_FAILED instead of an internal SQLite constraint error.
+func validateConfigJSON(configJSON string) error {
+	if configJSON == "" {
+		return nil
+	}
+	if !json.Valid([]byte(configJSON)) {
+		return ValidationError{Message: "config must be valid JSON"}
 	}
 	return nil
 }

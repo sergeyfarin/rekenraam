@@ -18,6 +18,8 @@ ErrorBody:
         - LEDGER_OVERFLOW
         - SETUP_REQUIRED
         - SETUP_ALREADY_COMPLETE
+        - CONFIG_REQUIRED
+        - PROVIDER_ERROR
         - INTERNAL_ERROR
     message:
       type: string

@@ -75,17 +75,40 @@ Closed by adding path items for all 7 import routes, import request/response sch
 and generated TS types. The frontend import helper still uses raw `fetch` for multipart
 upload, but its public DTO types now come from `frontend/src/lib/api/schema.d.ts`.
 
-### T-08 No encrypted-secret store for reusable third-party credentials `[ ]`
+### T-08 No encrypted-secret store for reusable third-party credentials `[x]`
 **File:** `backend/internal/config/config.go`, `backend/internal/app/auth.go`.
 
-The repo stores passwords as one-way argon2 *hashes* and the only third-party key
-(`OPEN_EXCHANGE_RATES_APP_ID`) as an **env var**. There is no facility to store a
-*reusable, reversible* secret a user pastes at runtime and we must replay to a
-provider (e.g. a Trading 212 API key). Online import (R7) needs one.
-**Planned fix:** `internal/secretbox` (AES-256-GCM, stdlib only) + a
-`REKENRAAM_SECRET_KEY` env var, designed in `docs/trading212-import-plan.md`
-(Slice 1). Built once, reused by every online provider. Listed here so the gap is
-visible outside the Trading 212 plan.
+Closed by Trading 212 Slice 1: `internal/secretbox` (AES-256-GCM, stdlib only) +
+`REKENRAAM_SECRET_KEY` env var (optional boot, hard error on bad key). Used by
+`ImportConnectionService` to seal/open API keys; reusable by every future online
+provider.
+
+### T-11 `ImportConnectionService` ships with a no-op key prober `[ ]`
+**File:** `backend/cmd/rekenraam/command.go:81`, `backend/internal/app/import_connections.go:33-37`.
+
+`NewImportConnectionService(..., nil)` resolves to `NoOpProber`, so
+`POST /import-connections` and key rotation on `PATCH` accept any non-blank
+string as a valid API key — nothing is actually checked against Trading 212 (or
+any provider) yet. The OpenAPI description for `201` was reworded to say the key
+is "saved but not verified" so the contract isn't misleading in the meantime.
+**Planned fix:** wire a real `ConnectionProber` (Trading 212 Slice 2,
+`internal/onlinesource/trading212`) before this is presented to users as a
+verified connection.
+
+### T-12 Deleting an import connection erases batch provenance `[ ]`
+**File:** `backend/migrations/0007_online_import.sql:27` (`ON DELETE SET NULL`),
+`backend/internal/db/import_connections.go:186` (`DeleteImportConnection`).
+
+The migration comment says `import_batches.connection_id` exists so batch history
+stays queryable by connection, but deletion is a hard `DELETE` and the FK is
+`ON DELETE SET NULL` — once a connection is deleted, any batches it produced lose
+their link to it. **Not yet an active bug**: nothing currently writes
+`import_batches.connection_id` (the fetch worker that would is Slice 2+), so no
+data loss is possible today. Before the fetch worker ships, choose one: (a) make
+delete a revoke/archive (e.g. `revoked_at` column, hide from list/create but keep
+the row so the FK stays valid), or (b) denormalize immutable connection metadata
+(source, display_name at time of fetch) onto `import_batches` so the historical
+record survives connection deletion even with `ON DELETE SET NULL`.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
 **File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.
