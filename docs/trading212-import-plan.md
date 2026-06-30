@@ -14,13 +14,28 @@ ADR 0010 (durable background work), and `docs/conventions.md`. Aligns with the
 FX-refresh precedent in `docs/fx-refresh-implementation-plan.md`, which is the
 template for the durable-fetch machinery here.
 
-Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28.** Slices 2–4 pending.
+Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28. Slice 2
+(Fetcher + adapter, parse offline) shipped 2026-06-30.** Slices 3–4 pending.
 
 Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
 migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
 (probe-before-store, key masking), 4 REST endpoints (`/api/v1/import-connections`),
 OpenAPI coverage, generated TS types, `$lib/api/connections.ts` client, connections UI
-on the import page (masked list, add form, delete with confirm). Last updated 2026-06-28.
+on the import page (masked list, add form, delete with confirm).
+
+Slice 2 delivered: `internal/onlinesource/trading212` (`Fetcher`: cursor/`nextPagePath`
+pagination, 401/403 → `ErrUnauthorized`, 429 + `Retry-After` in-call backoff, base URL
+override); `Trading212Adapter` (`internal/app/import_trading212.go`) implementing
+`SourceAdapter`, registered in `NewImportService`; connection-scoped provider-id
+fingerprints (`trading212|<connection_id>|<providerID>`); cash movement types map to
+plain staged rows, `BUY`/`SELL` and any unrecognized type are staged with a
+`needs_attention` parse warning (B-T212-INVST unchanged). `ConnectionProber` extended
+with a `configJSON` parameter so `config_json.base_url` can target the demo/sandbox
+endpoint; `Trading212Prober` wired in `cmd/rekenraam/command.go`, closing T-11. The
+flagged `stageParseResult` refactor is done: `StartImport` now creates the batch and
+delegates fingerprint-hash → dedupe → insert to a shared method the Slice 3 fetch
+worker will call directly. No queue wiring, no `POST /imports` JSON branch, and no UI
+yet — those are Slice 3. Last updated 2026-06-30.
 
 ---
 

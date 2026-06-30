@@ -55,7 +55,7 @@ func newTestConnectionService(t *testing.T, key []byte, prober ConnectionProber)
 // errProber always rejects.
 type errProber struct{ err error }
 
-func (p errProber) Probe(_ context.Context, _ string, _ string) error { return p.err }
+func (p errProber) Probe(_ context.Context, _ string, _ string, _ string) error { return p.err }
 
 // --- Tests ---
 

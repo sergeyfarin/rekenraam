@@ -72,7 +72,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | OpenAPI spec + generated TS types | ✅ | `api/openapi/components/schemas/import-connections.yaml` + path files; `schema.d.ts` regenerated. |
 | Frontend connections client | ✅ | `frontend/src/lib/api/connections.ts`; typed against generated schema. |
 | Connections UI on import page | ✅ | Masked key hint list, add-connection form (probe-then-store), inline delete confirm. |
-| **Slice 2: Trading 212 HTTP fetcher + adapter** | ⬜ | `internal/onlinesource/trading212`; real `ConnectionProber`. |
+| **Slice 2: Trading 212 HTTP fetcher + adapter** | ✅ | `internal/onlinesource/trading212` (`Fetcher`: paging, 429/`Retry-After` backoff, cursor); `Trading212Adapter` (`internal/app/import_trading212.go`) registered in `NewImportService`; real `Trading212Prober` closes T-11. `stageParseResult` extracted from `StartImport` so file and fetch paths share staging logic (no queue wiring yet — Slice 3). |
 | **Slice 3: Durable fetch worker** | ⬜ | `kind="import.fetch.trading212"` work item + cursor. |
 | **Slice 4: Online-import batch flow** | ⬜ | `POST /imports` JSON branch; UI polling; incremental re-fetch. |
 

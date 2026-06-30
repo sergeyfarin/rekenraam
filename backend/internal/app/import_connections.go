@@ -22,20 +22,23 @@ var (
 )
 
 // ConnectionProber validates a provider API key by making a lightweight
-// authenticated call. The real Trading 212 implementation lives in
-// internal/onlinesource/trading212 (Slice 2). For Slice 1 we wire a no-op
-// prober so the CRUD is fully testable without a live key.
+// authenticated call. The real Trading 212 implementation is
+// Trading212Prober (import_trading212.go), backed by
+// internal/onlinesource/trading212.
 type ConnectionProber interface {
 	// Probe returns nil if the key is valid, ErrProviderUnauthorized if the
 	// provider rejects it, or another error for transient failures.
-	Probe(ctx context.Context, sourceKind string, apiKey string) error
+	// configJSON is the connection's non-secret config (e.g. base_url
+	// override for sandbox/test endpoints); sourceKind selects which
+	// provider's prober logic applies.
+	Probe(ctx context.Context, sourceKind string, apiKey string, configJSON string) error
 }
 
-// NoOpProber skips validation. Used in tests and in the Slice 1 binary until
-// the real Trading 212 fetcher (Slice 2) provides a real implementation.
+// NoOpProber skips validation. Used in tests and for source kinds with no
+// real prober wired yet.
 type NoOpProber struct{}
 
-func (NoOpProber) Probe(_ context.Context, _ string, _ string) error { return nil }
+func (NoOpProber) Probe(_ context.Context, _ string, _ string, _ string) error { return nil }
 
 // ImportConnectionService manages online source connections.
 type ImportConnectionService struct {
@@ -110,7 +113,7 @@ func (s *ImportConnectionService) CreateImportConnection(ctx context.Context, in
 	displayName := strings.TrimSpace(input.DisplayName)
 
 	// Probe before storing anything — if the key is bad we store nothing.
-	if err := s.prober.Probe(ctx, input.SourceKind, input.APIKey); err != nil {
+	if err := s.prober.Probe(ctx, input.SourceKind, input.APIKey, input.ConfigJSON); err != nil {
 		if errors.Is(err, ErrProviderUnauthorized) {
 			return ImportConnection{}, ErrProviderUnauthorized
 		}
@@ -212,7 +215,7 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	keyForHint := ""
 	if input.NewAPIKey != "" {
 		// Probe the new key before rotating.
-		if err := s.prober.Probe(ctx, existing.SourceKind, input.NewAPIKey); err != nil {
+		if err := s.prober.Probe(ctx, existing.SourceKind, input.NewAPIKey, existing.ConfigJSON); err != nil {
 			if errors.Is(err, ErrProviderUnauthorized) {
 				return ImportConnection{}, ErrProviderUnauthorized
 			}

@@ -34,7 +34,7 @@ func NewImportService(
 		repository:         repository,
 		transactionService: transactionService,
 		accountRepository:  accountRepository,
-		registry:           newAdapterRegistry(&QIFAdapter{}),
+		registry:           newAdapterRegistry(&QIFAdapter{}, &Trading212Adapter{}),
 		now:                time.Now,
 	}
 }
@@ -58,26 +58,7 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		return StartImportResult{}, fmt.Errorf("parse import: %w", err)
 	}
 
-	now := s.now().UTC()
-	nowStr := now.Format(time.RFC3339)
-
-	// Compute dedupe fingerprints and check against existing commit identities.
-	for i := range parseResult.Rows {
-		fp := hashFingerprint(parseResult.Rows[i].DedupeFingerprint)
-		parseResult.Rows[i].DedupeFingerprint = fp
-	}
-
-	// Within-batch dedupe: mark later duplicate fingerprints.
-	seen := make(map[string]bool)
-	for i := range parseResult.Rows {
-		fp := parseResult.Rows[i].DedupeFingerprint
-		if seen[fp] {
-			parseResult.Rows[i].DedupeFingerprint = fp // keep same
-			// We'll mark this as needs_attention in staged rows
-		} else {
-			seen[fp] = true
-		}
-	}
+	nowStr := s.now().UTC().Format(time.RFC3339)
 
 	var profileID sql.NullInt64
 	if input.ProfileID != nil {
@@ -101,6 +82,30 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		return StartImportResult{}, fmt.Errorf("create import batch: %w", err)
 	}
 
+	stagedRows, err := s.stageParseResult(ctx, batch.ID, parseResult)
+	if err != nil {
+		return StartImportResult{}, err
+	}
+
+	return StartImportResult{
+		Batch:    toImportBatch(batch),
+		Rows:     toImportStagedRows(stagedRows),
+		Warnings: parseResult.Warnings,
+		Meta:     parseResult.Meta,
+	}, nil
+}
+
+// stageParseResult takes a SourceAdapter's ParseResult and runs the
+// fingerprint-hash → dedupe → insert pipeline against an existing batch.
+// Shared by StartImport (file path) and the Trading 212 fetch worker
+// (Slice 3, online path) so the staging logic is written once.
+func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, parseResult ParseResult) ([]db.ImportStagedRowRecord, error) {
+	// Compute dedupe fingerprints and check against existing commit identities.
+	for i := range parseResult.Rows {
+		fp := hashFingerprint(parseResult.Rows[i].DedupeFingerprint)
+		parseResult.Rows[i].DedupeFingerprint = fp
+	}
+
 	// Check each row against existing commit identities.
 	fpDupeSet := make(map[string]bool)
 	for _, row := range parseResult.Rows {
@@ -110,7 +115,7 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		fpDupeSet[row.DedupeFingerprint] = true
 		_, found, err := s.repository.FindCommitIdentity(ctx, BookID, row.DedupeFingerprint)
 		if err != nil {
-			return StartImportResult{}, fmt.Errorf("check commit identity: %w", err)
+			return nil, fmt.Errorf("check commit identity: %w", err)
 		}
 		if found {
 			fpDupeSet[row.DedupeFingerprint] = false // mark as ledger duplicate
@@ -146,7 +151,7 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		seenInBatch[row.DedupeFingerprint] = true
 
 		dbRows = append(dbRows, db.CreateImportStagedRowParams{
-			BatchID:           batch.ID,
+			BatchID:           batchID,
 			BookID:            BookID,
 			RowIndex:          i,
 			DedupeFingerprint: row.DedupeFingerprint,
@@ -158,20 +163,14 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 	}
 
 	if err := s.repository.InsertImportStagedRows(ctx, dbRows); err != nil {
-		return StartImportResult{}, fmt.Errorf("insert staged rows: %w", err)
+		return nil, fmt.Errorf("insert staged rows: %w", err)
 	}
 
-	stagedRows, err := s.repository.ListAllImportStagedRows(ctx, batch.ID)
+	stagedRows, err := s.repository.ListAllImportStagedRows(ctx, batchID)
 	if err != nil {
-		return StartImportResult{}, fmt.Errorf("list staged rows: %w", err)
+		return nil, fmt.Errorf("list staged rows: %w", err)
 	}
-
-	return StartImportResult{
-		Batch:    toImportBatch(batch),
-		Rows:     toImportStagedRows(stagedRows),
-		Warnings: parseResult.Warnings,
-		Meta:     parseResult.Meta,
-	}, nil
+	return stagedRows, nil
 }
 
 // GetImportBatch returns a batch with its staged rows (paginated).

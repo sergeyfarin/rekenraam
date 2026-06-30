@@ -83,17 +83,17 @@ Closed by Trading 212 Slice 1: `internal/secretbox` (AES-256-GCM, stdlib only) +
 `ImportConnectionService` to seal/open API keys; reusable by every future online
 provider.
 
-### T-11 `ImportConnectionService` ships with a no-op key prober `[ ]`
-**File:** `backend/cmd/rekenraam/command.go:81`, `backend/internal/app/import_connections.go:33-37`.
+### T-11 `ImportConnectionService` ships with a no-op key prober `[x]`
+**File:** `backend/cmd/rekenraam/command.go:81`, `backend/internal/app/import_connections.go`.
 
-`NewImportConnectionService(..., nil)` resolves to `NoOpProber`, so
-`POST /import-connections` and key rotation on `PATCH` accept any non-blank
-string as a valid API key — nothing is actually checked against Trading 212 (or
-any provider) yet. The OpenAPI description for `201` was reworded to say the key
-is "saved but not verified" so the contract isn't misleading in the meantime.
-**Planned fix:** wire a real `ConnectionProber` (Trading 212 Slice 2,
-`internal/onlinesource/trading212`) before this is presented to users as a
-verified connection.
+Closed by Trading 212 Slice 2: `Trading212Prober` (`backend/internal/app/import_trading212.go`)
+wraps `internal/onlinesource/trading212.Fetcher.Probe` and is wired in
+`command.go` in place of `nil`/`NoOpProber`. `ConnectionProber.Probe` gained a
+`configJSON` parameter so the prober can honor `config_json.base_url` (demo/sandbox
+endpoint); the prober no-ops for any `sourceKind != "trading212"` so other future
+source kinds still fall back to `NoOpProber` behavior until they get a real
+implementation. The OpenAPI `201` description still says "saved but not verified"
+for non-trading212 kinds — update it if/when a second provider ships a real prober.
 
 ### T-12 Deleting an import connection erases batch provenance `[ ]`
 **File:** `backend/migrations/0007_online_import.sql:27` (`ON DELETE SET NULL`),
@@ -103,12 +103,30 @@ The migration comment says `import_batches.connection_id` exists so batch histor
 stays queryable by connection, but deletion is a hard `DELETE` and the FK is
 `ON DELETE SET NULL` — once a connection is deleted, any batches it produced lose
 their link to it. **Not yet an active bug**: nothing currently writes
-`import_batches.connection_id` (the fetch worker that would is Slice 2+), so no
+`import_batches.connection_id` (Slice 2 added the fetcher + adapter but no DB
+wiring; the fetch worker that would write it is Slice 3), so no
 data loss is possible today. Before the fetch worker ships, choose one: (a) make
 delete a revoke/archive (e.g. `revoked_at` column, hide from list/create but keep
 the row so the FK stays valid), or (b) denormalize immutable connection metadata
 (source, display_name at time of fetch) onto `import_batches` so the historical
 record survives connection deletion even with `ON DELETE SET NULL`.
+
+### T-13 `ImportService.StartImport`/`stageParseResult` has no service-level test `[ ]`
+**File:** `backend/internal/app/import_service.go` (`StartImport`, `stageParseResult`).
+
+The file-upload pipeline (parse → fingerprint → dedupe → stage) is exercised only
+through the QIF *parser* unit tests (`import_qif_test.go`) and indirectly via manual
+testing / the frontend; there is no test that drives `ImportService.StartImport`
+end-to-end against a real `*sql.DB` the way `import_connections_test.go` does for
+connections. This was true before Trading 212 Slice 2 and remains true after: Slice 2
+extracted `stageParseResult` out of `StartImport` as a pure refactor (no behavior
+change, full suite green before/after), but the extraction itself has no direct
+regression test — only the `Trading212Adapter`'s own parse tests and the full test
+suite's continued pass protect it. Building this requires a fixture harness with
+seeded accounts/commodities/book (more than `import_connections_test.go`'s minimal
+seed), which is why it wasn't done inline with the refactor. Worth doing before
+Slice 3 adds the fetch worker, which will call `stageParseResult` directly and
+deserves a real regression anchor.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
 **File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.

@@ -74,7 +74,16 @@
       "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/coder/Repos/rekenraam/frontend/messages/app/en.json'\\)\\); keys = [k for k in d.keys\\(\\) if k.startswith\\('import'\\)]; print\\('\\\\n'.join\\(keys[:30]\\)\\)\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k,':',v\\) for k,v in d.get\\('scripts',{}\\).items\\(\\)]\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); keys=[k for k in d.keys\\(\\) if k.startswith\\('import'\\)]; print\\('\\\\n'.join\\(keys\\)\\)\")",
-      "Bash(go run *)"
+      "Bash(go run *)",
+      "Bash(gofmt -l internal/onlinesource/trading212/*.go)",
+      "Bash(gofmt -w internal/onlinesource/trading212/fetcher.go)",
+      "Bash(gofmt -w internal/onlinesource/trading212/*.go)",
+      "Bash(gofmt -w internal/app/import_trading212.go internal/app/import_connections.go)",
+      "Bash(gofmt -l .)",
+      "Bash(gofmt -l cmd/rekenraam/command.go internal/app/import_connections.go internal/app/import_connections_test.go internal/app/import_service.go)",
+      "Bash(gofmt -d internal/app/import_connections.go)",
+      "Bash(gofmt -l internal/app/import_trading212.go internal/app/import_trading212_test.go internal/onlinesource/trading212/*.go internal/app/import_connections.go)",
+      "Bash(echo \"exit: $?\")"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

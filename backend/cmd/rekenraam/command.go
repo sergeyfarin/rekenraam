@@ -78,7 +78,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository)
-	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), cfg.SecretKey, nil)
+	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), cfg.SecretKey, app.NewTrading212Prober(nil))
 	pricingService.StartScheduler(ctx, logger)
 	pricingService.StartBackgroundWorker(ctx, logger)
 	handler := api.NewHandler(logger, web.Handler(), api.Services{
