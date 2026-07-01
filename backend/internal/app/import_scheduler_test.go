@@ -21,7 +21,7 @@ func enableAutoRefresh(t *testing.T, connService *ImportConnectionService, conn 
 		ID:                 conn.ID,
 		DisplayName:        conn.DisplayName,
 		ConfigJSON:         conn.ConfigJSON,
-		AutoRefreshEnabled: true,
+		AutoRefreshEnabled: boolPtr(true),
 	})
 	require.NoError(t, err)
 }

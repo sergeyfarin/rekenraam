@@ -83,7 +83,9 @@
       "Bash(gofmt -l cmd/rekenraam/command.go internal/app/import_connections.go internal/app/import_connections_test.go internal/app/import_service.go)",
       "Bash(gofmt -d internal/app/import_connections.go)",
       "Bash(gofmt -l internal/app/import_trading212.go internal/app/import_trading212_test.go internal/onlinesource/trading212/*.go internal/app/import_connections.go)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(jobs -l)",
+      "Bash(wait 543194)"
     ],
     "additionalDirectories": [
       "/home/coder/Repos/rekenraam/frontend/src/routes/app/accounts/[id]",

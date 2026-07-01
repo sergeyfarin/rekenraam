@@ -156,6 +156,36 @@ CREATE TABLE import_connection_holdings (
 This makes scenario 1 and scenario 2 the same code path with one branch
 ("did we find a reusable candidate") rather than two separate flows.
 
+> **Open concern (flagged in review, not yet resolved): timing of durable
+> creation vs. discard.** As written above, "resolution at fetch-worker/commit
+> time" is ambiguous about *when* the auto-create branch runs, and
+> `trading212-import-plan.md`'s Slice 4b section currently says instrument
+> resolution/creation runs **at fetch-worker time** so the preview UI can show
+> the resolved/created instrument before commit. Applied here, that would mean
+> a brand-new `security_holding` account (and its `import_connection_holdings`
+> mapping row) gets created as a side effect of a *fetch*, before the user has
+> committed — or even seen — the batch. If the user then discards the batch
+> (a normal, expected outcome of preview), the account and mapping row are
+> orphaned: they persist with zero transactions/lots, silently cluttering the
+> account tree and permanently reserving the `(connection_id, commodity_id)`
+> `UNIQUE` slot, so a later re-fetch reuses the orphan instead of retrying
+> creation. This is a real regression against the pipeline's existing
+> invariant that **only `commit` writes durable state** — see
+> `trading212-import-plan.md`'s "Cross-cutting rules" ("the fetch stages rows
+> into preview; only commit writes to the ledger"). The same applies to
+> `InvestmentService.CreateInstrument` calls for brand-new tickers.
+>
+> **Recommended fix for Slice 4b implementation:** do resolution-by-lookup
+> (ISIN/ticker match, existing holding-account match) at fetch-worker time —
+> that's read-only and safe to show in preview — but defer all **creation**
+> (new instrument, new holding account, new mapping row) to `commit` time,
+> keyed off the same staged-row data the preview already displayed. The
+> preview can still show "will create: holding account 'Trading 212 — AAPL'"
+> as a *proposed* action without having created it yet. Add a test asserting
+> that discarding a preview batch containing a not-yet-seen instrument leaves
+> no new `InvestmentInstrument`, `accounts`, or `import_connection_holdings`
+> rows behind.
+
 ### 3. Institution — optional, cosmetic only
 
 An `institutions` row is **not required** for any of the above to work. If
@@ -196,10 +226,12 @@ narrows to:
 
 One migration, additive only, no data backfill needed (existing connections
 simply have `cash_account_id = NULL` and an empty holdings map until the user
-sets one):
+sets one). **Numbering note:** this doc originally reserved `0008`, but Slice
+4a shipped first and took `0008_import_connection_auto_refresh.sql` — this
+migration is `0009`.
 
 ```sql
--- 0008_import_connection_accounts.sql
+-- 0009_import_connection_accounts.sql
 ALTER TABLE import_connections ADD COLUMN cash_account_id INTEGER
   REFERENCES accounts(id) ON DELETE SET NULL;
 

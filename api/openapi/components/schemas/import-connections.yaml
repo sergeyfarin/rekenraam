@@ -103,4 +103,4 @@ UpdateImportConnectionRequest:
       type: boolean
       description: >-
         Enable/disable the ~24h rolling auto-refresh schedule for this
-        connection. Omitted or false disables it.
+        connection. Omitted leaves the current setting unchanged.

@@ -95,9 +95,10 @@ type UpdateImportConnectionInput struct {
 	ID          int64
 	DisplayName string
 	// NewAPIKey is optional. Empty = keep existing key.
-	NewAPIKey          string
-	ConfigJSON         string
-	AutoRefreshEnabled bool
+	NewAPIKey  string
+	ConfigJSON string
+	// AutoRefreshEnabled is optional. Nil = keep the existing setting.
+	AutoRefreshEnabled *bool
 }
 
 // --- Service methods ---
@@ -246,6 +247,11 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 		configJSON = "{}"
 	}
 
+	autoRefreshEnabled := existing.AutoRefreshEnabled
+	if input.AutoRefreshEnabled != nil {
+		autoRefreshEnabled = *input.AutoRefreshEnabled
+	}
+
 	now := s.now().UTC().Format(time.RFC3339)
 	rec, err := s.repository.UpdateImportConnection(ctx, db.UpdateImportConnectionParams{
 		ID:                 input.ID,
@@ -253,7 +259,7 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 		DisplayName:        displayName,
 		SecretCiphertext:   newCiphertext,
 		ConfigJSON:         configJSON,
-		AutoRefreshEnabled: input.AutoRefreshEnabled,
+		AutoRefreshEnabled: autoRefreshEnabled,
 		UpdatedAt:          now,
 	})
 	if err != nil {

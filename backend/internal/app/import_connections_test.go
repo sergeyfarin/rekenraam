@@ -193,6 +193,61 @@ func TestUpdateImportConnection_RenameOnly(t *testing.T) {
 	assert.Equal(t, conn.KeyHint, updated.KeyHint)
 }
 
+func TestUpdateImportConnection_OmittedAutoRefreshPreservesExisting(t *testing.T) {
+	svc := newTestConnectionService(t, testKey(), NoOpProber{})
+
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "Original", APIKey: "api-key-xxxx",
+	})
+	require.NoError(t, err)
+
+	enabled, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID:        1,
+		ID:                 conn.ID,
+		DisplayName:        conn.DisplayName,
+		ConfigJSON:         "{}",
+		AutoRefreshEnabled: boolPtr(true),
+	})
+	require.NoError(t, err)
+	require.True(t, enabled.AutoRefreshEnabled)
+
+	// Rename without touching auto_refresh_enabled (the field is omitted, as
+	// a client that only knows about renaming would do). It must NOT be
+	// silently disabled.
+	renamed, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1,
+		ID:          conn.ID,
+		DisplayName: "Renamed",
+		ConfigJSON:  "{}",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed", renamed.DisplayName)
+	assert.True(t, renamed.AutoRefreshEnabled, "omitting auto_refresh_enabled on update must preserve the existing setting")
+
+	// Rotating the key without touching auto_refresh_enabled must also
+	// preserve it.
+	rotated, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1,
+		ID:          conn.ID,
+		DisplayName: "Renamed",
+		NewAPIKey:   "new-key-2222",
+		ConfigJSON:  "{}",
+	})
+	require.NoError(t, err)
+	assert.True(t, rotated.AutoRefreshEnabled, "key rotation must preserve the existing auto_refresh_enabled setting")
+
+	// An explicit false must still disable it.
+	disabled, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID:        1,
+		ID:                 conn.ID,
+		DisplayName:        "Renamed",
+		ConfigJSON:         "{}",
+		AutoRefreshEnabled: boolPtr(false),
+	})
+	require.NoError(t, err)
+	assert.False(t, disabled.AutoRefreshEnabled)
+}
+
 func TestUpdateImportConnection_RotateKey(t *testing.T) {
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 

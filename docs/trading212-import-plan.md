@@ -555,15 +555,25 @@ holding-account resolution logic it defines). Once that lands:
      exactly as unverified as the original cash-history ones were in Slice 2.
 2. **Instrument resolution:** a new helper (`resolveTrading212Instrument` or
    similar, in `internal/app`) that looks up `InvestmentInstrument` by ISIN
-   first, falls back to ticker/symbol, and calls
-   `InvestmentService.CreateInstrument` if neither matches. Runs at
-   fetch-worker time (same place cash movements get staged), not at commit
-   time, so the preview UI can show the resolved/created instrument before
-   the user commits.
+   first, falls back to ticker/symbol. The **lookup** runs at fetch-worker
+   time (same place cash movements get staged) so the preview UI can show the
+   resolved (or proposed-new) instrument before the user commits. **Revised
+   per review:** the actual `InvestmentService.CreateInstrument` call for an
+   unmatched ticker must be deferred to **commit** time, not fetch time — see
+   the "Open concern" callout in `docs/import-connection-accounts-plan.md`'s
+   holding-account section for why (a fetch that only stages preview rows
+   must not durably create instruments/accounts that outlive a discarded
+   batch). The preview shows "will create instrument X" as a proposed action;
+   the row's `ParseWarning`/metadata carries enough (ISIN, ticker, name) for
+   commit to actually create it.
 3. **Holding + cash account resolution:** exactly as specified in
    `docs/import-connection-accounts-plan.md` — reuse
    `import_connection_holdings` (auto-create-or-link-with-confirmation) and
-   `import_connections.cash_account_id`.
+   `import_connections.cash_account_id`. Same deferred-creation rule as
+   above: matching/linking an *existing* holding account is fine to do at
+   fetch time (read-only), but creating a **new** holding account and its
+   mapping row must happen at commit time, for the same discard-orphan
+   reason.
 4. **Commit-path branch:** `CommitImportBatch` needs a per-row-kind check —
    rows whose `Raw["type"]` is `BUY`/`SELL`/`DIVIDEND` *and* have a resolved
    instrument + accounts skip `buildTransactionSpec` and instead call
@@ -572,6 +582,25 @@ holding-account resolution logic it defines). Once that lands:
    instrument match, no cash/holding account configured, ambiguous holding
    account) keep today's `needs_attention` behavior — this is a strict
    superset of current behavior, never a regression.
+   - **Wiring gap (flagged in review, not yet resolved):** `ImportService`
+     has no `InvestmentService` dependency today
+     (`backend/internal/app/import_service.go` — its struct only holds
+     `transactionService`, `accountRepository`, the online-import fields).
+     Slice 4b must add one, threaded through `NewImportService` and
+     `cmd/rekenraam/command.go`, before `CommitImportBatch` can call
+     `InvestmentService.Buy`/`Sell`/`Dividend`.
+   - **Attribution gap (flagged in review, not yet resolved):**
+     `InvestmentService.Buy`/`Sell`/`Dividend` currently hardcode
+     `OriginType: "browser_api"` on every transaction they create
+     (`backend/internal/app/investments.go`, e.g. the `Buy`/`Sell`/`Dividend`
+     methods around lines 613/659/697/855/990). Calling them unchanged from
+     the import commit path would mislabel imported trades as manual
+     browser-originated actions — the same way `buildTransactionSpec` stamps
+     `OriginType: "import"` for cash rows. These methods need an
+     origin-aware variant (or an `OriginType`/`OriginRef` parameter) before
+     Slice 4b wires them up, plus the same `import_commit_identities`
+     idempotency handling the cash path already gets, so a re-fetch/re-commit
+     can't double-book a lot or a disposal.
    - **Sell-specific:** `Sell` needs a cost-basis method and enough open lot
      quantity; if `PreviewSell`'s disposal simulation fails
      (`ErrInvestmentLotsInsufficient` — e.g. history fetched only partially,

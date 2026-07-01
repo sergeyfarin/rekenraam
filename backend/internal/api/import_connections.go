@@ -40,7 +40,7 @@ type updateImportConnectionRequest struct {
 	DisplayName        string `json:"display_name"`
 	NewAPIKey          string `json:"api_key,omitempty"`
 	ConfigJSON         string `json:"config,omitempty"`
-	AutoRefreshEnabled bool   `json:"auto_refresh_enabled,omitempty"`
+	AutoRefreshEnabled *bool  `json:"auto_refresh_enabled,omitempty"`
 }
 
 // --- Handlers ---
