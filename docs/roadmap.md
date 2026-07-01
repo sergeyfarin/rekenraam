@@ -130,7 +130,7 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   category; R6 should show per-split category selectors in the preview UI and route
   each split to its own `CategoryID` derived from `category_hint` in normalized JSON.
 
-### R7. Online ingestion + payee/category cleanup — 🟦 Slice 1 shipped
+### R7. Online ingestion + payee/category cleanup — 🟦 Slices 1–3 shipped
 - Online sources implement the same adapter contract, driven by the durable work
   queue (ADR 0010) so refreshes are restart-safe — same model as FX coverage.
 - **First provider: Trading 212** (token-based public API, no OAuth/PSD2). Proves
@@ -140,8 +140,17 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
 - **Slice 1 shipped (2026-06-28):** `internal/secretbox` credential store, `import_connections`
   table (migration `0007`), `ImportConnectionService` with probe-before-store + key masking,
   4 REST endpoints, OpenAPI, TS types, connections UI (masked list + add + delete).
-- **Remaining:** Slice 2 (T212 HTTP fetcher + real `ConnectionProber`), Slice 3 (fetch worker),
-  Slice 4 (online-batch `POST /imports` JSON branch + polling UI).
+- **Slice 2 shipped (2026-06-30):** `internal/onlinesource/trading212` HTTP fetcher
+  (paging, 429 backoff, cursor), `Trading212Adapter`, real `Trading212Prober`.
+- **Slice 3 shipped (2026-06-30):** durable `import.fetch.trading212` worker
+  (`app/import_fetch_worker.go`), content-negotiated `POST /imports` (JSON → online
+  fetch, multipart → unchanged file upload), `POST /import-connections/{id}/refresh`
+  (incremental), double-fetch guard, terminal-vs-retryable failure handling,
+  per-connection Import/Refresh UI with polling. Trading 212 cash-movement import is
+  now end-to-end functional.
+- **Remaining (Slice 4, not built):** scheduled auto-refresh toggle (B-T212-SCHED),
+  investment lot import (B-T212-INVST), pagination beyond 50 pages on a single fetch
+  (T-14).
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
 

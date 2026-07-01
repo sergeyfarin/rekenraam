@@ -8,6 +8,7 @@ export type CreateImportConnectionRequest =
   components['schemas']['CreateImportConnectionRequest'];
 export type UpdateImportConnectionRequest =
   components['schemas']['UpdateImportConnectionRequest'];
+export type StartOnlineImportResponse = components['schemas']['StartOnlineImportResponse'];
 
 // --- API helpers ---
 
@@ -65,6 +66,16 @@ export async function updateImportConnection(
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(request)
+  });
+}
+
+export async function refreshImportConnection(
+  connectionId: number,
+  csrfToken: string
+): Promise<StartOnlineImportResponse> {
+  return apiFetch<StartOnlineImportResponse>(`/api/v1/import-connections/${connectionId}/refresh`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken }
   });
 }
 

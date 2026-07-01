@@ -124,6 +124,37 @@ func updateImportConnection(logger *slog.Logger, authService *app.AuthService, c
 	}))
 }
 
+// refreshImportConnection enqueues an incremental Trading 212 fetch on the
+// connection's saved cursor. It lives alongside the other import-connection
+// handlers (route-wise) but calls ImportService, since the fetch worker and
+// batch-creation logic live there, not on ImportConnectionService.
+func refreshImportConnection(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+
+		connID, ok := readImportConnectionID(w, r)
+		if !ok {
+			return
+		}
+
+		result, err := importService.RefreshImportConnection(r.Context(), app.RefreshImportConnectionInput{
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			ConnectionID:  connID,
+		})
+		if err != nil {
+			writeImportServiceError(w, r, logger, "refresh import connection", err)
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, startOnlineImportResponse{Batch: toImportBatchResponse(result.Batch)})
+	}))
+}
+
 func deleteImportConnection(logger *slog.Logger, authService *app.AuthService, connectionService *app.ImportConnectionService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, ok := authenticatedMutationOwner(w, r)

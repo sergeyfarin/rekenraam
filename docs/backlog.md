@@ -95,38 +95,87 @@ source kinds still fall back to `NoOpProber` behavior until they get a real
 implementation. The OpenAPI `201` description still says "saved but not verified"
 for non-trading212 kinds — update it if/when a second provider ships a real prober.
 
-### T-12 Deleting an import connection erases batch provenance `[ ]`
+### T-12 Deleting an import connection erases batch provenance `[x]`
 **File:** `backend/migrations/0007_online_import.sql:27` (`ON DELETE SET NULL`),
-`backend/internal/db/import_connections.go:186` (`DeleteImportConnection`).
+`backend/internal/app/import_fetch_worker.go` (`trading212BatchMeta`).
 
-The migration comment says `import_batches.connection_id` exists so batch history
-stays queryable by connection, but deletion is a hard `DELETE` and the FK is
-`ON DELETE SET NULL` — once a connection is deleted, any batches it produced lose
-their link to it. **Not yet an active bug**: nothing currently writes
-`import_batches.connection_id` (Slice 2 added the fetcher + adapter but no DB
-wiring; the fetch worker that would write it is Slice 3), so no
-data loss is possible today. Before the fetch worker ships, choose one: (a) make
-delete a revoke/archive (e.g. `revoked_at` column, hide from list/create but keep
-the row so the FK stays valid), or (b) denormalize immutable connection metadata
-(source, display_name at time of fetch) onto `import_batches` so the historical
-record survives connection deletion even with `ON DELETE SET NULL`.
+Closed by Trading 212 Slice 3, option (b) from the two choices this item originally
+posed: `startTrading212Fetch` and `runTrading212Fetch` snapshot
+`connection_display_name` into `import_batches.source_meta_json` (`trading212BatchMeta`)
+at batch-create and fetch-complete time. `import_batches.connection_id` is now
+actually written (it sat unused since migration `0007`); when a connection is later
+hard-deleted the FK still `SET NULL`s `connection_id`, but the batch's `source_meta`
+retains the human-readable name, so import history stays readable. Verified by a
+manual smoke test: create connection → import → delete connection → `GET
+/imports/{id}` still shows `"connection_display_name":"..."` with `connection_id`
+simply absent from the response.
 
-### T-13 `ImportService.StartImport`/`stageParseResult` has no service-level test `[ ]`
+### T-13 `ImportService.StartImport`/`stageParseResult` has no service-level test `[~]`
 **File:** `backend/internal/app/import_service.go` (`StartImport`, `stageParseResult`).
 
-The file-upload pipeline (parse → fingerprint → dedupe → stage) is exercised only
-through the QIF *parser* unit tests (`import_qif_test.go`) and indirectly via manual
-testing / the frontend; there is no test that drives `ImportService.StartImport`
-end-to-end against a real `*sql.DB` the way `import_connections_test.go` does for
-connections. This was true before Trading 212 Slice 2 and remains true after: Slice 2
-extracted `stageParseResult` out of `StartImport` as a pure refactor (no behavior
-change, full suite green before/after), but the extraction itself has no direct
-regression test — only the `Trading212Adapter`'s own parse tests and the full test
-suite's continued pass protect it. Building this requires a fixture harness with
-seeded accounts/commodities/book (more than `import_connections_test.go`'s minimal
-seed), which is why it wasn't done inline with the refactor. Worth doing before
-Slice 3 adds the fetch worker, which will call `stageParseResult` directly and
-deserves a real regression anchor.
+Narrowed by Trading 212 Slice 3, not fully closed. `stageParseResult` — the shared
+fingerprint-hash → dedupe → insert pipeline both `StartImport` (file path) and the
+new fetch worker (online path) call — now has direct regression coverage via
+`backend/internal/app/import_fetch_worker_test.go`
+(`TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor`,
+`TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted`), which
+drive it against a real `*sql.DB` and assert dedupe-status transitions (`new` vs
+`duplicate` against `import_commit_identities`) the same way this item asked for.
+What remains untested at the service level is `StartImport`'s *own* thin wrapper
+(`adapter.Parse` → `CreateImportBatch` → `stageParseResult`) for the file-upload
+entry point specifically — still only covered by `import_qif_test.go`'s parser-level
+tests and manual/UI testing. Low priority now that the shared core has coverage;
+revisit if QIF-path regressions start slipping through.
+
+### T-14 Trading 212 fetch silently truncates history beyond 50 pages `[ ]`
+**File:** `backend/internal/onlinesource/trading212/fetcher.go:25` (`maxPages`),
+`backend/internal/app/import_fetch_worker.go` (`runTrading212Fetch`).
+
+Found while implementing Slice 3 (the Slice 2 code comment on `maxPages` already
+flagged this as deferred: *"the durable queue's continuation payload (Slice 3) is
+the intended mechanism for fetching more than this many pages in one logical
+refresh"* — not built). `Fetcher.Fetch` loops at most `maxPages=50` pages and
+returns whatever it collected with no signal of whether the provider had more.
+`runTrading212Fetch` always treats a successful `Fetch` as complete, marking
+`fetch_status="ready"`. For an account with more than ~50 pages of cash-movement
+history, the **first full import silently omits everything beyond page 50** — and
+because the saved cursor becomes the *newest* timestamp seen on a successful fetch,
+a later "Refresh" looks only for movements *newer* than that cursor; it does not
+resume backfilling the older tail that was cut off. There is currently no UI signal
+and no recovery path other than re-running a full fetch with `cursor=""`, which
+re-runs into the same 50-page cap. Fix requires: (1) `FetchResult` to report
+`HasMore bool` (true only when the loop exhausted its page budget, not when it
+stopped naturally or hit the incremental cursor — distinguishing the three cases
+matters), and (2) the worker to enqueue a `reason="continuation"` work item using the
+new cursor instead of marking the batch ready, accumulating into the same batch
+across multiple worker ticks (same pattern as `pricing_worker.go`'s FX-coverage
+continuation). Deferred rather than rushed: getting the cursor/ordering semantics
+wrong here is worse than leaving the gap documented.
+
+### T-15 Worker retry after partial success can re-stage duplicate rows `[ ]`
+**File:** `backend/internal/app/import_fetch_worker.go` (`runTrading212Fetch`),
+`backend/internal/app/import_service.go` (`stageParseResult`).
+
+Found while implementing Slice 3. `stageParseResult`'s `InsertImportStagedRows` is a
+plain bulk `INSERT` with no `(batch_id, dedupe_fingerprint)` uniqueness — it relies
+on being called exactly once per batch. `runTrading212Fetch` calls it, then still has
+two more fallible steps (`UpdateImportBatchSourceMeta`, `ImportConnectionService.UpdateFetchCursor`)
+before returning success. If either of those fails (or the process is killed between
+them), the wrapper treats the whole attempt as retryable and a later worker tick
+re-runs `runTrading212Fetch` from scratch — re-fetching and re-staging the *same*
+movements into the *same* batch as a second set of `import_staged_rows` (different
+row ids, identical `dedupe_fingerprint`). **Not a ledger-correctness bug**: at
+`CommitImportBatch` time, rows are processed in order and `FindCommitIdentity` is
+checked per row against the live DB, so the first duplicate-fingerprint row to commit
+creates the `import_commit_identities` row and the second is skipped as a duplicate —
+no double-posting. It *is* a confusing preview-UI bug (the user sees the same
+movement listed twice before committing). The narrow trigger window (a SQLite
+single-row `UPDATE` failing) makes this low-probability; fixing it properly means
+making `stageParseResult` idempotent (e.g. `INSERT OR IGNORE` keyed on
+`(batch_id, dedupe_fingerprint)`, which also needs a new unique index and a decision
+about what happens to a duplicate row's `row_index`), which is exactly the
+crash-consistency territory T-06 already flags as "do not regress" — left open
+rather than touched under time pressure.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
 **File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.

@@ -14,6 +14,8 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   LEDGER_OVERFLOW: () => m.api_error_ledger_overflow(),
   SETUP_REQUIRED: () => m.api_error_setup_required(),
   SETUP_ALREADY_COMPLETE: () => m.api_error_setup_already_complete(),
+  CONFIG_REQUIRED: () => m.api_error_config_required(),
+  PROVIDER_ERROR: () => m.api_error_provider_error(),
   INTERNAL_ERROR: () => m.api_error_internal_error()
 };
 

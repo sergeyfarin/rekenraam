@@ -5601,7 +5601,10 @@ export interface paths {
             };
         };
         put?: never;
-        /** Start import batch */
+        /**
+         * Start import batch
+         * @description Content-negotiated by request body. multipart/form-data starts the existing file-upload pipeline synchronously (201). application/json `{ source, connection_id }` enqueues a durable online fetch on the named connection and returns immediately (202); poll GET /imports/{batch_id} until source_meta's fetch_status is "ready".
+         */
         post: {
             parameters: {
                 query?: never;
@@ -5617,10 +5620,11 @@ export interface paths {
                         /** Format: binary */
                         file: string;
                     };
+                    "application/json": components["schemas"]["StartOnlineImportRequest"];
                 };
             };
             responses: {
-                /** @description Import batch staged for preview */
+                /** @description Import batch staged for preview (multipart file upload) */
                 201: {
                     headers: {
                         [name: string]: unknown;
@@ -5629,7 +5633,16 @@ export interface paths {
                         "application/json": components["schemas"]["StartImportResponse"];
                     };
                 };
-                /** @description Invalid multipart form, missing file, or unsupported file format */
+                /** @description Online fetch enqueued; batch created in "fetching" state */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StartOnlineImportResponse"];
+                    };
+                };
+                /** @description Invalid multipart form, missing file, or unsupported file/source */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -5656,8 +5669,35 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Import connection not found (online branch only) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description An import fetch is already in progress for this connection */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured (online branch only) */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -6368,6 +6408,96 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/v1/import-connections/{connection_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: components["parameters"]["ImportConnectionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh a Trading 212 connection (incremental fetch)
+         * @description Enqueues a durable fetch on the connection's saved cursor and opens a fresh batch for any new movements. Returns immediately; poll GET /imports/{batch_id} until source_meta's fetch_status is "ready".
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    connection_id: components["parameters"]["ImportConnectionID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Incremental fetch enqueued; batch created in "fetching" state */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StartOnlineImportResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Connection not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description An import fetch is already in progress for this connection */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/accounts/{account_id}/postings/{posting_line_id}/move": {
@@ -10597,6 +10727,11 @@ export interface components {
             source_kind: string;
             /** Format: int64 */
             profile_id?: number;
+            /**
+             * Format: int64
+             * @description The online connection that produced this batch, if any.
+             */
+            connection_id?: number;
             status: components["schemas"]["ImportBatchStatus"];
             original_filename: string;
             /** @description JSON object string containing persisted source metadata. */
@@ -10672,6 +10807,19 @@ export interface components {
             rows: components["schemas"]["ImportStagedRowResponse"][];
             warnings: components["schemas"]["ParseWarning"][];
             meta: components["schemas"]["ImportSourceMeta"];
+        };
+        StartOnlineImportRequest: {
+            /** @description Online source kind. Only "trading212" is currently supported. */
+            source: string;
+            /**
+             * Format: int64
+             * @description The import connection to fetch from.
+             */
+            connection_id: number;
+        };
+        StartOnlineImportResponse: {
+            /** @description The newly created batch, still fetching. Rows are not included; poll GET /imports/{batch_id} until source_meta's fetch_status is "ready". */
+            batch: components["schemas"]["ImportBatchResponse"];
         };
         GetImportBatchResponse: {
             batch: components["schemas"]["ImportBatchResponse"];

@@ -9,6 +9,7 @@ export type ImportStagedRow = components['schemas']['ImportStagedRowResponse'];
 export type ParseWarning = components['schemas']['ParseWarning'];
 export type SourceMeta = components['schemas']['ImportSourceMeta'];
 export type StartImportResponse = components['schemas']['StartImportResponse'];
+export type StartOnlineImportResponse = components['schemas']['StartOnlineImportResponse'];
 export type GetImportBatchResponse = components['schemas']['GetImportBatchResponse'];
 export type ListImportBatchesResponse = components['schemas']['ListImportBatchesResponse'];
 export type CommitImportBatchRequest = components['schemas']['CommitImportBatchRequest'];
@@ -61,6 +62,17 @@ export async function startImport(file: File, csrfToken: string): Promise<StartI
     method: 'POST',
     headers: { 'X-CSRF-Token': csrfToken },
     body: form
+  });
+}
+
+export async function startOnlineImport(
+  connectionId: number,
+  csrfToken: string
+): Promise<StartOnlineImportResponse> {
+  return apiFetch<StartOnlineImportResponse>('/api/v1/imports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify({ source: 'trading212', connection_id: connectionId })
   });
 }
 
@@ -146,6 +158,29 @@ export function parseNormalized(row: ImportStagedRow): NormalizedRow {
       external_ref: '',
       splits: []
     };
+  }
+}
+
+// ImportBatchSourceMeta is the shape app.trading212BatchMeta marshals into
+// batch.source_meta for online (fetch-driven) batches. It is not part of the
+// generated OpenAPI types because source_meta is an opaque JSON string by
+// design (see docs/trading212-import-plan.md "Data model").
+export interface ImportBatchSourceMeta {
+  fetch_status?: 'fetching' | 'ready' | 'failed';
+  connection_display_name?: string;
+  account_hints?: string[];
+  currency_hints?: string[];
+  date_from?: string;
+  date_to?: string;
+  warnings?: ParseWarning[];
+  error?: string;
+}
+
+export function parseBatchSourceMeta(batch: ImportBatch): ImportBatchSourceMeta {
+  try {
+    return JSON.parse(batch.source_meta) as ImportBatchSourceMeta;
+  } catch {
+    return {};
   }
 }
 

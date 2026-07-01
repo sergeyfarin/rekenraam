@@ -59,7 +59,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Category transactions route | ✅ | `routes/app/categories/[id]`. |
 | Trash / recovery (soft-delete browse + guarded restore) | ✅ | `settings/trash`. |
 
-## Online Connections (R7, Slice 1) — ✅ Credential store + CRUD shipped
+## Online Connections (R7) — 🟦 Slices 1–3 shipped (full Trading 212 online import)
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -73,8 +73,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Frontend connections client | ✅ | `frontend/src/lib/api/connections.ts`; typed against generated schema. |
 | Connections UI on import page | ✅ | Masked key hint list, add-connection form (probe-then-store), inline delete confirm. |
 | **Slice 2: Trading 212 HTTP fetcher + adapter** | ✅ | `internal/onlinesource/trading212` (`Fetcher`: paging, 429/`Retry-After` backoff, cursor); `Trading212Adapter` (`internal/app/import_trading212.go`) registered in `NewImportService`; real `Trading212Prober` closes T-11. `stageParseResult` extracted from `StartImport` so file and fetch paths share staging logic (no queue wiring yet — Slice 3). |
-| **Slice 3: Durable fetch worker** | ⬜ | `kind="import.fetch.trading212"` work item + cursor. |
-| **Slice 4: Online-import batch flow** | ⬜ | `POST /imports` JSON branch; UI polling; incremental re-fetch. |
+| **Slice 3: Durable fetch worker + online batch flow** | ✅ | `app/import_fetch_worker.go` (`kind="import.fetch.trading212"`, same claim/lease/retry shape as `pricing_worker.go`); `POST /imports` content-negotiated (`application/json` → `202` fetch-driven batch, `multipart/form-data` unchanged `201`); `POST /import-connections/{id}/refresh` (incremental, `202`); double-fetch guard (`ImportRepository.HasInFlightFetch` → `409 CONFLICT`); terminal-vs-retryable fetch failure classification (401/403 fail fast, other errors retry up to 8 attempts); `import_batches.connection_id` now written + `connection_display_name` snapshotted into `source_meta_json` so deleting a connection doesn't erase batch provenance (closes T-12). Frontend: per-connection Import/Refresh button + polling "fetching" step, handing off to the existing preview/commit UI unchanged. 7 service-level tests (`import_fetch_worker_test.go`) plus a manual HTTP smoke test against a fake Trading 212 server. |
 
 ## Import Pipeline (Phase 4, Slice 1) — 🟦 Core pipeline + QIF shipped
 
@@ -163,6 +162,7 @@ scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, reconcile UI, reports UI,
 pricing UI.
 
-Online import (R7) is planned but not started: Trading 212 is the first provider
-(`docs/trading212-import-plan.md`), which also introduces the `internal/secretbox`
-encrypted credential store the repo does not yet have.
+Online import (R7) Slices 1–3 are shipped (Trading 212 connections, fetch, durable
+worker, online batch flow — see "Online Connections" above,
+`docs/trading212-import-plan.md`). Slice 4 (scheduled auto-refresh, investment lot
+import) is not started.

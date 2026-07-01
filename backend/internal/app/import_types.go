@@ -13,6 +13,7 @@ type ImportBatch struct {
 	BookID           int64
 	SourceKind       string
 	ProfileID        *int64
+	ConnectionID     *int64
 	Status           string
 	OriginalFilename string
 	SourceMetaJSON   string
@@ -21,18 +22,18 @@ type ImportBatch struct {
 
 // ImportStagedRow is the service-layer representation of a staged row.
 type ImportStagedRow struct {
-	ID                    int64
-	BatchID               int64
-	BookID                int64
-	RowIndex              int
-	DedupeFingerprint     string
-	RawJSON               string
-	NormalizedJSON        string
-	DedupeStatus          string
-	ResolutionJSON        string
-	CommitStatus          string
+	ID                     int64
+	BatchID                int64
+	BookID                 int64
+	RowIndex               int
+	DedupeFingerprint      string
+	RawJSON                string
+	NormalizedJSON         string
+	DedupeStatus           string
+	ResolutionJSON         string
+	CommitStatus           string
 	CommittedTransactionID *int64
-	CommitError           string
+	CommitError            string
 }
 
 // ParseWarning is a non-fatal issue found during parsing.
@@ -146,10 +147,10 @@ type GetImportBatchResult struct {
 }
 
 type PatchImportBatchInput struct {
-	OwnerUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	BatchID       int64
+	OwnerUserID    int64
+	AuthSessionID  int64
+	RequestID      string
+	BatchID        int64
 	RowResolutions []RowResolutionPatch
 }
 
@@ -160,20 +161,20 @@ type RowResolutionPatch struct {
 }
 
 type CommitImportBatchInput struct {
-	OwnerUserID              int64
-	AuthSessionID            int64
-	RequestID                string
-	BatchID                  int64
-	ReconciliationOverride   bool
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	BatchID                int64
+	ReconciliationOverride bool
 }
 
 type CommitImportBatchResult struct {
-	BatchID          int64
-	Status           string
-	TotalRows        int
-	CommittedCount   int
-	SkippedCount     int
-	FailedCount      int
+	BatchID        int64
+	Status         string
+	TotalRows      int
+	CommittedCount int
+	SkippedCount   int
+	FailedCount    int
 }
 
 type PreviewCommitInput struct {
@@ -188,8 +189,8 @@ type PreviewCommitResult struct {
 }
 
 type ReconciliationIssuePreview struct {
-	RowIndex       int
-	CheckpointIDs  []int64
+	RowIndex      int
+	CheckpointIDs []int64
 }
 
 type DiscardImportBatchInput struct {
@@ -207,4 +208,30 @@ type ListImportBatchesInput struct {
 type ListImportBatchesResult struct {
 	Batches    []ImportBatch
 	NextCursor string
+}
+
+// StartOnlineImportInput starts a new online (fetch-driven) import batch for
+// a connection. Unlike StartImportInput, parsing does not happen inline —
+// the durable fetch worker stages rows once the fetch completes.
+type StartOnlineImportInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	ConnectionID  int64
+}
+
+// StartOnlineImportResult carries the newly created (still-fetching) batch.
+// Rows are not included; the caller polls GetImportBatch until
+// source_meta.fetch_status flips to "ready".
+type StartOnlineImportResult struct {
+	Batch ImportBatch
+}
+
+// RefreshImportConnectionInput requests an incremental fetch on the
+// connection's saved cursor, opening a fresh batch for the new rows.
+type RefreshImportConnectionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	ConnectionID  int64
 }

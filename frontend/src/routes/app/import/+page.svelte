@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Upload from '@lucide/svelte/icons/upload';
   import CheckCircle from '@lucide/svelte/icons/circle-check';
@@ -6,6 +7,7 @@
   import Info from '@lucide/svelte/icons/info';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import Plus from '@lucide/svelte/icons/plus';
+  import Loader from '@lucide/svelte/icons/loader-circle';
   import Panel from '$lib/components/panel.svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
@@ -14,12 +16,14 @@
   import { categoriesQueryOptions } from '$lib/api/categories';
   import {
     startImport,
+    startOnlineImport,
     getImportBatch,
     patchImportBatch,
     commitImportBatch,
     discardImportBatch,
     parseNormalized,
     parseResolution,
+    parseBatchSourceMeta,
     type StartImportResponse,
     type ImportStagedRow,
     type CommitImportBatchResponse,
@@ -29,13 +33,14 @@
     listImportConnections,
     createImportConnection,
     deleteImportConnection,
+    refreshImportConnection,
     importConnectionsQueryKey,
     type ImportConnection
   } from '$lib/api/connections';
   import { m } from '$lib/paraglide/messages.js';
 
   // ── Page state ─────────────────────────────────────────────────────
-  type Step = 'upload' | 'preview' | 'result';
+  type Step = 'upload' | 'fetching' | 'preview' | 'result';
 
   let step = $state<Step>('upload');
 
@@ -43,6 +48,12 @@
   let selectedFile = $state<File | null>(null);
   let uploading = $state(false);
   let uploadError = $state<unknown>(undefined);
+
+  // Online import (fetching) step
+  let startingOnlineConnectionId = $state<number | null>(null);
+  let onlineImportError = $state<unknown>(undefined);
+  let fetchFailed = $state(false);
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Preview step
   let previewData = $state<StartImportResponse | null>(null);
@@ -101,6 +112,96 @@
       uploading = false;
     }
   }
+
+  // ── Online import (Trading 212) ───────────────────────────────────────
+  async function handleStartOnlineImport(connectionId: number) {
+    startingOnlineConnectionId = connectionId;
+    onlineImportError = undefined;
+    fetchFailed = false;
+    try {
+      const result = await startOnlineImport(connectionId, csrfToken);
+      batchId = result.batch.id;
+      step = 'fetching';
+      pollFetchStatus();
+    } catch (err) {
+      onlineImportError = err;
+    } finally {
+      startingOnlineConnectionId = null;
+    }
+  }
+
+  async function handleRefreshConnection(connectionId: number) {
+    startingOnlineConnectionId = connectionId;
+    onlineImportError = undefined;
+    fetchFailed = false;
+    try {
+      const result = await refreshImportConnection(connectionId, csrfToken);
+      batchId = result.batch.id;
+      step = 'fetching';
+      pollFetchStatus();
+    } catch (err) {
+      onlineImportError = err;
+    } finally {
+      startingOnlineConnectionId = null;
+    }
+  }
+
+  async function pollFetchStatus() {
+    if (!batchId) return;
+    try {
+      const result = await getImportBatch(batchId, { limit: 500 });
+      const meta = parseBatchSourceMeta(result.batch);
+      if (meta.fetch_status === 'ready') {
+        previewData = {
+          batch: result.batch,
+          rows: result.rows,
+          warnings: meta.warnings ?? [],
+          meta: {
+            account_hints: meta.account_hints ?? [],
+            currency_hints: meta.currency_hints ?? [],
+            date_from: meta.date_from,
+            date_to: meta.date_to
+          }
+        };
+        rowResolutions = new Map();
+        step = 'preview';
+        return;
+      }
+      if (meta.fetch_status === 'failed') {
+        fetchFailed = true;
+        return;
+      }
+      pollTimer = setTimeout(pollFetchStatus, 2000);
+    } catch (err) {
+      onlineImportError = err;
+      fetchFailed = true;
+    }
+  }
+
+  async function handleCancelFetch() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    const idToDiscard = batchId;
+    step = 'upload';
+    batchId = null;
+    fetchFailed = false;
+    onlineImportError = undefined;
+    if (idToDiscard) {
+      // Best-effort: the batch may already be "failed" (discard would 409),
+      // and there is no UI consequence either way once we've left the step.
+      try {
+        await discardImportBatch(idToDiscard, csrfToken);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  onDestroy(() => {
+    if (pollTimer) clearTimeout(pollTimer);
+  });
 
   // ── Preview helpers ────────────────────────────────────────────────
   function getResolution(rowId: number): ImportResolution {
@@ -362,6 +463,26 @@
                   <td class="py-2.5 pr-4 font-mono text-xs text-muted">{conn.key_hint}</td>
                   <td class="py-2.5 pr-4 text-muted">{fetchStatusLabel(conn)}</td>
                   <td class="py-2.5">
+                    <div class="flex items-center gap-2">
+                    {#if confirmDeleteConnectionId !== conn.id}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-(--radius-control) border border-border px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        onclick={() =>
+                          conn.last_fetch_status
+                            ? handleRefreshConnection(conn.id)
+                            : handleStartOnlineImport(conn.id)}
+                        disabled={startingOnlineConnectionId === conn.id}
+                      >
+                        {#if startingOnlineConnectionId === conn.id}
+                          {m.import_connections_starting()}
+                        {:else if conn.last_fetch_status}
+                          {m.import_connections_refresh()}
+                        {:else}
+                          {m.import_connections_import()}
+                        {/if}
+                      </button>
+                    {/if}
                     {#if confirmDeleteConnectionId === conn.id}
                       <div class="flex items-center gap-2">
                         <span class="text-xs text-muted">{m.import_connections_delete_confirm()}</span>
@@ -392,12 +513,17 @@
                         {m.import_connections_delete()}
                       </button>
                     {/if}
+                    </div>
                   </td>
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
+      {/if}
+
+      {#if onlineImportError}
+        <p class="mt-3 text-sm text-warning">{m.import_connections_fetch_error()}</p>
       {/if}
 
       {#if deleteConnectionError}
@@ -471,6 +597,36 @@
           </div>
         </div>
       {/if}
+    </Panel>
+  </div>
+
+<!-- Fetching step (online import in progress) -->
+{:else if step === 'fetching'}
+  <div class="max-w-2xl space-y-6">
+    <Panel>
+      {#if fetchFailed}
+        <div class="flex items-center gap-2">
+          <AlertCircle size={20} class="text-warning shrink-0" aria-hidden="true" />
+          <p class="text-sm font-semibold text-foreground">{m.import_fetching_failed_title()}</p>
+        </div>
+        <p class="mt-2 text-sm text-muted">{m.import_fetching_failed_copy()}</p>
+      {:else}
+        <div class="flex items-center gap-2">
+          <Loader size={20} class="shrink-0 animate-spin text-muted" aria-hidden="true" />
+          <p class="text-sm font-semibold text-foreground">{m.import_fetching_title()}</p>
+        </div>
+        <p class="mt-2 text-sm leading-6 text-muted">{m.import_fetching_copy()}</p>
+      {/if}
+
+      <div class="mt-5">
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+          onclick={handleCancelFetch}
+        >
+          {m.import_fetching_cancel()}
+        </button>
+      </div>
     </Panel>
   </div>
 

@@ -1,0 +1,51 @@
+parameters:
+  - $ref: "../openapi.yaml#/components/parameters/ImportConnectionID"
+post:
+  summary: Refresh a Trading 212 connection (incremental fetch)
+  description: >-
+    Enqueues a durable fetch on the connection's saved cursor and opens a
+    fresh batch for any new movements. Returns immediately; poll
+    GET /imports/{batch_id} until source_meta's fetch_status is "ready".
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  responses:
+    "202":
+      description: Incremental fetch enqueued; batch created in "fetching" state
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/StartOnlineImportResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Connection not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: An import fetch is already in progress for this connection
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

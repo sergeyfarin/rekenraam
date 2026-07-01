@@ -13,17 +13,17 @@ var ErrImportConnectionNotFound = errors.New("import connection not found")
 // The secret is never surfaced to callers outside the db package directly —
 // the app layer opens it in-memory only when needed for a fetch.
 type ImportConnectionRecord struct {
-	ID                int64
-	BookID            int64
-	SourceKind        string
-	DisplayName       string
-	SecretCiphertext  string
-	ConfigJSON        string
-	FetchCursor       string
-	LastFetchStatus   string
-	LastFetchedAt     sql.NullString
-	CreatedAt         string
-	UpdatedAt         string
+	ID               int64
+	BookID           int64
+	SourceKind       string
+	DisplayName      string
+	SecretCiphertext string
+	ConfigJSON       string
+	FetchCursor      string
+	LastFetchStatus  string
+	LastFetchedAt    sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 type ImportConnectionRepository struct {

@@ -15,7 +15,8 @@ FX-refresh precedent in `docs/fx-refresh-implementation-plan.md`, which is the
 template for the durable-fetch machinery here.
 
 Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28. Slice 2
-(Fetcher + adapter, parse offline) shipped 2026-06-30.** Slices 3–4 pending.
+(Fetcher + adapter, parse offline) shipped 2026-06-30. Slice 3 (Durable fetch +
+JSON `POST /imports` branch + refresh) shipped 2026-06-30.** Slice 4 pending.
 
 Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
 migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
@@ -35,7 +36,33 @@ endpoint; `Trading212Prober` wired in `cmd/rekenraam/command.go`, closing T-11. 
 flagged `stageParseResult` refactor is done: `StartImport` now creates the batch and
 delegates fingerprint-hash → dedupe → insert to a shared method the Slice 3 fetch
 worker will call directly. No queue wiring, no `POST /imports` JSON branch, and no UI
-yet — those are Slice 3. Last updated 2026-06-30.
+yet — those are Slice 3.
+
+Slice 3 delivered: `app/import_fetch_worker.go` — `kind="import.fetch.trading212"`
+durable worker (same claim/lease/retry/backoff shape as `pricing_worker.go`), wired
+via `ImportService.StartBackgroundWorker` next to `pricingService.StartBackgroundWorker`
+in `cmd/rekenraam/command.go`. `POST /api/v1/imports` is now content-negotiated:
+`application/json {source, connection_id}` enqueues a fetch and returns `202` with a
+`previewing` batch (`source_meta.fetch_status="fetching"`); `multipart/form-data` is
+unchanged (`201`). New `POST /api/v1/import-connections/{id}/refresh` opens a fresh
+batch and fetches incrementally from the connection's saved cursor (`202`). The
+double-fetch guard is a DB-level check (`ImportRepository.HasInFlightFetch`, a
+`json_extract` query against `source_meta_json`) consulted by both entry points,
+returning `ErrImportFetchInProgress` → `409 CONFLICT`. Unauthorized (401/403) fetches
+fail terminally on the first attempt (bad keys don't get better with retries); other
+errors retry with the existing `retryDelay` backoff up to 8 attempts before the batch
+and connection are marked `failed`. `import_batches.connection_id` (already a column
+since migration `0007`) is now actually written and read; `T-12`'s provenance concern
+is closed by also snapshotting `connection_display_name` into `source_meta_json` at
+fetch time, so a batch's online provenance survives connection deletion (`ON DELETE
+SET NULL` still clears the FK, but the human-readable name persists). Frontend: a
+per-connection "Import"/"Refresh" button replaces the connections table's bare list;
+clicking it polls `GET /imports/{id}` until `source_meta.fetch_status` is `ready` (or
+shows a failure state), then hands off to the existing unchanged preview/commit UI.
+**Known gap (not fixed in this slice, see backlog T-14):** `trading212.Fetcher.Fetch`
+caps a single call at 50 pages with no continuation signal; an account with deeper
+history than that is fetched incompletely with no automatic recovery path. Last
+updated 2026-06-30.
 
 ---
 
@@ -390,24 +417,31 @@ the code — a slice is not done until its docs reflect it.
   rows with provider-id fingerprints, and re-parsing the same sample yields
   identical fingerprints (idempotency precondition).
 
-### Slice 3 — Durable fetch + the JSON `POST /imports` branch + refresh
-- `app/import_fetch_worker.go` (durable, restart-safe; copy `pricing_worker.go`).
+### Slice 3 — Durable fetch + the JSON `POST /imports` branch + refresh — ✅ shipped 2026-06-30
+- `app/import_fetch_worker.go` (durable, restart-safe; copy `pricing_worker.go`). ✅
 - `POST /imports` JSON branch → enqueue + `202` + `previewing` batch with
-  `fetch_status`.
-- `POST /import-connections/{id}/refresh` → incremental fetch via saved cursor.
+  `fetch_status`. ✅
+- `POST /import-connections/{id}/refresh` → incremental fetch via saved cursor. ✅
 - Wire the worker start in `cmd/rekenraam/command.go` next to
-  `pricingService.StartBackgroundWorker`.
+  `pricingService.StartBackgroundWorker`. ✅
 - Frontend: "Import from Trading 212" button → poll `GET /imports/{id}` until
-  `ready` → existing preview/commit UI takes over unchanged.
+  `ready` → existing preview/commit UI takes over unchanged. ✅
 - **Tests (service-level, the important ones):** kill-and-restart mid-fetch resumes
   (lease expiry → reclaim); incremental refresh after a commit pulls only new
   movements and re-fetched overlap is skipped via `import_commit_identities`;
   a provider 5xx retries with backoff and does not wedge the batch; commit of
   fetched rows creates balanced `posted`+`needs_review` transactions with the
-  correct resolved currency.
+  correct resolved currency. ✅ `internal/app/import_fetch_worker_test.go` (7 tests,
+  real SQLite DB + fake HTTP T212 server); the currency/needs-review assertion is a
+  direct `buildTransactionSpec` unit test rather than a full ledger-commit
+  integration test (no account/commodity fixture harness exists yet — see T-13).
 - **Acceptance:** connect Trading 212 → import → rows land in the review queue as
   `posted`+`needs_review`; refresh a day later pulls only new movements; stopping
-  the server mid-fetch and restarting completes the fetch with no duplicates.
+  the server mid-fetch and restarting completes the fetch with no duplicates. ✅
+  Verified both by the automated tests above and a manual HTTP smoke test against a
+  running server + fake Trading 212 endpoint (full flow: connect → import → poll →
+  ready → refresh → 409 on concurrent refresh → delete connection → batch retains
+  `connection_display_name` in `source_meta`).
 
 ### Slice 4 (follow-up, scoped not built here)
 - Scheduled auto-refresh toggle per connection (B-T212-SCHED): a domain trigger
@@ -449,16 +483,30 @@ the code — a slice is not done until its docs reflect it.
 4. **T-06 interaction:** the fetch path reuses the same commit; it inherits T-06's
    crash-consistency gap but does not worsen it. Do not attempt to fix T-06 inside
    this plan; it is a transaction-service refactor tracked separately.
+5. **Pagination beyond `maxPages` (T-14, found during Slice 3):** `Fetcher.Fetch`
+   caps a single call at 50 pages and has no way to signal "more pages remain." Not
+   fixed in Slice 3 — see `docs/backlog.md` T-14 for the precise mechanism and why a
+   naive "just refresh again" doesn't recover the missing history.
+6. **Re-staging on partial-success retry (T-15, found during Slice 3):** if the
+   fetch worker fails *after* `stageParseResult` but *before* it finishes recording
+   progress, a retry re-runs the whole fetch and re-stages the same movements into
+   the same batch as duplicate `import_staged_rows`. Commit-time idempotency still
+   prevents duplicate ledger postings (see `docs/backlog.md` T-15), so this is a
+   preview-UX cosmetic gap, not a correctness gap — left open rather than touching
+   the shared `stageParseResult` path under time pressure.
 
-## Prerequisites in the backlog (read before Slice 3)
+## Prerequisites in the backlog — resolved before Slice 3 started
 
 Two pre-existing issues were found while validating this plan against the code.
-Neither blocks Slices 1–2, but Slice 3 (the durable worker) depends on them:
+Neither blocked Slices 1–2, and both were closed (see `docs/backlog.md`) before
+Slice 3 began:
 
-- **T-10 — queue methods on `PricingRepository`.** Extract a standalone
-  `BackgroundWorkRepository` first (pure move) so `import → pricing` is not a
-  dependency. Prerequisite for the worker.
-- **T-09 — queue does not coalesce enqueues.** Until fixed, the refresh handler
-  guards against a duplicate in-flight fetch at the service layer (described in
-  "Durable fetch worker"). Provider-id dedupe keeps the *committed* result correct
-  regardless; the guard only prevents confusing duplicate preview batches.
+- **T-10 — queue methods on `PricingRepository`.** Closed: `db.BackgroundWorkRepository`
+  is now standalone (`PricingRepository` embeds it); `ImportService` takes its own
+  instance, so `import → pricing` is not a dependency.
+- **T-09 — queue does not coalesce enqueues.** Closed for *identical* payloads via a
+  partial unique index (`(book_id, kind, payload_json) WHERE status IN
+  ('pending','running')`). That alone does not stop two *different* in-flight fetches
+  for the same connection (different payloads can't collide on the unique index), so
+  Slice 3 still added the dedicated service-layer guard described in "Durable fetch
+  worker" (`ImportRepository.HasInFlightFetch`, `ErrImportFetchInProgress` → `409`).

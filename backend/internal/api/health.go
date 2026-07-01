@@ -162,6 +162,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 		mux.HandleFunc("POST /api/v1/import-connections", createImportConnection(logger, services.Auth, services.ImportConnection, options))
 		mux.HandleFunc("PATCH /api/v1/import-connections/{connection_id}", updateImportConnection(logger, services.Auth, services.ImportConnection, options))
 		mux.HandleFunc("DELETE /api/v1/import-connections/{connection_id}", deleteImportConnection(logger, services.Auth, services.ImportConnection, options))
+		mux.HandleFunc("POST /api/v1/import-connections/{connection_id}/refresh", refreshImportConnection(logger, services.Auth, services.Import, options))
 	}
 }
 

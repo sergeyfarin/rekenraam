@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
 	"time"
 
@@ -23,12 +24,22 @@ type ImportService struct {
 	accountRepository  *db.AccountRepository
 	registry           *adapterRegistry
 	now                func() time.Time
+
+	// Online-import dependencies (Slice 3). Both are nil-safe: callers that
+	// only exercise the file-upload pipeline (e.g. unit tests) may omit them,
+	// in which case StartOnlineImport/RefreshImportConnection/the fetch
+	// worker simply report online import as unconfigured.
+	connectionService *ImportConnectionService
+	backgroundWork    *db.BackgroundWorkRepository
+	httpClient        *http.Client
 }
 
 func NewImportService(
 	repository *db.ImportRepository,
 	transactionService *TransactionService,
 	accountRepository *db.AccountRepository,
+	connectionService *ImportConnectionService,
+	backgroundWork *db.BackgroundWorkRepository,
 ) *ImportService {
 	return &ImportService{
 		repository:         repository,
@@ -36,7 +47,16 @@ func NewImportService(
 		accountRepository:  accountRepository,
 		registry:           newAdapterRegistry(&QIFAdapter{}, &Trading212Adapter{}),
 		now:                time.Now,
+		connectionService:  connectionService,
+		backgroundWork:     backgroundWork,
+		httpClient:         &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// SetNowForTest overrides the clock used for batch/work timestamps and lease
+// expiry, so tests can deterministically simulate lease expiry/restart.
+func (s *ImportService) SetNowForTest(now func() time.Time) {
+	s.now = now
 }
 
 // StartImport runs detect → parse → stage and returns the preview.
@@ -736,15 +756,15 @@ func parseQIFDate(raw string) (string, error) {
 	}
 
 	formats := []string{
-		"01/02/06",    // MM/DD/YY (US)
-		"01/02/2006",  // MM/DD/YYYY (US)
-		"02/01/06",    // DD/MM/YY (EU — detected by profile, fallback here)
-		"02/01/2006",  // DD/MM/YYYY (EU)
-		"2006-01-02",  // ISO (already normalized)
-		"1/2/06",      // M/D/YY
-		"1/2/2006",    // M/D/YYYY
-		"2-Jan-06",    // D-Mon-YY (Quicken alternative)
-		"2-Jan-2006",  // D-Mon-YYYY
+		"01/02/06",   // MM/DD/YY (US)
+		"01/02/2006", // MM/DD/YYYY (US)
+		"02/01/06",   // DD/MM/YY (EU — detected by profile, fallback here)
+		"02/01/2006", // DD/MM/YYYY (EU)
+		"2006-01-02", // ISO (already normalized)
+		"1/2/06",     // M/D/YY
+		"1/2/2006",   // M/D/YYYY
+		"2-Jan-06",   // D-Mon-YY (Quicken alternative)
+		"2-Jan-2006", // D-Mon-YYYY
 	}
 
 	// Replace dash with slash to normalize separators.
@@ -826,11 +846,16 @@ func toImportBatch(rec db.ImportBatchRecord) ImportBatch {
 	if rec.ProfileID.Valid {
 		profileID = &rec.ProfileID.Int64
 	}
+	var connectionID *int64
+	if rec.ConnectionID.Valid {
+		connectionID = &rec.ConnectionID.Int64
+	}
 	return ImportBatch{
 		ID:               rec.ID,
 		BookID:           rec.BookID,
 		SourceKind:       rec.SourceKind,
 		ProfileID:        profileID,
+		ConnectionID:     connectionID,
 		Status:           rec.Status,
 		OriginalFilename: rec.OriginalFilename,
 		SourceMetaJSON:   rec.SourceMetaJSON,

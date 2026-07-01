@@ -24,6 +24,7 @@ type ImportBatchRecord struct {
 	BookID           int64
 	SourceKind       string
 	ProfileID        sql.NullInt64
+	ConnectionID     sql.NullInt64
 	Status           string
 	OriginalFilename string
 	SourceMetaJSON   string
@@ -40,28 +41,28 @@ type ImportBatchEventRecord struct {
 }
 
 type ImportStagedRowRecord struct {
-	ID                    int64
-	BatchID               int64
-	BookID                int64
-	RowIndex              int
-	DedupeFingerprint     string
-	RawJSON               string
-	NormalizedJSON        string
-	DedupeStatus          string
-	ResolutionJSON        string
-	CommitStatus          string
+	ID                     int64
+	BatchID                int64
+	BookID                 int64
+	RowIndex               int
+	DedupeFingerprint      string
+	RawJSON                string
+	NormalizedJSON         string
+	DedupeStatus           string
+	ResolutionJSON         string
+	CommitStatus           string
 	CommittedTransactionID sql.NullInt64
-	CommitError           sql.NullString
+	CommitError            sql.NullString
 }
 
 type ImportCommitIdentityRecord struct {
-	ID                    int64
-	BookID                int64
-	DedupeFingerprint     string
+	ID                     int64
+	BookID                 int64
+	DedupeFingerprint      string
 	CommittedTransactionID int64
-	SourceKind            string
-	AccountID             int64
-	CreatedAt             string
+	SourceKind             string
+	AccountID              int64
+	CreatedAt              string
 }
 
 // --- Param types ---
@@ -70,6 +71,7 @@ type CreateImportBatchParams struct {
 	BookID           int64
 	SourceKind       string
 	ProfileID        sql.NullInt64
+	ConnectionID     sql.NullInt64
 	OriginalFilename string
 	SourceMetaJSON   string
 	CreatedAt        string
@@ -110,19 +112,19 @@ type UpdateImportStagedRowResolutionParams struct {
 }
 
 type CommitImportStagedRowParams struct {
-	RowID                 int64
-	CommitStatus          string
+	RowID                  int64
+	CommitStatus           string
 	CommittedTransactionID sql.NullInt64
-	CommitError           sql.NullString
+	CommitError            sql.NullString
 }
 
 type CreateImportCommitIdentityParams struct {
-	BookID                int64
-	DedupeFingerprint     string
+	BookID                 int64
+	DedupeFingerprint      string
 	CommittedTransactionID int64
-	SourceKind            string
-	AccountID             int64
-	CreatedAt             string
+	SourceKind             string
+	AccountID              int64
+	CreatedAt              string
 }
 
 type ListImportBatchesParams struct {
@@ -174,9 +176,9 @@ func (r *ImportRepository) CreateImportBatch(ctx context.Context, params CreateI
 	}
 
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO import_batches (book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at)
-		VALUES (?, ?, ?, 'previewing', ?, ?, ?)
-	`, params.BookID, params.SourceKind, params.ProfileID, params.OriginalFilename, params.SourceMetaJSON, params.CreatedAt)
+		INSERT INTO import_batches (book_id, source_kind, profile_id, connection_id, status, original_filename, source_meta_json, created_at)
+		VALUES (?, ?, ?, ?, 'previewing', ?, ?, ?)
+	`, params.BookID, params.SourceKind, params.ProfileID, params.ConnectionID, params.OriginalFilename, params.SourceMetaJSON, params.CreatedAt)
 	if err != nil {
 		return ImportBatchRecord{}, fmt.Errorf("insert import batch: %w", err)
 	}
@@ -203,6 +205,7 @@ func (r *ImportRepository) CreateImportBatch(ctx context.Context, params CreateI
 		BookID:           params.BookID,
 		SourceKind:       params.SourceKind,
 		ProfileID:        params.ProfileID,
+		ConnectionID:     params.ConnectionID,
 		Status:           "previewing",
 		OriginalFilename: params.OriginalFilename,
 		SourceMetaJSON:   params.SourceMetaJSON,
@@ -213,11 +216,11 @@ func (r *ImportRepository) CreateImportBatch(ctx context.Context, params CreateI
 func (r *ImportRepository) ImportBatchByID(ctx context.Context, bookID, batchID int64) (ImportBatchRecord, error) {
 	var rec ImportBatchRecord
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at
+		SELECT id, book_id, source_kind, profile_id, connection_id, status, original_filename, source_meta_json, created_at
 		FROM import_batches
 		WHERE id = ? AND book_id = ?
 	`, batchID, bookID).Scan(
-		&rec.ID, &rec.BookID, &rec.SourceKind, &rec.ProfileID, &rec.Status,
+		&rec.ID, &rec.BookID, &rec.SourceKind, &rec.ProfileID, &rec.ConnectionID, &rec.Status,
 		&rec.OriginalFilename, &rec.SourceMetaJSON, &rec.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -240,7 +243,7 @@ func (r *ImportRepository) ListImportBatches(ctx context.Context, params ListImp
 
 	if params.CursorCreatedAt != "" && params.CursorID > 0 {
 		rows, err = r.database.QueryContext(ctx, `
-			SELECT id, book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at
+			SELECT id, book_id, source_kind, profile_id, connection_id, status, original_filename, source_meta_json, created_at
 			FROM import_batches
 			WHERE book_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
 			ORDER BY created_at DESC, id DESC
@@ -248,7 +251,7 @@ func (r *ImportRepository) ListImportBatches(ctx context.Context, params ListImp
 		`, params.BookID, params.CursorCreatedAt, params.CursorCreatedAt, params.CursorID, limit)
 	} else {
 		rows, err = r.database.QueryContext(ctx, `
-			SELECT id, book_id, source_kind, profile_id, status, original_filename, source_meta_json, created_at
+			SELECT id, book_id, source_kind, profile_id, connection_id, status, original_filename, source_meta_json, created_at
 			FROM import_batches
 			WHERE book_id = ?
 			ORDER BY created_at DESC, id DESC
@@ -264,7 +267,7 @@ func (r *ImportRepository) ListImportBatches(ctx context.Context, params ListImp
 	for rows.Next() {
 		var rec ImportBatchRecord
 		if err := rows.Scan(
-			&rec.ID, &rec.BookID, &rec.SourceKind, &rec.ProfileID, &rec.Status,
+			&rec.ID, &rec.BookID, &rec.SourceKind, &rec.ProfileID, &rec.ConnectionID, &rec.Status,
 			&rec.OriginalFilename, &rec.SourceMetaJSON, &rec.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan import batch: %w", err)
@@ -344,6 +347,47 @@ func (r *ImportRepository) UpdateImportBatchStatus(ctx context.Context, params U
 	}
 	committed = true
 	return nil
+}
+
+// UpdateImportBatchSourceMeta overwrites source_meta_json. Used by the
+// Trading 212 fetch worker to flip fetch_status (fetching → ready/failed) and
+// record the parsed date/currency hints once a fetch completes — a transient
+// metadata update, not a status transition, so it does not write an
+// import_batch_events row.
+func (r *ImportRepository) UpdateImportBatchSourceMeta(ctx context.Context, batchID int64, sourceMetaJSON string) error {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE import_batches SET source_meta_json = ? WHERE id = ?
+	`, sourceMetaJSON, batchID)
+	if err != nil {
+		return fmt.Errorf("update import batch source meta: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return ErrImportBatchNotFound
+	}
+	return nil
+}
+
+// HasInFlightFetch reports whether a connection already has a previewing
+// batch whose source_meta.fetch_status is "fetching" — the double-fetch
+// guard the durable worker relies on, since the background queue itself does
+// not coalesce different connection/cursor payloads.
+func (r *ImportRepository) HasInFlightFetch(ctx context.Context, bookID, connectionID int64) (bool, error) {
+	var exists int
+	err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM import_batches
+			WHERE book_id = ? AND connection_id = ? AND status = 'previewing'
+			  AND json_extract(source_meta_json, '$.fetch_status') = 'fetching'
+		)
+	`, bookID, connectionID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check in-flight fetch: %w", err)
+	}
+	return exists == 1, nil
 }
 
 // --- Staged row operations ---

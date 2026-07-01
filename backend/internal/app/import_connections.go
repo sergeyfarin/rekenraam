@@ -299,6 +299,46 @@ func (s *ImportConnectionService) OpenSecret(ctx context.Context, id int64) (str
 	return string(plaintext), nil
 }
 
+// UpdateFetchCursor saves the incremental fetch cursor and status after a
+// successful fetch. Called by the Trading 212 fetch worker, never by an HTTP
+// handler.
+func (s *ImportConnectionService) UpdateFetchCursor(ctx context.Context, id int64, cursor string, status string, fetchedAt string) error {
+	if err := s.requireSecretKey(); err != nil {
+		return err
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	if err := s.repository.UpdateImportConnectionCursor(ctx, db.UpdateImportConnectionCursorParams{
+		ID:              id,
+		BookID:          BookID,
+		FetchCursor:     cursor,
+		LastFetchStatus: status,
+		LastFetchedAt:   fetchedAt,
+		UpdatedAt:       now,
+	}); err != nil {
+		if errors.Is(err, db.ErrImportConnectionNotFound) {
+			return ErrImportConnectionNotFound
+		}
+		return fmt.Errorf("update fetch cursor: %w", err)
+	}
+	return nil
+}
+
+// MarkFetchFailed flips a connection's last_fetch_status to "failed" after a
+// terminal fetch error, preserving its existing cursor.
+func (s *ImportConnectionService) MarkFetchFailed(ctx context.Context, id int64, fetchedAt string) error {
+	if err := s.requireSecretKey(); err != nil {
+		return err
+	}
+	existing, err := s.repository.ImportConnectionByID(ctx, id, BookID)
+	if err != nil {
+		if errors.Is(err, db.ErrImportConnectionNotFound) {
+			return ErrImportConnectionNotFound
+		}
+		return fmt.Errorf("load import connection: %w", err)
+	}
+	return s.UpdateFetchCursor(ctx, id, existing.FetchCursor, "failed", fetchedAt)
+}
+
 // --- Helpers ---
 
 func (s *ImportConnectionService) requireSecretKey() error {

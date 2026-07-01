@@ -163,5 +163,15 @@
   "import_connections_error_config": "The server is not configured for online connections. Set REKENRAAM_SECRET_KEY.",
   "import_connections_error_duplicate": "A connection with this name already exists.",
   "import_connections_error_generic": "Could not save the connection.",
-  "import_connections_delete_error": "Could not delete the connection."
+  "import_connections_delete_error": "Could not delete the connection.",
+  "import_connections_import": "Import",
+  "import_connections_refresh": "Refresh",
+  "import_connections_starting": "Starting…",
+  "import_connections_fetch_error": "Could not start the fetch. Check the connection and try again.",
+
+  "import_fetching_title": "Fetching from Trading 212…",
+  "import_fetching_copy": "This can take a moment. You can leave this page; the fetch keeps running in the background.",
+  "import_fetching_cancel": "Cancel",
+  "import_fetching_failed_title": "The fetch failed",
+  "import_fetching_failed_copy": "Check the connection's API key and try again."
 }

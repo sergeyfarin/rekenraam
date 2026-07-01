@@ -43,6 +43,10 @@ ImportBatchResponse:
     profile_id:
       type: integer
       format: int64
+    connection_id:
+      type: integer
+      format: int64
+      description: The online connection that produced this batch, if any.
     status:
       $ref: "../../openapi.yaml#/components/schemas/ImportBatchStatus"
     original_filename:
@@ -196,6 +200,29 @@ ImportSourceMeta:
     date_to:
       type: string
       format: date
+StartOnlineImportRequest:
+  type: object
+  required:
+    - source
+    - connection_id
+  properties:
+    source:
+      type: string
+      description: Online source kind. Only "trading212" is currently supported.
+    connection_id:
+      type: integer
+      format: int64
+      description: The import connection to fetch from.
+StartOnlineImportResponse:
+  type: object
+  required:
+    - batch
+  properties:
+    batch:
+      $ref: "../../openapi.yaml#/components/schemas/ImportBatchResponse"
+      description: >-
+        The newly created batch, still fetching. Rows are not included; poll
+        GET /imports/{batch_id} until source_meta's fetch_status is "ready".
 StartImportResponse:
   type: object
   required:

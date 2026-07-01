@@ -77,23 +77,24 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
-	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository)
 	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), cfg.SecretKey, app.NewTrading212Prober(nil))
+	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, importConnectionService, db.NewBackgroundWorkRepository(database))
 	pricingService.StartScheduler(ctx, logger)
 	pricingService.StartBackgroundWorker(ctx, logger)
+	importService.StartBackgroundWorker(ctx, logger)
 	handler := api.NewHandler(logger, web.Handler(), api.Services{
-		Setup:       setupService,
-		Auth:        authService,
-		Settings:    settingsService,
-		Book:        bookService,
-		Currency:    currencyService,
-		Institution: institutionService,
-		Account:     accountService,
-		Tag:         tagService,
-		Category:    categoryService,
-		Payee:       payeeService,
-		Transaction: transactionService,
-		Pricing:     pricingService,
+		Setup:            setupService,
+		Auth:             authService,
+		Settings:         settingsService,
+		Book:             bookService,
+		Currency:         currencyService,
+		Institution:      institutionService,
+		Account:          accountService,
+		Tag:              tagService,
+		Category:         categoryService,
+		Payee:            payeeService,
+		Transaction:      transactionService,
+		Pricing:          pricingService,
 		Investment:       investmentService,
 		Import:           importService,
 		ImportConnection: importConnectionService,

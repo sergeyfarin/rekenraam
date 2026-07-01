@@ -25,6 +25,12 @@ get:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 post:
   summary: Start import batch
+  description: >-
+    Content-negotiated by request body. multipart/form-data starts the
+    existing file-upload pipeline synchronously (201). application/json
+    `{ source, connection_id }` enqueues a durable online fetch on the named
+    connection and returns immediately (202); poll GET /imports/{batch_id}
+    until source_meta's fetch_status is "ready".
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -43,15 +49,24 @@ post:
             file:
               type: string
               format: binary
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/StartOnlineImportRequest"
   responses:
     "201":
-      description: Import batch staged for preview
+      description: Import batch staged for preview (multipart file upload)
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/StartImportResponse"
+    "202":
+      description: Online fetch enqueued; batch created in "fetching" state
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/StartOnlineImportResponse"
     "400":
-      description: Invalid multipart form, missing file, or unsupported file format
+      description: Invalid multipart form, missing file, or unsupported file/source
       content:
         application/json:
           schema:
@@ -68,8 +83,26 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Import connection not found (online branch only)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: An import fetch is already in progress for this connection
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "500":
       description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured (online branch only)
       content:
         application/json:
           schema:

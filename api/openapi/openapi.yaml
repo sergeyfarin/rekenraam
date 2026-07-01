@@ -137,6 +137,8 @@ paths:
     $ref: "./paths/import-connections.yaml"
   /api/v1/import-connections/{connection_id}:
     $ref: "./paths/import-connection.yaml"
+  /api/v1/import-connections/{connection_id}/refresh:
+    $ref: "./paths/import-connection-refresh.yaml"
   /api/v1/accounts/{account_id}/postings/{posting_line_id}/move:
     $ref: "./paths/posting-move.yaml"
   /api/v1/reconciliations/{reconciliation_id}:
@@ -526,6 +528,10 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportSourceMeta"
     StartImportResponse:
       $ref: "./components/schemas/imports.yaml#/StartImportResponse"
+    StartOnlineImportRequest:
+      $ref: "./components/schemas/imports.yaml#/StartOnlineImportRequest"
+    StartOnlineImportResponse:
+      $ref: "./components/schemas/imports.yaml#/StartOnlineImportResponse"
     GetImportBatchResponse:
       $ref: "./components/schemas/imports.yaml#/GetImportBatchResponse"
     ListImportBatchesResponse:

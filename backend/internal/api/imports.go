@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"rekenraam/backend/internal/app"
 )
@@ -18,6 +19,7 @@ type importBatchResponse struct {
 	BookID           int64  `json:"book_id"`
 	SourceKind       string `json:"source_kind"`
 	ProfileID        *int64 `json:"profile_id,omitempty"`
+	ConnectionID     *int64 `json:"connection_id,omitempty"`
 	Status           string `json:"status"`
 	OriginalFilename string `json:"original_filename"`
 	SourceMetaJSON   string `json:"source_meta"`
@@ -55,6 +57,20 @@ type startImportResponse struct {
 	Rows     []importStagedRowResponse `json:"rows"`
 	Warnings []parseWarningResponse    `json:"warnings"`
 	Meta     sourceMetaResponse        `json:"meta"`
+}
+
+type startOnlineImportRequest struct {
+	Source       string `json:"source"`
+	ConnectionID int64  `json:"connection_id"`
+}
+
+// startOnlineImportResponse is returned for both the JSON POST /imports
+// branch and POST /import-connections/{id}/refresh: the batch has been
+// created but the durable worker hasn't fetched/staged rows yet, so there is
+// nothing else to return. The caller polls GET /imports/{id} until
+// batch.source_meta's fetch_status flips to "ready".
+type startOnlineImportResponse struct {
+	Batch importBatchResponse `json:"batch"`
 }
 
 type getImportBatchResponse struct {
@@ -108,6 +124,33 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
 		if !ok {
+			return
+		}
+
+		// Content-negotiated: application/json starts an online (fetch-driven)
+		// import from a connection; multipart/form-data is the existing
+		// file-upload path.
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			var req startOnlineImportRequest
+			if err := decodeJSONBody(r, &req); err != nil {
+				writeDecodeError(w, err)
+				return
+			}
+			if req.Source != "trading212" {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "source must be \"trading212\"")
+				return
+			}
+			result, err := importService.StartOnlineImport(r.Context(), app.StartOnlineImportInput{
+				OwnerUserID:   owner.ID,
+				AuthSessionID: authenticatedSessionID(r),
+				RequestID:     RequestIDFromContext(r.Context()),
+				ConnectionID:  req.ConnectionID,
+			})
+			if err != nil {
+				writeImportServiceError(w, r, logger, "start online import", err)
+				return
+			}
+			writeJSON(w, http.StatusAccepted, startOnlineImportResponse{Batch: toImportBatchResponse(result.Batch)})
 			return
 		}
 
@@ -391,6 +434,12 @@ func writeImportServiceError(w http.ResponseWriter, r *http.Request, logger *slo
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import batch not found")
 	case errors.Is(err, app.ErrImportBatchNotOpen):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "import batch is not in an open state")
+	case errors.Is(err, app.ErrImportConnectionNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import connection not found")
+	case errors.Is(err, app.ErrImportFetchInProgress):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "an import fetch is already in progress for this connection")
+	case errors.Is(err, app.ErrSecretKeyMissing):
+		writeAPIError(w, http.StatusServiceUnavailable, "CONFIG_REQUIRED", "REKENRAAM_SECRET_KEY is not configured on the server")
 	default:
 		var ve app.ValidationError
 		if errors.As(err, &ve) {
@@ -425,6 +474,7 @@ func toImportBatchResponse(b app.ImportBatch) importBatchResponse {
 		BookID:           b.BookID,
 		SourceKind:       b.SourceKind,
 		ProfileID:        b.ProfileID,
+		ConnectionID:     b.ConnectionID,
 		Status:           b.Status,
 		OriginalFilename: b.OriginalFilename,
 		SourceMetaJSON:   meta,
