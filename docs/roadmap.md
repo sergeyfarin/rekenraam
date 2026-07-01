@@ -142,15 +142,22 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   4 REST endpoints, OpenAPI, TS types, connections UI (masked list + add + delete).
 - **Slice 2 shipped (2026-06-30):** `internal/onlinesource/trading212` HTTP fetcher
   (paging, 429 backoff, cursor), `Trading212Adapter`, real `Trading212Prober`.
-- **Slice 3 shipped (2026-06-30):** durable `import.fetch.trading212` worker
-  (`app/import_fetch_worker.go`), content-negotiated `POST /imports` (JSON → online
-  fetch, multipart → unchanged file upload), `POST /import-connections/{id}/refresh`
+- **Slice 3 shipped (2026-06-30, hardened 2026-07-01):** durable
+  `import.fetch.trading212` worker (`app/import_fetch_worker.go`),
+  content-negotiated `POST /imports` (JSON → online fetch, multipart →
+  unchanged file upload), `POST /import-connections/{id}/refresh`
   (incremental), double-fetch guard, terminal-vs-retryable failure handling,
-  per-connection Import/Refresh UI with polling. Trading 212 cash-movement import is
-  now end-to-end functional.
-- **Remaining (Slice 4, not built):** scheduled auto-refresh toggle (B-T212-SCHED),
-  investment lot import (B-T212-INVST), pagination beyond 50 pages on a single fetch
-  (T-14).
+  per-connection Import/Refresh UI with polling, pagination beyond 50 pages
+  via continuation work items (T-14), same-timestamp cursor + absolute
+  `nextPagePath` hardening (T-17). Trading 212 cash-movement import is now
+  end-to-end functional.
+- **Remaining (Slice 4, decomposed 2026-07-01, not built):**
+  **4a — scheduled auto-refresh toggle (B-T212-SCHED)**, planned and small;
+  **4b — investment lot import (B-T212-INVST)**, planned but blocked on a new
+  prerequisite design doc, `docs/import-connection-accounts-plan.md`
+  (import connections have no relationship to accounts today, which BUY/SELL
+  lot mapping needs and plain cash-movement rows didn't). See
+  `docs/trading212-import-plan.md` Slice 4 for both concrete plans.
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
 

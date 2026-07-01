@@ -242,26 +242,38 @@ unverified assumptions — not fixed here to avoid guessing at behavior no one h
 validated against the real API yet.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
-**File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.
+**File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`.
 
 Online import (R7, Trading 212) imports **cash-account movements** only. Instrument
 buy/sell fills are flagged `needs_attention` and not booked as lots — the same
 stance QIF takes on `!Type:Invst`.
 
-**No longer blocked.** The original blocker (no investments ledger UI) is gone: the
-investments feature shipped end-to-end (R12, all four cost-basis methods, sell
-preview, gains reporting — see `implemented.md`). This is now a scoped task inside
-the Trading 212 work itself (`investments-plan.md` Slice 5): map order fills to
-buys/sells and dividends to investment events through the now-UI-backed investment
-service. It remains open only because R7/Trading 212 is itself deferred, not because
-a prerequisite is missing.
+**Planned 2026-07-01, not yet built.** The investments-UI blocker is gone (R12
+shipped), but scoping this for real implementation surfaced a second, unrelated
+prerequisite: `import_connections` has no relationship to `accounts` at all today,
+and a holding account in this codebase is 1:1 with a single instrument
+(`CreateHoldingAccount`), so "the" holding account for a brokerage connection is a
+growing per-instrument set, not one value — the plain per-batch account picker
+cash-movement rows use doesn't generalize. `docs/import-connection-accounts-plan.md`
+designs the fix (a `cash_account_id` column + an `import_connection_holdings`
+mapping table, auto-created/linked per instrument). `docs/trading212-import-plan.md`
+Slice 4b is the concrete implementation plan once that lands: new fetcher fields for
+order fills (ticker/quantity/price — endpoint shape still unverified against the
+live API, same caveat Slice 2 had for cash history), instrument find-or-create,
+and a `CommitImportBatch` branch that routes to `InvestmentService.Buy/Sell/Dividend`
+instead of the generic transaction builder.
 
 ### B-T212-SCHED Trading 212 scheduled auto-refresh `[ ]`
-**File:** `docs/trading212-import-plan.md` (Slice 4).
+**File:** `docs/trading212-import-plan.md` (Slice 4a).
 
 R7 ships **manual "refresh now"** on the durable queue. A per-connection scheduled
-auto-refresh (daily domain trigger enqueuing `import.fetch.trading212`) is a thin
-follow-up on the same machinery — deferred to keep the first online slice small.
+auto-refresh is a thin follow-up on the same machinery — deferred to keep the first
+online slice small. **Planned 2026-07-01, not yet built:** Slice 4a specifies a
+24h-since-last-successful-fetch cadence (not a fixed wall-clock time, to avoid
+needing the book-owner-timezone plumbing `pricing_scheduler.go` has, and to be
+self-correcting if the server was down), reusing the existing
+`RefreshImportConnection` path and its in-flight guard — no new fetch logic, just
+a scheduler goroutine mirroring `PricingService.StartScheduler`.
 
 > **I-03 and I-04 are open *product/accounting decisions*, not blockers.** Both
 > were deliberately scoped out of the shipped investments feature (R12) and neither

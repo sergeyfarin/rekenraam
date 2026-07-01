@@ -16,7 +16,12 @@ template for the durable-fetch machinery here.
 
 Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28. Slice 2
 (Fetcher + adapter, parse offline) shipped 2026-06-30. Slice 3 (Durable fetch +
-JSON `POST /imports` branch + refresh) shipped 2026-06-30.** Slice 4 pending.
+JSON `POST /imports` branch + refresh, plus a post-shipment review pass closing
+T-14/T-15/T-16/T-17) shipped 2026-06-30/2026-07-01.** Slice 4 decomposed
+2026-07-01 into **4a (scheduled auto-refresh, B-T212-SCHED — planned, small,
+ready to build)** and **4b (investment lot import, B-T212-INVST — planned,
+blocked on `docs/import-connection-accounts-plan.md` landing first)**. Neither
+is built yet; see "Delivery slices" below for the concrete plans.
 
 Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
 migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
@@ -450,12 +455,117 @@ the code — a slice is not done until its docs reflect it.
   ready → refresh → 409 on concurrent refresh → delete connection → batch retains
   `connection_display_name` in `source_meta`).
 
-### Slice 4 (follow-up, scoped not built here)
-- Scheduled auto-refresh toggle per connection (B-T212-SCHED): a domain trigger
-  enqueues `import.fetch.trading212` on a daily cadence, same machinery.
-- Investment lot import (B-T212-INVST): map order fills to buys/sells and dividends
-  to investment events through the investment service (its UI now ships — R12), so
-  this is buildable as part of this work rather than blocked on a prerequisite.
+### Slice 4 — decomposed 2026-07-01, not yet built
+
+Scoping this slice for real implementation (rather than the one-line stub
+above) surfaced that its two backlog items are not the same size. **4a is
+small and self-contained.** **4b turned out to depend on a design gap that
+didn't exist in any prior slice** — see `docs/import-connection-accounts-plan.md`
+(new doc) for the full writeup. Splitting them so 4a can ship independently.
+
+#### Slice 4a — Scheduled auto-refresh (B-T212-SCHED)
+
+Mirrors the existing `PricingService.StartScheduler` /
+`runScheduledRefreshIfDue` pattern (`backend/internal/app/pricing_scheduler.go`)
+almost exactly — a once-a-minute ticker that checks "is it due" and, if so,
+calls the *existing* `RefreshImportConnection` service method (Slice 3), not
+new fetch logic.
+
+- **Migration:** add `auto_refresh_enabled INTEGER NOT NULL DEFAULT 0` to
+  `import_connections`. Deliberately **no** per-connection hour/minute/timezone
+  policy like pricing has — simpler cadence: "due if
+  `auto_refresh_enabled` and `now - last_fetched_at >= 24h` (or
+  `last_fetched_at` is null)". This avoids needing the book-owner-timezone
+  plumbing pricing's scheduler needs, and a fixed 24h-since-last-success
+  interval is a better fit for a rate-limited third-party API than a fixed
+  wall-clock time anyway (no thundering-herd at midnight, self-correcting if
+  the server was down at the usual time).
+- **Service:** `ImportConnectionService.runDueAutoRefreshes(ctx, logger)` —
+  list connections with `auto_refresh_enabled=1` and
+  `source_kind="trading212"`, filter to those whose `last_fetched_at` is
+  null or `>= 24h` old, and call the same `RefreshImportConnection` path the
+  manual "Refresh" button already uses (Slice 3) — including its existing
+  in-flight guard (`ErrImportFetchInProgress`), which this scheduler must
+  treat as a normal skip-this-tick outcome, not an error to log loudly.
+- **Wiring:** `ImportConnectionService.StartScheduler(ctx, logger)` started in
+  `cmd/rekenraam/command.go` next to `pricingService.StartScheduler(...)`.
+- **API:** `PATCH /import-connections/{id}` gains `auto_refresh_enabled` in
+  its existing config-update body (no new endpoint). Add to OpenAPI + regen
+  TS types.
+- **Frontend:** a toggle on each connection row in the existing connections
+  table (`routes/app/import/+page.svelte`), reusing the existing PATCH call.
+- **Tests:** due-detection boundary (23h59m vs 24h01m since last fetch);
+  disabled connections never trigger; in-flight guard causes a skip, not a
+  failure log; a connection with `last_fetched_at IS NULL` triggers
+  immediately (first-time enable shouldn't wait 24h).
+- **Acceptance:** enabling the toggle causes a fetch within the next minute if
+  more than 24h have passed (or immediately if never fetched); disabling it
+  stops future automatic fetches; the manual refresh button and the
+  scheduler share one in-flight guard so they can never race each other.
+
+#### Slice 4b — Investment lot import (B-T212-INVST)
+
+**Blocked on `docs/import-connection-accounts-plan.md` shipping first**
+(the `cash_account_id` column + `import_connection_holdings` table + the
+holding-account resolution logic it defines). Once that lands:
+
+1. **Fetcher:** extend `internal/onlinesource/trading212` with order-fill and
+   dividend detail. Two open questions to resolve against the live API before
+   writing code (both already flagged in "Risks & open questions" below,
+   restated here because they block 4b specifically):
+   - Does `/history/transactions` already carry ticker/ISIN/quantity/price for
+     `DIVIDEND` and settled-order rows (in fields the current
+     `transactionHistoryResponse` struct doesn't parse yet), or is a second
+     endpoint (order history, e.g. `/equity/history/orders`) required for
+     quantity/price? Verify first — extending the existing struct is far
+     cheaper than adding a second paginated endpoint.
+   - If a second endpoint is required, it needs its own cursor/pagination
+     handling mirroring `Fetch`, but can reuse the same `maxPages`/continuation
+     machinery (T-14) rather than duplicating it.
+   - Whichever shape it turns out to be, isolate the new fields in response
+     structs with a golden-file test, per this doc's existing "Implementer
+     note on API specifics" precedent — field-name assumptions here are
+     exactly as unverified as the original cash-history ones were in Slice 2.
+2. **Instrument resolution:** a new helper (`resolveTrading212Instrument` or
+   similar, in `internal/app`) that looks up `InvestmentInstrument` by ISIN
+   first, falls back to ticker/symbol, and calls
+   `InvestmentService.CreateInstrument` if neither matches. Runs at
+   fetch-worker time (same place cash movements get staged), not at commit
+   time, so the preview UI can show the resolved/created instrument before
+   the user commits.
+3. **Holding + cash account resolution:** exactly as specified in
+   `docs/import-connection-accounts-plan.md` — reuse
+   `import_connection_holdings` (auto-create-or-link-with-confirmation) and
+   `import_connections.cash_account_id`.
+4. **Commit-path branch:** `CommitImportBatch` needs a per-row-kind check —
+   rows whose `Raw["type"]` is `BUY`/`SELL`/`DIVIDEND` *and* have a resolved
+   instrument + accounts skip `buildTransactionSpec` and instead call
+   `InvestmentService.Buy`/`Sell`/`Dividend` directly, passing through the
+   row's date/quantity/price/amount. Rows that fail resolution (no
+   instrument match, no cash/holding account configured, ambiguous holding
+   account) keep today's `needs_attention` behavior — this is a strict
+   superset of current behavior, never a regression.
+   - **Sell-specific:** `Sell` needs a cost-basis method and enough open lot
+     quantity; if `PreviewSell`'s disposal simulation fails
+     (`ErrInvestmentLotsInsufficient` — e.g. history fetched only partially,
+     or a corporate action the pipeline doesn't understand happened), fall
+     back to `needs_attention` with the specific error surfaced rather than
+     failing the whole batch.
+5. **Dividends:** route through `InvestmentService.Dividend`, using
+   `ResolveDividendDefault` for the income account exactly as the manual
+   dividend form does, keyed off the resolved instrument's `CommodityID`.
+6. **Tests:** golden-file parse of a captured order-fill/dividend payload;
+   commit-time routing test (BUY creates a lot, SELL disposes lots and
+   matches `PreviewSell`'s figures, DIVIDEND creates no lot); instrument
+   auto-creation on first-seen ticker; holding-account reuse across two
+   fetches of the same instrument; insufficient-lots sell falls back to
+   `needs_attention` instead of failing the batch.
+- **Acceptance:** connecting a Trading 212 account with real trade history
+  results in lots appearing in `/investments/positions` with correct
+  quantities and cost basis, dividends appear as investment income (not
+  generic cash transactions), and re-running a refresh never double-books a
+  lot or a disposal (idempotency inherited from the existing provider-id
+  fingerprint, same guarantee cash movements already have).
 
 ---
 
