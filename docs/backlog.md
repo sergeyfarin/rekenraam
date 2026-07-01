@@ -263,17 +263,29 @@ live API, same caveat Slice 2 had for cash history), instrument find-or-create,
 and a `CommitImportBatch` branch that routes to `InvestmentService.Buy/Sell/Dividend`
 instead of the generic transaction builder.
 
-### B-T212-SCHED Trading 212 scheduled auto-refresh `[ ]`
-**File:** `docs/trading212-import-plan.md` (Slice 4a).
+### B-T212-SCHED Trading 212 scheduled auto-refresh `[x]`
+**File:** `docs/trading212-import-plan.md` (Slice 4a), `backend/internal/app/import_scheduler.go`.
 
-R7 ships **manual "refresh now"** on the durable queue. A per-connection scheduled
-auto-refresh is a thin follow-up on the same machinery — deferred to keep the first
-online slice small. **Planned 2026-07-01, not yet built:** Slice 4a specifies a
-24h-since-last-successful-fetch cadence (not a fixed wall-clock time, to avoid
-needing the book-owner-timezone plumbing `pricing_scheduler.go` has, and to be
-self-correcting if the server was down), reusing the existing
-`RefreshImportConnection` path and its in-flight guard — no new fetch logic, just
-a scheduler goroutine mirroring `PricingService.StartScheduler`.
+Closed 2026-07-01 (Slice 4a). Per-connection `auto_refresh_enabled` column
+(migration `0008`) drives `ImportService.StartScheduler` /
+`runDueTrading212AutoRefreshes`: a once-a-minute ticker, mirroring
+`PricingService.StartScheduler`, that treats a connection as due once
+`last_fetched_at` is null or at least 24h old (not a fixed wall-clock time,
+to avoid the book-owner-timezone plumbing `pricing_scheduler.go` needs, and
+to self-correct if the server was down at whatever the "usual" time would
+have been) and calls the existing `RefreshImportConnection` path — no new
+fetch logic. The scheduler treats `ErrImportFetchInProgress` (the existing
+Slice 3 in-flight guard) as a normal per-tick skip, so it can never
+double-enqueue against a manual refresh or a still-running deep backfill.
+`ImportRepository.CurrentBookOwnerID` was added (mirroring
+`PricingRepository.CurrentBookOwnerID`) so a scheduled refresh has a real
+owner to attribute its batch/audit trail to. Frontend: a switch on each
+connection row (`routes/app/import/+page.svelte`), calling the existing
+`PATCH /import-connections/{id}` with the new `auto_refresh_enabled` field.
+Verified by `internal/app/import_scheduler_test.go` (due-boundary at exactly
+24h, disabled connections never trigger, never-fetched triggers immediately,
+in-flight guard skips silently) and a manual pass driving the real built app
++ a real (headless) browser against a local fake Trading 212 server.
 
 > **I-03 and I-04 are open *product/accounting decisions*, not blockers.** Both
 > were deliberately scoped out of the shipped investments feature (R12) and neither

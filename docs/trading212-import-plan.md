@@ -17,11 +17,11 @@ template for the durable-fetch machinery here.
 Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28. Slice 2
 (Fetcher + adapter, parse offline) shipped 2026-06-30. Slice 3 (Durable fetch +
 JSON `POST /imports` branch + refresh, plus a post-shipment review pass closing
-T-14/T-15/T-16/T-17) shipped 2026-06-30/2026-07-01.** Slice 4 decomposed
-2026-07-01 into **4a (scheduled auto-refresh, B-T212-SCHED — planned, small,
-ready to build)** and **4b (investment lot import, B-T212-INVST — planned,
-blocked on `docs/import-connection-accounts-plan.md` landing first)**. Neither
-is built yet; see "Delivery slices" below for the concrete plans.
+T-14/T-15/T-16/T-17) shipped 2026-06-30/2026-07-01. Slice 4a (scheduled
+auto-refresh, B-T212-SCHED) shipped 2026-07-01.** Slice 4b (investment lot
+import, B-T212-INVST) is still planned, blocked on
+`docs/import-connection-accounts-plan.md` landing first — see "Delivery
+slices" below.
 
 Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
 migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
@@ -463,7 +463,34 @@ small and self-contained.** **4b turned out to depend on a design gap that
 didn't exist in any prior slice** — see `docs/import-connection-accounts-plan.md`
 (new doc) for the full writeup. Splitting them so 4a can ship independently.
 
-#### Slice 4a — Scheduled auto-refresh (B-T212-SCHED)
+#### Slice 4a — Scheduled auto-refresh (B-T212-SCHED) — ✅ shipped 2026-07-01
+
+Delivered almost exactly as planned, with two implementation-time refinements
+kept for the record:
+- The scheduler and its cadence check (`runDueTrading212AutoRefreshes`) live
+  on `ImportService` (`app/import_scheduler.go`), not `ImportConnectionService`
+  — `RefreshImportConnection` (the method it calls) is already on
+  `ImportService`, and `ImportConnectionService.ListDueAutoRefreshConnectionIDs`
+  is the thin query it calls back into. Splitting the "when" (`ImportService`)
+  from the "which connections" (`ImportConnectionService`) matched the
+  existing service boundary rather than moving fetch orchestration onto the
+  connection service.
+- `ImportRepository.CurrentBookOwnerID` was added (mirroring
+  `PricingRepository.CurrentBookOwnerID`) so a scheduled refresh can attribute
+  itself to the real book owner, exactly like `pricing_scheduler.go` does for
+  scheduled FX refreshes — a system-triggered fetch still needs a valid
+  `OwnerUserID` for the batch's audit trail.
+
+Verified by `internal/app/import_scheduler_test.go` (due-boundary at exactly
+24h, disabled connections never trigger, a never-fetched connection triggers
+immediately, the in-flight guard silently skips rather than double-enqueuing)
+and a manual end-to-end pass: built and ran the real server, bootstrapped an
+owner, created a Trading 212 connection against a local fake provider server,
+and drove the actual rendered toggle in a real (Playwright-controlled)
+browser — confirmed the switch renders, the click sends
+`PATCH /import-connections/{id}` with `auto_refresh_enabled`, the UI reflects
+the new state, and the state survives a page reload (not just optimistic
+local state).
 
 Mirrors the existing `PricingService.StartScheduler` /
 `runScheduledRefreshIfDue` pattern (`backend/internal/app/pricing_scheduler.go`)

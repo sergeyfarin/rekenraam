@@ -130,7 +130,7 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   category; R6 should show per-split category selectors in the preview UI and route
   each split to its own `CategoryID` derived from `category_hint` in normalized JSON.
 
-### R7. Online ingestion + payee/category cleanup — 🟦 Slices 1–3 shipped
+### R7. Online ingestion + payee/category cleanup — 🟦 Slices 1–3, 4a shipped
 - Online sources implement the same adapter contract, driven by the durable work
   queue (ADR 0010) so refreshes are restart-safe — same model as FX coverage.
 - **First provider: Trading 212** (token-based public API, no OAuth/PSD2). Proves
@@ -151,13 +151,17 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   via continuation work items (T-14), same-timestamp cursor + absolute
   `nextPagePath` hardening (T-17). Trading 212 cash-movement import is now
   end-to-end functional.
-- **Remaining (Slice 4, decomposed 2026-07-01, not built):**
-  **4a — scheduled auto-refresh toggle (B-T212-SCHED)**, planned and small;
-  **4b — investment lot import (B-T212-INVST)**, planned but blocked on a new
-  prerequisite design doc, `docs/import-connection-accounts-plan.md`
-  (import connections have no relationship to accounts today, which BUY/SELL
-  lot mapping needs and plain cash-movement rows didn't). See
-  `docs/trading212-import-plan.md` Slice 4 for both concrete plans.
+- **Slice 4a shipped (2026-07-01):** scheduled auto-refresh
+  (B-T212-SCHED) — a per-connection toggle drives a 24h-since-last-fetch
+  scheduler (`ImportService.StartScheduler`, `app/import_scheduler.go`)
+  reusing the existing manual-refresh path and its in-flight guard; no new
+  fetch logic.
+- **Remaining (Slice 4b, planned but not built):** investment lot import
+  (B-T212-INVST), blocked on a new prerequisite design doc,
+  `docs/import-connection-accounts-plan.md` (import connections have no
+  relationship to accounts today, which BUY/SELL lot mapping needs and plain
+  cash-movement rows didn't). See `docs/trading212-import-plan.md` Slice 4b
+  for the concrete plan.
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
 

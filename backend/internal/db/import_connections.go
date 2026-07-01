@@ -13,17 +13,18 @@ var ErrImportConnectionNotFound = errors.New("import connection not found")
 // The secret is never surfaced to callers outside the db package directly —
 // the app layer opens it in-memory only when needed for a fetch.
 type ImportConnectionRecord struct {
-	ID               int64
-	BookID           int64
-	SourceKind       string
-	DisplayName      string
-	SecretCiphertext string
-	ConfigJSON       string
-	FetchCursor      string
-	LastFetchStatus  string
-	LastFetchedAt    sql.NullString
-	CreatedAt        string
-	UpdatedAt        string
+	ID                 int64
+	BookID             int64
+	SourceKind         string
+	DisplayName        string
+	SecretCiphertext   string
+	ConfigJSON         string
+	FetchCursor        string
+	LastFetchStatus    string
+	LastFetchedAt      sql.NullString
+	AutoRefreshEnabled bool
+	CreatedAt          string
+	UpdatedAt          string
 }
 
 type ImportConnectionRepository struct {
@@ -46,12 +47,13 @@ type CreateImportConnectionParams struct {
 }
 
 type UpdateImportConnectionParams struct {
-	ID               int64
-	BookID           int64
-	DisplayName      string
-	SecretCiphertext string // empty = do not rotate; the caller sets it to the sealed new key or keeps the old
-	ConfigJSON       string
-	UpdatedAt        string
+	ID                 int64
+	BookID             int64
+	DisplayName        string
+	SecretCiphertext   string // empty = do not rotate; the caller sets it to the sealed new key or keeps the old
+	ConfigJSON         string
+	AutoRefreshEnabled bool
+	UpdatedAt          string
 }
 
 type UpdateImportConnectionCursorParams struct {
@@ -83,17 +85,33 @@ func (r *ImportConnectionRepository) CreateImportConnection(ctx context.Context,
 	return r.ImportConnectionByID(ctx, id, p.BookID)
 }
 
-func (r *ImportConnectionRepository) ImportConnectionByID(ctx context.Context, id int64, bookID int64) (ImportConnectionRecord, error) {
+// importConnectionSelectColumns is shared by every SELECT against
+// import_connections so scanImportConnectionRow/scanImportConnectionRows
+// stay in sync with the query column order.
+const importConnectionSelectColumns = `
+	id, book_id, source_kind, display_name, secret_ciphertext,
+	config_json, fetch_cursor, last_fetch_status, last_fetched_at, auto_refresh_enabled, created_at, updated_at
+`
+
+func scanImportConnectionRow(scanner rowScanner) (ImportConnectionRecord, error) {
 	var rec ImportConnectionRecord
-	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, source_kind, display_name, secret_ciphertext,
-		       config_json, fetch_cursor, last_fetch_status, last_fetched_at, created_at, updated_at
-		FROM import_connections WHERE id = ? AND book_id = ?
-	`, id, bookID).Scan(
+	var autoRefreshEnabled int
+	if err := scanner.Scan(
 		&rec.ID, &rec.BookID, &rec.SourceKind, &rec.DisplayName, &rec.SecretCiphertext,
-		&rec.ConfigJSON, &rec.FetchCursor, &rec.LastFetchStatus, &rec.LastFetchedAt,
+		&rec.ConfigJSON, &rec.FetchCursor, &rec.LastFetchStatus, &rec.LastFetchedAt, &autoRefreshEnabled,
 		&rec.CreatedAt, &rec.UpdatedAt,
-	)
+	); err != nil {
+		return ImportConnectionRecord{}, err
+	}
+	rec.AutoRefreshEnabled = autoRefreshEnabled == 1
+	return rec, nil
+}
+
+func (r *ImportConnectionRepository) ImportConnectionByID(ctx context.Context, id int64, bookID int64) (ImportConnectionRecord, error) {
+	rec, err := scanImportConnectionRow(r.database.QueryRowContext(ctx, `
+		SELECT `+importConnectionSelectColumns+`
+		FROM import_connections WHERE id = ? AND book_id = ?
+	`, id, bookID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return ImportConnectionRecord{}, ErrImportConnectionNotFound
 	}
@@ -105,8 +123,7 @@ func (r *ImportConnectionRepository) ImportConnectionByID(ctx context.Context, i
 
 func (r *ImportConnectionRepository) ListImportConnections(ctx context.Context, bookID int64) ([]ImportConnectionRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `
-		SELECT id, book_id, source_kind, display_name, secret_ciphertext,
-		       config_json, fetch_cursor, last_fetch_status, last_fetched_at, created_at, updated_at
+		SELECT `+importConnectionSelectColumns+`
 		FROM import_connections
 		WHERE book_id = ?
 		ORDER BY created_at ASC, id ASC
@@ -118,13 +135,38 @@ func (r *ImportConnectionRepository) ListImportConnections(ctx context.Context, 
 
 	var result []ImportConnectionRecord
 	for rows.Next() {
-		var rec ImportConnectionRecord
-		if err := rows.Scan(
-			&rec.ID, &rec.BookID, &rec.SourceKind, &rec.DisplayName, &rec.SecretCiphertext,
-			&rec.ConfigJSON, &rec.FetchCursor, &rec.LastFetchStatus, &rec.LastFetchedAt,
-			&rec.CreatedAt, &rec.UpdatedAt,
-		); err != nil {
+		rec, err := scanImportConnectionRow(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan import connection: %w", err)
+		}
+		result = append(result, rec)
+	}
+	return result, rows.Err()
+}
+
+// ListDueAutoRefreshConnections returns connections with auto-refresh enabled
+// whose last fetch attempt (success or terminal failure) was before cutoff —
+// or that have never been fetched at all. Scoped to sourceKind because the
+// scheduler only drives Trading 212 today; a future provider adds its own
+// kind here rather than assuming every online source wants the same cadence.
+func (r *ImportConnectionRepository) ListDueAutoRefreshConnections(ctx context.Context, bookID int64, sourceKind string, cutoff string) ([]ImportConnectionRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT `+importConnectionSelectColumns+`
+		FROM import_connections
+		WHERE book_id = ? AND source_kind = ? AND auto_refresh_enabled = 1
+		  AND (last_fetched_at IS NULL OR last_fetched_at <= ?)
+		ORDER BY id ASC
+	`, bookID, sourceKind, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("list due auto-refresh connections: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ImportConnectionRecord
+	for rows.Next() {
+		rec, err := scanImportConnectionRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan due auto-refresh connection: %w", err)
 		}
 		result = append(result, rec)
 	}
@@ -136,18 +178,19 @@ func (r *ImportConnectionRepository) ListImportConnections(ctx context.Context, 
 func (r *ImportConnectionRepository) UpdateImportConnection(ctx context.Context, p UpdateImportConnectionParams) (ImportConnectionRecord, error) {
 	var result sql.Result
 	var err error
+	autoRefreshEnabled := boolToInt(p.AutoRefreshEnabled)
 	if p.SecretCiphertext != "" {
 		result, err = r.database.ExecContext(ctx, `
 			UPDATE import_connections
-			SET display_name = ?, secret_ciphertext = ?, config_json = ?, updated_at = ?
+			SET display_name = ?, secret_ciphertext = ?, config_json = ?, auto_refresh_enabled = ?, updated_at = ?
 			WHERE id = ? AND book_id = ?
-		`, p.DisplayName, p.SecretCiphertext, p.ConfigJSON, p.UpdatedAt, p.ID, p.BookID)
+		`, p.DisplayName, p.SecretCiphertext, p.ConfigJSON, autoRefreshEnabled, p.UpdatedAt, p.ID, p.BookID)
 	} else {
 		result, err = r.database.ExecContext(ctx, `
 			UPDATE import_connections
-			SET display_name = ?, config_json = ?, updated_at = ?
+			SET display_name = ?, config_json = ?, auto_refresh_enabled = ?, updated_at = ?
 			WHERE id = ? AND book_id = ?
-		`, p.DisplayName, p.ConfigJSON, p.UpdatedAt, p.ID, p.BookID)
+		`, p.DisplayName, p.ConfigJSON, autoRefreshEnabled, p.UpdatedAt, p.ID, p.BookID)
 	}
 	if err != nil {
 		return ImportConnectionRecord{}, fmt.Errorf("update import connection: %w", err)

@@ -82,6 +82,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	pricingService.StartScheduler(ctx, logger)
 	pricingService.StartBackgroundWorker(ctx, logger)
 	importService.StartBackgroundWorker(ctx, logger)
+	importService.StartScheduler(ctx, logger)
 	handler := api.NewHandler(logger, web.Handler(), api.Services{
 		Setup:            setupService,
 		Auth:             authService,

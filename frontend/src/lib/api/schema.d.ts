@@ -10884,6 +10884,8 @@ export interface components {
              * @description Timestamp of the last completed fetch, omitted if never fetched.
              */
             last_fetched_at?: string;
+            /** @description Whether this connection is auto-refreshed on a rolling ~24h cadence since its last fetch attempt. Manual "refresh now" always works regardless of this setting. */
+            auto_refresh_enabled: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -10909,6 +10911,8 @@ export interface components {
             api_key?: string;
             /** @description Optional JSON string of non-secret provider configuration. */
             config?: string;
+            /** @description Enable/disable the ~24h rolling auto-refresh schedule for this connection. Omitted or false disables it. */
+            auto_refresh_enabled?: boolean;
         };
         ReconciliationPostingResponse: {
             /** Format: int64 */

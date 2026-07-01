@@ -12,16 +12,17 @@ import (
 // --- Response types ---
 
 type importConnectionResponse struct {
-	ID              int64   `json:"id"`
-	BookID          int64   `json:"book_id"`
-	SourceKind      string  `json:"source"`
-	DisplayName     string  `json:"display_name"`
-	KeyHint         string  `json:"key_hint"`
-	ConfigJSON      string  `json:"config"`
-	LastFetchStatus string  `json:"last_fetch_status"`
-	LastFetchedAt   *string `json:"last_fetched_at,omitempty"`
-	CreatedAt       string  `json:"created_at"`
-	UpdatedAt       string  `json:"updated_at"`
+	ID                 int64   `json:"id"`
+	BookID             int64   `json:"book_id"`
+	SourceKind         string  `json:"source"`
+	DisplayName        string  `json:"display_name"`
+	KeyHint            string  `json:"key_hint"`
+	ConfigJSON         string  `json:"config"`
+	LastFetchStatus    string  `json:"last_fetch_status"`
+	LastFetchedAt      *string `json:"last_fetched_at,omitempty"`
+	AutoRefreshEnabled bool    `json:"auto_refresh_enabled"`
+	CreatedAt          string  `json:"created_at"`
+	UpdatedAt          string  `json:"updated_at"`
 }
 
 type listImportConnectionsResponse struct {
@@ -36,9 +37,10 @@ type createImportConnectionRequest struct {
 }
 
 type updateImportConnectionRequest struct {
-	DisplayName string `json:"display_name"`
-	NewAPIKey   string `json:"api_key,omitempty"`
-	ConfigJSON  string `json:"config,omitempty"`
+	DisplayName        string `json:"display_name"`
+	NewAPIKey          string `json:"api_key,omitempty"`
+	ConfigJSON         string `json:"config,omitempty"`
+	AutoRefreshEnabled bool   `json:"auto_refresh_enabled,omitempty"`
 }
 
 // --- Handlers ---
@@ -109,11 +111,12 @@ func updateImportConnection(logger *slog.Logger, authService *app.AuthService, c
 		}
 
 		conn, err := connectionService.UpdateImportConnection(r.Context(), app.UpdateImportConnectionInput{
-			OwnerUserID: owner.ID,
-			ID:          connID,
-			DisplayName: req.DisplayName,
-			NewAPIKey:   req.NewAPIKey,
-			ConfigJSON:  req.ConfigJSON,
+			OwnerUserID:        owner.ID,
+			ID:                 connID,
+			DisplayName:        req.DisplayName,
+			NewAPIKey:          req.NewAPIKey,
+			ConfigJSON:         req.ConfigJSON,
+			AutoRefreshEnabled: req.AutoRefreshEnabled,
 		})
 		if err != nil {
 			writeImportConnectionServiceError(w, r, logger, "update import connection", err)
@@ -218,15 +221,16 @@ func toImportConnectionResponse(c app.ImportConnection) importConnectionResponse
 		config = "{}"
 	}
 	return importConnectionResponse{
-		ID:              c.ID,
-		BookID:          c.BookID,
-		SourceKind:      c.SourceKind,
-		DisplayName:     c.DisplayName,
-		KeyHint:         c.KeyHint,
-		ConfigJSON:      config,
-		LastFetchStatus: c.LastFetchStatus,
-		LastFetchedAt:   c.LastFetchedAt,
-		CreatedAt:       c.CreatedAt,
-		UpdatedAt:       c.UpdatedAt,
+		ID:                 c.ID,
+		BookID:             c.BookID,
+		SourceKind:         c.SourceKind,
+		DisplayName:        c.DisplayName,
+		KeyHint:            c.KeyHint,
+		ConfigJSON:         config,
+		LastFetchStatus:    c.LastFetchStatus,
+		LastFetchedAt:      c.LastFetchedAt,
+		AutoRefreshEnabled: c.AutoRefreshEnabled,
+		CreatedAt:          c.CreatedAt,
+		UpdatedAt:          c.UpdatedAt,
 	}
 }

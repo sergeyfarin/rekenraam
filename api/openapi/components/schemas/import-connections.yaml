@@ -8,6 +8,7 @@ ImportConnectionResponse:
     - key_hint
     - config
     - last_fetch_status
+    - auto_refresh_enabled
     - created_at
     - updated_at
   properties:
@@ -41,6 +42,12 @@ ImportConnectionResponse:
       type: string
       format: date-time
       description: Timestamp of the last completed fetch, omitted if never fetched.
+    auto_refresh_enabled:
+      type: boolean
+      description: >-
+        Whether this connection is auto-refreshed on a rolling ~24h cadence
+        since its last fetch attempt. Manual "refresh now" always works
+        regardless of this setting.
     created_at:
       type: string
       format: date-time
@@ -92,3 +99,8 @@ UpdateImportConnectionRequest:
     config:
       type: string
       description: Optional JSON string of non-secret provider configuration.
+    auto_refresh_enabled:
+      type: boolean
+      description: >-
+        Enable/disable the ~24h rolling auto-refresh schedule for this
+        connection. Omitted or false disables it.

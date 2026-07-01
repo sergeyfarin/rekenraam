@@ -761,6 +761,20 @@ func (r *ImportRepository) DB() *sql.DB {
 	return r.database
 }
 
+// CurrentBookOwnerID reads the owning user for a book, used by the scheduled
+// auto-refresh worker to attribute a system-triggered fetch to a real user
+// (mirrors PricingRepository.CurrentBookOwnerID).
+func (r *ImportRepository) CurrentBookOwnerID(ctx context.Context, bookID int64) (int64, error) {
+	var ownerID int64
+	if err := r.database.QueryRowContext(ctx, `SELECT owner_user_id FROM books WHERE id = ?`, bookID).Scan(&ownerID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, fmt.Errorf("read book owner: %w", err)
+	}
+	return ownerID, nil
+}
+
 // CountStagedRowsByCommitStatus returns counts by commit_status for a batch.
 func (r *ImportRepository) CountStagedRowsByCommitStatus(ctx context.Context, batchID int64) (map[string]int, error) {
 	rows, err := r.database.QueryContext(ctx, `

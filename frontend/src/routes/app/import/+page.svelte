@@ -32,6 +32,7 @@
   import {
     listImportConnections,
     createImportConnection,
+    updateImportConnection,
     deleteImportConnection,
     refreshImportConnection,
     importConnectionsQueryKey,
@@ -337,6 +338,10 @@
   let confirmDeleteConnectionId = $state<number | null>(null);
   let deleteConnectionError = $state<unknown>(undefined);
 
+  // Auto-refresh toggle
+  let togglingAutoRefreshId = $state<number | null>(null);
+  let autoRefreshError = $state<unknown>(undefined);
+
   async function handleAddConnection() {
     if (!newConnName.trim() || !newConnKey.trim()) return;
     addingConnection = true;
@@ -368,6 +373,27 @@
       deleteConnectionError = err;
     } finally {
       deletingConnectionId = null;
+    }
+  }
+
+  async function handleToggleAutoRefresh(conn: ImportConnection) {
+    togglingAutoRefreshId = conn.id;
+    autoRefreshError = undefined;
+    try {
+      await updateImportConnection(
+        conn.id,
+        {
+          display_name: conn.display_name,
+          config: conn.config,
+          auto_refresh_enabled: !conn.auto_refresh_enabled
+        },
+        csrfToken
+      );
+      await queryClient.invalidateQueries({ queryKey: importConnectionsQueryKey });
+    } catch (err) {
+      autoRefreshError = err;
+    } finally {
+      togglingAutoRefreshId = null;
     }
   }
 
@@ -452,6 +478,7 @@
                 <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_source()}</th>
                 <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_key()}</th>
                 <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_status()}</th>
+                <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_auto_refresh()}</th>
                 <th class="pb-2 font-semibold text-muted">{m.import_connections_col_actions()}</th>
               </tr>
             </thead>
@@ -462,6 +489,27 @@
                   <td class="py-2.5 pr-4 text-muted">{conn.source}</td>
                   <td class="py-2.5 pr-4 font-mono text-xs text-muted">{conn.key_hint}</td>
                   <td class="py-2.5 pr-4 text-muted">{fetchStatusLabel(conn)}</td>
+                  <td class="py-2.5 pr-4">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={conn.auto_refresh_enabled}
+                      title={conn.auto_refresh_enabled
+                        ? m.import_connections_auto_refresh_on()
+                        : m.import_connections_auto_refresh_off()}
+                      class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 {conn.auto_refresh_enabled
+                        ? 'bg-foreground'
+                        : 'bg-control'} border border-border"
+                      onclick={() => handleToggleAutoRefresh(conn)}
+                      disabled={togglingAutoRefreshId === conn.id}
+                    >
+                      <span
+                        class="inline-block h-3.5 w-3.5 transform rounded-full bg-background transition {conn.auto_refresh_enabled
+                          ? 'translate-x-4'
+                          : 'translate-x-1'}"
+                      ></span>
+                    </button>
+                  </td>
                   <td class="py-2.5">
                     <div class="flex items-center gap-2">
                     {#if confirmDeleteConnectionId !== conn.id}
@@ -528,6 +576,10 @@
 
       {#if deleteConnectionError}
         <p class="mt-3 text-sm text-warning">{m.import_connections_delete_error()}</p>
+      {/if}
+
+      {#if autoRefreshError}
+        <p class="mt-3 text-sm text-warning">{m.import_connections_auto_refresh_error()}</p>
       {/if}
 
       <!-- Add connection form -->

@@ -68,17 +68,18 @@ func NewImportConnectionService(
 
 // ImportConnection is the safe, public view of a connection — no secret.
 type ImportConnection struct {
-	ID              int64
-	BookID          int64
-	SourceKind      string
-	DisplayName     string
-	KeyHint         string // "••••<last4>" — the only key info we surface
-	ConfigJSON      string
-	FetchCursor     string
-	LastFetchStatus string
-	LastFetchedAt   *string
-	CreatedAt       string
-	UpdatedAt       string
+	ID                 int64
+	BookID             int64
+	SourceKind         string
+	DisplayName        string
+	KeyHint            string // "••••<last4>" — the only key info we surface
+	ConfigJSON         string
+	FetchCursor        string
+	LastFetchStatus    string
+	LastFetchedAt      *string
+	AutoRefreshEnabled bool
+	CreatedAt          string
+	UpdatedAt          string
 }
 
 type CreateImportConnectionInput struct {
@@ -94,8 +95,9 @@ type UpdateImportConnectionInput struct {
 	ID          int64
 	DisplayName string
 	// NewAPIKey is optional. Empty = keep existing key.
-	NewAPIKey  string
-	ConfigJSON string
+	NewAPIKey          string
+	ConfigJSON         string
+	AutoRefreshEnabled bool
 }
 
 // --- Service methods ---
@@ -246,12 +248,13 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 
 	now := s.now().UTC().Format(time.RFC3339)
 	rec, err := s.repository.UpdateImportConnection(ctx, db.UpdateImportConnectionParams{
-		ID:               input.ID,
-		BookID:           BookID,
-		DisplayName:      displayName,
-		SecretCiphertext: newCiphertext,
-		ConfigJSON:       configJSON,
-		UpdatedAt:        now,
+		ID:                 input.ID,
+		BookID:             BookID,
+		DisplayName:        displayName,
+		SecretCiphertext:   newCiphertext,
+		ConfigJSON:         configJSON,
+		AutoRefreshEnabled: input.AutoRefreshEnabled,
+		UpdatedAt:          now,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrImportConnectionNotFound) {
@@ -321,6 +324,26 @@ func (s *ImportConnectionService) UpdateFetchCursor(ctx context.Context, id int6
 		return fmt.Errorf("update fetch cursor: %w", err)
 	}
 	return nil
+}
+
+// ListDueAutoRefreshConnectionIDs returns the ids of auto-refresh-enabled
+// connections for sourceKind whose last fetch attempt was before cutoff (or
+// that have never been fetched). Used by ImportService's scheduler
+// (import_scheduler.go); returns bare ids rather than full ImportConnection
+// values since the caller only needs them to call RefreshImportConnection.
+func (s *ImportConnectionService) ListDueAutoRefreshConnectionIDs(ctx context.Context, sourceKind string, cutoff time.Time) ([]int64, error) {
+	if err := s.requireSecretKey(); err != nil {
+		return nil, err
+	}
+	recs, err := s.repository.ListDueAutoRefreshConnections(ctx, BookID, sourceKind, cutoff.UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("list due auto-refresh connections: %w", err)
+	}
+	ids := make([]int64, len(recs))
+	for i, rec := range recs {
+		ids[i] = rec.ID
+	}
+	return ids, nil
 }
 
 // MarkFetchFailed flips a connection's last_fetch_status to "failed" after a
@@ -406,17 +429,18 @@ func toImportConnection(rec db.ImportConnectionRecord, apiKey string) ImportConn
 		lastFetchedAt = &rec.LastFetchedAt.String
 	}
 	return ImportConnection{
-		ID:              rec.ID,
-		BookID:          rec.BookID,
-		SourceKind:      rec.SourceKind,
-		DisplayName:     rec.DisplayName,
-		KeyHint:         keyHint(apiKey),
-		ConfigJSON:      rec.ConfigJSON,
-		FetchCursor:     rec.FetchCursor,
-		LastFetchStatus: rec.LastFetchStatus,
-		LastFetchedAt:   lastFetchedAt,
-		CreatedAt:       rec.CreatedAt,
-		UpdatedAt:       rec.UpdatedAt,
+		ID:                 rec.ID,
+		BookID:             rec.BookID,
+		SourceKind:         rec.SourceKind,
+		DisplayName:        rec.DisplayName,
+		KeyHint:            keyHint(apiKey),
+		ConfigJSON:         rec.ConfigJSON,
+		FetchCursor:        rec.FetchCursor,
+		LastFetchStatus:    rec.LastFetchStatus,
+		LastFetchedAt:      lastFetchedAt,
+		AutoRefreshEnabled: rec.AutoRefreshEnabled,
+		CreatedAt:          rec.CreatedAt,
+		UpdatedAt:          rec.UpdatedAt,
 	}
 }
 
