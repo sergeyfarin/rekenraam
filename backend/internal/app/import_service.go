@@ -102,7 +102,7 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		return StartImportResult{}, fmt.Errorf("create import batch: %w", err)
 	}
 
-	stagedRows, err := s.stageParseResult(ctx, batch.ID, parseResult)
+	stagedRows, _, err := s.stageParseResult(ctx, batch.ID, parseResult)
 	if err != nil {
 		return StartImportResult{}, err
 	}
@@ -117,34 +117,55 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 
 // stageParseResult takes a SourceAdapter's ParseResult and runs the
 // fingerprint-hash → dedupe → insert pipeline against an existing batch.
-// Shared by StartImport (file path) and the Trading 212 fetch worker
-// (Slice 3, online path) so the staging logic is written once.
-func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, parseResult ParseResult) ([]db.ImportStagedRowRecord, error) {
+// Shared by StartImport (file path, always exactly one call per batch) and
+// the Trading 212 fetch worker (Slice 3, online path — which, since adding
+// pagination continuation, can call this more than once for the same batch
+// as each chunk lands). The second return value is the row_index base this
+// call assigned its rows at (== the count of rows already staged before this
+// call), so a caller juggling multiple calls on one batch (continuation
+// warnings) can translate a ParseResult-local RowIndex into a batch-global
+// one.
+func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, parseResult ParseResult) ([]db.ImportStagedRowRecord, int, error) {
+	existingRows, err := s.repository.ListAllImportStagedRows(ctx, batchID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list existing staged rows: %w", err)
+	}
+	baseIndex := len(existingRows)
+
+	// seenInBatch starts seeded with fingerprints already staged from an
+	// earlier call on this same batch. Without this, a continuation chunk
+	// re-scanning the incremental cursor's overlap boundary (see the
+	// Fetcher's same-timestamp handling) would insert that movement a
+	// second time as a fresh "new" row instead of flagging it
+	// "needs_attention" — this call has no other way to know about rows a
+	// prior call already inserted.
+	seenInBatch := make(map[string]bool, len(existingRows))
+	for _, r := range existingRows {
+		seenInBatch[r.DedupeFingerprint] = true
+	}
+
 	// Compute dedupe fingerprints and check against existing commit identities.
 	for i := range parseResult.Rows {
 		fp := hashFingerprint(parseResult.Rows[i].DedupeFingerprint)
 		parseResult.Rows[i].DedupeFingerprint = fp
 	}
 
-	// Check each row against existing commit identities.
-	fpDupeSet := make(map[string]bool)
+	// Check each row against existing commit identities (ledger-committed
+	// duplicates) — one DB lookup per unique fingerprint in this call.
+	fpCommittedDupe := make(map[string]bool)
 	for _, row := range parseResult.Rows {
-		if fpDupeSet[row.DedupeFingerprint] {
+		if _, checked := fpCommittedDupe[row.DedupeFingerprint]; checked {
 			continue
 		}
-		fpDupeSet[row.DedupeFingerprint] = true
 		_, found, err := s.repository.FindCommitIdentity(ctx, BookID, row.DedupeFingerprint)
 		if err != nil {
-			return nil, fmt.Errorf("check commit identity: %w", err)
+			return nil, 0, fmt.Errorf("check commit identity: %w", err)
 		}
-		if found {
-			fpDupeSet[row.DedupeFingerprint] = false // mark as ledger duplicate
-		}
+		fpCommittedDupe[row.DedupeFingerprint] = found
 	}
 
 	// Insert staged rows.
 	var dbRows []db.CreateImportStagedRowParams
-	seenInBatch := make(map[string]bool)
 	for i, row := range parseResult.Rows {
 		rawJSON, _ := json.Marshal(row.Raw)
 		normalizedJSON, _ := json.Marshal(map[string]any{
@@ -161,11 +182,11 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		})
 
 		dedupeStatus := "new"
-		if !fpDupeSet[row.DedupeFingerprint] {
+		if fpCommittedDupe[row.DedupeFingerprint] {
 			// Exists in commit_identities → duplicate of a previously committed row.
 			dedupeStatus = "duplicate"
 		} else if seenInBatch[row.DedupeFingerprint] {
-			// Duplicate within this batch.
+			// Duplicate within this batch (this call or an earlier one).
 			dedupeStatus = "needs_attention"
 		}
 		seenInBatch[row.DedupeFingerprint] = true
@@ -173,7 +194,7 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		dbRows = append(dbRows, db.CreateImportStagedRowParams{
 			BatchID:           batchID,
 			BookID:            BookID,
-			RowIndex:          i,
+			RowIndex:          baseIndex + i,
 			DedupeFingerprint: row.DedupeFingerprint,
 			RawJSON:           string(rawJSON),
 			NormalizedJSON:    string(normalizedJSON),
@@ -183,14 +204,14 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 	}
 
 	if err := s.repository.InsertImportStagedRows(ctx, dbRows); err != nil {
-		return nil, fmt.Errorf("insert staged rows: %w", err)
+		return nil, 0, fmt.Errorf("insert staged rows: %w", err)
 	}
 
 	stagedRows, err := s.repository.ListAllImportStagedRows(ctx, batchID)
 	if err != nil {
-		return nil, fmt.Errorf("list staged rows: %w", err)
+		return nil, 0, fmt.Errorf("list staged rows: %w", err)
 	}
-	return stagedRows, nil
+	return stagedRows, baseIndex, nil
 }
 
 // GetImportBatch returns a batch with its staged rows (paginated).

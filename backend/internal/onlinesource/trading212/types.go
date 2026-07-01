@@ -31,5 +31,20 @@ type Movement struct {
 // pass to the next incremental fetch.
 type FetchResult struct {
 	Movements []Movement
-	Cursor    string // max movement timestamp seen; empty if no movements
+	Cursor    string // max movement timestamp seen this call; empty if no movements
+	// HasMore is true only when Fetch stopped because it exhausted maxPages
+	// while the provider still had more pages to offer — never when it
+	// stopped naturally (provider reported no next page) or hit the
+	// incremental boundary. NextPageToken is the exact page to pass as
+	// resumeFrom on a follow-up Fetch call to continue toward older history.
+	//
+	// This is deliberately a *different* continuation mechanism from the
+	// incremental boundary argument: the boundary says "stop once you reach
+	// data I already have", which is fixed for a whole logical fetch and
+	// would immediately (and wrongly) re-trigger on page 2 of a follow-up
+	// call if used as a resume point, because every Fetch call restarts
+	// pagination at page 1. NextPageToken instead says "carry on turning
+	// pages from exactly here", independent of the boundary.
+	HasMore       bool
+	NextPageToken string
 }

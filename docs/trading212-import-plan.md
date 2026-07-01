@@ -45,24 +45,31 @@ in `cmd/rekenraam/command.go`. `POST /api/v1/imports` is now content-negotiated:
 `application/json {source, connection_id}` enqueues a fetch and returns `202` with a
 `previewing` batch (`source_meta.fetch_status="fetching"`); `multipart/form-data` is
 unchanged (`201`). New `POST /api/v1/import-connections/{id}/refresh` opens a fresh
-batch and fetches incrementally from the connection's saved cursor (`202`). The
-double-fetch guard is a DB-level check (`ImportRepository.HasInFlightFetch`, a
-`json_extract` query against `source_meta_json`) consulted by both entry points,
-returning `ErrImportFetchInProgress` → `409 CONFLICT`. Unauthorized (401/403) fetches
-fail terminally on the first attempt (bad keys don't get better with retries); other
-errors retry with the existing `retryDelay` backoff up to 8 attempts before the batch
-and connection are marked `failed`. `import_batches.connection_id` (already a column
-since migration `0007`) is now actually written and read; `T-12`'s provenance concern
-is closed by also snapshotting `connection_display_name` into `source_meta_json` at
+batch and fetches incrementally from the connection's saved cursor (`202`). Starting
+a fetch (either entry point) is atomic — `ImportRepository.StartOnlineImportBatch`
+does the in-flight guard check, batch insert, and work-item enqueue in one
+transaction, closing a real race/stranded-batch gap found in review (T-16) — and
+returns `ErrImportFetchInProgress` → `409 CONFLICT` when a fetch is already running
+for the connection. Unauthorized (401/403) fetches fail terminally on the first
+attempt (bad keys don't get better with retries); other errors retry with the
+existing `retryDelay` backoff up to 8 attempts before the batch and connection are
+marked `failed` — both in `import_batches.status` and in `source_meta_json`, the
+field the frontend's polling loop actually reads (a review pass caught that only the
+former was wired originally). `import_batches.connection_id` (already a column since
+migration `0007`) is now actually written and read; T-12's provenance concern is
+closed by also snapshotting `connection_display_name` into `source_meta_json` at
 fetch time, so a batch's online provenance survives connection deletion (`ON DELETE
-SET NULL` still clears the FK, but the human-readable name persists). Frontend: a
-per-connection "Import"/"Refresh" button replaces the connections table's bare list;
-clicking it polls `GET /imports/{id}` until `source_meta.fetch_status` is `ready` (or
-shows a failure state), then hands off to the existing unchanged preview/commit UI.
-**Known gap (not fixed in this slice, see backlog T-14):** `trading212.Fetcher.Fetch`
-caps a single call at 50 pages with no continuation signal; an account with deeper
-history than that is fetched incompletely with no automatic recovery path. Last
-updated 2026-06-30.
+SET NULL` still clears the FK, but the human-readable name persists). A fetch beyond
+`trading212.Fetcher`'s 50-page-per-call budget continues automatically via a
+`reason="continuation"` work item chain rather than silently truncating (T-14); the
+incremental cursor re-scans (rather than drops) movements sharing its exact
+timestamp (T-17), and the fetcher refuses to follow an absolute `nextPagePath` so a
+compromised/misconfigured provider response can't exfiltrate the API key (also
+T-17). Frontend: a per-connection "Import"/"Refresh" button replaces the connections
+table's bare list; clicking it polls `GET /imports/{id}` until `source_meta.fetch_status`
+is `ready` (or shows a failure state), then hands off to the existing unchanged
+preview/commit UI. Last updated 2026-07-01 (post-shipment review pass closed T-14
+through T-17 — see `docs/backlog.md`).
 
 ---
 
@@ -483,17 +490,25 @@ the code — a slice is not done until its docs reflect it.
 4. **T-06 interaction:** the fetch path reuses the same commit; it inherits T-06's
    crash-consistency gap but does not worsen it. Do not attempt to fix T-06 inside
    this plan; it is a transaction-service refactor tracked separately.
-5. **Pagination beyond `maxPages` (T-14, found during Slice 3):** `Fetcher.Fetch`
-   caps a single call at 50 pages and has no way to signal "more pages remain." Not
-   fixed in Slice 3 — see `docs/backlog.md` T-14 for the precise mechanism and why a
-   naive "just refresh again" doesn't recover the missing history.
-6. **Re-staging on partial-success retry (T-15, found during Slice 3):** if the
-   fetch worker fails *after* `stageParseResult` but *before* it finishes recording
-   progress, a retry re-runs the whole fetch and re-stages the same movements into
-   the same batch as duplicate `import_staged_rows`. Commit-time idempotency still
-   prevents duplicate ledger postings (see `docs/backlog.md` T-15), so this is a
-   preview-UX cosmetic gap, not a correctness gap — left open rather than touching
-   the shared `stageParseResult` path under time pressure.
+5. **Pagination beyond `maxPages` — closed (T-14).** `Fetcher.Fetch` reports
+   `HasMore`/`NextPageToken`; the worker chains `reason="continuation"` work items
+   until a fetch naturally exhausts, rather than truncating at 50 pages. See
+   `docs/backlog.md` T-14 for why the resume mechanism had to be a page token
+   separate from the incremental cursor (an early draft of the fix conflated the
+   two and didn't actually work — pagination always restarts at page 1).
+6. **Re-staging on partial-success retry — closed (T-15), as a side effect of T-14.**
+   `stageParseResult` now seeds its within-batch dedupe set from rows already
+   staged by an earlier call on the same batch, so a retry that re-stages already-
+   fetched movements flags them `needs_attention` instead of silently duplicating
+   them as `new`. Ledger safety was never actually at risk here (commit-time
+   `FindCommitIdentity` already prevented double-posting) — see `docs/backlog.md` T-15.
+7. **Same-timestamp incremental cursor + absolute nextPagePath — closed (T-17).**
+   The incremental boundary now uses strict `<` so a movement sharing the cursor's
+   exact timestamp is re-scanned, not dropped; `fetchPage` refuses to follow an
+   absolute `nextPagePath` so it can't be tricked into sending the API key to an
+   untrusted host. Deeper ordering assumptions (strictly chronological pages,
+   no backdated corrections) remain unverified against the live API — see
+   `docs/backlog.md` T-17 for what's still open there and why.
 
 ## Prerequisites in the backlog — resolved before Slice 3 started
 

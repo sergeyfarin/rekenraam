@@ -127,55 +127,119 @@ entry point specifically — still only covered by `import_qif_test.go`'s parser
 tests and manual/UI testing. Low priority now that the shared core has coverage;
 revisit if QIF-path regressions start slipping through.
 
-### T-14 Trading 212 fetch silently truncates history beyond 50 pages `[ ]`
-**File:** `backend/internal/onlinesource/trading212/fetcher.go:25` (`maxPages`),
+### T-14 Trading 212 fetch silently truncates history beyond 50 pages `[x]`
+**File:** `backend/internal/onlinesource/trading212/fetcher.go` (`maxPages`, `Fetch`),
 `backend/internal/app/import_fetch_worker.go` (`runTrading212Fetch`).
 
-Found while implementing Slice 3 (the Slice 2 code comment on `maxPages` already
-flagged this as deferred: *"the durable queue's continuation payload (Slice 3) is
-the intended mechanism for fetching more than this many pages in one logical
-refresh"* — not built). `Fetcher.Fetch` loops at most `maxPages=50` pages and
-returns whatever it collected with no signal of whether the provider had more.
-`runTrading212Fetch` always treats a successful `Fetch` as complete, marking
-`fetch_status="ready"`. For an account with more than ~50 pages of cash-movement
-history, the **first full import silently omits everything beyond page 50** — and
-because the saved cursor becomes the *newest* timestamp seen on a successful fetch,
-a later "Refresh" looks only for movements *newer* than that cursor; it does not
-resume backfilling the older tail that was cut off. There is currently no UI signal
-and no recovery path other than re-running a full fetch with `cursor=""`, which
-re-runs into the same 50-page cap. Fix requires: (1) `FetchResult` to report
-`HasMore bool` (true only when the loop exhausted its page budget, not when it
-stopped naturally or hit the incremental cursor — distinguishing the three cases
-matters), and (2) the worker to enqueue a `reason="continuation"` work item using the
-new cursor instead of marking the batch ready, accumulating into the same batch
-across multiple worker ticks (same pattern as `pricing_worker.go`'s FX-coverage
-continuation). Deferred rather than rushed: getting the cursor/ordering semantics
-wrong here is worse than leaving the gap documented.
+Closed by a post-Slice-3 review pass (2026-07-01). `FetchResult` now reports
+`HasMore`/`NextPageToken`; `Fetch` takes a separate `resumeFrom` argument decoupled
+from the incremental boundary (`cursor`) — reusing the boundary as a resume point was
+an early draft of this fix and was wrong: every `Fetch` call restarts pagination at
+page 1, so a boundary-as-resume-point would immediately re-trigger the incremental
+stop on page 2 of the very next chunk and never reach the unfetched older pages.
+`runTrading212Fetch` now enqueues a `reason="continuation"` work item
+(`ResumePath`/`MaxCursorSoFar` fields on the payload) instead of marking the batch
+ready when `HasMore` is true, and only persists the connection's cursor once the
+whole chain (all chunks) naturally exhausts. `mergeTrading212BatchMeta` accumulates
+hints/warnings across chunks instead of each chunk overwriting the last.
+`stageParseResult` was changed to seed its within-batch dedupe set from rows already
+staged by an earlier call on the same batch (previously always started an empty set,
+correct only when called once per batch) — required because the incremental
+boundary's overlap re-scan (see T-16) can legitimately re-see the same movement
+across two chunks of one fetch, and needed to avoid mislabeling it. `row_index` now
+continues from the batch's existing row count rather than restarting at 0 per call.
+Verified: `internal/onlinesource/trading212/fetcher_test.go` (`TestFetchReportsHasMoreWhenPageBudgetExhausted`,
+`TestFetchHasMoreFalseWhenProviderExhaustsNaturally`, `TestFetchHasMoreFalseWhenIncrementalCursorStops`)
+and `internal/app/import_fetch_worker_test.go`
+(`TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating`, using
+`trading212.SetMaxPagesForTest` to exercise a multi-chunk fetch without a real 50+
+page server).
 
-### T-15 Worker retry after partial success can re-stage duplicate rows `[ ]`
+### T-15 Worker retry after partial success can re-stage duplicate rows `[x]`
 **File:** `backend/internal/app/import_fetch_worker.go` (`runTrading212Fetch`),
 `backend/internal/app/import_service.go` (`stageParseResult`).
 
-Found while implementing Slice 3. `stageParseResult`'s `InsertImportStagedRows` is a
-plain bulk `INSERT` with no `(batch_id, dedupe_fingerprint)` uniqueness — it relies
-on being called exactly once per batch. `runTrading212Fetch` calls it, then still has
-two more fallible steps (`UpdateImportBatchSourceMeta`, `ImportConnectionService.UpdateFetchCursor`)
-before returning success. If either of those fails (or the process is killed between
-them), the wrapper treats the whole attempt as retryable and a later worker tick
-re-runs `runTrading212Fetch` from scratch — re-fetching and re-staging the *same*
-movements into the *same* batch as a second set of `import_staged_rows` (different
-row ids, identical `dedupe_fingerprint`). **Not a ledger-correctness bug**: at
-`CommitImportBatch` time, rows are processed in order and `FindCommitIdentity` is
-checked per row against the live DB, so the first duplicate-fingerprint row to commit
-creates the `import_commit_identities` row and the second is skipped as a duplicate —
-no double-posting. It *is* a confusing preview-UI bug (the user sees the same
-movement listed twice before committing). The narrow trigger window (a SQLite
-single-row `UPDATE` failing) makes this low-probability; fixing it properly means
-making `stageParseResult` idempotent (e.g. `INSERT OR IGNORE` keyed on
-`(batch_id, dedupe_fingerprint)`, which also needs a new unique index and a decision
-about what happens to a duplicate row's `row_index`), which is exactly the
-crash-consistency territory T-06 already flags as "do not regress" — left open
-rather than touched under time pressure.
+Substantially closed as a side effect of the T-14 fix (2026-07-01), not a separate
+change. The original concern: `stageParseResult`'s `InsertImportStagedRows` is a
+plain bulk `INSERT` with no `(batch_id, dedupe_fingerprint)` uniqueness, so a retry
+that re-ran `runTrading212Fetch` after staging had already succeeded (but a later
+step failed) would silently re-insert the same movements as confusing duplicate
+"new"-looking rows. Fixing T-14 required `stageParseResult` to seed its
+`seenInBatch` dedupe set from rows already staged by an earlier call on the same
+batch (for the continuation-chunk overlap case) — which incidentally makes exactly
+this retry scenario correctly flag the re-staged rows `needs_attention` instead of
+`new`. **Ledger safety was never actually at risk** (unchanged from the original
+finding): `CommitImportBatch` checks `FindCommitIdentity` per row against the live
+DB in commit order, so the first duplicate-fingerprint row to commit creates the
+identity and the second is skipped regardless of its staged `dedupe_status` — this
+fix only improves the preview-UI signal. `row_index` uniqueness across multiple
+`stageParseResult` calls on one batch is also now guaranteed (see T-14) rather than
+merely harmless-but-odd. Verified by
+`internal/app/import_fetch_worker_test.go`'s
+`TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew`, which
+calls `stageParseResult` twice against the same batch with freshly-constructed
+(unhashed) `ParseResult` values per call — mirroring production, where each retry
+re-parses fresh JSON — and confirms the second call's row is flagged
+`needs_attention`, not `new`.
+
+### T-16 Trading 212 online-import start had a real TOCTOU race and a stranded-batch failure mode `[x]`
+**File:** `backend/internal/db/imports.go` (`StartOnlineImportBatch`),
+`backend/internal/app/import_fetch_worker.go` (`startTrading212Fetch`).
+
+Found and closed by a post-Slice-3 review pass (2026-07-01). The original
+`startTrading212Fetch` ran the in-flight guard check, the batch insert, and the
+background-work enqueue as three separate calls. Two real bugs followed: (1) if the
+enqueue failed after the batch insert had already committed, the batch was stranded
+permanently in `fetch_status=fetching` with no work item to ever process it, and
+every later start/refresh for that connection would then hit the in-flight guard
+forever with no recovery; (2) because the guard read and the batch write were
+separate statements, two concurrent callers could both observe "no in-flight fetch"
+before either had inserted its batch, both passing the guard and creating duplicate
+fetches. Fixed with `ImportRepository.StartOnlineImportBatch`, which does the guard
+check, batch insert (+ its audit trail), and work-item insert in one transaction.
+Because the database is opened with `SetMaxOpenConns(1)`, one transaction here is a
+full mutual-exclusion lock: a second caller's `BeginTx` blocks until the first
+commits or rolls back, and a failure at any step rolls back everything so a
+half-finished attempt never leaves a batch behind. Verified by
+`internal/app/import_fetch_worker_test.go`'s
+`TestStartOnlineImport_ConcurrentStartsRaceSafely` (12 concurrent
+`StartOnlineImport` calls, exactly one must win — this test would have been flaky
+against the old code) and
+`TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch` (a failing
+work-payload builder must leave zero rows in both `import_batches` and
+`background_work_items`).
+
+### T-17 Trading 212 incremental cursor could silently drop same-timestamp movements `[x]`
+**File:** `backend/internal/onlinesource/trading212/fetcher.go` (`Fetch`).
+
+Found and closed by a post-Slice-3 review pass (2026-07-01). The incremental stop
+condition was `item.Timestamp <= cursor`, treating any movement at exactly the saved
+cursor's timestamp as already-seen. Since the cursor is a single timestamp value
+rather than a per-movement watermark, two distinct movements can legitimately share
+it (e.g. a page boundary split them across two different fetches); whichever one
+wasn't captured in the fetch that first advanced the cursor to that instant would
+never be re-scanned on any later incremental refresh. Changed to strict `<`, so a
+same-timestamp movement is re-scanned rather than dropped — safe because the dedupe
+fingerprint keys on provider ID, not timestamp, so re-scanning an already-known
+movement is idempotent (flagged `needs_attention` if still un-committed and sitting
+in an older batch, or `duplicate` if already committed). Verified by
+`TestFetchIncludesMovementsAtExactCursorTimestamp` and updated assertions in
+`TestFetchIncrementalStopsAtCursor`. Also hardened alongside: `Fetcher.fetchPage`
+now refuses to follow an absolute (`http://`/`https://`) `nextPagePath`, since
+blindly following one would attach the `Authorization` header (the user's real
+Trading 212 API key) to whatever host a malicious/compromised/misconfigured provider
+response pointed at — only paths relative to the configured base URL are trusted
+with the key. Verified by `TestFetchRefusesAbsoluteNextPagePath`.
+
+Deeper cursor-ordering questions remain open by design, not oversight: same-timestamp
+re-scanning only guards the exact-tie case, not "the provider returns pages out of
+strict chronological order" or "a backdated correction arrives with a timestamp
+before the current cursor" (which would need a full re-fetch, `cursor=""`, to ever
+surface, since normal incremental refresh only looks forward from the cursor). Both
+depend on the live Trading 212 API's actual pagination/backdating semantics, which
+`docs/trading212-import-plan.md`'s "Risks & open questions" already flags as
+unverified assumptions — not fixed here to avoid guessing at behavior no one has
+validated against the real API yet.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
 **File:** `docs/trading212-import-plan.md` (scope), future `internal/onlinesource/trading212`.

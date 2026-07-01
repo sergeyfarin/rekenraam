@@ -20,9 +20,11 @@ const historyPath = "/history/transactions"
 
 // maxPages bounds a single Fetch call so a misbehaving cursor (or an
 // adversarial nextPagePath) can't loop forever; the durable queue's
-// continuation payload (Slice 3) is the intended mechanism for fetching
-// more than this many pages in one logical refresh.
-const maxPages = 50
+// continuation payload (Slice 3) is the mechanism for fetching more than
+// this many pages in one logical refresh (FetchResult.HasMore signals it).
+// A var, not a const, so fetcher_test.go can exercise the >maxPages path
+// without an actual 50-page fake server.
+var maxPages = 50
 
 // Fetcher talks HTTP to the Trading 212 public API. It holds no secret and
 // no DB handle: the caller supplies the API key per call and persists
@@ -30,6 +32,16 @@ const maxPages = 50
 type Fetcher struct {
 	client  *http.Client
 	baseURL string
+}
+
+// SetMaxPagesForTest overrides maxPages for the duration of a test and
+// returns a restore function. Lets callers outside this package (the
+// app-level fetch worker tests) exercise the pagination-continuation path
+// without standing up a real 50+ page fake server.
+func SetMaxPagesForTest(n int) (restore func()) {
+	old := maxPages
+	maxPages = n
+	return func() { maxPages = old }
 }
 
 func NewFetcher(client *http.Client, baseURL string) *Fetcher {
@@ -52,13 +64,25 @@ func (f *Fetcher) Probe(ctx context.Context, apiKey string) error {
 	return err
 }
 
-// Fetch pages through transaction history starting at cursor (empty = full
-// history) and returns all movements seen plus the new cursor. Pagination
-// stops when the provider reports no further page, or when a movement at or
-// before cursor is reached (incremental fetch).
-func (f *Fetcher) Fetch(ctx context.Context, apiKey string, cursor string) (FetchResult, error) {
+// Fetch pages through transaction history and returns all movements seen
+// plus the new incremental cursor.
+//
+// cursor is the incremental boundary: pagination stops once a movement
+// strictly older than cursor is reached (empty = full history, never stops
+// early). It is fixed for a whole logical fetch — pass the same value again
+// on every continuation call (see HasMore/NextPageToken below); it is not
+// something to advance chunk-to-chunk.
+//
+// resumeFrom is which page to start turning from: empty starts at page 1
+// (the provider's newest data). Pass FetchResult.NextPageToken here on a
+// follow-up call to continue exactly where the previous call's page budget
+// (maxPages) cut it off, without re-scanning everything already seen.
+func (f *Fetcher) Fetch(ctx context.Context, apiKey string, cursor string, resumeFrom string) (FetchResult, error) {
 	var all []Movement
 	nextPath := historyPath
+	if resumeFrom != "" {
+		nextPath = resumeFrom
+	}
 	maxSeen := cursor
 
 	for page := 0; page < maxPages; page++ {
@@ -80,7 +104,15 @@ func (f *Fetcher) Fetch(ctx context.Context, apiKey string, cursor string) (Fetc
 
 		stop := false
 		for _, item := range items {
-			if cursor != "" && item.Timestamp <= cursor {
+			// Strictly less-than: a movement whose timestamp equals the
+			// cursor is re-scanned rather than dropped. The cursor is a
+			// single timestamp, not a per-movement watermark, so two
+			// movements can legitimately share it; treating "<=" as already
+			// seen silently drops whichever one didn't make it into the
+			// batch that first advanced the cursor to that instant. Provider
+			// IDs (not timestamps) are the dedupe key, so re-scanning
+			// already-known movements here is idempotent and safe.
+			if cursor != "" && item.Timestamp < cursor {
 				stop = true
 				continue
 			}
@@ -90,12 +122,16 @@ func (f *Fetcher) Fetch(ctx context.Context, apiKey string, cursor string) (Fetc
 			}
 		}
 		if stop {
+			nextPath = ""
 			break
 		}
 		nextPath = next
 	}
 
-	return FetchResult{Movements: all, Cursor: maxSeen}, nil
+	// nextPath is non-empty here only if the loop ran out of page budget
+	// while the provider still had a next page to offer — both "natural"
+	// exit paths (exhaustion, incremental stop) explicitly clear it above.
+	return FetchResult{Movements: all, Cursor: maxSeen, HasMore: nextPath != "", NextPageToken: nextPath}, nil
 }
 
 // transactionHistoryResponse mirrors the Trading 212 /history/transactions
@@ -123,10 +159,16 @@ func (f *Fetcher) fetchPage(ctx context.Context, apiKey string, path string) (mo
 	if path == "" {
 		path = historyPath
 	}
-	url := path
-	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
-		url = f.baseURL + path
+	// nextPagePath after the first page comes from the provider's own
+	// response (transactionHistoryResponse.NextPagePath). A relative path is
+	// the only shape the documented API returns; refuse anything else so a
+	// malicious/misconfigured provider (or MITM'd/compromised response)
+	// can't redirect the Authorization header carrying the user's real
+	// Trading 212 API key to an arbitrary host.
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return nil, "", 0, false, fmt.Errorf("trading212: refusing to follow absolute nextPagePath %q; only paths relative to the configured base URL are trusted with the API key", path)
 	}
+	url := f.baseURL + path
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

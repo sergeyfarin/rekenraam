@@ -4,11 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/onlinesource/trading212"
 )
 
 // --- Test fixtures ---
@@ -86,6 +92,63 @@ func sourceMetaOf(t *testing.T, importRepo *db.ImportRepository, batchID int64) 
 }
 
 // --- Tests ---
+
+// TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew
+// guards a scenario the pagination-continuation work made real: if
+// runTrading212Fetch is retried after stageParseResult already succeeded but
+// a later step (updating source_meta or the connection cursor) failed, the
+// retry re-fetches and re-stages the same movements into the same batch.
+// Before stageParseResult seeded its within-batch dedupe set from rows
+// already staged by an earlier call, this produced confusing duplicate
+// "new"-looking rows in the preview UI (still ledger-safe at commit time via
+// FindCommitIdentity's per-row check, but visually misleading). Confirms the
+// second call correctly flags them "needs_attention" instead.
+func TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew(t *testing.T) {
+	svc, connService, importRepo, _ := newImportFetchTestService(t)
+	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
+	ctx := context.Background()
+
+	nowStr := "2026-06-30T00:00:00Z"
+	batch, err := importRepo.CreateImportBatch(ctx, db.CreateImportBatchParams{
+		BookID: BookID, SourceKind: "trading212",
+		ConnectionID:   sql.NullInt64{Int64: conn.ID, Valid: true},
+		SourceMetaJSON: `{"fetch_status":"fetching"}`, CreatedAt: nowStr, ActorUserID: 1,
+	})
+	require.NoError(t, err)
+
+	// A fresh ParseResult per call, matching production: runTrading212Fetch
+	// re-parses freshly-fetched JSON each attempt, so DedupeFingerprint is
+	// always the raw pre-hash value going in. stageParseResult hashes it in
+	// place, so reusing one ParseResult value across two calls (as opposed
+	// to two separately-constructed ones) would double-hash the second call
+	// and silently miss the very match this test exists to check for.
+	newParseResult := func() ParseResult {
+		return ParseResult{Rows: []StagedRow{
+			{DedupeFingerprint: buildTrading212Fingerprint(conn.ID, "ref-retry", 0), Date: "2024-01-01", Amount: "10.00", CommodityHint: "EUR", ExternalRef: "ref-retry"},
+		}}
+	}
+
+	// First call: the fetch worker's normal path.
+	firstRows, firstBase, err := svc.stageParseResult(ctx, batch.ID, newParseResult())
+	require.NoError(t, err)
+	require.Len(t, firstRows, 1)
+	assert.Equal(t, "new", firstRows[0].DedupeStatus)
+	assert.Equal(t, 0, firstBase)
+
+	// Second call on the SAME batch: simulates a retry that re-fetched and
+	// re-parsed the same movement (e.g. cursor hadn't advanced yet when the
+	// prior attempt failed after staging but before recording progress).
+	secondRows, secondBase, err := svc.stageParseResult(ctx, batch.ID, newParseResult())
+	require.NoError(t, err)
+	require.Len(t, secondRows, 2, "both the original and re-staged row exist — this only affects labeling, not row count")
+	assert.Equal(t, 1, secondBase, "row_index continues from where the first call left off, not reset to 0")
+
+	statuses := make([]string, len(secondRows))
+	for i, r := range secondRows {
+		statuses[i] = r.DedupeStatus
+	}
+	assert.Contains(t, statuses, "needs_attention", "the re-staged duplicate must be flagged, not silently labeled new")
+}
 
 func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +235,7 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 	}
 	assert.Equal(t, "duplicate", byFingerprint[fp], "already-committed movement should be flagged duplicate, not re-imported")
 
-	// A third, later movement appears upstream; refresh should fetch only it.
+	// A third, later movement appears upstream; refresh should fetch it.
 	movements = append(movements, fakeT212Movement{ID: "ref-3", Type: "FEE", DateTime: "2024-01-03T00:00:00Z", Amount: "-0.50", Currency: "EUR"})
 
 	refreshResult, err := svc.RefreshImportConnection(ctx, RefreshImportConnectionInput{OwnerUserID: 1, ConnectionID: conn.ID})
@@ -181,8 +244,33 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 
 	refreshRows, err := importRepo.ListAllImportStagedRows(ctx, refreshResult.Batch.ID)
 	require.NoError(t, err)
-	require.Len(t, refreshRows, 1, "incremental refresh should only pull movements after the saved cursor")
-	assert.Contains(t, refreshRows[0].RawJSON, "ref-3")
+	// The saved cursor is ref-2's exact timestamp (it was the newest
+	// movement seen in the first fetch). The fetcher deliberately re-scans
+	// movements at the cursor's exact timestamp rather than dropping them
+	// (see trading212.Fetcher's "<" cursor comparison — a same-timestamp
+	// movement split across two fetches must not be silently lost), so ref-2
+	// legitimately reappears here alongside the genuinely new ref-3. Neither
+	// is a duplicate transaction/dedupe_status "duplicate": ref-2 was never
+	// committed (only ref-1 was, in the setup above), so re-seeing it in a
+	// fresh batch is correct, not an over-import.
+	require.Len(t, refreshRows, 2, "incremental refresh should pull movements at-or-after the saved cursor")
+	rawByID := map[string]string{}
+	for _, row := range refreshRows {
+		rawByID[row.RawJSON] = row.DedupeStatus
+	}
+	var sawRef2, sawRef3 bool
+	for raw, status := range rawByID {
+		if strings.Contains(raw, "ref-2") {
+			sawRef2 = true
+			assert.Equal(t, "new", status, "ref-2 was never committed, so re-scanning it is not a duplicate")
+		}
+		if strings.Contains(raw, "ref-3") {
+			sawRef3 = true
+			assert.Equal(t, "new", status)
+		}
+	}
+	assert.True(t, sawRef2, "expected the same-timestamp-as-cursor movement to be re-scanned")
+	assert.True(t, sawRef3, "expected the genuinely new movement to be fetched")
 
 	updatedConn, err := connService.GetImportConnection(ctx, conn.ID)
 	require.NoError(t, err)
@@ -210,6 +298,93 @@ func TestStartOnlineImport_GuardsAgainstConcurrentFetch(t *testing.T) {
 	require.ErrorIs(t, err, ErrImportFetchInProgress)
 }
 
+// TestStartOnlineImport_ConcurrentStartsRaceSafely fires many concurrent
+// StartOnlineImport calls for the same connection and asserts exactly one
+// wins. Before StartOnlineImportBatch made the guard-check + batch-insert +
+// enqueue atomic, the guard's read and the batch's write were separate
+// statements, so two goroutines could both observe "no in-flight fetch"
+// before either had inserted its batch — this test would have been flaky
+// (occasionally >1 success) against that version.
+func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeFakeT212JSON(w, nil)
+	}))
+	defer server.Close()
+
+	svc, connService, importRepo, _ := newImportFetchTestService(t)
+	conn := createTestTrading212Connection(t, connService, server.URL)
+	ctx := context.Background()
+
+	const attempts = 12
+	var wg sync.WaitGroup
+	var successes int64
+	var conflicts int64
+	var unexpected int64
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
+			switch {
+			case err == nil:
+				atomic.AddInt64(&successes, 1)
+			case errors.Is(err, ErrImportFetchInProgress):
+				atomic.AddInt64(&conflicts, 1)
+			default:
+				atomic.AddInt64(&unexpected, 1)
+				t.Errorf("unexpected error from concurrent StartOnlineImport: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int64(0), unexpected)
+	assert.Equal(t, int64(1), successes, "exactly one concurrent start should win the in-flight guard")
+	assert.Equal(t, int64(attempts-1), conflicts)
+
+	// Only one previewing/fetching batch should exist for this connection —
+	// confirms the race didn't leave a second, orphaned batch behind either.
+	batches, err := importRepo.ListImportBatches(ctx, db.ListImportBatchesParams{BookID: BookID, Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
+	assert.Equal(t, conn.ID, batches[0].ConnectionID.Int64)
+}
+
+// TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch exercises
+// the repository method directly: if building the work-item payload fails
+// after the batch row would otherwise have been inserted, the whole
+// transaction must roll back — no batch, no orphaned "fetching" state that
+// would permanently trip the in-flight guard with nothing to ever process it.
+func TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch(t *testing.T) {
+	svc, connService, importRepo, database := newImportFetchTestService(t)
+	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
+	ctx := context.Background()
+
+	boom := errors.New("boom: payload build failed")
+	_, err := importRepo.StartOnlineImportBatch(ctx, db.StartOnlineImportBatchParams{
+		BookID:         BookID,
+		ConnectionID:   conn.ID,
+		SourceKind:     "trading212",
+		SourceMetaJSON: `{"fetch_status":"fetching"}`,
+		CreatedAt:      "2026-06-30T00:00:00Z",
+		ActorUserID:    1,
+		WorkKind:       trading212FetchWorkKind,
+	}, func(batchID int64) (string, error) {
+		return "", boom
+	})
+	require.ErrorIs(t, err, boom)
+
+	var batchCount, workCount int
+	require.NoError(t, database.QueryRowContext(ctx, `SELECT COUNT(*) FROM import_batches`).Scan(&batchCount))
+	require.NoError(t, database.QueryRowContext(ctx, `SELECT COUNT(*) FROM background_work_items`).Scan(&workCount))
+	assert.Equal(t, 0, batchCount, "the batch insert must roll back when the payload build fails")
+	assert.Equal(t, 0, workCount)
+
+	// The guard must not think a fetch is in progress after the rollback.
+	_, startErr := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
+	require.NoError(t, startErr)
+}
+
 func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -228,6 +403,12 @@ func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
 	batch, err := importRepo.ImportBatchByID(ctx, BookID, result.Batch.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "failed", batch.Status)
+
+	// The frontend polls source_meta.fetch_status, not batch.status — both
+	// must flip to "failed" or the UI spins forever on stale "fetching" meta.
+	meta := sourceMetaOf(t, importRepo, result.Batch.ID)
+	assert.Equal(t, "failed", meta.FetchStatus)
+	assert.NotEmpty(t, meta.Error)
 
 	updatedConn, err := connService.GetImportConnection(ctx, conn.ID)
 	require.NoError(t, err)
@@ -305,6 +486,81 @@ func TestImportFetchWork_RestartReclaimsExpiredLease(t *testing.T) {
 	rows, err := importRepo.ListAllImportStagedRows(ctx, result.Batch.ID)
 	require.NoError(t, err)
 	assert.Len(t, rows, 1, "the reclaimed fetch should complete with no duplicate staged rows")
+}
+
+// TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
+// simulates a Trading 212 account with more history than a single Fetch call
+// will page through (trading212.maxPages), verifying the worker's
+// continuation mechanism recovers the full history across multiple chunks
+// instead of silently truncating it (the gap fixed alongside this test).
+func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating(t *testing.T) {
+	restore := trading212.SetMaxPagesForTest(3)
+	defer restore()
+
+	// 7 movements, newest-first (page 0 = newest, matching the documented
+	// provider ordering the incremental-stop logic assumes): dates
+	// 2024-01-07 down to 2024-01-01.
+	const totalMovements = 7
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Query().Get("p")
+		page := 0
+		if p != "" {
+			page, _ = strconv.Atoi(p)
+		}
+		day := totalMovements - page
+		next := ""
+		if page+1 < totalMovements {
+			next = fmt.Sprintf("/history/transactions?p=%d", page+1)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"items": []map[string]any{
+				{"id": page, "type": "DEPOSIT", "dateTime": fmt.Sprintf("2024-01-%02dT00:00:00Z", day), "amount": "10.00", "currency": "EUR", "reference": fmt.Sprintf("ref-%d", page)},
+			},
+			"nextPagePath": next,
+		})
+	}))
+	defer server.Close()
+
+	svc, connService, importRepo, _ := newImportFetchTestService(t)
+	conn := createTestTrading212Connection(t, connService, server.URL)
+	ctx := context.Background()
+
+	result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
+	require.NoError(t, err)
+
+	// A single tick processes the whole chain: each chunk's completion
+	// immediately enqueues (and makes due) the next continuation, and
+	// runDueTrading212Fetches claims up to 4 items per call — enough for
+	// this test's 3 chunks (7 movements / maxPages=3 per chunk).
+	svc.runDueTrading212Fetches(ctx, testWorkerLogger(), "worker-1")
+
+	meta := sourceMetaOf(t, importRepo, result.Batch.ID)
+	assert.Equal(t, "ready", meta.FetchStatus, "the batch should reach ready once the last chunk naturally exhausts the provider")
+
+	rows, err := importRepo.ListAllImportStagedRows(ctx, result.Batch.ID)
+	require.NoError(t, err)
+	assert.Len(t, rows, totalMovements, "every movement across all chunks should be staged exactly once, none lost to the page cap")
+
+	seenFingerprints := map[string]bool{}
+	for _, row := range rows {
+		assert.False(t, seenFingerprints[row.DedupeFingerprint], "no duplicate fingerprint across chunks: %s", row.DedupeFingerprint)
+		seenFingerprints[row.DedupeFingerprint] = true
+		assert.Equal(t, "new", row.DedupeStatus)
+	}
+
+	// row_index must be unique and monotonic across chunks (each
+	// stageParseResult call continues from where the previous one left off).
+	rowIndexes := map[int]bool{}
+	for _, row := range rows {
+		assert.False(t, rowIndexes[row.RowIndex], "duplicate row_index %d across chunks", row.RowIndex)
+		rowIndexes[row.RowIndex] = true
+	}
+
+	updatedConn, err := connService.GetImportConnection(ctx, conn.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "2024-01-07T00:00:00Z", updatedConn.FetchCursor, "the persisted cursor must be the true overall newest timestamp, not just the last chunk's")
+	assert.Equal(t, "ready", updatedConn.LastFetchStatus)
 }
 
 func TestBuildTransactionSpec_OnlineRowResolvesCurrencyAndIsNeedsReview(t *testing.T) {

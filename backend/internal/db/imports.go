@@ -373,11 +373,19 @@ func (r *ImportRepository) UpdateImportBatchSourceMeta(ctx context.Context, batc
 
 // HasInFlightFetch reports whether a connection already has a previewing
 // batch whose source_meta.fetch_status is "fetching" — the double-fetch
-// guard the durable worker relies on, since the background queue itself does
-// not coalesce different connection/cursor payloads.
-func (r *ImportRepository) HasInFlightFetch(ctx context.Context, bookID, connectionID int64) (bool, error) {
+// guard StartOnlineImportBatch relies on, since the background queue itself
+// does not coalesce different connection/cursor payloads.
+//
+// queryRowContexter is satisfied by both *sql.DB and *sql.Tx, so the same
+// query backs the tx-scoped check inside StartOnlineImportBatch (where it
+// matters for correctness) without duplicating the SQL.
+type queryRowContexter interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func hasInFlightFetch(ctx context.Context, q queryRowContexter, bookID, connectionID int64) (bool, error) {
 	var exists int
-	err := r.database.QueryRowContext(ctx, `
+	err := q.QueryRowContext(ctx, `
 		SELECT EXISTS(
 			SELECT 1 FROM import_batches
 			WHERE book_id = ? AND connection_id = ? AND status = 'previewing'
@@ -388,6 +396,136 @@ func (r *ImportRepository) HasInFlightFetch(ctx context.Context, bookID, connect
 		return false, fmt.Errorf("check in-flight fetch: %w", err)
 	}
 	return exists == 1, nil
+}
+
+// ErrImportFetchAlreadyInProgress is StartOnlineImportBatch's guard-tripped
+// sentinel; the app layer maps it to ErrImportFetchInProgress.
+var ErrImportFetchAlreadyInProgress = errors.New("import fetch already in progress for this connection")
+
+// StartOnlineImportBatchParams groups the fields StartOnlineImportBatch needs
+// to create a previewing online batch and enqueue its fetch work item.
+type StartOnlineImportBatchParams struct {
+	BookID         int64
+	ConnectionID   int64
+	SourceKind     string
+	SourceMetaJSON string
+	CreatedAt      string
+	ActorUserID    int64
+	AuthSessionID  int64
+	RequestID      string
+	WorkKind       string
+}
+
+// StartOnlineImportBatch atomically checks the in-flight guard, inserts the
+// previewing batch (+ its creation audit trail), and enqueues the durable
+// fetch work item — all in one transaction.
+//
+// Doing these as three separate calls (as the first cut of this method did)
+// left two real gaps: if the enqueue failed after the batch insert
+// committed, the batch was stranded permanently in fetch_status=fetching
+// with nothing left to ever process it, and every later start/refresh for
+// that connection would then hit the in-flight guard forever, with no
+// automatic recovery. And because the guard check and the batch insert were
+// separate statements, two concurrent callers could each see "no in-flight
+// fetch" before either had inserted its batch, both passing the guard.
+//
+// One transaction fixes both: the database is opened with
+// SetMaxOpenConns(1) (see sqlite.go), so a transaction here is a full mutual
+// exclusion lock — a second caller's BeginTx blocks until this one commits
+// or rolls back — and a failure at any step rolls back everything, so a
+// half-finished attempt never leaves a batch behind.
+//
+// buildWorkPayload receives the newly assigned batch ID (only known after
+// the INSERT) and returns the JSON payload to enqueue; this keeps the
+// payload's shape an app-layer concern rather than something this package
+// needs to know about.
+func (r *ImportRepository) StartOnlineImportBatch(ctx context.Context, params StartOnlineImportBatchParams, buildWorkPayload func(batchID int64) (string, error)) (ImportBatchRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("begin start online import batch: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	inFlight, err := hasInFlightFetch(ctx, tx, params.BookID, params.ConnectionID)
+	if err != nil {
+		return ImportBatchRecord{}, err
+	}
+	if inFlight {
+		return ImportBatchRecord{}, ErrImportFetchAlreadyInProgress
+	}
+
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return ImportBatchRecord{}, err
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.CreatedAt,
+		RequestID:     params.RequestID,
+		OriginType:    "import",
+		Operation:     "import.batch.create",
+		Reason:        "import batch created",
+	})
+	if err != nil {
+		return ImportBatchRecord{}, err
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO import_batches (book_id, source_kind, connection_id, status, original_filename, source_meta_json, created_at)
+		VALUES (?, ?, ?, 'previewing', '', ?, ?)
+	`, params.BookID, params.SourceKind, params.ConnectionID, params.SourceMetaJSON, params.CreatedAt)
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("insert online import batch: %w", err)
+	}
+	batchID, err := result.LastInsertId()
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("read online import batch id: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO import_batch_events (batch_id, event_kind, detail_json, audit_event_id, created_at)
+		VALUES (?, 'created', '{}', ?, ?)
+	`, batchID, auditEventID, params.CreatedAt); err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("insert online import batch event: %w", err)
+	}
+
+	payloadJSON, err := buildWorkPayload(batchID)
+	if err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("build fetch work payload: %w", err)
+	}
+
+	// A plain INSERT, not EnqueueBackgroundWork's coalescing INSERT ... ON
+	// CONFLICT: the payload always embeds this call's freshly minted
+	// batchID, so it can never collide with any existing work item's
+	// (book_id, kind, payload_json).
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO background_work_items (book_id, kind, payload_json, available_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.WorkKind, payloadJSON, params.CreatedAt, params.CreatedAt, params.CreatedAt); err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("enqueue online import fetch work: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return ImportBatchRecord{}, fmt.Errorf("commit start online import batch: %w", err)
+	}
+	committed = true
+
+	return ImportBatchRecord{
+		ID:             batchID,
+		BookID:         params.BookID,
+		SourceKind:     params.SourceKind,
+		ConnectionID:   sql.NullInt64{Int64: params.ConnectionID, Valid: true},
+		Status:         "previewing",
+		SourceMetaJSON: params.SourceMetaJSON,
+		CreatedAt:      params.CreatedAt,
+	}, nil
 }
 
 // --- Staged row operations ---
