@@ -40,11 +40,11 @@ description: "Use when editing Go backend code, migrations, repositories, servic
 ## Infrastructure Conventions
 
 - The `APP_ENV` environment variable controls mode: `development` (text logs, dev middleware) or `production` (JSON logs). Default to `production` when unset.
-- HTTP middleware layers run in this order: request ID injection → request logging → auth check → handler. Each layer is a plain `http.Handler` wrapper.
+- HTTP middleware layers run in this order: request ID injection → panic recovery → request logging → auth check → CSRF validation for mutating authenticated requests → handler. Each layer is a plain `http.Handler` wrapper.
 - Inject a request-scoped UUID as a request ID on every inbound request. Include it in log entries and echo it as `X-Request-ID` in the response.
 - Use `testify/assert` (non-fatal) and `testify/require` (fatal) in all Go tests. Do not write verbose manual assertion blocks.
-- `sqlc`-generated code lives in `backend/internal/db/`. Do not edit generated files by hand; regenerate with `sqlc generate`.
-- Backend tests use a temporary in-memory or temp-file SQLite database. Never use the development database file in tests.
+- Database access in `backend/internal/db/` is handwritten repository-style code over `database/sql`. There is no `sqlc` code generation in this repo; introduce it only per `docs/conventions.md` (large query surface, documented generation command). Never assume generated files exist.
+- Backend tests use a temporary SQLite database opened with `db.Open(ctx, "file:"+filepath.Join(t.TempDir(), "test.sqlite"))`. Never use the development database file in tests.
 - Live SQLite backup code must use the online backup API or `VACUUM INTO`; do not implement raw live file copy as the normal backup path.
 - The server must handle `SIGTERM` and `SIGINT` with `http.Server.Shutdown(ctx)` and a short grace period.
 

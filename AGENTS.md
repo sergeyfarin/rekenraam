@@ -29,6 +29,10 @@ For current execution state, read these (governed by the sources above):
 
 If a change introduces a durable new rule, update the relevant document in the same change.
 
+## Task Skills
+
+`.claude/skills/` contains six task-shaped skill guides (ledger invariants, backend slice, API contract, frontend screen, background work, validate-and-ship) distilled from this repo's conventions and bug history. Claude Code picks them up automatically; other agents should read the relevant `SKILL.md` files directly — start with `.claude/skills/README.md`. The `docs/` sources above still govern on any conflict.
+
 ## Working Rules
 
 - Deliver incrementally, one feature slice at a time.

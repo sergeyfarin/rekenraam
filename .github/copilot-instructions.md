@@ -14,6 +14,8 @@ Before making durable product, architecture, or workflow changes, read:
 
 In case of conflict, earlier items in the list take precedence over later items. Accepted ADRs supersede all other documents. Agent guidance files (`AGENTS.md`, `.github/copilot-instructions.md`) are not product sources of truth; the documents above govern.
 
+Task-shaped skill guides live in `.claude/skills/` (ledger invariants, backend slice, API contract, frontend screen, background work, validate-and-ship). Read the relevant `SKILL.md` before starting matching work; `.claude/skills/README.md` is the index.
+
 ## Default Working Rules
 
 - Deliver incrementally, one feature slice at a time.

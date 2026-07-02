@@ -241,6 +241,41 @@ depend on the live Trading 212 API's actual pagination/backdating semantics, whi
 unverified assumptions — not fixed here to avoid guessing at behavior no one has
 validated against the real API yet.
 
+### T-18 No periodic cleanup of expired/revoked auth sessions `[ ]`
+**File:** `backend/internal/app/auth.go`, `backend/migrations/0001_initial_schema.sql`
+(`auth_sessions_expires_revoked_idx`).
+
+`docs/conventions.md` (§ Authentication And Session Security) requires a periodic
+delete of `auth_sessions` rows where `revoked_at IS NOT NULL OR expires_at <= now`
+before the app is recommended for long-running deployments. The supporting index
+exists; no cleanup job does. Cheapest fix: fold a delete into an existing
+once-a-minute scheduler tick (pattern: `app/import_scheduler.go`) or run it at
+startup + daily. Add a named test that seeded expired/revoked rows disappear.
+
+### T-19 `REKENRAAM_SECRET_KEY` has no rotation path `[ ]`
+**File:** `backend/internal/secretbox/secretbox.go`, `backend/internal/config/config.go`,
+`backend/internal/db/import_connections.go`.
+
+All stored provider credentials are sealed with the single AES-256-GCM key from
+`REKENRAAM_SECRET_KEY`. If the operator loses or must rotate that key, every
+`import_connections.encrypted_api_key` becomes permanently unreadable and there is
+no re-encryption command or documented procedure. Options when prioritized: a
+`rotate-secret-key` maintenance command (old key + new key → re-seal all rows in
+one transaction, backup-first like `recover-owner`), or at minimum a documented
+"delete and re-add connections" recovery note in README/deploy docs. Becomes more
+important with each new credential-storing provider.
+
+### T-20 E2E coverage is 2 specs vs a full shipped app `[ ]`
+**File:** `e2e/playwright/` (`auth.spec.ts`, `health.spec.ts`).
+
+Phases 0–2 plus reconcile, import, and investments UI ship, but Playwright only
+covers login and health. The critical money journeys — first-run setup, add
+transaction (incl. split/transfer), reconcile to zero, QIF import
+preview→commit, buy/sell with preview — have no browser-level regression net;
+they were verified manually per slice. Grow `./scripts/test-e2e.sh` coverage one
+journey per slice, starting with transaction entry (the workflow AGENTS.md calls
+mobile-critical).
+
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`.
 

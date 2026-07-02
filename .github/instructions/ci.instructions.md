@@ -10,7 +10,7 @@ description: "Use when editing GitHub Actions workflows, job structure, CI trigg
 - E2E execution belongs in a separate workflow, added when a real user journey exists.
 - Prefer official setup actions when available.
 - Keep workflow names and job names readable.
-- Use the repo's current toolchain versions: Go from `backend/go.mod`, Node 22, and `pnpm` 11.5.2 unless the repo updates them.
+- Use the repo's current toolchain versions: Go from `backend/go.mod`, Node 22, and the `pnpm` version pinned in the root `package.json` `packageManager` field. Do not hardcode a pnpm version in workflows or docs.
 - If workflows are reintroduced, start with manual validation helpers.
 - If automatic CI is enabled later, fast CI should cover backend tests, frontend checks, and integrated build confidence.
 - Heavier e2e execution should stay in a separate workflow.

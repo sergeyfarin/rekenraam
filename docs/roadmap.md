@@ -19,6 +19,73 @@ only. Phase 5 (budgets, recurring) is unstarted.
 
 ---
 
+## Product Direction (decided 2026-07-02)
+
+Governed by `docs/product-requirements.md` (Working Decisions); recorded here
+because it orders the roadmap:
+
+1. **Finish the personal daily-driver core** (R2 reports UI, R3 exports, R5 CSV
+   import, then budgets and recurring). No direction succeeds without it; this
+   is the Money/Quicken-successor market that keeps arriving as those tools die.
+2. **Differentiate into the multi-currency / cross-border personal niche**
+   (expats, multi-jurisdiction investors). The exact-precision multi-currency
+   ledger, FX history, and lot-level investment engine are the durable
+   differentiator — Firefly III is weak on investments, Actual is
+   budgeting-only, Ghostfolio is portfolio-only. Concretely: multi-currency
+   reporting done right, IBKR Flex Query as the likely second online provider
+   (token-based, same bring-your-own-key pattern as Trading 212), import
+   profiles for common cross-border brokers and banks.
+3. **Distribution before hosting.** Self-host marketplace listings (PikaPods,
+   Cloudron, Elestio, Umbrel) are the low-cost demand experiment. A
+   first-party hosted service is the only meaningful revenue path in this
+   category, but it is a company-sized commitment (GDPR posture, MFA, backups,
+   incident response) — deferred until demand evidence exists.
+
+Explicitly rejected: EU small-business pivot, native desktop/mobile apps, and
+promised bank-connection coverage. **Connections are adapters users bring keys
+for, never coverage we promise** — every promised connection is a permanent
+maintenance liability (the Trading 212 hardening history, T-14…T-17, is the
+proof at n=1).
+
+---
+
+## Open-Sourcing Track (decided 2026-07-02)
+
+License: **AGPL-3.0**, sole copyright retained (rationale and durable rules in
+`docs/product-requirements.md`). Repo-public and public announcement are two
+separate events with separate gates.
+
+### Gates before flipping the repo public (do soon, quietly)
+
+1. **Full git-history secrets scan** — run `gitleaks` (or `trufflehog`) over
+   the entire history (375+ commits including the archived Rust/Python/Tauri
+   experiments), not just HEAD. Known scanner bait already found:
+   `.archive/secrets/first_admin_password.txt` (a dummy CI value, but the path
+   alone fails reviews) — remove it, and decide whether `.archive/` belongs in
+   public history at all. History rewrite via `git filter-repo` is cheapest
+   **before** anyone has cloned.
+2. Add `LICENSE` (AGPL-3.0) and `SECURITY.md` with a private disclosure
+   channel (GitHub private vulnerability reporting or a dedicated email).
+3. Enable GitHub secret scanning + push protection and Dependabot; add
+   `govulncheck` for the Go module (in CI or a scheduled workflow).
+
+### Gates before the public announcement (one-shot first impression)
+
+4. Daily-driver core shipped: R2 reports UI, R3 exports (CSV + QIF), R5 CSV
+   import — the "migrate from MS Money/Mint and watch it reconcile" demo.
+5. Close backlog T-19 (`REKENRAAM_SECRET_KEY` loss/rotation documentation) —
+   the first serious reviewer will find it.
+6. Signed release binaries (with reproducibility notes) once binaries are
+   published.
+7. Marketplace listings (PikaPods, Cloudron, Elestio, Umbrel) and the
+   announcement (r/selfhosted, awesome-selfhosted PR) land together.
+
+Between the two events, development continues in the open — a repo with
+visible history and activity reads better at announcement time than one that
+appeared yesterday.
+
+---
+
 ## Competitor Feature Gap Analysis
 
 Reference apps for a self-hosted Microsoft Money / Quicken successor. ✅ = solid,

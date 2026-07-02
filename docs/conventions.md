@@ -253,6 +253,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 ## Security And Deployment Conventions
 
+- The codebase is destined for public open-source release (AGPL-3.0, per `docs/product-requirements.md`). Treat the repository and its full git history as public: never commit secrets, real credentials, personal data, or real financial records — including in test fixtures, docs examples, and `.archive/`. Test values must be obviously fake.
+- Security must not depend on source secrecy. Any mechanism that would break if an attacker read the code is wrong by design.
 - Treat local-network deployment as safer than public deployment, but never as fully trusted.
 - Local authentication must exist before real data entry.
 - First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, default currency preference, system accounts, default categories, and optional additional categories as those domains are implemented.

@@ -1,5 +1,5 @@
 ---
-applyTo: "backend/**/*_test.go,e2e/**/*.ts,e2e/playwright.config.ts,api/bruno/**,openapi/**,.github/workflows/**/*.yml"
+applyTo: "backend/**/*_test.go,e2e/**/*.ts,e2e/playwright.config.ts,api/bruno/**,api/openapi/**,.github/workflows/**/*.yml"
 description: "Use when editing automated tests, API test assets, Playwright config, or CI workflows."
 ---
 
