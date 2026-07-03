@@ -83,7 +83,7 @@ func TestRunDueTrading212AutoRefreshes_BoundaryJustUnderAndOverInterval(t *testi
 	enableAutoRefresh(t, connService, conn)
 
 	lastFetched := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, connService.UpdateFetchCursor(context.Background(), conn.ID, "", "ready", lastFetched.Format(time.RFC3339)))
+	require.NoError(t, connService.UpdateFetchCursor(context.Background(), conn.ID, "", "", "", "ready", lastFetched.Format(time.RFC3339)))
 
 	// Just under 24h later: not due yet.
 	svc.SetNowForTest(func() time.Time { return lastFetched.Add(23*time.Hour + 59*time.Minute) })
@@ -128,7 +128,7 @@ func TestRunDueTrading212AutoRefreshes_InFlightGuardSkipsWithoutError(t *testing
 // swept up by the trading212-only scheduler.
 func TestListDueAutoRefreshConnectionIDs_ScopedToSourceKind(t *testing.T) {
 	database := openConnectionTestDatabase(t)
-	connService := NewImportConnectionService(db.NewImportConnectionRepository(database), testKey(), NoOpProber{})
+	connService := NewImportConnectionService(db.NewImportConnectionRepository(database), nil, testKey(), NoOpProber{})
 	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
 	enableAutoRefresh(t, connService, conn)
 

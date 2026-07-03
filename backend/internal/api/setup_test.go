@@ -304,7 +304,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
-	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, nil, nil)
+	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, nil, nil, nil)
 
 	return NewHandler(logger, http.NotFoundHandler(), Services{
 		Setup:       setupService,

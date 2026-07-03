@@ -53,10 +53,10 @@ func testWorkerLogger() *slog.Logger {
 func newImportFetchTestService(t *testing.T) (*ImportService, *ImportConnectionService, *db.ImportRepository, *sql.DB) {
 	t.Helper()
 	database := openConnectionTestDatabase(t)
-	connService := NewImportConnectionService(db.NewImportConnectionRepository(database), testKey(), NoOpProber{})
+	connService := NewImportConnectionService(db.NewImportConnectionRepository(database), nil, testKey(), NoOpProber{})
 	importRepo := db.NewImportRepository(database)
 	bgRepo := db.NewBackgroundWorkRepository(database)
-	svc := NewImportService(importRepo, nil, nil, connService, bgRepo)
+	svc := NewImportService(importRepo, nil, nil, connService, bgRepo, nil)
 	return svc, connService, importRepo, database
 }
 
@@ -152,6 +152,10 @@ func TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew(t
 
 func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		writeFakeT212JSON(w, []fakeT212Movement{
 			{ID: "ref-1", Type: "DEPOSIT", DateTime: "2024-01-01T00:00:00Z", Amount: "100.00", Currency: "EUR"},
 			{ID: "ref-2", Type: "DIVIDEND", DateTime: "2024-01-02T00:00:00Z", Amount: "1.23", Currency: "EUR"},
@@ -187,7 +191,7 @@ func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
 
 	updatedConn, err := connService.GetImportConnection(ctx, conn.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "2024-01-02T00:00:00Z", updatedConn.FetchCursor)
+	assert.Equal(t, "2024-01-02T00:00:00Z", updatedConn.TransactionsCursor)
 	assert.Equal(t, "ready", updatedConn.LastFetchStatus)
 }
 
@@ -197,6 +201,10 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 		{ID: "ref-2", Type: "DIVIDEND", DateTime: "2024-01-02T00:00:00Z", Amount: "1.23", Currency: "EUR"},
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		writeFakeT212JSON(w, movements)
 	}))
 	defer server.Close()
@@ -274,11 +282,15 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 
 	updatedConn, err := connService.GetImportConnection(ctx, conn.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "2024-01-03T00:00:00Z", updatedConn.FetchCursor)
+	assert.Equal(t, "2024-01-03T00:00:00Z", updatedConn.TransactionsCursor)
 }
 
 func TestStartOnlineImport_GuardsAgainstConcurrentFetch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		writeFakeT212JSON(w, nil)
 	}))
 	defer server.Close()
@@ -307,6 +319,10 @@ func TestStartOnlineImport_GuardsAgainstConcurrentFetch(t *testing.T) {
 // (occasionally >1 success) against that version.
 func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		writeFakeT212JSON(w, nil)
 	}))
 	defer server.Close()
@@ -387,6 +403,10 @@ func TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch(t *testing.T
 
 func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer server.Close()
@@ -421,6 +441,10 @@ func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
 
 func TestProcessTrading212FetchWork_TransientErrorRetriesWithoutFailingBatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -448,6 +472,10 @@ func TestProcessTrading212FetchWork_TransientErrorRetriesWithoutFailingBatch(t *
 
 func TestImportFetchWork_RestartReclaimsExpiredLease(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		writeFakeT212JSON(w, []fakeT212Movement{
 			{ID: "ref-1", Type: "DEPOSIT", DateTime: "2024-01-01T00:00:00Z", Amount: "10.00", Currency: "EUR"},
 		})
@@ -502,6 +530,10 @@ func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
 	// 2024-01-07 down to 2024-01-01.
 	const totalMovements = 7
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			writeFakeT212JSON(w, nil)
+			return
+		}
 		p := r.URL.Query().Get("p")
 		page := 0
 		if p != "" {
@@ -510,7 +542,7 @@ func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
 		day := totalMovements - page
 		next := ""
 		if page+1 < totalMovements {
-			next = fmt.Sprintf("/history/transactions?p=%d", page+1)
+			next = fmt.Sprintf("/equity/history/transactions?p=%d", page+1)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -529,10 +561,13 @@ func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
 	result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
 	require.NoError(t, err)
 
-	// A single tick processes the whole chain: each chunk's completion
-	// immediately enqueues (and makes due) the next continuation, and
-	// runDueTrading212Fetches claims up to 4 items per call — enough for
-	// this test's 3 chunks (7 movements / maxPages=3 per chunk).
+	// Each chunk's completion immediately enqueues (and makes due) the next
+	// continuation/stage, and runDueTrading212Fetches claims up to 4 items
+	// per call. This chain needs 5 work items: 3 transactions chunks (7
+	// movements / maxPages=3 per chunk) plus one orders-stage and one
+	// dividends-stage item (both empty against this fake server, but still
+	// real hops in the stage machinery) — two ticks comfortably cover it.
+	svc.runDueTrading212Fetches(ctx, testWorkerLogger(), "worker-1")
 	svc.runDueTrading212Fetches(ctx, testWorkerLogger(), "worker-1")
 
 	meta := sourceMetaOf(t, importRepo, result.Batch.ID)
@@ -559,7 +594,7 @@ func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
 
 	updatedConn, err := connService.GetImportConnection(ctx, conn.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "2024-01-07T00:00:00Z", updatedConn.FetchCursor, "the persisted cursor must be the true overall newest timestamp, not just the last chunk's")
+	assert.Equal(t, "2024-01-07T00:00:00Z", updatedConn.TransactionsCursor, "the persisted cursor must be the true overall newest timestamp, not just the last chunk's")
 	assert.Equal(t, "ready", updatedConn.LastFetchStatus)
 }
 

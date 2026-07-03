@@ -42,14 +42,16 @@ func (NoOpProber) Probe(_ context.Context, _ string, _ string, _ string) error {
 
 // ImportConnectionService manages online source connections.
 type ImportConnectionService struct {
-	repository *db.ImportConnectionRepository
-	secretKey  []byte // nil = not configured
-	prober     ConnectionProber
-	now        func() time.Time
+	repository     *db.ImportConnectionRepository
+	accountService *AccountService
+	secretKey      []byte // nil = not configured
+	prober         ConnectionProber
+	now            func() time.Time
 }
 
 func NewImportConnectionService(
 	repository *db.ImportConnectionRepository,
+	accountService *AccountService,
 	secretKey []byte,
 	prober ConnectionProber,
 ) *ImportConnectionService {
@@ -57,10 +59,11 @@ func NewImportConnectionService(
 		prober = NoOpProber{}
 	}
 	return &ImportConnectionService{
-		repository: repository,
-		secretKey:  secretKey,
-		prober:     prober,
-		now:        time.Now,
+		repository:     repository,
+		accountService: accountService,
+		secretKey:      secretKey,
+		prober:         prober,
+		now:            time.Now,
 	}
 }
 
@@ -74,12 +77,22 @@ type ImportConnection struct {
 	DisplayName        string
 	KeyHint            string // "••••<last4>" — the only key info we surface
 	ConfigJSON         string
-	FetchCursor        string
+	// TransactionsCursor/OrdersCursor/DividendsCursor are the incremental
+	// cursors for each independently-paginated Trading 212 endpoint
+	// (B-T212-INVST, Slice 4b) — internal fetch-worker state, not surfaced
+	// on the API response.
+	TransactionsCursor string
+	OrdersCursor       string
+	DividendsCursor    string
 	LastFetchStatus    string
 	LastFetchedAt      *string
 	AutoRefreshEnabled bool
-	CreatedAt          string
-	UpdatedAt          string
+	// CashAccountID is the settlement account for BUY/SELL/DIVIDEND cash
+	// legs (B-T212-INVST, docs/import-connection-accounts-plan.md). Nil
+	// until the user sets one; rows resolve to needs_attention until then.
+	CashAccountID *int64
+	CreatedAt     string
+	UpdatedAt     string
 }
 
 type CreateImportConnectionInput struct {
@@ -88,6 +101,8 @@ type CreateImportConnectionInput struct {
 	DisplayName string
 	APIKey      string
 	ConfigJSON  string
+	// CashAccountID is optional at create time (nil = set it later via PATCH).
+	CashAccountID *int64
 }
 
 type UpdateImportConnectionInput struct {
@@ -99,6 +114,11 @@ type UpdateImportConnectionInput struct {
 	ConfigJSON string
 	// AutoRefreshEnabled is optional. Nil = keep the existing setting.
 	AutoRefreshEnabled *bool
+	// CashAccountID is optional. Nil = keep the existing setting; a non-nil
+	// pointer sets/replaces it. There is currently no way to explicitly
+	// clear it back to unset via PATCH (not needed by the accounts plan —
+	// revisit if a real need shows up).
+	CashAccountID *int64
 }
 
 // --- Service methods ---
@@ -111,6 +131,9 @@ func (s *ImportConnectionService) CreateImportConnection(ctx context.Context, in
 		return ImportConnection{}, err
 	}
 	if err := validateConfigJSON(input.ConfigJSON); err != nil {
+		return ImportConnection{}, err
+	}
+	if err := s.validateCashAccountID(ctx, input.CashAccountID); err != nil {
 		return ImportConnection{}, err
 	}
 	displayName := strings.TrimSpace(input.DisplayName)
@@ -144,6 +167,7 @@ func (s *ImportConnectionService) CreateImportConnection(ctx context.Context, in
 		DisplayName:      displayName,
 		SecretCiphertext: ciphertext,
 		ConfigJSON:       configJSON,
+		CashAccountID:    nullableInt64(input.CashAccountID),
 		CreatedAt:        now,
 	})
 	if err != nil {
@@ -204,6 +228,9 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	if err := validateConfigJSON(input.ConfigJSON); err != nil {
 		return ImportConnection{}, err
 	}
+	if err := s.validateCashAccountID(ctx, input.CashAccountID); err != nil {
+		return ImportConnection{}, err
+	}
 	displayName := strings.TrimSpace(input.DisplayName)
 
 	existing, err := s.repository.ImportConnectionByID(ctx, input.ID, BookID)
@@ -251,6 +278,10 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	if input.AutoRefreshEnabled != nil {
 		autoRefreshEnabled = *input.AutoRefreshEnabled
 	}
+	cashAccountID := existing.CashAccountID
+	if input.CashAccountID != nil {
+		cashAccountID = nullableInt64(input.CashAccountID)
+	}
 
 	now := s.now().UTC().Format(time.RFC3339)
 	rec, err := s.repository.UpdateImportConnection(ctx, db.UpdateImportConnectionParams{
@@ -260,6 +291,7 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 		SecretCiphertext:   newCiphertext,
 		ConfigJSON:         configJSON,
 		AutoRefreshEnabled: autoRefreshEnabled,
+		CashAccountID:      cashAccountID,
 		UpdatedAt:          now,
 	})
 	if err != nil {
@@ -308,21 +340,23 @@ func (s *ImportConnectionService) OpenSecret(ctx context.Context, id int64) (str
 	return string(plaintext), nil
 }
 
-// UpdateFetchCursor saves the incremental fetch cursor and status after a
-// successful fetch. Called by the Trading 212 fetch worker, never by an HTTP
-// handler.
-func (s *ImportConnectionService) UpdateFetchCursor(ctx context.Context, id int64, cursor string, status string, fetchedAt string) error {
+// UpdateFetchCursor saves the incremental fetch cursors (one per endpoint)
+// and status after a fetch attempt. Called by the Trading 212 fetch worker,
+// never by an HTTP handler.
+func (s *ImportConnectionService) UpdateFetchCursor(ctx context.Context, id int64, transactionsCursor string, ordersCursor string, dividendsCursor string, status string, fetchedAt string) error {
 	if err := s.requireSecretKey(); err != nil {
 		return err
 	}
 	now := s.now().UTC().Format(time.RFC3339)
 	if err := s.repository.UpdateImportConnectionCursor(ctx, db.UpdateImportConnectionCursorParams{
-		ID:              id,
-		BookID:          BookID,
-		FetchCursor:     cursor,
-		LastFetchStatus: status,
-		LastFetchedAt:   fetchedAt,
-		UpdatedAt:       now,
+		ID:                 id,
+		BookID:             BookID,
+		TransactionsCursor: transactionsCursor,
+		OrdersCursor:       ordersCursor,
+		DividendsCursor:    dividendsCursor,
+		LastFetchStatus:    status,
+		LastFetchedAt:      fetchedAt,
+		UpdatedAt:          now,
 	}); err != nil {
 		if errors.Is(err, db.ErrImportConnectionNotFound) {
 			return ErrImportConnectionNotFound
@@ -365,7 +399,7 @@ func (s *ImportConnectionService) MarkFetchFailed(ctx context.Context, id int64,
 		}
 		return fmt.Errorf("load import connection: %w", err)
 	}
-	return s.UpdateFetchCursor(ctx, id, existing.FetchCursor, "failed", fetchedAt)
+	return s.UpdateFetchCursor(ctx, id, existing.TransactionsCursor, existing.OrdersCursor, existing.DividendsCursor, "failed", fetchedAt)
 }
 
 // --- Helpers ---
@@ -387,6 +421,33 @@ func (s *ImportConnectionService) openSecret(ciphertext string) ([]byte, error) 
 		return nil, fmt.Errorf("open ciphertext: %w", err)
 	}
 	return plaintext, nil
+}
+
+// validateCashAccountID checks that a proposed cash_account_id (if any)
+// references a real, postable, non-archived account — per
+// docs/import-connection-accounts-plan.md ("any postable asset kind — do not
+// restrict to security_holding, since the cash leg is ordinary cash").
+func (s *ImportConnectionService) validateCashAccountID(ctx context.Context, cashAccountID *int64) error {
+	if cashAccountID == nil {
+		return nil
+	}
+	if s.accountService == nil {
+		return fmt.Errorf("import connections require an account service to validate cash_account_id")
+	}
+	account, err := s.accountService.Account(ctx, *cashAccountID)
+	if err != nil {
+		if errors.Is(err, ErrAccountNotFound) {
+			return ValidationError{Message: "cash_account_id does not reference an existing account"}
+		}
+		return fmt.Errorf("validate cash account: %w", err)
+	}
+	if !account.AllowsPostings {
+		return ValidationError{Message: "cash_account_id must reference a postable account"}
+	}
+	if account.Status == "archived" {
+		return ValidationError{Message: "cash_account_id must reference a non-archived account"}
+	}
+	return nil
 }
 
 func validateConnectionInput(displayName, sourceKind, apiKey string) error {
@@ -441,10 +502,13 @@ func toImportConnection(rec db.ImportConnectionRecord, apiKey string) ImportConn
 		DisplayName:        rec.DisplayName,
 		KeyHint:            keyHint(apiKey),
 		ConfigJSON:         rec.ConfigJSON,
-		FetchCursor:        rec.FetchCursor,
+		TransactionsCursor: rec.TransactionsCursor,
+		OrdersCursor:       rec.OrdersCursor,
+		DividendsCursor:    rec.DividendsCursor,
 		LastFetchStatus:    rec.LastFetchStatus,
 		LastFetchedAt:      lastFetchedAt,
 		AutoRefreshEnabled: rec.AutoRefreshEnabled,
+		CashAccountID:      nullableSQLInt64Ptr(rec.CashAccountID),
 		CreatedAt:          rec.CreatedAt,
 		UpdatedAt:          rec.UpdatedAt,
 	}

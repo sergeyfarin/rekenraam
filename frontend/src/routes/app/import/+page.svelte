@@ -330,6 +330,7 @@
   let showAddConnection = $state(false);
   let newConnName = $state('');
   let newConnKey = $state('');
+  let newConnCashAccountId = $state('');
   let addingConnection = $state(false);
   let addConnectionError = $state<unknown>(undefined);
 
@@ -342,23 +343,59 @@
   let togglingAutoRefreshId = $state<number | null>(null);
   let autoRefreshError = $state<unknown>(undefined);
 
+  // Cash account picker
+  let updatingCashAccountId = $state<number | null>(null);
+  let cashAccountError = $state<unknown>(undefined);
+
+  const postableAccounts = $derived(
+    accounts.filter((a) => a.allows_postings && a.status !== 'archived')
+  );
+
   async function handleAddConnection() {
     if (!newConnName.trim() || !newConnKey.trim()) return;
     addingConnection = true;
     addConnectionError = undefined;
     try {
       await createImportConnection(
-        { source: 'trading212', display_name: newConnName.trim(), api_key: newConnKey.trim() },
+        {
+          source: 'trading212',
+          display_name: newConnName.trim(),
+          api_key: newConnKey.trim(),
+          ...(newConnCashAccountId ? { cash_account_id: Number(newConnCashAccountId) } : {})
+        },
         csrfToken
       );
       await queryClient.invalidateQueries({ queryKey: importConnectionsQueryKey });
       showAddConnection = false;
       newConnName = '';
       newConnKey = '';
+      newConnCashAccountId = '';
     } catch (err) {
       addConnectionError = err;
     } finally {
       addingConnection = false;
+    }
+  }
+
+  async function handleSetCashAccount(conn: ImportConnection, accountId: string) {
+    if (!accountId) return;
+    updatingCashAccountId = conn.id;
+    cashAccountError = undefined;
+    try {
+      await updateImportConnection(
+        conn.id,
+        {
+          display_name: conn.display_name,
+          config: conn.config,
+          cash_account_id: Number(accountId)
+        },
+        csrfToken
+      );
+      await queryClient.invalidateQueries({ queryKey: importConnectionsQueryKey });
+    } catch (err) {
+      cashAccountError = err;
+    } finally {
+      updatingCashAccountId = null;
     }
   }
 
@@ -479,6 +516,7 @@
                 <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_key()}</th>
                 <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_status()}</th>
                 <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_auto_refresh()}</th>
+                <th class="pb-2 pr-4 font-semibold text-muted">{m.import_connections_col_cash_account()}</th>
                 <th class="pb-2 font-semibold text-muted">{m.import_connections_col_actions()}</th>
               </tr>
             </thead>
@@ -509,6 +547,19 @@
                           : 'translate-x-1'}"
                       ></span>
                     </button>
+                  </td>
+                  <td class="py-2.5 pr-4">
+                    <select
+                      class="rounded-(--radius-control) border border-border bg-control px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                      value={conn.cash_account_id ?? ''}
+                      disabled={updatingCashAccountId === conn.id}
+                      onchange={(e) => handleSetCashAccount(conn, e.currentTarget.value)}
+                    >
+                      <option value="" disabled>{m.import_connections_cash_account_placeholder()}</option>
+                      {#each postableAccounts as account (account.id)}
+                        <option value={account.id}>{account.name}</option>
+                      {/each}
+                    </select>
                   </td>
                   <td class="py-2.5">
                     <div class="flex items-center gap-2">
@@ -582,6 +633,10 @@
         <p class="mt-3 text-sm text-warning">{m.import_connections_auto_refresh_error()}</p>
       {/if}
 
+      {#if cashAccountError}
+        <p class="mt-3 text-sm text-warning">{m.import_connections_cash_account_error()}</p>
+      {/if}
+
       <!-- Add connection form -->
       {#if showAddConnection}
         <div class="mt-5 border-t border-border pt-5">
@@ -613,6 +668,22 @@
               />
               <p class="text-xs text-muted">{m.import_connections_add_key_help()}</p>
             </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-medium text-muted" for="conn-cash-account">
+                {m.import_connections_add_cash_account_label()}
+              </label>
+              <select
+                id="conn-cash-account"
+                class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                bind:value={newConnCashAccountId}
+              >
+                <option value="">{m.import_connections_add_cash_account_none()}</option>
+                {#each postableAccounts as account (account.id)}
+                  <option value={account.id}>{account.name}</option>
+                {/each}
+              </select>
+              <p class="text-xs text-muted">{m.import_connections_add_cash_account_help()}</p>
+            </div>
 
             {#if addConnectionError}
               {@const errCode = (addConnectionError as { code?: string })?.code}
@@ -641,7 +712,7 @@
               <button
                 type="button"
                 class="text-sm text-muted hover:text-foreground"
-                onclick={() => { showAddConnection = false; addConnectionError = undefined; newConnName = ''; newConnKey = ''; }}
+                onclick={() => { showAddConnection = false; addConnectionError = undefined; newConnName = ''; newConnKey = ''; newConnCashAccountId = ''; }}
               >
                 {m.import_discard_cancel()}
               </button>

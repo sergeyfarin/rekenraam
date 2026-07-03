@@ -32,23 +32,57 @@ const maxTrading212FetchAttempts = 8
 // the import plan).
 var ErrImportFetchInProgress = errors.New("an import fetch is already in progress for this connection")
 
+// trading212FetchStage identifies which of the three independently-paginated
+// Trading 212 endpoints a work item processes. A whole logical fetch walks
+// stages in this order (transactions -> orders -> dividends); each stage's
+// own pagination/continuation is identical to Slice 3's original
+// single-endpoint design (T-14) — B-T212-INVST only adds a stage transition
+// once a stage's pagination naturally exhausts, rather than tripling the
+// worker for three endpoints.
+type trading212FetchStage string
+
+const (
+	trading212StageTransactions trading212FetchStage = "transactions"
+	trading212StageOrders       trading212FetchStage = "orders"
+	trading212StageDividends    trading212FetchStage = "dividends"
+)
+
+// trading212NextStage returns the stage after the given one, and whether the
+// whole logical fetch is done (dividends was the last stage).
+func trading212NextStage(stage trading212FetchStage) (next trading212FetchStage, done bool) {
+	switch stage {
+	case trading212StageTransactions:
+		return trading212StageOrders, false
+	case trading212StageOrders:
+		return trading212StageDividends, false
+	default:
+		return "", true
+	}
+}
+
 type trading212FetchWorkPayload struct {
 	ConnectionID int64  `json:"connection_id"`
 	BatchID      int64  `json:"batch_id"`
 	Reason       string `json:"reason"` // "manual" | "continuation"
-	// Cursor is the incremental boundary passed to trading212.Fetcher.Fetch.
-	// It is fixed for a whole logical fetch (empty = full history) — a
-	// continuation payload carries the exact same value as the fetch it
-	// continues, never an updated one. See Fetch's doc comment for why: the
-	// boundary and the pagination resume point are different things.
-	Cursor string `json:"cursor"`
-	// ResumePath is the page to resume HTTP pagination from (Fetcher's
-	// NextPageToken from the previous chunk). Empty means start at page 1 —
-	// true for the first chunk of any fetch, manual or continuation-seeded.
-	ResumePath string `json:"resume_path,omitempty"`
-	// MaxCursorSoFar tracks the running max movement timestamp seen across
-	// every chunk of this logical fetch so far. Only the final chunk (no
-	// more continuation) persists this to the connection's saved cursor.
+
+	// Stage is which endpoint this work item processes. Empty defaults to
+	// trading212StageTransactions (the first stage of any fresh fetch).
+	Stage trading212FetchStage `json:"stage,omitempty"`
+
+	// TransactionsCursor/OrdersCursor/DividendsCursor: each endpoint's
+	// incremental boundary for this whole logical fetch (fixed once that
+	// stage starts — see Fetch's doc comment), seeded at fetch-start time
+	// from the connection's saved cursors. Once a stage completes, its
+	// field here is overwritten with the final value to persist, so by the
+	// time the last stage (dividends) finishes, all three fields hold the
+	// values to write back to the connection in one UpdateFetchCursor call.
+	TransactionsCursor string `json:"transactions_cursor"`
+	OrdersCursor       string `json:"orders_cursor"`
+	DividendsCursor    string `json:"dividends_cursor"`
+
+	// ResumePath/MaxCursorSoFar are scoped to the CURRENTLY ACTIVE stage
+	// only — reset to zero value whenever Stage transitions to the next one.
+	ResumePath     string `json:"resume_path,omitempty"`
 	MaxCursorSoFar string `json:"max_cursor_so_far,omitempty"`
 }
 
@@ -87,7 +121,7 @@ func (s *ImportService) StartOnlineImport(ctx context.Context, input StartOnline
 
 	batch, err := s.startTrading212Fetch(ctx, trading212FetchStartParams{
 		Connection:    conn,
-		Cursor:        "",
+		Incremental:   false,
 		Reason:        "manual",
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
@@ -116,7 +150,7 @@ func (s *ImportService) RefreshImportConnection(ctx context.Context, input Refre
 
 	batch, err := s.startTrading212Fetch(ctx, trading212FetchStartParams{
 		Connection:    conn,
-		Cursor:        conn.FetchCursor,
+		Incremental:   true,
 		Reason:        "manual",
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
@@ -129,8 +163,11 @@ func (s *ImportService) RefreshImportConnection(ctx context.Context, input Refre
 }
 
 type trading212FetchStartParams struct {
-	Connection    ImportConnection
-	Cursor        string
+	Connection ImportConnection
+	// Incremental selects which cursors seed the fetch: false (StartOnlineImport)
+	// starts all three endpoints from full history; true (RefreshImportConnection)
+	// starts each from the connection's own saved per-endpoint cursor.
+	Incremental   bool
 	Reason        string
 	OwnerUserID   int64
 	AuthSessionID int64
@@ -152,6 +189,13 @@ func (s *ImportService) startTrading212Fetch(ctx context.Context, params trading
 		ConnectionDisplayName: params.Connection.DisplayName,
 	})
 
+	var transactionsCursor, ordersCursor, dividendsCursor string
+	if params.Incremental {
+		transactionsCursor = params.Connection.TransactionsCursor
+		ordersCursor = params.Connection.OrdersCursor
+		dividendsCursor = params.Connection.DividendsCursor
+	}
+
 	batch, err := s.repository.StartOnlineImportBatch(ctx, db.StartOnlineImportBatchParams{
 		BookID:         BookID,
 		ConnectionID:   params.Connection.ID,
@@ -164,10 +208,13 @@ func (s *ImportService) startTrading212Fetch(ctx context.Context, params trading
 		WorkKind:       trading212FetchWorkKind,
 	}, func(batchID int64) (string, error) {
 		payloadJSON, err := json.Marshal(trading212FetchWorkPayload{
-			ConnectionID: params.Connection.ID,
-			BatchID:      batchID,
-			Reason:       params.Reason,
-			Cursor:       params.Cursor,
+			ConnectionID:       params.Connection.ID,
+			BatchID:            batchID,
+			Reason:             params.Reason,
+			Stage:              trading212StageTransactions,
+			TransactionsCursor: transactionsCursor,
+			OrdersCursor:       ordersCursor,
+			DividendsCursor:    dividendsCursor,
 		})
 		return string(payloadJSON), err
 	})
@@ -265,13 +312,17 @@ func (s *ImportService) processTrading212FetchWork(ctx context.Context, logger *
 	s.markTrading212FetchTerminalFailure(ctx, logger, payload, err, now)
 }
 
-// runTrading212Fetch performs one fetch attempt: load connection + secret,
-// call the fetcher, parse via the registered Trading212Adapter (reusing the
-// same RawInput.Bytes contract every adapter uses), stage rows through the
+// runTrading212Fetch performs one fetch attempt for the payload's active
+// stage: load connection + secret, call that stage's fetcher endpoint,
+// parse via the registered Trading212Adapter (reusing the same
+// RawInput.Bytes contract every adapter uses), run the investment
+// resolution pass over any order-fill/dividend rows, stage rows through the
 // shared stageParseResult pipeline, and persist progress. Returns nil on
 // success (including the no-op case where the batch was closed by the user
-// mid-fetch, and the case where more pages remain and a continuation was
-// enqueued instead of finishing).
+// mid-fetch, the case where more pages remain in this stage and a
+// continuation was enqueued, and the case where this stage finished and a
+// work item for the next stage was enqueued instead of finishing the whole
+// fetch).
 func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading212FetchWorkPayload) error {
 	batch, err := s.repository.ImportBatchByID(ctx, BookID, payload.BatchID)
 	if err != nil {
@@ -292,15 +343,42 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 
 	baseURL := trading212BaseURLFromConfig(conn.ConfigJSON)
 	fetcher := trading212.NewFetcher(s.httpClient, baseURL)
-	result, err := fetcher.Fetch(ctx, apiKey, payload.Cursor, payload.ResumePath)
-	if err != nil {
-		return err
+
+	stage := payload.Stage
+	if stage == "" {
+		stage = trading212StageTransactions
 	}
 
-	rawBytes, err := json.Marshal(trading212FetchPayload{
-		ConnectionID: payload.ConnectionID,
-		Movements:    toAdapterMovements(result.Movements),
-	})
+	var rawBytes []byte
+	var hasMore bool
+	var nextPageToken string
+	var chunkCursor string // this HTTP call's own Fetch-family result.Cursor
+
+	switch stage {
+	case trading212StageTransactions:
+		result, ferr := fetcher.Fetch(ctx, apiKey, payload.TransactionsCursor, payload.ResumePath)
+		if ferr != nil {
+			return ferr
+		}
+		hasMore, nextPageToken, chunkCursor = result.HasMore, result.NextPageToken, result.Cursor
+		rawBytes, err = json.Marshal(trading212FetchPayload{ConnectionID: payload.ConnectionID, Movements: toAdapterMovements(result.Movements)})
+	case trading212StageOrders:
+		result, ferr := fetcher.FetchOrders(ctx, apiKey, payload.OrdersCursor, payload.ResumePath)
+		if ferr != nil {
+			return ferr
+		}
+		hasMore, nextPageToken, chunkCursor = result.HasMore, result.NextPageToken, result.Cursor
+		rawBytes, err = json.Marshal(trading212FetchPayload{ConnectionID: payload.ConnectionID, OrderFills: toAdapterOrderFills(result.Fills)})
+	case trading212StageDividends:
+		result, ferr := fetcher.FetchDividends(ctx, apiKey, payload.DividendsCursor, payload.ResumePath)
+		if ferr != nil {
+			return ferr
+		}
+		hasMore, nextPageToken, chunkCursor = result.HasMore, result.NextPageToken, result.Cursor
+		rawBytes, err = json.Marshal(trading212FetchPayload{ConnectionID: payload.ConnectionID, Dividends: toAdapterDividends(result.Dividends)})
+	default:
+		return fmt.Errorf("unknown trading212 fetch stage %q", stage)
+	}
 	if err != nil {
 		return fmt.Errorf("marshal trading212 fetch payload: %w", err)
 	}
@@ -313,6 +391,16 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 	if err != nil {
 		return fmt.Errorf("parse trading212 fetch: %w", err)
 	}
+
+	// Instrument/holding-account resolution for order-fill/dividend rows
+	// (B-T212-INVST) happens entirely at commit time (import_service.go
+	// CommitImportBatch), not here — a fetch only stages rows into preview,
+	// and resolution can create a new instrument/holding account (see the
+	// discard-orphan concern in docs/import-connection-accounts-plan.md);
+	// only commit is allowed to create durable state. The preview UI shows
+	// these rows with their raw ticker/side/quantity but not yet a
+	// resolved/proposed instrument name — a documented, deferred UX
+	// enhancement, not a correctness gap.
 
 	// Re-check: fetching can take a while; the user may have discarded or
 	// committed the batch while it was in flight.
@@ -339,40 +427,29 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 	merged.ConnectionDisplayName = conn.DisplayName
 	now := s.now().UTC().Format(time.RFC3339)
 
-	// The running max across every chunk of this logical fetch so far, not
-	// just this chunk's result.Cursor — a later (older-page) chunk's max can
-	// never exceed an earlier chunk's if the provider is newest-first as
-	// documented, but tracking the true running max doesn't depend on that
-	// ordering assumption holding exactly.
+	// The running max across every chunk of this STAGE's logical fetch so
+	// far, not just this chunk's chunkCursor — mirrors Fetch's own
+	// cursor/MaxCursorSoFar split (see its doc comment).
 	runningMax := payload.MaxCursorSoFar
-	if result.Cursor > runningMax {
-		runningMax = result.Cursor
+	if chunkCursor > runningMax {
+		runningMax = chunkCursor
 	}
 
-	if result.HasMore {
-		// More pages remain than a single Fetch call will follow (see
-		// trading212.maxPages). Persist progress and enqueue a continuation
-		// work item instead of marking the batch ready — this closes the
-		// gap where a deep-history account was silently truncated at the
-		// page cap with no signal and no way to recover the missing tail.
-		// ResumePath (not Cursor) carries where to continue pagination from:
-		// reusing Cursor here would immediately re-trigger the incremental
-		// stop on the very next page, since every Fetch call restarts
-		// pagination at page 1 (see Fetch's doc comment).
+	if hasMore {
+		// More pages remain in this stage than a single Fetch-family call
+		// will follow. Persist progress and enqueue a continuation work item
+		// for the SAME stage instead of marking the batch ready.
 		merged.FetchStatus = "fetching"
 		metaJSON, _ := json.Marshal(merged)
 		if err := s.repository.UpdateImportBatchSourceMeta(ctx, payload.BatchID, string(metaJSON)); err != nil {
 			return fmt.Errorf("update batch source meta: %w", err)
 		}
 
-		continuationJSON, err := json.Marshal(trading212FetchWorkPayload{
-			ConnectionID:   payload.ConnectionID,
-			BatchID:        payload.BatchID,
-			Reason:         "continuation",
-			Cursor:         payload.Cursor, // unchanged incremental boundary for the whole logical fetch
-			ResumePath:     result.NextPageToken,
-			MaxCursorSoFar: runningMax,
-		})
+		continuation := payload
+		continuation.Reason = "continuation"
+		continuation.ResumePath = nextPageToken
+		continuation.MaxCursorSoFar = runningMax
+		continuationJSON, err := json.Marshal(continuation)
 		if err != nil {
 			return fmt.Errorf("marshal continuation fetch payload: %w", err)
 		}
@@ -382,21 +459,65 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 		return nil
 	}
 
+	// This stage naturally exhausted. finalCursor is what to persist for
+	// THIS stage — the running max seen, or (if nothing was seen this run)
+	// the boundary it started with, so an empty run never regresses the
+	// saved cursor.
+	startingCursor := payload.TransactionsCursor
+	if stage == trading212StageOrders {
+		startingCursor = payload.OrdersCursor
+	} else if stage == trading212StageDividends {
+		startingCursor = payload.DividendsCursor
+	}
+	finalCursor := runningMax
+	if finalCursor == "" {
+		finalCursor = startingCursor
+	}
+
+	nextStage, allDone := trading212NextStage(stage)
+	if !allDone {
+		// Move to the next stage within the same logical fetch. The next
+		// stage starts fresh (no resume path/running max of its own yet)
+		// from whatever its own saved cursor already was on the payload.
+		merged.FetchStatus = "fetching"
+		metaJSON, _ := json.Marshal(merged)
+		if err := s.repository.UpdateImportBatchSourceMeta(ctx, payload.BatchID, string(metaJSON)); err != nil {
+			return fmt.Errorf("update batch source meta: %w", err)
+		}
+
+		next := payload
+		next.Reason = "continuation"
+		next.Stage = nextStage
+		next.ResumePath = ""
+		next.MaxCursorSoFar = ""
+		switch stage {
+		case trading212StageTransactions:
+			next.TransactionsCursor = finalCursor
+		case trading212StageOrders:
+			next.OrdersCursor = finalCursor
+		}
+		nextJSON, err := json.Marshal(next)
+		if err != nil {
+			return fmt.Errorf("marshal next-stage fetch payload: %w", err)
+		}
+		if _, err := s.backgroundWork.EnqueueBackgroundWork(ctx, BookID, trading212FetchWorkKind, string(nextJSON), now); err != nil {
+			return fmt.Errorf("enqueue next-stage fetch: %w", err)
+		}
+		return nil
+	}
+
+	// All three stages (transactions -> orders -> dividends) are done.
 	merged.FetchStatus = "ready"
 	metaJSON, _ := json.Marshal(merged)
 	if err := s.repository.UpdateImportBatchSourceMeta(ctx, payload.BatchID, string(metaJSON)); err != nil {
 		return fmt.Errorf("update batch source meta: %w", err)
 	}
 
-	// The connection's saved cursor only advances once the fetch (across all
-	// its continuation chunks) has actually caught up to "now" — persisting
-	// a partial cursor mid-backfill and then failing terminally on a later
-	// chunk would make a future incremental refresh skip the un-fetched gap.
-	cursor := runningMax
-	if cursor == "" {
-		cursor = payload.Cursor // no movements seen this run; keep the existing cursor.
-	}
-	if err := s.connectionService.UpdateFetchCursor(ctx, payload.ConnectionID, cursor, "ready", now); err != nil {
+	// stage here is always trading212StageDividends when allDone is true
+	// (see trading212NextStage), so finalCursor is the dividends cursor;
+	// transactions/orders were already folded into payload during their own
+	// stage transitions above.
+	if err := s.connectionService.UpdateFetchCursor(ctx, payload.ConnectionID, payload.TransactionsCursor, payload.OrdersCursor, finalCursor, "ready", now); err != nil {
 		return fmt.Errorf("update connection cursor: %w", err)
 	}
 
@@ -475,6 +596,42 @@ func toAdapterMovements(movements []trading212.Movement) []trading212Movement {
 			Amount:    m.Amount,
 			Currency:  m.Currency,
 			Notes:     m.Notes,
+		}
+	}
+	return out
+}
+
+func toAdapterOrderFills(fills []trading212.OrderFill) []trading212OrderFill {
+	out := make([]trading212OrderFill, len(fills))
+	for i, f := range fills {
+		out[i] = trading212OrderFill{
+			FillID:   f.FillID,
+			OrderID:  f.OrderID,
+			Ticker:   f.Ticker,
+			ISIN:     f.ISIN,
+			Side:     f.Side,
+			Quantity: f.Quantity,
+			Price:    f.Price,
+			Currency: f.Currency,
+			FilledAt: f.FilledAt,
+			NetValue: f.NetValue,
+		}
+	}
+	return out
+}
+
+func toAdapterDividends(dividends []trading212.Dividend) []trading212Dividend {
+	out := make([]trading212Dividend, len(dividends))
+	for i, d := range dividends {
+		out[i] = trading212Dividend{
+			Reference: d.Reference,
+			Ticker:    d.Ticker,
+			ISIN:      d.ISIN,
+			Quantity:  d.Quantity,
+			Amount:    d.Amount,
+			Currency:  d.Currency,
+			PaidOn:    d.PaidOn,
+			Type:      d.Type,
 		}
 	}
 	return out

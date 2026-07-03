@@ -11,6 +11,24 @@ import (
 	"time"
 )
 
+// TestFetchHitsRealHistoryPath locks in the corrected endpoint path — the
+// original Slice 2 path (`/history/transactions`, missing `/equity`) 404s
+// against the real Trading 212 API; this guards against that regressing.
+func TestFetchHitsRealHistoryPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/transactions" {
+			t.Fatalf("expected /equity/history/transactions, got %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]any{"items": []map[string]any{}, "nextPagePath": ""})
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	if _, err := fetcher.Fetch(context.Background(), "test-key", "", ""); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+}
+
 func TestFetchSinglePage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "test-key" {
@@ -55,12 +73,12 @@ func TestFetchPaginatesAcrossPages(t *testing.T) {
 			})
 			return
 		}
-		if r.URL.Path == "/history/transactions" {
+		if r.URL.Path == "/equity/history/transactions" {
 			writeJSON(w, map[string]any{
 				"items": []map[string]any{
 					{"id": 1, "type": "DEPOSIT", "dateTime": "2024-01-01T00:00:00Z", "amount": "100.00", "currency": "EUR", "reference": "ref-1"},
 				},
-				"nextPagePath": "/history/transactions?cursor=page2",
+				"nextPagePath": "/equity/history/transactions?cursor=page2",
 			})
 			return
 		}
@@ -311,12 +329,12 @@ func TestFetchUnauthorized(t *testing.T) {
 	}
 }
 
-func TestProbeUsesHistoryEndpointAndSucceeds(t *testing.T) {
+func TestProbeUsesAccountSummaryEndpointAndSucceeds(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/history/transactions" {
-			t.Fatalf("expected probe to hit history endpoint, got %s", r.URL.Path)
+		if r.URL.Path != "/equity/account/summary" {
+			t.Fatalf("expected probe to hit the account summary endpoint, got %s", r.URL.Path)
 		}
-		writeJSON(w, map[string]any{"items": []map[string]any{}, "nextPagePath": ""})
+		writeJSON(w, map[string]any{})
 	}))
 	defer server.Close()
 
@@ -358,4 +376,192 @@ func TestFetchRespectsContextCancellation(t *testing.T) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// --- FetchOrders / FetchDividends (B-T212-INVST / Slice 4b) ---
+
+func TestFetchOrdersHitsRealPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/orders" {
+			t.Fatalf("expected /equity/history/orders, got %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]any{"items": []map[string]any{}, "nextPagePath": ""})
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	if _, err := fetcher.FetchOrders(context.Background(), "test-key", "", ""); err != nil {
+		t.Fatalf("FetchOrders: %v", err)
+	}
+}
+
+func TestFetchDividendsHitsRealPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/equity/history/dividends" {
+			t.Fatalf("expected /equity/history/dividends, got %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]any{"items": []map[string]any{}, "nextPagePath": ""})
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	if _, err := fetcher.FetchDividends(context.Background(), "test-key", "", ""); err != nil {
+		t.Fatalf("FetchDividends: %v", err)
+	}
+}
+
+// writeGoldenOrderJSON mirrors the real /equity/history/orders response
+// shape verified 2026-07-03 against the published OpenAPI spec: a
+// {order, fill} pair per item, not a flat object.
+func writeGoldenOrderJSON(w http.ResponseWriter, nextPagePath string) {
+	writeJSON(w, map[string]any{
+		"items": []map[string]any{
+			{
+				"order": map[string]any{
+					"id": 111, "ticker": "AAPL_US_EQ", "side": "BUY", "currency": "USD",
+					"instrument": map[string]any{"ticker": "AAPL_US_EQ", "isin": "US0378331005", "name": "Apple Inc.", "currency": "USD"},
+				},
+				"fill": map[string]any{
+					"id": 222, "filledAt": "2024-02-01T10:00:00Z", "price": "150.25", "quantity": "2",
+					"walletImpact": map[string]any{"currency": "USD", "netValue": "-300.75"},
+				},
+			},
+		},
+		"nextPagePath": nextPagePath,
+	})
+}
+
+func TestFetchOrdersParsesRealShape(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeGoldenOrderJSON(w, "")
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	result, err := fetcher.FetchOrders(context.Background(), "test-key", "", "")
+	if err != nil {
+		t.Fatalf("FetchOrders: %v", err)
+	}
+	if len(result.Fills) != 1 {
+		t.Fatalf("expected 1 fill, got %d", len(result.Fills))
+	}
+	fill := result.Fills[0]
+	if fill.FillID != "222" || fill.OrderID != "111" {
+		t.Fatalf("unexpected ids: %+v", fill)
+	}
+	if fill.Ticker != "AAPL_US_EQ" || fill.ISIN != "US0378331005" {
+		t.Fatalf("unexpected instrument fields: %+v", fill)
+	}
+	if fill.Side != "BUY" || fill.Quantity != "2" || fill.Price != "150.25" || fill.Currency != "USD" {
+		t.Fatalf("unexpected order/fill fields: %+v", fill)
+	}
+	if fill.NetValue != "-300.75" {
+		t.Fatalf("expected wallet impact net value passed through raw, got %q", fill.NetValue)
+	}
+	if fill.FilledAt != "2024-02-01T10:00:00Z" {
+		t.Fatalf("unexpected filledAt: %q", fill.FilledAt)
+	}
+	if result.Cursor != "2024-02-01T10:00:00Z" {
+		t.Fatalf("expected cursor to track filledAt, got %q", result.Cursor)
+	}
+}
+
+func TestFetchOrdersIncrementalCursorStopsOnFilledAt(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{
+			"items": []map[string]any{
+				{
+					"order": map[string]any{"id": 1, "ticker": "AAPL_US_EQ", "side": "BUY", "currency": "USD", "instrument": map[string]any{"ticker": "AAPL_US_EQ", "isin": "US0378331005"}},
+					"fill":  map[string]any{"id": 1, "filledAt": "2024-01-01T00:00:00Z", "price": "1", "quantity": "1", "walletImpact": map[string]any{"netValue": "-1"}},
+				},
+			},
+			"nextPagePath": "/equity/history/orders?p=1",
+		})
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	result, err := fetcher.FetchOrders(context.Background(), "test-key", "2024-01-01T00:00:01Z", "")
+	if err != nil {
+		t.Fatalf("FetchOrders: %v", err)
+	}
+	if len(result.Fills) != 0 {
+		t.Fatalf("expected the fill strictly before the cursor to stop pagination without being included, got %d", len(result.Fills))
+	}
+	if result.HasMore {
+		t.Fatal("expected HasMore=false when the incremental cursor stopped pagination")
+	}
+}
+
+// writeGoldenDividendJSON mirrors the real /equity/history/dividends response shape.
+func writeGoldenDividendJSON(w http.ResponseWriter, nextPagePath string) {
+	writeJSON(w, map[string]any{
+		"items": []map[string]any{
+			{
+				"ticker": "AAPL_US_EQ", "quantity": "10", "amount": "4.32", "currency": "EUR",
+				"paidOn": "2024-03-01T00:00:00Z", "reference": "div-ref-1", "type": "DIVIDEND",
+				"instrument": map[string]any{"ticker": "AAPL_US_EQ", "isin": "US0378331005", "name": "Apple Inc.", "currency": "USD"},
+			},
+		},
+		"nextPagePath": nextPagePath,
+	})
+}
+
+func TestFetchDividendsParsesRealShape(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeGoldenDividendJSON(w, "")
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	result, err := fetcher.FetchDividends(context.Background(), "test-key", "", "")
+	if err != nil {
+		t.Fatalf("FetchDividends: %v", err)
+	}
+	if len(result.Dividends) != 1 {
+		t.Fatalf("expected 1 dividend, got %d", len(result.Dividends))
+	}
+	div := result.Dividends[0]
+	if div.Reference != "div-ref-1" || div.Ticker != "AAPL_US_EQ" || div.ISIN != "US0378331005" {
+		t.Fatalf("unexpected identity fields: %+v", div)
+	}
+	if div.Quantity != "10" || div.Amount != "4.32" || div.Currency != "EUR" {
+		t.Fatalf("unexpected amount fields: %+v", div)
+	}
+	if div.Type != "DIVIDEND" || div.PaidOn != "2024-03-01T00:00:00Z" {
+		t.Fatalf("unexpected type/paidOn: %+v", div)
+	}
+	if result.Cursor != "2024-03-01T00:00:00Z" {
+		t.Fatalf("expected cursor to track paidOn, got %q", result.Cursor)
+	}
+}
+
+func TestFetchDividendsPaginatesAcrossPages(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.RawQuery == "cursor=page2" {
+			writeJSON(w, map[string]any{
+				"items": []map[string]any{
+					{"ticker": "MSFT_US_EQ", "quantity": "1", "amount": "1.00", "currency": "EUR", "paidOn": "2024-03-02T00:00:00Z", "reference": "div-ref-2", "type": "DIVIDEND"},
+				},
+				"nextPagePath": "",
+			})
+			return
+		}
+		writeGoldenDividendJSON(w, "/equity/history/dividends?cursor=page2")
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client(), server.URL)
+	result, err := fetcher.FetchDividends(context.Background(), "test-key", "", "")
+	if err != nil {
+		t.Fatalf("FetchDividends: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 HTTP calls, got %d", calls)
+	}
+	if len(result.Dividends) != 2 {
+		t.Fatalf("expected 2 dividends across pages, got %d", len(result.Dividends))
+	}
 }

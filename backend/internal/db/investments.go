@@ -408,6 +408,49 @@ func (r *InvestmentRepository) InstrumentByCommodityID(ctx context.Context, book
 	return record, nil
 }
 
+// InstrumentByISIN finds an active instrument whose identifiers_json.isin
+// matches (case-insensitive), used by online-import instrument resolution
+// (B-T212-INVST). ISIN is not a dedicated column (identifiers_json is a
+// free-form blob — see docs/import-connection-accounts-plan.md), so this is
+// a json_extract scan rather than an indexed lookup; acceptable at the
+// personal-finance scale this table holds. Returns ErrNotFound if no active
+// instrument has a matching ISIN.
+func (r *InvestmentRepository) InstrumentByISIN(ctx context.Context, bookID int64, isin string) (InvestmentInstrumentRecord, error) {
+	var record InvestmentInstrumentRecord
+	if err := scanInvestmentInstrumentRecord(r.database.QueryRowContext(ctx, investmentInstrumentSelect(`
+		WHERE ii.book_id = ? AND iiv.status = 'active'
+		  AND upper(json_extract(iiv.identifiers_json, '$.isin')) = upper(?)
+	`), bookID, isin), &record); err != nil {
+		return InvestmentInstrumentRecord{}, err
+	}
+	return record, nil
+}
+
+// InstrumentBySymbol finds an active instrument by exact symbol match
+// (case-insensitive), used as the fallback when ISIN doesn't match — e.g. an
+// instrument the user created manually before connecting an online source.
+// Returns ErrNotFound if no active instrument has a matching symbol, or if
+// more than one does (ambiguous — the caller should treat that the same as
+// not found rather than guessing).
+func (r *InvestmentRepository) InstrumentBySymbol(ctx context.Context, bookID int64, symbol string) (InvestmentInstrumentRecord, error) {
+	rows, err := r.database.QueryContext(ctx, investmentInstrumentSelect(`
+		WHERE ii.book_id = ? AND iiv.status = 'active' AND iiv.symbol = ? COLLATE NOCASE
+	`), bookID, symbol)
+	if err != nil {
+		return InvestmentInstrumentRecord{}, fmt.Errorf("find instrument by symbol: %w", err)
+	}
+	defer rows.Close()
+
+	records, err := scanInvestmentInstrumentRecords(rows)
+	if err != nil {
+		return InvestmentInstrumentRecord{}, err
+	}
+	if len(records) != 1 {
+		return InvestmentInstrumentRecord{}, ErrNotFound
+	}
+	return records[0], nil
+}
+
 func (r *InvestmentRepository) CreateInstrument(ctx context.Context, params CreateInvestmentInstrumentParams) (InvestmentInstrumentRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {

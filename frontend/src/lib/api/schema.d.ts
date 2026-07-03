@@ -10886,6 +10886,11 @@ export interface components {
             last_fetched_at?: string;
             /** @description Whether this connection is auto-refreshed on a rolling ~24h cadence since its last fetch attempt. Manual "refresh now" always works regardless of this setting. */
             auto_refresh_enabled: boolean;
+            /**
+             * Format: int64
+             * @description The settlement account for BUY/SELL/DIVIDEND cash legs. Omitted if not yet set — rows needing it stay `needs_attention` until it is.
+             */
+            cash_account_id?: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -10903,6 +10908,11 @@ export interface components {
             api_key: string;
             /** @description Optional JSON string of non-secret provider configuration. */
             config?: string;
+            /**
+             * Format: int64
+             * @description Optional settlement account for BUY/SELL/DIVIDEND cash legs. Can also be set later via PATCH.
+             */
+            cash_account_id?: number;
         };
         UpdateImportConnectionRequest: {
             /** @description New display name. */
@@ -10911,8 +10921,13 @@ export interface components {
             api_key?: string;
             /** @description Optional JSON string of non-secret provider configuration. */
             config?: string;
-            /** @description Enable/disable the ~24h rolling auto-refresh schedule for this connection. Omitted or false disables it. */
+            /** @description Enable/disable the ~24h rolling auto-refresh schedule for this connection. Omitted leaves the current setting unchanged. */
             auto_refresh_enabled?: boolean;
+            /**
+             * Format: int64
+             * @description Set/replace the settlement account for BUY/SELL/DIVIDEND cash legs. Omitted leaves the current setting unchanged (there is currently no way to explicitly clear it back to unset via PATCH).
+             */
+            cash_account_id?: number;
         };
         ReconciliationPostingResponse: {
             /** Format: int64 */

@@ -276,6 +276,32 @@ they were verified manually per slice. Grow `./scripts/test-e2e.sh` coverage one
 journey per slice, starting with transaction entry (the workflow AGENTS.md calls
 mobile-critical).
 
+### T-21 Trading 212 fetcher hit a nonexistent endpoint path with a wrong type enum `[x]`
+**File:** `backend/internal/onlinesource/trading212/fetcher.go`, `backend/internal/app/import_trading212.go`.
+
+Found and closed 2026-07-03 while scoping Slice 4b against the real,
+published Trading 212 OpenAPI spec (`docs.trading212.com`) — the first time
+this integration was checked against verified field names/paths rather than
+the plan's documented-as-unverified assumptions. Two real bugs in
+already-shipped (Slice 2/3) code: (1) `historyPath` was
+`/history/transactions`, missing the `/equity` segment the real API requires
+(`/equity/history/transactions`) — every live fetch and every connection
+probe (which reused the same path) would 404; a real user could never
+successfully create a working Trading 212 connection. (2) `cashMovementTypes`
+included `WITHDRAWAL`, `DIVIDEND`, `INTEREST`, `CARD_CREDIT`, `CARD_DEBIT`,
+`CARD_TOPUP`, `TRANSFER_IN`, `TRANSFER_OUT`, `LENDING_INTEREST` — none of
+which the real endpoint's `type` enum (`WITHDRAW`/`DEPOSIT`/`FEE`/`TRANSFER`
+only) ever emits; every real cash movement except `DEPOSIT`/`FEE` would have
+been wrongly flagged `needs_attention`. Fixed: corrected `historyPath`;
+`Probe` now hits the dedicated `/equity/account/summary` endpoint instead of
+reusing history (avoids requiring the `history:transactions` scope just to
+validate a key); `cashMovementTypes` matches the real enum exactly. Verified
+by `TestFetchHitsRealHistoryPath`, `TestProbeUsesAccountSummaryEndpointAndSucceeds`,
+and `TestTrading212Adapter_CashMovementTypesMatchRealAPIEnum` (asserts the old
+guessed values now correctly flag `needs_attention`). This also resolved
+Slice 4b's biggest open risk — the order-fill/dividend endpoint shapes are
+now verified, not guessed (see `docs/trading212-import-plan.md` Slice 4b).
+
 ### B-T212-INVST Trading 212 investment lots not imported `[ ]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`.
 

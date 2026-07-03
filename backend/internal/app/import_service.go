@@ -32,6 +32,12 @@ type ImportService struct {
 	connectionService *ImportConnectionService
 	backgroundWork    *db.BackgroundWorkRepository
 	httpClient        *http.Client
+
+	// investmentService routes resolved Trading 212 order-fill/dividend rows
+	// to real Buy/Sell/Dividend calls at commit time (B-T212-INVST, Slice
+	// 4b). Nil-safe: without it, these rows just commit as plain cash
+	// transactions via the generic path, same as before Slice 4b.
+	investmentService *InvestmentService
 }
 
 func NewImportService(
@@ -40,6 +46,7 @@ func NewImportService(
 	accountRepository *db.AccountRepository,
 	connectionService *ImportConnectionService,
 	backgroundWork *db.BackgroundWorkRepository,
+	investmentService *InvestmentService,
 ) *ImportService {
 	return &ImportService{
 		repository:         repository,
@@ -50,6 +57,7 @@ func NewImportService(
 		connectionService:  connectionService,
 		backgroundWork:     backgroundWork,
 		httpClient:         &http.Client{Timeout: 30 * time.Second},
+		investmentService:  investmentService,
 	}
 }
 

@@ -19,12 +19,16 @@ var (
 // risk note — a field rename is a one-line fix in history.go, not a
 // pipeline change).
 type Movement struct {
-	ID        string // provider transaction id / reference — the strong dedupe key
-	Type      string // "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND" | "INTEREST" | "FEE" | "CARD" | "BUY" | "SELL" | ...
+	ID   string // provider transaction id / reference — the strong dedupe key
+	Type string // real /equity/history/transactions enum: "WITHDRAW" | "DEPOSIT" | "FEE" | "TRANSFER"
+	// (verified 2026-07-03 against the published OpenAPI spec — dividends
+	// and BUY/SELL order fills are never emitted by this endpoint; they come
+	// from /equity/history/dividends and /equity/history/orders respectively,
+	// see B-T212-INVST/Slice 4b).
 	Timestamp string // RFC3339, as provided
 	Amount    string // raw decimal string, sign per movement direction
 	Currency  string // ISO 4217 code
-	Notes     string // free-text description/counterparty, when present
+	Notes     string // not present on the real payload today; kept for forward-compat, always empty in practice
 }
 
 // FetchResult is what Fetch returns: the movements seen plus the cursor to
@@ -45,6 +49,60 @@ type FetchResult struct {
 	// call if used as a resume point, because every Fetch call restarts
 	// pagination at page 1. NextPageToken instead says "carry on turning
 	// pages from exactly here", independent of the boundary.
+	HasMore       bool
+	NextPageToken string
+}
+
+// OrderFill is the stable internal shape produced by FetchOrders — one per
+// execution event (a partially-filled order produces multiple fills, each
+// with its own FillID). Verified 2026-07-03 against the published OpenAPI
+// spec for GET /equity/history/orders (B-T212-INVST/Slice 4b).
+type OrderFill struct {
+	FillID   string // fill.id — the actual execution event; the strong dedupe key
+	OrderID  string // order.id — links partial fills of the same order together
+	Ticker   string // e.g. "AAPL_US_EQ"
+	ISIN     string
+	Side     string // "BUY" | "SELL"
+	Quantity string // decimal string, shares filled in this fill
+	Price    string // decimal string, fill price (instrument currency)
+	Currency string // ISO 4217, the order's currency
+	FilledAt string // RFC3339
+	// NetValue is fill.walletImpact.netValue: the actual net cash effect of
+	// this fill (fees/taxes already netted in by the provider) — this is
+	// what the ledger's cash leg must move, not quantity*price recomputed
+	// from scratch, per "no floating point" (never re-derive money via
+	// arithmetic on decimal strings in Go).
+	NetValue string
+}
+
+// OrdersFetchResult mirrors FetchResult for the orders endpoint.
+type OrdersFetchResult struct {
+	Fills         []OrderFill
+	Cursor        string
+	HasMore       bool
+	NextPageToken string
+}
+
+// Dividend is the stable internal shape produced by FetchDividends.
+// Verified 2026-07-03 against the published OpenAPI spec for
+// GET /equity/history/dividends (B-T212-INVST/Slice 4b).
+type Dividend struct {
+	Reference string // strong dedupe key
+	Ticker    string
+	ISIN      string
+	Quantity  string // decimal string
+	// Amount is in the account's primary currency — the actual cash
+	// credited, distinct from GrossAmountPerShare (instrument currency).
+	Amount   string
+	Currency string // account's primary currency
+	PaidOn   string // RFC3339
+	Type     string // real enum, e.g. "DIVIDEND", "INTEREST", ...
+}
+
+// DividendsFetchResult mirrors FetchResult for the dividends endpoint.
+type DividendsFetchResult struct {
+	Dividends     []Dividend
+	Cursor        string
 	HasMore       bool
 	NextPageToken string
 }

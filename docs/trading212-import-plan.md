@@ -18,8 +18,17 @@ Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28. Slice
 (Fetcher + adapter, parse offline) shipped 2026-06-30. Slice 3 (Durable fetch +
 JSON `POST /imports` branch + refresh, plus a post-shipment review pass closing
 T-14/T-15/T-16/T-17) shipped 2026-06-30/2026-07-01. Slice 4a (scheduled
-auto-refresh, B-T212-SCHED) shipped 2026-07-01.** Slice 4b (investment lot
-import, B-T212-INVST) is still planned, blocked on
+auto-refresh, B-T212-SCHED) shipped 2026-07-01. Real-API verification pass
+(2026-07-03, while scoping Slice 4b) found and fixed two live bugs in the
+already-shipped cash-movement path: `historyPath` was `/history/transactions`
+(404s against the real API; correct path is `/equity/history/transactions`),
+and `cashMovementTypes` included several values (`WITHDRAWAL`, `DIVIDEND`,
+`INTEREST`, `CARD_*`, `TRANSFER_IN/OUT`, `LENDING_INTEREST`) the real endpoint
+never emits — its actual `type` enum is only `WITHDRAW`/`DEPOSIT`/`FEE`/`TRANSFER`.
+Both were unverified guesses from before this plan's author had access to the
+published OpenAPI spec. `Probe` now hits `/equity/account/summary` instead of
+reusing the history endpoint. See `docs/backlog.md` for the tracked item.**
+Slice 4b (investment lot import, B-T212-INVST) is still planned, blocked on
 `docs/import-connection-accounts-plan.md` landing first — see "Delivery
 slices" below.
 
@@ -278,7 +287,8 @@ here, close **T-07** by adding the seven existing import paths too (see backlog)
 Connections (`/api/v1/import-connections`):
 - `POST` — create a connection: body `{ source, display_name, api_key, config }`.
   Seals `api_key`, stores it, validates by making one authenticated probe call to
-  Trading 212 (`/equity/account/info` or equivalent) and returns `201` with the
+  Trading 212 (`/equity/account/summary`, confirmed 2026-07-03 against the
+  published API spec) and returns `201` with the
   masked connection. A failing probe returns `502 PROVIDER_ERROR` and stores
   nothing.
 - `GET` — list connections (masked, never the key).
@@ -343,7 +353,7 @@ Movement → `StagedRow` mapping (in `Trading212Adapter.Parse`):
 | transaction id / reference | `ExternalRef`, fingerprint seed | Strong dedupe key. |
 | timestamp | `Date` (normalized to `YYYY-MM-DD`) | Provider gives ISO; pass through, `parseQIFDate` accepts ISO. |
 | amount + currency | `Amount` (raw decimal), `CommodityHint` | Exact; no float. Sign per movement direction. |
-| type (`DEPOSIT`/`WITHDRAWAL`/`DIVIDEND`/`INTEREST`/`FEE`/`CARD`/…) | `Memo`/`Raw["type"]`, drives default category hint | Cash movements map cleanly. |
+| type (real enum, confirmed 2026-07-03: `WITHDRAW`/`DEPOSIT`/`FEE`/`TRANSFER`) | `Memo`/`Raw["type"]`, drives default category hint | Cash movements map cleanly. Dividends/interest/card movements are **not** emitted by this endpoint at all — see the dedicated dividends endpoint in Slice 4b. |
 | order/instrument fill (`BUY`/`SELL`) | row flagged `needs_attention` via `ParseWarning` | Not auto-booked as a lot (B-T212-INVST). The **cash leg** of a settled order may still import as cash if the API exposes it separately; instrument lots do not. |
 | counterparty / description | `PayeeHint` | |
 

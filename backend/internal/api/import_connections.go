@@ -21,6 +21,7 @@ type importConnectionResponse struct {
 	LastFetchStatus    string  `json:"last_fetch_status"`
 	LastFetchedAt      *string `json:"last_fetched_at,omitempty"`
 	AutoRefreshEnabled bool    `json:"auto_refresh_enabled"`
+	CashAccountID      *int64  `json:"cash_account_id,omitempty"`
 	CreatedAt          string  `json:"created_at"`
 	UpdatedAt          string  `json:"updated_at"`
 }
@@ -30,10 +31,11 @@ type listImportConnectionsResponse struct {
 }
 
 type createImportConnectionRequest struct {
-	Source      string `json:"source"`
-	DisplayName string `json:"display_name"`
-	APIKey      string `json:"api_key"`
-	ConfigJSON  string `json:"config,omitempty"`
+	Source        string `json:"source"`
+	DisplayName   string `json:"display_name"`
+	APIKey        string `json:"api_key"`
+	ConfigJSON    string `json:"config,omitempty"`
+	CashAccountID *int64 `json:"cash_account_id,omitempty"`
 }
 
 type updateImportConnectionRequest struct {
@@ -41,6 +43,7 @@ type updateImportConnectionRequest struct {
 	NewAPIKey          string `json:"api_key,omitempty"`
 	ConfigJSON         string `json:"config,omitempty"`
 	AutoRefreshEnabled *bool  `json:"auto_refresh_enabled,omitempty"`
+	CashAccountID      *int64 `json:"cash_account_id,omitempty"`
 }
 
 // --- Handlers ---
@@ -77,11 +80,12 @@ func createImportConnection(logger *slog.Logger, authService *app.AuthService, c
 		}
 
 		conn, err := connectionService.CreateImportConnection(r.Context(), app.CreateImportConnectionInput{
-			OwnerUserID: owner.ID,
-			SourceKind:  req.Source,
-			DisplayName: req.DisplayName,
-			APIKey:      req.APIKey,
-			ConfigJSON:  req.ConfigJSON,
+			OwnerUserID:   owner.ID,
+			SourceKind:    req.Source,
+			DisplayName:   req.DisplayName,
+			APIKey:        req.APIKey,
+			ConfigJSON:    req.ConfigJSON,
+			CashAccountID: req.CashAccountID,
 		})
 		if err != nil {
 			writeImportConnectionServiceError(w, r, logger, "create import connection", err)
@@ -117,6 +121,7 @@ func updateImportConnection(logger *slog.Logger, authService *app.AuthService, c
 			NewAPIKey:          req.NewAPIKey,
 			ConfigJSON:         req.ConfigJSON,
 			AutoRefreshEnabled: req.AutoRefreshEnabled,
+			CashAccountID:      req.CashAccountID,
 		})
 		if err != nil {
 			writeImportConnectionServiceError(w, r, logger, "update import connection", err)
@@ -230,6 +235,7 @@ func toImportConnectionResponse(c app.ImportConnection) importConnectionResponse
 		LastFetchStatus:    c.LastFetchStatus,
 		LastFetchedAt:      c.LastFetchedAt,
 		AutoRefreshEnabled: c.AutoRefreshEnabled,
+		CashAccountID:      c.CashAccountID,
 		CreatedAt:          c.CreatedAt,
 		UpdatedAt:          c.UpdatedAt,
 	}

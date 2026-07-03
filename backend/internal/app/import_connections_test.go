@@ -49,7 +49,58 @@ func openTestConnectionRepo(t *testing.T) *db.ImportConnectionRepository {
 func newTestConnectionService(t *testing.T, key []byte, prober ConnectionProber) *ImportConnectionService {
 	t.Helper()
 	repo := openTestConnectionRepo(t)
-	return NewImportConnectionService(repo, key, prober)
+	return NewImportConnectionService(repo, nil, key, prober)
+}
+
+// newTestConnectionServiceWithAccounts wires a real AccountService, used by
+// the cash_account_id validation tests. Returns the underlying *sql.DB too
+// so tests can seed account fixtures directly (account_kinds is seeded by
+// the initial migration, so a minimal account_versions row is enough —
+// going through the full setup-wizard bootstrap isn't needed just to
+// validate an FK reference).
+func newTestConnectionServiceWithAccounts(t *testing.T) (*ImportConnectionService, *sql.DB) {
+	t.Helper()
+	database := openConnectionTestDatabase(t)
+	accountService := NewAccountService(db.NewAccountRepository(database), db.NewInstitutionRepository(database), nil)
+	svc := NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, testKey(), NoOpProber{})
+	return svc, database
+}
+
+// seedTestAccount inserts a minimal, real account_versions row directly
+// (bypassing AccountService/SetupService bootstrap, which normally seeds
+// account_kinds/system accounts at first run — not needed here since
+// account_kinds is already seeded by the initial schema migration).
+func seedTestAccount(t *testing.T, database *sql.DB, status string, allowsPostings bool) int64 {
+	t.Helper()
+	ctx := context.Background()
+	result, err := database.ExecContext(ctx, `
+		INSERT INTO accounts (book_id, created_at, created_by_user_id)
+		VALUES (?, '2026-01-01T00:00:00Z', 1)
+	`, BookID)
+	require.NoError(t, err)
+	accountID, err := result.LastInsertId()
+	require.NoError(t, err)
+
+	closedOn := sql.NullString{}
+	if status != "active" {
+		closedOn = sql.NullString{String: "2026-01-02", Valid: true}
+	}
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, opened_on, closed_on, code, name, account_class,
+			account_kind, allows_postings
+		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', ?, '2026-01-01', ?, 'CASH', 'Test Cash', 'asset', 'checking', ?)
+	`, accountID, status, closedOn, boolToIntForTest(allowsPostings))
+	require.NoError(t, err)
+	return accountID
+}
+
+func boolToIntForTest(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 // errProber always rejects.
@@ -90,7 +141,7 @@ func TestCreateImportConnection_RoundTrip(t *testing.T) {
 
 func TestCreateImportConnection_SecretsNeverInPlaintext(t *testing.T) {
 	repo := openTestConnectionRepo(t)
-	svc := NewImportConnectionService(repo, testKey(), NoOpProber{})
+	svc := NewImportConnectionService(repo, nil, testKey(), NoOpProber{})
 
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
@@ -111,7 +162,7 @@ func TestCreateImportConnection_SecretsNeverInPlaintext(t *testing.T) {
 
 func TestCreateImportConnection_ProbeFailureStoresNothing(t *testing.T) {
 	repo := openTestConnectionRepo(t)
-	svc := NewImportConnectionService(repo, testKey(), errProber{err: ErrProviderUnauthorized})
+	svc := NewImportConnectionService(repo, nil, testKey(), errProber{err: ErrProviderUnauthorized})
 
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
@@ -277,7 +328,7 @@ func TestUpdateImportConnection_KeyRotationProbeFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	badProber := errProber{err: ErrProviderUnauthorized}
-	badSvc := NewImportConnectionService(openTestConnectionRepo(t), testKey(), badProber)
+	badSvc := NewImportConnectionService(openTestConnectionRepo(t), nil, testKey(), badProber)
 
 	// Create using the good svc first, so the connection exists.
 	// For this test case, use the original repo with a bad prober.
@@ -289,8 +340,8 @@ func TestUpdateImportConnection_KeyRotationProbeFailure(t *testing.T) {
 
 	// Create with good prober, then rotate with bad prober on the same DB.
 	repo := openTestConnectionRepo(t)
-	goodSvc := NewImportConnectionService(repo, testKey(), NoOpProber{})
-	badSvc2 := NewImportConnectionService(repo, testKey(), errProber{err: ErrProviderUnauthorized})
+	goodSvc := NewImportConnectionService(repo, nil, testKey(), NoOpProber{})
+	badSvc2 := NewImportConnectionService(repo, nil, testKey(), errProber{err: ErrProviderUnauthorized})
 
 	conn2, err := goodSvc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "Rotate Probe", APIKey: "good-key",
@@ -406,4 +457,96 @@ func TestOpenSecret_ReturnsPlaintext(t *testing.T) {
 	secret, err := svc.OpenSecret(context.Background(), conn.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "the-real-key-xyz", secret)
+}
+
+// --- cash_account_id (B-T212-INVST / Slice 4b) ---
+
+func TestCreateImportConnection_CashAccountIDSetAndValidated(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedTestAccount(t, database, "active", true)
+
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, conn.CashAccountID)
+	assert.Equal(t, accountID, *conn.CashAccountID)
+}
+
+func TestCreateImportConnection_CashAccountIDNotFoundRejected(t *testing.T) {
+	svc, _ := newTestConnectionServiceWithAccounts(t)
+	missing := int64(999999)
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &missing,
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+}
+
+func TestCreateImportConnection_CashAccountIDNonPostableRejected(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedTestAccount(t, database, "active", false)
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+}
+
+func TestCreateImportConnection_CashAccountIDArchivedRejected(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedTestAccount(t, database, "archived", true)
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+}
+
+// TestUpdateImportConnection_OmittedCashAccountIDPreservesExisting guards the
+// same PATCH-omission class of bug as auto_refresh_enabled (T-21-adjacent,
+// see docs/backlog.md's "PATCH omission overwrites" review checklist entry):
+// a rename/rotate request that never mentions cash_account_id must not clear it.
+func TestUpdateImportConnection_OmittedCashAccountIDPreservesExisting(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedTestAccount(t, database, "active", true)
+
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	require.NoError(t, err)
+
+	renamed, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1, ID: conn.ID, DisplayName: "ISA Renamed", ConfigJSON: "{}",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, renamed.CashAccountID)
+	assert.Equal(t, accountID, *renamed.CashAccountID)
+}
+
+func TestUpdateImportConnection_CashAccountIDCanBeSetLater(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+	})
+	require.NoError(t, err)
+	assert.Nil(t, conn.CashAccountID)
+
+	accountID := seedTestAccount(t, database, "active", true)
+	updated, err := svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1, ID: conn.ID, DisplayName: conn.DisplayName, ConfigJSON: "{}",
+		CashAccountID: &accountID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, updated.CashAccountID)
+	assert.Equal(t, accountID, *updated.CashAccountID)
 }

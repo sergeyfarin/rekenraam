@@ -48,6 +48,12 @@ ImportConnectionResponse:
         Whether this connection is auto-refreshed on a rolling ~24h cadence
         since its last fetch attempt. Manual "refresh now" always works
         regardless of this setting.
+    cash_account_id:
+      type: integer
+      format: int64
+      description: >-
+        The settlement account for BUY/SELL/DIVIDEND cash legs. Omitted if
+        not yet set — rows needing it stay `needs_attention` until it is.
     created_at:
       type: string
       format: date-time
@@ -84,6 +90,12 @@ CreateImportConnectionRequest:
     config:
       type: string
       description: Optional JSON string of non-secret provider configuration.
+    cash_account_id:
+      type: integer
+      format: int64
+      description: >-
+        Optional settlement account for BUY/SELL/DIVIDEND cash legs. Can also
+        be set later via PATCH.
 
 UpdateImportConnectionRequest:
   type: object
@@ -104,3 +116,10 @@ UpdateImportConnectionRequest:
       description: >-
         Enable/disable the ~24h rolling auto-refresh schedule for this
         connection. Omitted leaves the current setting unchanged.
+    cash_account_id:
+      type: integer
+      format: int64
+      description: >-
+        Set/replace the settlement account for BUY/SELL/DIVIDEND cash legs.
+        Omitted leaves the current setting unchanged (there is currently no
+        way to explicitly clear it back to unset via PATCH).
