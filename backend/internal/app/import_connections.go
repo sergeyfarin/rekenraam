@@ -28,9 +28,8 @@ var (
 type ConnectionProber interface {
 	// Probe returns nil if the key is valid, ErrProviderUnauthorized if the
 	// provider rejects it, or another error for transient failures.
-	// configJSON is the connection's non-secret config (e.g. base_url
-	// override for sandbox/test endpoints); sourceKind selects which
-	// provider's prober logic applies.
+	// configJSON is the connection's non-secret provider config; sourceKind
+	// selects which provider's prober logic applies.
 	Probe(ctx context.Context, sourceKind string, apiKey string, configJSON string) error
 }
 
@@ -130,7 +129,7 @@ func (s *ImportConnectionService) CreateImportConnection(ctx context.Context, in
 	if err := validateConnectionInput(input.DisplayName, input.SourceKind, input.APIKey); err != nil {
 		return ImportConnection{}, err
 	}
-	if err := validateConfigJSON(input.ConfigJSON); err != nil {
+	if err := validateConfigJSON(input.SourceKind, input.ConfigJSON); err != nil {
 		return ImportConnection{}, err
 	}
 	if err := s.validateCashAccountID(ctx, input.CashAccountID); err != nil {
@@ -225,9 +224,6 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	if strings.TrimSpace(input.DisplayName) == "" {
 		return ImportConnection{}, ValidationError{Message: "display_name is required"}
 	}
-	if err := validateConfigJSON(input.ConfigJSON); err != nil {
-		return ImportConnection{}, err
-	}
 	if err := s.validateCashAccountID(ctx, input.CashAccountID); err != nil {
 		return ImportConnection{}, err
 	}
@@ -240,6 +236,9 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 		}
 		return ImportConnection{}, fmt.Errorf("get import connection for update: %w", err)
 	}
+	if err := validateConfigJSON(existing.SourceKind, input.ConfigJSON); err != nil {
+		return ImportConnection{}, err
+	}
 
 	configJSON := input.ConfigJSON
 	if configJSON == "" {
@@ -250,10 +249,9 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 	keyForHint := ""
 	if input.NewAPIKey != "" {
 		// Probe the new key against the config being saved (configJSON), not
-		// existing.ConfigJSON — api_key and config (e.g. base_url) can be
-		// rotated together, and probing against the stale config would
-		// validate the key against an endpoint different from the one this
-		// update actually persists.
+		// existing.ConfigJSON — api_key and config can be rotated together,
+		// and probing against stale config would validate a different
+		// connection shape from the one this update actually persists.
 		if err := s.prober.Probe(ctx, existing.SourceKind, input.NewAPIKey, configJSON); err != nil {
 			if errors.Is(err, ErrProviderUnauthorized) {
 				return ImportConnection{}, ErrProviderUnauthorized
@@ -491,12 +489,21 @@ func validateConnectionInput(displayName, sourceKind, apiKey string) error {
 // validateConfigJSON rejects malformed JSON before it reaches the
 // json_valid(config_json) CHECK constraint, so callers get a 400
 // VALIDATION_FAILED instead of an internal SQLite constraint error.
-func validateConfigJSON(configJSON string) error {
+func validateConfigJSON(sourceKind string, configJSON string) error {
 	if configJSON == "" {
 		return nil
 	}
 	if !json.Valid([]byte(configJSON)) {
 		return ValidationError{Message: "config must be valid JSON"}
+	}
+	if sourceKind == "trading212" {
+		var cfg map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+			return ValidationError{Message: "config must be valid JSON"}
+		}
+		if _, ok := cfg["base_url"]; ok {
+			return ValidationError{Message: "trading212 config must not include base_url"}
+		}
 	}
 	return nil
 }

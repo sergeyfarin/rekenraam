@@ -60,14 +60,17 @@ func newImportFetchTestService(t *testing.T) (*ImportService, *ImportConnectionS
 	return svc, connService, importRepo, database
 }
 
-func createTestTrading212Connection(t *testing.T, connService *ImportConnectionService, baseURL string) ImportConnection {
+func createTestTrading212Connection(t *testing.T, svc *ImportService, connService *ImportConnectionService, baseURL string) ImportConnection {
 	t.Helper()
+	if svc != nil {
+		svc.trading212BaseURL = baseURL
+	}
 	conn, err := connService.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
 		SourceKind:  "trading212",
 		DisplayName: "Test T212",
 		APIKey:      "test-api-key",
-		ConfigJSON:  fmt.Sprintf(`{"base_url":%q}`, baseURL),
+		ConfigJSON:  "{}",
 	})
 	require.NoError(t, err)
 	return conn
@@ -105,7 +108,7 @@ func sourceMetaOf(t *testing.T, importRepo *db.ImportRepository, batchID int64) 
 // second call correctly flags them "needs_attention" instead.
 func TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew(t *testing.T) {
 	svc, connService, importRepo, _ := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
+	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	ctx := context.Background()
 
 	nowStr := "2026-06-30T00:00:00Z"
@@ -164,7 +167,7 @@ func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
 	defer server.Close()
 
 	svc, connService, importRepo, _ := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
@@ -210,7 +213,7 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 	defer server.Close()
 
 	svc, connService, importRepo, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	// Seed the minimal account + transaction rows import_commit_identities'
@@ -296,7 +299,7 @@ func TestStartOnlineImport_GuardsAgainstConcurrentFetch(t *testing.T) {
 	defer server.Close()
 
 	svc, connService, _, _ := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	_, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
@@ -328,7 +331,7 @@ func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
 	defer server.Close()
 
 	svc, connService, importRepo, _ := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	const attempts = 12
@@ -373,7 +376,7 @@ func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
 // would permanently trip the in-flight guard with nothing to ever process it.
 func TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch(t *testing.T) {
 	svc, connService, importRepo, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
+	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	ctx := context.Background()
 
 	boom := errors.New("boom: payload build failed")
@@ -412,7 +415,7 @@ func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
 	defer server.Close()
 
 	svc, connService, importRepo, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
@@ -450,7 +453,7 @@ func TestProcessTrading212FetchWork_TransientErrorRetriesWithoutFailingBatch(t *
 	defer server.Close()
 
 	svc, connService, importRepo, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
@@ -483,7 +486,7 @@ func TestImportFetchWork_RestartReclaimsExpiredLease(t *testing.T) {
 	defer server.Close()
 
 	svc, connService, importRepo, _ := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
@@ -555,7 +558,7 @@ func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
 	defer server.Close()
 
 	svc, connService, importRepo, _ := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	ctx := context.Background()
 
 	result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})

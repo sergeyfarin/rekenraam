@@ -177,9 +177,8 @@ func TestTrading212Prober_ValidKeySucceeds(t *testing.T) {
 	defer server.Close()
 
 	prober := NewTrading212Prober(server.Client())
-	configJSON, err := json.Marshal(map[string]string{"base_url": server.URL})
-	require.NoError(t, err)
-	err = prober.Probe(context.Background(), "trading212", "good-key", string(configJSON))
+	prober.baseURL = server.URL
+	err := prober.Probe(context.Background(), "trading212", "good-key", "{}")
 	assert.NoError(t, err)
 }
 
@@ -190,18 +189,7 @@ func TestTrading212Prober_InvalidKeyReturnsProviderUnauthorized(t *testing.T) {
 	defer server.Close()
 
 	prober := NewTrading212Prober(server.Client())
-	configJSON, err := json.Marshal(map[string]string{"base_url": server.URL})
-	require.NoError(t, err)
-	err = prober.Probe(context.Background(), "trading212", "bad-key", string(configJSON))
+	prober.baseURL = server.URL
+	err := prober.Probe(context.Background(), "trading212", "bad-key", "{}")
 	assert.True(t, errors.Is(err, ErrProviderUnauthorized))
-}
-
-func TestTrading212BaseURLFromConfig_MalformedOrEmptyFallsBackToDefault(t *testing.T) {
-	assert.Equal(t, "", trading212BaseURLFromConfig(""))
-	assert.Equal(t, "", trading212BaseURLFromConfig("{not json"))
-	assert.Equal(t, "", trading212BaseURLFromConfig("{}"))
-}
-
-func TestTrading212BaseURLFromConfig_ReadsOverride(t *testing.T) {
-	assert.Equal(t, "https://demo.trading212.com/api/v0", trading212BaseURLFromConfig(`{"base_url":"https://demo.trading212.com/api/v0"}`))
 }
