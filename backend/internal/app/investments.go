@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -238,6 +239,13 @@ type InvestmentTradeInput struct {
 	LotAllocations   []InvestmentLotAllocationInput
 	ChangeReason     string
 	CostBasisMethod  string
+	// OriginType/Operation override the default "browser_api"/"investment.buy"
+	// (or "investment.sell") attribution — set by the Trading 212 import
+	// commit path (B-T212-INVST) so an auto-booked trade is correctly
+	// labeled OriginType="import" instead of looking like a manual browser
+	// action. Empty (every existing caller) keeps the original defaults.
+	OriginType string
+	Operation  string
 }
 
 type SellPreviewResult struct {
@@ -286,6 +294,10 @@ type DividendInput struct {
 	PayeeID              *int64
 	Status               string
 	ChangeReason         string
+	// OriginType/Operation: see InvestmentTradeInput's doc comment — same
+	// override mechanism, same reason (B-T212-INVST import attribution).
+	OriginType string
+	Operation  string
 }
 
 type ReinvestedDividendInput struct {
@@ -501,6 +513,70 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 	return toInvestmentInstrument(record), nil
 }
 
+// ResolveOrCreateInstrumentForImport finds an instrument by ISIN, falling
+// back to ticker/symbol, creating a new one (named/coded from the ticker)
+// only if neither matches. Used by the Trading 212 import commit path
+// (B-T212-INVST): creation only ever happens here, at commit time, never at
+// fetch/preview time — see docs/import-connection-accounts-plan.md's
+// discard-orphan concern (a discarded preview batch must not leave behind a
+// durably-created instrument nobody asked for). Returns the resolved
+// instrument's InstrumentID and CommodityID together, since callers need
+// both (CommodityID for postings, InstrumentID for CreateHoldingAccount).
+func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string, effectiveFrom string) (instrumentID int64, commodityID int64, err error) {
+	isin = strings.TrimSpace(isin)
+	ticker = strings.TrimSpace(ticker)
+
+	if isin != "" {
+		if rec, err := s.repository.InstrumentByISIN(ctx, BookID, isin); err == nil {
+			return rec.ID, rec.CommodityID, nil
+		} else if !errors.Is(err, db.ErrNotFound) {
+			return 0, 0, fmt.Errorf("find instrument by isin: %w", err)
+		}
+	}
+	if ticker != "" {
+		if rec, err := s.repository.InstrumentBySymbol(ctx, BookID, ticker); err == nil {
+			return rec.ID, rec.CommodityID, nil
+		} else if !errors.Is(err, db.ErrNotFound) {
+			return 0, 0, fmt.Errorf("find instrument by symbol: %w", err)
+		}
+	}
+	if ticker == "" {
+		return 0, 0, fmt.Errorf("cannot create instrument: no ticker")
+	}
+
+	identifiersJSON := "{}"
+	if isin != "" {
+		if encoded, err := json.Marshal(map[string]string{"isin": isin}); err == nil {
+			identifiersJSON = string(encoded)
+		}
+	}
+	instrument, err := s.CreateInstrument(ctx, InvestmentInstrumentInput{
+		OwnerUserID:    ownerUserID,
+		AuthSessionID:  authSessionID,
+		RequestID:      requestID,
+		OriginType:     "import",
+		Operation:      "investment.instrument.create_from_import",
+		CommodityCode:  ticker,
+		InstrumentType: "stock",
+		DisplayName:    ticker,
+		Symbol:         ticker,
+		QuantityScale:  6,
+		PriceScale:     4,
+		// EffectiveFrom must be no later than the importing trade's own
+		// date — the CreateInstrument default ("today") would otherwise
+		// make PostingCommodityRule find no commodity version effective as
+		// of a back-dated fill and fail "posting commodity is invalid".
+		EffectiveFrom:   effectiveFrom,
+		IdentifiersJSON: identifiersJSON,
+		MetadataJSON:    "{}",
+		ChangeReason:    "created from Trading 212 import",
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("create instrument for import: %w", err)
+	}
+	return instrument.ID, instrument.CommodityID, nil
+}
+
 func (s *InvestmentService) UpdateInstrument(ctx context.Context, input InvestmentInstrumentInput) (InvestmentInstrument, error) {
 	if input.OwnerUserID <= 0 {
 		return InvestmentInstrument{}, ValidationError{Message: "owner user is required"}
@@ -694,8 +770,8 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "investment.buy",
+		OriginType:    defaultString(input.OriginType, "browser_api"),
+		Operation:     defaultString(input.Operation, "investment.buy"),
 		ChangeReason:  input.ChangeReason,
 		Spec: TransactionInput{
 			Status:          status,
@@ -735,7 +811,7 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 		CreatedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
-		OriginType:      "browser_api",
+		OriginType:      defaultString(input.OriginType, "browser_api"),
 		Operation:       "investment.lot.create",
 		ChangeReason:    "created lot from buy transaction",
 		EventKind:       "acquisition",
@@ -852,8 +928,8 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "investment.sell",
+		OriginType:    defaultString(input.OriginType, "browser_api"),
+		Operation:     defaultString(input.Operation, "investment.sell"),
 		ChangeReason:  input.ChangeReason,
 		Spec: TransactionInput{
 			Status:          status,
@@ -898,7 +974,7 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 		ActorUserID:     input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
 		RequestID:       input.RequestID,
-		OriginType:      "browser_api",
+		OriginType:      defaultString(input.OriginType, "browser_api"),
 		Operation:       "investment.lot.dispose",
 		ChangeReason:    "disposed lots from sell transaction",
 	})
@@ -987,8 +1063,8 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "investment.dividend",
+		OriginType:    defaultString(input.OriginType, "browser_api"),
+		Operation:     defaultString(input.Operation, "investment.dividend"),
 		ChangeReason:  input.ChangeReason,
 		Spec: TransactionInput{
 			Status:          status,

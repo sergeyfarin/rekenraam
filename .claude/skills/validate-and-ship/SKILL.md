@@ -58,6 +58,17 @@ non-trivial diff (yours or reviewed):
    raw Go errors leaking to clients.
 9. **i18n bypass** — hard-coded English in UI or in `lib/api/`.
 10. **Logging financial content** — forbidden at every level.
+11. **Builder-output tests that never reach the real consumer** — a test that
+    checks a spec-building function's *return value* in isolation (e.g.
+    `buildTransactionSpec`) is not the same as proving it survives the
+    consumer's real validation. `EntryKind: "main"` sat in
+    `buildTransactionSpec` since the import feature's first commit — invalid
+    per `entryKinds`, so every `CommitImportBatch` call failed the instant it
+    reached `TransactionService.CreateTransaction` for real — undetected
+    because no test drove a staged row through the *actual* commit path
+    against a real account (T-22). When testing a function that produces
+    input for another service, add at least one test that calls the
+    consumer for real, not just asserts on the producer's output shape.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

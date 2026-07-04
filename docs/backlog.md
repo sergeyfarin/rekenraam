@@ -127,6 +127,13 @@ entry point specifically — still only covered by `import_qif_test.go`'s parser
 tests and manual/UI testing. Low priority now that the shared core has coverage;
 revisit if QIF-path regressions start slipping through.
 
+**Retrospective note (2026-07-03):** this item undersold the actual gap.
+Staging (`stageParseResult`) had coverage, but **committing** — the entire
+point of an import — did not: no test anywhere in the suite drove a staged
+row through `CommitImportBatch` against a real account/ledger, for *any*
+source. That gap hid a severity-1 bug (T-22, `EntryKind: "main"`) that made
+every single commit fail from day one. Closed by Slice 4b's tests; see T-22.
+
 ### T-14 Trading 212 fetch silently truncates history beyond 50 pages `[x]`
 **File:** `backend/internal/onlinesource/trading212/fetcher.go` (`maxPages`, `Fetch`),
 `backend/internal/app/import_fetch_worker.go` (`runTrading212Fetch`).
@@ -302,27 +309,62 @@ guessed values now correctly flag `needs_attention`). This also resolved
 Slice 4b's biggest open risk — the order-fill/dividend endpoint shapes are
 now verified, not guessed (see `docs/trading212-import-plan.md` Slice 4b).
 
-### B-T212-INVST Trading 212 investment lots not imported `[ ]`
-**File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`.
+### T-22 Every import commit failed "entry kind is invalid" — never caught by any test `[x]`
+**File:** `backend/internal/app/import_service.go` (`buildTransactionSpec`),
+`backend/internal/app/transactions_validate.go` (`entryKinds`).
 
-Online import (R7, Trading 212) imports **cash-account movements** only. Instrument
-buy/sell fills are flagged `needs_attention` and not booked as lots — the same
-stance QIF takes on `!Type:Invst`.
+Found and closed 2026-07-03 while building Slice 4b's test fixtures — the
+first tests in the whole suite to drive a staged row through the complete
+`CommitImportBatch` → `TransactionService.CreateTransaction` path against a
+real account (see T-13: "narrowed, not fully closed" undersold how much was
+actually untested). Severity-1, and **not specific to Trading 212**: every
+single `CommitImportBatch` call, for *any* import source (QIF file upload or
+online), set `JournalEntryInput.EntryKind` to the literal string `"main"` —
+not a member of the valid `entryKinds` set
+(`ordinary`/`transfer_leg`/`exchange`/`investment`/`opening_balance`/`adjustment`).
+The moment a committed row actually reached real validation, it failed with
+`"entry kind is invalid"` and the whole batch reported `failed`/`0 committed`.
+This has been present since the import feature's very first commit
+(2026-06-27) — every prior test either checked `buildTransactionSpec`'s
+returned struct in isolation (never posting it) or never called
+`CommitImportBatch` at all, so nothing ever exercised the real posting path.
+Fixed: `EntryKind: "ordinary"`. Verified by
+`TestCommitImportBatch_GenericCashRowCommitsToRealLedger`
+(`backend/internal/app/import_trading212_invest_test.go` — deliberately
+source-agnostic, no Trading 212 involved, to prove this is a pipeline fix not
+a Trading-212-specific one) plus the four B-T212-INVST commit tests in the
+same file, all of which exercise the same real-ledger commit path.
 
-**Planned 2026-07-01, not yet built.** The investments-UI blocker is gone (R12
-shipped), but scoping this for real implementation surfaced a second, unrelated
-prerequisite: `import_connections` has no relationship to `accounts` at all today,
-and a holding account in this codebase is 1:1 with a single instrument
-(`CreateHoldingAccount`), so "the" holding account for a brokerage connection is a
-growing per-instrument set, not one value — the plain per-batch account picker
-cash-movement rows use doesn't generalize. `docs/import-connection-accounts-plan.md`
-designs the fix (a `cash_account_id` column + an `import_connection_holdings`
-mapping table, auto-created/linked per instrument). `docs/trading212-import-plan.md`
-Slice 4b is the concrete implementation plan once that lands: new fetcher fields for
-order fills (ticker/quantity/price — endpoint shape still unverified against the
-live API, same caveat Slice 2 had for cash history), instrument find-or-create,
-and a `CommitImportBatch` branch that routes to `InvestmentService.Buy/Sell/Dividend`
-instead of the generic transaction builder.
+### B-T212-INVST Trading 212 investment lots not imported `[~]`
+**File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,
+`backend/internal/app/import_trading212_invest.go`.
+
+Closed 2026-07-03 (Slice 4b) for the core flow: order fills route through
+`InvestmentService.Buy`/`Sell` (real lots, via a per-connection
+per-instrument holding account, `import_connection_holdings`), dividends
+through `InvestmentService.Dividend`. Instrument resolution is ISIN-first,
+ticker/symbol-second, create-third
+(`InvestmentService.ResolveOrCreateInstrumentForImport`); all creation
+(instrument, holding account) happens at commit time only, never at fetch
+time (the accounts-plan doc's discard-orphan concern). Anything that can't
+resolve (no `cash_account_id` configured, no instrument match, insufficient
+lots, no dividend default) falls back to the pre-4b plain-cash-row behavior
+— a strict superset, never a regression. See
+`docs/trading212-import-plan.md` Slice 4b for the full writeup, including
+two bugs found and fixed while building this (a holding-account
+`opened_on`/`effective_from` defaulting to "today" instead of the trade's
+own date, and the unrelated severity-1 `EntryKind: "main"` bug, T-22).
+
+**Remaining, by design (`[~]` not `[ ]`):** accounts-plan "scenario 2" (link
+a Trading 212 instrument to an *already-existing*, manually-tracked holding
+account, with explicit human confirmation) is not implemented — resolution
+always either reuses a connection-linked account or creates a fresh one. A
+user who tracked AAPL manually before connecting Trading 212 gets a
+**second**, separate AAPL holding account once Trading 212 starts trading
+it, rather than an automatic/confirmed merge. Revisit if a real user hits
+this. Also not implemented: the preview UI does not show a
+resolved/proposed instrument name before commit (resolution is commit-time
+only) — a deferred UX polish, not a correctness gap.
 
 ### B-T212-SCHED Trading 212 scheduled auto-refresh `[x]`
 **File:** `docs/trading212-import-plan.md` (Slice 4a), `backend/internal/app/import_scheduler.go`.

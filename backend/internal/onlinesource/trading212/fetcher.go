@@ -320,16 +320,17 @@ func (f *Fetcher) fetchOrdersPage(ctx context.Context, apiKey string, path strin
 			ticker = item.Order.Instrument.Ticker
 		}
 		out = append(out, OrderFill{
-			FillID:   item.Fill.ID.String(),
-			OrderID:  item.Order.ID.String(),
-			Ticker:   ticker,
-			ISIN:     item.Order.Instrument.ISIN,
-			Side:     item.Order.Side,
-			Quantity: item.Fill.Quantity.String(),
-			Price:    item.Fill.Price.String(),
-			Currency: item.Order.Currency,
-			FilledAt: item.Fill.FilledAt,
-			NetValue: item.Fill.WalletImpact.NetValue.String(),
+			FillID:           item.Fill.ID.String(),
+			OrderID:          item.Order.ID.String(),
+			Ticker:           ticker,
+			ISIN:             item.Order.Instrument.ISIN,
+			Side:             item.Order.Side,
+			Quantity:         item.Fill.Quantity.String(),
+			Price:            item.Fill.Price.String(),
+			Currency:         item.Order.Currency,
+			FilledAt:         item.Fill.FilledAt,
+			NetValue:         item.Fill.WalletImpact.NetValue.String(),
+			NetValueCurrency: item.Fill.WalletImpact.Currency,
 		})
 	}
 	return out, next, retryAfter, shouldRetry, nil

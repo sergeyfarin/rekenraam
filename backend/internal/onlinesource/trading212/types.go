@@ -64,15 +64,23 @@ type OrderFill struct {
 	ISIN     string
 	Side     string // "BUY" | "SELL"
 	Quantity string // decimal string, shares filled in this fill
-	Price    string // decimal string, fill price (instrument currency)
-	Currency string // ISO 4217, the order's currency
+	Price    string // decimal string, fill price, denominated in Currency
+	Currency string // ISO 4217, the order's own trading currency (for Price)
 	FilledAt string // RFC3339
 	// NetValue is fill.walletImpact.netValue: the actual net cash effect of
 	// this fill (fees/taxes already netted in by the provider) — this is
 	// what the ledger's cash leg must move, not quantity*price recomputed
 	// from scratch, per "no floating point" (never re-derive money via
 	// arithmetic on decimal strings in Go).
-	NetValue string
+	//
+	// NetValueCurrency (walletImpact.currency) is NOT necessarily the same
+	// as Currency: a multi-currency Trading 212 account can trade an
+	// instrument priced in one currency while its wallet settles in
+	// another (the provider converts internally) — using Currency for
+	// NetValue would silently mislabel the cash leg's currency whenever
+	// they differ. Always pair NetValue with NetValueCurrency, never Currency.
+	NetValue         string
+	NetValueCurrency string
 }
 
 // OrdersFetchResult mirrors FetchResult for the orders endpoint.

@@ -1,9 +1,30 @@
 # Import Connection ↔ Account Linking Plan
 
-Status: **planning only, nothing implemented**. Written 2026-07-01 while scoping
-Trading 212 Slice 4 (`docs/trading212-import-plan.md`). This is a prerequisite
-design for **B-T212-INVST** (investment lot import) and is written generically
-because the same gap will hit every future online provider, not just Trading 212.
+Status: **shipped 2026-07-03** as part of Trading 212 Slice 4b
+(`docs/trading212-import-plan.md`). Written 2026-07-01 while scoping that
+slice; this is a prerequisite design for **B-T212-INVST** (investment lot
+import) and is written generically because the same gap will hit every
+future online provider, not just Trading 212.
+
+**What shipped, and one deliberate deviation:**
+- Migration `0009_import_connection_accounts.sql`: `cash_account_id` column
+  + `import_connection_holdings` table, exactly as designed below.
+- The deferred-creation rule (resolution/lookup can run early, but
+  **creation** only happens at commit time) was followed exactly — see
+  Slice 4b's writeup for the "opened_on/effective_from must be the trade's
+  own date, not today" bug this surfaced.
+- **Scenario 2 (link to an existing pre-connection holding account, with
+  explicit human confirmation) was not implemented.** Resolution always
+  either reuses a connection-linked account or creates a fresh one; the
+  "ambiguous existing match" heuristic and its confirmation UI described
+  below are a deferred follow-up, tracked under B-T212-INVST in
+  `docs/backlog.md`. This means: a user who already tracked an instrument
+  manually before connecting Trading 212 will get a **second**, separate
+  holding account for it once Trading 212 starts trading that instrument,
+  not an automatic/confirmed merge into their existing one.
+- The delete+recreate dedupe-break and multi-currency cash-settlement risks
+  below remain open exactly as documented — neither was hit or resolved
+  during Slice 4b.
 
 Governed by `docs/accounts-system-design.md` (institutions/accounts),
 `docs/investments-plan.md` (holding accounts, lots), `docs/import-plan.md`

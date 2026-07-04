@@ -430,6 +430,24 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
+		// B-T212-INVST (Slice 4b): a Trading 212 order-fill/dividend row
+		// tries the investment-posting path first — if it resolves (a cash
+		// account is configured on the connection, the instrument matches
+		// or can be created, and the trade actually posts), it's committed
+		// as a real Buy/Sell/Dividend and this row is done. Anything else
+		// (not an investment row, or investment posting didn't work out)
+		// falls through unchanged to the generic buildTransactionSpec path
+		// below — a strict superset of pre-Slice-4b behavior.
+		if handled, txnID, identityAccountID, err := s.commitTrading212InvestmentRow(ctx, row, batch, input, nowStr); err != nil {
+			return result, fmt.Errorf("commit trading212 investment row %d: %w", row.ID, err)
+		} else if handled {
+			if err := s.recordCommitIdentityAndMarkRow(ctx, row.ID, row.DedupeFingerprint, batch.SourceKind, identityAccountID, txnID, nowStr); err != nil {
+				return result, fmt.Errorf("record investment commit row %d: %w", row.ID, err)
+			}
+			result.CommittedCount++
+			continue
+		}
+
 		resolution, err := parseResolutionJSON(row.ResolutionJSON)
 		if err != nil || resolution.AccountID == 0 {
 			if err := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
@@ -492,37 +510,8 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
-		// Record commit identity + mark row committed in a single tx.
-		// This ensures that if we crash after identity write, the staged row is also
-		// marked committed, so a retry sees commit_status=committed and skips it.
-		database := s.repository.DB()
-		tx, err := database.BeginTx(ctx, nil)
-		if err != nil {
-			return result, fmt.Errorf("begin commit identity tx row %d: %w", row.ID, err)
-		}
-		identityErr := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
-			BookID:                 BookID,
-			DedupeFingerprint:      row.DedupeFingerprint,
-			CommittedTransactionID: txn.ID,
-			SourceKind:             batch.SourceKind,
-			AccountID:              resolution.AccountID,
-			CreatedAt:              nowStr,
-		})
-		if identityErr != nil {
-			_ = tx.Rollback()
-			return result, fmt.Errorf("create commit identity row %d: %w", row.ID, identityErr)
-		}
-		rowErr := s.repository.CommitImportStagedRowInTx(ctx, tx, db.CommitImportStagedRowParams{
-			RowID:                  row.ID,
-			CommitStatus:           "committed",
-			CommittedTransactionID: sql.NullInt64{Int64: txn.ID, Valid: true},
-		})
-		if rowErr != nil {
-			_ = tx.Rollback()
-			return result, fmt.Errorf("mark row committed %d: %w", row.ID, rowErr)
-		}
-		if err := tx.Commit(); err != nil {
-			return result, fmt.Errorf("commit identity tx row %d: %w", row.ID, err)
+		if err := s.recordCommitIdentityAndMarkRow(ctx, row.ID, row.DedupeFingerprint, batch.SourceKind, resolution.AccountID, txn.ID, nowStr); err != nil {
+			return result, fmt.Errorf("record commit row %d: %w", row.ID, err)
 		}
 		result.CommittedCount++
 	}
@@ -567,6 +556,44 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 
 	result.Status = finalStatus
 	return result, nil
+}
+
+// recordCommitIdentityAndMarkRow records the commit identity + marks the
+// staged row committed in a single DB transaction, so a crash between the
+// two never leaves an orphan identity with no corresponding committed row
+// (or vice versa) — a retry sees commit_status=committed and skips it.
+// Shared by CommitImportBatch's generic path and its Trading 212 investment
+// branch (B-T212-INVST, Slice 4b) so both go through the exact same
+// idempotency mechanics.
+func (s *ImportService) recordCommitIdentityAndMarkRow(ctx context.Context, rowID int64, dedupeFingerprint string, sourceKind string, accountID int64, transactionID int64, nowStr string) error {
+	database := s.repository.DB()
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin commit identity tx: %w", err)
+	}
+	if err := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
+		BookID:                 BookID,
+		DedupeFingerprint:      dedupeFingerprint,
+		CommittedTransactionID: transactionID,
+		SourceKind:             sourceKind,
+		AccountID:              accountID,
+		CreatedAt:              nowStr,
+	}); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("create commit identity: %w", err)
+	}
+	if err := s.repository.CommitImportStagedRowInTx(ctx, tx, db.CommitImportStagedRowParams{
+		RowID:                  rowID,
+		CommitStatus:           "committed",
+		CommittedTransactionID: sql.NullInt64{Int64: transactionID, Valid: true},
+	}); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("mark row committed: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit identity tx: %w", err)
+	}
+	return nil
 }
 
 // DiscardImportBatch marks a previewing batch as discarded.
@@ -768,7 +795,7 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 		JournalEntries: []JournalEntryInput{
 			{
 				EntryDate: date,
-				EntryKind: "main",
+				EntryKind: "ordinary",
 				Postings:  postings,
 			},
 		},

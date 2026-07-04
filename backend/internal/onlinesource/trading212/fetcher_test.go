@@ -421,9 +421,14 @@ func writeGoldenOrderJSON(w http.ResponseWriter, nextPagePath string) {
 					"id": 111, "ticker": "AAPL_US_EQ", "side": "BUY", "currency": "USD",
 					"instrument": map[string]any{"ticker": "AAPL_US_EQ", "isin": "US0378331005", "name": "Apple Inc.", "currency": "USD"},
 				},
+				// walletImpact.currency deliberately differs from order.currency:
+				// a multi-currency account can trade a USD-priced instrument while
+				// its wallet settles net_value in EUR (the provider converts
+				// internally) — this golden fixture guards against conflating
+				// the two (see OrderFill.NetValueCurrency's doc comment).
 				"fill": map[string]any{
 					"id": 222, "filledAt": "2024-02-01T10:00:00Z", "price": "150.25", "quantity": "2",
-					"walletImpact": map[string]any{"currency": "USD", "netValue": "-300.75"},
+					"walletImpact": map[string]any{"currency": "EUR", "netValue": "-278.50"},
 				},
 			},
 		},
@@ -455,8 +460,11 @@ func TestFetchOrdersParsesRealShape(t *testing.T) {
 	if fill.Side != "BUY" || fill.Quantity != "2" || fill.Price != "150.25" || fill.Currency != "USD" {
 		t.Fatalf("unexpected order/fill fields: %+v", fill)
 	}
-	if fill.NetValue != "-300.75" {
+	if fill.NetValue != "-278.50" {
 		t.Fatalf("expected wallet impact net value passed through raw, got %q", fill.NetValue)
+	}
+	if fill.NetValueCurrency != "EUR" {
+		t.Fatalf("expected NetValueCurrency from walletImpact.currency (distinct from the order's own Currency=USD), got %q", fill.NetValueCurrency)
 	}
 	if fill.FilledAt != "2024-02-01T10:00:00Z" {
 		t.Fatalf("unexpected filledAt: %q", fill.FilledAt)

@@ -197,7 +197,7 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   category; R6 should show per-split category selectors in the preview UI and route
   each split to its own `CategoryID` derived from `category_hint` in normalized JSON.
 
-### R7. Online ingestion + payee/category cleanup — 🟦 Slices 1–3, 4a shipped
+### R7. Online ingestion + payee/category cleanup — 🟩 Trading 212 fully shipped (Slices 1–4b)
 - Online sources implement the same adapter contract, driven by the durable work
   queue (ADR 0010) so refreshes are restart-safe — same model as FX coverage.
 - **First provider: Trading 212** (token-based public API, no OAuth/PSD2). Proves
@@ -223,12 +223,21 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   scheduler (`ImportService.StartScheduler`, `app/import_scheduler.go`)
   reusing the existing manual-refresh path and its in-flight guard; no new
   fetch logic.
-- **Remaining (Slice 4b, planned but not built):** investment lot import
-  (B-T212-INVST), blocked on a new prerequisite design doc,
-  `docs/import-connection-accounts-plan.md` (import connections have no
-  relationship to accounts today, which BUY/SELL lot mapping needs and plain
-  cash-movement rows didn't). See `docs/trading212-import-plan.md` Slice 4b
-  for the concrete plan.
+- **Slice 4b shipped (2026-07-03):** investment lot import (B-T212-INVST) —
+  order fills route through `InvestmentService.Buy`/`Sell` (creating real
+  lots via a per-connection, per-instrument holding account,
+  `import_connection_holdings`), dividends through
+  `InvestmentService.Dividend`. Built on the new
+  `docs/import-connection-accounts-plan.md` (`cash_account_id` +
+  `import_connection_holdings`), also shipped in this pass. Anything that
+  can't resolve (no cash account configured, no instrument match,
+  insufficient lots, no dividend default) falls back to the plain cash row
+  behavior from Slices 1–3, never blocking the batch. One deliberate scope
+  cut: linking a Trading 212 instrument to an *already-existing*,
+  manually-tracked holding account requires no special handling today — it
+  always creates a fresh holding account instead (tracked as the remaining
+  open part of B-T212-INVST in `docs/backlog.md`). Trading 212 is now a
+  complete first online-import provider end to end.
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
 

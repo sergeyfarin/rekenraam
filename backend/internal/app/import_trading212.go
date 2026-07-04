@@ -46,10 +46,14 @@ type trading212OrderFill struct {
 	ISIN     string `json:"isin"`
 	Side     string `json:"side"`
 	Quantity string `json:"quantity"`
-	Price    string `json:"price"`
+	Price    string `json:"price"` // denominated in Currency (the instrument's trading currency)
 	Currency string `json:"currency"`
 	FilledAt string `json:"filled_at"`
-	NetValue string `json:"net_value"`
+	// NetValue is denominated in NetValueCurrency, which is NOT always the
+	// same as Currency for a multi-currency account — see trading212.OrderFill's
+	// doc comment. Always pair the two.
+	NetValue         string `json:"net_value"`
+	NetValueCurrency string `json:"net_value_currency"`
 }
 
 // trading212Dividend mirrors trading212.Dividend (B-T212-INVST/Slice 4b).
@@ -227,11 +231,16 @@ func trading212OrderFillToStagedRow(o trading212OrderFill, connectionID int64, o
 
 	fp := buildTrading212OrderFingerprint(connectionID, o.FillID, occurrence)
 
+	// Amount/CommodityHint use NetValue/NetValueCurrency (the wallet's
+	// actual cash effect), NOT Price/Currency (the instrument's trading
+	// currency) — they can differ on a multi-currency account. This is
+	// what lets the row commit correctly as a plain cash transaction via
+	// the generic path if investment resolution never succeeds.
 	return StagedRow{
 		DedupeFingerprint: fp,
 		Date:              date,
 		Amount:            o.NetValue,
-		CommodityHint:     strings.ToUpper(strings.TrimSpace(o.Currency)),
+		CommodityHint:     strings.ToUpper(strings.TrimSpace(o.NetValueCurrency)),
 		PayeeHint:         o.Ticker,
 		Memo:              strings.TrimSpace(o.Side + " " + o.Ticker),
 		ExternalRef:       o.FillID,

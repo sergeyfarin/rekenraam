@@ -9,7 +9,9 @@ deferred behind (`docs/trading212-import-plan.md`).
 Realises roadmap **R12 (Investments UI + gains reporting)**. Written for the
 Sonnet model to implement, grounded in the actual code as of 2026-06-27.
 
-Status: Slices 1, 2, 3, and 4 **complete** (R12 shipped). Last updated 2026-06-28.
+Status: Slices 1, 2, 3, and 4 **complete** (R12 shipped). Slice 5 (Trading 212
+lots) shipped 2026-07-03 as Slice 4b of `docs/trading212-import-plan.md`.
+Last updated 2026-07-03.
 
 > **Outcome (kept as the design record).** This plan is **done** through Slice 4 —
 > see `implemented.md` (Investments) and `roadmap.md` R12 for the shipped state. The
@@ -21,8 +23,12 @@ Status: Slices 1, 2, 3, and 4 **complete** (R12 shipped). Last updated 2026-06-2
 >   (Backlog "Resolved".)
 > - **OpenAPI coverage added** — all investment paths incl. `/investments/gains` now
 >   in `api/openapi/` with generated TS types; risk #1 below is resolved.
-> - **Slice 5 (Trading 212 lots, `B-T212-INVST`)** is the only remaining work, and it
->   lives in `docs/trading212-import-plan.md`, deferred with R7.
+> - **Slice 5 (Trading 212 lots, `B-T212-INVST`) shipped 2026-07-03** — see
+>   `docs/trading212-import-plan.md` Slice 4b for what actually got built
+>   (order-fill/dividend fetching, instrument/holding-account resolution,
+>   `CommitImportBatch` routing to `Buy`/`Sell`/`Dividend`) and its one
+>   deliberate scope cut (no confirmation UI for linking to a pre-existing
+>   holding account — always creates a new one instead).
 
 ---
 
@@ -754,14 +760,13 @@ action arrives as a suggestion the user can accept or ignore through the UI,
 never auto-posted without an active automation rule; the gains report shows
 server-computed figures and degrades gracefully to cost-only when no price exists.
 
-### Slice 5 (then) — Return to Trading 212
+### Slice 5 (then) — Return to Trading 212 — ✅ shipped 2026-07-03
 
-With investments working, reopen `docs/trading212-import-plan.md`:
-- Lift the `B-T212-INVST` restriction: map Trading 212 order fills to buys/sells
-  (lots) and dividends to investment events, routed through the now-UI-backed
-  investment service.
-- Everything else in that plan (credential store, durable fetch, dedupe) is
-  unchanged.
+See `docs/trading212-import-plan.md` Slice 4b for the full writeup. Summary:
+Trading 212 order fills now map to Buy/Sell (lots) and dividends to
+`InvestmentService.Dividend`, routed through the investment service via a
+new `CommitImportBatch` branch. Everything else in that plan (credential
+store, durable fetch, dedupe) was unchanged, as planned.
 
 ---
 

@@ -605,16 +605,17 @@ func toAdapterOrderFills(fills []trading212.OrderFill) []trading212OrderFill {
 	out := make([]trading212OrderFill, len(fills))
 	for i, f := range fills {
 		out[i] = trading212OrderFill{
-			FillID:   f.FillID,
-			OrderID:  f.OrderID,
-			Ticker:   f.Ticker,
-			ISIN:     f.ISIN,
-			Side:     f.Side,
-			Quantity: f.Quantity,
-			Price:    f.Price,
-			Currency: f.Currency,
-			FilledAt: f.FilledAt,
-			NetValue: f.NetValue,
+			FillID:           f.FillID,
+			OrderID:          f.OrderID,
+			Ticker:           f.Ticker,
+			ISIN:             f.ISIN,
+			Side:             f.Side,
+			Quantity:         f.Quantity,
+			Price:            f.Price,
+			Currency:         f.Currency,
+			FilledAt:         f.FilledAt,
+			NetValue:         f.NetValue,
+			NetValueCurrency: f.NetValueCurrency,
 		}
 	}
 	return out

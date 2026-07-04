@@ -27,10 +27,23 @@ and `cashMovementTypes` included several values (`WITHDRAWAL`, `DIVIDEND`,
 never emits — its actual `type` enum is only `WITHDRAW`/`DEPOSIT`/`FEE`/`TRANSFER`.
 Both were unverified guesses from before this plan's author had access to the
 published OpenAPI spec. `Probe` now hits `/equity/account/summary` instead of
-reusing the history endpoint. See `docs/backlog.md` for the tracked item.**
-Slice 4b (investment lot import, B-T212-INVST) is still planned, blocked on
-`docs/import-connection-accounts-plan.md` landing first — see "Delivery
-slices" below.
+reusing the history endpoint. See `docs/backlog.md` T-21 (closed).
+Slice 4b (investment lot import, B-T212-INVST) shipped 2026-07-03 — see its
+"Delivery slices" entry below for what's actually built vs. deferred.**
+
+**Also found and fixed while building Slice 4b (severity-1, pre-existing since
+Slice 1, unrelated to Trading 212 specifically):** `buildTransactionSpec`
+(`import_service.go`) set every journal entry's `EntryKind` to `"main"`, which
+is not a member of the valid `entryKinds` set
+(`transactions_validate.go`) — every `CommitImportBatch` call, for **any**
+import source (QIF file upload or Trading 212), failed `"entry kind is
+invalid"` the instant it reached `TransactionService.CreateTransaction`'s
+real validation. This had gone completely undetected because no test in the
+suite drove a staged row through the full commit path against a real
+account/ledger — every prior test either checked `buildTransactionSpec`'s
+output in isolation or never called `CommitImportBatch` at all (see the old
+T-13 "narrowed, not fully closed" note, which was closer to the truth than
+anyone realized). Fixed: `EntryKind: "ordinary"`. See `docs/backlog.md` T-22.
 
 Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
 migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
@@ -540,98 +553,119 @@ new fetch logic.
   stops future automatic fetches; the manual refresh button and the
   scheduler share one in-flight guard so they can never race each other.
 
-#### Slice 4b — Investment lot import (B-T212-INVST)
+#### Slice 4b — Investment lot import (B-T212-INVST) — ✅ shipped 2026-07-03
 
-**Blocked on `docs/import-connection-accounts-plan.md` shipping first**
-(the `cash_account_id` column + `import_connection_holdings` table + the
-holding-account resolution logic it defines). Once that lands:
+Delivered on top of `docs/import-connection-accounts-plan.md`'s
+`cash_account_id` column and `import_connection_holdings` table (both
+shipped in the same pass — that doc was "planning only" before this). What
+actually shipped, and where it differs from the original plan above:
 
-1. **Fetcher:** extend `internal/onlinesource/trading212` with order-fill and
-   dividend detail. Two open questions to resolve against the live API before
-   writing code (both already flagged in "Risks & open questions" below,
-   restated here because they block 4b specifically):
-   - Does `/history/transactions` already carry ticker/ISIN/quantity/price for
-     `DIVIDEND` and settled-order rows (in fields the current
-     `transactionHistoryResponse` struct doesn't parse yet), or is a second
-     endpoint (order history, e.g. `/equity/history/orders`) required for
-     quantity/price? Verify first — extending the existing struct is far
-     cheaper than adding a second paginated endpoint.
-   - If a second endpoint is required, it needs its own cursor/pagination
-     handling mirroring `Fetch`, but can reuse the same `maxPages`/continuation
-     machinery (T-14) rather than duplicating it.
-   - Whichever shape it turns out to be, isolate the new fields in response
-     structs with a golden-file test, per this doc's existing "Implementer
-     note on API specifics" precedent — field-name assumptions here are
-     exactly as unverified as the original cash-history ones were in Slice 2.
-2. **Instrument resolution:** a new helper (`resolveTrading212Instrument` or
-   similar, in `internal/app`) that looks up `InvestmentInstrument` by ISIN
-   first, falls back to ticker/symbol. The **lookup** runs at fetch-worker
-   time (same place cash movements get staged) so the preview UI can show the
-   resolved (or proposed-new) instrument before the user commits. **Revised
-   per review:** the actual `InvestmentService.CreateInstrument` call for an
-   unmatched ticker must be deferred to **commit** time, not fetch time — see
-   the "Open concern" callout in `docs/import-connection-accounts-plan.md`'s
-   holding-account section for why (a fetch that only stages preview rows
-   must not durably create instruments/accounts that outlive a discarded
-   batch). The preview shows "will create instrument X" as a proposed action;
-   the row's `ParseWarning`/metadata carries enough (ISIN, ticker, name) for
-   commit to actually create it.
-3. **Holding + cash account resolution:** exactly as specified in
-   `docs/import-connection-accounts-plan.md` — reuse
-   `import_connection_holdings` (auto-create-or-link-with-confirmation) and
-   `import_connections.cash_account_id`. Same deferred-creation rule as
-   above: matching/linking an *existing* holding account is fine to do at
-   fetch time (read-only), but creating a **new** holding account and its
-   mapping row must happen at commit time, for the same discard-orphan
-   reason.
-4. **Commit-path branch:** `CommitImportBatch` needs a per-row-kind check —
-   rows whose `Raw["type"]` is `BUY`/`SELL`/`DIVIDEND` *and* have a resolved
-   instrument + accounts skip `buildTransactionSpec` and instead call
-   `InvestmentService.Buy`/`Sell`/`Dividend` directly, passing through the
-   row's date/quantity/price/amount. Rows that fail resolution (no
-   instrument match, no cash/holding account configured, ambiguous holding
-   account) keep today's `needs_attention` behavior — this is a strict
-   superset of current behavior, never a regression.
-   - **Wiring gap (flagged in review, not yet resolved):** `ImportService`
-     has no `InvestmentService` dependency today
-     (`backend/internal/app/import_service.go` — its struct only holds
-     `transactionService`, `accountRepository`, the online-import fields).
-     Slice 4b must add one, threaded through `NewImportService` and
-     `cmd/rekenraam/command.go`, before `CommitImportBatch` can call
-     `InvestmentService.Buy`/`Sell`/`Dividend`.
-   - **Attribution gap (flagged in review, not yet resolved):**
-     `InvestmentService.Buy`/`Sell`/`Dividend` currently hardcode
-     `OriginType: "browser_api"` on every transaction they create
-     (`backend/internal/app/investments.go`, e.g. the `Buy`/`Sell`/`Dividend`
-     methods around lines 613/659/697/855/990). Calling them unchanged from
-     the import commit path would mislabel imported trades as manual
-     browser-originated actions — the same way `buildTransactionSpec` stamps
-     `OriginType: "import"` for cash rows. These methods need an
-     origin-aware variant (or an `OriginType`/`OriginRef` parameter) before
-     Slice 4b wires them up, plus the same `import_commit_identities`
-     idempotency handling the cash path already gets, so a re-fetch/re-commit
-     can't double-book a lot or a disposal.
-   - **Sell-specific:** `Sell` needs a cost-basis method and enough open lot
-     quantity; if `PreviewSell`'s disposal simulation fails
-     (`ErrInvestmentLotsInsufficient` — e.g. history fetched only partially,
-     or a corporate action the pipeline doesn't understand happened), fall
-     back to `needs_attention` with the specific error surfaced rather than
-     failing the whole batch.
-5. **Dividends:** route through `InvestmentService.Dividend`, using
-   `ResolveDividendDefault` for the income account exactly as the manual
-   dividend form does, keyed off the resolved instrument's `CommodityID`.
-6. **Tests:** golden-file parse of a captured order-fill/dividend payload;
-   commit-time routing test (BUY creates a lot, SELL disposes lots and
-   matches `PreviewSell`'s figures, DIVIDEND creates no lot); instrument
-   auto-creation on first-seen ticker; holding-account reuse across two
-   fetches of the same instrument; insufficient-lots sell falls back to
-   `needs_attention` instead of failing the batch.
-- **Acceptance:** connecting a Trading 212 account with real trade history
-  results in lots appearing in `/investments/positions` with correct
-  quantities and cost basis, dividends appear as investment income (not
-  generic cash transactions), and re-running a refresh never double-books a
-  lot or a disposal (idempotency inherited from the existing provider-id
-  fingerprint, same guarantee cash movements already have).
+1. **Fetcher:** `internal/onlinesource/trading212` gained `FetchOrders`
+   (`/equity/history/orders`) and `FetchDividends`
+   (`/equity/history/dividends`), verified against the **real, published**
+   Trading 212 OpenAPI spec rather than guessed — resolving this plan's
+   biggest listed risk outright. A second endpoint was required (order
+   fills carry ticker/ISIN/quantity/price in a nested `{order, fill}` shape;
+   dividends are a fully separate endpoint neither cash-history rows nor
+   order rows ever include). Rather than duplicating `Fetch`'s
+   pagination/incremental-cursor/continuation loop three times, it was
+   factored into one shared generic `fetchPaginated[T]` engine
+   (`fetcher.go`) parameterized per endpoint — exactly the reuse this plan
+   asked for. **Correctness catch:** an order fill's actual cash effect
+   (`fill.walletImpact.netValue`) is denominated in `walletImpact.currency`,
+   which is **not** always the same as the order's own trading currency
+   (`order.currency`) — a multi-currency account can trade a USD-priced
+   instrument while its wallet nets out in EUR. `OrderFill` carries both
+   (`Currency` for price, `NetValueCurrency` for the cash amount) so the
+   cash leg is never posted under the wrong currency.
+2. **Cursor storage:** three independently-paginated endpoints need three
+   independent incremental cursors. `import_connections.fetch_cursor` was
+   renamed to `transactions_cursor` and `orders_cursor`/`dividends_cursor`
+   added (migration `0010`) — a straight rename/split, not a
+   backward-compat shim, since no production data exists yet. The durable
+   worker (`import_fetch_worker.go`) now walks three **stages**
+   (transactions → orders → dividends) per logical fetch, each with its own
+   maxPages/continuation chain identical to the original Slice 3 machinery;
+   a stage transitions to the next only once its own pagination naturally
+   exhausts, and the connection's three cursors are all persisted together
+   only once the final (dividends) stage finishes.
+3. **Instrument resolution:** `InvestmentService.ResolveOrCreateInstrumentForImport`
+   — ISIN match (`InstrumentByISIN`, a `json_extract` scan over
+   `identifiers_json` since ISIN isn't an indexed column) first, ticker/symbol
+   match (`InstrumentBySymbol`, indexed) second, create third. **Deferred-
+   creation invariant kept:** all of this runs at **commit** time only, not
+   fetch time — the plan's discard-orphan concern is fully avoided because
+   nothing durable is created until the user actually clicks commit. The
+   tradeoff (also a deliberate scope cut, see below): the preview UI does
+   **not** yet show a resolved/proposed instrument name before commit — a
+   documented, deferred UX enhancement, not a correctness gap.
+4. **Holding + cash account resolution:** `import_connection_holdings`
+   lookup/create via `ImportConnectionService.HoldingAccountForCommodity`/
+   `LinkHolding`, same deferred-to-commit-time rule. **Scope cut:**
+   accounts-plan "scenario 2" (link to an *existing* pre-connection holding
+   account, with explicit human confirmation before the first auto-link) is
+   **not implemented** — resolution always either reuses a
+   connection-linked account or creates a fresh one. Tracked as a follow-up
+   in `docs/backlog.md` (B-T212-INVST, now the open remainder of that item).
+   **New bug found and fixed while building this:** a holding account (and
+   instrument) created for a back-dated fill defaulted its
+   `opened_on`/`effective_from` to "today" (`CreateAccount`'s default when
+   left blank) — for any fill dated before today, every posting to that
+   brand-new account then failed `"posting account is invalid"`
+   (`PostingAccountRule` finds no account version effective as of the
+   entry date). Fixed by passing the trade's own date as
+   `OpenedOn`/`EffectiveFrom` for both the instrument and the holding account.
+5. **Commit-path branch:** `CommitImportBatch` (`import_service.go`) now
+   tries `commitTrading212InvestmentRow` (`import_trading212_invest.go`)
+   before the generic path; `handled=false` (not a trading212 investment
+   row, or resolution/posting failed for any reason — no cash account
+   configured, insufficient lots, no dividend default, ...) falls through
+   unchanged to `buildTransactionSpec`, a strict superset of pre-4b
+   behavior. Both the wiring gap (`ImportService` now takes an
+   `*InvestmentService`) and the attribution gap flagged during scoping were
+   closed: `InvestmentTradeInput`/`DividendInput` gained optional
+   `OriginType`/`Operation` override fields (empty = unchanged default
+   `"browser_api"`/`"investment.buy"` etc., so every existing browser-API
+   caller is unaffected) and the import commit path passes `"import"`.
+   Idempotency is inherited for free: the outer `CommitImportBatch` loop
+   already checks `FindCommitIdentity` before any per-row branch runs, and
+   the investment branch records its own identity via the same
+   `recordCommitIdentityAndMarkRow` helper the generic path now also uses
+   (extracted from what was inline code, so both paths share one
+   crash-safe identity+mark-committed transaction).
+   `CreateHoldingAccount` still hardcodes `OriginType: "browser_api"` (not
+   fixed) — deliberately out of scope: it's a one-time structural action
+   per instrument, not a recurring money-moving posting, so misattributing
+   it is much lower-impact than the trade/dividend postings this slice did
+   fix. Tracked in `docs/backlog.md` if it ever needs closing.
+6. **Dividends:** route through `InvestmentService.Dividend`, which already
+   auto-resolves the income account via `ResolveDividendDefault` keyed off
+   the resolved instrument's `CommodityID` (unchanged, exactly as planned).
+7. **Severity-1 bug found and fixed, unrelated to Trading 212 itself:**
+   `buildTransactionSpec`'s `EntryKind: "main"` was not a valid entry kind —
+   see this doc's status line above and `docs/backlog.md` T-22. Discovered
+   only because this slice's tests were the first in the whole suite to
+   drive a staged row through the complete `CommitImportBatch` →
+   `TransactionService.CreateTransaction` path against a real account.
+- **Tests:** `internal/onlinesource/trading212/fetcher_test.go` — golden-file
+  parses for both new endpoints against the real schema, path-correctness
+  guards, incremental-cursor-on-`filledAt`/`paidOn` tests, a same-vs-different
+  wallet/order currency guard. `internal/app/import_trading212_invest_test.go`
+  — buy creates instrument+holding+lot, a second fill reuses the same holding
+  account (not a duplicate), no-cash-account falls back to the generic cash
+  path (and creates no instrument), dividend posts as investment income
+  without creating a lot, and the severity-1 `EntryKind` regression test
+  (source-agnostic, no Trading 212 involved).
+- **Acceptance:** met for the core flow — a buy/sell with a configured
+  `cash_account_id` and either an ISIN/ticker match or a creatable new
+  instrument results in a real lot via the same holding account across
+  fetches; a dividend with a configured default posts as investment income;
+  anything that can't resolve falls back to a plain cash row exactly like
+  before this slice, never blocking the batch. Not yet covered: sell-specific
+  insufficient-lots fallback and re-fetch/re-commit idempotency for
+  investment rows specifically have integration-level reasoning (inherited
+  from the shared identity mechanism) but no dedicated named test — a
+  reasonable next addition, not a known gap in the mechanism itself.
 
 ---
 

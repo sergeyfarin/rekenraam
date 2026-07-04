@@ -71,12 +71,12 @@ func NewImportConnectionService(
 
 // ImportConnection is the safe, public view of a connection — no secret.
 type ImportConnection struct {
-	ID                 int64
-	BookID             int64
-	SourceKind         string
-	DisplayName        string
-	KeyHint            string // "••••<last4>" — the only key info we surface
-	ConfigJSON         string
+	ID          int64
+	BookID      int64
+	SourceKind  string
+	DisplayName string
+	KeyHint     string // "••••<last4>" — the only key info we surface
+	ConfigJSON  string
 	// TransactionsCursor/OrdersCursor/DividendsCursor are the incremental
 	// cursors for each independently-paginated Trading 212 endpoint
 	// (B-T212-INVST, Slice 4b) — internal fetch-worker state, not surfaced
@@ -400,6 +400,27 @@ func (s *ImportConnectionService) MarkFetchFailed(ctx context.Context, id int64,
 		return fmt.Errorf("load import connection: %w", err)
 	}
 	return s.UpdateFetchCursor(ctx, id, existing.TransactionsCursor, existing.OrdersCursor, existing.DividendsCursor, "failed", fetchedAt)
+}
+
+// HoldingAccountForCommodity looks up the holding account already linked to
+// (connectionID, commodityID) for B-T212-INVST commit-time routing. The bool
+// is false if this commodity has never been seen for this connection before.
+func (s *ImportConnectionService) HoldingAccountForCommodity(ctx context.Context, connectionID int64, commodityID int64) (int64, bool, error) {
+	holdingAccountID, err := s.repository.HoldingAccountForCommodity(ctx, connectionID, commodityID)
+	if errors.Is(err, db.ErrNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("find holding account for commodity: %w", err)
+	}
+	return holdingAccountID, true, nil
+}
+
+// LinkHolding records (connectionID, commodityID) -> holdingAccountID so
+// future fetches reuse the same holding account. Called only from the
+// commit path (never at fetch time — see docs/import-connection-accounts-plan.md).
+func (s *ImportConnectionService) LinkHolding(ctx context.Context, connectionID int64, commodityID int64, holdingAccountID int64, createdAt string) error {
+	return s.repository.LinkHolding(ctx, connectionID, commodityID, holdingAccountID, createdAt)
 }
 
 // --- Helpers ---

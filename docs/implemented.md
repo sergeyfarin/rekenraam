@@ -59,7 +59,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Category transactions route | ✅ | `routes/app/categories/[id]`. |
 | Trash / recovery (soft-delete browse + guarded restore) | ✅ | `settings/trash`. |
 
-## Online Connections (R7) — 🟦 Slices 1–3 shipped (full Trading 212 online import)
+## Online Connections (R7) — 🟩 Trading 212 fully shipped (Slices 1–4b: cash movements + investment lots)
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -74,6 +74,8 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Connections UI on import page | ✅ | Masked key hint list, add-connection form (probe-then-store), inline delete confirm. |
 | **Slice 2: Trading 212 HTTP fetcher + adapter** | ✅ | `internal/onlinesource/trading212` (`Fetcher`: paging, 429/`Retry-After` backoff, cursor); `Trading212Adapter` (`internal/app/import_trading212.go`) registered in `NewImportService`; real `Trading212Prober` closes T-11. `stageParseResult` extracted from `StartImport` so file and fetch paths share staging logic (no queue wiring yet — Slice 3). |
 | **Slice 3: Durable fetch worker + online batch flow** | ✅ | `app/import_fetch_worker.go` (`kind="import.fetch.trading212"`, same claim/lease/retry shape as `pricing_worker.go`); `POST /imports` content-negotiated (`application/json` → `202` fetch-driven batch, `multipart/form-data` unchanged `201`); `POST /import-connections/{id}/refresh` (incremental, `202`); atomic guard+create+enqueue via `ImportRepository.StartOnlineImportBatch` (one transaction, closing a real TOCTOU race — T-16) → `ErrImportFetchInProgress`/`409 CONFLICT`; terminal-vs-retryable fetch failure classification (401/403 fail fast, other errors retry up to 8 attempts) written to both `import_batches.status` and `source_meta_json` (the field the frontend actually polls); `import_batches.connection_id` now written + `connection_display_name` snapshotted into `source_meta_json` so deleting a connection doesn't erase batch provenance (closes T-12); pagination continuation past the fetcher's 50-page-per-call budget (T-14) via `reason="continuation"` work-item chaining; incremental cursor re-scans same-timestamp movements instead of dropping them, and refuses to follow an absolute `nextPagePath` (T-17). Frontend: per-connection Import/Refresh button + polling "fetching" step, handing off to the existing preview/commit UI unchanged. 15 service-level Go tests (`import_fetch_worker_test.go`, `fetcher_test.go`) including a 12-goroutine concurrency race test and a multi-chunk continuation test, a frontend unit test for the `source_meta` polling contract, plus manual HTTP smoke tests against a fake Trading 212 server. |
+| **Slice 4a: scheduled auto-refresh (B-T212-SCHED)** | ✅ | Per-connection `auto_refresh_enabled` toggle drives `ImportService.StartScheduler`/`runDueTrading212AutoRefreshes` (`app/import_scheduler.go`) — a 24h-since-last-fetch cadence (not a fixed wall-clock time), reusing the existing manual-refresh path and its in-flight guard. Migration `0008`. |
+| **Slice 4b: investment lot import (B-T212-INVST)** | ✅ | Order fills route through `InvestmentService.Buy`/`Sell` (real lots via `import_connection_holdings`, a per-connection per-instrument holding-account mapping); dividends through `InvestmentService.Dividend`. Instrument resolution: ISIN → ticker/symbol → create (`ResolveOrCreateInstrumentForImport`), creation deferred to commit time only (`docs/import-connection-accounts-plan.md`, migration `0009`: `cash_account_id` + `import_connection_holdings`). Fetcher gained `FetchOrders`/`FetchDividends` against the real, spec-verified `/equity/history/orders`/`/equity/history/dividends` endpoints, sharing one generic `fetchPaginated[T]` pagination engine with the original cash-history `Fetch`. Multi-endpoint cursor tracking: `fetch_cursor` renamed to `transactions_cursor` + new `orders_cursor`/`dividends_cursor` (migration `0010`), the worker walking three stages per logical fetch. Rows that can't resolve (no cash account, no instrument match, insufficient lots, no dividend default) fall back to the pre-4b plain-cash-row behavior unchanged. Also found and fixed while building this: a severity-1, source-agnostic bug where `EntryKind: "main"` made every single `CommitImportBatch` call fail real validation since the import feature's first commit (T-22, `docs/backlog.md`), and a holding-account creation date defaulting to "today" instead of the trade's own date. |
 
 ## Import Pipeline (Phase 4, Slice 1) — 🟦 Core pipeline + QIF shipped
 
@@ -162,7 +164,7 @@ scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, reconcile UI, reports UI,
 pricing UI.
 
-Online import (R7) Slices 1–3 are shipped (Trading 212 connections, fetch, durable
-worker, online batch flow — see "Online Connections" above,
-`docs/trading212-import-plan.md`). Slice 4 (scheduled auto-refresh, investment lot
-import) is not started.
+Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
+fetch, durable worker, online batch flow, scheduled auto-refresh, investment
+lot import — see "Online Connections" above, `docs/trading212-import-plan.md`).
+A second online provider is not started.
