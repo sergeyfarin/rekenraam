@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -240,7 +241,14 @@ func verifyPassword(password string, encodedHash string) (bool, error) {
 		return false, err
 	}
 
-	derivedHash := argon2.IDKey([]byte(password), parsedHash.Salt, uint32(parsedHash.Iterations), uint32(parsedHash.MemoryKiB), uint8(parsedHash.Parallelism), uint32(len(parsedHash.Hash)))
+	derivedHash := argon2.IDKey(
+		[]byte(password),
+		parsedHash.Salt,
+		uint32(parsedHash.Iterations),
+		uint32(parsedHash.MemoryKiB),
+		uint8(parsedHash.Parallelism),
+		uint32(len(parsedHash.Hash)),
+	)
 	return subtle.ConstantTimeCompare(parsedHash.Hash, derivedHash) == 1, nil
 }
 
@@ -275,6 +283,9 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 	if err != nil {
 		return parsedPasswordHash{}, err
 	}
+	if err := validateArgonParameters(version, memoryKiB, iterations, parallelism); err != nil {
+		return parsedPasswordHash{}, err
+	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
@@ -294,6 +305,22 @@ func parsePasswordHash(encodedHash string) (parsedPasswordHash, error) {
 		Salt:        salt,
 		Hash:        hash,
 	}, nil
+}
+
+func validateArgonParameters(version, memoryKiB, iterations, parallelism int) error {
+	if version < 0 || version > math.MaxUint32 {
+		return fmt.Errorf("argon2 version out of range")
+	}
+	if memoryKiB <= 0 || memoryKiB > math.MaxUint32 {
+		return fmt.Errorf("argon2 memory parameter out of range")
+	}
+	if iterations <= 0 || iterations > math.MaxUint32 {
+		return fmt.Errorf("argon2 iterations parameter out of range")
+	}
+	if parallelism <= 0 || parallelism > math.MaxUint8 {
+		return fmt.Errorf("argon2 parallelism parameter out of range")
+	}
+	return nil
 }
 
 func (s *AuthService) passwordNeedsRehash(ctx context.Context, encodedHash string) bool {
