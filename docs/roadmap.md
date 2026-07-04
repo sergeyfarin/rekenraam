@@ -64,7 +64,7 @@ separate events with separate gates.
    alone fails reviews) — remove it, and decide whether `.archive/` belongs in
    public history at all. History rewrite via `git filter-repo` is cheapest
    **before** anyone has cloned.
-2. Add `LICENSE` (AGPL-3.0) and `SECURITY.md` with a private disclosure
+2. Done: Add `LICENSE` (AGPL-3.0) and `SECURITY.md` with a private disclosure
    channel (GitHub private vulnerability reporting or a dedicated email).
 3. Enable GitHub secret scanning + push protection and Dependabot; add
    `govulncheck` for the Go module (in CI or a scheduled workflow).
@@ -73,8 +73,7 @@ separate events with separate gates.
 
 4. Daily-driver core shipped: R2 reports UI, R3 exports (CSV + QIF), R5 CSV
    import — the "migrate from MS Money/Mint and watch it reconcile" demo.
-5. Close backlog T-19 (`REKENRAAM_SECRET_KEY` loss/rotation documentation) —
-   the first serious reviewer will find it.
+5. Done: close backlog T-19 (`REKENRAAM_SECRET_KEY` loss/rotation documentation).
 6. Signed release binaries (with reproducibility notes) once binaries are
    published.
 7. Marketplace listings (PikaPods, Cloudron, Elestio, Umbrel) and the

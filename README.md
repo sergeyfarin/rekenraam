@@ -281,6 +281,31 @@ For Docker Compose, stop the app before restore and copy the verified backup int
 
 The local owner recovery command also creates and verifies a SQLite backup by default before changing the owner password.
 
+## Online Provider Secret Key
+
+Online provider credentials, such as Trading 212 API keys, are encrypted at rest
+with `REKENRAAM_SECRET_KEY`. The value must be base64 for exactly 32 random bytes.
+Generate one with:
+
+```sh
+openssl rand -base64 32
+```
+
+Keep this value in the service environment or secret manager and back it up with
+the same care as the SQLite database. Losing it does not delete ledger data, but
+it makes stored online provider credentials unreadable.
+
+If `REKENRAAM_SECRET_KEY` is lost, restore it from backup if possible. If it
+cannot be restored, stop the app, take and verify a SQLite backup, start the app
+with a new key, delete the affected online import connections, and re-add them
+with fresh provider credentials. Existing imported transactions, lots, batches,
+and audit history remain in the database.
+
+There is currently no in-place `REKENRAAM_SECRET_KEY` rotation command. To rotate
+the key intentionally, use the same backup-first delete-and-re-add procedure for
+stored online import connections. Do not change the key while expecting existing
+connection secrets to keep working.
+
 ## Deploy Docker
 
 Build and run with Docker Compose:

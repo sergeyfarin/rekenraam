@@ -55,6 +55,26 @@ Only use the emergency override when backup creation or verification is impossib
 printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run ./backend/cmd/rekenraam recover-owner --password-stdin --allow-no-backup
 ```
 
+### Online Provider Secret Key
+
+`REKENRAAM_SECRET_KEY` encrypts online provider credentials at rest. It must be
+base64 for exactly 32 random bytes:
+
+```sh
+openssl rand -base64 32
+```
+
+Keep the value outside Git in the service environment or deployment secret
+manager, and back it up with the SQLite database. If the key is lost, existing
+online connection secrets cannot be decrypted. Restore the old key from backup,
+or stop the app, take and verify a SQLite backup, start with a new key, delete
+the affected online import connections, and re-add them with fresh provider
+credentials. Existing imported ledger data and import history remain durable.
+
+There is no in-place secret-key rotation command yet. Intentional rotation uses
+the same backup-first delete-and-re-add procedure for stored online import
+connections.
+
 ### Frontend Validation
 
 ```sh

@@ -259,18 +259,21 @@ exists; no cleanup job does. Cheapest fix: fold a delete into an existing
 once-a-minute scheduler tick (pattern: `app/import_scheduler.go`) or run it at
 startup + daily. Add a named test that seeded expired/revoked rows disappear.
 
-### T-19 `REKENRAAM_SECRET_KEY` has no rotation path `[ ]`
+### T-19 `REKENRAAM_SECRET_KEY` has no rotation path `[x]`
 **File:** `backend/internal/secretbox/secretbox.go`, `backend/internal/config/config.go`,
 `backend/internal/db/import_connections.go`.
 
-All stored provider credentials are sealed with the single AES-256-GCM key from
-`REKENRAAM_SECRET_KEY`. If the operator loses or must rotate that key, every
-`import_connections.encrypted_api_key` becomes permanently unreadable and there is
-no re-encryption command or documented procedure. Options when prioritized: a
-`rotate-secret-key` maintenance command (old key + new key → re-seal all rows in
-one transaction, backup-first like `recover-owner`), or at minimum a documented
-"delete and re-add connections" recovery note in README/deploy docs. Becomes more
-important with each new credential-storing provider.
+Closed by documenting the current operational path rather than adding a
+maintenance command. `README.md`, `docs/developer-workflow.md`, and
+`docs/conventions.md` now state that `REKENRAAM_SECRET_KEY` is a base64-encoded
+32-byte key, must be backed up with the SQLite database, and cannot currently be
+rotated in place. If the key is lost or intentionally rotated, the documented
+procedure is: stop the app, take and verify a SQLite backup, start with the new
+key, delete affected online import connections, and re-add them with fresh
+provider credentials. Imported ledger data, lots, batches, and audit history
+remain durable.
+
+Validation: docs-only change; `git diff --check` over touched docs.
 
 ### T-20 E2E coverage is 2 specs vs a full shipped app `[ ]`
 **File:** `e2e/playwright/` (`auth.spec.ts`, `health.spec.ts`).
