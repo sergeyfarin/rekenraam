@@ -33,6 +33,7 @@ type ImportService struct {
 	connectionService *ImportConnectionService
 	backgroundWork    *db.BackgroundWorkRepository
 	httpClient        *http.Client
+	trading212BaseURL string
 
 	// investmentService routes resolved Trading 212 order-fill/dividend rows
 	// to real Buy/Sell/Dividend calls at commit time (B-T212-INVST, Slice

@@ -324,16 +324,13 @@ func TestUpdateImportConnection_RotateKey(t *testing.T) {
 		ConfigJSON:  "{}",
 	})
 	require.NoError(t, err)
-	assert.Contains(t, updated.KeyHint, "9999")   // new last-4
+	assert.Contains(t, updated.KeyHint, "9999")    // new last-4
 	assert.NotContains(t, updated.KeyHint, "1111") // old last-4 gone
 }
 
 // TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig is a
-// regression test: rotating api_key and config (e.g. base_url) together
-// used to probe the new key against the connection's stale existing
-// config, so a probe could succeed against the old endpoint while a
-// broken new base_url was saved anyway. The probe must validate against
-// the config actually being persisted.
+// regression test: rotating api_key and provider config together must probe
+// the config actually being persisted, not the connection's stale config.
 func TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig(t *testing.T) {
 	repo := openTestConnectionRepo(t)
 	var lastConfigJSON string
@@ -342,11 +339,11 @@ func TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig(t *testing.
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "Rotate Both",
-		APIKey: "old-key-1111", ConfigJSON: `{"base_url":"https://old.example.com"}`,
+		APIKey: "old-key-1111", ConfigJSON: `{"label":"old"}`,
 	})
 	require.NoError(t, err)
 
-	newConfigJSON := `{"base_url":"https://new.example.com"}`
+	newConfigJSON := `{"label":"new"}`
 	_, err = svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
 		OwnerUserID: 1,
 		ID:          conn.ID,
@@ -356,6 +353,21 @@ func TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig(t *testing.
 	})
 	require.NoError(t, err)
 	assert.Equal(t, newConfigJSON, lastConfigJSON, "probe must validate the new key against the config being saved, not the connection's stale config")
+}
+
+func TestCreateImportConnection_Trading212BaseURLConfigRejected(t *testing.T) {
+	svc := newTestConnectionService(t, testKey(), NoOpProber{})
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1,
+		SourceKind:  "trading212",
+		DisplayName: "Unsafe Config",
+		APIKey:      "good-key-1234",
+		ConfigJSON:  `{"base_url":"https://attacker.example"}`,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, ValidationError{Message: "trading212 config must not include base_url"}, err)
 }
 
 func TestUpdateImportConnection_KeyRotationProbeFailure(t *testing.T) {

@@ -328,7 +328,8 @@ func containsString(values []string, target string) bool {
 // other source kinds fall through to NoOpProber until they have a real
 // provider integration.
 type Trading212Prober struct {
-	client *http.Client
+	client  *http.Client
+	baseURL string
 }
 
 func NewTrading212Prober(client *http.Client) *Trading212Prober {
@@ -339,8 +340,7 @@ func (p *Trading212Prober) Probe(ctx context.Context, sourceKind string, apiKey 
 	if sourceKind != "trading212" {
 		return nil
 	}
-	baseURL := trading212BaseURLFromConfig(configJSON)
-	fetcher := trading212.NewFetcher(p.client, baseURL)
+	fetcher := trading212.NewFetcher(p.client, p.baseURL)
 	if err := fetcher.Probe(ctx, apiKey); err != nil {
 		if errors.Is(err, trading212.ErrUnauthorized) {
 			return ErrProviderUnauthorized
@@ -348,20 +348,4 @@ func (p *Trading212Prober) Probe(ctx context.Context, sourceKind string, apiKey 
 		return fmt.Errorf("trading212 probe: %w", err)
 	}
 	return nil
-}
-
-// trading212BaseURLFromConfig reads config_json.base_url, the documented
-// override for the demo/sandbox endpoint and tests. Malformed or absent
-// config falls back to the fetcher's default (the live API).
-func trading212BaseURLFromConfig(configJSON string) string {
-	if configJSON == "" {
-		return ""
-	}
-	var cfg struct {
-		BaseURL string `json:"base_url"`
-	}
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
-		return ""
-	}
-	return cfg.BaseURL
 }

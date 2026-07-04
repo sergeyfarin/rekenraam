@@ -341,8 +341,7 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 		return fmt.Errorf("open import connection secret: %w", err)
 	}
 
-	baseURL := trading212BaseURLFromConfig(conn.ConfigJSON)
-	fetcher := trading212.NewFetcher(s.httpClient, baseURL)
+	fetcher := trading212.NewFetcher(s.httpClient, s.trading212BaseURL)
 
 	stage := payload.Stage
 	if stage == "" {

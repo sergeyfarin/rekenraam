@@ -39,7 +39,7 @@ func countBackgroundWork(t *testing.T, database *sql.DB, kind string) int {
 // before Slice 4a shipped.
 func TestRunDueTrading212AutoRefreshes_DisabledConnectionNeverTriggers(t *testing.T) {
 	svc, connService, _, database := newImportFetchTestService(t)
-	createTestTrading212Connection(t, connService, "http://example.invalid")
+	createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 
 	svc.runDueTrading212AutoRefreshes(context.Background(), testWorkerLogger())
 
@@ -57,7 +57,7 @@ func TestRunDueTrading212AutoRefreshes_NeverFetchedTriggersImmediately(t *testin
 	defer server.Close()
 
 	svc, connService, _, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	enableAutoRefresh(t, connService, conn)
 
 	svc.runDueTrading212AutoRefreshes(context.Background(), testWorkerLogger())
@@ -79,7 +79,7 @@ func TestRunDueTrading212AutoRefreshes_BoundaryJustUnderAndOverInterval(t *testi
 	defer server.Close()
 
 	svc, connService, _, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, server.URL)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
 	enableAutoRefresh(t, connService, conn)
 
 	lastFetched := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
@@ -104,7 +104,7 @@ func TestRunDueTrading212AutoRefreshes_BoundaryJustUnderAndOverInterval(t *testi
 // double-enqueue a second fetch on top of it.
 func TestRunDueTrading212AutoRefreshes_InFlightGuardSkipsWithoutError(t *testing.T) {
 	svc, connService, _, database := newImportFetchTestService(t)
-	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
+	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	enableAutoRefresh(t, connService, conn)
 
 	// Start a fetch and leave it unfinished (never call runDueTrading212Fetches),
@@ -129,7 +129,7 @@ func TestRunDueTrading212AutoRefreshes_InFlightGuardSkipsWithoutError(t *testing
 func TestListDueAutoRefreshConnectionIDs_ScopedToSourceKind(t *testing.T) {
 	database := openConnectionTestDatabase(t)
 	connService := NewImportConnectionService(db.NewImportConnectionRepository(database), nil, testKey(), NoOpProber{})
-	conn := createTestTrading212Connection(t, connService, "http://example.invalid")
+	conn := createTestTrading212Connection(t, nil, connService, "http://example.invalid")
 	enableAutoRefresh(t, connService, conn)
 
 	ids, err := connService.ListDueAutoRefreshConnectionIDs(context.Background(), "trading212", time.Now().UTC())
