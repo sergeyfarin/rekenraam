@@ -66,8 +66,12 @@ separate events with separate gates.
    **before** anyone has cloned.
 2. Done: Add `LICENSE` (AGPL-3.0) and `SECURITY.md` with a private disclosure
    channel (GitHub private vulnerability reporting or a dedicated email).
-3. Enable GitHub secret scanning + push protection and Dependabot; add
-   `govulncheck` for the Go module (in CI or a scheduled workflow).
+3. Partly done: Dependabot is configured in `.github/dependabot.yml`, and
+   `govulncheck` runs from `.github/workflows/govulncheck.yml`. Remaining manual
+   GitHub check: enable Secret Protection and repository-level push protection
+   if GitHub offers them for the repository; if unavailable while private and
+   user-owned, re-check immediately after the repository becomes public or move
+   the repository under an organization with Secret Protection available.
 
 ### Gates before the public announcement (one-shot first impression)
 

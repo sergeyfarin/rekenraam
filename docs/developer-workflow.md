@@ -175,6 +175,12 @@ The repo uses a fast CI workflow in `.github/workflows/ci.yml`.
 Workflow conventions:
 
 - Fast CI covers backend tests, frontend check, and integrated build.
+- Go vulnerability scanning runs in `.github/workflows/govulncheck.yml` with
+  `govulncheck ./...` from `backend/` on a weekly schedule, manually via
+  `workflow_dispatch`, and on backend-affecting pull requests.
+- Dependabot version updates are configured in `.github/dependabot.yml` for
+  GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
+  Docker runtime image.
 - E2E stays in a separate workflow and runs only when a real user journey exists.
 - Use `pnpm install --frozen-lockfile` in CI.
 - Keep CI commands aligned with the local wrapper scripts in `scripts/`.
