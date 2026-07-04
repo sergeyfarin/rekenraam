@@ -108,6 +108,15 @@ type errProber struct{ err error }
 
 func (p errProber) Probe(_ context.Context, _ string, _ string, _ string) error { return p.err }
 
+// recordingProber records the configJSON it was last called with, so a test
+// can assert which config a rotation was actually validated against.
+type recordingProber struct{ lastConfigJSON *string }
+
+func (p *recordingProber) Probe(_ context.Context, _ string, _ string, configJSON string) error {
+	*p.lastConfigJSON = configJSON
+	return nil
+}
+
 // --- Tests ---
 
 func TestCreateImportConnection_MissingKeyReturnsConfigRequired(t *testing.T) {
@@ -317,6 +326,36 @@ func TestUpdateImportConnection_RotateKey(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, updated.KeyHint, "9999")   // new last-4
 	assert.NotContains(t, updated.KeyHint, "1111") // old last-4 gone
+}
+
+// TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig is a
+// regression test: rotating api_key and config (e.g. base_url) together
+// used to probe the new key against the connection's stale existing
+// config, so a probe could succeed against the old endpoint while a
+// broken new base_url was saved anyway. The probe must validate against
+// the config actually being persisted.
+func TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig(t *testing.T) {
+	repo := openTestConnectionRepo(t)
+	var lastConfigJSON string
+	prober := &recordingProber{lastConfigJSON: &lastConfigJSON}
+	svc := NewImportConnectionService(repo, nil, testKey(), prober)
+
+	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "Rotate Both",
+		APIKey: "old-key-1111", ConfigJSON: `{"base_url":"https://old.example.com"}`,
+	})
+	require.NoError(t, err)
+
+	newConfigJSON := `{"base_url":"https://new.example.com"}`
+	_, err = svc.UpdateImportConnection(context.Background(), UpdateImportConnectionInput{
+		OwnerUserID: 1,
+		ID:          conn.ID,
+		DisplayName: "Rotate Both",
+		NewAPIKey:   "new-key-9999",
+		ConfigJSON:  newConfigJSON,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, newConfigJSON, lastConfigJSON, "probe must validate the new key against the config being saved, not the connection's stale config")
 }
 
 func TestUpdateImportConnection_KeyRotationProbeFailure(t *testing.T) {

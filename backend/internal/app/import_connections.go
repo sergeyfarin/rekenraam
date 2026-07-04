@@ -241,11 +241,20 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 		return ImportConnection{}, fmt.Errorf("get import connection for update: %w", err)
 	}
 
+	configJSON := input.ConfigJSON
+	if configJSON == "" {
+		configJSON = "{}"
+	}
+
 	newCiphertext := ""
 	keyForHint := ""
 	if input.NewAPIKey != "" {
-		// Probe the new key before rotating.
-		if err := s.prober.Probe(ctx, existing.SourceKind, input.NewAPIKey, existing.ConfigJSON); err != nil {
+		// Probe the new key against the config being saved (configJSON), not
+		// existing.ConfigJSON — api_key and config (e.g. base_url) can be
+		// rotated together, and probing against the stale config would
+		// validate the key against an endpoint different from the one this
+		// update actually persists.
+		if err := s.prober.Probe(ctx, existing.SourceKind, input.NewAPIKey, configJSON); err != nil {
 			if errors.Is(err, ErrProviderUnauthorized) {
 				return ImportConnection{}, ErrProviderUnauthorized
 			}
@@ -267,11 +276,6 @@ func (s *ImportConnectionService) UpdateImportConnection(ctx context.Context, in
 			return ImportConnection{}, fmt.Errorf("open existing secret: %w", err)
 		}
 		keyForHint = string(plaintext)
-	}
-
-	configJSON := input.ConfigJSON
-	if configJSON == "" {
-		configJSON = "{}"
 	}
 
 	autoRefreshEnabled := existing.AutoRefreshEnabled

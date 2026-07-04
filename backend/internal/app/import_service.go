@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -384,6 +385,7 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 	if err != nil {
 		return CommitImportBatchResult{}, fmt.Errorf("list rows for commit: %w", err)
 	}
+	sortRowsForInvestmentCommitOrder(rows)
 
 	now := s.now().UTC()
 	nowStr := now.Format(time.RFC3339)
@@ -434,12 +436,24 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 		// tries the investment-posting path first — if it resolves (a cash
 		// account is configured on the connection, the instrument matches
 		// or can be created, and the trade actually posts), it's committed
-		// as a real Buy/Sell/Dividend and this row is done. Anything else
-		// (not an investment row, or investment posting didn't work out)
-		// falls through unchanged to the generic buildTransactionSpec path
-		// below — a strict superset of pre-Slice-4b behavior.
+		// as a real Buy/Sell/Dividend and this row is done. A row that
+		// simply isn't an investment row, or hit an expected data gap (no
+		// dividend default yet, insufficient lots), falls through unchanged
+		// to the generic buildTransactionSpec path below — a strict superset
+		// of pre-Slice-4b behavior. An unexpected error (missing system
+		// account, invalid posting, a real ledger bug) fails just this row
+		// instead of the whole batch, same as any other per-row commit
+		// failure below.
 		if handled, txnID, identityAccountID, err := s.commitTrading212InvestmentRow(ctx, row, batch, input, nowStr); err != nil {
-			return result, fmt.Errorf("commit trading212 investment row %d: %w", row.ID, err)
+			if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+				RowID:        row.ID,
+				CommitStatus: "failed",
+				CommitError:  sql.NullString{String: err.Error(), Valid: true},
+			}); err2 != nil {
+				return result, fmt.Errorf("fail investment row %d after commit error: %w", row.ID, err2)
+			}
+			result.FailedCount++
+			continue
 		} else if handled {
 			if err := s.recordCommitIdentityAndMarkRow(ctx, row.ID, row.DedupeFingerprint, batch.SourceKind, identityAccountID, txnID, nowStr); err != nil {
 				return result, fmt.Errorf("record investment commit row %d: %w", row.ID, err)
@@ -663,6 +677,44 @@ func (s *ImportService) ListImportBatches(ctx context.Context, input ListImportB
 }
 
 // --- Helpers ---
+
+// sortRowsForInvestmentCommitOrder stable-sorts staged rows so Trading 212
+// order-fill/dividend rows (see rawKeyKind) commit oldest-first by trade
+// date, instead of the provider's newest-first paging order (row_index
+// ASC). Without this, a full-history import can stage a recent SELL ahead
+// of the older BUY that opened its lot, and commitTrading212InvestmentRow's
+// Sell call fails "insufficient lots" purely from processing order — not a
+// real data problem — and falls back to a plain cash transaction.
+// Non-investment rows have no normalized date key here and sort by their
+// empty key, which — being a stable sort — preserves their original
+// row_index-relative order; only investment rows are reordered relative to
+// each other and to non-investment rows.
+func sortRowsForInvestmentCommitOrder(rows []db.ImportStagedRowRecord) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		return investmentRowSortDate(rows[i]) < investmentRowSortDate(rows[j])
+	})
+}
+
+// investmentRowSortDate returns the row's normalized trade date if it's a
+// Trading 212 order-fill/dividend row, or "" otherwise (dates are
+// YYYY-MM-DD, so "" sorts first and never collides with a real date).
+func investmentRowSortDate(row db.ImportStagedRowRecord) string {
+	var raw map[string]string
+	if err := json.Unmarshal([]byte(row.RawJSON), &raw); err != nil {
+		return ""
+	}
+	kind := raw[rawKeyKind]
+	if kind != trading212RawKindOrderFill && kind != trading212RawKindDividend {
+		return ""
+	}
+	var normalized struct {
+		Date string `json:"date"`
+	}
+	if err := json.Unmarshal([]byte(row.NormalizedJSON), &normalized); err != nil {
+		return ""
+	}
+	return normalized.Date
+}
 
 func hashFingerprint(raw string) string {
 	h := sha256.Sum256([]byte(raw))

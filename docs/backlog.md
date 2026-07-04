@@ -335,6 +335,57 @@ source-agnostic, no Trading 212 involved, to prove this is a pipeline fix not
 a Trading-212-specific one) plus the four B-T212-INVST commit tests in the
 same file, all of which exercise the same real-ledger commit path.
 
+### T-23 Import preview UI only reviews the first page; commit processes every staged row `[ ]`
+**File:** `frontend/src/routes/app/import/+page.svelte` (`pollFetchStatus`, `handleCommit`),
+`backend/internal/app/import_service.go` (`GetImportBatch`, `CommitImportBatch`).
+
+Found during a Slice-4b-era review pass (2026-07-04). The preview screen fetches
+one page of staged rows (`getImportBatch(batchId, { limit: 500 })`) and never
+follows `next_cursor`; the backend also silently clamps any `limit > 200` down
+to 100 (`GetImportBatch`). `CommitImportBatch`, however, iterates *every* staged
+row in the batch regardless of what the UI ever rendered. For a batch with more
+rows than one page (a full-history Trading 212 backfill easily exceeds 100–500
+staged rows), the user can review/exclude/resolve only the rows they were shown
+and then commit a batch that silently processes rows they never saw — including
+rows that fail or get auto-resolved by global account/category assignment
+without the user ever laying eyes on them. Fix options: make the preview table
+consume `next_cursor` (infinite scroll/pagination), add a bulk apply-and-commit
+endpoint that doesn't require materializing every row client-side, or block
+`CommitImportBatch` until all rows have been fetched at least once by the
+client. Needs a test asserting a >1-page batch can't be committed with only
+page 1 resolved (or that the resolution flow can't silently skip unseen rows).
+
+### T-24 Investment trade/dividend postings bypass the reconciliation guard entirely `[ ]`
+**File:** `backend/internal/app/investments.go` (`Buy`, `Sell`, `Dividend`,
+`ReinvestedDividend`), `backend/internal/app/transactions_write.go` (`CreateTransaction`).
+
+Found during a Slice-4b-era review pass (2026-07-04). `TransactionService.CreateTransaction`
+is the only place that computes `reconciliationInvalidationRefsFromSpec` and enforces
+`ErrReconciliationOverrideRequired` when a posting would change a reconciled balance
+(`transactions_write.go:19-29`). `InvestmentService.Buy`/`Sell`/`Dividend`/`ReinvestedDividend`
+never call `CreateTransaction` — they call `prepareCreateTransaction` (which only cleans/
+validates the spec) and then post directly via `InvestmentRepository.CreateTransactionAndLot`/
+`CreateTransactionAndDisposeLots`, skipping the guard entirely. Per
+`.claude/skills/ledger-invariants`: "any operation that changes a reconciled balance must be
+guarded... forgetting the guard on a new path is a severity-1 bug." Concretely: a backdated
+Trading 212 buy/sell/dividend imported into an already-reconciled period posts successfully
+with no override check and no checkpoint invalidation — the reconciled balance silently
+becomes wrong with no record that it happened. This is a pre-existing gap in the investment
+service itself (predates B-T212-INVST), not something the Slice 4b import work introduced,
+but the import path is what makes it newly reachable with backdated, unreviewed data.
+`CommitImportBatchInput.ReconciliationOverride` is threaded into the generic cash commit
+path (`import_service.go:485`) but has no equivalent for the investment commit branch
+(`import_trading212_invest.go`) — even if the guard existed, there's no override plumbing to
+pass it through yet. Fix requires: (1) `InvestmentTradeInput`/`DividendInput` gain a
+`ReconciliationOverride bool`, (2) `Buy`/`Sell`/`Dividend`/`ReinvestedDividend` compute
+invalidation refs and enforce the guard the same way `CreateTransaction` does (likely by
+having `InvestmentRepository.CreateTransactionAndLot`/`CreateTransactionAndDisposeLots`
+accept `InvalidateCheckpointRefs`/`InvalidateCheckpointReason` the way `CreateTransactionParams`
+already does), (3) the T212 investment commit path passes `input.ReconciliationOverride`
+through. Needs a named test: sell/buy/dividend into a reconciled period without override
+must fail `ErrReconciliationOverrideRequired`, and with override must invalidate the
+checkpoint — mirroring the existing `transactions_write.go` coverage for the generic path.
+
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,
 `backend/internal/app/import_trading212_invest.go`.

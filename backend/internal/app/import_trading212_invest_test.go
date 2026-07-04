@@ -33,6 +33,15 @@ type investTestFixture struct {
 
 func newInvestTestFixture(t *testing.T) *investTestFixture {
 	t.Helper()
+	return newInvestTestFixtureWithOptions(t, true)
+}
+
+// newInvestTestFixtureWithOptions lets a test opt out of seeding the
+// commodity_trading system account (seedTradingAccount=false) — used to
+// simulate a real configuration gap Buy/Sell requires, since
+// account_versions rows are append-only and can't be deleted afterwards.
+func newInvestTestFixtureWithOptions(t *testing.T, seedTradingAccount bool) *investTestFixture {
+	t.Helper()
 	database := openConnectionTestDatabase(t)
 	ctx := context.Background()
 
@@ -54,7 +63,10 @@ func newInvestTestFixture(t *testing.T) *investTestFixture {
 
 	cashAccountID := seedTestAccount(t, database, "active", true)
 	categoryAccountID := seedTestAccount(t, database, "active", true)
-	tradingAccountID := seedCommodityTradingAccount(t, database)
+	var tradingAccountID int64
+	if seedTradingAccount {
+		tradingAccountID = seedCommodityTradingAccount(t, database)
+	}
 
 	accountRepository := db.NewAccountRepository(database)
 	accountService := NewAccountService(accountRepository, db.NewInstitutionRepository(database), nil)
@@ -304,6 +316,117 @@ func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t
 	instruments, err := f.investmentSvc.ListInstruments(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, instruments, "no instrument should be created when investment routing never engaged")
+}
+
+// TestCommitImportBatch_SellBeforeBuyInRowIndexOrderStillCommitsBothAsInvestmentTrades
+// is a regression test for a real ordering bug: a full Trading 212 history
+// import stages rows in provider paging order (newest page first), so a
+// batch can end up with a SELL at a lower row_index than the BUY that
+// opened its lot. CommitImportBatch used to iterate row_index ASC
+// unconditionally, so the SELL was attempted before any lot existed,
+// failed "insufficient lots", and silently fell back to a plain cash
+// transaction instead of a real investment trade. Both fills share one
+// batch (stageOrderFillRow always creates a fresh batch, so this test
+// stages them directly) with the SELL row staged first — the newest-first
+// shape the provider actually produces.
+func TestCommitImportBatch_SellBeforeBuyInRowIndexOrderStillCommitsBothAsInvestmentTrades(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	ctx := context.Background()
+
+	batch, err := f.importRepo.CreateImportBatch(ctx, db.CreateImportBatchParams{
+		BookID: BookID, SourceKind: "trading212",
+		ConnectionID:   sql.NullInt64{Int64: conn.ID, Valid: true},
+		SourceMetaJSON: `{"fetch_status":"ready"}`, CreatedAt: time.Now().UTC().Format(time.RFC3339), ActorUserID: f.ownerUserID,
+	})
+	require.NoError(t, err)
+
+	adapter := &Trading212Adapter{}
+	stage := func(payload trading212FetchPayload) {
+		payloadJSON, err := json.Marshal(payload)
+		require.NoError(t, err)
+		parseResult, err := adapter.Parse(ctx, RawInput{Bytes: payloadJSON}, nil)
+		require.NoError(t, err)
+		_, _, err = f.importService.stageParseResult(ctx, batch.ID, parseResult)
+		require.NoError(t, err)
+	}
+
+	// Row index 0: the SELL (newer trade, provider's first page).
+	stage(trading212FetchPayload{ConnectionID: conn.ID, OrderFills: []trading212OrderFill{{
+		FillID: "fill-sell", OrderID: "order-sell", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
+		FilledAt: "2026-06-02T10:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
+	}}})
+	// Row index 1: the BUY that opened the lot (older trade, a later page).
+	stage(trading212FetchPayload{ConnectionID: conn.ID, OrderFills: []trading212OrderFill{{
+		FillID: "fill-buy", OrderID: "order-buy", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
+	}}})
+
+	result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batch.ID})
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.CommittedCount, "both rows should commit")
+
+	// A fully-closed position (0 remaining) isn't returned by Positions (it
+	// only lists open lots), so its absence here plus the closed lot check
+	// below together prove the sell actually disposed the buy's lot instead
+	// of falling back to a generic cash transaction that leaves the lot open.
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, positions, "buy then sell of 1 share nets to 0 held, so no open position remains")
+
+	instruments, err := f.investmentSvc.ListInstruments(context.Background())
+	require.NoError(t, err)
+	require.Len(t, instruments, 1, "the instrument must have been resolved for both the buy and the sell")
+
+	holdingAccountID, found, err := f.connService.HoldingAccountForCommodity(context.Background(), conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found, "the buy must have linked a holding account for this commodity")
+
+	lots, err := f.investmentSvc.ListLots(context.Background(), holdingAccountID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1, "the buy must have created exactly one lot")
+	assert.Equal(t, "closed", lots[0].Status, "the sell must have disposed the buy's lot — proves it committed as a real investment trade, not a generic cash fallback")
+}
+
+// TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadOfFallingBack
+// is a regression test: commitTrading212OrderFill used to treat every error
+// from InvestmentService.Buy/Sell as "fall back to the generic cash path",
+// including real configuration/ledger bugs like a missing commodity_trading
+// system account. That silently hid the bug behind what looked like a
+// normal plain cash transaction. Now only the expected data-gap errors
+// (insufficient lots, no dividend default) fall back; anything else must
+// fail the row with the real error message so the underlying problem is
+// visible instead of masked.
+func TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadOfFallingBack(t *testing.T) {
+	// No commodity_trading system account seeded — Buy() requires one, so
+	// this simulates a real configuration bug rather than a normal
+	// "can't resolve this row" gap.
+	f := newInvestTestFixtureWithOptions(t, false)
+	conn := f.createConnection(t, &f.cashAccountID)
+
+	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
+	})
+	// Resolve the row generically too, so a silent-fallback regression would
+	// still show up as a (wrong) committed cash transaction, not a row that
+	// fails for an unrelated reason (missing resolution).
+	f.resolveRowGeneric(t, batchID, rowID, f.cashAccountID)
+
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.FailedCount, "the row must fail, not silently commit as a generic cash transaction")
+	assert.Equal(t, 0, result.CommittedCount)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "failed", rows[0].CommitStatus)
+	require.True(t, rows[0].CommitError.Valid)
+	assert.Contains(t, rows[0].CommitError.String, "commodity trading system account is required")
 }
 
 func TestCommitImportBatch_DividendPostsAsInvestmentIncome(t *testing.T) {

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -174,12 +175,39 @@ func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[s
 		transaction, tradeErr = result.Transaction, err
 	}
 	if tradeErr != nil {
-		// Insufficient lots (partial history fetched, or an unhandled
-		// corporate action) and any other posting error both fall back to
-		// the generic path rather than failing the whole batch.
-		return false, 0, nil
+		if isExpectedInvestmentCommitGap(tradeErr) {
+			// Insufficient lots (partial history fetched, or an unhandled
+			// corporate action) is a real data gap, not a bug — fall back to
+			// the generic cash path rather than failing the whole batch.
+			return false, 0, nil
+		}
+		// Anything else (missing system account, invalid posting, a real
+		// ledger/validation bug) must not be silently swallowed as "this row
+		// just isn't an investment row" — that hides configuration and code
+		// defects behind a misleading generic-cash-transaction fallback.
+		return false, 0, fmt.Errorf("post trading212 %s: %w", strings.ToLower(side), tradeErr)
 	}
 	return true, transaction.ID, nil
+}
+
+// isExpectedInvestmentCommitGap reports whether err represents a normal,
+// data-driven reason an investment row can't be posted as a real trade or
+// dividend — as opposed to a configuration or code bug that should surface
+// instead of silently falling back to the generic cash commit path.
+func isExpectedInvestmentCommitGap(err error) bool {
+	if errors.Is(err, ErrInvestmentLotsInsufficient) {
+		// Partial history fetched, or an unhandled corporate action —
+		// nothing wrong with the system, just insufficient data to match
+		// this sell to a lot yet.
+		return true
+	}
+	var validationErr ValidationError
+	if errors.As(err, &validationErr) && validationErr.Message == "dividend income account is required" {
+		// No dividend default configured for this instrument yet — an
+		// expected gap until the user sets one up, not a bug.
+		return true
+	}
+	return false
 }
 
 func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[string]string, date string, rawAmount string, commodityID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput) (bool, int64, error) {
@@ -204,10 +232,12 @@ func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[st
 		Operation:       "investment.dividend.import",
 	})
 	if err != nil {
-		// No dividend default configured for this instrument yet (income
-		// account unresolved) and any other posting error both fall back to
-		// the generic path rather than failing the whole batch.
-		return false, 0, nil
+		if isExpectedInvestmentCommitGap(err) {
+			// No dividend default configured for this instrument yet — fall
+			// back to the generic cash path rather than failing the batch.
+			return false, 0, nil
+		}
+		return false, 0, fmt.Errorf("post trading212 dividend: %w", err)
 	}
 	return true, transaction.ID, nil
 }
