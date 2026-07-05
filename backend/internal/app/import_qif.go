@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -245,7 +246,11 @@ func newQIFRecord() *qifRecord {
 
 func qifRecordToStagedRow(rec *qifRecord, occurrenceIndex int, recordType, filename string) StagedRow {
 	// Build raw map (flatten multi-value fields to first value for display).
-	raw := make(map[string]string, len(rec.rawFields)+2)
+	rawCap := 2
+	if len(rec.rawFields) <= math.MaxInt-2 {
+		rawCap += len(rec.rawFields)
+	}
+	raw := make(map[string]string, rawCap)
 	for k, vs := range rec.rawFields {
 		raw[k] = strings.Join(vs, "|")
 	}
