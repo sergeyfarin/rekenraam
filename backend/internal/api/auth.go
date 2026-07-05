@@ -146,10 +146,11 @@ func clearCookie(w http.ResponseWriter, name string, secure bool) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   secure,
+		Secure:   true,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
+	_ = secure
 }
 
 func requestUsesHTTPS(r *http.Request, options HandlerOptions) bool {
