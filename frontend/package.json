@@ -36,7 +36,7 @@
         "vitest": "4.1.9"
     },
     "dependencies": {
-        "@inlang/paraglide-js": "2.20.1",
+        "@inlang/paraglide-js": "2.20.2",
         "@tanstack/svelte-query": "6.1.34",
         "date-fns": "4.4.0",
         "dinero.js": "2.0.2",
