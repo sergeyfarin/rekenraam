@@ -14,14 +14,15 @@ re-deriving the analysis. Items are verified against the actual code.
 
 ## Open
 
-### T-01 Session lifetime is hardcoded (30 days) `[ ]`
+### T-01 Session lifetime is hardcoded (30 days) `[x]`
 **File:** `backend/internal/app/auth.go:207` (`sessionExpiresAt`)
 
-`sessionExpiresAt(now)` takes no configuration. Add `SESSION_LIFETIME_HOURS` to
-`config` (default 720, must be > 0), thread it into `AuthService`, and pass it to
-`sessionExpiresAt`. Lets operators tighten sessions in higher-security
-deployments without a recompile. Document the default and constraint in
-`conventions.md` under the auth section.
+Closed by adding `SESSION_LIFETIME_HOURS` to config (default `720`, must be a
+positive integer number of hours), threading it into `AuthService`, and passing
+the configured duration into `sessionExpiresAt` for login-created sessions. The
+owner setup flow still uses the product default unless setup is deliberately made
+configurable too. Documented in `docs/conventions.md` and verified by config
+parsing tests plus `TestSessionExpiresAtUsesConfiguredLifetime`.
 
 ### T-02 `BookID = int64(1)` is a hardcoded package constant `[~]`
 **File:** `backend/internal/app/currencies.go:17`, referenced ~everywhere.
@@ -254,16 +255,16 @@ depend on the live Trading 212 API's actual pagination/backdating semantics, whi
 unverified assumptions — not fixed here to avoid guessing at behavior no one has
 validated against the real API yet.
 
-### T-18 No periodic cleanup of expired/revoked auth sessions `[ ]`
+### T-18 No periodic cleanup of expired/revoked auth sessions `[x]`
 **File:** `backend/internal/app/auth.go`, `backend/migrations/0001_initial_schema.sql`
 (`auth_sessions_expires_revoked_idx`).
 
-`docs/conventions.md` (§ Authentication And Session Security) requires a periodic
-delete of `auth_sessions` rows where `revoked_at IS NOT NULL OR expires_at <= now`
-before the app is recommended for long-running deployments. The supporting index
-exists; no cleanup job does. Cheapest fix: fold a delete into an existing
-once-a-minute scheduler tick (pattern: `app/import_scheduler.go`) or run it at
-startup + daily. Add a named test that seeded expired/revoked rows disappear.
+Closed by `AuthService.StartSessionCleanup`, which deletes rows where
+`revoked_at IS NOT NULL OR expires_at <= now` at server startup and then every
+24 hours. `AuthRepository.DeleteExpiredOrRevokedSessions` uses the existing
+`auth_sessions_expires_revoked_idx`-supported predicate. Verified by
+`TestCleanupExpiredAndRevokedSessionsDeletesOnlyInactiveRows`, which seeds active,
+expired, and revoked sessions and confirms only the active session remains.
 
 ### T-19 `REKENRAAM_SECRET_KEY` has no rotation path `[x]`
 **File:** `backend/internal/secretbox/secretbox.go`, `backend/internal/config/config.go`,
