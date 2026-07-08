@@ -363,7 +363,7 @@ loading all staged rows, so review, bulk apply, patch, and commit operate on
 the same complete row set. Verified by `getFullImportBatch`'s unit test in
 `frontend/src/lib/api/imports.test.ts`.
 
-### T-24 Investment trade/dividend postings bypass the reconciliation guard entirely `[ ]`
+### T-24 Investment trade/dividend postings bypass the reconciliation guard entirely `[x]`
 **File:** `backend/internal/app/investments.go` (`Buy`, `Sell`, `Dividend`,
 `ReinvestedDividend`), `backend/internal/app/transactions_write.go` (`CreateTransaction`).
 
@@ -394,6 +394,24 @@ through. Needs a named test: sell/buy/dividend into a reconciled period without 
 must fail `ErrReconciliationOverrideRequired`, and with override must invalidate the
 checkpoint — mirroring the existing `transactions_write.go` coverage for the generic path.
 
+Closed by routing investment creates through the same guard-aware transaction
+preparation used by ordinary creates. `InvestmentTradeInput`, `DividendInput`,
+and `ReinvestedDividendInput` now carry `ReconciliationOverride`; buy, sell,
+and reinvested-dividend use `prepareCreateTransactionForWrite`; dividend
+continues through `CreateTransaction` and now receives the override flag. The
+Trading 212 investment commit path threads `CommitImportBatchInput.ReconciliationOverride`
+through to buy/sell/dividend and classifies `ErrReconciliationOverrideRequired`
+as a skipped row, matching the generic import path.
+
+The fix also closed the lower-level invalidation gap found while testing:
+`InvestmentRepository.CreateTransactionAndLot` and
+`CreateTransactionAndDisposeLots` now apply `CreateTransactionParams` checkpoint
+invalidation refs inside the same DB transaction as the ledger transaction plus
+lot/disposal write. Verified by
+`TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride`,
+which proves a Trading 212 buy into a reconciled period skips without override
+and commits with override while invalidating the checkpoint.
+
 ### T-25 Pricing refresh run history has no cursor or hidden-results signal `[x]`
 **File:** `backend/internal/api/pricing.go` (`listPricingRefreshRuns`),
 `backend/internal/api/settings.go` (`currencySettingsPage`),
@@ -421,11 +439,12 @@ Trading 212 investment branch still posts through `InvestmentService.Buy` /
 transaction afterwards. A crash in that narrow window can orphan an investment
 ledger transaction without an import identity, so retry can duplicate it. This
 is separate from T-06's generic `CreateTransaction` path because buy/sell also
-write lots/disposals in investment repository transactions. Fix together with
-T-24 or immediately after it: add tx-scoped investment posting helpers so the
-investment transaction, lot/disposal rows, import identity, and staged-row mark
-share one commit. Add named tests for buy, sell, and dividend rollback when
-identity recording fails.
+write lots/disposals in investment repository transactions. T-24 closed the
+reconciliation guard/invalidation behavior for those repository transactions,
+but the import identity is still a second commit. Fix next by adding tx-scoped
+investment posting helpers so the investment transaction, lot/disposal rows,
+import identity, and staged-row mark share one commit. Add named tests for buy,
+sell, and dividend rollback when identity recording fails.
 
 ### T-27 Remaining critical browser journeys need E2E coverage `[ ]`
 **File:** `e2e/playwright/`.

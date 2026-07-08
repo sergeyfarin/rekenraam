@@ -42,21 +42,26 @@ func createTransactionTx(ctx context.Context, tx *sql.Tx, params CreateTransacti
 	if err != nil {
 		return TransactionRecord{}, err
 	}
-	if len(params.InvalidateCheckpointRefs) > 0 {
-		invalidatedIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-			BookID:       params.BookID,
-			Refs:         params.InvalidateCheckpointRefs,
-			ActorUserID:  params.ActorUserID,
-			AuditEventID: auditEventID,
-			OccurredAt:   params.CreatedAt,
-			Reason:       params.InvalidateCheckpointReason,
-		})
-		if err != nil {
-			return TransactionRecord{}, err
-		}
-		record.InvalidatedCheckpointIDs = invalidatedIDs
+	invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, params, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, err
 	}
+	record.InvalidatedCheckpointIDs = invalidatedIDs
 	return record, nil
+}
+
+func invalidateCreateTransactionCheckpointsTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, auditEventID int64) ([]int64, error) {
+	if len(params.InvalidateCheckpointRefs) == 0 {
+		return nil, nil
+	}
+	return invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+		BookID:       params.BookID,
+		Refs:         params.InvalidateCheckpointRefs,
+		ActorUserID:  params.ActorUserID,
+		AuditEventID: auditEventID,
+		OccurredAt:   params.CreatedAt,
+		Reason:       params.InvalidateCheckpointReason,
+	})
 }
 
 func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (TransactionRecord, int64, error) {

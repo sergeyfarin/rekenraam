@@ -446,6 +446,17 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 		// instead of the whole batch, same as any other per-row commit
 		// failure below.
 		if handled, txnID, identityAccountID, err := s.commitTrading212InvestmentRow(ctx, row, batch, input, nowStr); err != nil {
+			if errors.Is(err, ErrReconciliationOverrideRequired) {
+				if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+					RowID:        row.ID,
+					CommitStatus: "skipped",
+					CommitError:  sql.NullString{String: "reconciliation override required", Valid: true},
+				}); err2 != nil {
+					return result, fmt.Errorf("skip investment reconciliation row %d: %w", row.ID, err2)
+				}
+				result.SkippedCount++
+				continue
+			}
 			if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "failed",
