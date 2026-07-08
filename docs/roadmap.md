@@ -82,6 +82,10 @@ separate events with separate gates.
    published.
 7. Marketplace listings (PikaPods, Cloudron, Elestio, Umbrel) and the
    announcement (r/selfhosted, awesome-selfhosted PR) land together.
+8. **Adoption assets** (added 2026-07-07): a public demo instance with
+   seeded data (Ghostfolio's proven playbook), screenshots in the README,
+   and a "migrate from MS Money/Quicken in 10 minutes" screencast. These
+   are cheap relative to their effect on the one-shot first impression.
 
 Between the two events, development continues in the open — a repo with
 visible history and activity reads better at announcement time than one that
@@ -91,41 +95,27 @@ appeared yesterday.
 
 ## Competitor Feature Gap Analysis
 
-Reference apps for a self-hosted Microsoft Money / Quicken successor. ✅ = solid,
-🟦 = partial/backend-only, ⬜ = missing.
+The full comparison (feature matrices for open-source and commercial apps —
+Quicken, Mint, Monarch, YNAB, PocketSmith, Lunch Money, GnuCash, Firefly III,
+Actual, Ghostfolio, Portfolio Performance, plain-text accounting, and more —
+plus per-competitor reads and migration waves) lives in
+**`docs/competitor-comparison.md`**. Point-in-time deep dive:
+`docs/competitive-analysis-2026-07.md` (2026-07-07).
 
-| Capability | Rekenraam | Quicken | GnuCash | YNAB | Firefly III | Money Manager Ex |
-|---|---|---|---|---|---|---|
-| Double-entry ledger | ✅ | partial | ✅ | ⬜ (envelope) | ✅ | partial |
-| Multi-currency accounts | ✅ | ✅ | ✅ | limited | ✅ | ✅ |
-| Account register + same-day order | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Reconciliation workflow | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ |
-| Core reports (net worth/cashflow/spending) | 🟦 (no UI) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Saved/custom reports | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ |
-| CSV import | ⬜ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| OFX/QFX/QIF import | ⬜ | ✅ | ✅ | ⬜ | partial | ✅ |
-| Duplicate detection + import rules | ⬜ | ✅ | partial | ✅ | ✅ | partial |
-| CSV/QIF export | ⬜ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Budgets | ⬜ | ✅ | ✅ | ✅ (core) | ✅ | ✅ |
-| Scheduled / recurring transactions | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ |
-| Projected balances / forecasting | ⬜ | ✅ | partial | ✅ | partial | ⬜ |
-| Loans / amortization helpers | ⬜ | ✅ | ✅ | ⬜ | ⬜ | ✅ |
-| Investment lots & cost basis | ✅ | ✅ | ✅ | ⬜ | partial | ✅ |
-| Dividends / corporate actions | ✅ | ✅ | ✅ | ⬜ | ⬜ | partial |
-| Price/FX history + scheduled refresh | 🟦 | ✅ | ✅ | ⬜ | ✅ | partial |
-| Realized/unrealized gains reporting | ✅ | ✅ | ✅ | ⬜ | ⬜ | partial |
-| Payee/category cleanup & merge | ⬜ | ✅ | partial | ✅ | ✅ | partial |
-| Self-hosted, single binary, no telemetry | ✅ | ⬜ | ✅ | ⬜ | ✅ | ✅ |
-| Mobile-responsive web | ✅ | app | ⬜ | ✅ | ✅ | ⬜ |
-
-**Reading of the gap:** Rekenraam's ledger core is competitive with GnuCash and
-Firefly and ahead of YNAB on accounting correctness. The decisive missing pieces
-for an everyday Money/Quicken replacement are, in order: (1) reconcile + reports
-UI to expose the engine that already exists, (2) import — the single biggest
-manual-entry reducer every competitor ships, (3) budgets and recurring
-transactions, the daily-driver planning loop, and (4) surfacing the remaining
-FX/pricing backend (investments now ship end-to-end with UI). Exports are table
-stakes and cheap.
+**Reading of the gap (updated 2026-07-07):** Rekenraam's ledger core is
+competitive with GnuCash and Firefly and ahead of YNAB on accounting
+correctness; the exact-precision multi-currency ledger + lot-level investment
+engine has **no self-hosted web equivalent** (Firefly is weak on investments
+by design, Ghostfolio has no cost basis or taxes, Actual is budgeting-only,
+Portfolio Performance is desktop-only). The decisive missing pieces for an
+everyday Money/Quicken replacement are, in order: (1) reports UI to expose
+the engine that already exists, (2) import — the single biggest manual-entry
+reducer every competitor ships, plus the **rules engine** that makes
+Firefly III sticky, (3) budgets, recurring transactions, and **multi-currency
+cashflow forecasting** — the daily-driver planning loop and the
+niche-defining feature PocketSmith monetizes, and (4) **returns analytics
+(TWR/MWR, allocation)** to meet the expectations Ghostfolio and Portfolio
+Performance set for investment users. Exports are table stakes and cheap.
 
 ---
 
@@ -243,6 +233,17 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   complete first online-import provider end to end.
 - Merge duplicate payees; bulk recategorize; the `needs_review` queue UI for
   imported-but-unreviewed transactions (flag + endpoint already exist).
+- **Import rules engine** (competitor-driven, added 2026-07-07): persistent
+  user-defined rules (match on payee/description/amount → set category,
+  payee, tags) applied during staging, before review. Firefly III's
+  most-loved feature and the retention driver for import-heavy users; the
+  staged pipeline is the natural place to run rules.
+- **Later provider candidates** (same bring-your-own-key pattern, in order):
+  **IBKR Flex Query** (token-based reporting API — the investor persona's
+  second broker), **GoCardless Bank Account Data** (EU PSD2 aggregation,
+  free personal tier — what Firefly/Actual communities actually use),
+  **SimpleFIN Bridge** (US, user-purchased token). All are adapters users
+  bring keys for; none are promised coverage.
 
 ---
 
@@ -261,6 +262,13 @@ Templates + schedule; generate due entries (a future producer of persisted
 
 ### R10. Projected balances & loan helpers
 - Projected cash balance from scheduled transactions.
+- **Per-currency projected balances** (added 2026-07-07): for the
+  expat/multi-currency niche, forecasting must answer "will my EUR account
+  cover the rent while my salary lands in USD" — projections per currency
+  and converted-total, using the FX engine that already exists. This is the
+  niche-defining feature: PocketSmith monetizes calendar forecasting but
+  no one ships it with real multi-currency math. Treat as first-class R10
+  scope, not a nice-to-have.
 - Simple loan/liability + amortization helpers that fit the existing ledger.
 
 ---
@@ -281,6 +289,17 @@ have APIs (`/pricing/*`) and no screens yet.
 - Report snapshots deferred (immutable event log makes past-date queries reproducible; explicit snapshot store deferred).
 - **Next**: online import (R7 / Trading 212), lifting `B-T212-INVST`. Full design: `docs/investments-plan.md`.
 
+### R13. Returns analytics (TWR/MWR, allocation) — added 2026-07-07
+Read-side only, over data that already exists (lots, prices, FX, dividends):
+- Time-weighted and money-weighted return per holding account / instrument /
+  portfolio; allocation breakdown (asset class, currency, instrument);
+  optional benchmark comparison.
+- Ghostfolio and Portfolio Performance set this expectation for investment
+  users — they ship returns percentages, not just gain amounts. Rekenraam has
+  strictly better underlying data (exact lots + FX history), so this is the
+  cheapest "investments feel complete" win after R11.
+- Natural extension of `GET /investments/gains`; no schema changes expected.
+
 ---
 
 ## Beyond — explicitly deferred
@@ -290,6 +309,48 @@ bank/open-banking integrations, attachments (statements/receipts), plugin
 architecture, small-business AR/AP & invoicing, native mobile apps, hosted
 service operations. Compatibility guardrails (typed `/api/v1`, semantic theme
 tokens, reserved `/plugins` `/themes` namespaces) keep these additive later.
+
+### Trade execution — explicitly NOT planned (decided 2026-07-07)
+
+Rekenraam stays **read-only against brokers**. Placing orders (via the
+Trading 212 order API, IBKR trading APIs, or Wikifolio), scheduled trades,
+and trigger-based trading are out of scope — not deferred, rejected. Full
+analysis: `docs/competitive-analysis-2026-07.md` §4. Reasons:
+
+1. **Risk class inversion.** Every current bug class misreports the past; an
+   execution bug spends real money prospectively. The Trading 212 order
+   endpoint is beta and documented as non-idempotent (duplicate requests can
+   produce duplicate live orders). The project's own history (T-22: a
+   severity-1 commit bug no test caught) is the proof that this bar is not
+   met — and the whole test strategy would need to change to meet it.
+2. **Security posture inversion.** Stored provider keys are currently
+   read-only history scopes; execution keys are write-capable, so a
+   compromised instance becomes a theft vector instead of a privacy
+   incident. The 2026-07 security audit's open items (first-run setup race,
+   no 2FA) are hard blockers for holding trading-capable credentials.
+3. **Regulatory and ToS exposure.** Distributing software that executes
+   automated trades edges toward regulated activity: IBKR expects
+   third-party automated-trading vendors to hold regulatory registration
+   and pass compliance review per region; Wikifolio's terms prohibit
+   autonomous automation (account blocks) and its model (trading a
+   certificate you manage, not your own portfolio) doesn't fit anyway.
+   A personal script is fine; an AGPL-distributed product with the
+   project's name on it is a different legal object.
+4. **Strategic dilution.** The differentiator is the correct ledger.
+   Execution bots are a crowded, separate category (freqtrade et al.);
+   time spent there is time not spent on the uncontested niche.
+
+**The safe alternative that captures most of the user value** — a candidate
+Phase 5/6 feature, not yet scheduled: a **trade planner**. Target
+allocations and DCA schedules produce a *proposed order list*
+(server-computed with the existing pricing/FX engine); the user executes the
+orders manually in their broker's app; the next import reconciles plan vs
+actual. Portfolio Performance's rebalancing view proves the demand; no OSS
+web app does it with real multi-currency math. If human-confirmed execution
+is ever revisited, the non-negotiable floor is: per-order in-session
+confirmation with fresh auth + 2FA, off-by-default build/env gate,
+Trading 212 practice mode first, client-side idempotency guard, spending
+caps — and never unattended, scheduled, or trigger-fired.
 
 ---
 

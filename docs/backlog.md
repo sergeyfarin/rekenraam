@@ -46,27 +46,33 @@ Present because SvelteKit injects an inline bootstrap script. Planned fix is a
 build-time SHA-256 hash of the script. Not actionable until the build pipeline
 emits the hash. Tracked, not forgotten.
 
-### T-05 Frontend list pagination not consumed `[ ]`
+### T-05 Frontend list pagination not consumed `[x]`
 **File:** `frontend/src/lib/api/transactions.ts` and reconciliation equivalents.
 
-Backend returns `next_cursor`; some list views fetch once and ignore it. The
-transactions/trash tables now use infinite-query options — audit the remaining
-list helpers (reconciliation, pricing runs) to confirm they paginate or show a
-hidden-results count rather than silently truncating.
+Closed by auditing every frontend consumer of response shapes with
+`next_cursor`. Transactions, account registers, and trash already use
+TanStack infinite-query options. Reconciliation checkpoint/session helpers do
+not expose cursor-paginated responses. Pricing refresh runs currently expose a
+fixed latest-run/history summary with no cursor; the shipped currencies UI only
+uses the latest run, so it is not silently truncating a visible list. The one
+remaining cursor-loss path was import batch preview rows (tracked separately as
+T-23) and is now fixed by `getFullImportBatch`, which follows every
+`next_cursor` page before the preview can be committed. Verified by
+`frontend/src/lib/api/imports.test.ts`.
 
-### T-06 Import crash-consistency hole between ledger tx and identity write `[ ]`
+### T-06 Import crash-consistency hole between ledger tx and identity write `[x]`
 **File:** `backend/internal/app/import_service.go` — `CommitImportBatch`, around line 420.
 
-`CreateTransaction` commits its own internal DB transaction. The `import_commit_identities`
-write and staged-row mark-committed happen in a separate transaction immediately after.
-A crash between the two leaves an orphan posted ledger transaction with no identity row,
-so a retry will duplicate it (the idempotency pre-check finds nothing). The fix requires
-`CreateTransaction` to accept a caller-supplied `*sql.Tx` so the identity insert can join
-the same transaction — a refactor that touches the transaction service signature. Deferred
-because (a) real crashes are rare in practice, (b) the duplicate surfaces in the
-`needs_review` queue where the user can catch it, and (c) the refactor is non-trivial.
-When addressed, remove the `DB()` accessor on `ImportRepository` as it will no longer
-be needed.
+Closed by splitting transaction creation into preparation plus a tx-scoped write
+path (`TransactionRepository.CreateTransactionInTx`) and routing generic import
+commits through `ImportRepository.CommitImportedTransaction`. The generic import
+row now writes the ledger transaction, `import_commit_identities`, and the
+staged-row `committed` marker in one SQL transaction, so a failure between those
+steps rolls all three back together. The old `ImportRepository.DB()` escape hatch
+was removed. Verified by
+`TestCommitImportedTransaction_RollsBackLedgerWhenIdentityWriteFails`, which
+forces the identity insert to fail after `createTransactionTx` and asserts that
+no ledger transaction, identity row, or committed staged-row marker escapes.
 
 ### T-07 Import endpoints missing from OpenAPI spec `[x]`
 **File:** `api/openapi/openapi.yaml`, `api/openapi/components/schemas/imports.yaml`.
@@ -338,25 +344,22 @@ source-agnostic, no Trading 212 involved, to prove this is a pipeline fix not
 a Trading-212-specific one) plus the four B-T212-INVST commit tests in the
 same file, all of which exercise the same real-ledger commit path.
 
-### T-23 Import preview UI only reviews the first page; commit processes every staged row `[ ]`
+### T-23 Import preview UI only reviews the first page; commit processes every staged row `[x]`
 **File:** `frontend/src/routes/app/import/+page.svelte` (`pollFetchStatus`, `handleCommit`),
 `backend/internal/app/import_service.go` (`GetImportBatch`, `CommitImportBatch`).
 
-Found during a Slice-4b-era review pass (2026-07-04). The preview screen fetches
+Found during a Slice-4b-era review pass (2026-07-04). The preview screen fetched
 one page of staged rows (`getImportBatch(batchId, { limit: 500 })`) and never
-follows `next_cursor`; the backend also silently clamps any `limit > 200` down
-to 100 (`GetImportBatch`). `CommitImportBatch`, however, iterates *every* staged
-row in the batch regardless of what the UI ever rendered. For a batch with more
-rows than one page (a full-history Trading 212 backfill easily exceeds 100–500
-staged rows), the user can review/exclude/resolve only the rows they were shown
-and then commit a batch that silently processes rows they never saw — including
-rows that fail or get auto-resolved by global account/category assignment
-without the user ever laying eyes on them. Fix options: make the preview table
-consume `next_cursor` (infinite scroll/pagination), add a bulk apply-and-commit
-endpoint that doesn't require materializing every row client-side, or block
-`CommitImportBatch` until all rows have been fetched at least once by the
-client. Needs a test asserting a >1-page batch can't be committed with only
-page 1 resolved (or that the resolution flow can't silently skip unseen rows).
+followed `next_cursor`; the backend also silently clamps any `limit > 200` down
+to 100 (`GetImportBatch`). `CommitImportBatch`, however, iterates *every*
+staged row in the batch regardless of what the UI ever rendered.
+
+Closed by `frontend/src/lib/api/imports.ts:getFullImportBatch`, which requests
+the service's real max page size (200) and follows `next_cursor` until the
+whole batch is loaded. The online-import poller now enters preview only after
+loading all staged rows, so review, bulk apply, patch, and commit operate on
+the same complete row set. Verified by `getFullImportBatch`'s unit test in
+`frontend/src/lib/api/imports.test.ts`.
 
 ### T-24 Investment trade/dividend postings bypass the reconciliation guard entirely `[ ]`
 **File:** `backend/internal/app/investments.go` (`Buy`, `Sell`, `Dividend`,
@@ -388,6 +391,38 @@ already does), (3) the T212 investment commit path passes `input.ReconciliationO
 through. Needs a named test: sell/buy/dividend into a reconciled period without override
 must fail `ErrReconciliationOverrideRequired`, and with override must invalidate the
 checkpoint — mirroring the existing `transactions_write.go` coverage for the generic path.
+
+### T-25 Pricing refresh run history has no cursor or hidden-results signal `[ ]`
+**File:** `backend/internal/api/pricing.go` (`listPricingRefreshRuns`),
+`backend/internal/api/settings.go` (`currencySettingsPage`),
+`backend/internal/app/pricing.go` (`ListRefreshRuns`).
+
+Found while closing T-05 (2026-07-08). The pricing refresh run endpoint and the
+currency settings read model both fetch a fixed latest 50 refresh runs. The
+current shipped UI only uses `refresh_runs[0]` as a latest-run summary, so this
+does not silently truncate a visible history list today. Before adding a pricing
+or FX refresh history table, make this endpoint cursor-paginated or return an
+explicit hidden-results/has-more signal so a future screen cannot repeat the
+T-05 bug class.
+
+### T-26 Trading 212 investment import identity is still recorded after the investment ledger transaction `[ ]`
+**File:** `backend/internal/app/import_trading212_invest.go`
+(`commitTrading212InvestmentRow`), `backend/internal/app/import_service.go`
+(`recordCommitIdentityAndMarkRow`), `backend/internal/db/investments.go`
+(`CreateTransactionAndLot`, `CreateTransactionAndDisposeLots`).
+
+Found while closing T-06 (2026-07-08). Generic cash import rows now commit the
+ledger transaction, import identity, and staged-row marker atomically, but the
+Trading 212 investment branch still posts through `InvestmentService.Buy` /
+`Sell` / `Dividend` first and records the import identity in a second
+transaction afterwards. A crash in that narrow window can orphan an investment
+ledger transaction without an import identity, so retry can duplicate it. This
+is separate from T-06's generic `CreateTransaction` path because buy/sell also
+write lots/disposals in investment repository transactions. Fix together with
+T-24 or immediately after it: add tx-scoped investment posting helpers so the
+investment transaction, lot/disposal rows, import identity, and staged-row mark
+share one commit. Add named tests for buy, sell, and dividend rollback when
+identity recording fails.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,
