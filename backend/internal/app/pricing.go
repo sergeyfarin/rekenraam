@@ -181,6 +181,11 @@ type PricingRefreshRun struct {
 	LastError      string
 }
 
+type PricingRefreshRuns struct {
+	Runs    []PricingRefreshRun
+	HasMore bool
+}
+
 type PricingSourceHealth struct {
 	ID               int64
 	BookID           int64
@@ -420,18 +425,22 @@ func (s *PricingService) RunRefresh(ctx context.Context, ownerUserID int64, sour
 	return s.runFXRefresh(ctx, ownerUserID, sourceID, trigger)
 }
 
-func (s *PricingService) ListRefreshRuns(ctx context.Context, limit int) ([]PricingRefreshRun, error) {
+func (s *PricingService) ListRefreshRuns(ctx context.Context, limit int) (PricingRefreshRuns, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	if limit > 200 {
 		limit = 200
 	}
-	records, err := s.repository.ListRefreshRuns(ctx, BookID, limit)
+	records, err := s.repository.ListRefreshRuns(ctx, BookID, limit+1)
 	if err != nil {
-		return nil, fmt.Errorf("list pricing refresh runs: %w", err)
+		return PricingRefreshRuns{}, fmt.Errorf("list pricing refresh runs: %w", err)
 	}
-	return toPricingRefreshRuns(records), nil
+	hasMore := len(records) > limit
+	if hasMore {
+		records = records[:limit]
+	}
+	return PricingRefreshRuns{Runs: toPricingRefreshRuns(records), HasMore: hasMore}, nil
 }
 
 func (s *PricingService) SourceHealth(ctx context.Context) ([]PricingSourceHealth, error) {

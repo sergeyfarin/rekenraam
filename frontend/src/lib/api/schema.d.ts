@@ -9666,6 +9666,7 @@ export interface components {
             policy: components["schemas"]["PricingPolicyResponse"];
             assignments: components["schemas"]["PricingSourceAssignmentResponse"][];
             refresh_runs: components["schemas"]["PricingRefreshRunResponse"][];
+            refresh_runs_has_more: boolean;
             source_health: components["schemas"]["PricingSourceHealthResponse"][];
             /** @description Latest known observations for active currency/default-currency pairs in both directions. */
             latest_rates: components["schemas"]["PriceObservationResponse"][];
@@ -10418,6 +10419,7 @@ export interface components {
         };
         PricingRefreshRunsResponse: {
             runs: components["schemas"]["PricingRefreshRunResponse"][];
+            has_more: boolean;
         };
         PricingRefreshRunRequest: {
             /** Format: int64 */

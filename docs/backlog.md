@@ -282,16 +282,17 @@ remain durable.
 
 Validation: docs-only change; `git diff --check` over touched docs.
 
-### T-20 E2E coverage is 2 specs vs a full shipped app `[ ]`
+### T-20 E2E coverage is 2 specs vs a full shipped app `[x]`
 **File:** `e2e/playwright/` (`auth.spec.ts`, `health.spec.ts`).
 
-Phases 0–2 plus reconcile, import, and investments UI ship, but Playwright only
-covers login and health. The critical money journeys — first-run setup, add
-transaction (incl. split/transfer), reconcile to zero, QIF import
-preview→commit, buy/sell with preview — have no browser-level regression net;
-they were verified manually per slice. Grow `./scripts/test-e2e.sh` coverage one
-journey per slice, starting with transaction entry (the workflow AGENTS.md calls
-mobile-critical).
+Closed by adding the first real money journey:
+`e2e/playwright/transactions.spec.ts` seeds setup prerequisites through the same
+browser session and creates a simple transaction through the UI form. The auth
+spec was updated to complete the currency setup step before expecting the app
+shell, and `playwright.config.ts` now uses `workers: 1` because the suite starts
+one app instance over one SQLite database. Verified by `./scripts/test-e2e.sh`
+(`4 passed`). Remaining browser journeys are tracked in T-27 so this closure
+means "not only auth/health anymore," not "every shipped workflow has E2E."
 
 ### T-21 Trading 212 fetcher hit a nonexistent endpoint path with a wrong type enum `[x]`
 **File:** `backend/internal/onlinesource/trading212/fetcher.go`, `backend/internal/app/import_trading212.go`.
@@ -393,18 +394,19 @@ through. Needs a named test: sell/buy/dividend into a reconciled period without 
 must fail `ErrReconciliationOverrideRequired`, and with override must invalidate the
 checkpoint — mirroring the existing `transactions_write.go` coverage for the generic path.
 
-### T-25 Pricing refresh run history has no cursor or hidden-results signal `[ ]`
+### T-25 Pricing refresh run history has no cursor or hidden-results signal `[x]`
 **File:** `backend/internal/api/pricing.go` (`listPricingRefreshRuns`),
 `backend/internal/api/settings.go` (`currencySettingsPage`),
 `backend/internal/app/pricing.go` (`ListRefreshRuns`).
 
-Found while closing T-05 (2026-07-08). The pricing refresh run endpoint and the
-currency settings read model both fetch a fixed latest 50 refresh runs. The
-current shipped UI only uses `refresh_runs[0]` as a latest-run summary, so this
-does not silently truncate a visible history list today. Before adding a pricing
-or FX refresh history table, make this endpoint cursor-paginated or return an
-explicit hidden-results/has-more signal so a future screen cannot repeat the
-T-05 bug class.
+Closed by changing `PricingService.ListRefreshRuns` to fetch one extra row and
+return `PricingRefreshRuns{Runs, HasMore}`. `GET /pricing/refresh/runs` now
+returns `has_more`, and the currency settings page read model returns
+`refresh_runs_has_more`, so future history UI cannot mistake the fixed latest
+50-row summary for a complete list. OpenAPI and generated frontend API types
+were updated. Verified by
+`TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows` and the composed
+currency settings API test.
 
 ### T-26 Trading 212 investment import identity is still recorded after the investment ledger transaction `[ ]`
 **File:** `backend/internal/app/import_trading212_invest.go`
@@ -424,6 +426,16 @@ T-24 or immediately after it: add tx-scoped investment posting helpers so the
 investment transaction, lot/disposal rows, import identity, and staged-row mark
 share one commit. Add named tests for buy, sell, and dividend rollback when
 identity recording fails.
+
+### T-27 Remaining critical browser journeys need E2E coverage `[ ]`
+**File:** `e2e/playwright/`.
+
+Follow-up after closing T-20's initial "only auth/health" gap. Transaction entry
+now has one simple browser journey, but split/transfer transactions, reconcile
+to zero, QIF import preview→commit, buy/sell with preview, and at least one
+mobile viewport run still need Playwright coverage. Add one journey per feature
+slice and keep the shared-DB suite serial unless the harness is changed to
+provision an isolated database per worker.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,

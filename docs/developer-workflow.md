@@ -95,6 +95,7 @@ E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
 
 - `./scripts/test-e2e.sh` now builds the integrated app, starts a fresh local instance on `127.0.0.1:16889`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` unless `E2E_BASE_URL` is set.
+- The Playwright suite runs with one worker because the default harness shares one app instance and SQLite database.
 - Set `E2E_PORT` when the self-managed e2e port needs to move.
 - Set `E2E_BASE_URL` when you want Playwright to target an already-running app instead of booting its own fresh instance.
 
