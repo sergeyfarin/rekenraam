@@ -33,6 +33,10 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 	return record, nil
 }
 
+func (r *TransactionRepository) CreateTransactionInTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (TransactionRecord, error) {
+	return createTransactionTx(ctx, tx, params)
+}
+
 func createTransactionTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (TransactionRecord, error) {
 	record, auditEventID, err := createTransactionWithAuditTx(ctx, tx, params)
 	if err != nil {

@@ -489,7 +489,7 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
-		txn, err := s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+		createParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
 			OwnerUserID:            input.OwnerUserID,
 			AuthSessionID:          input.AuthSessionID,
 			RequestID:              input.RequestID,
@@ -525,7 +525,24 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
-		if err := s.recordCommitIdentityAndMarkRow(ctx, row.ID, row.DedupeFingerprint, batch.SourceKind, resolution.AccountID, txn.ID, nowStr); err != nil {
+		if _, err := s.repository.CommitImportedTransaction(ctx, db.CommitImportedTransactionParams{
+			Identity: db.CreateImportCommitIdentityParams{
+				BookID:            BookID,
+				DedupeFingerprint: row.DedupeFingerprint,
+				SourceKind:        batch.SourceKind,
+				AccountID:         resolution.AccountID,
+				CreatedAt:         nowStr,
+			},
+			Row: db.CommitImportStagedRowParams{
+				RowID: row.ID,
+			},
+		}, func(tx *sql.Tx) (int64, error) {
+			record, err := s.transactionService.createTransactionRecordInTx(ctx, tx, createParams)
+			if err != nil {
+				return 0, err
+			}
+			return record.ID, nil
+		}); err != nil {
 			return result, fmt.Errorf("record commit row %d: %w", row.ID, err)
 		}
 		result.CommittedCount++
@@ -577,38 +594,27 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 // staged row committed in a single DB transaction, so a crash between the
 // two never leaves an orphan identity with no corresponding committed row
 // (or vice versa) — a retry sees commit_status=committed and skips it.
-// Shared by CommitImportBatch's generic path and its Trading 212 investment
-// branch (B-T212-INVST, Slice 4b) so both go through the exact same
-// idempotency mechanics.
+//
+// The generic import path uses CommitImportedTransaction instead so its ledger
+// write joins this same transaction. The Trading 212 investment path still posts
+// through investment-specific service methods first; T-26 tracks moving those
+// ledger writes into the same transaction too.
 func (s *ImportService) recordCommitIdentityAndMarkRow(ctx context.Context, rowID int64, dedupeFingerprint string, sourceKind string, accountID int64, transactionID int64, nowStr string) error {
-	database := s.repository.DB()
-	tx, err := database.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin commit identity tx: %w", err)
-	}
-	if err := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
-		BookID:                 BookID,
-		DedupeFingerprint:      dedupeFingerprint,
-		CommittedTransactionID: transactionID,
-		SourceKind:             sourceKind,
-		AccountID:              accountID,
-		CreatedAt:              nowStr,
-	}); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("create commit identity: %w", err)
-	}
-	if err := s.repository.CommitImportStagedRowInTx(ctx, tx, db.CommitImportStagedRowParams{
-		RowID:                  rowID,
-		CommitStatus:           "committed",
-		CommittedTransactionID: sql.NullInt64{Int64: transactionID, Valid: true},
-	}); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("mark row committed: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit identity tx: %w", err)
-	}
-	return nil
+	return s.repository.RecordCommitIdentityAndMarkRow(ctx, db.CommitImportedTransactionParams{
+		Identity: db.CreateImportCommitIdentityParams{
+			BookID:                 BookID,
+			DedupeFingerprint:      dedupeFingerprint,
+			CommittedTransactionID: transactionID,
+			SourceKind:             sourceKind,
+			AccountID:              accountID,
+			CreatedAt:              nowStr,
+		},
+		Row: db.CommitImportStagedRowParams{
+			RowID:                  rowID,
+			CommitStatus:           "committed",
+			CommittedTransactionID: sql.NullInt64{Int64: transactionID, Valid: true},
+		},
+	})
 }
 
 // DiscardImportBatch marks a previewing batch as discarded.

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,21 +12,9 @@ import (
 )
 
 func (s *TransactionService) CreateTransaction(ctx context.Context, input CreateTransactionInput) (Transaction, error) {
-	params, err := s.prepareCreateTransaction(ctx, input)
+	params, err := s.prepareCreateTransactionForWrite(ctx, input)
 	if err != nil {
 		return Transaction{}, err
-	}
-
-	refs, err := s.reconciliationInvalidationRefsFromSpec(ctx, params.Spec)
-	if err != nil {
-		return Transaction{}, err
-	}
-	if len(refs) > 0 && !input.ReconciliationOverride {
-		return Transaction{}, ErrReconciliationOverrideRequired
-	}
-	if input.ReconciliationOverride {
-		params.InvalidateCheckpointRefs = refs
-		params.InvalidateCheckpointReason = params.ChangeReason
 	}
 
 	record, err := s.repository.CreateTransaction(ctx, params)
@@ -34,6 +23,35 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 	}
 
 	return s.enrichOne(ctx, toTransaction(record))
+}
+
+func (s *TransactionService) prepareCreateTransactionForWrite(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
+	params, err := s.prepareCreateTransaction(ctx, input)
+	if err != nil {
+		return db.CreateTransactionParams{}, err
+	}
+
+	refs, err := s.reconciliationInvalidationRefsFromSpec(ctx, params.Spec)
+	if err != nil {
+		return db.CreateTransactionParams{}, err
+	}
+	if len(refs) > 0 && !input.ReconciliationOverride {
+		return db.CreateTransactionParams{}, ErrReconciliationOverrideRequired
+	}
+	if input.ReconciliationOverride {
+		params.InvalidateCheckpointRefs = refs
+		params.InvalidateCheckpointReason = params.ChangeReason
+	}
+
+	return params, nil
+}
+
+func (s *TransactionService) createTransactionRecordInTx(ctx context.Context, tx *sql.Tx, params db.CreateTransactionParams) (db.TransactionRecord, error) {
+	record, err := s.repository.CreateTransactionInTx(ctx, tx, params)
+	if err != nil {
+		return db.TransactionRecord{}, mapTransactionDBError(err)
+	}
+	return record, nil
 }
 
 func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {

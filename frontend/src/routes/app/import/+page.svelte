@@ -18,6 +18,7 @@
     startImport,
     startOnlineImport,
     getImportBatch,
+    getFullImportBatch,
     patchImportBatch,
     commitImportBatch,
     discardImportBatch,
@@ -150,9 +151,10 @@
   async function pollFetchStatus() {
     if (!batchId) return;
     try {
-      const result = await getImportBatch(batchId, { limit: 500 });
-      const meta = parseBatchSourceMeta(result.batch);
+      const firstPage = await getImportBatch(batchId);
+      const meta = parseBatchSourceMeta(firstPage.batch);
       if (meta.fetch_status === 'ready') {
+        const result = firstPage.next_cursor ? await getFullImportBatch(batchId, firstPage) : firstPage;
         previewData = {
           batch: result.batch,
           rows: result.rows,

@@ -298,6 +298,83 @@ func TestCommitImportBatch_GenericCashRowCommitsToRealLedger(t *testing.T) {
 	assert.Equal(t, "committed", result.Status)
 }
 
+func TestCommitImportedTransaction_RollsBackLedgerWhenIdentityWriteFails(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+
+	batch, err := f.importRepo.CreateImportBatch(ctx, db.CreateImportBatchParams{
+		BookID: BookID, SourceKind: "qif", SourceMetaJSON: "{}", CreatedAt: "2026-06-01T00:00:00Z", ActorUserID: f.ownerUserID,
+	})
+	require.NoError(t, err)
+
+	parseResult := ParseResult{Rows: []StagedRow{{
+		DedupeFingerprint: "qif|atomic-row-1",
+		Date:              "2026-06-01",
+		Amount:            "42.50",
+		CommodityHint:     "EUR",
+		PayeeHint:         "Atomic Payee",
+		Memo:              "atomic rollback probe",
+		ExternalRef:       "atomic-ext-1",
+	}}}
+	rows, _, err := f.importService.stageParseResult(ctx, batch.ID, parseResult)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	f.resolveRowGeneric(t, batch.ID, rows[0].ID, f.cashAccountID)
+
+	rows, err = f.importRepo.ListAllImportStagedRows(ctx, batch.ID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	resolution, err := parseResolutionJSON(rows[0].ResolutionJSON)
+	require.NoError(t, err)
+	spec, err := buildTransactionSpec(rows[0], resolution)
+	require.NoError(t, err)
+	createParams, err := f.importService.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID:  f.ownerUserID,
+		OriginType:   "import",
+		Operation:    "transaction.create",
+		Spec:         spec,
+		ChangeReason: "imported from qif",
+	})
+	require.NoError(t, err)
+
+	var beforeTransactions int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&beforeTransactions))
+
+	_, err = f.importRepo.CommitImportedTransaction(ctx, db.CommitImportedTransactionParams{
+		Identity: db.CreateImportCommitIdentityParams{
+			BookID:            BookID,
+			DedupeFingerprint: rows[0].DedupeFingerprint,
+			SourceKind:        "qif",
+			AccountID:         0, // Invalid FK: force failure after createTransactionTx has inserted the ledger rows.
+			CreatedAt:         "2026-06-01T00:00:00Z",
+		},
+		Row: db.CommitImportStagedRowParams{RowID: rows[0].ID},
+	}, func(tx *sql.Tx) (int64, error) {
+		record, err := f.importService.transactionService.createTransactionRecordInTx(ctx, tx, createParams)
+		if err != nil {
+			return 0, err
+		}
+		return record.ID, nil
+	})
+	require.Error(t, err)
+
+	var afterTransactions int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&afterTransactions))
+	assert.Equal(t, beforeTransactions, afterTransactions, "ledger transaction must roll back when import identity recording fails")
+
+	var identityCount int
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM import_commit_identities WHERE dedupe_fingerprint = ?
+	`, rows[0].DedupeFingerprint).Scan(&identityCount))
+	assert.Equal(t, 0, identityCount)
+
+	updatedRows, err := f.importRepo.ListAllImportStagedRows(ctx, batch.ID)
+	require.NoError(t, err)
+	require.Len(t, updatedRows, 1)
+	assert.Equal(t, "pending", updatedRows[0].CommitStatus)
+	assert.False(t, updatedRows[0].CommittedTransactionID.Valid)
+}
+
 func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t *testing.T) {
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, nil) // no cash_account_id configured
