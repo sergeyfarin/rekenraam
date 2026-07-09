@@ -181,7 +181,7 @@ func (s *SetupService) CreateOwner(ctx context.Context, input CreateOwnerInput) 
 		SessionTokenHash: sessionTokenHash,
 		TimeZone:         timeZone,
 		CreatedAt:        createdAt,
-		SessionExpiresAt: sessionExpiresAt(now),
+		SessionExpiresAt: sessionExpiresAt(now, SessionLifetime),
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrOwnerExists) {
@@ -288,6 +288,6 @@ func newSessionToken() (string, string, error) {
 	return plainToken, hex.EncodeToString(tokenHash[:]), nil
 }
 
-func sessionExpiresAt(now time.Time) string {
-	return now.Add(SessionLifetime).UTC().Format(time.RFC3339)
+func sessionExpiresAt(now time.Time, lifetime time.Duration) string {
+	return now.Add(lifetime).UTC().Format(time.RFC3339)
 }

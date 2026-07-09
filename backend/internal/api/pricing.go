@@ -162,7 +162,8 @@ type pricingRefreshRunResponse struct {
 }
 
 type pricingRefreshRunsResponse struct {
-	Runs []pricingRefreshRunResponse `json:"runs"`
+	Runs    []pricingRefreshRunResponse `json:"runs"`
+	HasMore bool                        `json:"has_more"`
 }
 
 type pricingRefreshRunRequest struct {
@@ -398,7 +399,10 @@ func listPricingRefreshRuns(logger *slog.Logger, authService *app.AuthService, p
 			writePricingServiceError(w, r, logger, "list pricing refresh runs", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, pricingRefreshRunsResponse{Runs: toPricingRefreshRunResponses(runs)})
+		writeJSON(w, http.StatusOK, pricingRefreshRunsResponse{
+			Runs:    toPricingRefreshRunResponses(runs.Runs),
+			HasMore: runs.HasMore,
+		})
 	}
 }
 

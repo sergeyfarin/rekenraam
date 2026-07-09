@@ -81,7 +81,7 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.Equal(t, "/", cookies[0].Path)
 	assert.True(t, cookies[0].HttpOnly)
 	assert.Equal(t, http.SameSiteStrictMode, cookies[0].SameSite)
-	assert.False(t, cookies[0].Secure)
+	assert.True(t, cookies[0].Secure)
 	assert.Equal(t, int(app.SessionLifetime.Seconds()), cookies[0].MaxAge)
 
 	var passwordHash string

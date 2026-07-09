@@ -50,6 +50,7 @@ CurrencySettingsPageResponse:
     - policy
     - assignments
     - refresh_runs
+    - refresh_runs_has_more
     - source_health
     - latest_rates
   properties:
@@ -75,6 +76,8 @@ CurrencySettingsPageResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/PricingRefreshRunResponse"
+    refresh_runs_has_more:
+      type: boolean
     source_health:
       type: array
       items:

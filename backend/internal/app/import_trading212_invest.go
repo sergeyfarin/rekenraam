@@ -145,22 +145,23 @@ func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[s
 	}
 
 	tradeInput := InvestmentTradeInput{
-		OwnerUserID:      input.OwnerUserID,
-		AuthSessionID:    input.AuthSessionID,
-		RequestID:        input.RequestID,
-		TransactionDate:  date,
-		CommodityID:      commodityID,
-		HoldingAccountID: holdingAccountID,
-		CashAccountID:    cashAccountID,
-		QuantityValue:    quantity,
-		QuantityScale:    quantityScale,
-		CashAmountValue:  cashValue,
-		CashAmountScale:  cashScale,
-		CashCommodityID:  cashCommodityID,
-		Memo:             strings.TrimSpace(side + " " + raw[rawKeyTicker]),
-		ChangeReason:     "imported from trading212",
-		OriginType:       "import",
-		Operation:        "investment." + strings.ToLower(side) + ".import",
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		TransactionDate:        date,
+		CommodityID:            commodityID,
+		HoldingAccountID:       holdingAccountID,
+		CashAccountID:          cashAccountID,
+		QuantityValue:          quantity,
+		QuantityScale:          quantityScale,
+		CashAmountValue:        cashValue,
+		CashAmountScale:        cashScale,
+		CashCommodityID:        cashCommodityID,
+		Memo:                   strings.TrimSpace(side + " " + raw[rawKeyTicker]),
+		ChangeReason:           "imported from trading212",
+		ReconciliationOverride: input.ReconciliationOverride,
+		OriginType:             "import",
+		Operation:              "investment." + strings.ToLower(side) + ".import",
 	}
 
 	var (
@@ -217,19 +218,20 @@ func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[st
 	}
 
 	transaction, err := s.investmentService.Dividend(ctx, DividendInput{
-		OwnerUserID:     input.OwnerUserID,
-		AuthSessionID:   input.AuthSessionID,
-		RequestID:       input.RequestID,
-		TransactionDate: date,
-		CommodityID:     &commodityID,
-		CashAccountID:   cashAccountID,
-		CashCommodityID: cashCommodityID,
-		AmountValue:     amountValue,
-		AmountScale:     amountScale,
-		Memo:            "Dividend: " + raw[rawKeyTicker],
-		ChangeReason:    "imported from trading212",
-		OriginType:      "import",
-		Operation:       "investment.dividend.import",
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		TransactionDate:        date,
+		CommodityID:            &commodityID,
+		CashAccountID:          cashAccountID,
+		CashCommodityID:        cashCommodityID,
+		AmountValue:            amountValue,
+		AmountScale:            amountScale,
+		Memo:                   "Dividend: " + raw[rawKeyTicker],
+		ChangeReason:           "imported from trading212",
+		ReconciliationOverride: input.ReconciliationOverride,
+		OriginType:             "import",
+		Operation:              "investment.dividend.import",
 	})
 	if err != nil {
 		if isExpectedInvestmentCommitGap(err) {

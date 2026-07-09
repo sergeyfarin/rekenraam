@@ -275,6 +275,7 @@ func TestCurrencySettingsPageDataReturnsComposedReadModel(t *testing.T) {
 	assert.NotEmpty(t, body.Sources)
 	assert.Empty(t, body.Assignments)
 	assert.Empty(t, body.RefreshRuns)
+	assert.False(t, body.RefreshRunsHasMore)
 	assert.Empty(t, body.SourceHealth)
 	assert.Empty(t, body.LatestRates)
 }

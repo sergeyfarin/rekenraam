@@ -22,15 +22,16 @@ type userPreferencesRequest struct {
 }
 
 type currencySettingsPageResponse struct {
-	Book         bookResponse                      `json:"book"`
-	Preferences  userPreferencesResponse           `json:"preferences"`
-	Currencies   []currencyResponse                `json:"currencies"`
-	Sources      []marketDataSourceResponse        `json:"sources"`
-	Policy       pricingPolicyResponse             `json:"policy"`
-	Assignments  []pricingSourceAssignmentResponse `json:"assignments"`
-	RefreshRuns  []pricingRefreshRunResponse       `json:"refresh_runs"`
-	SourceHealth []pricingSourceHealthResponse     `json:"source_health"`
-	LatestRates  []priceObservationResponse        `json:"latest_rates"`
+	Book               bookResponse                      `json:"book"`
+	Preferences        userPreferencesResponse           `json:"preferences"`
+	Currencies         []currencyResponse                `json:"currencies"`
+	Sources            []marketDataSourceResponse        `json:"sources"`
+	Policy             pricingPolicyResponse             `json:"policy"`
+	Assignments        []pricingSourceAssignmentResponse `json:"assignments"`
+	RefreshRuns        []pricingRefreshRunResponse       `json:"refresh_runs"`
+	RefreshRunsHasMore bool                              `json:"refresh_runs_has_more"`
+	SourceHealth       []pricingSourceHealthResponse     `json:"source_health"`
+	LatestRates        []priceObservationResponse        `json:"latest_rates"`
 }
 
 func userPreferences(logger *slog.Logger, authService *app.AuthService, settingsService *app.SettingsService) http.HandlerFunc {
@@ -141,15 +142,16 @@ func currencySettingsPageData(logger *slog.Logger, authService *app.AuthService,
 		}
 
 		writeJSON(w, http.StatusOK, currencySettingsPageResponse{
-			Book:         toBookResponse(book),
-			Preferences:  toUserPreferencesResponse(preferences),
-			Currencies:   toCurrencyResponses(currencies),
-			Sources:      toMarketDataSourceResponses(sources),
-			Policy:       toPricingPolicyResponse(policy),
-			Assignments:  toPricingSourceAssignmentResponses(assignments),
-			RefreshRuns:  toPricingRefreshRunResponses(refreshRuns),
-			SourceHealth: toPricingSourceHealthResponses(sourceHealth),
-			LatestRates:  toPriceObservationResponses(latestRates),
+			Book:               toBookResponse(book),
+			Preferences:        toUserPreferencesResponse(preferences),
+			Currencies:         toCurrencyResponses(currencies),
+			Sources:            toMarketDataSourceResponses(sources),
+			Policy:             toPricingPolicyResponse(policy),
+			Assignments:        toPricingSourceAssignmentResponses(assignments),
+			RefreshRuns:        toPricingRefreshRunResponses(refreshRuns.Runs),
+			RefreshRunsHasMore: refreshRuns.HasMore,
+			SourceHealth:       toPricingSourceHealthResponses(sourceHealth),
+			LatestRates:        toPriceObservationResponses(latestRates),
 		})
 	}
 }

@@ -418,11 +418,14 @@ PricingRefreshRunsResponse:
   type: object
   required:
     - runs
+    - has_more
   properties:
     runs:
       type: array
       items:
         $ref: "#/PricingRefreshRunResponse"
+    has_more:
+      type: boolean
 
 PricingRefreshRunRequest:
   type: object
