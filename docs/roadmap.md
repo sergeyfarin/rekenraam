@@ -135,10 +135,27 @@ The core reconcile loop ships at `routes/app/reconcile` (`implemented.md`):
   mark-cleared UI (APIs exist); these sit outside the R1 trust loop.
 
 ### R2. Reports UI
-Read models exist (`/ledger/net-worth`, `/account-balances`, `/category-totals`).
-- Net worth over time, spending by category/payee, cashflow.
-- Date-range + account filters; CSV/print-friendly view.
-- Add a cashflow read model (the one core report without an endpoint).
+Full plan: `docs/reports-plan.md`. Current backend read models exist for
+single-point net worth, account balances, and category totals
+(`/ledger/net-worth`, `/account-balances`, `/category-totals`); the missing work
+is a reusable reporting/query layer plus UI.
+
+- Treat net worth over time as a reusable valuation series, not just one report
+  page. The same read model should power full net worth, account-level balance
+  history on account detail, account group slices, and future filters for
+  categories, accounts, countries, currencies, and investments.
+- Establish one shared report filter vocabulary: inclusive date range,
+  bucket/granularity, include/exclude accounts and descendants, categories,
+  payees, commodities/currencies, system-account policy, and later
+  country/jurisdiction and investment dimensions.
+- Ship first core reports: net worth over time, spending by category/payee, and
+  cashflow.
+- Add the missing cashflow read model; cashflow must separate inflow, outflow,
+  transfers, and net movement instead of hiding those semantics in one number.
+- Keep multi-commodity results exact and grouped unless a request explicitly
+  selects a reporting currency plus valuation/FX method.
+- Date-range + account/category/payee/commodity filters; CSV and print-friendly
+  table views; charts are summaries over accessible tables.
 
 ### R3. Core exports (CSV + QIF)
 Locked as the first mandatory export set (product-requirements). Cheap, expected
