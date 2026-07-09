@@ -225,7 +225,7 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 	require.NoError(t, err)
 
 	fp := hashFingerprint(buildTrading212Fingerprint(conn.ID, "ref-1", 0))
-	tx, err := importRepo.DB().BeginTx(ctx, nil)
+	tx, err := database.BeginTx(ctx, nil)
 	require.NoError(t, err)
 	require.NoError(t, importRepo.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
 		BookID: BookID, DedupeFingerprint: fp, CommittedTransactionID: 999,

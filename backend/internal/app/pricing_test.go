@@ -156,6 +156,26 @@ func TestPricingRefreshRecordsFailureHealth(t *testing.T) {
 	assert.True(t, health[0].LastError.Valid)
 }
 
+func TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
+	repository := db.NewPricingRepository(database)
+
+	for i := 0; i < 3; i++ {
+		startedAt := time.Date(2026, 6, 12, 12, i, 0, 0, time.UTC).Format(time.RFC3339)
+		_, err := repository.RecordRefreshRun(ctx, BookID, 1, "manual", "succeeded", startedAt, startedAt, 0, 0, 0, "")
+		require.NoError(t, err)
+	}
+
+	runs, err := service.ListRefreshRuns(ctx, 2)
+
+	require.NoError(t, err)
+	assert.True(t, runs.HasMore)
+	require.Len(t, runs.Runs, 2)
+	assert.Equal(t, "2026-06-12T12:02:00Z", runs.Runs[0].StartedAt)
+	assert.Equal(t, "2026-06-12T12:01:00Z", runs.Runs[1].StartedAt)
+}
+
 func TestFXCoverageBackfillsHistoricalPublicationDatesIdempotently(t *testing.T) {
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{

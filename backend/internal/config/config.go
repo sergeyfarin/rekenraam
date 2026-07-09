@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
 	AppEnv                 string
 	HTTPAddr               string
 	DatabaseURL            string
+	SessionLifetime        time.Duration
 	TrustProxyHeaders      bool
 	TrustedProxyCIDRs      []netip.Prefix
 	OpenExchangeRatesAppID string
@@ -26,6 +29,11 @@ func Load() (Config, error) {
 	appEnv := env("APP_ENV", "production")
 	if appEnv != "development" && appEnv != "production" {
 		return Config{}, fmt.Errorf("APP_ENV must be development or production")
+	}
+
+	sessionLifetime, err := envPositiveHours("SESSION_LIFETIME_HOURS", 720)
+	if err != nil {
+		return Config{}, err
 	}
 
 	trustProxyHeaders, err := envBool("TRUST_PROXY_HEADERS", false)
@@ -55,6 +63,7 @@ func Load() (Config, error) {
 		AppEnv:                 appEnv,
 		HTTPAddr:               env("HTTP_ADDR", ":16888"),
 		DatabaseURL:            env("DATABASE_URL", "file:var/dev.sqlite"),
+		SessionLifetime:        sessionLifetime,
 		TrustProxyHeaders:      trustProxyHeaders,
 		TrustedProxyCIDRs:      trustedProxyCIDRs,
 		OpenExchangeRatesAppID: strings.TrimSpace(os.Getenv("OPEN_EXCHANGE_RATES_APP_ID")),
@@ -102,6 +111,20 @@ func envBool(key string, fallback bool) (bool, error) {
 	default:
 		return false, fmt.Errorf("%s must be a boolean", key)
 	}
+}
+
+func envPositiveHours(key string, fallback int) (time.Duration, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return time.Duration(fallback) * time.Hour, nil
+	}
+
+	hours, err := strconv.Atoi(value)
+	if err != nil || hours <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer number of hours", key)
+	}
+
+	return time.Duration(hours) * time.Hour, nil
 }
 
 func envCIDRs(key string) ([]netip.Prefix, error) {

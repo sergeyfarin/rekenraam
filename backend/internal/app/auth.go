@@ -51,9 +51,10 @@ const (
 )
 
 type AuthService struct {
-	repository *db.AuthRepository
-	logger     *slog.Logger
-	now        func() time.Time
+	repository      *db.AuthRepository
+	logger          *slog.Logger
+	now             func() time.Time
+	sessionLifetime time.Duration
 }
 
 type loginThrottleScope struct {
@@ -88,10 +89,18 @@ type LoginResult struct {
 }
 
 func NewAuthService(repository *db.AuthRepository, logger *slog.Logger) *AuthService {
+	return NewAuthServiceWithSessionLifetime(repository, logger, SessionLifetime)
+}
+
+func NewAuthServiceWithSessionLifetime(repository *db.AuthRepository, logger *slog.Logger, sessionLifetime time.Duration) *AuthService {
+	if sessionLifetime <= 0 {
+		sessionLifetime = SessionLifetime
+	}
 	return &AuthService{
-		repository: repository,
-		logger:     logger,
-		now:        time.Now,
+		repository:      repository,
+		logger:          logger,
+		now:             time.Now,
+		sessionLifetime: sessionLifetime,
 	}
 }
 
@@ -205,7 +214,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		UserID:    credentials.ID,
 		TokenHash: sessionTokenHash,
 		CreatedAt: createdAt,
-		ExpiresAt: sessionExpiresAt(now),
+		ExpiresAt: sessionExpiresAt(now, s.sessionLifetime),
 	}); err != nil {
 		return LoginResult{}, fmt.Errorf("persist auth session: %w", err)
 	}
@@ -233,6 +242,51 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 	}
 
 	return nil
+}
+
+func (s *AuthService) CleanupExpiredAndRevokedSessions(ctx context.Context) (int64, error) {
+	deleted, err := s.repository.DeleteExpiredOrRevokedSessions(ctx, s.now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return 0, fmt.Errorf("delete expired or revoked auth sessions: %w", err)
+	}
+
+	return deleted, nil
+}
+
+func (s *AuthService) StartSessionCleanup(ctx context.Context, logger *slog.Logger) {
+	if logger == nil {
+		logger = s.logger
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	go func() {
+		s.cleanupExpiredAndRevokedSessions(ctx, logger)
+
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.cleanupExpiredAndRevokedSessions(ctx, logger)
+			}
+		}
+	}()
+}
+
+func (s *AuthService) cleanupExpiredAndRevokedSessions(ctx context.Context, logger *slog.Logger) {
+	deleted, err := s.CleanupExpiredAndRevokedSessions(ctx)
+	if err != nil {
+		logger.WarnContext(ctx, "clean up auth sessions", slog.Any("err", err))
+		return
+	}
+	if deleted > 0 {
+		logger.InfoContext(ctx, "cleaned up auth sessions", slog.Int64("deleted", deleted))
+	}
 }
 
 func verifyPassword(password string, encodedHash string) (bool, error) {

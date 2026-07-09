@@ -14,14 +14,15 @@ re-deriving the analysis. Items are verified against the actual code.
 
 ## Open
 
-### T-01 Session lifetime is hardcoded (30 days) `[ ]`
+### T-01 Session lifetime is hardcoded (30 days) `[x]`
 **File:** `backend/internal/app/auth.go:207` (`sessionExpiresAt`)
 
-`sessionExpiresAt(now)` takes no configuration. Add `SESSION_LIFETIME_HOURS` to
-`config` (default 720, must be > 0), thread it into `AuthService`, and pass it to
-`sessionExpiresAt`. Lets operators tighten sessions in higher-security
-deployments without a recompile. Document the default and constraint in
-`conventions.md` under the auth section.
+Closed by adding `SESSION_LIFETIME_HOURS` to config (default `720`, must be a
+positive integer number of hours), threading it into `AuthService`, and passing
+the configured duration into `sessionExpiresAt` for login-created sessions. The
+owner setup flow still uses the product default unless setup is deliberately made
+configurable too. Documented in `docs/conventions.md` and verified by config
+parsing tests plus `TestSessionExpiresAtUsesConfiguredLifetime`.
 
 ### T-02 `BookID = int64(1)` is a hardcoded package constant `[~]`
 **File:** `backend/internal/app/currencies.go:17`, referenced ~everywhere.
@@ -46,27 +47,33 @@ Present because SvelteKit injects an inline bootstrap script. Planned fix is a
 build-time SHA-256 hash of the script. Not actionable until the build pipeline
 emits the hash. Tracked, not forgotten.
 
-### T-05 Frontend list pagination not consumed `[ ]`
+### T-05 Frontend list pagination not consumed `[x]`
 **File:** `frontend/src/lib/api/transactions.ts` and reconciliation equivalents.
 
-Backend returns `next_cursor`; some list views fetch once and ignore it. The
-transactions/trash tables now use infinite-query options — audit the remaining
-list helpers (reconciliation, pricing runs) to confirm they paginate or show a
-hidden-results count rather than silently truncating.
+Closed by auditing every frontend consumer of response shapes with
+`next_cursor`. Transactions, account registers, and trash already use
+TanStack infinite-query options. Reconciliation checkpoint/session helpers do
+not expose cursor-paginated responses. Pricing refresh runs currently expose a
+fixed latest-run/history summary with no cursor; the shipped currencies UI only
+uses the latest run, so it is not silently truncating a visible list. The one
+remaining cursor-loss path was import batch preview rows (tracked separately as
+T-23) and is now fixed by `getFullImportBatch`, which follows every
+`next_cursor` page before the preview can be committed. Verified by
+`frontend/src/lib/api/imports.test.ts`.
 
-### T-06 Import crash-consistency hole between ledger tx and identity write `[ ]`
+### T-06 Import crash-consistency hole between ledger tx and identity write `[x]`
 **File:** `backend/internal/app/import_service.go` — `CommitImportBatch`, around line 420.
 
-`CreateTransaction` commits its own internal DB transaction. The `import_commit_identities`
-write and staged-row mark-committed happen in a separate transaction immediately after.
-A crash between the two leaves an orphan posted ledger transaction with no identity row,
-so a retry will duplicate it (the idempotency pre-check finds nothing). The fix requires
-`CreateTransaction` to accept a caller-supplied `*sql.Tx` so the identity insert can join
-the same transaction — a refactor that touches the transaction service signature. Deferred
-because (a) real crashes are rare in practice, (b) the duplicate surfaces in the
-`needs_review` queue where the user can catch it, and (c) the refactor is non-trivial.
-When addressed, remove the `DB()` accessor on `ImportRepository` as it will no longer
-be needed.
+Closed by splitting transaction creation into preparation plus a tx-scoped write
+path (`TransactionRepository.CreateTransactionInTx`) and routing generic import
+commits through `ImportRepository.CommitImportedTransaction`. The generic import
+row now writes the ledger transaction, `import_commit_identities`, and the
+staged-row `committed` marker in one SQL transaction, so a failure between those
+steps rolls all three back together. The old `ImportRepository.DB()` escape hatch
+was removed. Verified by
+`TestCommitImportedTransaction_RollsBackLedgerWhenIdentityWriteFails`, which
+forces the identity insert to fail after `createTransactionTx` and asserts that
+no ledger transaction, identity row, or committed staged-row marker escapes.
 
 ### T-07 Import endpoints missing from OpenAPI spec `[x]`
 **File:** `api/openapi/openapi.yaml`, `api/openapi/components/schemas/imports.yaml`.
@@ -248,16 +255,16 @@ depend on the live Trading 212 API's actual pagination/backdating semantics, whi
 unverified assumptions — not fixed here to avoid guessing at behavior no one has
 validated against the real API yet.
 
-### T-18 No periodic cleanup of expired/revoked auth sessions `[ ]`
+### T-18 No periodic cleanup of expired/revoked auth sessions `[x]`
 **File:** `backend/internal/app/auth.go`, `backend/migrations/0001_initial_schema.sql`
 (`auth_sessions_expires_revoked_idx`).
 
-`docs/conventions.md` (§ Authentication And Session Security) requires a periodic
-delete of `auth_sessions` rows where `revoked_at IS NOT NULL OR expires_at <= now`
-before the app is recommended for long-running deployments. The supporting index
-exists; no cleanup job does. Cheapest fix: fold a delete into an existing
-once-a-minute scheduler tick (pattern: `app/import_scheduler.go`) or run it at
-startup + daily. Add a named test that seeded expired/revoked rows disappear.
+Closed by `AuthService.StartSessionCleanup`, which deletes rows where
+`revoked_at IS NOT NULL OR expires_at <= now` at server startup and then every
+24 hours. `AuthRepository.DeleteExpiredOrRevokedSessions` uses the existing
+`auth_sessions_expires_revoked_idx`-supported predicate. Verified by
+`TestCleanupExpiredAndRevokedSessionsDeletesOnlyInactiveRows`, which seeds active,
+expired, and revoked sessions and confirms only the active session remains.
 
 ### T-19 `REKENRAAM_SECRET_KEY` has no rotation path `[x]`
 **File:** `backend/internal/secretbox/secretbox.go`, `backend/internal/config/config.go`,
@@ -275,16 +282,17 @@ remain durable.
 
 Validation: docs-only change; `git diff --check` over touched docs.
 
-### T-20 E2E coverage is 2 specs vs a full shipped app `[ ]`
+### T-20 E2E coverage is 2 specs vs a full shipped app `[x]`
 **File:** `e2e/playwright/` (`auth.spec.ts`, `health.spec.ts`).
 
-Phases 0–2 plus reconcile, import, and investments UI ship, but Playwright only
-covers login and health. The critical money journeys — first-run setup, add
-transaction (incl. split/transfer), reconcile to zero, QIF import
-preview→commit, buy/sell with preview — have no browser-level regression net;
-they were verified manually per slice. Grow `./scripts/test-e2e.sh` coverage one
-journey per slice, starting with transaction entry (the workflow AGENTS.md calls
-mobile-critical).
+Closed by adding the first real money journey:
+`e2e/playwright/transactions.spec.ts` seeds setup prerequisites through the same
+browser session and creates a simple transaction through the UI form. The auth
+spec was updated to complete the currency setup step before expecting the app
+shell, and `playwright.config.ts` now uses `workers: 1` because the suite starts
+one app instance over one SQLite database. Verified by `./scripts/test-e2e.sh`
+(`4 passed`). Remaining browser journeys are tracked in T-27 so this closure
+means "not only auth/health anymore," not "every shipped workflow has E2E."
 
 ### T-21 Trading 212 fetcher hit a nonexistent endpoint path with a wrong type enum `[x]`
 **File:** `backend/internal/onlinesource/trading212/fetcher.go`, `backend/internal/app/import_trading212.go`.
@@ -338,27 +346,24 @@ source-agnostic, no Trading 212 involved, to prove this is a pipeline fix not
 a Trading-212-specific one) plus the four B-T212-INVST commit tests in the
 same file, all of which exercise the same real-ledger commit path.
 
-### T-23 Import preview UI only reviews the first page; commit processes every staged row `[ ]`
+### T-23 Import preview UI only reviews the first page; commit processes every staged row `[x]`
 **File:** `frontend/src/routes/app/import/+page.svelte` (`pollFetchStatus`, `handleCommit`),
 `backend/internal/app/import_service.go` (`GetImportBatch`, `CommitImportBatch`).
 
-Found during a Slice-4b-era review pass (2026-07-04). The preview screen fetches
+Found during a Slice-4b-era review pass (2026-07-04). The preview screen fetched
 one page of staged rows (`getImportBatch(batchId, { limit: 500 })`) and never
-follows `next_cursor`; the backend also silently clamps any `limit > 200` down
-to 100 (`GetImportBatch`). `CommitImportBatch`, however, iterates *every* staged
-row in the batch regardless of what the UI ever rendered. For a batch with more
-rows than one page (a full-history Trading 212 backfill easily exceeds 100–500
-staged rows), the user can review/exclude/resolve only the rows they were shown
-and then commit a batch that silently processes rows they never saw — including
-rows that fail or get auto-resolved by global account/category assignment
-without the user ever laying eyes on them. Fix options: make the preview table
-consume `next_cursor` (infinite scroll/pagination), add a bulk apply-and-commit
-endpoint that doesn't require materializing every row client-side, or block
-`CommitImportBatch` until all rows have been fetched at least once by the
-client. Needs a test asserting a >1-page batch can't be committed with only
-page 1 resolved (or that the resolution flow can't silently skip unseen rows).
+followed `next_cursor`; the backend also silently clamps any `limit > 200` down
+to 100 (`GetImportBatch`). `CommitImportBatch`, however, iterates *every*
+staged row in the batch regardless of what the UI ever rendered.
 
-### T-24 Investment trade/dividend postings bypass the reconciliation guard entirely `[ ]`
+Closed by `frontend/src/lib/api/imports.ts:getFullImportBatch`, which requests
+the service's real max page size (200) and follows `next_cursor` until the
+whole batch is loaded. The online-import poller now enters preview only after
+loading all staged rows, so review, bulk apply, patch, and commit operate on
+the same complete row set. Verified by `getFullImportBatch`'s unit test in
+`frontend/src/lib/api/imports.test.ts`.
+
+### T-24 Investment trade/dividend postings bypass the reconciliation guard entirely `[x]`
 **File:** `backend/internal/app/investments.go` (`Buy`, `Sell`, `Dividend`,
 `ReinvestedDividend`), `backend/internal/app/transactions_write.go` (`CreateTransaction`).
 
@@ -388,6 +393,68 @@ already does), (3) the T212 investment commit path passes `input.ReconciliationO
 through. Needs a named test: sell/buy/dividend into a reconciled period without override
 must fail `ErrReconciliationOverrideRequired`, and with override must invalidate the
 checkpoint — mirroring the existing `transactions_write.go` coverage for the generic path.
+
+Closed by routing investment creates through the same guard-aware transaction
+preparation used by ordinary creates. `InvestmentTradeInput`, `DividendInput`,
+and `ReinvestedDividendInput` now carry `ReconciliationOverride`; buy, sell,
+and reinvested-dividend use `prepareCreateTransactionForWrite`; dividend
+continues through `CreateTransaction` and now receives the override flag. The
+Trading 212 investment commit path threads `CommitImportBatchInput.ReconciliationOverride`
+through to buy/sell/dividend and classifies `ErrReconciliationOverrideRequired`
+as a skipped row, matching the generic import path.
+
+The fix also closed the lower-level invalidation gap found while testing:
+`InvestmentRepository.CreateTransactionAndLot` and
+`CreateTransactionAndDisposeLots` now apply `CreateTransactionParams` checkpoint
+invalidation refs inside the same DB transaction as the ledger transaction plus
+lot/disposal write. Verified by
+`TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride`,
+which proves a Trading 212 buy into a reconciled period skips without override
+and commits with override while invalidating the checkpoint.
+
+### T-25 Pricing refresh run history has no cursor or hidden-results signal `[x]`
+**File:** `backend/internal/api/pricing.go` (`listPricingRefreshRuns`),
+`backend/internal/api/settings.go` (`currencySettingsPage`),
+`backend/internal/app/pricing.go` (`ListRefreshRuns`).
+
+Closed by changing `PricingService.ListRefreshRuns` to fetch one extra row and
+return `PricingRefreshRuns{Runs, HasMore}`. `GET /pricing/refresh/runs` now
+returns `has_more`, and the currency settings page read model returns
+`refresh_runs_has_more`, so future history UI cannot mistake the fixed latest
+50-row summary for a complete list. OpenAPI and generated frontend API types
+were updated. Verified by
+`TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows` and the composed
+currency settings API test.
+
+### T-26 Trading 212 investment import identity is still recorded after the investment ledger transaction `[ ]`
+**File:** `backend/internal/app/import_trading212_invest.go`
+(`commitTrading212InvestmentRow`), `backend/internal/app/import_service.go`
+(`recordCommitIdentityAndMarkRow`), `backend/internal/db/investments.go`
+(`CreateTransactionAndLot`, `CreateTransactionAndDisposeLots`).
+
+Found while closing T-06 (2026-07-08). Generic cash import rows now commit the
+ledger transaction, import identity, and staged-row marker atomically, but the
+Trading 212 investment branch still posts through `InvestmentService.Buy` /
+`Sell` / `Dividend` first and records the import identity in a second
+transaction afterwards. A crash in that narrow window can orphan an investment
+ledger transaction without an import identity, so retry can duplicate it. This
+is separate from T-06's generic `CreateTransaction` path because buy/sell also
+write lots/disposals in investment repository transactions. T-24 closed the
+reconciliation guard/invalidation behavior for those repository transactions,
+but the import identity is still a second commit. Fix next by adding tx-scoped
+investment posting helpers so the investment transaction, lot/disposal rows,
+import identity, and staged-row mark share one commit. Add named tests for buy,
+sell, and dividend rollback when identity recording fails.
+
+### T-27 Remaining critical browser journeys need E2E coverage `[ ]`
+**File:** `e2e/playwright/`.
+
+Follow-up after closing T-20's initial "only auth/health" gap. Transaction entry
+now has one simple browser journey, but split/transfer transactions, reconcile
+to zero, QIF import preview→commit, buy/sell with preview, and at least one
+mobile viewport run still need Playwright coverage. Add one journey per feature
+slice and keep the shared-DB suite serial unless the harness is changed to
+provision an isolated database per worker.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,

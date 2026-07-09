@@ -127,6 +127,11 @@ type CreateImportCommitIdentityParams struct {
 	CreatedAt              string
 }
 
+type CommitImportedTransactionParams struct {
+	Identity CreateImportCommitIdentityParams
+	Row      CommitImportStagedRowParams
+}
+
 type ListImportBatchesParams struct {
 	BookID int64
 	Limit  int
@@ -681,6 +686,43 @@ func (r *ImportRepository) CommitImportStagedRowInTx(ctx context.Context, tx *sq
 	return commitImportStagedRowExec(ctx, tx, params)
 }
 
+func (r *ImportRepository) CommitImportedTransaction(ctx context.Context, params CommitImportedTransactionParams, createTransaction func(*sql.Tx) (int64, error)) (int64, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin commit imported transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	transactionID, err := createTransaction(tx)
+	if err != nil {
+		return 0, err
+	}
+
+	identity := params.Identity
+	identity.CommittedTransactionID = transactionID
+	if err := r.CreateCommitIdentity(ctx, tx, identity); err != nil {
+		return 0, fmt.Errorf("create commit identity: %w", err)
+	}
+
+	row := params.Row
+	row.CommitStatus = "committed"
+	row.CommittedTransactionID = sql.NullInt64{Int64: transactionID, Valid: true}
+	if err := r.CommitImportStagedRowInTx(ctx, tx, row); err != nil {
+		return 0, fmt.Errorf("mark row committed: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit imported transaction: %w", err)
+	}
+	committed = true
+	return transactionID, nil
+}
+
 type execContexter interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
@@ -757,8 +799,29 @@ func (r *ImportRepository) CreateCommitIdentity(ctx context.Context, tx *sql.Tx,
 	return nil
 }
 
-func (r *ImportRepository) DB() *sql.DB {
-	return r.database
+func (r *ImportRepository) RecordCommitIdentityAndMarkRow(ctx context.Context, params CommitImportedTransactionParams) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin commit identity tx: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	if err := r.CreateCommitIdentity(ctx, tx, params.Identity); err != nil {
+		return fmt.Errorf("create commit identity: %w", err)
+	}
+	if err := r.CommitImportStagedRowInTx(ctx, tx, params.Row); err != nil {
+		return fmt.Errorf("mark row committed: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit identity tx: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // CurrentBookOwnerID reads the owning user for a book, used by the scheduled

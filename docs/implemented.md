@@ -65,6 +65,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 |---|---|---|
 | `internal/secretbox` (AES-256-GCM, random nonce, base64 wire format) | ✅ | `backend/internal/secretbox/secretbox.go`; pure stdlib, 11-test suite. |
 | `REKENRAAM_SECRET_KEY` config (base64 32-byte key, optional boot) | ✅ | `internal/config/config.go`; absent = nil (boots); invalid = hard error; loss/rotation recovery documented in `README.md` and `docs/developer-workflow.md`. |
+| `SESSION_LIFETIME_HOURS` config | ✅ | `internal/config/config.go`; default `720`, must be a positive integer number of hours; controls login-created session expiry. |
 | Migration `0007_online_import.sql` | ✅ | `import_connections` table + `connection_id` FK on `import_batches`. |
 | `ImportConnectionRepository` (CRUD) | ✅ | `internal/db/import_connections.go`; conditional key rotation on update. |
 | `ImportConnectionService` (probe-before-store, key masking) | ✅ | `internal/app/import_connections.go`; `ConnectionProber` interface; `NoOpProber` for Slice 1. |

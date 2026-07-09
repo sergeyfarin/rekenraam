@@ -231,6 +231,14 @@ Run the app:
 HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite ./dist/rekenraam
 ```
 
+Login sessions last 30 days by default. Operators can tighten or lengthen
+login-created sessions with `SESSION_LIFETIME_HOURS`, which must be a positive
+integer number of hours:
+
+```sh
+HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite SESSION_LIFETIME_HOURS=168 ./dist/rekenraam
+```
+
 If the app runs behind a trusted reverse proxy that rewrites forwarding headers, opt in explicitly and allowlist the proxy source ranges:
 
 ```sh
