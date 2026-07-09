@@ -6,6 +6,7 @@ const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${e2ePort}`;
 
 export default defineConfig({
   testDir: './playwright',
+  workers: 1,
   use: {
     baseURL
   },

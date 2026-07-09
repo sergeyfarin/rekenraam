@@ -239,6 +239,9 @@ type InvestmentTradeInput struct {
 	LotAllocations   []InvestmentLotAllocationInput
 	ChangeReason     string
 	CostBasisMethod  string
+	// ReconciliationOverride allows backdated investment trades to invalidate
+	// affected checkpoints through the normal transaction write guard.
+	ReconciliationOverride bool
 	// OriginType/Operation override the default "browser_api"/"investment.buy"
 	// (or "investment.sell") attribution — set by the Trading 212 import
 	// commit path (B-T212-INVST) so an auto-booked trade is correctly
@@ -294,6 +297,9 @@ type DividendInput struct {
 	PayeeID              *int64
 	Status               string
 	ChangeReason         string
+	// ReconciliationOverride allows backdated dividends to invalidate affected
+	// checkpoints through the normal transaction write guard.
+	ReconciliationOverride bool
 	// OriginType/Operation: see InvestmentTradeInput's doc comment — same
 	// override mechanism, same reason (B-T212-INVST import attribution).
 	OriginType string
@@ -301,22 +307,23 @@ type DividendInput struct {
 }
 
 type ReinvestedDividendInput struct {
-	OwnerUserID      int64
-	AuthSessionID    int64
-	RequestID        string
-	TransactionDate  string
-	CommodityID      int64
-	HoldingAccountID int64
-	IncomeAccountID  *int64
-	QuantityValue    exact.Coefficient
-	QuantityScale    int
-	AmountValue      int64
-	AmountScale      int
-	CashCommodityID  int64
-	Memo             string
-	PayeeID          *int64
-	Status           string
-	ChangeReason     string
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	TransactionDate        string
+	CommodityID            int64
+	HoldingAccountID       int64
+	IncomeAccountID        *int64
+	QuantityValue          exact.Coefficient
+	QuantityScale          int
+	AmountValue            int64
+	AmountScale            int
+	CashCommodityID        int64
+	Memo                   string
+	PayeeID                *int64
+	Status                 string
+	ChangeReason           string
+	ReconciliationOverride bool
 }
 
 type InvestmentLot struct {
@@ -766,13 +773,14 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transactionParams, err := s.transactionService.prepareCreateTransaction(ctx, CreateTransactionInput{
-		OwnerUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    defaultString(input.OriginType, "browser_api"),
-		Operation:     defaultString(input.Operation, "investment.buy"),
-		ChangeReason:  input.ChangeReason,
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		OriginType:             defaultString(input.OriginType, "browser_api"),
+		Operation:              defaultString(input.Operation, "investment.buy"),
+		ChangeReason:           input.ChangeReason,
+		ReconciliationOverride: input.ReconciliationOverride,
 		Spec: TransactionInput{
 			Status:          status,
 			TransactionKind: "investment",
@@ -924,13 +932,14 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transactionParams, err := s.transactionService.prepareCreateTransaction(ctx, CreateTransactionInput{
-		OwnerUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    defaultString(input.OriginType, "browser_api"),
-		Operation:     defaultString(input.Operation, "investment.sell"),
-		ChangeReason:  input.ChangeReason,
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		OriginType:             defaultString(input.OriginType, "browser_api"),
+		Operation:              defaultString(input.Operation, "investment.sell"),
+		ChangeReason:           input.ChangeReason,
+		ReconciliationOverride: input.ReconciliationOverride,
 		Spec: TransactionInput{
 			Status:          status,
 			TransactionKind: "investment",
@@ -1060,12 +1069,13 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 		)
 	}
 	return s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
-		OwnerUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    defaultString(input.OriginType, "browser_api"),
-		Operation:     defaultString(input.Operation, "investment.dividend"),
-		ChangeReason:  input.ChangeReason,
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		OriginType:             defaultString(input.OriginType, "browser_api"),
+		Operation:              defaultString(input.Operation, "investment.dividend"),
+		ChangeReason:           input.ChangeReason,
+		ReconciliationOverride: input.ReconciliationOverride,
 		Spec: TransactionInput{
 			Status:          status,
 			TransactionKind: "investment",
@@ -1116,13 +1126,14 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transactionParams, err := s.transactionService.prepareCreateTransaction(ctx, CreateTransactionInput{
-		OwnerUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "investment.reinvested_dividend",
-		ChangeReason:  input.ChangeReason,
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		OriginType:             "browser_api",
+		Operation:              "investment.reinvested_dividend",
+		ChangeReason:           input.ChangeReason,
+		ReconciliationOverride: input.ReconciliationOverride,
 		Spec: TransactionInput{
 			Status:          status,
 			TransactionKind: "investment",

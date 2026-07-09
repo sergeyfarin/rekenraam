@@ -127,7 +127,7 @@ func writeSessionCookie(w http.ResponseWriter, r *http.Request, options HandlerO
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   requestUsesHTTPS(r, options),
+		Secure:   true,
 		MaxAge:   int(app.SessionLifetime.Seconds()),
 	})
 }

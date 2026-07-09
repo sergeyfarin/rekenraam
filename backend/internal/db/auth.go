@@ -123,6 +123,24 @@ func (r *AuthRepository) RevokeSession(ctx context.Context, tokenHash string, re
 	return nil
 }
 
+func (r *AuthRepository) DeleteExpiredOrRevokedSessions(ctx context.Context, now string) (int64, error) {
+	result, err := r.database.ExecContext(ctx, `
+		DELETE FROM auth_sessions
+		WHERE revoked_at IS NOT NULL
+		   OR expires_at <= ?
+	`, now)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired or revoked auth sessions: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read deleted auth session rows affected: %w", err)
+	}
+
+	return rowsAffected, nil
+}
+
 func (r *AuthRepository) UpdatePasswordHash(ctx context.Context, params UpdatePasswordHashParams) error {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE users

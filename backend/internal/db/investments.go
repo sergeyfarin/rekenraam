@@ -1285,6 +1285,11 @@ func (r *InvestmentRepository) CreateTransactionAndLot(ctx context.Context, tran
 	if err != nil {
 		return TransactionRecord{}, InvestmentLotRecord{}, err
 	}
+	invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, transactionParams, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, InvestmentLotRecord{}, err
+	}
+	transaction.InvalidatedCheckpointIDs = invalidatedIDs
 	if err := tx.Commit(); err != nil {
 		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("commit create investment transaction and lot: %w", err)
 	}
@@ -1313,6 +1318,11 @@ func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Conte
 	if err != nil {
 		return TransactionRecord{}, nil, err
 	}
+	invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, transactionParams, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, nil, err
+	}
+	transaction.InvalidatedCheckpointIDs = invalidatedIDs
 	if err := tx.Commit(); err != nil {
 		return TransactionRecord{}, nil, fmt.Errorf("commit create investment transaction and dispose lots: %w", err)
 	}

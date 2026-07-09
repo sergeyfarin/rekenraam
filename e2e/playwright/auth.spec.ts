@@ -9,6 +9,8 @@ test('bootstraps the owner account, signs out, and signs back in', async ({ page
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Create owner' }).click();
 
+  await completeCurrencySetupIfNeeded(page);
+
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
@@ -52,6 +54,7 @@ async function ensureOwnerExistsAndReachLogin(page: Parameters<typeof test>[0]['
     await page.getByLabel('Username').fill('owner');
     await page.getByLabel('Password').fill('test-password');
     await page.getByRole('button', { name: 'Create owner' }).click();
+    await completeCurrencySetupIfNeeded(page);
     await expect(page).toHaveURL(/\/app$/);
     await page.getByRole('button', { name: 'Sign out' }).click();
   } else if (await signOutButton.isVisible()) {
@@ -60,4 +63,15 @@ async function ensureOwnerExistsAndReachLogin(page: Parameters<typeof test>[0]['
 
   await expect(page).toHaveURL('/');
   await expect(loginHeading).toBeVisible();
+}
+
+async function completeCurrencySetupIfNeeded(page: Parameters<typeof test>[0]['page']) {
+  const currencyHeading = page.getByRole('heading', { name: 'Choose default currencies' });
+  const overviewHeading = page.getByRole('heading', { name: 'Overview' });
+
+  await expect(currencyHeading.or(overviewHeading)).toBeVisible({ timeout: 10_000 });
+  if (await currencyHeading.isVisible()) {
+    await page.getByRole('button', { name: /USD/ }).first().click();
+    await page.getByRole('button', { name: 'Save currencies' }).click();
+  }
 }

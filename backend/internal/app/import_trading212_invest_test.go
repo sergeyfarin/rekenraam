@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 // investTestFixture wires a full ImportService (with a real InvestmentService)
@@ -195,6 +196,77 @@ func (f *investTestFixture) resolveRowGeneric(t *testing.T, batchID int64, rowID
 	}))
 }
 
+func (f *investTestFixture) createCashReconciliationCheckpoint(t *testing.T, statementDate string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	transaction, err := f.importService.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+		OwnerUserID:  f.ownerUserID,
+		OriginType:   "browser_api",
+		Operation:    "transaction.create",
+		ChangeReason: "test fixture",
+		Spec: TransactionInput{
+			Status:          "posted",
+			TransactionKind: "ordinary",
+			TransactionDate: statementDate,
+			JournalEntries: []JournalEntryInput{{
+				EntryDate: statementDate,
+				EntryKind: "ordinary",
+				Postings: []PostingInput{
+					{AccountID: f.cashAccountID, QuantityValue: exact.New(10000), QuantityScale: 2, CommodityID: f.eurCommodityID},
+					{AccountID: f.categoryAccountID, QuantityValue: exact.New(-10000), QuantityScale: 2, CommodityID: f.eurCommodityID},
+				},
+			}},
+		},
+	})
+	require.NoError(t, err)
+
+	var cashPostingID int64
+	for _, posting := range transaction.JournalEntries[0].Postings {
+		if posting.AccountID == f.cashAccountID {
+			cashPostingID = posting.ID
+			break
+		}
+	}
+	require.NotZero(t, cashPostingID)
+
+	session, err := f.importService.transactionService.StartReconciliation(ctx, StartReconciliationInput{
+		OwnerUserID:           f.ownerUserID,
+		OriginType:            "browser_api",
+		AccountID:             f.cashAccountID,
+		CommodityID:           f.eurCommodityID,
+		SourceKind:            "statement",
+		StatementDate:         statementDate,
+		StatementBalanceValue: exact.New(10000),
+		StatementBalanceScale: 2,
+		ChangeReason:          "test fixture",
+	})
+	require.NoError(t, err)
+	session, err = f.importService.transactionService.UpdateReconciliationSelection(ctx, ReconciliationSelectionInput{
+		OwnerUserID:       f.ownerUserID,
+		OriginType:        "browser_api",
+		SessionID:         session.ID,
+		PostingVersionIDs: []int64{cashPostingID},
+		ChangeReason:      "selected test posting",
+	})
+	require.NoError(t, err)
+	_, err = f.importService.transactionService.FinishReconciliation(ctx, FinishReconciliationInput{
+		OwnerUserID:  f.ownerUserID,
+		OriginType:   "browser_api",
+		SessionID:    session.ID,
+		ChangeReason: "matched test statement",
+	})
+	require.NoError(t, err)
+
+	checkpoints, err := f.importService.transactionService.ReconciliationCheckpoints(ctx, ListReconciliationCheckpointsInput{
+		AccountID:   f.cashAccountID,
+		CommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	require.Len(t, checkpoints, 1)
+	require.Equal(t, "active", checkpoints[0].Status)
+	return checkpoints[0].ID
+}
+
 func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing.T) {
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -219,6 +291,63 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 	require.NoError(t, err)
 	require.Len(t, instruments, 1)
 	assert.Equal(t, "AAPL_US_EQ", instruments[0].Symbol)
+}
+
+func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	checkpointID := f.createCashReconciliationCheckpoint(t, "2026-06-10")
+
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "fill-reconciled-1", OrderID: "order-reconciled-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
+	})
+
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.CommittedCount)
+	assert.Equal(t, 1, result.SkippedCount, "investment imports should use the same reconciled-period guard as generic imports")
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "skipped", rows[0].CommitStatus)
+	require.True(t, rows[0].CommitError.Valid)
+	assert.Equal(t, "reconciliation override required", rows[0].CommitError.String)
+
+	checkpoints, err := f.importService.transactionService.ReconciliationCheckpoints(context.Background(), ListReconciliationCheckpointsInput{
+		AccountID:   f.cashAccountID,
+		CommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	require.Len(t, checkpoints, 1)
+	assert.Equal(t, checkpointID, checkpoints[0].ID)
+	assert.Equal(t, "active", checkpoints[0].Status)
+
+	overrideBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "fill-reconciled-2", OrderID: "order-reconciled-2", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "1", Price: "151.00", Currency: "USD",
+		FilledAt: "2026-06-02T10:00:00Z", NetValue: "-151.00", NetValueCurrency: "EUR",
+	})
+
+	overrideResult, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{
+		OwnerUserID:            f.ownerUserID,
+		BatchID:                overrideBatchID,
+		ReconciliationOverride: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, overrideResult.CommittedCount)
+	assert.Equal(t, 0, overrideResult.SkippedCount)
+
+	checkpoints, err = f.importService.transactionService.ReconciliationCheckpoints(context.Background(), ListReconciliationCheckpointsInput{
+		AccountID:   f.cashAccountID,
+		CommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	require.Len(t, checkpoints, 1)
+	assert.Equal(t, checkpointID, checkpoints[0].ID)
+	assert.Equal(t, "invalidated", checkpoints[0].Status)
 }
 
 func TestCommitImportBatch_BuyOrderFillReusesHoldingAccountAcrossFetches(t *testing.T) {
@@ -296,6 +425,83 @@ func TestCommitImportBatch_GenericCashRowCommitsToRealLedger(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.CommittedCount, "a plain generic cash row must commit to the real ledger, not just validate in isolation")
 	assert.Equal(t, "committed", result.Status)
+}
+
+func TestCommitImportedTransaction_RollsBackLedgerWhenIdentityWriteFails(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+
+	batch, err := f.importRepo.CreateImportBatch(ctx, db.CreateImportBatchParams{
+		BookID: BookID, SourceKind: "qif", SourceMetaJSON: "{}", CreatedAt: "2026-06-01T00:00:00Z", ActorUserID: f.ownerUserID,
+	})
+	require.NoError(t, err)
+
+	parseResult := ParseResult{Rows: []StagedRow{{
+		DedupeFingerprint: "qif|atomic-row-1",
+		Date:              "2026-06-01",
+		Amount:            "42.50",
+		CommodityHint:     "EUR",
+		PayeeHint:         "Atomic Payee",
+		Memo:              "atomic rollback probe",
+		ExternalRef:       "atomic-ext-1",
+	}}}
+	rows, _, err := f.importService.stageParseResult(ctx, batch.ID, parseResult)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	f.resolveRowGeneric(t, batch.ID, rows[0].ID, f.cashAccountID)
+
+	rows, err = f.importRepo.ListAllImportStagedRows(ctx, batch.ID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	resolution, err := parseResolutionJSON(rows[0].ResolutionJSON)
+	require.NoError(t, err)
+	spec, err := buildTransactionSpec(rows[0], resolution)
+	require.NoError(t, err)
+	createParams, err := f.importService.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID:  f.ownerUserID,
+		OriginType:   "import",
+		Operation:    "transaction.create",
+		Spec:         spec,
+		ChangeReason: "imported from qif",
+	})
+	require.NoError(t, err)
+
+	var beforeTransactions int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&beforeTransactions))
+
+	_, err = f.importRepo.CommitImportedTransaction(ctx, db.CommitImportedTransactionParams{
+		Identity: db.CreateImportCommitIdentityParams{
+			BookID:            BookID,
+			DedupeFingerprint: rows[0].DedupeFingerprint,
+			SourceKind:        "qif",
+			AccountID:         0, // Invalid FK: force failure after createTransactionTx has inserted the ledger rows.
+			CreatedAt:         "2026-06-01T00:00:00Z",
+		},
+		Row: db.CommitImportStagedRowParams{RowID: rows[0].ID},
+	}, func(tx *sql.Tx) (int64, error) {
+		record, err := f.importService.transactionService.createTransactionRecordInTx(ctx, tx, createParams)
+		if err != nil {
+			return 0, err
+		}
+		return record.ID, nil
+	})
+	require.Error(t, err)
+
+	var afterTransactions int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&afterTransactions))
+	assert.Equal(t, beforeTransactions, afterTransactions, "ledger transaction must roll back when import identity recording fails")
+
+	var identityCount int
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM import_commit_identities WHERE dedupe_fingerprint = ?
+	`, rows[0].DedupeFingerprint).Scan(&identityCount))
+	assert.Equal(t, 0, identityCount)
+
+	updatedRows, err := f.importRepo.ListAllImportStagedRows(ctx, batch.ID)
+	require.NoError(t, err)
+	require.Len(t, updatedRows, 1)
+	assert.Equal(t, "pending", updatedRows[0].CommitStatus)
+	assert.False(t, updatedRows[0].CommittedTransactionID.Valid)
 }
 
 func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t *testing.T) {

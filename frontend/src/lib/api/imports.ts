@@ -22,6 +22,8 @@ export interface RowResolutionPatch {
   resolution?: ImportResolution;
 }
 
+const IMPORT_BATCH_ROW_PAGE_LIMIT = 200;
+
 // --- API helpers ---
 
 async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -85,6 +87,38 @@ export async function getImportBatch(
   if (options.cursor) params.set('cursor', options.cursor);
   const qs = params.size > 0 ? '?' + params.toString() : '';
   return apiFetch<GetImportBatchResponse>(`/api/v1/imports/${batchId}${qs}`);
+}
+
+export async function getFullImportBatch(
+  batchId: number,
+  initialPage?: GetImportBatchResponse
+): Promise<GetImportBatchResponse> {
+  const rows: ImportStagedRow[] = [];
+  let batch = initialPage?.batch;
+  let cursor = initialPage?.next_cursor ?? undefined;
+  let shouldFetch = initialPage === undefined;
+
+  if (initialPage) {
+    rows.push(...initialPage.rows);
+  }
+
+  while (shouldFetch || cursor) {
+    const page = await getImportBatch(batchId, {
+      limit: IMPORT_BATCH_ROW_PAGE_LIMIT,
+      cursor: shouldFetch ? undefined : cursor
+    });
+
+    batch = page.batch;
+    rows.push(...page.rows);
+    cursor = page.next_cursor ?? undefined;
+    shouldFetch = false;
+  }
+
+  return {
+    batch: batch!,
+    rows,
+    next_cursor: null
+  };
 }
 
 export async function listImportBatches(

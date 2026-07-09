@@ -199,7 +199,8 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Any feature that changes the owner password must revoke all existing sessions atomically in the same database transaction. The `recover-owner` command demonstrates the required pattern. Do not implement a "change password" endpoint that updates the hash without revoking sessions.
 - Login throttle scopes use `username` and `client_ip` as independent scope keys. The `username` throttle is cleared on successful login; the `client_ip` throttle is intentionally retained. When multi-user support is added, confirm that throttle scope keys remain globally unique and cannot be confused across user classes.
 - `429 Too Many Requests` responses from the login endpoint must include a `Retry-After` header with the remaining wait in seconds. The blocked-until time is known at the point the error is returned; derive `Retry-After` from it rather than from a fixed constant.
-- Expired and revoked `auth_sessions` rows accumulate over time. A periodic cleanup should delete rows where `revoked_at IS NOT NULL OR expires_at <= now`. The index `auth_sessions_expires_revoked_idx` exists to support this. Document and implement the cleanup strategy before the app is recommended for long-running deployments.
+- Login-created session lifetime is configurable with `SESSION_LIFETIME_HOURS` (default `720`, must be a positive integer number of hours). Owner setup sessions use the product default unless setup is deliberately made configurable too.
+- Expired and revoked `auth_sessions` rows are deleted at server startup and then once every 24 hours where `revoked_at IS NOT NULL OR expires_at <= now`. The index `auth_sessions_expires_revoked_idx` exists to support this.
 - The `script-src 'unsafe-inline'` directive in the Content-Security-Policy header exists because SvelteKit `adapter-static` injects an inline bootstrapping script into `index.html` at build time. The correct fix is to compute a SHA-256 hash of that script during the frontend build and embed it in the Go middleware's CSP. This is deferred; when implemented, the build script must output the hash and the Go source must consume it at build time. Do not remove `'unsafe-inline'` until that mechanism is in place.
 - `Strict-Transport-Security` (HSTS) is emitted only when the request is served over HTTPS (direct TLS or trusted proxy signalling `X-Forwarded-Proto: https`). Do not emit HSTS on plain HTTP responses.
 
@@ -220,6 +221,11 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.
 - Use **Dinero.js v2** for all frontend money arithmetic and display (balance checks before submission, running totals, input parsing). Use `Intl.NumberFormat` via Dinero's formatting layer for locale-aware rendering.
 - Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
+- Report calculations must be backend-composed read models with explicit filter
+  contracts. Reuse the same report semantics across full report pages,
+  account-detail summaries, category/payee drill-downs, and future
+  multi-currency/investment views instead of reimplementing route-local
+  financial calculations in the frontend.
 - Use Tailwind for implementation ergonomics, layout composition, and utility authoring, but keep semantic design tokens in CSS custom properties as the source of truth for theme roles. Tailwind utilities do not replace the token system or the app's product-specific visual language.
 - Build app screens from shared shell and surface primitives (`PageHeader`, `Panel`, `StatePanel`, status badges, toolbar/list-row patterns) before adding route-local visual styling. Route files may compose layout, but token roles and reusable financial-app chrome should stay centralized.
 - Themes must use semantic design tokens for color, spacing, typography, elevation, and motion.

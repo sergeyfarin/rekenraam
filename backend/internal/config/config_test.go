@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,4 +62,33 @@ func TestLoadReadsOpenExchangeRatesAppID(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "secret", cfg.OpenExchangeRatesAppID)
+}
+
+func TestLoadDefaultsSessionLifetimeToThirtyDays(t *testing.T) {
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 720*time.Hour, cfg.SessionLifetime)
+}
+
+func TestLoadReadsSessionLifetimeHours(t *testing.T) {
+	t.Setenv("SESSION_LIFETIME_HOURS", "12")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 12*time.Hour, cfg.SessionLifetime)
+}
+
+func TestLoadRejectsInvalidSessionLifetimeHours(t *testing.T) {
+	for _, value := range []string{"0", "-1", "soon"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("SESSION_LIFETIME_HOURS", value)
+
+			_, err := Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "SESSION_LIFETIME_HOURS must be a positive integer number of hours")
+		})
+	}
 }
