@@ -1,4 +1,4 @@
-FROM node:22-trixie-slim AS frontend
+FROM node:26-trixie-slim AS frontend
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
