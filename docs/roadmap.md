@@ -156,11 +156,22 @@ is a reusable reporting/query layer plus UI.
   selects a reporting currency plus valuation/FX method.
 - Date-range + account/category/payee/commodity filters; CSV and print-friendly
   table views; charts are summaries over accessible tables.
+- Add named saved report definitions and report runs so users can return to a
+  useful filter set. Initial runs capture the query parameters and recalculate
+  live; immutable input snapshots remain the separately deferred
+  reproducibility feature.
 
 ### R3. Core exports (CSV + QIF)
 Locked as the first mandatory export set (product-requirements). Cheap, expected
 by every competitor, and unblocks user trust/portability.
 - CSV export of core ledger (transactions + postings) and QIF export.
+
+### R3a. Core-workflow accessibility regression coverage
+Add automated accessibility smoke checks for the shipped core routes, starting
+with setup/auth, transaction entry, reconciliation, reports, and import. Keep
+these focused on actionable regressions (semantic controls, labels, keyboard
+navigation, focus handling, and contrast violations); mobile browser journeys
+remain covered by the broader Playwright expansion in backlog T-27.
 
 ---
 
@@ -203,6 +214,10 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
 ### R6. XLSX, OFX/QFX, duplicate-review depth
 - XLSX adapter (reuses the CSV row pipeline); OFX/QFX (FITID dedupe).
 - Richer duplicate review, import audit-trail/history, batch rollback (via void).
+- Match imported rows to pre-existing manual ledger entries, with explicit user
+  confirmation and durable provenance. This is distinct from provider/file
+  duplicate detection: it prevents a statement import from creating a second
+  transaction for an entry the user recorded earlier.
 - Per-split category mapping: currently all splits post to a single user-selected
   category; R6 should show per-split category selectors in the preview UI and route
   each split to its own `CategoryID` derived from `category_hint` in normalized JSON.
@@ -261,6 +276,13 @@ code**. Adds the CSV adapter + the column-mapping profile engine/UI.
   free personal tier — what Firefly/Actual communities actually use),
   **SimpleFIN Bridge** (US, user-purchased token). All are adapters users
   bring keys for; none are promised coverage.
+
+### R7a. Daily-entry ergonomics
+After imports and reports make the core trustworthy, reduce repeat manual work
+with named transaction templates (including memorized split patterns), learned
+and explicit payee defaults, saved transaction views, and keyboard-first quick
+entry. These are convenience layers over the existing ledger, not new accounting
+semantics.
 
 ---
 
@@ -322,10 +344,16 @@ Read-side only, over data that already exists (lots, prices, FX, dividends):
 ## Beyond — explicitly deferred
 
 Kept out of the near/mid roadmap by product decision: multi-user/household,
-bank/open-banking integrations, attachments (statements/receipts), plugin
-architecture, small-business AR/AP & invoicing, native mobile apps, hosted
-service operations. Compatibility guardrails (typed `/api/v1`, semantic theme
-tokens, reserved `/plugins` `/themes` namespaces) keep these additive later.
+bank/open-banking integrations, plugin architecture, small-business AR/AP &
+invoicing, native mobile apps, hosted service operations. Compatibility
+guardrails (typed `/api/v1`, semantic theme tokens, reserved `/plugins`
+`/themes` namespaces) keep these additive later.
+
+### Attachments (statements and receipts) — explicitly deferred
+Attachments remain a valuable future product capability, but are not part of
+the daily-driver core. Revisit only with a durable storage, retention,
+backup/restore, access-control, and encryption-at-rest design; do not add
+desktop-path or native-file-picker assumptions to the web app in the meantime.
 
 ### Trade execution — explicitly NOT planned (decided 2026-07-07)
 

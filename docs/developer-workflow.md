@@ -31,6 +31,8 @@ pnpm dev:frontend
 
 ### Backend Validation
 
+Runs the full Go suite with the race detector.
+
 ```sh
 ./scripts/test-backend.sh
 ```
@@ -76,6 +78,8 @@ the same backup-first delete-and-re-add procedure for stored online import
 connections.
 
 ### Frontend Validation
+
+Runs SvelteKit checks and the Vitest unit suite.
 
 ```sh
 ./scripts/test-frontend.sh
@@ -176,7 +180,8 @@ The repo uses a fast CI workflow in `.github/workflows/ci.yml`.
 
 Workflow conventions:
 
-- Fast CI covers backend tests, frontend check, and integrated build.
+- Fast CI covers race-detected backend tests, frontend checks plus Vitest, and
+  the integrated build.
 - Go vulnerability scanning runs in `.github/workflows/govulncheck.yml` with
   `govulncheck ./...` from `backend/` on a weekly schedule, manually via
   `workflow_dispatch`, and on backend-affecting pull requests.

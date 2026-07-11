@@ -4,3 +4,4 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 pnpm --dir "$ROOT/frontend" run check
+pnpm --dir "$ROOT/frontend" run test

@@ -46,13 +46,17 @@ almost mock-free:
 
 ## Gaps
 
-### G-01 CI does not run the frontend unit tests or e2e suite
+### G-01 CI does not run the frontend unit tests or e2e suite `[x]` (Vitest portion)
 
-`.github/workflows/ci.yml` → `scripts/test-frontend.sh` runs `pnpm run check`
-(svelte-check type checking) — **`vitest` is never executed in CI**, and the
-Playwright suite isn't wired into CI at all. The three existing vitest files
-can silently rot. Cheapest high-value fix in this review: add `pnpm --dir
-frontend test` to the frontend CI job.
+At review time, `.github/workflows/ci.yml` → `scripts/test-frontend.sh` ran
+only `pnpm run check` (svelte-check type checking) — **`vitest` was never
+executed in CI**, and the Playwright suite was not wired into CI. The three
+existing Vitest files could silently rot. The cheapest high-value fix was to
+add `pnpm --dir frontend test` to the frontend CI path.
+
+Closed 2026-07-11: `scripts/test-frontend.sh` now runs both `pnpm run check`
+and `pnpm run test`; the existing frontend CI job already calls this wrapper.
+Playwright remains a separate, intentionally unscheduled CI decision.
 
 ### G-02 Frontend is effectively untested
 
@@ -94,11 +98,14 @@ caught today.
 scheduler/worker pair has good tests to use as the pattern
 (`import_scheduler_test.go`, `import_fetch_worker_test.go`).
 
-### G-06 No race detector in CI
+### G-06 No race detector in CI `[x]`
 
-`scripts/test-backend.sh` runs plain `go test ./...`. The app runs four
-long-lived background goroutines (pricing + import schedulers and workers)
-against shared services; `-race` in CI is cheap insurance.
+At review time, `scripts/test-backend.sh` ran plain `go test ./...`. The app
+runs four long-lived background goroutines (pricing + import schedulers and
+workers) against shared services; `-race` in CI is cheap insurance.
+
+Closed 2026-07-11: `scripts/test-backend.sh` now runs `go test -race ./...`,
+which the backend CI job already invokes.
 
 ### G-07 No coverage signal in CI
 
@@ -119,15 +126,13 @@ sit.
 
 ## Recommended order of work
 
-1. **Wire vitest into CI** and add `-race` to backend CI (G-01, G-06) — one
-   line each.
-2. **HTTP-layer tests for import connections + imports** (G-03): one
+1. **HTTP-layer tests for import connections + imports** (G-03): one
    lifecycle test each in the existing `api` test style (create connection →
    list shows `key_hint` not key → refresh → delete; start QIF import →
    preview → commit → batch status).
-3. **Service tests for `PreviewSell` vs `Sell` consistency and
+2. **Service tests for `PreviewSell` vs `Sell` consistency and
    `ReinvestedDividend` postings** (G-04) — these guard real money math.
-4. **Pricing scheduler/worker tests** cloned from the import-side pattern
+3. **Pricing scheduler/worker tests** cloned from the import-side pattern
    (G-05).
-5. **Frontend unit tests for money input parsing and balance validation**
+4. **Frontend unit tests for money input parsing and balance validation**
    (G-02), then grow e2e per the already-tracked T-20.

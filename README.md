@@ -102,7 +102,8 @@ pnpm dev:frontend
 
 ## Test Backend
 
-Backend tests are independent from Node and the frontend:
+Backend tests are independent from Node and the frontend and run with Go's race
+detector:
 
 ```sh
 ./scripts/test-backend.sh
@@ -149,7 +150,7 @@ Install dependencies once:
 pnpm install
 ```
 
-Run SvelteKit checks:
+Run SvelteKit checks and the Vitest unit suite:
 
 ```sh
 ./scripts/test-frontend.sh
