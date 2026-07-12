@@ -11,6 +11,7 @@
     "test:backend": "./scripts/test-backend.sh",
     "test:frontend": "./scripts/test-frontend.sh",
     "test:e2e": "./scripts/test-e2e.sh",
+    "test:release-preflight": "./scripts/test-release-preflight.sh",
     "build": "./scripts/build-single-binary.sh"
   },
   "devDependencies": {

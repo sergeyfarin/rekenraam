@@ -32,8 +32,8 @@ Primary product goal:
 - Runtime product scope is strictly single-owner and single-user for now; if household sharing ever becomes real scope, naming can be revised deliberately then.
 - First-run setup is browser-based and guided. It creates the owner first, then grows to include the default book, default currency preference, system accounts, default categories, and optional additional categories as those feature slices are implemented.
 - Public VPS deployments require HTTPS and local authentication.
-- Public VPS deployment with real financial data requires MFA; public deployment may be delayed until MFA is implemented.
-- Localhost development may use HTTP. LAN/private deployments should strongly prefer HTTPS through a reverse proxy or app-provided certificate and key configuration.
+- Public deployment with real financial data is prohibited until MFA has both an approved design and a complete implementation. Public VPS deployment must otherwise use HTTPS and local authentication.
+- Localhost development may use HTTP. LAN/private deployments should strongly prefer HTTPS through a reverse proxy; the app does not terminate TLS itself.
 - Browser-warning-free LAN/private HTTPS requires either a trusted certificate for a real domain or installing a trusted local certificate authority on client devices.
 - SQLite database encryption is deferred for early local use, but the product should document that encrypted-at-rest storage may be needed before recommending higher-risk deployments.
 - Product direction (decided 2026-07-02): finish the polished personal daily-driver core first (reports, exports, imports, budgets, recurring), then differentiate into the multi-currency / cross-border personal-finance niche (expats and multi-jurisdiction investors) that the exact-precision ledger and investment engine already serve. An EU small-business accounting pivot is rejected for this product phase: per-country VAT and e-invoicing mandates are a regulatory treadmill, and businesses buy compliance plus support, which a self-hosted single-maintainer project cannot sell.

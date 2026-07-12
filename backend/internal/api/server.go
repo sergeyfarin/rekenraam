@@ -11,6 +11,7 @@ import (
 type HandlerOptions struct {
 	TrustProxyHeaders bool
 	TrustedProxyCIDRs []netip.Prefix
+	SetupToken        string
 }
 
 type Services struct {

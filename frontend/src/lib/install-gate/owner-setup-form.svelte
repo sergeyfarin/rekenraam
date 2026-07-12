@@ -5,12 +5,14 @@
   let {
     username = $bindable(''),
     password = $bindable(''),
+    setupToken = $bindable(''),
     error,
     pending,
     onsubmit
   }: {
     username: string;
     password: string;
+    setupToken: string;
     error: unknown;
     pending: boolean;
     onsubmit: (event: SubmitEvent) => void;
@@ -30,6 +32,19 @@
       required
       maxlength="64"
     />
+  </label>
+
+  <label class="block space-y-2">
+    <span class="text-sm font-medium text-foreground">{m.install_gate_setup_token_label()}</span>
+    <input
+      bind:value={setupToken}
+      name="setup-token"
+      type="password"
+      autocomplete="off"
+      spellcheck="false"
+      class="w-full rounded-2xl border border-border bg-surface-strong/40 px-4 py-3 text-base text-foreground placeholder:text-muted"
+    />
+    <span class="block text-xs leading-5 text-muted">{m.install_gate_setup_token_hint()}</span>
   </label>
 
   <label class="block space-y-2">

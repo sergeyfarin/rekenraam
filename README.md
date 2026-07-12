@@ -196,6 +196,16 @@ E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 
 E2E tests should cover browser-level user journeys. Prefer backend or frontend unit tests for logic that does not need a real browser.
 
+Run the critical browser release preflight separately:
+
+```sh
+pnpm test:release-preflight
+```
+
+It serially covers split transfer entry, reconciliation to zero, QIF preview and
+commit, investment buy plus sell preview and commit, and a mobile
+transaction-entry flow. It is local-only until the journeys have proven stable.
+
 ## Build Single Binary
 
 Install frontend dependencies first if needed:
@@ -218,41 +228,11 @@ dist/rekenraam
 
 ## Deploy Single Binary
 
-Copy `dist/rekenraam` to the target machine.
-
-Create a data directory for SQLite:
-
-```sh
-mkdir -p data
-```
-
-Run the app:
-
-```sh
-HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite ./dist/rekenraam
-```
-
-Login sessions last 30 days by default. Operators can tighten or lengthen
-login-created sessions with `SESSION_LIFETIME_HOURS`, which must be a positive
-integer number of hours:
-
-```sh
-HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite SESSION_LIFETIME_HOURS=168 ./dist/rekenraam
-```
-
-If the app runs behind a trusted reverse proxy that rewrites forwarding headers, opt in explicitly and allowlist the proxy source ranges:
-
-```sh
-HTTP_ADDR=:16888 DATABASE_URL=file:data/rekenraam.sqlite TRUST_PROXY_HEADERS=1 TRUSTED_PROXY_CIDRS=127.0.0.1/32,10.0.0.0/8 ./dist/rekenraam
-```
-
-Open:
-
-```text
-http://localhost:16888
-```
-
-For a real server, run the binary under a process manager such as `systemd`, and keep the SQLite data directory on persistent storage.
+Use the [deployment-security guide](docs/deployment-security.md) for LAN and
+reverse-proxy deployments. It covers the required first-run setup token,
+HTTPS/TLS termination, proxy-header allowlisting, SQLite permissions, backups,
+and secret-key custody. Do not expose the app's HTTP listener directly to the
+internet.
 
 ## Backup And Restore
 
@@ -269,15 +249,17 @@ Prefer app-aware or stopped-app backups. Do not copy a live WAL-mode SQLite data
 Create a compact operator backup from the project root while the app is stopped or lightly used:
 
 ```sh
+umask 077
 sqlite3 data/rekenraam.sqlite "VACUUM INTO 'data/rekenraam-backup.sqlite'"
 sqlite3 data/rekenraam-backup.sqlite "PRAGMA integrity_check"
+sqlite3 data/rekenraam-backup.sqlite "PRAGMA foreign_key_check"
+chmod 600 data/rekenraam-backup.sqlite
 ```
 
-The integrity check should print:
+The integrity check should print `ok`; the foreign-key check should return no rows.
 
-```text
-ok
-```
+`umask 077` protects files created during the procedure and the explicit `chmod`
+keeps the backup at mode `0600` even if the operator's umask differs.
 
 Restore by stopping the app, moving the existing database aside, copying the verified backup into place, then starting the app again:
 
@@ -323,10 +305,7 @@ Build and run with Docker Compose:
 docker compose -f deploy/docker/compose.yaml up --build
 ```
 
-Open:
-
-```text
-http://localhost:16888
-```
-
-The Compose file mounts SQLite data into a Docker volume named `rekenraam-data`.
+The example binds only to `127.0.0.1:16888` and requires `SETUP_TOKEN`; put TLS
+at a reverse proxy and follow the [deployment-security guide](docs/deployment-security.md)
+before exposing it beyond the host. The Compose file mounts SQLite data into a
+Docker volume named `rekenraam-data`.

@@ -14,6 +14,70 @@ re-deriving the analysis. Items are verified against the actual code.
 
 ## Open
 
+### S-01 First-run setup ownership claim `[x]`
+**File:** `backend/internal/config/config.go`, `backend/internal/api/setup.go`.
+
+Closed for external deployment: production generates a cryptographically random
+one-time setup token when `SETUP_TOKEN` is absent and logs it for the local
+operator; an operator-provided token must be at least 32 characters. The
+unauthenticated owner-creation endpoint now requires that token in
+`X-Setup-Token`, using a constant-time comparison. The browser setup form holds
+the entered token only for its create-owner request. Verified by config and API
+tests.
+
+### S-02 HTTP server slow-client protection `[x]`
+**File:** `backend/cmd/rekenraam/command.go` (`newHTTPServer`).
+
+Closed with explicit `ReadHeaderTimeout` (5 s), `ReadTimeout` (15 s),
+`WriteTimeout` (30 s), and `IdleTimeout` (60 s). Verified by
+`TestNewHTTPServerSetsDefensiveTimeouts`.
+
+### S-03 Trusted `X-Forwarded-For` chain parsing `[x]`
+**File:** `backend/internal/api/auth.go` (`trustedForwardedClientIP`).
+
+Closed by walking the XFF chain right-to-left after verifying the direct peer is
+within `TRUSTED_PROXY_CIDRS`; trusted proxy hops are skipped and the first
+untrusted address is the client. Malformed chains are ignored. Verified by
+`TestLoginUsesRightmostUntrustedForwardedClientIPWhenTrusted`.
+
+### S-04 Username login throttle can cause owner lockout `[ ]`
+**File:** `backend/internal/app/auth.go` (username-scope throttle).
+
+An internet attacker can keep the known single-owner username rate-limited.
+Design and implement the approved-device-cookie or an equivalent lockout-safe
+throttle before public beta.
+
+### S-05 External deployment/TLS posture `[x]`
+**File:** `docs/deployment-security.md`, `deploy/docker/compose.yaml`.
+
+Closed for the initial reverse-proxy-only deployment shape: Compose binds only
+to loopback, deployment guidance covers HTTPS termination, trusted proxy CIDRs,
+setup-token handling, and secret-key custody. No direct HTTP public deployment
+is supported.
+
+### S-06 Multi-factor authentication `[ ]`
+**File:** `docs/product-requirements.md` (public-deployment requirement).
+
+Public deployment with real financial data remains prohibited until MFA has an
+approved design and implementation. Select and implement TOTP, WebAuthn, or an
+approved equivalent before lifting this product gate.
+
+### S-07 Authentication-event visibility `[ ]`
+**File:** `backend/internal/api/auth.go`, `backend/internal/app/auth.go`.
+
+Add privacy-conscious, durable or operator-consumable visibility for successful
+and failed authentication events, including the proxy-aware client IP, so
+operators can detect brute-force attempts and integrate incident response.
+
+### S-08 SQLite, WAL, and SHM permissions `[x]`
+**File:** `backend/internal/db/sqlite.go` (`EnforceSQLiteFilePermissions`).
+
+Closed by explicitly applying mode `0600` to the SQLite database and existing
+`-wal`/`-shm` siblings after open and migration. App-generated backup output
+receives the same mode; the documented operator `VACUUM INTO` procedure now
+uses `umask 077`, `foreign_key_check`, and an explicit `chmod 600`. Verified by
+`TestEnforceSQLiteFilePermissionsRestrictsDatabaseAndSidecars`.
+
 ### T-01 Session lifetime is hardcoded (30 days) `[x]`
 **File:** `backend/internal/app/auth.go:207` (`sessionExpiresAt`)
 
@@ -441,15 +505,16 @@ second investment transaction. Verified by named buy, sell, and dividend
 identity-write-failure rollback tests in
 `backend/internal/app/import_trading212_invest_test.go`.
 
-### T-27 Remaining critical browser journeys need E2E coverage `[ ]`
+### T-27 Remaining critical browser journeys need E2E coverage `[x]`
 **File:** `e2e/playwright/`.
 
-Follow-up after closing T-20's initial "only auth/health" gap. Transaction entry
-now has one simple browser journey, but split/transfer transactions, reconcile
-to zero, QIF import preview→commit, buy/sell with preview, and at least one
-mobile viewport run still need Playwright coverage. Add one journey per feature
-slice and keep the shared-DB suite serial unless the harness is changed to
-provision an isolated database per worker.
+Closed by `e2e/playwright/release-preflight.spec.ts`, which drives serial browser
+journeys for a balanced split transfer, reconciliation to zero, QIF upload
+preview through commit, investment buy plus sell preview through commit, and
+simple transaction entry at a 390px mobile viewport. It uses the normal browser
+session and UI for each workflow, with API calls limited to creating isolated
+prerequisite accounts/instruments. `playwright.config.ts` explicitly keeps the
+shared-database release preflight serial. Verified by `./scripts/test-e2e.sh`.
 
 ### T-28 Same-day Trading 212 fill ordering could turn a real sell into a cash-only import `[x]`
 **File:** `backend/internal/app/import_service.go`,

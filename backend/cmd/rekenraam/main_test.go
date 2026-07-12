@@ -7,9 +7,11 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +19,15 @@ import (
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/db"
 )
+
+func TestNewHTTPServerSetsDefensiveTimeouts(t *testing.T) {
+	server := newHTTPServer("127.0.0.1:16888", http.NotFoundHandler())
+
+	assert.Equal(t, 5*time.Second, server.ReadHeaderTimeout)
+	assert.Equal(t, 15*time.Second, server.ReadTimeout)
+	assert.Equal(t, 30*time.Second, server.WriteTimeout)
+	assert.Equal(t, 60*time.Second, server.IdleTimeout)
+}
 
 func TestRecoverOwnerCommandBacksUpDatabaseBeforeMigration(t *testing.T) {
 	databaseURL := setupPreMigrationRecoveryDatabase(t)

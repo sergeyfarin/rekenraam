@@ -55,6 +55,37 @@ func TestLoadRejectsInvalidAppEnv(t *testing.T) {
 	assert.Contains(t, err.Error(), "APP_ENV must be development or production")
 }
 
+func TestLoadGeneratesSetupTokenInProductionWhenUnset(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("SETUP_TOKEN", "")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Len(t, cfg.SetupToken, 43)
+	assert.True(t, cfg.GeneratedSetupToken)
+}
+
+func TestLoadAcceptsProductionSetupToken(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("SETUP_TOKEN", "0123456789abcdef0123456789abcdef")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "0123456789abcdef0123456789abcdef", cfg.SetupToken)
+	assert.False(t, cfg.GeneratedSetupToken)
+}
+
+func TestLoadRejectsShortSetupToken(t *testing.T) {
+	t.Setenv("SETUP_TOKEN", "too-short")
+
+	_, err := Load()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SETUP_TOKEN must be at least 32 characters")
+}
+
 func TestLoadReadsOpenExchangeRatesAppID(t *testing.T) {
 	t.Setenv("OPEN_EXCHANGE_RATES_APP_ID", " secret ")
 

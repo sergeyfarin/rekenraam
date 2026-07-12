@@ -96,6 +96,42 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 	assert.Equal(t, 1, sessionCount)
 }
 
+func TestCreateOwnerRequiresConfiguredSetupToken(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandlerWithOptions(t, HandlerOptions{SetupToken: "0123456789abcdef0123456789abcdef"})
+
+	for name, token := range map[string]string{"missing": "", "incorrect": "not-the-setup-token"} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+			req.Header.Set("Content-Type", "application/json")
+			setSameOrigin(req)
+			if token != "" {
+				req.Header.Set(setupTokenHeader, token)
+			}
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			require.Equal(t, http.StatusForbidden, res.Code)
+		})
+	}
+
+	var ownerCount int
+	require.NoError(t, database.QueryRowContext(context.Background(), "SELECT COUNT(1) FROM users").Scan(&ownerCount))
+	assert.Zero(t, ownerCount)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(setupTokenHeader, "0123456789abcdef0123456789abcdef")
+	setSameOrigin(req)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusCreated, res.Code)
+}
+
 func TestCreateOwnerSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testing.T) {
 	t.Parallel()
 

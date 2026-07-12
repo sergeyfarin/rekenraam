@@ -478,6 +478,8 @@
   "install_gate_open_app": "Open app shell",
   "install_gate_owner_submit": "Create owner",
   "install_gate_owner_submit_pending": "Creating owner...",
+	"install_gate_setup_token_label": "Setup token",
+	"install_gate_setup_token_hint": "Required for production deployments. Enter the value supplied by the server operator; it is used only for this request.",
   "install_gate_password_hint": "Use at least 12 characters.",
   "install_gate_password_label": "Password",
   "install_gate_preparing_copy": "Setting up the private workspace for your financial records.",

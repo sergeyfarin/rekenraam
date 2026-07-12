@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"net/netip"
@@ -14,6 +15,8 @@ type Config struct {
 	AppEnv                 string
 	HTTPAddr               string
 	DatabaseURL            string
+	SetupToken             string
+	GeneratedSetupToken    bool
 	SessionLifetime        time.Duration
 	TrustProxyHeaders      bool
 	TrustedProxyCIDRs      []netip.Prefix
@@ -58,17 +61,42 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	setupToken, generatedSetupToken, err := loadSetupToken(appEnv)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
 		AppEnv:                 appEnv,
 		HTTPAddr:               env("HTTP_ADDR", ":16888"),
 		DatabaseURL:            env("DATABASE_URL", "file:var/dev.sqlite"),
+		SetupToken:             setupToken,
+		GeneratedSetupToken:    generatedSetupToken,
 		SessionLifetime:        sessionLifetime,
 		TrustProxyHeaders:      trustProxyHeaders,
 		TrustedProxyCIDRs:      trustedProxyCIDRs,
 		OpenExchangeRatesAppID: strings.TrimSpace(os.Getenv("OPEN_EXCHANGE_RATES_APP_ID")),
 		SecretKey:              secretKey,
 	}, nil
+}
+
+func loadSetupToken(appEnv string) (string, bool, error) {
+	token := strings.TrimSpace(os.Getenv("SETUP_TOKEN"))
+	if token != "" {
+		if len(token) < 32 {
+			return "", false, fmt.Errorf("SETUP_TOKEN must be at least 32 characters")
+		}
+		return token, false, nil
+	}
+	if appEnv != "production" {
+		return "", false, nil
+	}
+
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", false, fmt.Errorf("generate setup token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), true, nil
 }
 
 // loadSecretKey reads REKENRAAM_SECRET_KEY from the environment.

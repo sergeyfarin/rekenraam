@@ -35,9 +35,12 @@ export async function getSetupStatus(): Promise<SetupStatusResponse> {
   }
 }
 
-export async function createOwner(input: CreateOwnerRequest): Promise<CreateOwnerResponse> {
+export async function createOwner(input: CreateOwnerRequest, setupToken: string): Promise<CreateOwnerResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/setup/owner', {
+      params: {
+        header: setupToken === '' ? undefined : { 'X-Setup-Token': setupToken }
+      },
       body: input
     });
 

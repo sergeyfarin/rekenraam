@@ -77,7 +77,7 @@ Backup rules:
 2. In-app live backup should use SQLite's online backup API through `modernc.org/sqlite` when backup tooling lands.
 3. `VACUUM INTO` is an acceptable alternative for an operator-triggered compact backup when its higher CPU/I/O cost is acceptable.
 4. A stopped-app file copy is acceptable as an operator fallback if all SQLite database files are copied together and the app is not running.
-5. Backup tooling must verify the created backup with at least `PRAGMA quick_check` or `PRAGMA integrity_check`; add `PRAGMA foreign_key_check` once real foreign keys exist.
+5. Backup tooling must verify the created backup with `PRAGMA integrity_check` and `PRAGMA foreign_key_check` because the schema contains real foreign keys.
 6. Restore instructions must require stopping the app before replacing the active database.
 
 ## Consequences

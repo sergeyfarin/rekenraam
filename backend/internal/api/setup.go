@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,6 +17,7 @@ import (
 const (
 	sessionCookieName       = "rekenraam_session"
 	secureSessionCookieName = "__Host-rekenraam_session"
+	setupTokenHeader        = "X-Setup-Token"
 )
 
 type setupStatusResponse struct {
@@ -62,6 +64,11 @@ func setupStatus(logger *slog.Logger, setupService *app.SetupService) http.Handl
 
 func createOwner(logger *slog.Logger, setupService *app.SetupService, options HandlerOptions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !setupTokenMatches(options.SetupToken, r.Header.Get(setupTokenHeader)) {
+			writeAPIError(w, http.StatusForbidden, "FORBIDDEN", "valid setup token is required")
+			return
+		}
+
 		var request createOwnerRequest
 		if err := decodeJSONBody(r, &request); err != nil {
 			writeDecodeError(w, err)
@@ -87,6 +94,14 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService, options Ha
 			Setup: toSetupStatusResponse(result.SetupStatus),
 		})
 	}
+}
+
+func setupTokenMatches(expectedToken string, providedToken string) bool {
+	if expectedToken == "" {
+		return true
+	}
+
+	return subtle.ConstantTimeCompare([]byte(expectedToken), []byte(strings.TrimSpace(providedToken))) == 1
 }
 
 func writeSetupServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {

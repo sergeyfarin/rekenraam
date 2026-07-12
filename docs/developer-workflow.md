@@ -98,6 +98,12 @@ pnpm build
 E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
 
+Run the release preflight when preparing a release:
+
+```sh
+pnpm test:release-preflight
+```
+
 - `./scripts/test-e2e.sh` now builds the integrated app, starts a fresh local instance on `127.0.0.1:16889`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` unless `E2E_BASE_URL` is set.
 - The Playwright suite runs with one worker because the default harness shares one app instance and SQLite database.
 - Set `E2E_PORT` when the self-managed e2e port needs to move.
@@ -118,8 +124,10 @@ E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 - Keep the OpenAPI client seam language-agnostic. Do not embed user-facing English fallbacks in `frontend/src/lib/api/`; translate API status and error presentation at the UI layer with Paraglide using stable error codes or screen-specific fallback copy.
 - API examples and contract assets live in `api/`; use the Bruno `local` environment for the backend dev server and `app` for an integrated binary or Docker app.
 - Login-created sessions default to 30 days. Set `SESSION_LIFETIME_HOURS` to a positive integer number of hours when testing shorter or longer session expiry behavior.
+- Production generates a one-time setup token when `SETUP_TOKEN` is absent; operators should set a durable random token of at least 32 characters and enter it only for the first owner-creation request. See `docs/deployment-security.md`.
 - Forwarded proxy headers are ignored by default. Set `TRUST_PROXY_HEADERS=1` only when the app is behind a trusted reverse proxy that rewrites those headers, and set `TRUSTED_PROXY_CIDRS` to the proxy source ranges that are allowed to supply them.
 - Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
+- `e2e/playwright/release-preflight.spec.ts` is the local release preflight for critical financial workflows. It is intentionally serial against one fresh SQLite database and is not part of fast CI yet.
 - Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.
 - `backend/var/`, `backend/internal/web/dist/`, and `dist/` contain local or generated files. Their README files are placeholders that keep those ignored directories present in Git.
 

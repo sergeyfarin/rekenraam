@@ -265,6 +265,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Local authentication must exist before real data entry.
 - First-run setup is browser-based and guided. The first implementation creates the single owner with a username and password; later setup steps add the default book, default currency preference, system accounts, default categories, and optional additional categories as those domains are implemented.
 - First-run setup uses `GET /api/v1/setup/status` and `POST /api/v1/setup/owner` for the first slice. Setup progress is persisted as named steps, not as a single boolean.
+- Production owner creation requires a one-time `SETUP_TOKEN` in `X-Setup-Token`. Generate and log a cryptographically random token at boot only when the operator has not configured one; an operator-configured token must be at least 32 characters. The browser must not persist it.
 - Early password recovery has no unauthenticated browser or email reset flow. Use an operator-controlled local recovery path requiring server or database access, and invalidate existing sessions after password reset.
 - Session management uses **HTTP-only secure cookies** backed by a **SQLite session table**. Sessions are revocable by deleting the row. Do not use JWTs for session tokens.
 - Session tokens are opaque random values. Store only token hashes in SQLite.
@@ -276,12 +277,13 @@ When a feature introduces a durable new rule, update one of those documents in t
 - `REKENRAAM_SECRET_KEY` encrypts reusable online provider credentials at rest. It must be base64 for exactly 32 random bytes, must live in operator configuration or a deployment secret manager, must never be committed, and must be backed up with the SQLite database.
 - Losing `REKENRAAM_SECRET_KEY` makes stored online provider credentials unreadable but does not invalidate imported ledger data. Until an in-place rotation command exists, the documented recovery and intentional-rotation path is backup-first deletion and re-creation of affected online import connections with fresh provider credentials.
 - Mutating browser API routes must reject non-JSON request bodies unless a feature explicitly documents another content type. Mutating browser API routes must validate same-origin requests before business logic runs; authenticated mutations must also validate the session-bound CSRF token.
-- Public deployment requires HTTPS and explicit operator guidance.
-- Public VPS deployment with real financial data requires MFA.
+- Public deployment requires HTTPS and the reverse-proxy/operator guidance in `docs/deployment-security.md`; the app HTTP listener must not be exposed directly to the internet.
+- Public deployment with real financial data is prohibited until MFA has both an approved design and implementation.
 - Localhost development may use HTTP.
-- LAN/private-network deployments should use HTTPS and may use either a reverse proxy or app-provided certificate and key configuration. Browser-warning-free LAN/private HTTPS requires either a real trusted certificate for a domain or installing a trusted local certificate authority on every client device.
+- LAN/private-network deployments should use HTTPS through a reverse proxy; the app does not terminate TLS or accept certificate/key configuration. Browser-warning-free LAN/private HTTPS requires either a real trusted certificate for a domain or installing a trusted local certificate authority on every client device.
 - Local-network use may ship before MFA if authentication and operator guidance are clear.
 - SQLite database encryption is deferred for early local use, but docs must explain when encrypted-at-rest storage may be needed.
+- SQLite database, WAL, SHM, and generated backup files must be mode `0600`; keep their containing data directory private to the service account.
 - Docker Compose must package the same app shape as the single binary.
 - The Docker production runtime image uses the official Debian 13 slim base: **`debian:trixie-slim`**. The app runs as a non-root numeric user.
 - SQLite data must live in persistent storage outside the container image or binary.

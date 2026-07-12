@@ -34,6 +34,7 @@
 
   let ownerUsername = $state('');
   let ownerPassword = $state('');
+  let ownerSetupToken = $state('');
   let loginUsername = $state('');
   let loginPassword = $state('');
   let currencyDefaultCode = $state('');
@@ -148,9 +149,10 @@
         username: ownerUsername,
         password: ownerPassword,
         time_zone: browserTimeZone
-      });
+      }, ownerSetupToken);
       loginUsername = result.owner.username;
       ownerPassword = '';
+      ownerSetupToken = '';
       await refreshInstallGate();
     } catch (error) {
       ownerError = error;
@@ -256,6 +258,7 @@
         <OwnerSetupForm
           bind:username={ownerUsername}
           bind:password={ownerPassword}
+          bind:setupToken={ownerSetupToken}
           error={ownerError}
           pending={ownerPending}
           onsubmit={handleCreateOwner}

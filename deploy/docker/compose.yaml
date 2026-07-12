@@ -4,9 +4,28 @@ services:
             context: ../..
             dockerfile: deploy/docker/Dockerfile
         ports:
-            - "16888:16888"
+            - "127.0.0.1:16888:16888"
+        environment:
+            APP_ENV: production
+            HTTP_ADDR: :16888
+            DATABASE_URL: file:/app/data/rekenraam.sqlite
+            SETUP_TOKEN: "${SETUP_TOKEN:?SETUP_TOKEN must be set to a random value of at least 32 characters}"
+            REKENRAAM_SECRET_KEY: "${REKENRAAM_SECRET_KEY:-}"
         volumes:
             - rekenraam-data:/app/data
+        read_only: true
+        tmpfs:
+            - /tmp:rw,noexec,nosuid,size=64m
+        cap_drop:
+            - ALL
+        security_opt:
+            - no-new-privileges:true
+        healthcheck:
+            test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:16888/healthz"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
 
 volumes:
     rekenraam-data:

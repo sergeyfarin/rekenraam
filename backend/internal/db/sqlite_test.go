@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,6 +28,46 @@ func TestOpenAppliesRequiredPragmas(t *testing.T) {
 	assert.Equal(t, expectedSynchronous, state.Synchronous)
 	assert.Equal(t, expectedWALCheckpoint, state.WALAutoCheckpoint)
 	assert.Equal(t, 1, database.Stats().MaxOpenConnections)
+}
+
+func TestEnforceSQLiteFilePermissionsRestrictsDatabaseAndSidecars(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "private.sqlite")
+	databaseURL := "file:" + databasePath
+	database, err := Open(context.Background(), databaseURL)
+	require.NoError(t, err)
+	defer database.Close()
+
+	_, err = database.ExecContext(context.Background(), "CREATE TABLE permissions_test (id INTEGER PRIMARY KEY)")
+	require.NoError(t, err)
+	require.NoError(t, EnforceSQLiteFilePermissions(databaseURL))
+
+	for _, path := range []string{databasePath, databasePath + "-wal", databasePath + "-shm"} {
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(), path)
+	}
+}
+
+func TestVerifySQLiteBackupRejectsForeignKeyViolation(t *testing.T) {
+	backupPath := filepath.Join(t.TempDir(), "invalid-backup.sqlite")
+	backupDatabase, err := sql.Open(driverName, "file:"+backupPath)
+	require.NoError(t, err)
+	_, err = backupDatabase.ExecContext(context.Background(), `
+		PRAGMA foreign_keys = OFF;
+		CREATE TABLE parent_records (id INTEGER PRIMARY KEY);
+		CREATE TABLE child_records (parent_id INTEGER REFERENCES parent_records(id));
+		INSERT INTO child_records (parent_id) VALUES (1);
+	`)
+	require.NoError(t, err)
+	require.NoError(t, backupDatabase.Close())
+
+	err = VerifySQLiteBackup(context.Background(), backupPath)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "foreign_key_check found violation")
 }
 
 func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {

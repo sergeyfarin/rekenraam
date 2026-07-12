@@ -409,7 +409,10 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Required when the server has a setup token configured (always in production). Obtain it from the deployment operator; it is never stored by the browser. */
+                    "X-Setup-Token"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -441,7 +444,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Origin validation failed */
+                /** @description Origin validation failed or setup token was missing or invalid */
                 403: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];

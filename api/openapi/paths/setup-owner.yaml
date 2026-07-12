@@ -1,5 +1,12 @@
 post:
   summary: Create the single owner account during first-run setup
+  parameters:
+    - name: X-Setup-Token
+      in: header
+      required: false
+      description: Required when the server has a setup token configured (always in production). Obtain it from the deployment operator; it is never stored by the browser.
+      schema:
+        type: string
   requestBody:
     required: true
     content:
@@ -30,7 +37,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "403":
-      description: Origin validation failed
+      description: Origin validation failed or setup token was missing or invalid
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

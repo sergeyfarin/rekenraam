@@ -156,7 +156,7 @@ Early default:
 - Early password recovery is operator-controlled and local; no unauthenticated browser or email reset flow is included in the first implementation.
 - Hash passwords with Argon2id using self-describing stored hashes and upgradeable parameters.
 - Use same-origin browser sessions with `HttpOnly` cookies, hashed session tokens in SQLite, and CSRF protection on mutating API requests.
-- Public deployments require HTTPS. Localhost development may use HTTP. LAN/private deployments should use HTTPS through either a reverse proxy or app-provided certificate and key configuration.
+- Public deployments require HTTPS. Localhost development may use HTTP. LAN/private deployments should use HTTPS through a reverse proxy; the app does not terminate TLS itself.
 
 Multi-user households, sharing, and book permissions can be added later. Avoid names that imply there can only ever be one global user or one global book.
 

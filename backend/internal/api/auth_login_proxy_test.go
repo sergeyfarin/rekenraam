@@ -90,6 +90,45 @@ func TestLoginUsesForwardedClientIPHeadersWhenTrusted(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, res.Code)
 }
 
+func TestLoginUsesRightmostUntrustedForwardedClientIPWhenTrusted(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandlerWithOptions(t, HandlerOptions{
+		TrustProxyHeaders: true,
+		TrustedProxyCIDRs: []netip.Prefix{
+			netip.MustParsePrefix("203.0.113.0/24"),
+			netip.MustParsePrefix("198.51.100.0/24"),
+		},
+	})
+	bootstrapOwner(t, handler)
+
+	for attempt := 0; attempt < 4; attempt++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
+		req.Header.Set("Content-Type", "application/json")
+		setSameOrigin(req)
+		req.Header.Set("X-Forwarded-For", "192.0.2.8, 198.51.100.9, 203.0.113.10")
+		req.RemoteAddr = "203.0.113.20:1234"
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		require.Equal(t, http.StatusUnauthorized, res.Code)
+	}
+
+	// The spoofed leftmost address has not accumulated a throttle. The first
+	// untrusted hop from the right (192.0.2.8) has.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	setSameOrigin(req)
+	req.Header.Set("X-Forwarded-For", "198.51.100.77, 192.0.2.8, 203.0.113.10")
+	req.RemoteAddr = "203.0.113.20:1234"
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusTooManyRequests, res.Code)
+}
+
 func TestLoginIgnoresForwardedClientIPHeadersWhenPeerNotAllowlisted(t *testing.T) {
 	t.Parallel()
 

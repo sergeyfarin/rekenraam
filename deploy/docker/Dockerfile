@@ -17,7 +17,12 @@ RUN CGO_ENABLED=0 go build -trimpath -o /out/rekenraam ./cmd/rekenraam
 
 FROM debian:trixie-slim
 WORKDIR /app
-RUN mkdir -p /app/data && chown -R 10001:10001 /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/data \
+    && chown -R 10001:10001 /app \
+    && chmod 0700 /app/data
 COPY --from=backend --chown=10001:10001 /out/rekenraam /app/rekenraam
 USER 10001:10001
 VOLUME ["/app/data"]

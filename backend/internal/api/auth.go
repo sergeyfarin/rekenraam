@@ -275,15 +275,8 @@ func deriveCSRFToken(token string) string {
 
 func loginClientIP(r *http.Request, options HandlerOptions) string {
 	if shouldTrustProxyHeaders(r, options) {
-		if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
-			firstValue, _, _ := strings.Cut(forwardedFor, ",")
-			if clientIP := canonicalizeIP(firstValue); clientIP != "" {
-				return clientIP
-			}
-		}
-
-		if realIP := canonicalizeIP(r.Header.Get("X-Real-IP")); realIP != "" {
-			return realIP
+		if clientIP := trustedForwardedClientIP(r.Header.Get("X-Forwarded-For"), options.TrustedProxyCIDRs); clientIP != "" {
+			return clientIP
 		}
 	}
 
@@ -296,6 +289,33 @@ func loginClientIP(r *http.Request, options HandlerOptions) string {
 	return canonicalizeIP(r.RemoteAddr)
 }
 
+// trustedForwardedClientIP walks from the app-facing end of X-Forwarded-For
+// towards the client. The direct peer was already allowlisted by
+// shouldTrustProxyHeaders. Trusted proxy hops are skipped; the first remaining
+// address is the client. Proxies must therefore overwrite or append XFF rather
+// than passing a client-supplied header through unchanged.
+func trustedForwardedClientIP(forwardedFor string, trustedProxyCIDRs []netip.Prefix) string {
+	parts := strings.Split(forwardedFor, ",")
+	for index := len(parts) - 1; index >= 0; index-- {
+		clientIP := canonicalizeIP(parts[index])
+		if clientIP == "" {
+			return ""
+		}
+
+		address, err := netip.ParseAddr(clientIP)
+		if err != nil {
+			return ""
+		}
+		if isTrustedProxy(address.Unmap(), trustedProxyCIDRs) {
+			continue
+		}
+
+		return clientIP
+	}
+
+	return ""
+}
+
 func shouldTrustProxyHeaders(r *http.Request, options HandlerOptions) bool {
 	if !options.TrustProxyHeaders || len(options.TrustedProxyCIDRs) == 0 {
 		return false
@@ -306,8 +326,12 @@ func shouldTrustProxyHeaders(r *http.Request, options HandlerOptions) bool {
 		return false
 	}
 
-	for _, prefix := range options.TrustedProxyCIDRs {
-		if prefix.Contains(peerIP) {
+	return isTrustedProxy(peerIP, options.TrustedProxyCIDRs)
+}
+
+func isTrustedProxy(address netip.Addr, trustedProxyCIDRs []netip.Prefix) bool {
+	for _, prefix := range trustedProxyCIDRs {
+		if prefix.Contains(address) {
 			return true
 		}
 	}

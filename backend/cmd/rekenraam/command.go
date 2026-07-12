@@ -45,6 +45,10 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 }
 
 func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
+	if cfg.GeneratedSetupToken {
+		logger.Warn("generated one-time setup token; set SETUP_TOKEN before the next restart if setup is not completed", slog.String("setup_token", cfg.SetupToken))
+	}
+
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("open database", slog.Any("err", err))
@@ -54,6 +58,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 
 	if err := db.Migrate(ctx, database); err != nil {
 		logger.Error("run migrations", slog.Any("err", err))
+		return 1
+	}
+	if err := db.EnforceSQLiteFilePermissions(cfg.DatabaseURL); err != nil {
+		logger.Error("secure sqlite files", slog.Any("err", err))
 		return 1
 	}
 
@@ -103,11 +111,9 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	}, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
+		SetupToken:        cfg.SetupToken,
 	})
-	server := &http.Server{
-		Addr:    cfg.HTTPAddr,
-		Handler: handler,
-	}
+	server := newHTTPServer(cfg.HTTPAddr, handler)
 
 	logger.Info("server starting",
 		slog.String("addr", cfg.HTTPAddr),
@@ -142,6 +148,17 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	}
 
 	return 0
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 }
 
 func runRecoverOwner(ctx context.Context, cfg config.Config, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
@@ -193,6 +210,10 @@ func runRecoverOwner(ctx context.Context, cfg config.Config, args []string, stdi
 
 	if err := db.Migrate(ctx, database); err != nil {
 		fmt.Fprintf(stderr, "run migrations: %v\n", err)
+		return 1
+	}
+	if err := db.EnforceSQLiteFilePermissions(cfg.DatabaseURL); err != nil {
+		fmt.Fprintf(stderr, "secure sqlite files: %v\n", err)
 		return 1
 	}
 

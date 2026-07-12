@@ -78,8 +78,37 @@ func Open(ctx context.Context, databaseURL string) (*sql.DB, error) {
 		_ = database.Close()
 		return nil, err
 	}
+	if err := EnforceSQLiteFilePermissions(databaseURL); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
 
 	return database, nil
+}
+
+// EnforceSQLiteFilePermissions restricts the database and any WAL sidecars to
+// the process owner. SQLite inherits the process umask when it creates these
+// files, so this explicit correction is required for financial data on shared
+// hosts. Memory databases have no filesystem paths and are intentionally skipped.
+func EnforceSQLiteFilePermissions(databaseURL string) error {
+	databasePath, err := ResolveSQLiteFilePath(databaseURL)
+	if err != nil {
+		return err
+	}
+	if databasePath == ":memory:" || strings.HasPrefix(databasePath, "file::memory:") {
+		return nil
+	}
+
+	for _, path := range []string{databasePath, databasePath + "-wal", databasePath + "-shm"} {
+		if err := os.Chmod(path, 0o600); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("set sqlite file permissions for %s: %w", path, err)
+		}
+	}
+
+	return nil
 }
 
 func Migrate(ctx context.Context, database *sql.DB) error {
@@ -194,6 +223,9 @@ func BackupSQLiteDatabase(ctx context.Context, database *sql.DB, backupPath stri
 	if _, err := database.ExecContext(ctx, statement); err != nil {
 		return fmt.Errorf("vacuum into backup: %w", err)
 	}
+	if err := EnforceSQLiteFilePermissions("file:" + backupPath); err != nil {
+		return fmt.Errorf("set sqlite backup permissions: %w", err)
+	}
 
 	return nil
 }
@@ -220,6 +252,25 @@ func VerifySQLiteBackup(ctx context.Context, backupPath string) error {
 	}
 	if !strings.EqualFold(integrityResult, "ok") {
 		return fmt.Errorf("sqlite integrity_check returned %q", integrityResult)
+	}
+
+	foreignKeyRows, err := backupDatabase.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return fmt.Errorf("run sqlite foreign_key_check: %w", err)
+	}
+	defer foreignKeyRows.Close()
+	if foreignKeyRows.Next() {
+		var table string
+		var rowID int64
+		var parentTable string
+		var foreignKeyID int64
+		if err := foreignKeyRows.Scan(&table, &rowID, &parentTable, &foreignKeyID); err != nil {
+			return fmt.Errorf("read sqlite foreign_key_check result: %w", err)
+		}
+		return fmt.Errorf("sqlite foreign_key_check found violation in %s row %d referencing %s (foreign key %d)", table, rowID, parentTable, foreignKeyID)
+	}
+	if err := foreignKeyRows.Err(); err != nil {
+		return fmt.Errorf("iterate sqlite foreign_key_check: %w", err)
 	}
 
 	return nil

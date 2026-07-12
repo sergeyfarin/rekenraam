@@ -27,7 +27,7 @@ HTTPS policy:
 1. Public deployment requires HTTPS.
 2. Localhost development may use HTTP.
 3. LAN and other private-network deployments should use HTTPS.
-4. LAN/private HTTPS is supported by either a reverse proxy or app-provided certificate and key configuration.
+4. LAN/private HTTPS is supported through a reverse proxy; the app does not terminate TLS or provide certificate/key configuration.
 5. Browser-warning-free LAN/private HTTPS requires either a certificate for a real trusted domain or installing a trusted local certificate authority on every client device that should trust the app.
 
 Session policy:
@@ -64,6 +64,5 @@ CSRF policy:
 
 ### Follow-Up
 
-- Add app configuration for TLS certificate and key paths when implementing deployment configuration.
-- Document Caddy/reverse-proxy and local-CA examples before recommending LAN/private deployments for real financial data.
+- Keep the reverse-proxy and local-CA guidance in `docs/deployment-security.md` current before recommending LAN/private deployments for real financial data.
 - Implement auth middleware, session storage, cookie issuance, CSRF token issuance, and CSRF validation before real financial data entry ships.
