@@ -445,7 +445,7 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 		// account, invalid posting, a real ledger bug) fails just this row
 		// instead of the whole batch, same as any other per-row commit
 		// failure below.
-		if handled, txnID, identityAccountID, err := s.commitTrading212InvestmentRow(ctx, row, batch, input, nowStr); err != nil {
+		if handled, _, _, err := s.commitTrading212InvestmentRow(ctx, row, batch, input, nowStr); err != nil {
 			if errors.Is(err, ErrReconciliationOverrideRequired) {
 				if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
 					RowID:        row.ID,
@@ -467,9 +467,11 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			result.FailedCount++
 			continue
 		} else if handled {
-			if err := s.recordCommitIdentityAndMarkRow(ctx, row.ID, row.DedupeFingerprint, batch.SourceKind, identityAccountID, txnID, nowStr); err != nil {
-				return result, fmt.Errorf("record investment commit row %d: %w", row.ID, err)
-			}
+			// The investment path recorded the import identity and marked this
+			// staged row in the same transaction as its ledger/lot writes.
+			// Keeping that work inside the investment transaction closes T-26:
+			// a crash can no longer post an investment transaction without its
+			// idempotency identity.
 			result.CommittedCount++
 			continue
 		}
@@ -601,31 +603,30 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 	return result, nil
 }
 
-// recordCommitIdentityAndMarkRow records the commit identity + marks the
-// staged row committed in a single DB transaction, so a crash between the
-// two never leaves an orphan identity with no corresponding committed row
-// (or vice versa) — a retry sees commit_status=committed and skips it.
-//
-// The generic import path uses CommitImportedTransaction instead so its ledger
-// write joins this same transaction. The Trading 212 investment path still posts
-// through investment-specific service methods first; T-26 tracks moving those
-// ledger writes into the same transaction too.
-func (s *ImportService) recordCommitIdentityAndMarkRow(ctx context.Context, rowID int64, dedupeFingerprint string, sourceKind string, accountID int64, transactionID int64, nowStr string) error {
-	return s.repository.RecordCommitIdentityAndMarkRow(ctx, db.CommitImportedTransactionParams{
-		Identity: db.CreateImportCommitIdentityParams{
-			BookID:                 BookID,
-			DedupeFingerprint:      dedupeFingerprint,
-			CommittedTransactionID: transactionID,
-			SourceKind:             sourceKind,
-			AccountID:              accountID,
-			CreatedAt:              nowStr,
-		},
-		Row: db.CommitImportStagedRowParams{
-			RowID:                  rowID,
-			CommitStatus:           "committed",
-			CommittedTransactionID: sql.NullInt64{Int64: transactionID, Valid: true},
-		},
-	})
+// recordCommitIdentityAndMarkRowInTx is the investment-import variant used by
+// Buy/Sell/Dividend's post-write callback. The caller owns tx, which already
+// contains the transaction and, for trades, lot/acquisition or disposal
+// writes. Keeping the identity and staged-row marker in that tx makes the
+// at-least-once import retry boundary genuinely idempotent.
+func (s *ImportService) recordCommitIdentityAndMarkRowInTx(ctx context.Context, tx *sql.Tx, rowID int64, dedupeFingerprint string, sourceKind string, accountID int64, transactionID int64, nowStr string) error {
+	if err := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
+		BookID:                 BookID,
+		DedupeFingerprint:      dedupeFingerprint,
+		CommittedTransactionID: transactionID,
+		SourceKind:             sourceKind,
+		AccountID:              accountID,
+		CreatedAt:              nowStr,
+	}); err != nil {
+		return fmt.Errorf("create investment commit identity: %w", err)
+	}
+	if err := s.repository.CommitImportStagedRowInTx(ctx, tx, db.CommitImportStagedRowParams{
+		RowID:                  rowID,
+		CommitStatus:           "committed",
+		CommittedTransactionID: sql.NullInt64{Int64: transactionID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("mark investment row committed: %w", err)
+	}
+	return nil
 }
 
 // DiscardImportBatch marks a previewing batch as discarded.
@@ -697,26 +698,25 @@ func (s *ImportService) ListImportBatches(ctx context.Context, input ListImportB
 // --- Helpers ---
 
 // sortRowsForInvestmentCommitOrder stable-sorts staged rows so Trading 212
-// order-fill/dividend rows (see rawKeyKind) commit oldest-first by trade
-// date, instead of the provider's newest-first paging order (row_index
-// ASC). Without this, a full-history import can stage a recent SELL ahead
-// of the older BUY that opened its lot, and commitTrading212InvestmentRow's
-// Sell call fails "insufficient lots" purely from processing order — not a
-// real data problem — and falls back to a plain cash transaction.
+// order fills commit oldest-first by their full provider fill timestamp,
+// instead of the provider's newest-first paging order (row_index ASC).
+// Ordering by only the YYYY-MM-DD transaction date is insufficient: an
+// intraday SELL can otherwise remain before the BUY that opened its lot,
+// fail "insufficient lots", and fall back to a plain cash transaction.
 // Non-investment rows have no normalized date key here and sort by their
 // empty key, which — being a stable sort — preserves their original
 // row_index-relative order; only investment rows are reordered relative to
 // each other and to non-investment rows.
 func sortRowsForInvestmentCommitOrder(rows []db.ImportStagedRowRecord) {
 	sort.SliceStable(rows, func(i, j int) bool {
-		return investmentRowSortDate(rows[i]) < investmentRowSortDate(rows[j])
+		return investmentRowSortKey(rows[i]) < investmentRowSortKey(rows[j])
 	})
 }
 
-// investmentRowSortDate returns the row's normalized trade date if it's a
-// Trading 212 order-fill/dividend row, or "" otherwise (dates are
-// YYYY-MM-DD, so "" sorts first and never collides with a real date).
-func investmentRowSortDate(row db.ImportStagedRowRecord) string {
+// investmentRowSortKey returns a full order-fill timestamp where available,
+// falling back to the normalized date for dividends and older staged data.
+// Empty keys preserve original row order via sort.SliceStable.
+func investmentRowSortKey(row db.ImportStagedRowRecord) string {
 	var raw map[string]string
 	if err := json.Unmarshal([]byte(row.RawJSON), &raw); err != nil {
 		return ""
@@ -724,6 +724,9 @@ func investmentRowSortDate(row db.ImportStagedRowRecord) string {
 	kind := raw[rawKeyKind]
 	if kind != trading212RawKindOrderFill && kind != trading212RawKindDividend {
 		return ""
+	}
+	if kind == trading212RawKindOrderFill && raw[rawKeyFilledAt] != "" {
+		return raw[rawKeyFilledAt]
 	}
 	var normalized struct {
 		Date string `json:"date"`

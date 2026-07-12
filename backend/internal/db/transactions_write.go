@@ -9,6 +9,18 @@ import (
 )
 
 func (r *TransactionRepository) CreateTransaction(ctx context.Context, params CreateTransactionParams) (TransactionRecord, error) {
+	return r.createTransaction(ctx, params, nil)
+}
+
+// CreateTransactionWithPostWrite creates a transaction and invokes postWrite
+// inside the same database transaction after the ledger rows exist but before
+// the transaction commits. Import callers use this to persist their
+// idempotency identity atomically with the posted transaction.
+func (r *TransactionRepository) CreateTransactionWithPostWrite(ctx context.Context, params CreateTransactionParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, error) {
+	return r.createTransaction(ctx, params, postWrite)
+}
+
+func (r *TransactionRepository) createTransaction(ctx context.Context, params CreateTransactionParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return TransactionRecord{}, fmt.Errorf("begin create transaction: %w", err)
@@ -23,6 +35,11 @@ func (r *TransactionRepository) CreateTransaction(ctx context.Context, params Cr
 	record, err := createTransactionTx(ctx, tx, params)
 	if err != nil {
 		return TransactionRecord{}, err
+	}
+	if postWrite != nil {
+		if err := postWrite(tx, record.ID); err != nil {
+			return TransactionRecord{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

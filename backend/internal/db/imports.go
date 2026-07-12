@@ -799,31 +799,6 @@ func (r *ImportRepository) CreateCommitIdentity(ctx context.Context, tx *sql.Tx,
 	return nil
 }
 
-func (r *ImportRepository) RecordCommitIdentityAndMarkRow(ctx context.Context, params CommitImportedTransactionParams) error {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin commit identity tx: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-
-	if err := r.CreateCommitIdentity(ctx, tx, params.Identity); err != nil {
-		return fmt.Errorf("create commit identity: %w", err)
-	}
-	if err := r.CommitImportStagedRowInTx(ctx, tx, params.Row); err != nil {
-		return fmt.Errorf("mark row committed: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit identity tx: %w", err)
-	}
-	committed = true
-	return nil
-}
-
 // CurrentBookOwnerID reads the owning user for a book, used by the scheduled
 // auto-refresh worker to attribute a system-triggered fetch to a real user
 // (mirrors PricingRepository.CurrentBookOwnerID).

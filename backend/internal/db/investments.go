@@ -1265,6 +1265,17 @@ func disposeAverageCostLotTx(ctx context.Context, tx *sql.Tx, params DisposeLots
 }
 
 func (r *InvestmentRepository) CreateTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) (TransactionRecord, InvestmentLotRecord, error) {
+	return r.createTransactionAndLot(ctx, transactionParams, lotParams, nil)
+}
+
+// CreateTransactionAndLotWithPostWrite invokes postWrite in the same SQLite
+// transaction as the ledger transaction and lot. This keeps import identity
+// recording crash-safe: a failure rolls back all three writes together.
+func (r *InvestmentRepository) CreateTransactionAndLotWithPostWrite(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, InvestmentLotRecord, error) {
+	return r.createTransactionAndLot(ctx, transactionParams, lotParams, postWrite)
+}
+
+func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, InvestmentLotRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("begin create investment transaction and lot: %w", err)
@@ -1290,6 +1301,11 @@ func (r *InvestmentRepository) CreateTransactionAndLot(ctx context.Context, tran
 		return TransactionRecord{}, InvestmentLotRecord{}, err
 	}
 	transaction.InvalidatedCheckpointIDs = invalidatedIDs
+	if postWrite != nil {
+		if err := postWrite(tx, transaction.ID); err != nil {
+			return TransactionRecord{}, InvestmentLotRecord{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("commit create investment transaction and lot: %w", err)
 	}
@@ -1298,6 +1314,17 @@ func (r *InvestmentRepository) CreateTransactionAndLot(ctx context.Context, tran
 }
 
 func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (TransactionRecord, []LotDisposalRecord, error) {
+	return r.createTransactionAndDisposeLots(ctx, transactionParams, disposalParams, nil)
+}
+
+// CreateTransactionAndDisposeLotsWithPostWrite is the sell-side equivalent of
+// CreateTransactionAndLotWithPostWrite. The callback runs after lot disposal
+// but before the enclosing transaction commits.
+func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithPostWrite(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, error) {
+	return r.createTransactionAndDisposeLots(ctx, transactionParams, disposalParams, postWrite)
+}
+
+func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return TransactionRecord{}, nil, fmt.Errorf("begin create investment transaction and dispose lots: %w", err)
@@ -1323,6 +1350,11 @@ func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Conte
 		return TransactionRecord{}, nil, err
 	}
 	transaction.InvalidatedCheckpointIDs = invalidatedIDs
+	if postWrite != nil {
+		if err := postWrite(tx, transaction.ID); err != nil {
+			return TransactionRecord{}, nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return TransactionRecord{}, nil, fmt.Errorf("commit create investment transaction and dispose lots: %w", err)
 	}

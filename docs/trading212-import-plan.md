@@ -627,12 +627,16 @@ actually shipped, and where it differs from the original plan above:
    `OriginType`/`Operation` override fields (empty = unchanged default
    `"browser_api"`/`"investment.buy"` etc., so every existing browser-API
    caller is unaffected) and the import commit path passes `"import"`.
-   Idempotency is inherited for free: the outer `CommitImportBatch` loop
-   already checks `FindCommitIdentity` before any per-row branch runs, and
-   the investment branch records its own identity via the same
-   `recordCommitIdentityAndMarkRow` helper the generic path now also uses
-   (extracted from what was inline code, so both paths share one
-   crash-safe identity+mark-committed transaction).
+   **P1 follow-up (2026-07-11, T-26):** the original implementation only
+   checked `FindCommitIdentity` before posting, then wrote the identity in a
+   second transaction after `Buy`/`Sell`/`Dividend` committed. That left a
+   crash window which could duplicate a retried investment import. The
+   investment and ordinary transaction repositories now expose a narrow
+   post-write callback that runs inside their existing SQLite transaction;
+   the import identity and staged-row marker are written there after the
+   ledger/lot rows and before commit. Buy, sell, and dividend rollback tests
+   inject an identity-write failure and prove no ledger transaction, lot, or
+   disposal escapes.
    `CreateHoldingAccount` still hardcodes `OriginType: "browser_api"` (not
    fixed) — deliberately out of scope: it's a one-time structural action
    per instrument, not a recurring money-moving posting, so misattributing
@@ -656,16 +660,20 @@ actually shipped, and where it differs from the original plan above:
   path (and creates no instrument), dividend posts as investment income
   without creating a lot, and the severity-1 `EntryKind` regression test
   (source-agnostic, no Trading 212 involved).
+  `TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades`
+  proves an intraday
+  buy is ordered before a later same-day sell using Trading 212's full
+  `filledAt` timestamp (T-28). Three identity-failure tests cover atomic
+  buy, sell, and dividend rollback (T-26).
 - **Acceptance:** met for the core flow — a buy/sell with a configured
   `cash_account_id` and either an ISIN/ticker match or a creatable new
   instrument results in a real lot via the same holding account across
   fetches; a dividend with a configured default posts as investment income;
   anything that can't resolve falls back to a plain cash row exactly like
-  before this slice, never blocking the batch. Not yet covered: sell-specific
-  insufficient-lots fallback and re-fetch/re-commit idempotency for
-  investment rows specifically have integration-level reasoning (inherited
-  from the shared identity mechanism) but no dedicated named test — a
-  reasonable next addition, not a known gap in the mechanism itself.
+  before this slice, never blocking the batch. The investment identity is
+  atomic with the ledger write, not merely reasoned about by the outer
+  preflight lookup. Sell-specific insufficient-lots fallback still lacks a
+  dedicated named test.
 
 ---
 
@@ -683,9 +691,11 @@ actually shipped, and where it differs from the original plan above:
   existing `parseDecimalAmount`.
 - **i18n / a11y / mobile:** connection + import UI follow the same boundaries as the
   rest of the app; loading/empty/error/success states defined per screen.
-- **Auditable:** every batch state change is an `import_batch_events` row;
-  committed transactions carry `OriginType="import"` and Trading 212 metadata
-  (movement id, type) in `MetadataJSON`.
+- **Auditable:** every batch state change is an `import_batch_events` row and
+  committed transactions carry `OriginType="import"`. The investment branch
+  currently retains the provider reference through its committed staged row
+  and import identity, rather than copying it to transaction `MetadataJSON`;
+  this remaining provenance improvement is tracked as T-31.
 
 ## Risks & open questions (resolve during Slice 2 against the live API)
 

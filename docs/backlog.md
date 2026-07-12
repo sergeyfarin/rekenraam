@@ -426,25 +426,20 @@ were updated. Verified by
 `TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows` and the composed
 currency settings API test.
 
-### T-26 Trading 212 investment import identity is still recorded after the investment ledger transaction `[ ]`
+### T-26 Trading 212 investment import identity is still recorded after the investment ledger transaction `[x]`
 **File:** `backend/internal/app/import_trading212_invest.go`
 (`commitTrading212InvestmentRow`), `backend/internal/app/import_service.go`
-(`recordCommitIdentityAndMarkRow`), `backend/internal/db/investments.go`
+(`recordCommitIdentityAndMarkRowInTx`), `backend/internal/db/investments.go`
 (`CreateTransactionAndLot`, `CreateTransactionAndDisposeLots`).
 
-Found while closing T-06 (2026-07-08). Generic cash import rows now commit the
-ledger transaction, import identity, and staged-row marker atomically, but the
-Trading 212 investment branch still posts through `InvestmentService.Buy` /
-`Sell` / `Dividend` first and records the import identity in a second
-transaction afterwards. A crash in that narrow window can orphan an investment
-ledger transaction without an import identity, so retry can duplicate it. This
-is separate from T-06's generic `CreateTransaction` path because buy/sell also
-write lots/disposals in investment repository transactions. T-24 closed the
-reconciliation guard/invalidation behavior for those repository transactions,
-but the import identity is still a second commit. Fix next by adding tx-scoped
-investment posting helpers so the investment transaction, lot/disposal rows,
-import identity, and staged-row mark share one commit. Add named tests for buy,
-sell, and dividend rollback when identity recording fails.
+Closed 2026-07-11. `TransactionRepository` and `InvestmentRepository` now
+offer post-write callbacks that run within their existing transaction, after
+the transaction/lot/disposal writes but before `COMMIT`. The Trading 212 branch
+uses that callback to write both `import_commit_identities` and the staged-row
+commit marker. A failure rolls back all of them together; a retry cannot post a
+second investment transaction. Verified by named buy, sell, and dividend
+identity-write-failure rollback tests in
+`backend/internal/app/import_trading212_invest_test.go`.
 
 ### T-27 Remaining critical browser journeys need E2E coverage `[ ]`
 **File:** `e2e/playwright/`.
@@ -455,6 +450,61 @@ to zero, QIF import preview→commit, buy/sell with preview, and at least one
 mobile viewport run still need Playwright coverage. Add one journey per feature
 slice and keep the shared-DB suite serial unless the harness is changed to
 provision an isolated database per worker.
+
+### T-28 Same-day Trading 212 fill ordering could turn a real sell into a cash-only import `[x]`
+**File:** `backend/internal/app/import_service.go`,
+`backend/internal/app/import_trading212.go`.
+
+Closed 2026-07-11. The investment import sorter used only a calendar date, so
+provider newest-first order survived for an intraday sell and its earlier buy.
+The sell then found no lot and fell back to the generic cash path. Order-fill
+raw metadata now retains `filled_at`, and the sorter uses the full timestamp.
+Verified by
+`TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades`.
+
+### T-29 Failed Trading 212 investment routing can leave unused created instruments or holdings `[ ]`
+**File:** `backend/internal/app/import_trading212_invest.go`
+(`commitTrading212InvestmentRow`, `resolveTrading212HoldingAccount`).
+
+Instrument and holding-account creation happen before a Buy/Sell/Dividend is
+known to have posted. An expected fallback (for example insufficient lots or a
+missing dividend default) or an unexpected validation failure can therefore
+leave a zero-lot instrument, holding account, or connection mapping behind.
+Keep the useful “creation only at commit, never fetch” rule, but make creation
+part of the successful investment commit or explicitly clean it up on fallback.
+
+### T-30 Trading 212 cash-account configuration accepts non-asset accounts `[ ]`
+**File:** `backend/internal/app/import_connections.go`
+(`validateCashAccountID`), `frontend/src/routes/app/import/+page.svelte`.
+
+The accounts plan calls for a settlement **asset** account, but current service
+validation and the picker accept every postable non-archived account. Selecting
+an income or expense category would let investment cash legs post to the wrong
+account class. Restrict both layers to postable, non-archived asset accounts;
+add a service-level rejection test so API callers cannot bypass the UI.
+
+### T-31 Trading 212 investment transactions omit direct provider provenance `[ ]`
+**File:** `backend/internal/app/import_trading212_invest.go`,
+`backend/internal/app/investments.go`.
+
+The plan promised Trading 212 provider identifiers in committed transaction
+metadata, but Buy/Sell/Dividend only receive a memo and import attribution.
+The provider reference remains reachable through the committed staged row and
+identity record, but is not present on the ledger transaction itself. Thread a
+small stable source metadata object (provider kind, fill/reference id,
+connection id) into transaction and lot metadata; add a commit-path test.
+
+### T-32 Concurrent Trading 212 batch commits can overwrite a committed row as failed `[ ]`
+**File:** `backend/internal/app/import_service.go` (`CommitImportBatch`),
+`backend/internal/db/imports.go` (`CommitImportStagedRow`).
+
+T-26 now prevents duplicate ledger transactions: the second concurrent commit
+rolls back when its identity insert conflicts. But its caller still handles that
+conflict as a per-row failure and performs an unconditional staged-row update,
+which can overwrite the first caller's already-`committed` status with
+`failed`. Make staged-row terminal transitions conditional (or serialize one
+commit per batch) and treat an existing matching identity as the successful
+idempotent outcome. Add a two-goroutine regression test.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,

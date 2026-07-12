@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -755,6 +756,16 @@ func (s *InvestmentService) SaveDividendDefault(ctx context.Context, input Divid
 }
 
 func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
+	return s.buy(ctx, input, nil)
+}
+
+// buyWithPostWrite is used by imports that must persist an idempotency marker
+// inside the same transaction as the trade and its lot.
+func (s *InvestmentService) buyWithPostWrite(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
+	return s.buy(ctx, input, postWrite)
+}
+
+func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
 	if err := validateTradeInput(input); err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -804,7 +815,7 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 		return InvestmentTradeResult{}, err
 	}
 	now := s.now().UTC().Format(time.RFC3339)
-	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, db.CreateInvestmentLotParams{
+	lotParams := db.CreateInvestmentLotParams{
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
@@ -823,7 +834,14 @@ func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput)
 		Operation:       "investment.lot.create",
 		ChangeReason:    "created lot from buy transaction",
 		EventKind:       "acquisition",
-	})
+	}
+	var transactionRecord db.TransactionRecord
+	var lot db.InvestmentLotRecord
+	if postWrite == nil {
+		transactionRecord, lot, err = s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
+	} else {
+		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
+	}
 	if err != nil {
 		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
 	}
@@ -914,6 +932,16 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 }
 
 func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
+	return s.sell(ctx, input, nil)
+}
+
+// sellWithPostWrite is the import-side variant of Sell. Its callback runs
+// before the transaction and lot-disposal writes commit.
+func (s *InvestmentService) sellWithPostWrite(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
+	return s.sell(ctx, input, postWrite)
+}
+
+func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
 	if err := validateTradeInput(input); err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -970,7 +998,7 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	for _, allocation := range input.LotAllocations {
 		allocations = append(allocations, db.LotAllocation{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
 	}
-	transactionRecord, disposals, err := s.repository.CreateTransactionAndDisposeLots(ctx, transactionParams, db.DisposeLotsParams{
+	disposalParams := db.DisposeLotsParams{
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
@@ -986,7 +1014,14 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 		OriginType:      defaultString(input.OriginType, "browser_api"),
 		Operation:       "investment.lot.dispose",
 		ChangeReason:    "disposed lots from sell transaction",
-	})
+	}
+	var transactionRecord db.TransactionRecord
+	var disposals []db.LotDisposalRecord
+	if postWrite == nil {
+		transactionRecord, disposals, err = s.repository.CreateTransactionAndDisposeLots(ctx, transactionParams, disposalParams)
+	} else {
+		transactionRecord, disposals, err = s.repository.CreateTransactionAndDisposeLotsWithPostWrite(ctx, transactionParams, disposalParams, postWrite)
+	}
 	if err != nil {
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
@@ -1016,6 +1051,16 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 }
 
 func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (Transaction, error) {
+	return s.dividend(ctx, input, nil)
+}
+
+// dividendWithPostWrite keeps an imported dividend's import identity in the
+// same transaction as its ledger postings.
+func (s *InvestmentService) dividendWithPostWrite(ctx context.Context, input DividendInput, postWrite func(*sql.Tx, int64) error) (Transaction, error) {
+	return s.dividend(ctx, input, postWrite)
+}
+
+func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, postWrite func(*sql.Tx, int64) error) (Transaction, error) {
 	date, err := validateDividendInput(input)
 	if err != nil {
 		return Transaction{}, err
@@ -1068,7 +1113,7 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 			PostingInput{AccountID: input.CashAccountID, QuantityValue: exact.New(-*input.WithholdingValue), QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
 		)
 	}
-	return s.transactionService.CreateTransaction(ctx, CreateTransactionInput{
+	createInput := CreateTransactionInput{
 		OwnerUserID:            input.OwnerUserID,
 		AuthSessionID:          input.AuthSessionID,
 		RequestID:              input.RequestID,
@@ -1089,7 +1134,19 @@ func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (
 				Postings:  postings,
 			}},
 		},
-	})
+	}
+	if postWrite == nil {
+		return s.transactionService.CreateTransaction(ctx, createInput)
+	}
+	params, err := s.transactionService.prepareCreateTransactionForWrite(ctx, createInput)
+	if err != nil {
+		return Transaction{}, err
+	}
+	record, err := s.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, postWrite)
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input ReinvestedDividendInput) (InvestmentTradeResult, error) {

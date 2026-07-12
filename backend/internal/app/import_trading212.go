@@ -89,6 +89,7 @@ const (
 	rawKeyQuantity            = "quantity"
 	rawKeyPrice               = "price"
 	rawKeyOrderID             = "order_id"
+	rawKeyFilledAt            = "filled_at"
 	rawKeyResolvedCommodityID = "resolved_commodity_id"
 	rawKeyResolvedHoldingID   = "resolved_holding_account_id"
 )
@@ -221,6 +222,7 @@ func trading212OrderFillToStagedRow(o trading212OrderFill, connectionID int64, o
 		rawKeySide:     o.Side,
 		rawKeyQuantity: o.Quantity,
 		rawKeyPrice:    o.Price,
+		rawKeyFilledAt: o.FilledAt,
 		"net_value":    o.NetValue,
 	}
 

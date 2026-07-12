@@ -524,18 +524,12 @@ func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t
 	assert.Empty(t, instruments, "no instrument should be created when investment routing never engaged")
 }
 
-// TestCommitImportBatch_SellBeforeBuyInRowIndexOrderStillCommitsBothAsInvestmentTrades
-// is a regression test for a real ordering bug: a full Trading 212 history
-// import stages rows in provider paging order (newest page first), so a
-// batch can end up with a SELL at a lower row_index than the BUY that
-// opened its lot. CommitImportBatch used to iterate row_index ASC
-// unconditionally, so the SELL was attempted before any lot existed,
-// failed "insufficient lots", and silently fell back to a plain cash
-// transaction instead of a real investment trade. Both fills share one
-// batch (stageOrderFillRow always creates a fresh batch, so this test
-// stages them directly) with the SELL row staged first — the newest-first
-// shape the provider actually produces.
-func TestCommitImportBatch_SellBeforeBuyInRowIndexOrderStillCommitsBothAsInvestmentTrades(t *testing.T) {
+// TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades
+// proves that full fill timestamps, not only calendar dates, order a
+// newest-first Trading 212 history correctly. With a date-only stable sort,
+// the 15:00 SELL below remains before the 09:00 BUY, hits insufficient lots,
+// and falls back to a plain cash transaction instead of disposing the lot.
+func TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades(t *testing.T) {
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	ctx := context.Background()
@@ -561,13 +555,13 @@ func TestCommitImportBatch_SellBeforeBuyInRowIndexOrderStillCommitsBothAsInvestm
 	stage(trading212FetchPayload{ConnectionID: conn.ID, OrderFills: []trading212OrderFill{{
 		FillID: "fill-sell", OrderID: "order-sell", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
-		FilledAt: "2026-06-02T10:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
+		FilledAt: "2026-06-01T15:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
 	}}})
-	// Row index 1: the BUY that opened the lot (older trade, a later page).
+	// Row index 1: the intraday BUY that opened the lot (later provider page).
 	stage(trading212FetchPayload{ConnectionID: conn.ID, OrderFills: []trading212OrderFill{{
 		FillID: "fill-buy", OrderID: "order-buy", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
-		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
 	}}})
 
 	result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batch.ID})
@@ -677,4 +671,117 @@ func TestCommitImportBatch_DividendPostsAsInvestmentIncome(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, positions, 1)
 	assert.Equal(t, "2", positions[0].QuantityValue.String(), "the dividend must not change the held quantity")
+}
+
+// failInvestmentImportIdentityWrites injects the exact failure point T-26
+// used to leave outside the investment transaction. The trigger runs only
+// after the ledger (and, for buys/sells, lot) writes have been attempted.
+func failInvestmentImportIdentityWrites(t *testing.T, f *investTestFixture) {
+	t.Helper()
+	_, err := f.database.ExecContext(context.Background(), `
+		CREATE TRIGGER fail_investment_import_identity
+		BEFORE INSERT ON import_commit_identities
+		BEGIN
+			SELECT RAISE(ABORT, 'injected investment import identity failure');
+		END
+	`)
+	require.NoError(t, err)
+}
+
+func transactionCount(t *testing.T, f *investTestFixture) int {
+	t.Helper()
+	var count int
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM transactions`).Scan(&count))
+	return count
+}
+
+func assertInvestmentIdentityFailure(t *testing.T, f *investTestFixture, batchID int64) {
+	t.Helper()
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.CommittedCount)
+	assert.Equal(t, 1, result.FailedCount)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "failed", rows[0].CommitStatus)
+	require.True(t, rows[0].CommitError.Valid)
+	assert.Contains(t, rows[0].CommitError.String, "injected investment import identity failure")
+}
+
+func TestCommitImportBatch_InvestmentBuyRollsBackWhenIdentityRecordingFails(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "atomic-buy", OrderID: "atomic-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	})
+
+	failInvestmentImportIdentityWrites(t, f)
+	assertInvestmentIdentityFailure(t, f, batchID)
+	assert.Equal(t, 0, transactionCount(t, f), "identity failure must roll back the buy ledger transaction")
+
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, positions, "identity failure must roll back the acquired lot")
+}
+
+func TestCommitImportBatch_InvestmentSellRollsBackWhenIdentityRecordingFails(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	buyBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "atomic-sell-buy", OrderID: "atomic-sell-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	})
+	_, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: buyBatchID})
+	require.NoError(t, err)
+
+	sellBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "atomic-sell", OrderID: "atomic-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
+		FilledAt: "2026-06-02T09:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
+	})
+
+	failInvestmentImportIdentityWrites(t, f)
+	assertInvestmentIdentityFailure(t, f, sellBatchID)
+	assert.Equal(t, 1, transactionCount(t, f), "identity failure must roll back the sell ledger transaction")
+
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, "2", positions[0].QuantityValue.String(), "identity failure must roll back the lot disposal")
+}
+
+func TestCommitImportBatch_InvestmentDividendRollsBackWhenIdentityRecordingFails(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	buyBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "atomic-dividend-buy", OrderID: "atomic-dividend-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	})
+	_, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: buyBatchID})
+	require.NoError(t, err)
+
+	instruments, err := f.investmentSvc.ListInstruments(context.Background())
+	require.NoError(t, err)
+	require.Len(t, instruments, 1)
+	commodityID := instruments[0].CommodityID
+	_, err = f.investmentSvc.SaveDividendDefault(context.Background(), DividendDefaultInput{
+		OwnerUserID: f.ownerUserID, CommodityID: &commodityID, IncomeAccountID: f.categoryAccountID,
+		EffectiveFrom: "2026-01-01", ChangeReason: "test fixture",
+	})
+	require.NoError(t, err)
+
+	dividendBatchID, _ := f.stageDividendRow(t, conn.ID, trading212Dividend{
+		Reference: "atomic-dividend", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Quantity: "2", Amount: "4.32", Currency: "EUR", PaidOn: "2026-06-15T00:00:00Z", Type: "DIVIDEND",
+	})
+
+	failInvestmentImportIdentityWrites(t, f)
+	assertInvestmentIdentityFailure(t, f, dividendBatchID)
+	assert.Equal(t, 1, transactionCount(t, f), "identity failure must roll back the dividend ledger transaction")
 }

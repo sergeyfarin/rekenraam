@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,10 +76,16 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 		if err != nil {
 			return false, 0, 0, nil
 		}
-		handled, txnID, err := s.commitTrading212OrderFill(ctx, raw, normalized.Date, commodityID, holdingAccountID, *conn.CashAccountID, cashCurrency.ID, input)
+		postWrite := func(tx *sql.Tx, transactionID int64) error {
+			return s.recordCommitIdentityAndMarkRowInTx(ctx, tx, row.ID, row.DedupeFingerprint, batch.SourceKind, holdingAccountID, transactionID, nowStr)
+		}
+		handled, txnID, err := s.commitTrading212OrderFill(ctx, raw, normalized.Date, commodityID, holdingAccountID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
 		return handled, txnID, holdingAccountID, err
 	case trading212RawKindDividend:
-		handled, txnID, err := s.commitTrading212Dividend(ctx, raw, normalized.Date, normalized.Amount, commodityID, *conn.CashAccountID, cashCurrency.ID, input)
+		postWrite := func(tx *sql.Tx, transactionID int64) error {
+			return s.recordCommitIdentityAndMarkRowInTx(ctx, tx, row.ID, row.DedupeFingerprint, batch.SourceKind, *conn.CashAccountID, transactionID, nowStr)
+		}
+		handled, txnID, err := s.commitTrading212Dividend(ctx, raw, normalized.Date, normalized.Amount, commodityID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
 		return handled, txnID, *conn.CashAccountID, err
 	default:
 		return false, 0, 0, nil
@@ -130,7 +137,7 @@ func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, con
 	return account.ID, nil
 }
 
-func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[string]string, date string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput) (bool, int64, error) {
+func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[string]string, date string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
 	side := strings.ToUpper(strings.TrimSpace(raw[rawKeySide]))
 	if side != "BUY" && side != "SELL" {
 		return false, 0, nil
@@ -169,10 +176,10 @@ func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[s
 		tradeErr    error
 	)
 	if side == "BUY" {
-		result, err := s.investmentService.Buy(ctx, tradeInput)
+		result, err := s.investmentService.buyWithPostWrite(ctx, tradeInput, postWrite)
 		transaction, tradeErr = result.Transaction, err
 	} else {
-		result, err := s.investmentService.Sell(ctx, tradeInput)
+		result, err := s.investmentService.sellWithPostWrite(ctx, tradeInput, postWrite)
 		transaction, tradeErr = result.Transaction, err
 	}
 	if tradeErr != nil {
@@ -211,13 +218,13 @@ func isExpectedInvestmentCommitGap(err error) bool {
 	return false
 }
 
-func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[string]string, date string, rawAmount string, commodityID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput) (bool, int64, error) {
+func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[string]string, date string, rawAmount string, commodityID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
 	amountValue, amountScale, err := parsePositiveDecimalAmount(rawAmount)
 	if err != nil {
 		return false, 0, nil
 	}
 
-	transaction, err := s.investmentService.Dividend(ctx, DividendInput{
+	transaction, err := s.investmentService.dividendWithPostWrite(ctx, DividendInput{
 		OwnerUserID:            input.OwnerUserID,
 		AuthSessionID:          input.AuthSessionID,
 		RequestID:              input.RequestID,
@@ -232,7 +239,7 @@ func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[st
 		ReconciliationOverride: input.ReconciliationOverride,
 		OriginType:             "import",
 		Operation:              "investment.dividend.import",
-	})
+	}, postWrite)
 	if err != nil {
 		if isExpectedInvestmentCommitGap(err) {
 			// No dividend default configured for this instrument yet — fall
