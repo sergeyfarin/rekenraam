@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -869,4 +870,61 @@ func TestCommitImportBatch_InvestmentDividendRollsBackWhenIdentityRecordingFails
 	failInvestmentImportIdentityWrites(t, f)
 	assertInvestmentIdentityFailure(t, f, dividendBatchID)
 	assert.Equal(t, 1, transactionCount(t, f), "identity failure must roll back the dividend ledger transaction")
+}
+
+// TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow verifies
+// that two callers which both read the same pending Trading 212 row cannot
+// turn the winner's committed marker into failed. The loser must recognize the
+// existing import identity as its successful idempotent outcome.
+func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "concurrent-buy", OrderID: "concurrent-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	})
+
+	var reachedIdentityCheck sync.WaitGroup
+	reachedIdentityCheck.Add(2)
+	releaseCommits := make(chan struct{})
+	f.importService.beforeImportRowCommitForTest = func() {
+		reachedIdentityCheck.Done()
+		<-releaseCommits
+	}
+
+	results := make(chan CommitImportBatchResult, 2)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{
+				OwnerUserID: f.ownerUserID,
+				BatchID:     batchID,
+			})
+			results <- result
+			errs <- err
+		}()
+	}
+
+	reachedIdentityCheck.Wait()
+	close(releaseCommits)
+
+	for range 2 {
+		require.NoError(t, <-errs)
+		result := <-results
+		assert.Equal(t, 1, result.CommittedCount)
+		assert.Equal(t, "committed", result.Status)
+	}
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "committed", rows[0].CommitStatus)
+	assert.True(t, rows[0].CommittedTransactionID.Valid)
+	assert.False(t, rows[0].CommitError.Valid)
+	assert.Equal(t, 1, transactionCount(t, f), "idempotent concurrent commits must create one ledger transaction")
+
+	batch, err := f.importRepo.ImportBatchByID(context.Background(), BookID, batchID)
+	require.NoError(t, err)
+	assert.Equal(t, "committed", batch.Status)
 }

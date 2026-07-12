@@ -40,6 +40,11 @@ type ImportService struct {
 	// 4b). Nil-safe: without it, these rows just commit as plain cash
 	// transactions via the generic path, same as before Slice 4b.
 	investmentService *InvestmentService
+
+	// beforeImportRowCommitForTest creates a deterministic race window after
+	// an idempotency read and before the row's write transaction. Production
+	// callers leave it nil.
+	beforeImportRowCommitForTest func()
 }
 
 func NewImportService(
@@ -432,6 +437,9 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			result.SkippedCount++
 			continue
 		}
+		if s.beforeImportRowCommitForTest != nil {
+			s.beforeImportRowCommitForTest()
+		}
 
 		// B-T212-INVST (Slice 4b): a Trading 212 order-fill/dividend row
 		// tries the investment-posting path first — if it resolves (a cash
@@ -446,6 +454,13 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 		// instead of the whole batch, same as any other per-row commit
 		// failure below.
 		if handled, _, _, err := s.commitTrading212InvestmentRow(ctx, row, batch, input, nowStr); err != nil {
+			if errors.Is(err, db.ErrCommitIdentityConflict) {
+				if err := s.resolveConcurrentImportCommit(ctx, row); err != nil {
+					return result, fmt.Errorf("resolve concurrent investment commit row %d: %w", row.ID, err)
+				}
+				result.CommittedCount++
+				continue
+			}
 			if errors.Is(err, ErrReconciliationOverrideRequired) {
 				if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
 					RowID:        row.ID,
@@ -601,6 +616,25 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 
 	result.Status = finalStatus
 	return result, nil
+}
+
+// resolveConcurrentImportCommit turns a duplicate transaction attempt into
+// the successful outcome it represents. Commit identities and the winning
+// row marker share one transaction, so once an identity conflict occurs its
+// referenced transaction is durable and the row is either already committed
+// or still pending for this conditional repair.
+func (s *ImportService) resolveConcurrentImportCommit(ctx context.Context, row db.ImportStagedRowRecord) error {
+	identity, found, err := s.repository.FindCommitIdentity(ctx, BookID, row.DedupeFingerprint)
+	if err != nil {
+		return fmt.Errorf("find existing commit identity: %w", err)
+	}
+	if !found {
+		return errors.New("commit identity conflict without existing identity")
+	}
+	if _, err := s.repository.MarkImportStagedRowCommittedIfPending(ctx, row.ID, identity.CommittedTransactionID); err != nil {
+		return fmt.Errorf("mark existing commit identity as committed: %w", err)
+	}
+	return nil
 }
 
 // recordCommitIdentityAndMarkRowInTx is the investment-import variant used by

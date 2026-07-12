@@ -496,17 +496,18 @@ the transaction external reference. Buy lots and sell disposal events carry the
 same metadata. Verified by order-fill and dividend commit-path assertions in
 `backend/internal/app/import_trading212_invest_test.go`.
 
-### T-32 Concurrent Trading 212 batch commits can overwrite a committed row as failed `[ ]`
+### T-32 Concurrent Trading 212 batch commits can overwrite a committed row as failed `[x]`
 **File:** `backend/internal/app/import_service.go` (`CommitImportBatch`),
 `backend/internal/db/imports.go` (`CommitImportStagedRow`).
 
-T-26 now prevents duplicate ledger transactions: the second concurrent commit
-rolls back when its identity insert conflicts. But its caller still handles that
-conflict as a per-row failure and performs an unconditional staged-row update,
-which can overwrite the first caller's already-`committed` status with
-`failed`. Make staged-row terminal transitions conditional (or serialize one
-commit per batch) and treat an existing matching identity as the successful
-idempotent outcome. Add a two-goroutine regression test.
+Closed 2026-07-12. T-26 already rolled back the losing ledger transaction,
+but the Trading 212 investment caller then misclassified the identity conflict
+as a failed row and overwrote the winner's terminal marker. It now resolves the
+persisted identity as the successful idempotent outcome and conditionally marks
+only a still-pending row as committed. `TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow` synchronizes two goroutines after their identity
+reads and proves both report success, the staged row remains committed, and
+exactly one ledger transaction exists. Review found no additional actionable
+gaps or refactoring work in this focused path.
 
 ### T-33 Trading 212 settlement account accepted closed or system accounts `[x]`
 **File:** `backend/internal/app/import_connections.go`

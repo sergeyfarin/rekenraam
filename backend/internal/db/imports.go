@@ -686,6 +686,26 @@ func (r *ImportRepository) CommitImportStagedRowInTx(ctx context.Context, tx *sq
 	return commitImportStagedRowExec(ctx, tx, params)
 }
 
+// MarkImportStagedRowCommittedIfPending records a successful idempotent
+// outcome without overwriting a terminal result written by a concurrent
+// commit. The identity and winning row marker are written atomically, so a
+// no-op here means the other caller has already marked the row committed.
+func (r *ImportRepository) MarkImportStagedRowCommittedIfPending(ctx context.Context, rowID, transactionID int64) (bool, error) {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE import_staged_rows
+		SET commit_status = 'committed', committed_transaction_id = ?, commit_error = NULL
+		WHERE id = ? AND commit_status = 'pending'
+	`, transactionID, rowID)
+	if err != nil {
+		return false, fmt.Errorf("mark staged row committed if pending: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("committed-if-pending rows affected: %w", err)
+	}
+	return n == 1, nil
+}
+
 func (r *ImportRepository) CommitImportedTransaction(ctx context.Context, params CommitImportedTransactionParams, createTransaction func(*sql.Tx) (int64, error)) (int64, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
