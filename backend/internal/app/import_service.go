@@ -50,6 +50,11 @@ type ImportService struct {
 	// after a missing holding-map read and before account creation. Production
 	// callers leave it nil.
 	beforeTrading212HoldingCreateForTest func()
+
+	// beforeImportCommitIdentityCheckForTest creates a deterministic stale-row
+	// window after staged rows are listed and before their identity lookup.
+	// Production callers leave it nil.
+	beforeImportCommitIdentityCheckForTest func()
 }
 
 func NewImportService(
@@ -417,29 +422,30 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 
 		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" {
 			// Skip rows excluded by the user or already in the ledger.
-			if err := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+			if err := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "skipped",
-			}); err != nil {
+			}, nil); err != nil {
 				return result, fmt.Errorf("skip row %d: %w", row.ID, err)
 			}
-			result.SkippedCount++
 			continue
 		}
 
 		// Check idempotency: if this fingerprint is already committed, skip.
-		_, found, err := s.repository.FindCommitIdentity(ctx, BookID, row.DedupeFingerprint)
+		if s.beforeImportCommitIdentityCheckForTest != nil {
+			s.beforeImportCommitIdentityCheckForTest()
+		}
+		identity, found, err := s.repository.FindCommitIdentity(ctx, BookID, row.DedupeFingerprint)
 		if err != nil {
 			return result, fmt.Errorf("check idempotency row %d: %w", row.ID, err)
 		}
 		if found {
-			if err := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+			if err := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "skipped",
-			}); err != nil {
+			}, &identity.CommittedTransactionID); err != nil {
 				return result, fmt.Errorf("skip duplicate row %d: %w", row.ID, err)
 			}
-			result.SkippedCount++
 			continue
 		}
 		if s.beforeImportRowCommitForTest != nil {
@@ -467,24 +473,22 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 				continue
 			}
 			if errors.Is(err, ErrReconciliationOverrideRequired) {
-				if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+				if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 					RowID:        row.ID,
 					CommitStatus: "skipped",
 					CommitError:  sql.NullString{String: "reconciliation override required", Valid: true},
-				}); err2 != nil {
+				}, nil); err2 != nil {
 					return result, fmt.Errorf("skip investment reconciliation row %d: %w", row.ID, err2)
 				}
-				result.SkippedCount++
 				continue
 			}
-			if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+			if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "failed",
 				CommitError:  sql.NullString{String: err.Error(), Valid: true},
-			}); err2 != nil {
+			}, nil); err2 != nil {
 				return result, fmt.Errorf("fail investment row %d after commit error: %w", row.ID, err2)
 			}
-			result.FailedCount++
 			continue
 		} else if handled {
 			// The investment path recorded the import identity and marked this
@@ -498,27 +502,25 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 
 		resolution, err := parseResolutionJSON(row.ResolutionJSON)
 		if err != nil || resolution.AccountID == 0 {
-			if err := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+			if err := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "failed",
 				CommitError:  sql.NullString{String: "missing account resolution", Valid: true},
-			}); err != nil {
+			}, nil); err != nil {
 				return result, fmt.Errorf("fail unresolved row %d: %w", row.ID, err)
 			}
-			result.FailedCount++
 			continue
 		}
 
 		spec, err := buildTransactionSpec(row, resolution)
 		if err != nil {
-			if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+			if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "failed",
 				CommitError:  sql.NullString{String: err.Error(), Valid: true},
-			}); err2 != nil {
+			}, nil); err2 != nil {
 				return result, fmt.Errorf("fail build spec row %d: %w", row.ID, err2)
 			}
-			result.FailedCount++
 			continue
 		}
 
@@ -535,26 +537,24 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 		if err != nil {
 			if errors.Is(err, ErrReconciliationOverrideRequired) {
 				// Row crosses a reconciled period and override not set → skip.
-				if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+				if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 					RowID:        row.ID,
 					CommitStatus: "skipped",
 					CommitError:  sql.NullString{String: "reconciliation override required", Valid: true},
-				}); err2 != nil {
+				}, nil); err2 != nil {
 					return result, fmt.Errorf("skip reconciliation row %d: %w", row.ID, err2)
 				}
-				result.SkippedCount++
 				continue
 			}
 
 			errMsg := err.Error()
-			if err2 := s.repository.CommitImportStagedRow(ctx, db.CommitImportStagedRowParams{
+			if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "failed",
 				CommitError:  sql.NullString{String: errMsg, Valid: true},
-			}); err2 != nil {
+			}, nil); err2 != nil {
 				return result, fmt.Errorf("fail row %d after create error: %w", row.ID, err2)
 			}
-			result.FailedCount++
 			continue
 		}
 
@@ -621,6 +621,42 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 
 	result.Status = finalStatus
 	return result, nil
+}
+
+// recordImportStagedRowTerminal applies a failed or skipped terminal update.
+// A caller may hold a stale pending snapshot while another caller atomically
+// commits the transaction, identity, and row marker. In that case the guarded
+// repository update reports ErrImportStagedRowAlreadyCommitted; reload and
+// verify the winner before reporting the row as a successful commit.
+func (s *ImportService) recordImportStagedRowTerminal(ctx context.Context, result *CommitImportBatchResult, params db.CommitImportStagedRowParams, expectedTransactionID *int64) error {
+	err := s.repository.CommitImportStagedRow(ctx, params)
+	if err == nil {
+		switch params.CommitStatus {
+		case "skipped":
+			result.SkippedCount++
+		case "failed":
+			result.FailedCount++
+		default:
+			return fmt.Errorf("unsupported import staged-row terminal status %q", params.CommitStatus)
+		}
+		return nil
+	}
+	if !errors.Is(err, db.ErrImportStagedRowAlreadyCommitted) {
+		return err
+	}
+
+	row, err := s.repository.ImportStagedRowByID(ctx, params.RowID)
+	if err != nil {
+		return fmt.Errorf("reload committed staged row: %w", err)
+	}
+	if row.CommitStatus != "committed" || !row.CommittedTransactionID.Valid {
+		return fmt.Errorf("staged row %d reported committed transition conflict but is not committed", params.RowID)
+	}
+	if expectedTransactionID != nil && row.CommittedTransactionID.Int64 != *expectedTransactionID {
+		return fmt.Errorf("staged row %d committed transaction does not match import identity", params.RowID)
+	}
+	result.CommittedCount++
+	return nil
 }
 
 // resolveConcurrentImportCommit turns a duplicate transaction attempt into

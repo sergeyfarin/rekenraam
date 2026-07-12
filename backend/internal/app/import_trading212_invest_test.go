@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1042,4 +1043,63 @@ func TestCommitImportStagedRow_DoesNotOverwriteCommitted(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "committed", rows[0].CommitStatus)
 	assert.False(t, rows[0].CommitError.Valid)
+
+	err = f.importRepo.CommitImportStagedRow(context.Background(), db.CommitImportStagedRowParams{
+		RowID:        rows[0].ID + 1_000_000,
+		CommitStatus: "failed",
+	})
+	require.ErrorIs(t, err, db.ErrNotFound)
+}
+
+// TestCommitImportBatch_StaleIdentitySnapshotReturnsCommitted covers a caller
+// that has already listed a pending row when another caller atomically posts
+// its ledger transaction, import identity, and staged-row marker. The stale
+// caller must converge on that committed outcome instead of failing while it
+// tries to mark the stale snapshot as skipped.
+func TestCommitImportBatch_StaleIdentitySnapshotReturnsCommitted(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	batch, err := f.importRepo.CreateImportBatch(ctx, db.CreateImportBatchParams{
+		BookID: BookID, SourceKind: "qif", SourceMetaJSON: "{}", CreatedAt: "2026-06-01T00:00:00Z", ActorUserID: f.ownerUserID,
+	})
+	require.NoError(t, err)
+	rows, _, err := f.importService.stageParseResult(ctx, batch.ID, ParseResult{Rows: []StagedRow{{
+		DedupeFingerprint: "qif|stale-identity-snapshot", Date: "2026-06-01", Amount: "42.50", CommodityHint: "EUR",
+		PayeeHint: "Test Payee", Memo: "stale snapshot", ExternalRef: "stale-snapshot-1",
+	}}})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	f.resolveRowGeneric(t, batch.ID, rows[0].ID, f.cashAccountID)
+
+	readerListedPending := make(chan struct{})
+	releaseReader := make(chan struct{})
+	var identityChecks atomic.Int32
+	f.importService.beforeImportCommitIdentityCheckForTest = func() {
+		if identityChecks.Add(1) == 1 {
+			close(readerListedPending)
+			<-releaseReader
+		}
+	}
+
+	type commitResult struct {
+		result CommitImportBatchResult
+		err    error
+	}
+	reader := make(chan commitResult, 1)
+	go func() {
+		result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batch.ID})
+		reader <- commitResult{result: result, err: err}
+	}()
+	<-readerListedPending
+
+	winner, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batch.ID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, winner.CommittedCount)
+	assert.Equal(t, "committed", winner.Status)
+	close(releaseReader)
+
+	stale := <-reader
+	require.NoError(t, stale.err)
+	assert.Equal(t, 1, stale.result.CommittedCount)
+	assert.Equal(t, "committed", stale.result.Status)
 }

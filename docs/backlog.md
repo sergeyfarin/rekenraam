@@ -516,6 +516,19 @@ proves stale failed updates cannot replace a committed marker. All three pass
 under `go test -race`. No further actionable gaps or refactoring work were
 found in this focused follow-up.
 
+Reopened and completed 2026-07-12. A stale caller could still list a pending
+row, observe the winner's identity, then receive an avoidable error while its
+stale skip update correctly refused to replace the committed marker. Terminal
+failed/skipped updates now use one service helper: on an
+`ErrImportStagedRowAlreadyCommitted`, it reloads and verifies the committed row
+(including the identity transaction where known) and reports that winner as a
+successful commit. The repository now preserves `ErrNotFound` for an absent row
+instead of conflating it with an already-committed one.
+`TestCommitImportBatch_StaleIdentitySnapshotReturnsCommitted` deterministically
+pauses the reader after its pending snapshot, lets the winner atomically commit
+the identity and row, then proves the reader returns committed. It passes under
+`go test -race`.
+
 ### T-33 Trading 212 settlement account accepted closed or system accounts `[x]`
 **File:** `backend/internal/app/import_connections.go`
 (`validateCashAccountID`), `frontend/src/routes/app/import/+page.svelte`.

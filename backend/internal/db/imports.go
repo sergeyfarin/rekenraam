@@ -649,17 +649,48 @@ func (r *ImportRepository) ListAllImportStagedRows(ctx context.Context, batchID 
 func scanImportStagedRows(dbRows *sql.Rows) ([]ImportStagedRowRecord, error) {
 	var records []ImportStagedRowRecord
 	for dbRows.Next() {
-		var rec ImportStagedRowRecord
-		if err := dbRows.Scan(
-			&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
-			&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
-			&rec.CommitStatus, &rec.CommittedTransactionID, &rec.CommitError,
-		); err != nil {
-			return nil, fmt.Errorf("scan staged row: %w", err)
+		rec, err := scanImportStagedRow(dbRows)
+		if err != nil {
+			return nil, err
 		}
 		records = append(records, rec)
 	}
 	return records, dbRows.Err()
+}
+
+type importStagedRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanImportStagedRow(row importStagedRowScanner) (ImportStagedRowRecord, error) {
+	var rec ImportStagedRowRecord
+	if err := row.Scan(
+		&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
+		&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
+		&rec.CommitStatus, &rec.CommittedTransactionID, &rec.CommitError,
+	); err != nil {
+		return ImportStagedRowRecord{}, fmt.Errorf("scan staged row: %w", err)
+	}
+	return rec, nil
+}
+
+// ImportStagedRowByID reloads one staged row for a stale-writer transition
+// check. It deliberately distinguishes a missing row from a committed row.
+func (r *ImportRepository) ImportStagedRowByID(ctx context.Context, rowID int64) (ImportStagedRowRecord, error) {
+	rec, err := scanImportStagedRow(r.database.QueryRowContext(ctx, `
+		SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
+		       raw_json, normalized_json, dedupe_status, resolution_json,
+		       commit_status, committed_transaction_id, commit_error
+		FROM import_staged_rows
+		WHERE id = ?
+	`, rowID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ImportStagedRowRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return ImportStagedRowRecord{}, fmt.Errorf("read staged row: %w", err)
+	}
+	return rec, nil
 }
 
 func (r *ImportRepository) UpdateImportStagedRowResolution(ctx context.Context, params UpdateImportStagedRowResolutionParams) error {
@@ -748,6 +779,7 @@ func (r *ImportRepository) CommitImportedTransaction(ctx context.Context, params
 
 type execContexter interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 func commitImportStagedRowExec(ctx context.Context, db execContexter, params CommitImportStagedRowParams) error {
@@ -764,7 +796,18 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 		return fmt.Errorf("rows affected: %w", err)
 	}
 	if n == 0 {
-		return ErrImportStagedRowAlreadyCommitted
+		var commitStatus string
+		err := db.QueryRowContext(ctx, `SELECT commit_status FROM import_staged_rows WHERE id = ?`, params.RowID).Scan(&commitStatus)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("read staged row after terminal transition: %w", err)
+		}
+		if commitStatus == "committed" {
+			return ErrImportStagedRowAlreadyCommitted
+		}
+		return fmt.Errorf("staged row %d terminal transition was not applied from status %q", params.RowID, commitStatus)
 	}
 	return nil
 }
