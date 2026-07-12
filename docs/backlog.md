@@ -167,7 +167,7 @@ implementation. The OpenAPI `201` description still says "saved but not verified
 for non-trading212 kinds — update it if/when a second provider ships a real prober.
 
 ### T-12 Deleting an import connection erases batch provenance `[x]`
-**File:** `backend/migrations/0007_online_import.sql:27` (`ON DELETE SET NULL`),
+**File:** `backend/migrations/0001_initial_schema.sql` (`import_batches.connection_id`),
 `backend/internal/app/import_fetch_worker.go` (`trading212BatchMeta`).
 
 Closed by Trading 212 Slice 3, option (b) from the two choices this item originally
@@ -712,7 +712,7 @@ it to a *posted* ledger movement is the open decision here, interacting with I-0
   (`ORDER BY opened_on DESC, id DESC`), `average_cost` (per-lot weighted-average,
   model 2), `specific_lot` — are real, with a `resolveCostBasisMethod` resolver
   implementing 3-tier selection (per-transaction → `account_versions.cost_basis_method`
-  (migration 0005) → global default). A `POST /investments/sell/preview` endpoint shares
+  (beta baseline) → global default). A `POST /investments/sell/preview` endpoint shares
   the disposal calc with commit so they never diverge; an unimplemented method value
   fails loudly. Full DB + app test coverage.
 

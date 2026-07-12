@@ -1868,7 +1868,400 @@ BEGIN
 END;
 -- +goose StatementEnd
 
+-- Beta baseline extensions. This repository intentionally has no pre-beta
+-- databases to upgrade, so the former 0002–0011 migrations are folded into
+-- this fresh-install schema in their original execution order. Keeping the
+-- statements (rather than hand-reconstructing their final DDL) preserves the
+-- exact defaults, indexes, and trigger replacement semantics that the prior
+-- chain produced.
+
+ALTER TABLE transactions ADD COLUMN deleted_at TEXT;
+ALTER TABLE transactions ADD COLUMN deleted_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT;
+ALTER TABLE transactions ADD COLUMN deleted_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT;
+ALTER TABLE transactions ADD COLUMN delete_reason TEXT;
+
+CREATE INDEX transactions_deleted_idx
+  ON transactions (book_id, deleted_at, id)
+  WHERE deleted_at IS NOT NULL;
+
+CREATE TABLE transaction_deletion_events (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  action TEXT NOT NULL CHECK (action IN ('soft_delete', 'restore')),
+  occurred_at TEXT NOT NULL,
+  actor_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  reason TEXT NOT NULL
+);
+
+CREATE INDEX transaction_deletion_events_transaction_idx
+  ON transaction_deletion_events (transaction_id, id);
+
+-- +goose StatementBegin
+CREATE TRIGGER transaction_deletion_events_no_update
+BEFORE UPDATE ON transaction_deletion_events
+BEGIN
+  SELECT RAISE(ABORT, 'transaction_deletion_events rows are append-only');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER transaction_deletion_events_no_delete
+BEFORE DELETE ON transaction_deletion_events
+BEGIN
+  SELECT RAISE(ABORT, 'transaction_deletion_events rows are append-only');
+END;
+-- +goose StatementEnd
+
+-- Same-day sequence columns retain their former DEFAULT 0, including for a
+-- fresh database, to match the schema produced by the pre-beta chain.
+-- +goose StatementBegin
+DROP TRIGGER IF EXISTS transaction_versions_no_update;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+DROP TRIGGER IF EXISTS posting_versions_no_update;
+-- +goose StatementEnd
+
+ALTER TABLE transaction_versions
+  ADD COLUMN transaction_day_sequence INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE posting_versions
+  ADD COLUMN account_day_sequence INTEGER NOT NULL DEFAULT 0;
+
+-- +goose StatementBegin
+UPDATE transaction_versions
+SET transaction_day_sequence = (
+  SELECT COUNT(DISTINCT other.transaction_id)
+  FROM transaction_versions other
+  WHERE other.book_id = transaction_versions.book_id
+    AND other.transaction_date = transaction_versions.transaction_date
+    AND other.transaction_id <= transaction_versions.transaction_id
+);
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+UPDATE posting_versions
+SET account_day_sequence = (
+  SELECT COUNT(DISTINCT other.posting_line_id)
+  FROM posting_versions other
+  JOIN journal_entries other_je ON other_je.id = other.journal_entry_id
+  JOIN journal_entries self_je  ON self_je.id  = posting_versions.journal_entry_id
+  WHERE other.book_id = posting_versions.book_id
+    AND other.account_id = posting_versions.account_id
+    AND other_je.entry_date = self_je.entry_date
+    AND other.posting_line_id <= posting_versions.posting_line_id
+);
+-- +goose StatementEnd
+
+ALTER TABLE reconciliation_checkpoints
+  ADD COLUMN statement_account_sequence INTEGER NOT NULL DEFAULT 0;
+
+-- +goose StatementBegin
+UPDATE reconciliation_checkpoints
+SET statement_account_sequence = COALESCE((
+  SELECT MAX(pv.account_day_sequence)
+  FROM reconciliation_checkpoint_postings rcp
+  JOIN posting_versions pv ON pv.id = rcp.posting_version_id
+  WHERE rcp.checkpoint_id = reconciliation_checkpoints.id
+    AND rcp.entry_date = reconciliation_checkpoints.statement_date
+), 0);
+-- +goose StatementEnd
+
+CREATE INDEX transaction_versions_book_date_seq_idx
+  ON transaction_versions (book_id, transaction_date DESC, transaction_day_sequence DESC, id DESC);
+
+CREATE INDEX posting_versions_account_date_seq_idx
+  ON posting_versions (book_id, account_id, account_day_sequence DESC, id DESC);
+
+-- +goose StatementBegin
+CREATE TRIGGER transaction_versions_no_update
+BEFORE UPDATE ON transaction_versions
+BEGIN
+  SELECT RAISE(ABORT, 'transaction_versions rows are append-only');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER posting_versions_no_update
+BEFORE UPDATE ON posting_versions
+BEGIN
+  SELECT RAISE(ABORT, 'posting_versions rows are append-only');
+END;
+-- +goose StatementEnd
+
+CREATE TABLE import_profiles (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  adapter_kind TEXT NOT NULL CHECK (length(trim(adapter_kind)) > 0),
+  config_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(config_json)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX import_profiles_book_idx ON import_profiles (book_id);
+
+CREATE TABLE import_batches (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  source_kind TEXT NOT NULL CHECK (length(trim(source_kind)) > 0),
+  profile_id INTEGER REFERENCES import_profiles(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'previewing' CHECK (
+    status IN ('previewing', 'committed', 'partially_committed', 'discarded', 'failed')
+  ),
+  original_filename TEXT NOT NULL DEFAULT '',
+  source_meta_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(source_meta_json)),
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX import_batches_book_created_idx ON import_batches (book_id, created_at DESC, id DESC);
+
+CREATE TABLE import_batch_events (
+  id INTEGER PRIMARY KEY,
+  batch_id INTEGER NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+  event_kind TEXT NOT NULL CHECK (
+    event_kind IN ('created', 'parsed', 'committed', 'partially_committed', 'discarded', 'failed', 'rolled_back')
+  ),
+  detail_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(detail_json)),
+  audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX import_batch_events_batch_idx ON import_batch_events (batch_id, created_at ASC, id ASC);
+
+CREATE TABLE import_staged_rows (
+  id INTEGER PRIMARY KEY,
+  batch_id INTEGER NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  row_index INTEGER NOT NULL CHECK (row_index >= 0),
+  dedupe_fingerprint TEXT NOT NULL,
+  raw_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(raw_json)),
+  normalized_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(normalized_json)),
+  dedupe_status TEXT NOT NULL DEFAULT 'new' CHECK (
+    dedupe_status IN ('new', 'duplicate', 'needs_attention', 'excluded')
+  ),
+  resolution_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(resolution_json)),
+  commit_status TEXT NOT NULL DEFAULT 'pending' CHECK (
+    commit_status IN ('pending', 'committed', 'skipped', 'failed')
+  ),
+  committed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+  commit_error TEXT,
+  UNIQUE (batch_id, row_index)
+);
+
+CREATE INDEX import_staged_rows_batch_idx ON import_staged_rows (batch_id, row_index ASC);
+CREATE INDEX import_staged_rows_book_fingerprint_idx ON import_staged_rows (book_id, dedupe_fingerprint);
+
+CREATE TABLE import_commit_identities (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  dedupe_fingerprint TEXT NOT NULL,
+  committed_transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  source_kind TEXT NOT NULL,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  UNIQUE (book_id, dedupe_fingerprint)
+);
+
+CREATE INDEX import_commit_identities_book_idx ON import_commit_identities (book_id, created_at DESC);
+
+ALTER TABLE account_versions ADD COLUMN cost_basis_method TEXT CHECK (
+  cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')
+);
+
+DROP VIEW IF EXISTS current_account_versions;
+CREATE VIEW current_account_versions AS
+SELECT av.*
+FROM account_versions av
+WHERE av.id = (
+  SELECT current_av.id
+  FROM account_versions current_av
+  WHERE current_av.account_id = av.account_id
+    AND current_av.effective_from <= date('now')
+  ORDER BY current_av.effective_from DESC, current_av.version_seq DESC
+  LIMIT 1
+);
+
+CREATE UNIQUE INDEX background_work_items_active_unique_idx
+  ON background_work_items (book_id, kind, payload_json)
+  WHERE status IN ('pending', 'running');
+
+DROP TRIGGER IF EXISTS fx_work_after_account_version_insert;
+DROP TRIGGER IF EXISTS fx_work_after_posting_version_insert;
+
+-- +goose StatementBegin
+CREATE TRIGGER fx_work_after_account_version_insert
+AFTER INSERT ON account_versions
+WHEN NEW.status = 'active'
+  AND EXISTS (SELECT 1 FROM commodities c WHERE c.id = NEW.default_commodity_id AND c.kind = 'currency')
+  AND NEW.default_commodity_id != COALESCE(
+    (SELECT pp.base_commodity_id FROM accounts a JOIN pricing_policies pp ON pp.book_id = a.book_id WHERE a.id = NEW.account_id),
+    (SELECT b.default_currency_commodity_id FROM accounts a JOIN books b ON b.id = a.book_id WHERE a.id = NEW.account_id),
+    0
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM account_versions prior
+    WHERE prior.account_id = NEW.account_id AND prior.id != NEW.id
+      AND prior.status = 'active' AND prior.default_commodity_id = NEW.default_commodity_id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM current_account_versions other
+    JOIN accounts other_account ON other_account.id = other.account_id
+    JOIN accounts new_account ON new_account.id = NEW.account_id
+    WHERE other_account.book_id = new_account.book_id
+      AND other.account_id != NEW.account_id
+      AND other.status = 'active' AND other.default_commodity_id = NEW.default_commodity_id
+  )
+BEGIN
+  INSERT INTO background_work_items (book_id, kind, payload_json, available_at, created_at, updated_at)
+  SELECT a.book_id, 'pricing.fx_coverage',
+    json_object('reason', 'currency_activated', 'start_date', NEW.opened_on, 'currency_id', NEW.default_commodity_id),
+    NEW.recorded_at, NEW.recorded_at, NEW.recorded_at
+  FROM accounts a WHERE a.id = NEW.account_id
+  ON CONFLICT(book_id, kind, payload_json) WHERE status IN ('pending', 'running') DO NOTHING;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER fx_work_after_posting_version_insert
+AFTER INSERT ON posting_versions
+WHEN EXISTS (SELECT 1 FROM transaction_versions tv WHERE tv.id = NEW.transaction_version_id AND tv.status = 'posted')
+  AND EXISTS (SELECT 1 FROM commodities c WHERE c.id = NEW.commodity_id AND c.kind = 'currency')
+  AND NEW.commodity_id != COALESCE(
+    (SELECT base_commodity_id FROM pricing_policies WHERE book_id = NEW.book_id),
+    (SELECT default_currency_commodity_id FROM books WHERE id = NEW.book_id),
+    0
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM background_work_items bw
+    WHERE bw.book_id = NEW.book_id AND bw.kind = 'pricing.fx_coverage'
+      AND bw.status IN ('pending', 'running')
+      AND json_extract(bw.payload_json, '$.currency_id') = NEW.commodity_id
+      AND json_extract(bw.payload_json, '$.start_date') <= (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id)
+  )
+BEGIN
+  INSERT INTO background_work_items (book_id, kind, payload_json, available_at, created_at, updated_at)
+  VALUES (
+    NEW.book_id, 'pricing.fx_coverage',
+    json_object('reason', 'transaction_entered', 'start_date', (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id), 'currency_id', NEW.commodity_id),
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  )
+  ON CONFLICT(book_id, kind, payload_json) WHERE status IN ('pending', 'running') DO NOTHING;
+END;
+-- +goose StatementEnd
+
+CREATE TABLE import_connections (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  source_kind TEXT NOT NULL CHECK (length(trim(source_kind)) > 0),
+  display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0 AND display_name = trim(display_name)),
+  secret_ciphertext TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(config_json)),
+  transactions_cursor TEXT NOT NULL DEFAULT '',
+  orders_cursor TEXT NOT NULL DEFAULT '',
+  dividends_cursor TEXT NOT NULL DEFAULT '',
+  last_fetch_status TEXT NOT NULL DEFAULT '' CHECK (last_fetch_status IN ('', 'fetching', 'ready', 'failed')),
+  last_fetched_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  auto_refresh_enabled INTEGER NOT NULL DEFAULT 0 CHECK (auto_refresh_enabled IN (0, 1)),
+  cash_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+  UNIQUE (book_id, source_kind, display_name)
+);
+
+CREATE INDEX import_connections_book_idx ON import_connections (book_id, created_at DESC, id DESC);
+
+ALTER TABLE import_batches ADD COLUMN connection_id INTEGER REFERENCES import_connections(id) ON DELETE SET NULL;
+CREATE INDEX import_batches_connection_idx ON import_batches (connection_id) WHERE connection_id IS NOT NULL;
+
+CREATE TABLE import_connection_holdings (
+  id INTEGER PRIMARY KEY,
+  connection_id INTEGER NOT NULL REFERENCES import_connections(id) ON DELETE CASCADE,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  holding_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  UNIQUE (connection_id, commodity_id)
+);
+
+CREATE INDEX import_connection_holdings_connection_idx ON import_connection_holdings (connection_id);
+
+DROP TRIGGER IF EXISTS investment_instrument_versions_no_delete;
+DROP TRIGGER IF EXISTS commodity_versions_no_delete;
+
+-- +goose StatementBegin
+CREATE TRIGGER investment_instrument_versions_no_delete
+BEFORE DELETE ON investment_instrument_versions
+WHEN EXISTS (
+  SELECT 1 FROM investment_instruments ii
+  WHERE ii.id = OLD.instrument_id
+    AND (
+      EXISTS (SELECT 1 FROM investment_lots lot WHERE lot.commodity_id = ii.commodity_id)
+      OR EXISTS (SELECT 1 FROM posting_versions pv WHERE pv.commodity_id = ii.commodity_id)
+      OR EXISTS (SELECT 1 FROM import_connection_holdings ich WHERE ich.commodity_id = ii.commodity_id)
+      OR EXISTS (SELECT 1 FROM dividend_defaults dd WHERE dd.commodity_id = ii.commodity_id)
+      OR EXISTS (SELECT 1 FROM price_series ps WHERE ps.base_commodity_id = ii.commodity_id OR ps.quote_commodity_id = ii.commodity_id)
+      OR EXISTS (SELECT 1 FROM instrument_source_links isl WHERE isl.instrument_id = ii.id)
+      OR EXISTS (SELECT 1 FROM investment_provider_events ipe WHERE ipe.instrument_id = ii.id)
+      OR EXISTS (SELECT 1 FROM investment_event_suggestions ies WHERE ies.instrument_id = ii.id)
+      OR EXISTS (SELECT 1 FROM investment_automation_rules iar WHERE iar.instrument_id = ii.id)
+    )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment_instrument_versions rows are append-only once referenced');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER commodity_versions_no_delete
+BEFORE DELETE ON commodity_versions
+WHEN EXISTS (
+  SELECT 1 FROM commodities c
+  WHERE c.id = OLD.commodity_id
+    AND (
+      c.kind != 'security'
+      OR EXISTS (SELECT 1 FROM posting_versions pv WHERE pv.commodity_id = c.id)
+      OR EXISTS (SELECT 1 FROM investment_lots lot WHERE lot.commodity_id = c.id OR lot.cost_commodity_id = c.id)
+      OR EXISTS (SELECT 1 FROM import_connection_holdings ich WHERE ich.commodity_id = c.id)
+      OR EXISTS (SELECT 1 FROM dividend_defaults dd WHERE dd.commodity_id = c.id)
+      OR EXISTS (SELECT 1 FROM account_versions av WHERE av.default_commodity_id = c.id)
+      OR EXISTS (SELECT 1 FROM price_series ps WHERE ps.base_commodity_id = c.id OR ps.quote_commodity_id = c.id)
+      OR EXISTS (SELECT 1 FROM price_observations po WHERE po.base_commodity_id = c.id OR po.quote_commodity_id = c.id)
+    )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'commodity_versions rows are append-only once referenced');
+END;
+-- +goose StatementEnd
+
 -- +goose Down
+DROP TRIGGER IF EXISTS commodity_versions_no_delete;
+DROP TRIGGER IF EXISTS investment_instrument_versions_no_delete;
+DROP INDEX IF EXISTS import_connection_holdings_connection_idx;
+DROP TABLE IF EXISTS import_connection_holdings;
+DROP INDEX IF EXISTS import_batches_connection_idx;
+DROP INDEX IF EXISTS import_connections_book_idx;
+DROP TABLE IF EXISTS import_connections;
+DROP INDEX IF EXISTS background_work_items_active_unique_idx;
+DROP INDEX IF EXISTS import_commit_identities_book_idx;
+DROP TABLE IF EXISTS import_commit_identities;
+DROP INDEX IF EXISTS import_staged_rows_book_fingerprint_idx;
+DROP INDEX IF EXISTS import_staged_rows_batch_idx;
+DROP TABLE IF EXISTS import_staged_rows;
+DROP INDEX IF EXISTS import_batch_events_batch_idx;
+DROP TABLE IF EXISTS import_batch_events;
+DROP INDEX IF EXISTS import_batches_book_created_idx;
+DROP TABLE IF EXISTS import_batches;
+DROP INDEX IF EXISTS import_profiles_book_idx;
+DROP TABLE IF EXISTS import_profiles;
+DROP INDEX IF EXISTS posting_versions_account_date_seq_idx;
+DROP INDEX IF EXISTS transaction_versions_book_date_seq_idx;
+DROP TRIGGER IF EXISTS transaction_deletion_events_no_delete;
+DROP TRIGGER IF EXISTS transaction_deletion_events_no_update;
+DROP INDEX IF EXISTS transaction_deletion_events_transaction_idx;
+DROP TABLE IF EXISTS transaction_deletion_events;
+DROP INDEX IF EXISTS transactions_deleted_idx;
 DROP TRIGGER IF EXISTS fx_work_after_posting_version_insert;
 DROP TRIGGER IF EXISTS fx_work_after_account_version_insert;
 DROP TRIGGER IF EXISTS price_observations_positive_update;

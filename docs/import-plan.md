@@ -212,7 +212,7 @@ between providers" without touching Go code per bank.
 Staging is deliberately separate from the ledger so a preview never risks ledger
 integrity and a batch is fully reversible until commit.
 
-`0004_import_core.sql`:
+The pre-beta baseline migration (`0001_initial_schema.sql`):
 
 - `import_batches` — one per upload/fetch. Columns: `id`, `book_id`, `source_kind`,
   `profile_id` (nullable), `status` (current state, mutable:
@@ -367,7 +367,7 @@ Each slice leaves the app runnable, tested, documented. Slices map to roadmap
 R4–R7.
 
 ### Slice 1 — Pipeline + QIF (MS Money migration) — ✅ shipped
-- `0004_import_core.sql`: `import_batches`, `import_batch_events`,
+- Beta baseline: `import_batches`, `import_batch_events`,
   `import_staged_rows` (with `book_id`), `import_commit_identities`,
   `import_profiles`.
 - `SourceAdapter` interface + a small adapter **registry**; **only QIF**

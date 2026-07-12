@@ -102,7 +102,7 @@ func TestLoginUsesRightmostUntrustedForwardedClientIPWhenTrusted(t *testing.T) {
 	})
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for attempt := 0; attempt < 5; attempt++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)
@@ -112,7 +112,11 @@ func TestLoginUsesRightmostUntrustedForwardedClientIPWhenTrusted(t *testing.T) {
 
 		handler.ServeHTTP(res, req)
 
-		require.Equal(t, http.StatusUnauthorized, res.Code)
+		if attempt < 4 {
+			require.Equal(t, http.StatusUnauthorized, res.Code)
+		} else {
+			require.Equal(t, http.StatusTooManyRequests, res.Code)
+		}
 	}
 
 	// The spoofed leftmost address has not accumulated a throttle. The first

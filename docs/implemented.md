@@ -66,7 +66,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | `internal/secretbox` (AES-256-GCM, random nonce, base64 wire format) | ✅ | `backend/internal/secretbox/secretbox.go`; pure stdlib, 11-test suite. |
 | `REKENRAAM_SECRET_KEY` config (base64 32-byte key, optional boot) | ✅ | `internal/config/config.go`; absent = nil (boots); invalid = hard error; loss/rotation recovery documented in `README.md` and `docs/developer-workflow.md`. |
 | `SESSION_LIFETIME_HOURS` config | ✅ | `internal/config/config.go`; default `720`, must be a positive integer number of hours; controls login-created session expiry. |
-| Migration `0007_online_import.sql` | ✅ | `import_connections` table + `connection_id` FK on `import_batches`. |
+| Beta schema baseline (`0001_initial_schema.sql`) | ✅ | `import_connections` table + `connection_id` FK on `import_batches`. |
 | `ImportConnectionRepository` (CRUD) | ✅ | `internal/db/import_connections.go`; conditional key rotation on update. |
 | `ImportConnectionService` (probe-before-store, key masking) | ✅ | `internal/app/import_connections.go`; `ConnectionProber` interface; `NoOpProber` for Slice 1. |
 | 4 REST endpoints (`GET/POST /import-connections`, `PATCH/DELETE /{id}`) | ✅ | `internal/api/import_connections.go`; `CONFIG_REQUIRED`/`PROVIDER_ERROR`/`CONFLICT` error codes. |
@@ -86,7 +86,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | QIF parser (full field set, splits, transfers, investment entries) | ✅ | `app/import_qif.go`; handles MS Money loose-QIF export format. |
 | Import pipeline: parse → normalize → dedupe → stage → commit | ✅ | `app/import_service.go`. |
 | SHA-256 fingerprint deduplication (within-batch + ledger-level) | ✅ | `import_commit_identities` table; `INSERT OR IGNORE` with conflict detection. |
-| 5 new DB tables + goose migration | ✅ | `migrations/0004_import_core.sql`. |
+| Import schema | ✅ | Included in the pre-beta Goose baseline (`migrations/0001_initial_schema.sql`). |
 | 7 REST endpoints (`/api/v1/imports/*`) | ✅ | `api/imports.go`; auth-gated, CSRF-protected. |
 | Transfer detection: QIF `[Account]` → `transfer_account_id` routing | ✅ | Parsed to `transfer_hint`; per-row account selector in preview UI. |
 | Partial-commit semantics (per-row DB tx, failures don't block others) | ✅ | |
@@ -140,7 +140,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 | Dividend & reinvested-dividend (income/withholding defaults) | ✅ | Shared input validation; commodity-consistency guarded. |
 | Cost-basis method: fifo / lifo / average_cost / specific_lot | ✅ | All four implemented in `db/investments.go`. Explicit allocations blocked for non-specific_lot (I-01 closed). lifo/average_cost now fully implemented (I-02 closed). Per-lot-own-rate average cost; closed lots absorb full remaining cost. |
 | 3-tier cost-basis method resolution | ✅ | Per-transaction override → account default → global default → "fifo". `resolveCostBasisMethod` in `app/investments.go`. |
-| Account-level cost-basis method | ✅ | `account_versions.cost_basis_method` (migration 0005). Exposed via account CRUD API. |
+| Account-level cost-basis method | ✅ | `account_versions.cost_basis_method` (beta baseline). Exposed via account CRUD API. |
 | Sell preview endpoint | ✅ | `POST /api/v1/investments/sell/preview` — read-only simulation using `SimulateDisposeLots` (always rolls back). Returns allocations + realized gain. |
 | OpenAPI spec for all 24 investment endpoints | ✅ | `api/openapi/components/schemas/investments.yaml` + 14 path files. Generated TS types in `schema.d.ts`. |
 | Investments portfolio page (positions + lot drill-down) | ✅ | `routes/app/investments/+page.svelte`. Positions table; click a row to see open lots. Degrades gracefully when no market price. Investments nav link in app shell. |

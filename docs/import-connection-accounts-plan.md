@@ -7,7 +7,7 @@ import) and is written generically because the same gap will hit every
 future online provider, not just Trading 212.
 
 **What shipped, and one deliberate deviation:**
-- Migration `0009_import_connection_accounts.sql`: `cash_account_id` column
+- Beta baseline (`0001_initial_schema.sql`): `cash_account_id` column
   + `import_connection_holdings` table, exactly as designed below.
 - The deferred-creation rule (resolution/lookup can run early, but
   **creation** only happens at commit time) was followed exactly — see
@@ -77,7 +77,7 @@ The user asked explicitly for these to be planned, not assumed:
 
 ## Current state (verified against code)
 
-- `import_connections` (migration `0007_online_import.sql`): `id`, `book_id`,
+- `import_connections` (beta baseline): `id`, `book_id`,
   `source_kind`, `display_name`, `secret_ciphertext`, `config_json`,
   `fetch_cursor`, `last_fetch_status`, `last_fetched_at`. No account or
   institution reference of any kind.
@@ -248,11 +248,11 @@ narrows to:
 One migration, additive only, no data backfill needed (existing connections
 simply have `cash_account_id = NULL` and an empty holdings map until the user
 sets one). **Numbering note:** this doc originally reserved `0008`, but Slice
-4a shipped first and took `0008_import_connection_auto_refresh.sql` — this
+4a shipped first and introduced the auto-refresh column — this
 migration is `0009`.
 
 ```sql
--- 0009_import_connection_accounts.sql
+-- pre-beta baseline excerpt
 ALTER TABLE import_connections ADD COLUMN cash_account_id INTEGER
   REFERENCES accounts(id) ON DELETE SET NULL;
 

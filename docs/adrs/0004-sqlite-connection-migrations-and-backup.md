@@ -55,6 +55,7 @@ Rules:
 5. Do not use `-- +goose NO TRANSACTION` unless a migration has a documented SQLite requirement that cannot run inside a transaction.
 6. Do not put connection-level PRAGMA setup in schema migrations.
 7. Down migrations are useful for local development when they are straightforward, but production rollback guidance should prefer restoring a verified backup taken before upgrade.
+8. Before the first beta database existed, the schema history was intentionally collapsed into `0001_initial_schema.sql`. From beta onward, that baseline is immutable: make all schema changes as new forward migrations and preserve a verified backup before upgrading a populated database.
 
 ### Busy Handling
 

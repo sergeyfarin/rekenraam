@@ -46,7 +46,7 @@ T-13 "narrowed, not fully closed" note, which was closer to the truth than
 anyone realized). Fixed: `EntryKind: "ordinary"`. See `docs/backlog.md` T-22.
 
 Slice 1 delivered: `internal/secretbox` (AES-256-GCM), `REKENRAAM_SECRET_KEY` config,
-migration `0007_online_import.sql`, `ImportConnectionRepository`, `ImportConnectionService`
+the pre-beta baseline migration, `ImportConnectionRepository`, `ImportConnectionService`
 (probe-before-store, key masking), 4 REST endpoints (`/api/v1/import-connections`),
 OpenAPI coverage, generated TS types, `$lib/api/connections.ts` client, connections UI
 on the import page (masked list, add form, delete with confirm).
@@ -151,7 +151,7 @@ machinery. The temptation to build a parallel pipeline is the main risk.
 | `SourceAdapter` interface (`Kind`/`Detect`/`Parse`) | `backend/internal/app/import_adapter.go` | The Trading 212 adapter implements it. `Parse` reads the **fetched JSON** from `RawInput.Bytes` — no file is involved, but the shape is identical. |
 | Adapter registry | `import_adapter.go` (`newAdapterRegistry`) | Register the new adapter alongside `&QIFAdapter{}` in `NewImportService`. |
 | Whole pipeline: normalize → dedupe → stage → preview → commit | `app/import_service.go` | Unchanged. Online rows are just `StagedRow`s with a provider id in `ExternalRef`/`DedupeFingerprint`. |
-| `import_commit_identities` idempotency (`UNIQUE(book_id, dedupe_fingerprint)`) | `migrations/0004_import_core.sql`, `db/imports.go` | Provider transaction id → fingerprint precedence (already described in `import-plan.md` "Dedupe identity"). Re-fetch overlap is a no-op. |
+| `import_commit_identities` idempotency (`UNIQUE(book_id, dedupe_fingerprint)`) | beta baseline, `db/imports.go` | Provider transaction id → fingerprint precedence (already described in `import-plan.md` "Dedupe identity"). Re-fetch overlap is a no-op. |
 | Durable work queue (lease/retry/resume) | `db/background_work.go`, `app/pricing_worker.go` | Copy the worker shape for `import.fetch.trading212`. Restart-safe by construction. **Note:** the queue does **not** coalesce duplicate enqueues today (see T-09); the refresh handler must guard against double-fetch itself — see "Durable fetch worker". |
 | `CreateTransaction(OriginType="import", NeedsReview=true, ...)` | `app/transactions_write.go` via `buildTransactionSpec` | Commit path is identical to QIF. No change. |
 | Reconciliation skip/override at commit | `import_service.go` `CommitImportBatch` | Unchanged; backdated online rows behave like backdated QIF rows. |
@@ -224,7 +224,7 @@ This plan introduces a minimal, dependency-light secret box:
 - New package `internal/secretbox` wrapping `crypto/aes` + `crypto/cipher`
   (AES-256-GCM, random 12-byte nonce prepended to ciphertext). Pure stdlib; no new
   dependency. `Seal(plaintext) -> base64(nonce||ct)` / `Open(...) -> plaintext`.
-- New table `import_connections` (migration `0005_online_import.sql`):
+- New table `import_connections` (now in the beta baseline):
   `id`, `book_id`, `source_kind` (`"trading212"`), `display_name`,
   `secret_ciphertext` (the sealed API key), `config_json` (non-secret: base URL
   override, default target account id, instrument→account map later),
@@ -263,10 +263,10 @@ QIF "pick a currency for the whole batch" step for these rows.
 
 ---
 
-## Data model (new migration `0005_online_import.sql`)
+## Data model (beta baseline)
 
 Goose migration, additive only. Follows the column conventions in
-`0004_import_core.sql` (denormalized `book_id`, RFC3339 text timestamps).
+the beta baseline (denormalized `book_id`, RFC3339 text timestamps).
 
 - `import_connections` — as described in Decision 3.
   `UNIQUE(book_id, source_kind, display_name)`.
@@ -425,7 +425,7 @@ the code — a slice is not done until its docs reflect it.
 
 ### Slice 1 — Credential store + connection CRUD (no fetch yet)
 - `internal/secretbox` (AES-256-GCM seal/open) + `REKENRAAM_SECRET_KEY` in config.
-- `0005_online_import.sql`: `import_connections` (+ `connection_id` on
+- Beta baseline: `import_connections` (+ `connection_id` on
   `import_batches`).
 - `ImportConnectionService` + repository: create (seal key + provider probe),
   list (masked), patch (rotate), delete.

@@ -193,7 +193,7 @@ Shipped:
   codes including splits, transfers (`[Account]` syntax), and investment warnings.
 - SHA-256 fingerprint dedupe: within-batch + ledger-level (`import_commit_identities`).
 - 5 DB tables (`import_batches`, `import_batch_events`, `import_staged_rows`,
-  `import_commit_identities`, `import_profiles`) with goose migration `0004_import_core.sql`.
+  `import_commit_identities`, `import_profiles`) now included in the pre-beta Goose baseline.
 - 7 REST endpoints: `POST /imports`, `GET /imports`, `GET /imports/{id}`,
   `PATCH /imports/{id}`, `POST /imports/{id}/preview-commit`,
   `POST /imports/{id}/commit`, `POST /imports/{id}/discard`.
