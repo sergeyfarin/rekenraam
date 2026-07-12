@@ -53,6 +53,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 		Date          string `json:"date"`
 		Amount        string `json:"amount"`
 		CommodityHint string `json:"commodity_hint"`
+		ExternalRef   string `json:"external_ref"`
 	}
 	if jsonErr := json.Unmarshal([]byte(row.NormalizedJSON), &normalized); jsonErr != nil || normalized.Date == "" || normalized.CommodityHint == "" {
 		return false, 0, 0, nil
@@ -63,7 +64,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 		return false, 0, 0, nil // unknown currency — can't resolve, generic path still works.
 	}
 
-	instrumentID, commodityID, err := s.investmentService.ResolveOrCreateInstrumentForImport(
+	instrumentID, commodityID, createdInstrument, err := s.investmentService.ResolveOrCreateInstrumentForImport(
 		ctx, input.OwnerUserID, input.AuthSessionID, input.RequestID, raw[rawKeyISIN], raw[rawKeyTicker], normalized.Date,
 	)
 	if err != nil {
@@ -72,20 +73,28 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 
 	switch kind {
 	case trading212RawKindOrderFill:
-		holdingAccountID, err := s.resolveTrading212HoldingAccount(ctx, connectionID, instrumentID, commodityID, normalized.Date, input, nowStr)
+		holding, err := s.resolveTrading212HoldingAccount(ctx, connectionID, instrumentID, commodityID, normalized.Date, input, nowStr)
 		if err != nil {
-			return false, 0, 0, nil
+			return false, 0, 0, s.cleanupTrading212InvestmentSetup(ctx, connectionID, commodityID, instrumentID, createdInstrument, holding, input.OwnerUserID, err)
 		}
+		metadataJSON := trading212ImportMetadata(connectionID, "order_fill", normalized.ExternalRef)
 		postWrite := func(tx *sql.Tx, transactionID int64) error {
-			return s.recordCommitIdentityAndMarkRowInTx(ctx, tx, row.ID, row.DedupeFingerprint, batch.SourceKind, holdingAccountID, transactionID, nowStr)
+			return s.recordCommitIdentityAndMarkRowInTx(ctx, tx, row.ID, row.DedupeFingerprint, batch.SourceKind, holding.AccountID, transactionID, nowStr)
 		}
-		handled, txnID, err := s.commitTrading212OrderFill(ctx, raw, normalized.Date, commodityID, holdingAccountID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
-		return handled, txnID, holdingAccountID, err
+		handled, txnID, err := s.commitTrading212OrderFill(ctx, raw, normalized.Date, normalized.ExternalRef, metadataJSON, commodityID, holding.AccountID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
+		if !handled || err != nil {
+			err = s.cleanupTrading212InvestmentSetup(ctx, connectionID, commodityID, instrumentID, createdInstrument, holding, input.OwnerUserID, err)
+		}
+		return handled, txnID, holding.AccountID, err
 	case trading212RawKindDividend:
+		metadataJSON := trading212ImportMetadata(connectionID, "dividend", normalized.ExternalRef)
 		postWrite := func(tx *sql.Tx, transactionID int64) error {
 			return s.recordCommitIdentityAndMarkRowInTx(ctx, tx, row.ID, row.DedupeFingerprint, batch.SourceKind, *conn.CashAccountID, transactionID, nowStr)
 		}
-		handled, txnID, err := s.commitTrading212Dividend(ctx, raw, normalized.Date, normalized.Amount, commodityID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
+		handled, txnID, err := s.commitTrading212Dividend(ctx, raw, normalized.Date, normalized.ExternalRef, metadataJSON, normalized.Amount, commodityID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
+		if !handled || err != nil {
+			err = s.cleanupTrading212InvestmentSetup(ctx, connectionID, commodityID, instrumentID, createdInstrument, trading212HoldingResolution{}, input.OwnerUserID, err)
+		}
 		return handled, txnID, *conn.CashAccountID, err
 	default:
 		return false, 0, 0, nil
@@ -101,16 +110,22 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 // B-T212-INVST) — an ambiguous or ignorable existing match simply isn't
 // looked for; this always either reuses a connection-linked account or
 // creates a fresh one.
-func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, connectionID int64, instrumentID int64, commodityID int64, tradeDate string, input CommitImportBatchInput, nowStr string) (int64, error) {
+type trading212HoldingResolution struct {
+	AccountID      int64
+	CreatedAccount bool
+	CreatedMapping bool
+}
+
+func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, connectionID int64, instrumentID int64, commodityID int64, tradeDate string, input CommitImportBatchInput, nowStr string) (trading212HoldingResolution, error) {
 	if holdingAccountID, found, err := s.connectionService.HoldingAccountForCommodity(ctx, connectionID, commodityID); err != nil {
-		return 0, err
+		return trading212HoldingResolution{}, err
 	} else if found {
-		return holdingAccountID, nil
+		return trading212HoldingResolution{AccountID: holdingAccountID}, nil
 	}
 
 	instrument, err := s.investmentService.Instrument(ctx, instrumentID)
 	if err != nil {
-		return 0, fmt.Errorf("load instrument for holding account: %w", err)
+		return trading212HoldingResolution{}, fmt.Errorf("load instrument for holding account: %w", err)
 	}
 	// OpenedOn/EffectiveFrom must be the trade's own date, not "today" (the
 	// CreateAccount default) — otherwise a holding account created while
@@ -129,15 +144,17 @@ func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, con
 		ChangeReason:  "created from Trading 212 import",
 	})
 	if err != nil {
-		return 0, fmt.Errorf("create holding account for import: %w", err)
+		return trading212HoldingResolution{}, fmt.Errorf("create holding account for import: %w", err)
 	}
+	resolution := trading212HoldingResolution{AccountID: account.ID, CreatedAccount: true}
 	if err := s.connectionService.LinkHolding(ctx, connectionID, commodityID, account.ID, nowStr); err != nil {
-		return 0, fmt.Errorf("link import connection holding: %w", err)
+		return resolution, fmt.Errorf("link import connection holding: %w", err)
 	}
-	return account.ID, nil
+	resolution.CreatedMapping = true
+	return resolution, nil
 }
 
-func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[string]string, date string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
+func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[string]string, date string, externalRef string, metadataJSON string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
 	side := strings.ToUpper(strings.TrimSpace(raw[rawKeySide]))
 	if side != "BUY" && side != "SELL" {
 		return false, 0, nil
@@ -165,6 +182,8 @@ func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[s
 		CashAmountScale:        cashScale,
 		CashCommodityID:        cashCommodityID,
 		Memo:                   strings.TrimSpace(side + " " + raw[rawKeyTicker]),
+		ExternalRefHint:        externalRef,
+		MetadataJSON:           metadataJSON,
 		ChangeReason:           "imported from trading212",
 		ReconciliationOverride: input.ReconciliationOverride,
 		OriginType:             "import",
@@ -218,7 +237,7 @@ func isExpectedInvestmentCommitGap(err error) bool {
 	return false
 }
 
-func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[string]string, date string, rawAmount string, commodityID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
+func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[string]string, date string, externalRef string, metadataJSON string, rawAmount string, commodityID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
 	amountValue, amountScale, err := parsePositiveDecimalAmount(rawAmount)
 	if err != nil {
 		return false, 0, nil
@@ -235,6 +254,8 @@ func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[st
 		AmountValue:            amountValue,
 		AmountScale:            amountScale,
 		Memo:                   "Dividend: " + raw[rawKeyTicker],
+		ExternalRefHint:        externalRef,
+		MetadataJSON:           metadataJSON,
 		ChangeReason:           "imported from trading212",
 		ReconciliationOverride: input.ReconciliationOverride,
 		OriginType:             "import",
@@ -249,6 +270,55 @@ func (s *ImportService) commitTrading212Dividend(ctx context.Context, raw map[st
 		return false, 0, fmt.Errorf("post trading212 dividend: %w", err)
 	}
 	return true, transaction.ID, nil
+}
+
+// cleanupTrading212InvestmentSetup reverses only setup created by this row,
+// in dependency order. This path runs before generic fallback or failed-row
+// handling, so a non-posted investment route never leaves a holding map,
+// account, or instrument behind. Cleanup failure is surfaced instead of being
+// hidden behind a misleading cash fallback.
+func (s *ImportService) cleanupTrading212InvestmentSetup(ctx context.Context, connectionID int64, commodityID int64, instrumentID int64, createdInstrument bool, holding trading212HoldingResolution, ownerUserID int64, originalErr error) error {
+	if holding.CreatedMapping {
+		if err := s.connectionService.UnlinkHolding(ctx, connectionID, commodityID, holding.AccountID); err != nil {
+			return cleanupTrading212InvestmentError(originalErr, fmt.Errorf("unlink created holding: %w", err))
+		}
+	}
+	if holding.CreatedAccount {
+		if err := s.investmentService.DeleteUnusedHoldingAccountForImport(ctx, ownerUserID, holding.AccountID); err != nil {
+			return cleanupTrading212InvestmentError(originalErr, err)
+		}
+	}
+	if createdInstrument {
+		if err := s.investmentService.DeleteUnusedInstrumentForImport(ctx, instrumentID); err != nil {
+			return cleanupTrading212InvestmentError(originalErr, err)
+		}
+	}
+	return originalErr
+}
+
+func cleanupTrading212InvestmentError(originalErr error, cleanupErr error) error {
+	if originalErr != nil {
+		return fmt.Errorf("%w; cleanup failed: %v", originalErr, cleanupErr)
+	}
+	return fmt.Errorf("clean up failed Trading 212 investment setup: %w", cleanupErr)
+}
+
+func trading212ImportMetadata(connectionID int64, providerKind string, providerID string) string {
+	encoded, err := json.Marshal(struct {
+		SourceKind   string `json:"source_kind"`
+		ConnectionID int64  `json:"connection_id"`
+		ProviderKind string `json:"provider_kind"`
+		ProviderID   string `json:"provider_id"`
+	}{
+		SourceKind:   "trading212",
+		ConnectionID: connectionID,
+		ProviderKind: providerKind,
+		ProviderID:   providerID,
+	})
+	if err != nil {
+		return `{"source_kind":"trading212"}`
+	}
+	return string(encoded)
 }
 
 // parsePositiveCoefficient parses a raw decimal string into an

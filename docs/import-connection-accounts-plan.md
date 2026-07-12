@@ -272,8 +272,8 @@ CREATE INDEX import_connection_holdings_connection_idx
 
 - `CreateImportConnectionInput` / `UpdateImportConnectionInput` gain an
   optional `CashAccountID *int64`. Validate it references an existing,
-  non-archived account (any postable asset kind — do not restrict to
-  `security_holding`, since the cash leg is ordinary cash).
+  active, non-system **asset** account (any postable asset kind — do not
+  restrict to `security_holding`, since the cash leg is ordinary cash).
 - `ImportConnection` (the read DTO) surfaces `cash_account_id` so the
   frontend can show/edit it.
 - No new endpoints needed for the holdings map — it is an internal

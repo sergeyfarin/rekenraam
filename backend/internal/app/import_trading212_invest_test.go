@@ -291,6 +291,23 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 	require.NoError(t, err)
 	require.Len(t, instruments, 1)
 	assert.Equal(t, "AAPL_US_EQ", instruments[0].Symbol)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.True(t, rows[0].CommittedTransactionID.Valid)
+	transaction, err := f.importService.transactionService.Transaction(context.Background(), rows[0].CommittedTransactionID.Int64)
+	require.NoError(t, err)
+	assert.Equal(t, "fill-1", transaction.ExternalRefHint)
+	assert.JSONEq(t, `{"source_kind":"trading212","connection_id":1,"provider_kind":"order_fill","provider_id":"fill-1"}`, transaction.MetadataJSON)
+
+	holdingAccountID, found, err := f.connService.HoldingAccountForCommodity(context.Background(), conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found)
+	lots, err := f.investmentSvc.ListLots(context.Background(), holdingAccountID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	assert.JSONEq(t, transaction.MetadataJSON, lots[0].MetadataJSON)
 }
 
 func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride(t *testing.T) {
@@ -588,6 +605,14 @@ func TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrade
 	require.NoError(t, err)
 	require.Len(t, lots, 1, "the buy must have created exactly one lot")
 	assert.Equal(t, "closed", lots[0].Status, "the sell must have disposed the buy's lot — proves it committed as a real investment trade, not a generic cash fallback")
+
+	var disposalMetadata string
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT metadata_json
+		FROM investment_lot_events
+		WHERE lot_id = ? AND event_kind = 'disposal'
+	`, lots[0].ID).Scan(&disposalMetadata))
+	assert.JSONEq(t, `{"source_kind":"trading212","connection_id":1,"provider_kind":"order_fill","provider_id":"fill-sell"}`, disposalMetadata)
 }
 
 // TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadOfFallingBack
@@ -627,6 +652,57 @@ func TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadO
 	assert.Equal(t, "failed", rows[0].CommitStatus)
 	require.True(t, rows[0].CommitError.Valid)
 	assert.Contains(t, rows[0].CommitError.String, "commodity trading system account is required")
+
+	instruments, err := f.investmentSvc.ListInstruments(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, instruments, "a failed trade must not leave a newly-created instrument")
+	var holdingCount, accountCount int
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM import_connection_holdings`).Scan(&holdingCount))
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM accounts`).Scan(&accountCount))
+	assert.Zero(t, holdingCount, "a failed trade must not leave a connection holding map")
+	assert.Equal(t, 2, accountCount, "a failed trade must not leave a holding account")
+}
+
+func TestCommitImportBatch_InsufficientLotFallbackCleansCreatedInvestmentSetup(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "orphan-sell", OrderID: "orphan-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
+		FilledAt: "2026-06-02T10:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
+	})
+	f.resolveRowGeneric(t, batchID, rowID, f.cashAccountID)
+
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.CommittedCount, "insufficient lots should retain the generic cash fallback")
+
+	instruments, err := f.investmentSvc.ListInstruments(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, instruments, "cash fallback must clean the newly-created instrument")
+	var holdingCount, accountCount int
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM import_connection_holdings`).Scan(&holdingCount))
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM accounts`).Scan(&accountCount))
+	assert.Zero(t, holdingCount)
+	assert.Equal(t, 3, accountCount, "cash fallback must clean the newly-created holding account")
+}
+
+func TestCommitImportBatch_MissingDividendDefaultCleansCreatedInstrument(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	batchID, rowID := f.stageDividendRow(t, conn.ID, trading212Dividend{
+		Reference: "orphan-dividend", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Quantity: "2", Amount: "4.32", Currency: "EUR", PaidOn: "2026-06-15T00:00:00Z", Type: "DIVIDEND",
+	})
+	f.resolveRowGeneric(t, batchID, rowID, f.cashAccountID)
+
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.CommittedCount, "missing dividend defaults should retain the generic cash fallback")
+
+	instruments, err := f.investmentSvc.ListInstruments(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, instruments, "cash fallback must clean the newly-created dividend instrument")
 }
 
 func TestCommitImportBatch_DividendPostsAsInvestmentIncome(t *testing.T) {
@@ -671,6 +747,15 @@ func TestCommitImportBatch_DividendPostsAsInvestmentIncome(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, positions, 1)
 	assert.Equal(t, "2", positions[0].QuantityValue.String(), "the dividend must not change the held quantity")
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), divBatch)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.True(t, rows[0].CommittedTransactionID.Valid)
+	transaction, err := f.importService.transactionService.Transaction(context.Background(), rows[0].CommittedTransactionID.Int64)
+	require.NoError(t, err)
+	assert.Equal(t, "div-1", transaction.ExternalRefHint)
+	assert.JSONEq(t, `{"source_kind":"trading212","connection_id":1,"provider_kind":"dividend","provider_id":"div-1"}`, transaction.MetadataJSON)
 }
 
 // failInvestmentImportIdentityWrites injects the exact failure point T-26

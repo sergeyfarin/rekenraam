@@ -462,37 +462,39 @@ raw metadata now retains `filled_at`, and the sorter uses the full timestamp.
 Verified by
 `TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades`.
 
-### T-29 Failed Trading 212 investment routing can leave unused created instruments or holdings `[ ]`
+### T-29 Failed Trading 212 investment routing can leave unused created instruments or holdings `[x]`
 **File:** `backend/internal/app/import_trading212_invest.go`
 (`commitTrading212InvestmentRow`, `resolveTrading212HoldingAccount`).
 
-Instrument and holding-account creation happen before a Buy/Sell/Dividend is
-known to have posted. An expected fallback (for example insufficient lots or a
-missing dividend default) or an unexpected validation failure can therefore
-leave a zero-lot instrument, holding account, or connection mapping behind.
-Keep the useful “creation only at commit, never fetch” rule, but make creation
-part of the successful investment commit or explicitly clean it up on fallback.
+Closed 2026-07-12. The import branch tracks which instrument, holding account,
+and mapping it created for each row. Any fallback or posting failure reverses
+only those records in dependency order: mapping, unused account, unused
+instrument/security commodity. Migration `0011` permits deleting an
+unreferenced security's initial versions but keeps the database trigger strict
+once any posting, lot, default, price, provider event, source link, or holding
+map references it. Verified for an unexpected BUY failure, insufficient-lot
+SELL fallback, and missing-default DIVIDEND fallback in
+`backend/internal/app/import_trading212_invest_test.go`.
 
-### T-30 Trading 212 cash-account configuration accepts non-asset accounts `[ ]`
+### T-30 Trading 212 cash-account configuration accepts non-asset accounts `[x]`
 **File:** `backend/internal/app/import_connections.go`
 (`validateCashAccountID`), `frontend/src/routes/app/import/+page.svelte`.
 
-The accounts plan calls for a settlement **asset** account, but current service
-validation and the picker accept every postable non-archived account. Selecting
-an income or expense category would let investment cash legs post to the wrong
-account class. Restrict both layers to postable, non-archived asset accounts;
-add a service-level rejection test so API callers cannot bypass the UI.
+Closed 2026-07-12. The service now requires a postable, active, non-system
+**asset** account and the connection picker applies the same filter. The API
+cannot be bypassed by a crafted income/expense account id. Verified by
+`TestCreateImportConnection_CashAccountIDNonAssetRejected`.
 
-### T-31 Trading 212 investment transactions omit direct provider provenance `[ ]`
+### T-31 Trading 212 investment transactions omit direct provider provenance `[x]`
 **File:** `backend/internal/app/import_trading212_invest.go`,
 `backend/internal/app/investments.go`.
 
-The plan promised Trading 212 provider identifiers in committed transaction
-metadata, but Buy/Sell/Dividend only receive a memo and import attribution.
-The provider reference remains reachable through the committed staged row and
-identity record, but is not present on the ledger transaction itself. Thread a
-small stable source metadata object (provider kind, fill/reference id,
-connection id) into transaction and lot metadata; add a commit-path test.
+Closed 2026-07-12. Imported order fills and dividends now store a compact,
+stable source object (`source_kind`, `connection_id`, `provider_kind`,
+`provider_id`) on their transaction metadata and preserve the provider id as
+the transaction external reference. Buy lots and sell disposal events carry the
+same metadata. Verified by order-fill and dividend commit-path assertions in
+`backend/internal/app/import_trading212_invest_test.go`.
 
 ### T-32 Concurrent Trading 212 batch commits can overwrite a committed row as failed `[ ]`
 **File:** `backend/internal/app/import_service.go` (`CommitImportBatch`),
@@ -505,6 +507,17 @@ which can overwrite the first caller's already-`committed` status with
 `failed`. Make staged-row terminal transitions conditional (or serialize one
 commit per batch) and treat an existing matching identity as the successful
 idempotent outcome. Add a two-goroutine regression test.
+
+### T-33 Trading 212 settlement account accepted closed or system accounts `[x]`
+**File:** `backend/internal/app/import_connections.go`
+(`validateCashAccountID`), `frontend/src/routes/app/import/+page.svelte`.
+
+Closed 2026-07-12. While implementing T-30, review found that “not archived”
+also allowed closed accounts, and system accounts (including commodity-trading)
+were eligible despite not being user cash accounts. The service and picker now
+accept only active, non-system, postable asset accounts. Verified by
+`TestCreateImportConnection_CashAccountIDClosedRejected` and
+`TestCreateImportConnection_CashAccountIDSystemAccountRejected`.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
 **File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,

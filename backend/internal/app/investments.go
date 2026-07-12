@@ -235,6 +235,8 @@ type InvestmentTradeInput struct {
 	CashAmountScale  int
 	CashCommodityID  int64
 	Memo             string
+	ExternalRefHint  string
+	MetadataJSON     string
 	PayeeID          *int64
 	Status           string
 	LotAllocations   []InvestmentLotAllocationInput
@@ -295,6 +297,8 @@ type DividendInput struct {
 	WithholdingScale     *int
 	WithholdingAccountID *int64
 	Memo                 string
+	ExternalRefHint      string
+	MetadataJSON         string
 	PayeeID              *int64
 	Status               string
 	ChangeReason         string
@@ -530,26 +534,26 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 // durably-created instrument nobody asked for). Returns the resolved
 // instrument's InstrumentID and CommodityID together, since callers need
 // both (CommodityID for postings, InstrumentID for CreateHoldingAccount).
-func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string, effectiveFrom string) (instrumentID int64, commodityID int64, err error) {
+func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string, effectiveFrom string) (instrumentID int64, commodityID int64, created bool, err error) {
 	isin = strings.TrimSpace(isin)
 	ticker = strings.TrimSpace(ticker)
 
 	if isin != "" {
 		if rec, err := s.repository.InstrumentByISIN(ctx, BookID, isin); err == nil {
-			return rec.ID, rec.CommodityID, nil
+			return rec.ID, rec.CommodityID, false, nil
 		} else if !errors.Is(err, db.ErrNotFound) {
-			return 0, 0, fmt.Errorf("find instrument by isin: %w", err)
+			return 0, 0, false, fmt.Errorf("find instrument by isin: %w", err)
 		}
 	}
 	if ticker != "" {
 		if rec, err := s.repository.InstrumentBySymbol(ctx, BookID, ticker); err == nil {
-			return rec.ID, rec.CommodityID, nil
+			return rec.ID, rec.CommodityID, false, nil
 		} else if !errors.Is(err, db.ErrNotFound) {
-			return 0, 0, fmt.Errorf("find instrument by symbol: %w", err)
+			return 0, 0, false, fmt.Errorf("find instrument by symbol: %w", err)
 		}
 	}
 	if ticker == "" {
-		return 0, 0, fmt.Errorf("cannot create instrument: no ticker")
+		return 0, 0, false, fmt.Errorf("cannot create instrument: no ticker")
 	}
 
 	identifiersJSON := "{}"
@@ -580,9 +584,32 @@ func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Conte
 		ChangeReason:    "created from Trading 212 import",
 	})
 	if err != nil {
-		return 0, 0, fmt.Errorf("create instrument for import: %w", err)
+		return 0, 0, false, fmt.Errorf("create instrument for import: %w", err)
 	}
-	return instrument.ID, instrument.CommodityID, nil
+	return instrument.ID, instrument.CommodityID, true, nil
+}
+
+// DeleteUnusedInstrumentForImport compensates a failed import attempt that
+// created an instrument but no durable trade. Posted instruments are protected
+// by the repository's foreign-key checks and are never deleted here.
+func (s *InvestmentService) DeleteUnusedInstrumentForImport(ctx context.Context, instrumentID int64) error {
+	if err := s.repository.DeleteUnusedInstrument(ctx, BookID, instrumentID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ErrInvestmentInstrumentNotFound
+		}
+		return fmt.Errorf("delete unused import instrument: %w", err)
+	}
+	return nil
+}
+
+// DeleteUnusedHoldingAccountForImport compensates a holding account created
+// for an import row that did not produce a trade. DeleteUnusedAccount refuses
+// any account that has postings or other durable references.
+func (s *InvestmentService) DeleteUnusedHoldingAccountForImport(ctx context.Context, ownerUserID int64, accountID int64) error {
+	if err := s.accountService.DeleteUnusedAccount(ctx, DeleteAccountInput{OwnerUserID: ownerUserID, AccountID: accountID}); err != nil {
+		return fmt.Errorf("delete unused import holding account: %w", err)
+	}
+	return nil
 }
 
 func (s *InvestmentService) UpdateInstrument(ctx context.Context, input InvestmentInstrumentInput) (InvestmentInstrument, error) {
@@ -780,6 +807,10 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", investmentJSONMaxBytes)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
 	status := input.Status
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
@@ -798,6 +829,8 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 			TransactionDate: input.TransactionDate,
 			PayeeID:         input.PayeeID,
 			Description:     memo,
+			ExternalRefHint: input.ExternalRefHint,
+			MetadataJSON:    metadataJSON,
 			JournalEntries: []JournalEntryInput{{
 				EntryDate: input.TransactionDate,
 				EntryKind: "investment",
@@ -825,7 +858,7 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		CostBasisValue:  input.CashAmountValue,
 		CostBasisScale:  input.CashAmountScale,
 		CostCommodityID: input.CashCommodityID,
-		MetadataJSON:    "{}",
+		MetadataJSON:    metadataJSON,
 		CreatedAt:       now,
 		CreatedByUserID: input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
@@ -956,6 +989,10 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", investmentJSONMaxBytes)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
 	status := input.Status
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
@@ -974,6 +1011,8 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 			TransactionDate: input.TransactionDate,
 			PayeeID:         input.PayeeID,
 			Description:     memo,
+			ExternalRefHint: input.ExternalRefHint,
+			MetadataJSON:    metadataJSON,
 			JournalEntries: []JournalEntryInput{{
 				EntryDate: input.TransactionDate,
 				EntryKind: "investment",
@@ -1014,6 +1053,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		OriginType:      defaultString(input.OriginType, "browser_api"),
 		Operation:       "investment.lot.dispose",
 		ChangeReason:    "disposed lots from sell transaction",
+		MetadataJSON:    metadataJSON,
 	}
 	var transactionRecord db.TransactionRecord
 	var disposals []db.LotDisposalRecord
@@ -1127,6 +1167,8 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 			TransactionDate: date,
 			PayeeID:         input.PayeeID,
 			Description:     memo,
+			ExternalRefHint: input.ExternalRefHint,
+			MetadataJSON:    input.MetadataJSON,
 			JournalEntries: []JournalEntryInput{{
 				EntryDate: date,
 				EntryKind: "investment",

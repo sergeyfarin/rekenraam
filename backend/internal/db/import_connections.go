@@ -291,3 +291,24 @@ func (r *ImportConnectionRepository) LinkHolding(ctx context.Context, connection
 	}
 	return nil
 }
+
+// UnlinkHolding removes only the mapping created for a failed import attempt.
+// The holding account itself is deliberately left to the caller's unused-account
+// cleanup, so a pre-existing map can never be removed accidentally.
+func (r *ImportConnectionRepository) UnlinkHolding(ctx context.Context, connectionID int64, commodityID int64, holdingAccountID int64) error {
+	result, err := r.database.ExecContext(ctx, `
+		DELETE FROM import_connection_holdings
+		WHERE connection_id = ? AND commodity_id = ? AND holding_account_id = ?
+	`, connectionID, commodityID, holdingAccountID)
+	if err != nil {
+		return fmt.Errorf("unlink import connection holding: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read unlinked holding rows: %w", err)
+	}
+	if rows != 1 {
+		return ErrNotFound
+	}
+	return nil
+}

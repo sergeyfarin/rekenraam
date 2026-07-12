@@ -350,7 +350,7 @@
   let cashAccountError = $state<unknown>(undefined);
 
   const postableAccounts = $derived(
-    accounts.filter((a) => a.allows_postings && a.status !== 'archived')
+    accounts.filter((a) => a.allows_postings && a.status === 'active' && a.account_class === 'asset' && !a.is_system)
   );
 
   async function handleAddConnection() {

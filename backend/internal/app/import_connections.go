@@ -425,6 +425,15 @@ func (s *ImportConnectionService) LinkHolding(ctx context.Context, connectionID 
 	return s.repository.LinkHolding(ctx, connectionID, commodityID, holdingAccountID, createdAt)
 }
 
+// UnlinkHolding removes the mapping created during an investment import that
+// did not ultimately post. It is intentionally not exposed through HTTP.
+func (s *ImportConnectionService) UnlinkHolding(ctx context.Context, connectionID int64, commodityID int64, holdingAccountID int64) error {
+	if err := s.repository.UnlinkHolding(ctx, connectionID, commodityID, holdingAccountID); err != nil {
+		return fmt.Errorf("unlink holding: %w", err)
+	}
+	return nil
+}
+
 // --- Helpers ---
 
 func (s *ImportConnectionService) requireSecretKey() error {
@@ -447,9 +456,9 @@ func (s *ImportConnectionService) openSecret(ciphertext string) ([]byte, error) 
 }
 
 // validateCashAccountID checks that a proposed cash_account_id (if any)
-// references a real, postable, non-archived account — per
-// docs/import-connection-accounts-plan.md ("any postable asset kind — do not
-// restrict to security_holding, since the cash leg is ordinary cash").
+// references a real, postable, active, user-owned asset account. A connection's
+// settlement leg is ordinary cash, so any asset kind is valid, but an
+// income/expense category would corrupt investment cash classification.
 func (s *ImportConnectionService) validateCashAccountID(ctx context.Context, cashAccountID *int64) error {
 	if cashAccountID == nil {
 		return nil
@@ -467,8 +476,14 @@ func (s *ImportConnectionService) validateCashAccountID(ctx context.Context, cas
 	if !account.AllowsPostings {
 		return ValidationError{Message: "cash_account_id must reference a postable account"}
 	}
-	if account.Status == "archived" {
-		return ValidationError{Message: "cash_account_id must reference a non-archived account"}
+	if account.Status != "active" {
+		return ValidationError{Message: "cash_account_id must reference an active account"}
+	}
+	if account.AccountClass != "asset" {
+		return ValidationError{Message: "cash_account_id must reference an asset account"}
+	}
+	if account.IsSystem {
+		return ValidationError{Message: "cash_account_id must reference a user account"}
 	}
 	return nil
 }

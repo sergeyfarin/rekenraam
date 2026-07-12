@@ -599,6 +599,12 @@ actually shipped, and where it differs from the original plan above:
    tradeoff (also a deliberate scope cut, see below): the preview UI does
    **not** yet show a resolved/proposed instrument name before commit — a
    documented, deferred UX enhancement, not a correctness gap.
+   **P2 follow-up (2026-07-12, T-29):** creation remains commit-time, but is
+   now compensating and reference-safe: a row that falls back to generic cash
+   or fails after creating setup reverses only its new holding map, unused
+   account, and unused instrument/security commodity. Migration `0011` keeps
+   instrument and commodity versions append-only after any durable reference,
+   while allowing this never-used setup to be removed.
 4. **Holding + cash account resolution:** `import_connection_holdings`
    lookup/create via `ImportConnectionService.HoldingAccountForCommodity`/
    `LinkHolding`, same deferred-to-commit-time rule. **Scope cut:**
@@ -615,6 +621,10 @@ actually shipped, and where it differs from the original plan above:
    (`PostingAccountRule` finds no account version effective as of the
    entry date). Fixed by passing the trade's own date as
    `OpenedOn`/`EffectiveFrom` for both the instrument and the holding account.
+   The settlement-account selector and service both require a postable,
+   active, non-system **asset** account (T-30/T-33); a category, closed
+   account, or internal system account can no longer receive a brokerage cash
+   leg through a crafted API request.
 5. **Commit-path branch:** `CommitImportBatch` (`import_service.go`) now
    tries `commitTrading212InvestmentRow` (`import_trading212_invest.go`)
    before the generic path; `handled=false` (not a trading212 investment
@@ -645,6 +655,10 @@ actually shipped, and where it differs from the original plan above:
 6. **Dividends:** route through `InvestmentService.Dividend`, which already
    auto-resolves the income account via `ResolveDividendDefault` keyed off
    the resolved instrument's `CommodityID` (unchanged, exactly as planned).
+   Investment transactions now retain compact Trading 212 provenance in their
+   metadata (`source_kind`, connection id, provider kind/id) and use the
+   provider id as the external reference; buy lots and sell disposal events
+   receive the same metadata (T-31).
 7. **Severity-1 bug found and fixed, unrelated to Trading 212 itself:**
    `buildTransactionSpec`'s `EntryKind: "main"` was not a valid entry kind —
    see this doc's status line above and `docs/backlog.md` T-22. Discovered
@@ -692,10 +706,10 @@ actually shipped, and where it differs from the original plan above:
 - **i18n / a11y / mobile:** connection + import UI follow the same boundaries as the
   rest of the app; loading/empty/error/success states defined per screen.
 - **Auditable:** every batch state change is an `import_batch_events` row and
-  committed transactions carry `OriginType="import"`. The investment branch
-  currently retains the provider reference through its committed staged row
-  and import identity, rather than copying it to transaction `MetadataJSON`;
-  this remaining provenance improvement is tracked as T-31.
+  committed transactions carry `OriginType="import"`. Investment rows also
+  carry their Trading 212 source kind, connection id, provider kind/id in
+  transaction metadata and preserve the provider id as `ExternalRefHint`;
+  buy lots and sell disposal events carry the same compact source metadata.
 
 ## Risks & open questions (resolve during Slice 2 against the live API)
 

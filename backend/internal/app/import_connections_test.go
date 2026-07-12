@@ -72,6 +72,11 @@ func newTestConnectionServiceWithAccounts(t *testing.T) (*ImportConnectionServic
 // account_kinds is already seeded by the initial schema migration).
 func seedTestAccount(t *testing.T, database *sql.DB, status string, allowsPostings bool) int64 {
 	t.Helper()
+	return seedTestAccountWithClass(t, database, status, allowsPostings, "asset", "checking")
+}
+
+func seedTestAccountWithClass(t *testing.T, database *sql.DB, status string, allowsPostings bool, accountClass string, accountKind string) int64 {
+	t.Helper()
 	ctx := context.Background()
 	result, err := database.ExecContext(ctx, `
 		INSERT INTO accounts (book_id, created_at, created_by_user_id)
@@ -90,8 +95,8 @@ func seedTestAccount(t *testing.T, database *sql.DB, status string, allowsPostin
 			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
 			change_reason, status, opened_on, closed_on, code, name, account_class,
 			account_kind, allows_postings
-		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', ?, '2026-01-01', ?, 'CASH', 'Test Cash', 'asset', 'checking', ?)
-	`, accountID, status, closedOn, boolToIntForTest(allowsPostings))
+		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', ?, '2026-01-01', ?, 'CASH', 'Test Cash', ?, ?, ?)
+	`, accountID, status, closedOn, accountClass, accountKind, boolToIntForTest(allowsPostings))
 	require.NoError(t, err)
 	return accountID
 }
@@ -559,6 +564,45 @@ func TestCreateImportConnection_CashAccountIDArchivedRejected(t *testing.T) {
 	})
 	var ve ValidationError
 	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+}
+
+func TestCreateImportConnection_CashAccountIDClosedRejected(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedTestAccount(t, database, "closed", true)
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+	assert.Equal(t, "cash_account_id must reference an active account", ve.Message)
+}
+
+func TestCreateImportConnection_CashAccountIDNonAssetRejected(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedTestAccountWithClass(t, database, "active", true, "expense", "expense")
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+	assert.Equal(t, "cash_account_id must reference an asset account", ve.Message)
+}
+
+func TestCreateImportConnection_CashAccountIDSystemAccountRejected(t *testing.T) {
+	svc, database := newTestConnectionServiceWithAccounts(t)
+	accountID := seedCommodityTradingAccount(t, database)
+
+	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
+		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "ISA", APIKey: "api-key-xxxx",
+		CashAccountID: &accountID,
+	})
+	var ve ValidationError
+	require.True(t, errors.As(err, &ve), "expected ValidationError, got %T: %v", err, err)
+	assert.Equal(t, "cash_account_id must reference a user account", ve.Message)
 }
 
 // TestUpdateImportConnection_OmittedCashAccountIDPreservesExisting guards the

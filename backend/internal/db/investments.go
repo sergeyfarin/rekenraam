@@ -261,6 +261,7 @@ type DisposeLotsParams struct {
 	OriginType      string
 	Operation       string
 	ChangeReason    string
+	MetadataJSON    string
 }
 
 type InvestmentPositionRecord struct {
@@ -547,6 +548,52 @@ func (r *InvestmentRepository) CreateInstrument(ctx context.Context, params Crea
 	}
 	committed = true
 	return record, nil
+}
+
+// DeleteUnusedInstrument removes an instrument and its newly-created security
+// commodity only when neither has acquired a durable reference. It exists for
+// import compensation: a failed investment route must not leave structural
+// records behind. Foreign-key checks deliberately make this fail closed if a
+// concurrent or future feature has started using the instrument.
+func (r *InvestmentRepository) DeleteUnusedInstrument(ctx context.Context, bookID int64, instrumentID int64) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete unused instrument: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	var commodityID int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT commodity_id FROM investment_instruments WHERE id = ? AND book_id = ?
+	`, instrumentID, bookID).Scan(&commodityID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("read unused instrument: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM investment_instrument_versions WHERE instrument_id = ?`, instrumentID); err != nil {
+		return fmt.Errorf("delete unused instrument versions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM investment_instruments WHERE id = ? AND book_id = ?`, instrumentID, bookID); err != nil {
+		return fmt.Errorf("delete unused instrument: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM commodity_versions WHERE commodity_id = ?`, commodityID); err != nil {
+		return fmt.Errorf("delete unused security commodity versions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM commodities WHERE id = ? AND book_id = ? AND kind = 'security'`, commodityID, bookID); err != nil {
+		return fmt.Errorf("delete unused security commodity: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete unused instrument: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 func (r *InvestmentRepository) UpdateInstrument(ctx context.Context, params UpdateInvestmentInstrumentParams) (InvestmentInstrumentRecord, error) {
@@ -897,8 +944,8 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)
-	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.CreatedAt, params.CreatedByUserID, auditEventID); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID); err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot event: %w", err)
 	}
 	record, err := investmentLotByIDTx(ctx, tx, params.BookID, lotID)
@@ -971,6 +1018,9 @@ func (r *InvestmentRepository) SimulateDisposeLots(ctx context.Context, params D
 }
 
 func disposeLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) ([]LotDisposalRecord, error) {
+	if params.MetadataJSON == "" {
+		params.MetadataJSON = "{}"
+	}
 	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ActorUserID,
@@ -1251,8 +1301,8 @@ func disposeAverageCostLotTx(ctx context.Context, tx *sql.Tx, params DisposeLots
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
 		)
-		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)
-	`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityTaken.Negated(), lot.quantityScale, -reportedBasis, lot.costBasisScale, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
+		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityTaken.Negated(), lot.quantityScale, -reportedBasis, lot.costBasisScale, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert average-cost disposal lot event: %w", err)
 	}
 	return LotDisposalRecord{
@@ -1976,8 +2026,8 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
 		)
-		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)
-	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityValue.Negated(), quantityScale, -costBasisValue, lot.RemainingCostBasisScale, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
+		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate, quantityValue.Negated(), quantityScale, -costBasisValue, lot.RemainingCostBasisScale, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert disposal lot event: %w", err)
 	}
 	return LotDisposalRecord{
