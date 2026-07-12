@@ -45,6 +45,11 @@ type ImportService struct {
 	// an idempotency read and before the row's write transaction. Production
 	// callers leave it nil.
 	beforeImportRowCommitForTest func()
+
+	// beforeTrading212HoldingCreateForTest creates a deterministic race window
+	// after a missing holding-map read and before account creation. Production
+	// callers leave it nil.
+	beforeTrading212HoldingCreateForTest func()
 }
 
 func NewImportService(

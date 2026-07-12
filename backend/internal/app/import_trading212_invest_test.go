@@ -879,6 +879,15 @@ func TestCommitImportBatch_InvestmentDividendRollsBackWhenIdentityRecordingFails
 func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *testing.T) {
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
+	setupBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "concurrent-setup", OrderID: "concurrent-setup-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-05-30T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
+	})
+	_, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: setupBatchID})
+	require.NoError(t, err)
+	initialTransactions := transactionCount(t, f)
+
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
 		FillID: "concurrent-buy", OrderID: "concurrent-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
@@ -922,9 +931,115 @@ func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *tes
 	assert.Equal(t, "committed", rows[0].CommitStatus)
 	assert.True(t, rows[0].CommittedTransactionID.Valid)
 	assert.False(t, rows[0].CommitError.Valid)
-	assert.Equal(t, 1, transactionCount(t, f), "idempotent concurrent commits must create one ledger transaction")
+	assert.Equal(t, initialTransactions+1, transactionCount(t, f), "idempotent concurrent commits must create one additional ledger transaction")
 
 	batch, err := f.importRepo.ImportBatchByID(context.Background(), BookID, batchID)
 	require.NoError(t, err)
 	assert.Equal(t, "committed", batch.Status)
+}
+
+// TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner proves that
+// simultaneous first imports for one connection and instrument create one
+// holding map/account, reuse that winner for both trades, and clean up the
+// losing unused holding account.
+func TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	_, commodityID, _, err := f.investmentSvc.ResolveOrCreateInstrumentForImport(
+		context.Background(), f.ownerUserID, 0, "", "US0378331005", "AAPL_US_EQ", "2026-06-01",
+	)
+	require.NoError(t, err)
+
+	var initialAccountCount int
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM accounts`).Scan(&initialAccountCount))
+
+	batchOneID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "holding-race-one", OrderID: "holding-race-one-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	})
+	batchTwoID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "holding-race-two", OrderID: "holding-race-two-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "151.00", Currency: "USD",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-302.00", NetValueCurrency: "EUR",
+	})
+
+	var reachedMissingHoldingMap sync.WaitGroup
+	reachedMissingHoldingMap.Add(2)
+	releaseHoldingCreates := make(chan struct{})
+	f.importService.beforeTrading212HoldingCreateForTest = func() {
+		reachedMissingHoldingMap.Done()
+		<-releaseHoldingCreates
+	}
+
+	type commitResult struct {
+		result CommitImportBatchResult
+		err    error
+	}
+	results := make(chan commitResult, 2)
+	for _, batchID := range []int64{batchOneID, batchTwoID} {
+		go func() {
+			result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{
+				OwnerUserID: f.ownerUserID,
+				BatchID:     batchID,
+			})
+			results <- commitResult{result: result, err: err}
+		}()
+	}
+
+	reachedMissingHoldingMap.Wait()
+	close(releaseHoldingCreates)
+	for range 2 {
+		commit := <-results
+		require.NoError(t, commit.err)
+		assert.Equal(t, 1, commit.result.CommittedCount)
+		assert.Equal(t, "committed", commit.result.Status)
+	}
+
+	holdingAccountID, found, err := f.connService.HoldingAccountForCommodity(context.Background(), conn.ID, commodityID)
+	require.NoError(t, err)
+	assert.True(t, found)
+	require.Positive(t, holdingAccountID)
+
+	var holdingCount, accountCount int
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `
+		SELECT COUNT(*) FROM import_connection_holdings WHERE connection_id = ? AND commodity_id = ?
+	`, conn.ID, commodityID).Scan(&holdingCount))
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM accounts`).Scan(&accountCount))
+	assert.Equal(t, 1, holdingCount)
+	assert.Equal(t, initialAccountCount+1, accountCount, "the losing unused holding account must be cleaned up")
+
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, holdingAccountID, positions[0].AccountID)
+	assert.Equal(t, "4", positions[0].QuantityValue.String())
+}
+
+func TestCommitImportStagedRow_DoesNotOverwriteCommitted(t *testing.T) {
+	f := newInvestTestFixture(t)
+	conn := f.createConnection(t, &f.cashAccountID)
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "terminal-status-guard", OrderID: "terminal-status-guard-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
+	})
+	_, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+
+	err = f.importRepo.CommitImportStagedRow(context.Background(), db.CommitImportStagedRowParams{
+		RowID:        rows[0].ID,
+		CommitStatus: "failed",
+		CommitError:  sql.NullString{String: "stale concurrent failure", Valid: true},
+	})
+	require.ErrorIs(t, err, db.ErrImportStagedRowAlreadyCommitted)
+
+	rows, err = f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	assert.Equal(t, "committed", rows[0].CommitStatus)
+	assert.False(t, rows[0].CommitError.Valid)
 }

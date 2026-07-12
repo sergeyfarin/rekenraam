@@ -7,7 +7,10 @@ import (
 	"fmt"
 )
 
-var ErrImportConnectionNotFound = errors.New("import connection not found")
+var (
+	ErrImportConnectionNotFound      = errors.New("import connection not found")
+	ErrImportConnectionHoldingExists = errors.New("import connection holding already exists")
+)
 
 // ImportConnectionRecord is the full DB row, including the sealed secret.
 // The secret is never surfaced to callers outside the db package directly —
@@ -282,12 +285,19 @@ func (r *ImportConnectionRepository) HoldingAccountForCommodity(ctx context.Cont
 // discard-orphan concern): a discarded preview batch must never durably
 // reserve this mapping.
 func (r *ImportConnectionRepository) LinkHolding(ctx context.Context, connectionID int64, commodityID int64, holdingAccountID int64, createdAt string) error {
-	_, err := r.database.ExecContext(ctx, `
-		INSERT INTO import_connection_holdings (connection_id, commodity_id, holding_account_id, created_at)
+	result, err := r.database.ExecContext(ctx, `
+		INSERT OR IGNORE INTO import_connection_holdings (connection_id, commodity_id, holding_account_id, created_at)
 		VALUES (?, ?, ?, ?)
 	`, connectionID, commodityID, holdingAccountID, createdAt)
 	if err != nil {
 		return fmt.Errorf("link import connection holding: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read linked holding rows: %w", err)
+	}
+	if rows == 0 {
+		return ErrImportConnectionHoldingExists
 	}
 	return nil
 }

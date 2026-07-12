@@ -122,6 +122,9 @@ func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, con
 	} else if found {
 		return trading212HoldingResolution{AccountID: holdingAccountID}, nil
 	}
+	if s.beforeTrading212HoldingCreateForTest != nil {
+		s.beforeTrading212HoldingCreateForTest()
+	}
 
 	instrument, err := s.investmentService.Instrument(ctx, instrumentID)
 	if err != nil {
@@ -148,6 +151,22 @@ func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, con
 	}
 	resolution := trading212HoldingResolution{AccountID: account.ID, CreatedAccount: true}
 	if err := s.connectionService.LinkHolding(ctx, connectionID, commodityID, account.ID, nowStr); err != nil {
+		if errors.Is(err, db.ErrImportConnectionHoldingExists) {
+			// A concurrent first import created and linked a holding account
+			// after our initial lookup. This account has no postings or other
+			// durable references yet, so remove it before reusing the winner.
+			if cleanupErr := s.investmentService.DeleteUnusedHoldingAccountForImport(ctx, input.OwnerUserID, account.ID); cleanupErr != nil {
+				return trading212HoldingResolution{}, fmt.Errorf("clean up losing holding account after concurrent link: %w", cleanupErr)
+			}
+			holdingAccountID, found, lookupErr := s.connectionService.HoldingAccountForCommodity(ctx, connectionID, commodityID)
+			if lookupErr != nil {
+				return trading212HoldingResolution{}, fmt.Errorf("reload concurrent holding account: %w", lookupErr)
+			}
+			if !found {
+				return trading212HoldingResolution{}, errors.New("holding link conflict without a persisted holding account")
+			}
+			return trading212HoldingResolution{AccountID: holdingAccountID}, nil
+		}
 		return resolution, fmt.Errorf("link import connection holding: %w", err)
 	}
 	resolution.CreatedMapping = true

@@ -7,7 +7,10 @@ import (
 	"fmt"
 )
 
-var ErrImportBatchNotFound = errors.New("import batch not found")
+var (
+	ErrImportBatchNotFound             = errors.New("import batch not found")
+	ErrImportStagedRowAlreadyCommitted = errors.New("import staged row is already committed")
+)
 
 type ImportRepository struct {
 	database *sql.DB
@@ -751,7 +754,7 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 	result, err := db.ExecContext(ctx, `
 		UPDATE import_staged_rows
 		SET commit_status = ?, committed_transaction_id = ?, commit_error = ?
-		WHERE id = ?
+		WHERE id = ? AND commit_status <> 'committed'
 	`, params.CommitStatus, params.CommittedTransactionID, params.CommitError, params.RowID)
 	if err != nil {
 		return fmt.Errorf("commit staged row: %w", err)
@@ -761,7 +764,7 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 		return fmt.Errorf("rows affected: %w", err)
 	}
 	if n == 0 {
-		return ErrNotFound
+		return ErrImportStagedRowAlreadyCommitted
 	}
 	return nil
 }

@@ -503,11 +503,18 @@ same metadata. Verified by order-fill and dividend commit-path assertions in
 Closed 2026-07-12. T-26 already rolled back the losing ledger transaction,
 but the Trading 212 investment caller then misclassified the identity conflict
 as a failed row and overwrote the winner's terminal marker. It now resolves the
-persisted identity as the successful idempotent outcome and conditionally marks
-only a still-pending row as committed. `TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow` synchronizes two goroutines after their identity
-reads and proves both report success, the staged row remains committed, and
-exactly one ledger transaction exists. Review found no additional actionable
-gaps or refactoring work in this focused path.
+persisted identity as the successful idempotent outcome; all terminal staged-row
+writes reject an already-committed row. The initial race regression also exposed
+a separate first-time holding-map race: concurrent callers could both create an
+account, with the loser failing the unique mapping insert. A losing map insert
+now reloads and reuses the winner's mapping after deleting its unused holding
+account. `TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow`
+pre-seeds the holding map and isolates the identity-conflict case;
+`TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner` covers the
+first-map race; and `TestCommitImportStagedRow_DoesNotOverwriteCommitted`
+proves stale failed updates cannot replace a committed marker. All three pass
+under `go test -race`. No further actionable gaps or refactoring work were
+found in this focused follow-up.
 
 ### T-33 Trading 212 settlement account accepted closed or system accounts `[x]`
 **File:** `backend/internal/app/import_connections.go`
