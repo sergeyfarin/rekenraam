@@ -78,7 +78,7 @@ transactions. The `opening_balance` system account may be seeded in Phase 1 so
 setup is complete, but there should be no opening-balance endpoint or UI until
 transaction posting workflows are ready for users.
 
-The original implementation order was:
+The original Phase 1 implementation order was:
 
 1. Books.
 2. Commodities and currencies.
@@ -86,8 +86,8 @@ The original implementation order was:
 4. Accounts and account tree.
 5. System account seeding.
 
-Current implementation sequencing and completion criteria live in
-`docs/phase-1-implementation-plan.md`.
+Phase 1 is complete. Current sequencing lives in `docs/roadmap.md`; shipped
+scope lives in `docs/implemented.md`.
 
 ## Commodity Prerequisite
 
@@ -819,8 +819,7 @@ Phase 1 implementation rule:
 
 Reference note: this section records the design proposal that informed the
 backend work. The checked OpenAPI document is authoritative for implemented API
-surface, and `docs/phase-1-implementation-plan.md` is authoritative for current
-next steps.
+surface; `docs/roadmap.md` is authoritative for current next steps.
 
 Implemented commodity and currency setup surface:
 

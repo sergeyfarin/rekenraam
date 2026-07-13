@@ -43,11 +43,15 @@ Area notes:
 
 ## Architecture Notes
 
-The current state of the project is tracked in three first-class documents:
+The project has one active planning system:
 
-- [docs/roadmap.md](docs/roadmap.md) — what's next, prioritized, with competitor gap analysis.
+- [docs/roadmap.md](docs/roadmap.md) — the one prioritized plan for what is next.
 - [docs/implemented.md](docs/implemented.md) — the feature ledger of what ships today.
-- [docs/backlog.md](docs/backlog.md) — technical debt and code-quality items.
+- [docs/backlog.md](docs/backlog.md) — live technical-debt and public-deployment gates only.
+
+Completed plans and dated reviews are design and audit references, not active
+trackers. The resolved backlog record is in
+[docs/reviews/resolved-backlog-2026-07.md](docs/reviews/resolved-backlog-2026-07.md).
 
 Active product requirements and durable phase boundaries are documented in [docs/product-requirements.md](docs/product-requirements.md).
 

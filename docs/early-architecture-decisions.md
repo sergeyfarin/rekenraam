@@ -51,8 +51,9 @@ Do not optimize the first schema around a hypothetical PostgreSQL migration. Avo
 ## Ledger Model
 
 Use a double-entry-capable ledger from the first real transaction schema.
-The detailed Phase 2 transaction ledger plan is maintained in
-`docs/transaction-ledger-core-plan.md`.
+The implemented Phase 2 ledger design is recorded in
+`docs/transaction-ledger-core-plan.md`; current work is sequenced in
+`docs/roadmap.md`.
 
 Rules:
 

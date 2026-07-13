@@ -13,7 +13,8 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped — `routes/app/reconcile`).
+Last reconciled with the codebase: 2026-07-12 (Trading 212 investment-import
+hardening through migration `0011`; backlog and roadmap consolidation).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -162,8 +163,7 @@ Last reconciled with the codebase: 2026-06-28 (R1 reconcile workflow UI shipped 
 
 Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
-multi-currency reporting, report snapshots, reconcile UI, reports UI,
-pricing UI.
+multi-currency reporting, report snapshots, reports UI, and pricing UI.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

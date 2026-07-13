@@ -406,15 +406,31 @@ R4–R7.
 - OFX/QFX adapter (FITID-based dedupe, native currency, statement balances).
 - Covers bank statement downloads and is the bridge toward online sources.
 
-### Slice 5 — Online ingestion (durable, restart-safe)
+### Slice 5 — Online ingestion (durable, restart-safe) — ✅ foundation shipped
 - `OnlineSource` adapters implementing the same `SourceAdapter` contract, driven
   by the **durable work queue** (`kind="import.fetch.*"`), so scheduled/refresh
   pulls resume after restart exactly like FX coverage (ADR 0010).
 - Fetched payloads flow into the *same* batch/preview/commit pipeline.
-- First online adapter is a declarative HTTP adapter (mirrors the pricing
-  source-adapter progression) before any heavy bank-specific integration.
-- Credential handling, scheduling UI, and specific bank providers are scoped in a
-  follow-up plan; this slice proves the unified model with one source.
+- Trading 212 now proves credential handling, scheduling UI, a provider-specific
+  adapter, durable fetching, and investment-lot import end to end. See
+  `docs/trading212-import-plan.md` and `docs/implemented.md`.
+
+### Slice 6 — Import automation and cleanup (deferred)
+
+- Persistent user-defined rules run during staging before human review. A rule
+  matches payee/description/amount and can set category, payee, and tags.
+- Merge duplicate payees; support bulk recategorization; make the existing
+  `needs_review` queue useful for imported-but-unreviewed transactions.
+- Keep every automated transformation visible in staging and auditable. Rules
+  must not bypass preview or commit directly to the ledger.
+
+### Slice 7 — Additional bring-your-own-key providers (deferred)
+
+- Evaluate IBKR Flex Query for the investor persona, GoCardless Bank Account
+  Data for EU bank feeds, and SimpleFIN Bridge for US bank feeds only after the
+  CSV/profile and automation slices demonstrate demand.
+- Each provider reuses the same source → stage → review → commit pipeline and
+  preserves the no-promised-coverage product boundary.
 
 ---
 

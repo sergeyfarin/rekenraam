@@ -6,7 +6,7 @@ This document fixes cross-cutting product, engineering, and workflow conventions
 
 - Active requirements live in `docs/product-requirements.md`.
 - Active architecture rules live in `docs/early-architecture-decisions.md`.
-- Active sequencing lives in `docs/product-requirements.md`.
+- Active sequencing lives in `docs/roadmap.md`.
 - Archive review planning lives in `docs/archive-requirements-review.md`.
 - `.archive/` is historical reference only.
 
@@ -336,7 +336,13 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 - Requirements belong in `docs/product-requirements.md`.
 - Long-lived architectural constraints belong in `docs/early-architecture-decisions.md`.
-- Sequencing belongs in `docs/product-requirements.md`.
+- Active sequencing belongs in `docs/roadmap.md`; durable phase boundaries
+  belong in `docs/product-requirements.md`.
+- Shipped scope belongs in `docs/implemented.md`; live technical debt belongs in
+  `docs/backlog.md`. Completed plans and dated reviews are historical references,
+  not competing trackers.
+- When roadmap priorities change, cross-check `docs/competitor-comparison.md` and
+  record intentional parity gaps or gains in the roadmap's parity section.
 - Decision records belong in `docs/adrs/`.
 - Repo-wide agent guidance belongs in `AGENTS.md`.
 - Developer workflow notes belong in `README.md` and `docs/developer-workflow.md` unless a tooling area needs substantial local guidance.

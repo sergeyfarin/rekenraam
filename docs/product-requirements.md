@@ -162,9 +162,9 @@ These apply across all feature phases.
 
 These phases keep Rekenraam incremental while preserving the foundations needed for a GnuCash or Microsoft Money successor. Each phase should leave the app runnable, tested, and documented.
 
-Current near-term implementation sequencing lives in
-`docs/phase-1-implementation-plan.md`. This product requirements document keeps
-the durable phase boundaries and product intent.
+The active near-term sequence and its acceptance boundaries live in
+`docs/roadmap.md`. This document keeps the durable phase boundaries and product
+intent; completed implementation plans remain design references only.
 
 ### Phase 0: Foundation
 

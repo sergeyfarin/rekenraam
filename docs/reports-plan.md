@@ -1,142 +1,261 @@
 # Reports Plan
 
-This plan scopes roadmap **R2 Reports UI**. It covers the first daily-driver
-reports: net worth over time, spending by category/payee, and cashflow.
+Status: **active implementation plan for roadmap R2**. Last verified against the
+codebase: 2026-07-12.
 
-Reports are not just one route. The same calculations must power full report
-pages, account-detail summaries, category/payee drill-downs, and later
-multi-currency/investment views without each screen redefining financial
-semantics.
+This plan delivers the first daily-driver reports: net worth over time,
+spending by category or payee, and cashflow. It is governed by
+`docs/product-requirements.md`, sequenced by `docs/roadmap.md`, and must follow
+the ledger invariants in `docs/transaction-ledger-core-plan.md`.
 
-## Principles
+## Verified starting point
 
-- Backend-composed read models are the source of truth for report values.
-  Frontend code renders, filters, and formats returned values; it does not
-  recalculate balances.
-- Exact integer-plus-scale quantities remain grouped by commodity unless a
-  request explicitly asks for conversion through a named FX/pricing method.
-- Filters are part of the report contract, not route-local UI state. A saved or
-  shared report definition should be able to reuse the same filter shape later.
-- Net worth is a reusable valuation series, not only a "Reports" page chart. It
-  should support account-level history, account groups, and filtered slices.
-- First milestone is live reports, not immutable report snapshots. Report input
-  parameters should be explicit enough that snapshots can be added later without
-  changing user-facing semantics.
+The app already has authenticated, OpenAPI-described single-point read models:
 
-## Shared Report Query Shape
+- `GET /api/v1/ledger/net-worth` — an as-of asset/liability total grouped by
+  commodity; it excludes `commodity_trading`.
+- `GET /api/v1/ledger/account-balances` — direct and subtree balances per
+  account as of a date.
+- `GET /api/v1/ledger/category-totals` — category totals for an inclusive date
+  range, optionally restricted to income or expense.
 
-All R2 report endpoints should converge on one filter vocabulary:
+They are useful building blocks, not the reports API. They do not provide time
+series, a shared filter contract, cashflow semantics, a reports route, or
+report-level drill-downs. Keep them stable for their existing consumers; add
+new `/api/v1/reports/*` read models rather than overloading each endpoint into a
+different contract.
 
-- `book_id`: implicit `1` at runtime, still present in backend internals.
-- Date range: inclusive `start_date` and `end_date` calendar dates.
-- Bucket/granularity: at least day, week, month, quarter, and year where the
-  report is a time series.
-- Accounts: include/exclude account ids, with an option to include descendants.
-- Account classes/kinds: useful for assets, liabilities, spending accounts, and
-  investment holdings.
-- Categories: include/exclude category accounts, with descendants.
-- Payees: include/exclude payee ids.
-- Commodities/currencies: include/exclude commodity ids or codes.
-- Countries/jurisdictions: deferred until account, institution, security, or
-  tax-residency metadata exists; reserve the filter concept so reports do not
-  need a new model later.
-- Tags: deferred unless tag filtering already exists for transaction lists when
-  R2 is implemented.
-- System-account policy: default exclusions should match ledger semantics, for
-  example excluding `commodity_trading` from ordinary net-worth reports.
-- Reporting currency and valuation method: optional in R2 unless enough FX data
-  exists. Until conversion is implemented, return grouped commodity values and
-  make "combined total unavailable" explicit.
+## Outcomes and non-negotiables
 
-## Core Reports
+1. A user can answer, from one reports route: “What is my net worth?”, “Where
+   did money go?”, and “What changed my cash?” over a chosen period.
+2. The server is the source of truth for all calculations. The frontend formats
+   and presents returned values; it never recomputes balances from rows.
+3. Money remains exact. Results are grouped by commodity unless the caller
+   explicitly selects a later FX valuation method; the UI must never invent a
+   combined total across unlike commodities.
+4. Posted, non-voided, non-soft-deleted ledger data is the sole R2 reporting
+   basis. Drafts, voids, and deleted records never leak into a report.
+5. A table is the accessible source of truth. Charts summarize that table and
+   never carry information unavailable to keyboard or screen-reader users.
+6. Every result returns the effective query and any default/excluded-system
+   policy so that an exported or printed report can be understood later.
 
-### Net Worth Over Time
+## R2 boundary and preserved follow-ups
 
-Purpose: show balance-sheet value over time, with reusable slices.
+R2 ships three useful reports, not a generic report builder. This is an
+implementation sequence, not a decision to discard deeper work.
 
-Backend:
+R2 includes shared filters, URL-addressable report views, tables, modest chart
+summaries, CSV/print-friendly output, drill-down where an existing route can
+honour the filter, and all loading/empty/error states.
 
-- Add a series endpoint or extend the current `GET /api/v1/ledger/net-worth`
-  beyond one as-of date.
-- Compute periodic asset/liability totals from posted, non-deleted,
-  non-voided ledger state.
-- Support account filters so the same endpoint can power full net worth, one
-  account's historical balance on account detail, selected groups such as cash
-  accounts/investments/liabilities, and future country/currency/investment
-  filtered views.
-- Return per-bucket totals grouped by commodity, plus normal/display quantity
-  values using existing sign conventions.
-- Keep `transfer_clearing` included and `commodity_trading` excluded by default,
-  matching `docs/transaction-ledger-core-plan.md`.
+The following remain designed follow-ups and must be reconsidered explicitly at
+the R2 acceptance review:
+
+- named saved report definitions and live report runs;
+- immutable/reproducible report snapshots;
+- a reporting-currency selector and named FX/price valuation method;
+- country, jurisdiction, tax, investment, and benchmark dimensions;
+- a user-configurable report builder.
+
+## Shared contract
+
+### Common semantics
+
+- `start_date` and `end_date` are ISO calendar dates, inclusive. Series reports
+  require both; a client may offer presets but must put the resolved dates in the
+  URL and request.
+- `bucket` is `day`, `week`, `month`, `quarter`, or `year`. Week boundaries use
+  ISO weeks; month/quarter/year buckets use calendar boundaries. The response
+  labels the actual inclusive bucket start/end dates.
+- Repeated query parameters represent an OR-set within that filter, for example
+  `account_id=12&account_id=14`. Different filter types combine with AND.
+- Account filters use account IDs plus `include_descendants`. The backend
+  resolves descendants as of each reporting date; the frontend must not flatten
+  the account tree itself.
+- Category and payee filters are IDs. Commodity filtering is by commodity ID.
+  Account-class/kind, tag, country, and jurisdiction filters are deliberately
+  absent from the first public contract until a concrete report needs them.
+- System accounts are excluded by a named, endpoint-specific default policy;
+  callers cannot obtain a silently different result by relying on a UI default.
+- Invalid dates, empty/inverted ranges, invalid buckets, inaccessible account or
+  filter IDs, and unsupported filter combinations return `VALIDATION_FAILED`.
+  Arithmetic overflow returns `LEDGER_OVERFLOW`.
+
+### New API shape
+
+Add these OpenAPI-first endpoints under `/api/v1/reports`:
+
+| Endpoint | Purpose | First-release filters |
+| --- | --- | --- |
+| `GET /reports/net-worth` | Asset/liability value at each bucket end | dates, bucket, account IDs, descendants, commodity IDs |
+| `GET /reports/spending` | Expense or income totals ranked by one dimension | dates, `group_by=category|payee`, category IDs, payee IDs, account IDs, descendants, commodity IDs |
+| `GET /reports/cashflow` | Cash movement classified as inflow, outflow, transfer, and net movement | dates, bucket, cash account IDs, descendants, category IDs, payee IDs, commodity IDs, transfer policy |
+
+Every response must contain `query`, `buckets`, `commodity_totals`, and
+`excluded_system_roles` (or an equally explicit endpoint-specific policy). Do
+not reuse presentation DTOs from the existing ledger endpoints merely because
+they have similar quantity fields. Reuse the lossless quantity schema, but give
+reports stable names and response types of their own.
+
+## Report definitions
+
+### Net worth over time
+
+**Question:** What did I own less what I owed at each point in time?
+
+- Include assets and liabilities only. `commodity_trading` is excluded by
+  default; `transfer_clearing` remains included. The response names that policy.
+- Take each bucket’s balance as of the bucket end, using account versions and
+  postings valid through that date. Do not derive a time series by summing
+  current account balances backward in the frontend.
+- Return separate exact totals per commodity. A combined display is unavailable
+  until the caller chooses a future reporting-currency/valuation method.
+- An account filter may power full net worth, one account’s historical balance,
+  or a selected account group. The same endpoint can later power compact account
+  detail history without changing the financial calculation.
 
 UI:
 
-- Reports route: overview chart/table with date range, bucket, account, and
-  commodity filters.
-- Account detail/register: compact account-balance-over-time view using the same
-  endpoint and an account filter.
-- Empty state explains that posted transactions are needed.
-- Multi-commodity state shows grouped values and avoids fake combined totals.
+- `/app/reports` opens on net worth with a sensible, URL-visible recent date
+  preset. It offers date range, bucket, account, and commodity filters.
+- Show a chart only as a summary of a bucket table. The table provides bucket,
+  commodity, asset total, liability total, and net-worth total.
+- Explain empty state (“post transactions to see history”) and multi-commodity
+  state (“totals are shown separately; no valuation method is selected”).
 
-### Spending By Category And Payee
+### Spending by category or payee
 
-Purpose: answer where money went and who received it.
+**Question:** Where did money go, and who received it?
 
-Backend:
-
-- Extend category totals or add a report endpoint that can group by category,
-  payee, or category then payee.
-- Use income/expense account mappings; categories remain accounts, not a new
-  ledger primitive.
-- Exclude transfers from spending totals unless the user deliberately includes
-  transfer/system accounts.
-- Preserve exact grouped-by-commodity totals.
+- R2 has one grouping per request: `category` or `payee`. A nested
+  category-then-payee pivot is follow-up work.
+- Expense values are presented as positive spending magnitudes; refunds and
+  reversals reduce the total. Income mode is supported only when explicitly
+  selected and is labelled as income, not spending.
+- Transfers and system-account activity are excluded by default. The report
+  operates over income/expense category postings, not an inferred bank-statement
+  classification.
+- Each group row contains exact per-commodity totals, its share only within the
+  same commodity, and a drill-down query. A ranking must not compare unlike
+  commodities as one number.
 
 UI:
 
-- Show category and payee rankings for a selected date range.
-- Provide drill-down links to the underlying category/payee transaction lists.
-- Offer chart plus dense table; the table is the accessible source of truth.
+- A category/payee switch preserves compatible filters and changes only
+  `group_by` in the URL.
+- Dense table first, then a companion bar/donut summary when a single commodity
+  is selected. Drill-down links use the existing category or transactions route
+  only when it can represent the same date/filter semantics; otherwise show the
+  filter summary rather than a misleading link.
 
 ### Cashflow
 
-Purpose: show inflows, outflows, and net change over time.
+**Question:** What changed my liquid cash, without treating transfers as
+spending?
 
-Backend:
+R2 must lock this semantic before writing SQL:
 
-- Add the missing cashflow read model.
-- Define basis explicitly before implementation: actual posted ledger activity,
-  inclusive date range, grouped into buckets.
-- Separate income, expenses, transfers, and net movement so users can inspect
-  what changed cash without confusing transfer churn with spending.
-- Support account filters for checking-account cashflow and future portfolio or
-  country-specific cashflow.
+1. Default cash scope is active accounts of kinds `cash`, `checking`, `savings`,
+   and `brokerage_cash`, excluding system accounts. The UI shows this default
+   and allows an account/tree selection; it is not an invisible “all assets”
+   shortcut.
+2. For selected cash postings, counterpart income is **inflow** and counterpart
+   expense is **outflow**. A transfer between two selected accounts is eliminated
+   because it changes neither the selected cash total nor the user's cashflow.
+3. A movement between selected cash and an unselected asset, liability, or equity
+   account is **transfer/financing movement**, shown separately with signed
+   incoming/outgoing totals. It never becomes income or spending.
+4. `net_movement` is the signed sum of all selected cash postings for the
+   bucket. It must reconcile exactly to the selected cash balance change between
+   bucket boundaries. `operating_net` is inflow minus outflow and excludes
+   transfer/financing movement.
+5. A transaction with multiple counterpart postings must be classified from its
+   posting relationships; no “first counterpart wins” heuristic is permitted.
+   The backend may emit allocation rows internally, but the public bucket totals
+   must reconcile exactly and be auditable through drill-down.
 
 UI:
 
-- Time-series bars or table for inflow, outflow, and net by bucket.
-- Date range, bucket, account, category, payee, and commodity filters.
-- Make transfer inclusion/exclusion explicit.
+- Show inflow, outflow, operating net, transfers/financing, and net movement for
+  every bucket. Make the transfer inclusion policy visible.
+- The default table/chart uses the default liquid-cash scope. A selected account
+  tree is clearly named in the result summary.
+- Category/payee filters constrain the relevant counterpart dimensions; the UI
+  must explain when a transfer-only movement is excluded by such a filter.
 
-## Delivery Slices
+## Frontend shape
 
-1. **Report query contract:** define shared filter DTOs, date inclusivity, bucket
-   semantics, default system-account policy, and OpenAPI shapes.
-2. **Net-worth series:** backend series endpoint plus reports-route chart/table;
-   reuse it on account detail for account-level balance history.
-3. **Spending report:** category/payee grouping, table, chart, drill-down links,
-   and CSV/print-friendly output.
-4. **Cashflow report:** backend read model, table/chart UI, and transfer policy.
-5. **Polish and trust:** loading/empty/error states, mobile layout, accessible
-   tables, print styles, CSV export for report outputs, and regression tests.
+- Add `frontend/src/routes/app/reports/+page.svelte` and report-specific
+  components under `frontend/src/lib/reports/`. Keep the route as a composed
+  screen, not one monolithic component.
+- Add typed API helpers through generated OpenAPI types. Do not hand-maintain
+  report DTO copies or issue one request per table row.
+- Make query state shareable: the URL is the source of filter state; changing a
+  control updates the URL, then the typed query. Named saved reports later store
+  this same query shape.
+- Use the translation boundary for every label and empty/error explanation;
+  use locale-aware money/date formatting and semantic design tokens.
+- Define loading, empty, error, overflow, single-commodity, and
+  multi-commodity states for each report. Meet mobile layout and keyboard
+  navigation requirements before chart polish.
 
-## Validation
+## Delivery slices and acceptance
 
-- Backend tests must cover exact arithmetic, sign normalization, date-range
-  boundaries, system-account default exclusions, multi-commodity grouping, and
-  overflow returning `LEDGER_OVERFLOW`.
-- API tests must cover the shared filter shape and invalid date/filter handling.
-- Frontend tests should cover query construction and visible states for empty,
-  error, loading, multi-commodity, and populated reports.
-- Manual validation should include a seeded multi-account file with transfers,
-  income, expenses, liabilities, and at least two commodities.
+1. **Contract and fixtures**
+   - Define shared report DTOs/OpenAPI paths, date/bucket semantics, system
+     policy, and a deterministic multi-account/multi-commodity fixture.
+   - Add a reports navigation entry and URL-driven empty/loading/error shell.
+   - Acceptance: generated frontend types compile; invalid shared query cases
+     have API tests before individual report queries exist.
+2. **Net-worth series**
+   - Implement the series read model, API, table/chart, and account/commodity
+     filters. Reuse the typed result later for account-detail history.
+   - Acceptance: bucket-end balances match the existing as-of net-worth result
+     for each bucket end; grouped commodities never yield a fake total.
+3. **Spending**
+   - Implement category/payee grouping, exact totals, filters, table/chart, and
+     safe drill-down.
+   - Acceptance: expense/refund/transfer fixture results match manual ledger
+     arithmetic, and category versus payee changes grouping rather than source
+     data.
+4. **Cashflow**
+   - Implement the locked liquid-cash selection and counterpart-classification
+     model, then the API and UI.
+   - Acceptance: for every commodity and bucket, `net_movement` reconciles to
+     the selected-cash balance delta; transfers within scope net to zero; a
+     split transaction is not misclassified.
+5. **Trust and release quality**
+   - Add print-friendly and CSV views, accessibility smoke coverage, responsive
+     review, and backend/API/frontend/E2E regression tests.
+   - Acceptance: all three reports have loading, empty, error, populated, and
+     multi-commodity states; their tables are usable without a pointing device.
+
+## Validation matrix
+
+- **Backend:** exact arithmetic and scale alignment; inclusive boundaries;
+  account hierarchy as-of dates; bucket boundaries; system exclusions;
+  refunds; void/deleted exclusion; transfer elimination; split counterpart
+  classification; net-movement reconciliation; and overflow.
+- **API/OpenAPI:** authentication, all invalid common filters, repeated filter
+  semantics, default-policy fields, generated type check, and stable error
+  codes.
+- **Frontend:** URL/query construction, date presets, locale formatting,
+  accessible tables, chart/table equivalence, and all explicit screen states.
+- **E2E:** a seeded owner records income, an expense, an internal transfer, a
+  refund, and a multi-currency transaction; reports show each in the correct
+  view and cashflow reconciles to the visible cash-account change.
+
+## Competitor and parity review
+
+Before closing R2, update `docs/competitor-comparison.md` with the result:
+
+- Money/Quicken/Monarch parity: visible net worth, spending, cashflow, and
+  export-ready reports.
+- Firefly III parity: category/payee insight without compromising ledger
+  semantics.
+- PocketSmith differentiation groundwork: exact per-currency cashflow, ready
+  for R10 forecasting rather than a single fabricated base-currency number.
+- Ghostfolio/Portfolio Performance gap retained: returns, allocation, and
+  benchmarks remain R13 work, not an accidental partial R2 promise.

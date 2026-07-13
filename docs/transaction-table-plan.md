@@ -17,7 +17,8 @@ conflict:
   reconciliation guard).
 - `docs/transaction-ledger-core-plan.md` — the ledger schema, the transaction
   lifecycle, the reconciliation guard, and the API slice.
-- `docs/product-requirements.md` — product source of truth and sequencing.
+- `docs/product-requirements.md` — product source of truth and durable phase
+  boundaries; `docs/roadmap.md` — active sequencing.
 - `docs/early-architecture-decisions.md` and `docs/adrs/` — long-lived
   architectural constraints and decision records.
 - `docs/categories-design.md` — categories are income/expense accounts; the

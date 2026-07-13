@@ -478,7 +478,7 @@ the code — a slice is not done until its docs reflect it.
   ready → refresh → 409 on concurrent refresh → delete connection → batch retains
   `connection_display_name` in `source_meta`).
 
-### Slice 4 — decomposed 2026-07-01, not yet built
+### Slice 4 — decomposed 2026-07-01, subsequently completed
 
 Scoping this slice for real implementation (rather than the one-line stub
 above) surfaced that its two backlog items are not the same size. **4a is

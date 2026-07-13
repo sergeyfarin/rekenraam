@@ -7,10 +7,10 @@ This document records the completed Phase 0 setup/auth baseline and the original
 handoff constraints for the next domain slice. It is an implementation
 checklist, not a replacement for accepted ADRs or product requirements.
 
-Current note: Phase 0 is complete. Later slices have since implemented book,
-currency, institution, account, system-account, category, and audit/current-state
-foundations; see `docs/phase-1-implementation-plan.md` for current Phase 1
-status.
+Current note: Phase 0 and Phase 1 are complete. Later slices have since
+implemented book, currency, institution, account, system-account, category, and
+audit/current-state foundations; see `docs/implemented.md` for shipped status and
+`docs/roadmap.md` for current work.
 
 ## Locked Decisions
 
@@ -84,9 +84,9 @@ Build:
 
 ## Phase 1 Handoff
 
-Historical handoff note: these items have since been implemented or superseded
-by the current Phase 1 tracker. See `docs/phase-1-implementation-plan.md` before
-starting new work.
+Historical handoff note: these items have since been implemented or superseded.
+See `docs/implemented.md` for shipped scope and `docs/roadmap.md` before starting
+new work.
 
 1. Add the single owner book setup step. The `books` table remains the future extension point, but current runtime creates only book `1`.
 2. Add commodity and currency identity/version tables before account tables.
