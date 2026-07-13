@@ -338,8 +338,8 @@ func TestBackdatedCreateReconciliationImpactPreviewAndRetry(t *testing.T) {
 		"journal_entries":[{
 			"entry_date":"2026-06-01",
 			"postings":[
-				`+posting(checking.ID, -5000, 2, commodityID)+`,
-				`+posting(expense.ID, 5000, 2, commodityID)+`
+				` + posting(checking.ID, -5000, 2, commodityID) + `,
+				` + posting(expense.ID, 5000, 2, commodityID) + `
 			]
 		}]
 	}`
@@ -358,8 +358,8 @@ func TestBackdatedCreateReconciliationImpactPreviewAndRetry(t *testing.T) {
 		"journal_entries":[{
 			"entry_date":"2026-06-01",
 			"postings":[
-				`+posting(checking.ID, -5000, 2, commodityID)+`,
-				`+posting(expense.ID, 5000, 2, commodityID)+`
+				` + posting(checking.ID, -5000, 2, commodityID) + `,
+				` + posting(expense.ID, 5000, 2, commodityID) + `
 			]
 		}]
 	}`
@@ -483,6 +483,48 @@ func TestMovePostingAcrossReconciliationBoundaryRequiresOverride(t *testing.T) {
 	// would place it inside the reconciled period → guard fires.
 	tx2CheckingLineID := tx2.JournalEntries[0].Postings[0].PostingLineID
 	movePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, tx2CheckingLineID, "earlier", http.StatusConflict)
+}
+
+// TestMovePostingWithOverrideInvalidatesCheckpoint verifies that supplying
+// reconciliation_override lets a checkpoint-crossing move through and
+// invalidates the checkpoint, rather than leaving it active over data it no
+// longer accurately reflects.
+func TestMovePostingWithOverrideInvalidatesCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Override Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Override Expense","category_type":"expense"}`)
+
+	tx1 := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, commodityID),
+		posting(expense.ID, 10000, 2, commodityID),
+	), http.StatusCreated)
+	tx2 := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -5000, 2, commodityID),
+		posting(expense.ID, 5000, 2, commodityID),
+	), http.StatusCreated)
+
+	reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, tx1.JournalEntries[0].Postings[0], "2026-06-07")
+
+	tx2CheckingLineID := tx2.JournalEntries[0].Postings[0].PostingLineID
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(checking.ID)+"/postings/"+strconvFormatInt(tx2CheckingLineID)+"/move", strings.NewReader(`{"direction":"earlier","reconciliation_override":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equalf(t, http.StatusOK, res.Code, "move posting with override response body: %s", res.Body.String())
+
+	var moved transactionResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&moved))
+	assert.NotEmpty(t, moved.InvalidatedCheckpointIDs)
+
+	checkpoints := listReconciliationCheckpointsForSession(t, handler, sessionCookie, checking.ID, "?commodity_id="+strconvFormatInt(commodityID))
+	require.Len(t, checkpoints.Checkpoints, 1)
+	assert.Equal(t, "invalidated", checkpoints.Checkpoints[0].Status)
 }
 
 // Helper: move a posting and return the updated transaction.

@@ -133,8 +133,9 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 		var currentTransactionID int64
 		var currentEntryDate string
 		var currentSeq int64
+		var currentCommodityID int64
 		if err := tx.QueryRowContext(ctx, `
-		SELECT t.id, je.entry_date, pv.account_day_sequence
+		SELECT t.id, je.entry_date, pv.account_day_sequence, pv.commodity_id
 		FROM posting_versions pv
 		JOIN journal_entries je ON je.id = pv.journal_entry_id
 		JOIN current_transaction_versions ctv ON ctv.id = pv.transaction_version_id
@@ -145,7 +146,7 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 			AND t.deleted_at IS NULL
 		LIMIT 1
 	`, params.BookID, params.PostingLineID, params.AccountID).Scan(
-			&currentTransactionID, &currentEntryDate, &currentSeq,
+			&currentTransactionID, &currentEntryDate, &currentSeq, &currentCommodityID,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return TransactionRecord{}, ErrNotFound
@@ -199,34 +200,29 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 			return TransactionRecord{}, fmt.Errorf("find adjacent posting: %w", err)
 		}
 
-		// Check whether the swap would move a posting across an active checkpoint boundary.
-		// The current posting would take adjSeq; the adjacent posting would take currentSeq.
-		// If the new position for either posting crosses the boundary, require override.
-		if !params.ReconciliationOverride {
-			var stmtDate string
-			var stmtAcctSeq int64
-			scanErr := tx.QueryRowContext(ctx, `
-			SELECT statement_date, statement_account_sequence
-			FROM reconciliation_checkpoints
-			WHERE book_id = ?
-				AND account_id = ?
-				AND status = 'active'
-			ORDER BY id DESC
-			LIMIT 1
-		`, params.BookID, params.AccountID).Scan(&stmtDate, &stmtAcctSeq)
-			if scanErr != nil && !errors.Is(scanErr, sql.ErrNoRows) {
-				return TransactionRecord{}, fmt.Errorf("read checkpoint for move guard: %w", scanErr)
+		// Check whether the swap would move a posting across an active checkpoint
+		// boundary. The current posting would take adjSeq; the adjacent posting
+		// would take currentSeq. If the new position for either posting crosses
+		// the boundary, require override. Checkpoints are account- AND
+		// commodity-scoped, and latestActiveReconciliationCheckpoint applies the
+		// same (statement_date DESC, id DESC) lock-floor ordering used by every
+		// other reconciliation guard in this package.
+		crossesCheckpoint := false
+		checkpoint, checkpointErr := latestActiveReconciliationCheckpoint(ctx, tx, params.BookID, params.AccountID, currentCommodityID)
+		if checkpointErr != nil && !errors.Is(checkpointErr, ErrReconciliationCheckpoint) {
+			return TransactionRecord{}, fmt.Errorf("read checkpoint for move guard: %w", checkpointErr)
+		}
+		if checkpointErr == nil {
+			// A posting is inside the period when: entry_date < stmtDate OR (entry_date == stmtDate AND seq <= stmtAcctSeq)
+			insideBefore := func(seq int64) bool {
+				return currentEntryDate < checkpoint.StatementDate ||
+					(currentEntryDate == checkpoint.StatementDate && seq <= checkpoint.StatementAccountSequence)
 			}
-			if scanErr == nil {
-				// A posting is inside the period when: entry_date < stmtDate OR (entry_date == stmtDate AND seq <= stmtAcctSeq)
-				insideBefore := func(seq int64) bool {
-					return currentEntryDate < stmtDate || (currentEntryDate == stmtDate && seq <= stmtAcctSeq)
-				}
-				// A swap crosses the boundary when one sequence is inside and the other is not.
-				if insideBefore(currentSeq) != insideBefore(adjSeq) {
-					return TransactionRecord{}, ErrReconciliationOverrideRequired
-				}
-			}
+			// A swap crosses the boundary when one sequence is inside and the other is not.
+			crossesCheckpoint = insideBefore(currentSeq) != insideBefore(adjSeq)
+		}
+		if crossesCheckpoint && !params.ReconciliationOverride {
+			return TransactionRecord{}, ErrReconciliationOverrideRequired
 		}
 
 		auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
@@ -249,8 +245,16 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 		}
 		movedTxRecord = movedTxRecords[0]
 
-		// Write a new version of the moved transaction with an explicit seq override
-		// for the target posting line.
+		// Write a new version of the moved transaction with an explicit seq
+		// override for the target posting line. When the adjacent posting
+		// belongs to the SAME transaction, its override must be included in this
+		// same version write too — otherwise it would inherit its own prior
+		// position (which is what the moved posting is taking), leaving both
+		// postings at adjSeq and losing currentSeq entirely.
+		postingSeqOverrides := map[int64]int64{params.PostingLineID: adjSeq}
+		if adjTransactionID == currentTransactionID {
+			postingSeqOverrides[adjPostingLineID] = currentSeq
+		}
 		movedResult, err := r.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{
 			BookID: params.BookID, TransactionID: currentTransactionID, VersionSeq: movedTxRecord.VersionSeq + 1,
 			SupersedesVersionID: sql.NullInt64{Int64: movedTxRecord.VersionID, Valid: true},
@@ -258,7 +262,7 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 			RecordedAt: params.RecordedAt, ChangedByUserID: params.ActorUserID,
 			ChangeReason: "posting moved " + params.Direction, ChangeAuditEventID: auditEventID,
 			RequestID: params.RequestID, TransactionDaySequence: movedTxRecord.TransactionDaySequence,
-			PostingSeqOverrides: map[int64]int64{params.PostingLineID: adjSeq},
+			PostingSeqOverrides: postingSeqOverrides,
 		})
 		if err != nil {
 			return TransactionRecord{}, fmt.Errorf("insert moved posting version: %w", err)
@@ -288,6 +292,24 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 			if err != nil {
 				return TransactionRecord{}, fmt.Errorf("insert adjacent posting version after move: %w", err)
 			}
+		}
+
+		// The guard permitted this move only because an override was granted for
+		// a checkpoint-crossing swap — invalidate the checkpoint rather than
+		// leaving it active over data it no longer accurately reflects.
+		if crossesCheckpoint {
+			invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+				BookID:       params.BookID,
+				Refs:         []CheckpointInvalidationRef{{AccountID: params.AccountID, CommodityID: currentCommodityID, EntryDate: currentEntryDate}},
+				ActorUserID:  params.ActorUserID,
+				AuditEventID: auditEventID,
+				OccurredAt:   params.RecordedAt,
+				Reason:       "posting moved " + params.Direction + " across a reconciled checkpoint",
+			})
+			if err != nil {
+				return TransactionRecord{}, err
+			}
+			movedResult.InvalidatedCheckpointIDs = invalidated
 		}
 
 		return movedResult, nil

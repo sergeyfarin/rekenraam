@@ -128,11 +128,18 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 
 func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input TransactionInput, options cleanTransactionOptions) (db.TransactionSpec, error) {
 	status := strings.TrimSpace(input.Status)
-	if status == "" {
-		status = options.DefaultStatus
+	if status != "" && (!transactionStatuses[status] || status == "voided") {
+		return db.TransactionSpec{}, ValidationError{Message: "transaction status is invalid"}
 	}
-	if status == "" {
-		status = "posted"
+	if options.ForcedStatus != "" {
+		status = options.ForcedStatus
+	} else {
+		if status == "" {
+			status = options.DefaultStatus
+		}
+		if status == "" {
+			status = "posted"
+		}
 	}
 	if !transactionStatuses[status] || status == "voided" {
 		return db.TransactionSpec{}, ValidationError{Message: "transaction status is invalid"}
@@ -186,7 +193,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 	if err != nil {
 		return db.TransactionSpec{}, err
 	}
-	noteMarkdown, err := cleanOptionalText(input.NoteMarkdown, "note", transactionNoteMaxBytes)
+	noteMarkdown, err := cleanOptionalMultilineText(input.NoteMarkdown, "note", transactionNoteMaxBytes)
 	if err != nil {
 		return db.TransactionSpec{}, err
 	}
@@ -467,6 +474,25 @@ func cleanOptionalText(value string, field string, maxBytes int) (string, error)
 		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, maxBytes)}
 	}
 	for _, r := range cleaned {
+		if unicode.IsControl(r) {
+			return "", ValidationError{Message: field + " must not contain control characters"}
+		}
+	}
+	return cleaned, nil
+}
+
+// cleanOptionalMultilineText is like cleanOptionalText but permits \n and \t,
+// for fields that are genuinely multi-line (markdown notes) rather than
+// single-line labels/memos.
+func cleanOptionalMultilineText(value string, field string, maxBytes int) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if len(cleaned) > maxBytes {
+		return "", ValidationError{Message: fmt.Sprintf("%s must be at most %d bytes", field, maxBytes)}
+	}
+	for _, r := range cleaned {
+		if r == '\n' || r == '\t' {
+			continue
+		}
 		if unicode.IsControl(r) {
 			return "", ValidationError{Message: field + " must not contain control characters"}
 		}

@@ -202,7 +202,7 @@ func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledger
 		JOIN journal_entries je ON je.transaction_version_id = tv.id
 		JOIN posting_versions pv ON pv.journal_entry_id = je.id
 		WHERE `+strings.Join(where, " AND ")+`
-		ORDER BY je.entry_date, pv.id
+		ORDER BY je.entry_date, pv.account_day_sequence, pv.id
 	`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read ledger postings: %w", err)

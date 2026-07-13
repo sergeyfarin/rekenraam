@@ -46,8 +46,12 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 		}
 		return ReconciliationImpact{}, fmt.Errorf("read transaction: %w", err)
 	}
+	// This preview endpoint has no draft-promotion input, so the transaction's
+	// current status is always the final status — pin it the same way
+	// UpdateTransaction does, so the balance-validation check here matches
+	// what the real update will enforce.
 	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{
-		DefaultStatus:    current.Status,
+		ForcedStatus:     current.Status,
 		ExistingLineKeys: lineKeySet(current),
 		ExistingPostings: existingPostingStateSet(current),
 	})

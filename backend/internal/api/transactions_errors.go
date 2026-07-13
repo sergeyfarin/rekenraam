@@ -10,9 +10,12 @@ import (
 
 func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
 	var validationError app.ValidationError
+	var overflowError app.LedgerOverflowError
 	switch {
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.As(err, &overflowError):
+		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", overflowError.Error())
 	case errors.Is(err, app.ErrTransactionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "transaction not found")
 	case errors.Is(err, app.ErrTransactionProtected):
@@ -23,6 +26,8 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "voided transaction cannot be edited")
 	case errors.Is(err, app.ErrTransactionDeleted):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "soft-deleted transaction must be restored first")
+	case errors.Is(err, app.ErrTransactionDraftNotVoidable):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "draft transaction cannot be voided; post or delete it instead")
 	case errors.Is(err, app.ErrTransactionTag):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "transaction tag is invalid")
 	case errors.Is(err, app.ErrReconciliationOverrideRequired):

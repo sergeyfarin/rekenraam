@@ -13,6 +13,7 @@ var (
 	ErrTransactionPosted              = errors.New("posted or voided transaction cannot be deleted")
 	ErrTransactionVoided              = errors.New("voided transaction cannot be edited")
 	ErrTransactionDeleted             = errors.New("soft-deleted transaction must be restored first")
+	ErrTransactionDraftNotVoidable    = errors.New("draft transaction cannot be voided; post or delete it instead")
 	ErrTransactionTag                 = errors.New("transaction tag is invalid")
 	ErrReconciliationOverrideRequired = errors.New("reconciliation override is required")
 	ErrReconciliationNotFound         = errors.New("reconciliation not found")
@@ -162,12 +163,13 @@ type UpdateTransactionInput struct {
 }
 
 type PostTransactionInput struct {
-	OwnerUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	TransactionID int64
-	ChangeReason  string
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	OriginType             string
+	TransactionID          int64
+	ChangeReason           string
+	ReconciliationOverride bool
 }
 
 type VoidTransactionInput struct {
@@ -183,6 +185,10 @@ type VoidTransactionInput struct {
 type TransactionLifecycleInput = VoidTransactionInput
 
 type DeleteDraftTransactionInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
 	TransactionID int64
 }
 
@@ -239,13 +245,14 @@ type MoveTransactionInput struct {
 }
 
 type MovePostingInput struct {
-	OwnerUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	AccountID     int64
-	PostingLineID int64
-	Direction     string // "earlier" | "later"
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	OriginType             string
+	AccountID              int64
+	PostingLineID          int64
+	Direction              string // "earlier" | "later"
+	ReconciliationOverride bool
 }
 
 type ReconciliationImpact struct {
@@ -263,8 +270,8 @@ type CreateReconciliationImpactInput struct {
 // a pre-computed restore guard flag.
 type DeletedTransaction struct {
 	Transaction
-	DeleteReason                      string
-	RestoreBlockedByReconciliation    bool
+	DeleteReason                   string
+	RestoreBlockedByReconciliation bool
 }
 
 type ListDeletedTransactionsInput struct {
@@ -284,7 +291,15 @@ type UpdateReconciliationImpactInput struct {
 }
 
 type cleanTransactionOptions struct {
-	DefaultStatus    string
+	DefaultStatus string
+	// ForcedStatus, when non-empty, is the status that will actually be
+	// persisted regardless of what the request body's Status field says — used
+	// by the update path, where the transaction's current lifecycle state (not
+	// the request) decides whether the write stays "draft" or becomes
+	// "posted". Balance validation always runs against this final status, not
+	// whatever the caller claimed, so a request cannot dodge validateBalanced
+	// by naming a different status than the one that will actually land.
+	ForcedStatus     string
 	ExistingLineKeys map[string]bool
 	ExistingPostings map[string]existingPostingState
 }

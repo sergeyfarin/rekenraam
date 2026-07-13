@@ -641,6 +641,90 @@ func TestVoidReconciledTransactionRequiresOverrideAndInvalidatesCheckpoint(t *te
 	assert.Equal(t, "invalidated", checkpoints.Checkpoints[0].Status)
 }
 
+func TestUpdateTransactionCannotBypassBalanceValidationViaDraftStatus(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Balance Bypass Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Balance Bypass Expense","category_type":"expense"}`)
+
+	posted := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, commodityID),
+		posting(expense.ID, 10000, 2, commodityID),
+	), http.StatusCreated)
+
+	// The transaction is already posted, so the update path forces it back to
+	// "posted" regardless of what the request body claims — a PATCH claiming
+	// status:"draft" must not let balance validation be skipped for an
+	// unbalanced posting set that will actually land as posted.
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(posted.ID), `{
+		"status":"draft",
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"line_key":"`+posted.JournalEntries[0].Postings[0].LineKey+`","account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"line_key":"`+posted.JournalEntries[0].Postings[1].LineKey+`","account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":9000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
+	// The rejected update must not have persisted a new version.
+	assert.Equal(t, int64(1), countTransactionVersions(t, database, posted.ID))
+	unchanged := readTransactionForSession(t, handler, sessionCookie, posted.ID, http.StatusOK)
+	assert.Equal(t, "posted", unchanged.Status)
+	assert.Equal(t, "-10000", unchanged.JournalEntries[0].Postings[0].QuantityValue.String())
+}
+
+func TestPostDraftTransactionIntoReconciledPeriodRequiresOverride(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Draft Promotion Checking", "asset", "checking", commodityID, 2)
+	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Draft Promotion Expense","category_type":"expense"}`)
+
+	// Created first, so its checking posting claims the lowest
+	// account_day_sequence for this account/date — before any posted
+	// transaction exists to reconcile against.
+	draft := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"status":"draft",
+		"transaction_date":"2026-06-07",
+		"journal_entries":[{
+			"entry_date":"2026-06-07",
+			"postings":[
+				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-5000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":5000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+			]
+		}]
+	}`, http.StatusCreated)
+
+	// Created and reconciled second: its checking posting takes the next
+	// sequence position, and reconciling it sets the checkpoint's lock floor
+	// to that (higher) sequence — which covers the draft's earlier position.
+	posted := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(checking.ID, -10000, 2, commodityID),
+		posting(expense.ID, 10000, 2, commodityID),
+	), http.StatusCreated)
+	reconcilePostingForSession(t, handler, sessionCookie, csrfToken, checking.ID, commodityID, posted.JournalEntries[0].Postings[0], "2026-06-07")
+
+	// Promoting the draft brings its already-fixed, earlier-positioned posting
+	// into the ledger for the first time — inside the now-reconciled period —
+	// even though promotion changes none of the posting's own fields (the
+	// diff-based guard alone would see nothing to flag).
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(draft.ID)+"/post", `{
+		"change_reason":"completed draft"
+	}`, http.StatusConflict)
+
+	promoted := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(draft.ID)+"/post", `{
+		"change_reason":"completed draft",
+		"reconciliation_override":true
+	}`, http.StatusOK)
+	assert.Equal(t, "posted", promoted.Status)
+	assert.NotEmpty(t, promoted.InvalidatedCheckpointIDs)
+}
+
 func TestTransactionPostingAccountDateAndCommodityValidation(t *testing.T) {
 	t.Parallel()
 

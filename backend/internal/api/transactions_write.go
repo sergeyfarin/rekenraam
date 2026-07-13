@@ -95,12 +95,13 @@ func postTransaction(logger *slog.Logger, authService *app.AuthService, transact
 		}
 
 		transaction, err := transactionService.PostTransaction(r.Context(), app.PostTransactionInput{
-			OwnerUserID:   owner.ID,
-			AuthSessionID: authenticatedSessionID(r),
-			RequestID:     RequestIDFromContext(r.Context()),
-			OriginType:    "browser_api",
-			TransactionID: transactionID,
-			ChangeReason:  request.ChangeReason,
+			OwnerUserID:            owner.ID,
+			AuthSessionID:          authenticatedSessionID(r),
+			RequestID:              RequestIDFromContext(r.Context()),
+			OriginType:             "browser_api",
+			TransactionID:          transactionID,
+			ChangeReason:           request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "post transaction", err)
@@ -225,7 +226,8 @@ func correctTransaction(logger *slog.Logger, authService *app.AuthService, trans
 
 func deleteDraftTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := authenticatedMutationOwner(w, r); !ok {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
 			return
 		}
 		transactionID, ok := readTransactionID(w, r)
@@ -233,7 +235,13 @@ func deleteDraftTransaction(logger *slog.Logger, authService *app.AuthService, t
 			return
 		}
 
-		if err := transactionService.DeleteDraftTransaction(r.Context(), app.DeleteDraftTransactionInput{TransactionID: transactionID}); err != nil {
+		if err := transactionService.DeleteDraftTransaction(r.Context(), app.DeleteDraftTransactionInput{
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			OriginType:    "browser_api",
+			TransactionID: transactionID,
+		}); err != nil {
 			writeTransactionServiceError(w, r, logger, "delete draft transaction", err)
 			return
 		}

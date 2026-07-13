@@ -476,6 +476,9 @@ MoveRequest:
         - earlier
         - later
       description: Semantic direction independent of visual sort order.
+    reconciliation_override:
+      type: boolean
+      description: Required when the move would cross an active reconciliation checkpoint boundary; accepts checkpoint invalidation.
   additionalProperties: false
 ReconciliationImpactResponse:
   type: object

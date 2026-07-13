@@ -178,10 +178,10 @@ type ListTransactionsParams struct {
 }
 
 type ListDeletedTransactionsParams struct {
-	BookID           int64
-	CursorDeletedAt  string
-	CursorID         int64
-	Limit            int
+	BookID          int64
+	CursorDeletedAt string
+	CursorID        int64
+	Limit           int
 }
 
 // DeletedTransactionRecord is a TransactionRecord that also carries the snapshot
@@ -246,6 +246,13 @@ type SetTransactionDeletedParams struct {
 type DeleteDraftTransactionParams struct {
 	BookID        int64
 	TransactionID int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	ChangeReason  string
+	OccurredAt    string
 }
 
 type ApproveTransactionParams struct {

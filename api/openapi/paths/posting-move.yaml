@@ -38,3 +38,9 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Move crosses an active reconciliation checkpoint boundary; reconciliation_override is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

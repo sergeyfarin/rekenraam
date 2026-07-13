@@ -51,15 +51,16 @@ func (s *TransactionService) MovePosting(ctx context.Context, input MovePostingI
 	}
 	return s.moveOp(ctx, input.OwnerUserID, func() (db.TransactionRecord, error) {
 		return s.repository.MovePosting(ctx, db.MovePostingParams{
-			BookID:        BookID,
-			AccountID:     input.AccountID,
-			PostingLineID: input.PostingLineID,
-			Direction:     input.Direction,
-			ActorUserID:   input.OwnerUserID,
-			AuthSessionID: input.AuthSessionID,
-			RequestID:     input.RequestID,
-			OriginType:    input.OriginType,
-			RecordedAt:    s.now().UTC().Format(time.RFC3339),
+			BookID:                 BookID,
+			AccountID:              input.AccountID,
+			PostingLineID:          input.PostingLineID,
+			Direction:              input.Direction,
+			ActorUserID:            input.OwnerUserID,
+			AuthSessionID:          input.AuthSessionID,
+			RequestID:              input.RequestID,
+			OriginType:             input.OriginType,
+			RecordedAt:             s.now().UTC().Format(time.RFC3339),
+			ReconciliationOverride: input.ReconciliationOverride,
 		})
 	})
 }

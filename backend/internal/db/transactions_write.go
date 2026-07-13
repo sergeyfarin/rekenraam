@@ -431,6 +431,12 @@ func (r *TransactionRepository) ApproveTransaction(ctx context.Context, params A
 		if err != nil {
 			return TransactionRecord{}, err
 		}
+		if current.Status == "voided" {
+			return TransactionRecord{}, ErrTransactionVoided
+		}
+		if current.DeletedAt.Valid {
+			return TransactionRecord{}, ErrTransactionDeleted
+		}
 		if !current.NeedsReview {
 			records := []TransactionRecord{current}
 			if err := loadTransactionChildrenTx(ctx, tx, records); err != nil {
@@ -498,6 +504,22 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 		}
 		if durableCount > 0 {
 			return ErrTransactionHasPostedVersions
+		}
+
+		// Hard delete removes the transaction row itself, so this audit event is
+		// the only surviving record of the operation — audit_events has no FK to
+		// transactions, so it stands alone even after the delete below.
+		if _, err := insertAuditEvent(ctx, tx, AuditEventParams{
+			BookID:        params.BookID,
+			ActorUserID:   params.ActorUserID,
+			AuthSessionID: params.AuthSessionID,
+			OccurredAt:    params.OccurredAt,
+			RequestID:     params.RequestID,
+			OriginType:    params.OriginType,
+			Operation:     params.Operation,
+			Reason:        params.ChangeReason,
+		}); err != nil {
+			return err
 		}
 
 		if _, err := tx.ExecContext(ctx, `

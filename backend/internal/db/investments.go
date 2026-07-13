@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strconv"
+	"sort"
 	"strings"
 	"time"
 
@@ -1121,28 +1121,55 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 	if err := rows.Close(); err != nil {
 		return nil, fmt.Errorf("close %s lots: %w", method, err)
 	}
-	disposals := make([]LotDisposalRecord, 0)
-	remainingValue := params.QuantityValue
+
+	// Lots can carry a different quantity_scale than the sale (e.g. imported
+	// trades whose raw source strings had differing decimal-place counts for
+	// the same magnitude). Track the undisposed sale quantity in big.Int at a
+	// scale at least as precise as every candidate lot so comparisons and
+	// subtraction below are never done across mismatched scales.
+	commonScale := params.QuantityScale
 	for _, lot := range lots {
-		if remainingValue.Sign() <= 0 {
+		if lot.scale > commonScale {
+			commonScale = lot.scale
+		}
+	}
+	remaining := new(big.Int).Mul(params.QuantityValue.BigInt(), pow10DB(commonScale-params.QuantityScale))
+
+	disposals := make([]LotDisposalRecord, 0)
+	for _, lot := range lots {
+		if remaining.Sign() <= 0 {
 			break
 		}
-		take := lot.value
-		if take.Cmp(remainingValue) > 0 {
-			take = remainingValue
+		lotScaleFactor := pow10DB(commonScale - lot.scale)
+		lotAtCommonScale := new(big.Int).Mul(lot.value.BigInt(), lotScaleFactor)
+
+		takeAtCommonScale := new(big.Int).Set(lotAtCommonScale)
+		if takeAtCommonScale.Cmp(remaining) > 0 {
+			takeAtCommonScale.Set(remaining)
 		}
-		disposal, err := disposeLotTx(ctx, tx, params, lot.id, take, lot.scale, auditEventID)
+
+		// Convert the take back to the lot's own scale for disposeLotTx, which
+		// requires the disposal quantity to be expressed at the lot's scale. A
+		// full-lot take is always exact; a partial take is only representable
+		// when it carries no precision finer than the lot's own scale.
+		takeAtLotScale, remainder := new(big.Int), new(big.Int)
+		takeAtLotScale.QuoRem(takeAtCommonScale, lotScaleFactor, remainder)
+		if remainder.Sign() != 0 {
+			return nil, fmt.Errorf("%w: sale quantity is not representable at lot %d's quantity scale %d", ErrInvalidDisposalParams, lot.id, lot.scale)
+		}
+		takeCoeff, err := exact.FromBig(takeAtLotScale)
+		if err != nil {
+			return nil, err
+		}
+
+		disposal, err := disposeLotTx(ctx, tx, params, lot.id, takeCoeff, lot.scale, auditEventID)
 		if err != nil {
 			return nil, err
 		}
 		disposals = append(disposals, disposal)
-		remaining, err := exact.FromBig(new(big.Int).Sub(remainingValue.BigInt(), take.BigInt()))
-		if err != nil {
-			return nil, err
-		}
-		remainingValue = remaining
+		remaining.Sub(remaining, takeAtCommonScale)
 	}
-	if remainingValue.Sign() > 0 {
+	if remaining.Sign() > 0 {
 		return nil, ErrInsufficientLots
 	}
 	return disposals, nil
@@ -1183,7 +1210,11 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		return nil, ErrInsufficientLots
 	}
 
-	// Enforce consistent quantity scale across all open lots.
+	// Enforce consistent quantity scale across all open lots. The pool math
+	// below (pooledQty, pooledBasis, and the per-lot reported/deducted basis
+	// split) treats every lot's quantity_value and cost_basis_value as plain
+	// int64s at one shared scale each; mixing scales here would silently
+	// blend incommensurate magnitudes.
 	commonScale := lots[0].quantityScale
 	for _, lot := range lots[1:] {
 		if lot.quantityScale != commonScale {
@@ -1192,6 +1223,14 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	}
 	if params.QuantityScale != commonScale {
 		return nil, fmt.Errorf("%w: average_cost disposal: sale quantity scale %d does not match lot scale %d", ErrInvalidDisposalParams, params.QuantityScale, commonScale)
+	}
+	// Enforce consistent cost-basis scale across all open lots for the same
+	// reason: pooledBasis sums remaining_cost_basis_value as raw int64s.
+	commonCostScale := lots[0].costBasisScale
+	for _, lot := range lots[1:] {
+		if lot.costBasisScale != commonCostScale {
+			return nil, fmt.Errorf("%w: average_cost disposal requires all open lots to share the same cost basis scale", ErrInvalidDisposalParams)
+		}
 	}
 
 	// Compute pool totals.
@@ -2101,166 +2140,260 @@ type RealizedGainRecord struct {
 	RealizedGainValue  int64
 }
 
-// ListRealizedGains returns one row per disposal event (investment_lot_events with
-// event_kind='disposal'). Cash proceeds are read from the matching sell transaction
-// posting: the posting whose commodity_id matches the lot's cost_commodity_id and
-// whose account does not have system_role='commodity_trading' (i.e. the real cash
-// account). Realized gain = proceeds - disposed_basis, aligned to the proceeds scale.
+type realizedGainEventRow struct {
+	id              int64
+	transactionID   sql.NullInt64
+	eventDate       string
+	accountID       int64
+	commodityID     int64
+	costCommodityID int64
+	quantityValue   exact.Coefficient
+	quantityScale   int
+	costBasisValue  int64
+	costBasisScale  int
+}
+
+// ListRealizedGains returns one row per disposal event group (investment_lot_events
+// with event_kind='disposal'), aggregated at the transaction level so a single sell
+// transaction that disposes multiple lots produces one realized-gain row (manual
+// disposals, which have no transaction_id, each keep their own row). All summation
+// is done in Go with big.Int at aligned scales — disposal events and cash postings
+// can legitimately carry different quantity/cost scales (e.g. imported trades whose
+// raw source amounts had differing decimal-place counts), so SQL SUM/MAX over the
+// TEXT coefficient columns would silently blend incommensurate magnitudes.
+//
+// Cash proceeds are read from the matching sell transaction's postings: any posting
+// whose commodity_id matches the lot's cost_commodity_id and whose account does not
+// have system_role='commodity_trading' (i.e. a real cash account, not the internal
+// clearing account) — summed, since a sale can legitimately have more than one such
+// leg (e.g. a fee posted alongside the proceeds). Realized gain = proceeds -
+// disposed_basis, aligned to the proceeds scale.
 func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int64, params RealizedGainsParams) ([]RealizedGainRecord, error) {
-	// cteArgs: just bookID (for the cash_proceeds CTE WHERE clause)
-	// outerArgs: bookID + optional date params (for the outer WHERE clause)
 	dateFilter := ""
-	outerArgs := []any{bookID}
+	args := []any{bookID}
 	if params.From != "" {
 		dateFilter += " AND le.event_date >= ?"
-		outerArgs = append(outerArgs, params.From)
+		args = append(args, params.From)
 	}
 	if params.To != "" {
 		dateFilter += " AND le.event_date <= ?"
-		outerArgs = append(outerArgs, params.To)
+		args = append(args, params.To)
 	}
-	// CTE is parameterized first; args = [cteBookID, outerBookID, ...dateparams]
-	args := append([]any{bookID}, outerArgs...)
 
-	// Aggregate disposal events at the transaction level so that a single sell
-	// transaction that disposes multiple lots produces one realized-gain row (not
-	// one per lot). Cash proceeds appear once on the transaction and must not be
-	// counted per lot event.
-	//
-	// For manual disposals (transaction_id IS NULL) we preserve each lot event as
-	// its own row by grouping on lot_event_id.
-	//
-	// Group key: (transaction_id, account_id, commodity_id, cost_commodity_id, event_date).
-	// NULLs in GROUP BY compare unequal in SQL, so NULL transaction_id rows each
-	// form their own group — which is the desired behaviour.
 	rows, err := r.database.QueryContext(ctx, `
-		WITH cash_proceeds AS (
-			-- One row per (transaction_id, cost_commodity_id): the cash received.
-			-- Filtered to postings that are NOT the commodity_trading leg.
-			SELECT
-				le2.transaction_id,
-				lot2.cost_commodity_id,
-				MAX(CASE
-					WHEN cash_pv.commodity_id = lot2.cost_commodity_id
-						AND cash_pv.quantity_value > '0'
-						AND NOT EXISTS (
-							SELECT 1 FROM accounts a
-							WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
-						)
-					THEN cash_pv.quantity_value
-					ELSE NULL
-				END) AS proceeds_value,
-				MAX(CASE
-					WHEN cash_pv.commodity_id = lot2.cost_commodity_id
-						AND cash_pv.quantity_value > '0'
-						AND NOT EXISTS (
-							SELECT 1 FROM accounts a
-							WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
-						)
-					THEN cash_pv.quantity_scale
-					ELSE NULL
-				END) AS proceeds_scale
-			FROM investment_lot_events le2
-			JOIN investment_lots lot2 ON lot2.id = le2.lot_id
-			JOIN current_transaction_versions tv2 ON tv2.transaction_id = le2.transaction_id
-			JOIN journal_entries je2 ON je2.transaction_version_id = tv2.id
-			JOIN posting_versions cash_pv ON cash_pv.journal_entry_id = je2.id
-			WHERE lot2.book_id = ?
-				AND le2.event_kind = 'disposal'
-				AND le2.transaction_id IS NOT NULL
-			GROUP BY le2.transaction_id, lot2.cost_commodity_id
-		)
 		SELECT
+			le.id,
+			le.transaction_id,
+			le.event_date,
 			lot.account_id,
 			lot.commodity_id,
 			lot.cost_commodity_id,
-			le.event_date,
-			le.transaction_id,
-			SUM(CAST(le.quantity_value AS INTEGER)) AS total_quantity_value,
+			le.quantity_value,
 			le.quantity_scale,
-			SUM(le.cost_basis_value)               AS total_cost_basis_value,
-			le.cost_basis_scale,
-			cp.proceeds_value,
-			cp.proceeds_scale
+			le.cost_basis_value,
+			le.cost_basis_scale
 		FROM investment_lot_events le
 		JOIN investment_lots lot ON lot.id = le.lot_id
-		LEFT JOIN cash_proceeds cp
-			ON cp.transaction_id = le.transaction_id
-			AND cp.cost_commodity_id = lot.cost_commodity_id
 		WHERE lot.book_id = ?
 			AND le.event_kind = 'disposal'
 			`+dateFilter+`
-		GROUP BY
-			COALESCE(le.transaction_id, le.id),
-			lot.account_id,
-			lot.commodity_id,
-			lot.cost_commodity_id,
-			le.event_date
-		ORDER BY le.event_date DESC, MIN(le.id) DESC
 	`, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list realized gains: %w", err)
+		return nil, fmt.Errorf("list realized gain events: %w", err)
 	}
-	defer rows.Close()
-
-	var records []RealizedGainRecord
+	var events []realizedGainEventRow
 	for rows.Next() {
-		var record RealizedGainRecord
-		var proceedsValueStr sql.NullString
-		var proceedsScale sql.NullInt64
-		// quantity_value in disposal events is stored negated (reduction of holding).
-		// We scan into a temporary and negate to expose the sold quantity as positive.
-		var rawQuantityValue exact.Coefficient
-		if err := rows.Scan(
-			&record.AccountID, &record.CommodityID, &record.CostCommodityID,
-			&record.DisposalDate, &record.TransactionID,
-			&rawQuantityValue, &record.QuantityScale,
-			&record.DisposedBasisValue, &record.DisposedBasisScale,
-			&proceedsValueStr, &proceedsScale,
-		); err != nil {
-			return nil, fmt.Errorf("scan realized gain: %w", err)
+		var e realizedGainEventRow
+		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &e.costBasisValue, &e.costBasisScale); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan realized gain event: %w", err)
 		}
-		record.QuantityValue = rawQuantityValue.Negated()
-		if proceedsValueStr.Valid && proceedsScale.Valid {
-			// Parse proceeds as int64 (they fit: same scale as currency minor units)
-			proceeds, err := strconv.ParseInt(proceedsValueStr.String, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("parse proceeds value %q: %w", proceedsValueStr.String, err)
-			}
-			record.ProceedsValue = proceeds
-			record.ProceedsScale = int(proceedsScale.Int64)
+		events = append(events, e)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close realized gain events: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate realized gain events: %w", err)
+	}
+	if len(events) == 0 {
+		return nil, nil
+	}
+
+	proceeds, err := r.realizedGainCashProceeds(ctx, bookID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group key mirrors the prior SQL GROUP BY: (transaction_id or, for manual
+	// disposals with no transaction, the lot event's own id), account, commodity,
+	// cost commodity, event date.
+	type groupKey struct {
+		txKey           string
+		accountID       int64
+		commodityID     int64
+		costCommodityID int64
+		eventDate       string
+	}
+	type group struct {
+		key           groupKey
+		transactionID sql.NullInt64
+		minEventID    int64
+		quantity      *scaledInteger
+		costBasis     *scaledInteger
+	}
+	groups := map[groupKey]*group{}
+	var order []groupKey
+	for _, e := range events {
+		key := groupKey{accountID: e.accountID, commodityID: e.commodityID, costCommodityID: e.costCommodityID, eventDate: e.eventDate}
+		if e.transactionID.Valid {
+			key.txKey = fmt.Sprintf("t:%d", e.transactionID.Int64)
 		} else {
-			// No matching transaction or posting found (e.g. manual lot creation)
+			key.txKey = fmt.Sprintf("e:%d", e.id)
+		}
+		g := groups[key]
+		if g == nil {
+			g = &group{key: key, transactionID: e.transactionID, minEventID: e.id, quantity: newScaledInteger(), costBasis: newScaledInteger()}
+			groups[key] = g
+			order = append(order, key)
+		}
+		if e.id < g.minEventID {
+			g.minEventID = e.id
+		}
+		g.quantity.add(e.quantityValue.BigInt(), e.quantityScale)
+		g.costBasis.add(big.NewInt(e.costBasisValue), e.costBasisScale)
+	}
+
+	// Replicate ORDER BY le.event_date DESC, MIN(le.id) DESC.
+	sort.Slice(order, func(i, j int) bool {
+		gi, gj := groups[order[i]], groups[order[j]]
+		if gi.key.eventDate != gj.key.eventDate {
+			return gi.key.eventDate > gj.key.eventDate
+		}
+		return gi.minEventID > gj.minEventID
+	})
+
+	records := make([]RealizedGainRecord, 0, len(order))
+	for _, key := range order {
+		g := groups[key]
+		// quantity_value in disposal events is stored negated (reduction of
+		// holding); negate back to expose the sold quantity as positive.
+		quantityValue, err := exact.FromBig(new(big.Int).Neg(g.quantity.value))
+		if err != nil {
+			return nil, err
+		}
+		if !g.costBasis.value.IsInt64() {
+			return nil, fmt.Errorf("realized gain disposed basis exceeds int64 range")
+		}
+		record := RealizedGainRecord{
+			AccountID:          key.accountID,
+			CommodityID:        key.commodityID,
+			CostCommodityID:    key.costCommodityID,
+			DisposalDate:       key.eventDate,
+			TransactionID:      g.transactionID,
+			QuantityValue:      quantityValue,
+			QuantityScale:      g.quantity.scale,
+			DisposedBasisValue: g.costBasis.value.Int64(),
+			DisposedBasisScale: g.costBasis.scale,
+		}
+
+		var matchedProceeds *scaledInteger
+		if g.transactionID.Valid {
+			matchedProceeds = proceeds[proceedsKey{transactionID: g.transactionID.Int64, costCommodityID: key.costCommodityID}]
+		}
+		if matchedProceeds != nil {
+			if !matchedProceeds.value.IsInt64() {
+				return nil, fmt.Errorf("realized gain proceeds exceed int64 range")
+			}
+			record.ProceedsValue = matchedProceeds.value.Int64()
+			record.ProceedsScale = matchedProceeds.scale
+		} else {
+			// No matching transaction or posting found (e.g. manual lot creation).
 			record.ProceedsValue = 0
 			record.ProceedsScale = record.DisposedBasisScale
 		}
+
 		// Align disposed basis to proceeds scale for gain computation.
-		disposedAtProceedsScale := record.DisposedBasisValue
-		if record.DisposedBasisScale != record.ProceedsScale {
-			diff := record.ProceedsScale - record.DisposedBasisScale
-			if diff > 0 {
-				factor := int64(1)
-				for i := 0; i < diff; i++ {
-					factor *= 10
-				}
-				disposedAtProceedsScale = record.DisposedBasisValue * factor
-			} else {
-				factor := int64(1)
-				for i := 0; i < -diff; i++ {
-					factor *= 10
-				}
-				disposedAtProceedsScale = record.DisposedBasisValue / factor
-			}
+		disposedAtProceedsScale := new(big.Int).Set(g.costBasis.value)
+		if record.DisposedBasisScale < record.ProceedsScale {
+			disposedAtProceedsScale.Mul(disposedAtProceedsScale, pow10DB(record.ProceedsScale-record.DisposedBasisScale))
+		} else if record.DisposedBasisScale > record.ProceedsScale {
+			disposedAtProceedsScale.Quo(disposedAtProceedsScale, pow10DB(record.DisposedBasisScale-record.ProceedsScale))
 		}
-		// disposed_basis_value is stored as a negative number (the lot event records the
-		// deduction from cost basis). Gain = proceeds − |cost| = proceeds + disposed_basis.
-		record.RealizedGainValue = record.ProceedsValue + disposedAtProceedsScale
+		// disposed_basis_value is stored as a negative number (the lot event records
+		// the deduction from cost basis). Gain = proceeds − |cost| = proceeds + disposed_basis.
+		gain := new(big.Int).Add(big.NewInt(record.ProceedsValue), disposedAtProceedsScale)
+		if !gain.IsInt64() {
+			return nil, fmt.Errorf("realized gain value exceeds int64 range")
+		}
+		record.RealizedGainValue = gain.Int64()
 		records = append(records, record)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate realized gains: %w", err)
-	}
 	return records, nil
+}
+
+type proceedsKey struct {
+	transactionID   int64
+	costCommodityID int64
+}
+
+// realizedGainCashProceeds sums, per (transaction, cost commodity), the real cash
+// legs of every disposal-bearing sell transaction in the book: postings whose
+// commodity matches the lot's cost commodity and whose account is not the internal
+// commodity_trading clearing account. Deduplicated by posting id because a
+// multi-lot sale joins to the same cash posting once per disposed lot event.
+func (r *InvestmentRepository) realizedGainCashProceeds(ctx context.Context, bookID int64) (map[proceedsKey]*scaledInteger, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT DISTINCT
+			le2.transaction_id,
+			lot2.cost_commodity_id,
+			cash_pv.id,
+			cash_pv.quantity_value,
+			cash_pv.quantity_scale
+		FROM investment_lot_events le2
+		JOIN investment_lots lot2 ON lot2.id = le2.lot_id
+		JOIN current_transaction_versions tv2 ON tv2.transaction_id = le2.transaction_id
+		JOIN journal_entries je2 ON je2.transaction_version_id = tv2.id
+		JOIN posting_versions cash_pv ON cash_pv.journal_entry_id = je2.id
+		WHERE lot2.book_id = ?
+			AND le2.event_kind = 'disposal'
+			AND le2.transaction_id IS NOT NULL
+			AND cash_pv.commodity_id = lot2.cost_commodity_id
+			AND NOT EXISTS (
+				SELECT 1 FROM accounts a
+				WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
+			)
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read realized gain cash proceeds: %w", err)
+	}
+	defer rows.Close()
+
+	proceeds := map[proceedsKey]*scaledInteger{}
+	for rows.Next() {
+		var transactionID int64
+		var costCommodityID int64
+		var postingID int64
+		var quantityValue exact.Coefficient
+		var quantityScale int
+		if err := rows.Scan(&transactionID, &costCommodityID, &postingID, &quantityValue, &quantityScale); err != nil {
+			return nil, fmt.Errorf("scan realized gain cash proceeds: %w", err)
+		}
+		if quantityValue.Sign() <= 0 {
+			continue
+		}
+		key := proceedsKey{transactionID: transactionID, costCommodityID: costCommodityID}
+		total := proceeds[key]
+		if total == nil {
+			total = newScaledInteger()
+			proceeds[key] = total
+		}
+		total.add(quantityValue.BigInt(), quantityScale)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate realized gain cash proceeds: %w", err)
+	}
+	return proceeds, nil
 }
 
 type UnrealizedGainRecord struct {

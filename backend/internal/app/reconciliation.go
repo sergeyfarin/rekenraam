@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -577,20 +575,5 @@ func reconciliationQuantity(commodityID int64, value exact.Coefficient, scale in
 		QuantityValue:       value,
 		QuantityScale:       scale,
 		NormalQuantityValue: value,
-	}
-}
-
-func mapReconciliationError(err error) error {
-	switch {
-	case errors.Is(err, db.ErrReconciliationNotFound):
-		return ErrReconciliationNotFound
-	case errors.Is(err, db.ErrReconciliationClosed):
-		return ErrReconciliationClosed
-	case errors.Is(err, db.ErrReconciliationNotBalanced):
-		return ErrReconciliationNotBalanced
-	case errors.Is(err, db.ErrReconciliationPosting), errors.Is(err, db.ErrReconciliationCheckpoint):
-		return ErrReconciliationPosting
-	default:
-		return fmt.Errorf("reconciliation repository: %w", err)
 	}
 }

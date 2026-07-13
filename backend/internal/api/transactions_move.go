@@ -9,7 +9,8 @@ import (
 )
 
 type moveRequest struct {
-	Direction string `json:"direction"`
+	Direction              string `json:"direction"`
+	ReconciliationOverride bool   `json:"reconciliation_override"`
 }
 
 func moveTransaction(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService, options HandlerOptions) http.HandlerFunc {
@@ -63,13 +64,14 @@ func movePosting(logger *slog.Logger, authService *app.AuthService, transactionS
 			return
 		}
 		transaction, err := transactionService.MovePosting(r.Context(), app.MovePostingInput{
-			OwnerUserID:   owner.ID,
-			AuthSessionID: authenticatedSessionID(r),
-			RequestID:     RequestIDFromContext(r.Context()),
-			OriginType:    "browser_api",
-			AccountID:     accountID,
-			PostingLineID: postingLineID,
-			Direction:     req.Direction,
+			OwnerUserID:            owner.ID,
+			AuthSessionID:          authenticatedSessionID(r),
+			RequestID:              RequestIDFromContext(r.Context()),
+			OriginType:             "browser_api",
+			AccountID:              accountID,
+			PostingLineID:          postingLineID,
+			Direction:              req.Direction,
+			ReconciliationOverride: req.ReconciliationOverride,
 		})
 		if err != nil {
 			writeTransactionServiceError(w, r, logger, "move posting", err)

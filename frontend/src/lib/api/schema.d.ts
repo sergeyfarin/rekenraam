@@ -6625,6 +6625,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Move crosses an active reconciliation checkpoint boundary; reconciliation_override is required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -10768,6 +10777,8 @@ export interface components {
              * @enum {string}
              */
             direction: "earlier" | "later";
+            /** @description Required when the move would cross an active reconciliation checkpoint boundary; accepts checkpoint invalidation. */
+            reconciliation_override?: boolean;
         };
         ReconciliationImpactResponse: {
             /** @description Checkpoints that would be invalidated by the proposed operation. Empty when no reconciliation guard applies. */
