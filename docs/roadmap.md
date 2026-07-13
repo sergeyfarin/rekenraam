@@ -33,9 +33,10 @@ must not create a competing sequence.
 Ship a reports route with net worth over time, spending by category/payee, and
 cashflow. `docs/reports-plan.md` is the implementation reference.
 
-**Started:** the exact net-worth-series backend/API foundation ships at
-`GET /api/v1/reports/net-worth`; the reports route, shared filters, and the
-spending/cashflow read models remain to be delivered.
+**Started:** `/app/reports` now presents the exact net-worth series with
+URL-addressable date/bucket filters and an accessible per-commodity table.
+Account/commodity filters, charts, and the spending/cashflow read models remain
+to be delivered.
 
 Deliver in this order:
 

@@ -13,6 +13,7 @@
   import Scale from '@lucide/svelte/icons/scale';
   import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
   import TrendingUp from '@lucide/svelte/icons/trending-up';
+  import ChartNoAxesCombined from '@lucide/svelte/icons/chart-no-axes-combined';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -87,6 +88,7 @@
   const isImportRoute = $derived($page.url.pathname.startsWith('/app/import'));
   const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
   const isInvestmentsRoute = $derived($page.url.pathname.startsWith('/app/investments'));
+  const isReportsRoute = $derived($page.url.pathname.startsWith('/app/reports'));
 
   const headerTitle = $derived(
     isAccountsRoute
@@ -103,6 +105,8 @@
                 ? m.settings_title()
                 : isInvestmentsRoute
                   ? m.investments_title()
+                  : isReportsRoute
+                    ? m.reports_title()
                   : m.app_shell_header_title()
   );
   const headerCopy = $derived(
@@ -120,6 +124,8 @@
                 ? m.settings_shell_copy()
                 : isInvestmentsRoute
                   ? m.investments_shell_copy()
+                  : isReportsRoute
+                    ? m.reports_shell_copy()
                   : m.app_shell_header_copy()
   );
 
@@ -279,6 +285,18 @@
         >
           <TrendingUp size={16} aria-hidden="true" />
           {m.investments_nav()}
+        </a>
+        <a
+          href="/app/reports"
+          aria-current={isReportsRoute ? 'page' : undefined}
+          class:bg-selected={isReportsRoute}
+          class:text-selected-foreground={isReportsRoute}
+          class:bg-transparent={!isReportsRoute}
+          class:text-foreground={!isReportsRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <ChartNoAxesCombined size={16} aria-hidden="true" />
+          {m.reports_nav()}
         </a>
         <a
           href="/app/import"

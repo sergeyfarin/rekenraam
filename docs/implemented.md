@@ -117,10 +117,10 @@ series backend/API foundation).
 
 | Capability | Status | Notes |
 |---|---|---|
-| Net worth read models | 🟡 | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth` (date range + bucket; no reports UI route or filters yet). |
+| Net worth read models | 🟦 | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth`; `/app/reports` consumes the date/bucket contract, while account/commodity filters remain pending. |
 | Account balances read model | 🟡 | `GET /ledger/account-balances`; overflow-guarded (422 on precision limit). |
 | Category totals (spending) read model | 🟡 | `GET /ledger/category-totals`. |
-| **Reports UI (net worth / cashflow / spending)** | ⬜ | No `routes/app/reports`. |
+| **Reports UI (net worth / cashflow / spending)** | 🟦 | `/app/reports` ships net-worth date/bucket filters and an exact commodity-grouped table; spending and cashflow remain pending. |
 | Cashflow read model | ⬜ | Not yet a dedicated endpoint. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only

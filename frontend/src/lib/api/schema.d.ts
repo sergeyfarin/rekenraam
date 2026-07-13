@@ -10314,6 +10314,14 @@ export interface components {
             end_date: string;
             totals: components["schemas"]["BalanceQuantity"][];
         };
+        NetWorthSeriesQuery: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            bucket: "day" | "week" | "month" | "quarter" | "year";
+        };
         NetWorthSeriesResponse: {
             /** Format: date */
             start_date: string;
@@ -10321,6 +10329,7 @@ export interface components {
             end_date: string;
             /** @enum {string} */
             bucket: "day" | "week" | "month" | "quarter" | "year";
+            query: components["schemas"]["NetWorthSeriesQuery"];
             buckets: components["schemas"]["NetWorthSeriesBucket"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
         };

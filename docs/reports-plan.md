@@ -215,13 +215,20 @@ UI:
    the date-range/bucket contract, calendar bucket boundaries, exact
    commodity-grouped bucket-end totals, effective-query echo, explicit
    `commodity_trading` exclusion, OpenAPI types, and named API/application
-   tests. Account/commodity filters, the shared shell/navigation, and the
-   common fixture remain in this slice.
+   tests. `/app/reports` now provides the shared report shell, navigation,
+   URL-addressable date/bucket filters, and loading/empty/error states for the
+   net-worth view. Account/commodity filters and the common fixture remain in
+   this slice.
 2. **Net-worth series**
    - Implement the series read model, API, table/chart, and account/commodity
      filters. Reuse the typed result later for account-detail history.
    - Acceptance: bucket-end balances match the existing as-of net-worth result
      for each bucket end; grouped commodities never yield a fake total.
+
+   **Progress (2026-07-13):** the route renders the exact series in an
+   accessible, responsive table with currency labels. It deliberately keeps
+   unlike commodities on separate rows and explains why they cannot be summed;
+   charts and account/commodity filters remain pending.
 3. **Spending**
    - Implement category/payee grouping, exact totals, filters, table/chart, and
      safe drill-down.
