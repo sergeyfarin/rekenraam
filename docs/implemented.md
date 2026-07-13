@@ -13,8 +13,9 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-07-12 (Trading 212 investment-import
-hardening through migration `0011`; backlog and roadmap consolidation).
+Last reconciled with the codebase: 2026-07-13 (Trading 212 investment-import
+hardening through migration `0011`; documentation consolidation; R2 net-worth
+series backend/API foundation).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -116,7 +117,7 @@ hardening through migration `0011`; backlog and roadmap consolidation).
 
 | Capability | Status | Notes |
 |---|---|---|
-| Net worth read model | 🟡 | `GET /ledger/net-worth`; no reports UI route. |
+| Net worth read models | 🟡 | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth` (date range + bucket; no reports UI route or filters yet). |
 | Account balances read model | 🟡 | `GET /ledger/account-balances`; overflow-guarded (422 on precision limit). |
 | Category totals (spending) read model | 🟡 | `GET /ledger/category-totals`. |
 | **Reports UI (net worth / cashflow / spending)** | ⬜ | No `routes/app/reports`. |

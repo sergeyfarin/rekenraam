@@ -109,6 +109,62 @@ func TestLedgerReadModelBalancesTotalsAndRunningRegister(t *testing.T) {
 	assertRegisterRunningBalance(t, register, delayedTransferTx.ID, usdID, 75000)
 }
 
+func TestNetWorthSeriesUsesCalendarBucketEndsAndPostedLedgerOnly(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, usdID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Report Checking", "asset", "checking", usdID, 2)
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Report Salary","category_type":"income"}`)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Report Groceries","category_type":"expense"}`)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-03",
+		posting(checking.ID, 100000, 2, usdID),
+		posting(salary.ID, -100000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-10",
+		posting(checking.ID, -30000, 2, usdID),
+		posting(groceries.ID, 30000, 2, usdID),
+	), http.StatusCreated)
+
+	series := readNetWorthSeriesForSession(t, handler, sessionCookie, "?start_date=2026-06-01&end_date=2026-06-14&bucket=week")
+	require.Equal(t, "2026-06-01", series.StartDate)
+	require.Equal(t, "2026-06-14", series.EndDate)
+	require.Equal(t, "week", series.Bucket)
+	assert.Equal(t, "2026-06-01", series.Query.StartDate)
+	assert.Equal(t, "2026-06-14", series.Query.EndDate)
+	assert.Equal(t, "week", series.Query.Bucket)
+	require.Len(t, series.Buckets, 2)
+	assert.Equal(t, "2026-06-01", series.Buckets[0].StartDate)
+	assert.Equal(t, "2026-06-07", series.Buckets[0].EndDate)
+	assertBalance(t, series.Buckets[0].Totals, usdID, 100000, 2, 100000)
+	assert.Equal(t, "2026-06-08", series.Buckets[1].StartDate)
+	assert.Equal(t, "2026-06-14", series.Buckets[1].EndDate)
+	assertBalance(t, series.Buckets[1].Totals, usdID, 70000, 2, 70000)
+	assert.Contains(t, series.ExcludedSystemRoles, "commodity_trading")
+}
+
+func TestNetWorthSeriesRejectsIncompleteOrInvalidQuery(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, _, _ := setupAccountAPITest(t, handler)
+
+	for _, suffix := range []string{
+		"?start_date=2026-06-01&bucket=month",
+		"?start_date=2026-06-02&end_date=2026-06-01&bucket=month",
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=fortnight",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/net-worth"+suffix, nil)
+		req.AddCookie(sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusBadRequest, res.Code, suffix)
+	}
+}
+
 func readAccountBalancesForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) accountBalancesResponse {
 	t.Helper()
 
@@ -150,6 +206,21 @@ func readNetWorthForSession(t *testing.T, handler http.Handler, sessionCookie *h
 
 	require.Equal(t, http.StatusOK, res.Code)
 	var response netWorthResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func readNetWorthSeriesForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) netWorthSeriesResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/net-worth"+suffix, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+	var response netWorthSeriesResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 	return response
 }

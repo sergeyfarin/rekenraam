@@ -1,7 +1,8 @@
 # Reports Plan
 
-Status: **active implementation plan for roadmap R2**. Last verified against the
-codebase: 2026-07-12.
+Status: **active implementation plan for roadmap R2**. The net-worth-series
+backend/OpenAPI foundation is shipped; the reports route and the remaining R2
+read models are pending. Last verified against the codebase: 2026-07-13.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -209,6 +210,13 @@ UI:
    - Add a reports navigation entry and URL-driven empty/loading/error shell.
    - Acceptance: generated frontend types compile; invalid shared query cases
      have API tests before individual report queries exist.
+
+   **Progress (2026-07-13):** `GET /api/v1/reports/net-worth` now establishes
+   the date-range/bucket contract, calendar bucket boundaries, exact
+   commodity-grouped bucket-end totals, effective-query echo, explicit
+   `commodity_trading` exclusion, OpenAPI types, and named API/application
+   tests. Account/commodity filters, the shared shell/navigation, and the
+   common fixture remain in this slice.
 2. **Net-worth series**
    - Implement the series read model, API, table/chart, and account/commodity
      filters. Reuse the typed result later for account-detail history.

@@ -97,6 +97,26 @@ type NetWorthResult struct {
 	ExcludedSystemRoles []string
 }
 
+type NetWorthSeriesInput struct {
+	StartDate string
+	EndDate   string
+	Bucket    string
+}
+
+type NetWorthSeriesBucket struct {
+	StartDate string
+	EndDate   string
+	Totals    []BalanceQuantity
+}
+
+type NetWorthSeriesResult struct {
+	StartDate           string
+	EndDate             string
+	Bucket              string
+	Buckets             []NetWorthSeriesBucket
+	ExcludedSystemRoles []string
+}
+
 func (s *TransactionService) AccountBalances(ctx context.Context, input AccountBalancesInput) (AccountBalancesResult, error) {
 	asOf, status, err := cleanLedgerAsOfAndStatus(input.AsOf, input.Status, s.now)
 	if err != nil {
@@ -201,14 +221,63 @@ func (s *TransactionService) NetWorth(ctx context.Context, input NetWorthInput) 
 	if err != nil {
 		return NetWorthResult{}, err
 	}
+	totals, err := s.netWorthTotals(ctx, asOf, status)
+	if err != nil {
+		return NetWorthResult{}, err
+	}
+
+	return NetWorthResult{
+		AsOf:                asOf,
+		Status:              status,
+		Totals:              totals,
+		ExcludedSystemRoles: []string{"commodity_trading"},
+	}, nil
+}
+
+// NetWorthSeries returns exact asset/liability totals at each calendar bucket
+// end. Reports deliberately include posted records only: drafts, voided
+// transactions, and soft-deleted transactions are not part of financial truth.
+func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthSeriesInput) (NetWorthSeriesResult, error) {
+	startDate, endDate, bucket, err := cleanNetWorthSeriesInput(input)
+	if err != nil {
+		return NetWorthSeriesResult{}, err
+	}
+
+	bounds, err := calendarBucketBounds(startDate, endDate, bucket)
+	if err != nil {
+		return NetWorthSeriesResult{}, err
+	}
+	resultBuckets := make([]NetWorthSeriesBucket, 0, len(bounds))
+	for _, bound := range bounds {
+		totals, err := s.netWorthTotals(ctx, bound.endDate, "posted")
+		if err != nil {
+			return NetWorthSeriesResult{}, err
+		}
+		resultBuckets = append(resultBuckets, NetWorthSeriesBucket{
+			StartDate: bound.startDate,
+			EndDate:   bound.endDate,
+			Totals:    totals,
+		})
+	}
+
+	return NetWorthSeriesResult{
+		StartDate:           startDate,
+		EndDate:             endDate,
+		Bucket:              bucket,
+		Buckets:             resultBuckets,
+		ExcludedSystemRoles: []string{"commodity_trading"},
+	}, nil
+}
+
+func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string) ([]BalanceQuantity, error) {
 
 	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
 	if err != nil {
-		return NetWorthResult{}, fmt.Errorf("read net worth accounts: %w", err)
+		return nil, fmt.Errorf("read net worth accounts: %w", err)
 	}
 	postings, err := s.repository.LedgerPostingsThrough(ctx, BookID, asOf, status)
 	if err != nil {
-		return NetWorthResult{}, fmt.Errorf("read net worth postings: %w", err)
+		return nil, fmt.Errorf("read net worth postings: %w", err)
 	}
 
 	accountMap := ledgerAccountMap(accounts)
@@ -225,15 +294,86 @@ func (s *TransactionService) NetWorth(ctx context.Context, input NetWorthInput) 
 	}
 	quantities, err := balanceMapToQuantities(totals, "")
 	if err != nil {
-		return NetWorthResult{}, err
+		return nil, err
+	}
+	return quantities, nil
+}
+
+type calendarBucketBound struct {
+	startDate string
+	endDate   string
+}
+
+func cleanNetWorthSeriesInput(input NetWorthSeriesInput) (string, string, string, error) {
+	startDate, err := cleanRequiredDate(strings.TrimSpace(input.StartDate), "start date")
+	if err != nil {
+		return "", "", "", err
+	}
+	endDate, err := cleanRequiredDate(strings.TrimSpace(input.EndDate), "end date")
+	if err != nil {
+		return "", "", "", err
+	}
+	if startDate > endDate {
+		return "", "", "", ValidationError{Message: "start date must be on or before end date"}
+	}
+	bucket := strings.TrimSpace(input.Bucket)
+	if !reportBuckets[bucket] {
+		return "", "", "", ValidationError{Message: "bucket must be day, week, month, quarter, or year"}
+	}
+	return startDate, endDate, bucket, nil
+}
+
+var reportBuckets = map[string]bool{
+	"day":     true,
+	"week":    true,
+	"month":   true,
+	"quarter": true,
+	"year":    true,
+}
+
+func calendarBucketBounds(startDate string, endDate string, bucket string) ([]calendarBucketBound, error) {
+	start, err := time.Parse(time.DateOnly, startDate)
+	if err != nil {
+		return nil, fmt.Errorf("parse validated start date: %w", err)
+	}
+	end, err := time.Parse(time.DateOnly, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("parse validated end date: %w", err)
 	}
 
-	return NetWorthResult{
-		AsOf:                asOf,
-		Status:              status,
-		Totals:              quantities,
-		ExcludedSystemRoles: []string{"commodity_trading"},
-	}, nil
+	bounds := make([]calendarBucketBound, 0)
+	current := start
+	for !current.After(end) {
+		bucketEnd := calendarBucketEnd(current, bucket)
+		if bucketEnd.After(end) {
+			bucketEnd = end
+		}
+		bounds = append(bounds, calendarBucketBound{
+			startDate: current.Format(time.DateOnly),
+			endDate:   bucketEnd.Format(time.DateOnly),
+		})
+		current = bucketEnd.AddDate(0, 0, 1)
+	}
+	return bounds, nil
+}
+
+func calendarBucketEnd(date time.Time, bucket string) time.Time {
+	switch bucket {
+	case "day":
+		return date
+	case "week":
+		daysUntilSunday := (int(time.Sunday) - int(date.Weekday()) + 7) % 7
+		return date.AddDate(0, 0, daysUntilSunday)
+	case "month":
+		return time.Date(date.Year(), date.Month()+1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+	case "quarter":
+		quarterStartMonth := ((int(date.Month())-1)/3)*3 + 1
+		return time.Date(date.Year(), time.Month(quarterStartMonth+3), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+	case "year":
+		return time.Date(date.Year()+1, time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+	default:
+		panic("validated report bucket")
+	}
 }
 
 func (s *TransactionService) accountRegisterRunningBalances(ctx context.Context, params db.ListTransactionsParams, entries []db.AccountRegisterEntryRecord) (map[int64]BalanceQuantity, error) {

@@ -12,6 +12,70 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
+func TestCalendarBucketBoundsUsesCalendarBoundariesAndClipsRange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		startDate string
+		endDate   string
+		bucket    string
+		want      []calendarBucketBound
+	}{
+		{
+			name:      "weekly buckets end Sunday",
+			startDate: "2026-06-03",
+			endDate:   "2026-06-15",
+			bucket:    "week",
+			want: []calendarBucketBound{
+				{startDate: "2026-06-03", endDate: "2026-06-07"},
+				{startDate: "2026-06-08", endDate: "2026-06-14"},
+				{startDate: "2026-06-15", endDate: "2026-06-15"},
+			},
+		},
+		{
+			name:      "monthly buckets cross month boundary",
+			startDate: "2026-02-28",
+			endDate:   "2026-04-02",
+			bucket:    "month",
+			want: []calendarBucketBound{
+				{startDate: "2026-02-28", endDate: "2026-02-28"},
+				{startDate: "2026-03-01", endDate: "2026-03-31"},
+				{startDate: "2026-04-01", endDate: "2026-04-02"},
+			},
+		},
+		{
+			name:      "quarterly buckets cross quarter boundary",
+			startDate: "2026-03-31",
+			endDate:   "2026-04-02",
+			bucket:    "quarter",
+			want: []calendarBucketBound{
+				{startDate: "2026-03-31", endDate: "2026-03-31"},
+				{startDate: "2026-04-01", endDate: "2026-04-02"},
+			},
+		},
+		{
+			name:      "yearly buckets cross year boundary",
+			startDate: "2025-12-31",
+			endDate:   "2026-01-02",
+			bucket:    "year",
+			want: []calendarBucketBound{
+				{startDate: "2025-12-31", endDate: "2025-12-31"},
+				{startDate: "2026-01-01", endDate: "2026-01-02"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := calendarBucketBounds(test.startDate, test.endDate, test.bucket)
+
+			require.NoError(t, err)
+			assert.Equal(t, test.want, got)
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // scaledAmount
 // ---------------------------------------------------------------------------

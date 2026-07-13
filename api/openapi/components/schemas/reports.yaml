@@ -1,0 +1,64 @@
+NetWorthSeriesBucket:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - totals
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+
+NetWorthSeriesQuery:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - bucket
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    bucket:
+      type: string
+      enum: [day, week, month, quarter, year]
+
+NetWorthSeriesResponse:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - bucket
+    - query
+    - buckets
+    - excluded_system_roles
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    bucket:
+      type: string
+      enum: [day, week, month, quarter, year]
+    query:
+      $ref: "../../openapi.yaml#/components/schemas/NetWorthSeriesQuery"
+    buckets:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/NetWorthSeriesBucket"
+    excluded_system_roles:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"

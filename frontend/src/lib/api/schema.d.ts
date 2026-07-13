@@ -2864,6 +2864,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/net-worth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read net worth over time */
+        get: {
+            parameters: {
+                query: {
+                    start_date: string;
+                    end_date: string;
+                    bucket: "day" | "week" | "month" | "quarter" | "year";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Exact net worth totals at each calendar bucket end, grouped by commodity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NetWorthSeriesResponse"];
+                    };
+                };
+                /** @description Invalid report query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Report arithmetic exceeded exact quantity limits */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -10238,6 +10305,23 @@ export interface components {
             as_of: string;
             status: components["schemas"]["TransactionStatus"];
             totals: components["schemas"]["BalanceQuantity"][];
+            excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        NetWorthSeriesBucket: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            totals: components["schemas"]["BalanceQuantity"][];
+        };
+        NetWorthSeriesResponse: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            bucket: "day" | "week" | "month" | "quarter" | "year";
+            buckets: components["schemas"]["NetWorthSeriesBucket"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
         };
         PriceObservationResponse: {

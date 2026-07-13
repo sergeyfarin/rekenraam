@@ -65,6 +65,27 @@ type netWorthResponse struct {
 	ExcludedSystemRoles []string                  `json:"excluded_system_roles"`
 }
 
+type netWorthSeriesBucketResponse struct {
+	StartDate string                    `json:"start_date"`
+	EndDate   string                    `json:"end_date"`
+	Totals    []balanceQuantityResponse `json:"totals"`
+}
+
+type netWorthSeriesQueryResponse struct {
+	StartDate string `json:"start_date"`
+	EndDate   string `json:"end_date"`
+	Bucket    string `json:"bucket"`
+}
+
+type netWorthSeriesResponse struct {
+	StartDate           string                         `json:"start_date"`
+	EndDate             string                         `json:"end_date"`
+	Bucket              string                         `json:"bucket"`
+	Query               netWorthSeriesQueryResponse    `json:"query"`
+	Buckets             []netWorthSeriesBucketResponse `json:"buckets"`
+	ExcludedSystemRoles []string                       `json:"excluded_system_roles"`
+}
+
 func accountBalances(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
@@ -130,6 +151,45 @@ func netWorth(logger *slog.Logger, authService *app.AuthService, transactionServ
 			AsOf:                result.AsOf,
 			Status:              result.Status,
 			Totals:              toBalanceQuantityResponses(result.Totals),
+			ExcludedSystemRoles: result.ExcludedSystemRoles,
+		})
+	}
+}
+
+func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		result, err := transactionService.NetWorthSeries(r.Context(), app.NetWorthSeriesInput{
+			StartDate: r.URL.Query().Get("start_date"),
+			EndDate:   r.URL.Query().Get("end_date"),
+			Bucket:    r.URL.Query().Get("bucket"),
+		})
+		if err != nil {
+			writeLedgerServiceError(w, r, logger, "read net worth series", err)
+			return
+		}
+
+		buckets := make([]netWorthSeriesBucketResponse, 0, len(result.Buckets))
+		for _, bucket := range result.Buckets {
+			buckets = append(buckets, netWorthSeriesBucketResponse{
+				StartDate: bucket.StartDate,
+				EndDate:   bucket.EndDate,
+				Totals:    toBalanceQuantityResponses(bucket.Totals),
+			})
+		}
+		writeJSON(w, http.StatusOK, netWorthSeriesResponse{
+			StartDate: result.StartDate,
+			EndDate:   result.EndDate,
+			Bucket:    result.Bucket,
+			Query: netWorthSeriesQueryResponse{
+				StartDate: result.StartDate,
+				EndDate:   result.EndDate,
+				Bucket:    result.Bucket,
+			},
+			Buckets:             buckets,
 			ExcludedSystemRoles: result.ExcludedSystemRoles,
 		})
 	}

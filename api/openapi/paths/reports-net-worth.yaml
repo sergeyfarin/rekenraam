@@ -1,0 +1,46 @@
+get:
+  summary: Read net worth over time
+  parameters:
+    - in: query
+      name: start_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: end_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: bucket
+      required: true
+      schema:
+        type: string
+        enum: [day, week, month, quarter, year]
+  responses:
+    "200":
+      description: Exact net worth totals at each calendar bucket end, grouped by commodity
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/NetWorthSeriesResponse"
+    "400":
+      description: Invalid report query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Report arithmetic exceeded exact quantity limits
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

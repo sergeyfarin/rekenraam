@@ -86,6 +86,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/ledger/account-balances", accountBalances(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/ledger/category-totals", categoryTotals(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/ledger/net-worth", netWorth(logger, services.Auth, services.Transaction))
+	mux.HandleFunc("GET /api/v1/reports/net-worth", netWorthSeries(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/transactions", listTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/transactions/deleted", listDeletedTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("POST /api/v1/transactions", createTransaction(logger, services.Auth, services.Transaction, options))
