@@ -11396,9 +11396,11 @@ export interface components {
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
             /**
              * Format: int64
-             * @description Realized gain in the cost commodity minor units (cash proceeds minus disposed cost basis).
+             * @description Realized gain coefficient in the cost commodity (cash proceeds minus disposed cost basis), at realized_gain_scale.
              */
             realized_gain: number;
+            /** @description Decimal scale for realized_gain. May differ from cash_amount_scale when disposed lots carry a finer cost-basis scale. */
+            realized_gain_scale: number;
             /** Format: int64 */
             cash_amount_value: number;
             cash_amount_scale: number;

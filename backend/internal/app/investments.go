@@ -255,11 +255,12 @@ type InvestmentTradeInput struct {
 }
 
 type SellPreviewResult struct {
-	CostBasisMethod string
-	Allocations     []InvestmentLotDisposal
-	RealizedGain    int64
-	CashAmountValue int64
-	CashAmountScale int
+	CostBasisMethod   string
+	Allocations       []InvestmentLotDisposal
+	RealizedGain      int64
+	RealizedGainScale int
+	CashAmountValue   int64
+	CashAmountScale   int
 }
 
 type InvestmentLotAllocationInput struct {
@@ -950,17 +951,42 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 		}
 		return SellPreviewResult{}, fmt.Errorf("preview sell disposals: %w", err)
 	}
-	var totalDisposedBasis int64
+	// Disposals can carry different CostBasisScales (lots opened at different
+	// cash scales, e.g. via import); align in Go with big.Int rather than
+	// summing raw int64s at mismatched scales (same defect class as F5,
+	// ListRealizedGains).
+	disposedBasis := newScaledAmount()
 	for _, d := range disposals {
-		totalDisposedBasis += d.CostBasisValue
+		basisCoefficient, err := exact.FromBig(big.NewInt(d.CostBasisValue))
+		if err != nil {
+			return SellPreviewResult{}, fmt.Errorf("preview sell disposed basis: %w", err)
+		}
+		disposedBasis.add(basisCoefficient, d.CostBasisScale)
 	}
-	realizedGain := input.CashAmountValue - totalDisposedBasis
+	cashCoefficient, err := exact.FromBig(big.NewInt(input.CashAmountValue))
+	if err != nil {
+		return SellPreviewResult{}, fmt.Errorf("preview sell cash amount: %w", err)
+	}
+	cashProceeds := newScaledAmount()
+	cashProceeds.add(cashCoefficient, input.CashAmountScale)
+
+	gainScale := disposedBasis.scale
+	if cashProceeds.scale > gainScale {
+		gainScale = cashProceeds.scale
+	}
+	disposedBasis.align(gainScale)
+	cashProceeds.align(gainScale)
+	gain := new(big.Int).Sub(cashProceeds.value, disposedBasis.value)
+	if !gain.IsInt64() {
+		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
+	}
 	return SellPreviewResult{
-		CostBasisMethod: method,
-		Allocations:     toInvestmentLotDisposals(disposals),
-		RealizedGain:    realizedGain,
-		CashAmountValue: input.CashAmountValue,
-		CashAmountScale: input.CashAmountScale,
+		CostBasisMethod:   method,
+		Allocations:       toInvestmentLotDisposals(disposals),
+		RealizedGain:      gain.Int64(),
+		RealizedGainScale: gainScale,
+		CashAmountValue:   input.CashAmountValue,
+		CashAmountScale:   input.CashAmountScale,
 	}, nil
 }
 

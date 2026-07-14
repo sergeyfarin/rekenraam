@@ -12,13 +12,15 @@ shapes not yet produced by current callers.
 
 ## Status (2026-07-13, same day): all severity-1 and severity-2 items fixed
 
-F1–F5 (severity 1) and F7–F11 (severity 2) are fixed, each with a named
+F1–F6 (severity 1) and F7–F11 (severity 2) are all fixed, each with a named
 regression test (`backend/internal/db/investments_test.go`,
+`backend/internal/app/investments_test.go`,
 `backend/internal/api/transactions_test.go`,
-`backend/internal/api/day_sequence_test.go`). F6 (sell-preview scale) is not
-yet fixed — it needs an API contract change (a scale field on the preview
-response) that was out of scope for this pass. Several severity-3 items were
-also fixed (see that section for what landed vs. what's still open).
+`backend/internal/api/day_sequence_test.go`). F6 required an OpenAPI contract
+change (a new `realized_gain_scale` field on the sell-preview response),
+initially deferred and landed in a same-day follow-up. Several severity-3
+items were also fixed (see that section for what landed vs. what's still
+open).
 
 Fixing F3 and F8 surfaced two additional full-stack plumbing gaps not caught
 in the original pass, now also fixed:
@@ -199,7 +201,7 @@ loop. Tests: `TestListRealizedGainsAggregatesMixedScaleDisposalEvents`,
 
 ## Severity 2
 
-### F6. Sell preview realized gain mixes scales and has no scale field (CONFIRMED — NOT FIXED)
+### F6. Sell preview realized gain mixes scales and has no scale field (CONFIRMED — FIXED)
 
 `PreviewSell` (`app/investments.go:953-957`) computes
 `totalDisposedBasis += d.CostBasisValue` across disposals whose
@@ -209,13 +211,16 @@ scale. The API response (`api/investments.go:160,588`) exposes
 `realized_gain` with no scale at all — the client cannot render it correctly
 even when the scales happen to agree.
 
-**Not fixed in this pass**: fixing this properly means adding a
-`realized_gain_scale` field to the API response, which is an OpenAPI contract
-change (new field, client regen, frontend consumption) rather than a pure
-backend fix — left as a follow-up. The internal aggregation bug (summing
-`CostBasisValue` across possibly-different `CostBasisScale`s) is real and
-should be fixed together with the contract change using the same
-`scaledInteger`-based approach as F5.
+**Fixed**: `PreviewSell` now aligns disposed basis and cash proceeds to a
+shared scale via the existing `scaledAmount` helper (same family as F5's
+`scaledInteger`) before subtracting, and returns a new `RealizedGainScale`
+field; overflow maps to `LedgerOverflowError` → 422 `LEDGER_OVERFLOW` (added
+to `writeInvestmentServiceError`, matching the mapping pattern used
+elsewhere). This required the OpenAPI contract change flagged below:
+`SellPreviewResponse` gained a required `realized_gain_scale` field, the
+frontend client was regenerated, and `sell-form.svelte` now formats the gain
+using `realized_gain_scale` instead of `cash_amount_scale`. Test:
+`TestPreviewSellRealizedGainAlignsMismatchedCostBasisScales`.
 
 ### F7. Register running balances accumulate in a different order than the register displays (CONFIRMED — FIXED)
 
@@ -364,11 +369,20 @@ presence isn't asserted by name — a reasonable follow-up).
 
 ## Remaining follow-up
 
-Only F6 (sell-preview scale) is still open, blocked on an API contract change
-(new `realized_gain_scale` field) that's out of scope for a pure backend
-pass. Everything else in this document (F1–F5, F7–F11, and the severity-3
-items marked FIXED above) landed in the same change, each with the named test
-called out in its section, per `docs/conventions.md`'s financial-invariant
-testing rule. `go build`, `go vet`, and `gofmt -l` are clean across all
-touched files; `./scripts/test-backend.sh` (full suite, `-race`) was run
-before committing.
+All findings in this document (F1–F11 and the severity-3 items marked FIXED)
+are now fixed, each with the named test called out in its section, per
+`docs/conventions.md`'s financial-invariant testing rule. F6 required the
+OpenAPI contract change (new `realized_gain_scale` field) originally called
+out as out of scope; it landed in a follow-up pass alongside the frontend
+client regeneration and `sell-form.svelte` update. `go build`, `go vet`, and
+`gofmt -l` are clean across all touched files; `./scripts/test-backend.sh`
+(full suite, `-race`) and `pnpm --dir frontend run check` were run before
+each commit — the frontend check has one pre-existing, unrelated failure
+(`reports-screen.svelte:86`, a `commodity_id` type error present on `main`
+before this audit) not touched by any of this work.
+
+Not fixed, deliberately: the severity-3 items called out as skipped in their
+own bullets (zero-quantity postings, trade-implied-price error swallowing,
+rounding-mode documentation) — each is a product judgment call, not a
+correctness bug, and was left alone to avoid changing behavior without
+product input.

@@ -1,12 +1,16 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 func TestCleanInvestmentInstrumentSpecDefaultsAndNormalizesFields(t *testing.T) {
@@ -84,4 +88,90 @@ func TestCleanInvestmentInstrumentSpecRejectsInvalidInputs(t *testing.T) {
 
 func ptrInt64(value int64) *int64 {
 	return &value
+}
+
+func TestPreviewSellRealizedGainAlignsMismatchedCostBasisScales(t *testing.T) {
+	// Two buys create lots with different CostBasisScale (a lot's cost scale
+	// is the cash scale of the buy that created it, which varies per trade —
+	// realistic via import, see F1/F4 in the 2026-07-13 audit). Before the
+	// fix, PreviewSell summed CostBasisValue across disposals as raw int64s
+	// regardless of scale and exposed realized_gain with no scale field at
+	// all, so the result was both numerically wrong and unrenderable.
+	ctx := context.Background()
+	database := openConnectionTestDatabase(t)
+
+	res, err := database.ExecContext(ctx, `
+		INSERT INTO commodities (book_id, code, kind, is_builtin, created_at, created_by_user_id)
+		VALUES (?, 'EUR', 'currency', 1, '2026-01-01T00:00:00Z', 1)
+	`, BookID)
+	require.NoError(t, err)
+	eurCommodityID, err := res.LastInsertId()
+	require.NoError(t, err)
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO commodity_versions (
+			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
+		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', 'EUR', '€', 'Euro', 2, 6)
+	`, eurCommodityID)
+	require.NoError(t, err)
+
+	res, err = database.ExecContext(ctx, `
+		INSERT INTO commodities (book_id, code, kind, is_builtin, created_at, created_by_user_id)
+		VALUES (?, 'TEST', 'security', 0, '2026-01-01T00:00:00Z', 1)
+	`, BookID)
+	require.NoError(t, err)
+	stockCommodityID, err := res.LastInsertId()
+	require.NoError(t, err)
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO commodity_versions (
+			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
+		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', 'TEST', 'TEST', 'Test Security', 0, 6)
+	`, stockCommodityID)
+	require.NoError(t, err)
+
+	cashAccountID := seedTestAccount(t, database, "active", true)
+	holdingAccountID := seedTestAccount(t, database, "active", true)
+	seedCommodityTradingAccount(t, database)
+
+	accountRepository := db.NewAccountRepository(database)
+	accountService := NewAccountService(accountRepository, db.NewInstitutionRepository(database), nil)
+	transactionService := NewTransactionService(db.NewTransactionRepository(database), db.NewPayeeRepository(database), accountRepository, db.NewCommodityRepository(database))
+	investmentService := NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, nil)
+
+	// Lot A: 100.000000 shares (scale 6) bought for 2500.00 EUR (scale 2).
+	_, err = investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: 1, TransactionDate: "2026-01-01",
+		CommodityID: stockCommodityID, HoldingAccountID: holdingAccountID, CashAccountID: cashAccountID,
+		QuantityValue: exact.New(100000000), QuantityScale: 6,
+		CashAmountValue: 250000, CashAmountScale: 2, CashCommodityID: eurCommodityID,
+	})
+	require.NoError(t, err)
+	// Lot B: 20 shares (scale 0) bought for 40.000000 EUR (scale 6).
+	_, err = investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: 1, TransactionDate: "2026-02-01",
+		CommodityID: stockCommodityID, HoldingAccountID: holdingAccountID, CashAccountID: cashAccountID,
+		QuantityValue: exact.New(20), QuantityScale: 0,
+		CashAmountValue: 40000000, CashAmountScale: 6, CashCommodityID: eurCommodityID,
+	})
+	require.NoError(t, err)
+
+	// Sell all 120 shares (fifo disposes lot A then lot B) for 3000.00 EUR
+	// (scale 2) proceeds.
+	preview, err := investmentService.PreviewSell(ctx, InvestmentTradeInput{
+		OwnerUserID: 1, TransactionDate: "2026-03-01",
+		CommodityID: stockCommodityID, HoldingAccountID: holdingAccountID, CashAccountID: cashAccountID,
+		QuantityValue: exact.New(120), QuantityScale: 0,
+		CashAmountValue: 300000, CashAmountScale: 2, CashCommodityID: eurCommodityID,
+	})
+	require.NoError(t, err)
+
+	// Disposed basis aligned at scale 6: 2500.00 -> 2,500,000,000 plus
+	// 40,000,000 = 2,540,000,000 (2540.000000). Proceeds aligned at scale 6:
+	// 3000.00 -> 3,000,000,000. Gain = 460,000,000 at scale 6 (460.000000).
+	// The pre-fix code summed the raw CostBasisValue int64s (250000 +
+	// 40000000 = 40,250,000) against the unaligned cash value, producing a
+	// nonsensical negative gain.
+	assert.Equal(t, int64(460000000), preview.RealizedGain)
+	assert.Equal(t, 6, preview.RealizedGainScale)
 }

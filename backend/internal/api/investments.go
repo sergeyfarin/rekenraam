@@ -155,11 +155,12 @@ type investmentTradeRequest struct {
 }
 
 type sellPreviewResponse struct {
-	CostBasisMethod string                          `json:"cost_basis_method"`
-	Allocations     []investmentLotDisposalResponse `json:"allocations"`
-	RealizedGain    int64                           `json:"realized_gain"`
-	CashAmountValue int64                           `json:"cash_amount_value"`
-	CashAmountScale int                             `json:"cash_amount_scale"`
+	CostBasisMethod   string                          `json:"cost_basis_method"`
+	Allocations       []investmentLotDisposalResponse `json:"allocations"`
+	RealizedGain      int64                           `json:"realized_gain"`
+	RealizedGainScale int                             `json:"realized_gain_scale"`
+	CashAmountValue   int64                           `json:"cash_amount_value"`
+	CashAmountScale   int                             `json:"cash_amount_scale"`
 }
 
 type investmentLotAllocationRequest struct {
@@ -583,11 +584,12 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 			return
 		}
 		writeJSON(w, http.StatusOK, sellPreviewResponse{
-			CostBasisMethod: preview.CostBasisMethod,
-			Allocations:     toInvestmentLotDisposalResponses(preview.Allocations),
-			RealizedGain:    preview.RealizedGain,
-			CashAmountValue: preview.CashAmountValue,
-			CashAmountScale: preview.CashAmountScale,
+			CostBasisMethod:   preview.CostBasisMethod,
+			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
+			RealizedGain:      preview.RealizedGain,
+			RealizedGainScale: preview.RealizedGainScale,
+			CashAmountValue:   preview.CashAmountValue,
+			CashAmountScale:   preview.CashAmountScale,
 		})
 	}
 }
@@ -826,9 +828,12 @@ func saveInvestmentAutomationRules(logger *slog.Logger, authService *app.AuthSer
 
 func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
 	var validationError app.ValidationError
+	var overflowError app.LedgerOverflowError
 	switch {
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.As(err, &overflowError):
+		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", overflowError.Error())
 	case errors.Is(err, app.ErrInvestmentInstrumentNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment instrument not found")
 	case errors.Is(err, app.ErrInvestmentInstrumentExists):
