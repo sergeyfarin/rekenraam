@@ -301,6 +301,17 @@ func (s *ImportService) PatchImportBatch(ctx context.Context, input PatchImportB
 		return ErrImportBatchNotOpen
 	}
 
+	// Validate every patch before writing any of them: import_staged_rows
+	// enforces dedupe_status and resolution_json shape with DB CHECK
+	// constraints, and a violation from client input should surface as a
+	// clean 400 VALIDATION_FAILED rather than a 500 from a raw SQL error
+	// partway through the batch.
+	for _, patch := range input.RowResolutions {
+		if err := validateRowResolutionPatch(patch); err != nil {
+			return err
+		}
+	}
+
 	for _, patch := range input.RowResolutions {
 		if err := s.repository.UpdateImportStagedRowResolution(ctx, db.UpdateImportStagedRowResolutionParams{
 			RowID:          patch.RowID,
@@ -312,6 +323,28 @@ func (s *ImportService) PatchImportBatch(ctx context.Context, input PatchImportB
 		}
 	}
 
+	return nil
+}
+
+// validRowResolutionDedupeStatuses mirrors the import_staged_rows.dedupe_status
+// CHECK constraint (migrations).
+var validRowResolutionDedupeStatuses = map[string]bool{
+	"new":             true,
+	"duplicate":       true,
+	"needs_attention": true,
+	"excluded":        true,
+}
+
+func validateRowResolutionPatch(patch RowResolutionPatch) error {
+	if patch.RowID <= 0 {
+		return ValidationError{Message: "row_id is required"}
+	}
+	if patch.DedupeStatus != "" && !validRowResolutionDedupeStatuses[patch.DedupeStatus] {
+		return ValidationError{Message: "dedupe_status is invalid"}
+	}
+	if patch.ResolutionJSON != "" && !json.Valid([]byte(patch.ResolutionJSON)) {
+		return ValidationError{Message: "resolution is not valid JSON"}
+	}
 	return nil
 }
 
@@ -576,6 +609,20 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			}
 			return record.ID, nil
 		}); err != nil {
+			// A concurrent committer already won the race for this exact
+			// fingerprint (e.g. two requests committing the same batch at
+			// once): the loser's own transaction insert was rolled back
+			// (CommitImportedTransaction's tx never committed), so there is
+			// no partial write to clean up — just adopt the winner's
+			// outcome, same as the Trading 212 investment path already does
+			// via resolveConcurrentImportCommit.
+			if errors.Is(err, db.ErrCommitIdentityConflict) {
+				if err2 := s.resolveConcurrentImportCommit(ctx, row); err2 != nil {
+					return result, fmt.Errorf("resolve concurrent commit row %d: %w", row.ID, err2)
+				}
+				result.CommittedCount++
+				continue
+			}
 			return result, fmt.Errorf("record commit row %d: %w", row.ID, err)
 		}
 		result.CommittedCount++

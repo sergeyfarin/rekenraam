@@ -67,7 +67,7 @@ submission, input parsing, running totals — none of it unit-tested beyond
 amount parsing, and multi-currency display logic are the highest-value
 targets.
 
-### G-03 Import API surface near zero at the HTTP layer
+### G-03 Import API surface near zero at the HTTP layer `[x]`
 
 `api/import_connections.go` is **0%** — no handler test exercises the routes
 that accept and update third-party API keys (auth/CSRF wiring, error mapping,
@@ -78,6 +78,36 @@ that accept and update third-party API keys (auth/CSRF wiring, error mapping,
 Worker/scheduler paths are tested; the interactive request path is not —
 that is exactly the layer where T-22 ("every import commit failed, never
 caught by any test") lived.
+
+Closed 2026-07-15: full HTTP-level lifecycle and edge-case suites added —
+`api/imports_test.go` (18 tests: start/patch/preview-commit/commit/discard
+lifecycle, malformed/missing file, not-found, auth/CSRF, double-commit and
+discard-after-commit conflicts, cross-batch dedupe, pagination) and
+`api/import_connections_test.go` (8 tests: create/list/update/rotate/delete
+lifecycle, a raw-bytes scan proving the API key never appears in any
+response, provider-rejection and duplicate-name error mapping, PATCH
+auto-refresh omission semantics). `api/import_connections.go` 0% → 72.6%,
+`api/imports.go` ~3% → 72.7%, `app/import_service.go` 51% → 82.4% (merged,
+statement coverage). See `docs/backend-test-coverage-plan.md` Workstreams
+1–2 for the full design and the two real bugs this work found and fixed
+along the way:
+
+- A concurrent commit on the same batch for an **ordinary** (non-investment)
+  row raised a raw `record commit row: ... commit identity already exists`
+  error instead of resolving idempotently — the Trading 212 investment path
+  already handled this race via `resolveConcurrentImportCommit`, but the
+  plain-row path never got the same treatment. Fixed by routing the plain
+  path's `db.ErrCommitIdentityConflict` through the same resolver. Proven by
+  `TestCommitImportBatch_ConcurrentPlainRowCommitsKeepOneWinner`
+  (`app/import_service_test.go`), which failed before the fix on every run.
+- `PATCH /imports/{batch_id}` with a malformed `resolution` JSON string or an
+  invalid `dedupe_status` value hit the `import_staged_rows` table's DB
+  `CHECK` constraints and surfaced as a raw `500 INTERNAL_ERROR` instead of a
+  clean `400 VALIDATION_FAILED` — client input validation errors should
+  never look like server failures. Fixed by validating both fields in
+  `ImportService.PatchImportBatch` before writing. Proven by
+  `TestPatchImportBatch_InvalidResolutionJSONRejectedAsValidationError` and
+  `TestPatchImportBatch_InvalidDedupeStatusRejectedAsValidationError`.
 
 ### G-04 Investment service orchestration is thin above the db layer
 
@@ -126,10 +156,10 @@ sit.
 
 ## Recommended order of work
 
-1. **HTTP-layer tests for import connections + imports** (G-03): one
+1. ~~**HTTP-layer tests for import connections + imports** (G-03): one
    lifecycle test each in the existing `api` test style (create connection →
    list shows `key_hint` not key → refresh → delete; start QIF import →
-   preview → commit → batch status).
+   preview → commit → batch status).~~ **Closed 2026-07-15** — see G-03 above.
 2. **Service tests for `PreviewSell` vs `Sell` consistency and
    `ReinvestedDividend` postings** (G-04) — these guard real money math.
 3. **Pricing scheduler/worker tests** cloned from the import-side pattern
