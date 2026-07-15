@@ -83,7 +83,7 @@
   const currencyCodeByID = $derived.by(() => {
     const codes = new Map<number, string>();
     for (const currency of currenciesQuery.data?.currencies ?? []) {
-      codes.set(currency.commodity_id, currency.code);
+      codes.set(currency.id, currency.code);
     }
     return codes;
   });
