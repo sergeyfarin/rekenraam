@@ -80,6 +80,10 @@ func TestTransactionUnvoidSoftDeleteAndRestoreAreDistinct(t *testing.T) {
 	voided := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/void", `{"change_reason":"investigating mismatch"}`, http.StatusOK)
 	assert.Equal(t, "voided", voided.Status)
 	require.Len(t, voided.JournalEntries, 1, "void keeps the posting snapshot for audit and unvoid")
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(transaction.ID), balancedBody("2026-06-07",
+		posting(checking.ID, -20000, 2, commodityID),
+		posting(expense.ID, 20000, 2, commodityID),
+	), http.StatusConflict)
 
 	unvoided := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/unvoid", `{"change_reason":"entry was valid"}`, http.StatusOK)
 	assert.Equal(t, "posted", unvoided.Status)
@@ -91,6 +95,10 @@ func TestTransactionUnvoidSoftDeleteAndRestoreAreDistinct(t *testing.T) {
 	assert.Empty(t, listTransactionsForSession(t, handler, sessionCookie, "").Transactions)
 	assert.Empty(t, accountRegisterForSession(t, handler, sessionCookie, checking.ID, "").Entries)
 	readTransactionForSession(t, handler, sessionCookie, transaction.ID, http.StatusNotFound)
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPatch, "/api/v1/transactions/"+strconvFormatInt(transaction.ID), balancedBody("2026-06-07",
+		posting(checking.ID, -20000, 2, commodityID),
+		posting(expense.ID, 20000, 2, commodityID),
+	), http.StatusNotFound)
 
 	restored := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(transaction.ID)+"/restore", `{"change_reason":"restored from trash"}`, http.StatusOK)
 	assert.Empty(t, restored.DeletedAt)
@@ -163,6 +171,7 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 		"change_reason":"completed draft"
 	}`, http.StatusOK)
 	assert.Equal(t, "posted", posted.Status)
+	mutateTransactionNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/transactions/"+strconvFormatInt(posted.ID), http.StatusConflict)
 
 	draft = createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
 		"status":"draft",
@@ -760,6 +769,23 @@ func TestTransactionPostingAccountDateAndCommodityValidation(t *testing.T) {
 			"entry_date":"2026-06-07",
 			"postings":[
 				{"account_id":`+strconvFormatInt(closedAccount.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`},
+				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`}
+			]
+		}]
+	}`, http.StatusBadRequest)
+
+	archivedAccount := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Archived Checking", "asset", "checking", usdID, 2, "2026-01-01")
+	mutateAccountWithBody(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(archivedAccount.ID)+"/close", `{
+		"closed_on":"2026-06-06",
+		"change_reason":"closed for test"
+	}`, http.StatusOK)
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/accounts/"+strconvFormatInt(archivedAccount.ID)+"/archive", http.StatusOK)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-06",
+		"journal_entries":[{
+			"entry_date":"2026-06-06",
+			"postings":[
+				{"account_id":`+strconvFormatInt(archivedAccount.ID)+`,"quantity_value":-1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`},
 				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":1000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(usdID)+`}
 			]
 		}]

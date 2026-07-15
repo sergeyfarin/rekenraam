@@ -416,6 +416,58 @@ func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
 	assert.Contains(t, err.Error(), "CHECK constraint failed")
 }
 
+func TestMigrationsEnforceTransactionAndVersionIntegrity(t *testing.T) {
+	database := openTestDatabase(t)
+
+	require.NoError(t, Migrate(context.Background(), database))
+	insertMinimalFinancialFixture(t, database)
+
+	// A transaction cannot correct itself. The same-book trigger fires first
+	// because a self-reference can never satisfy "target already exists" at
+	// BEFORE INSERT time, but the row is rejected either way.
+	_, err := database.ExecContext(context.Background(), `
+		INSERT INTO transactions (id, book_id, correction_of_transaction_id, created_at, created_by_user_id)
+		VALUES (2, 1, 2, '2026-06-06T00:00:00Z', 1);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "correction target must belong to the same book")
+
+	// A superseding version must belong to the same transaction.
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO transactions (id, book_id, created_at, created_by_user_id) VALUES
+			(3, 1, '2026-06-06T00:00:00Z', 1),
+			(4, 1, '2026-06-06T00:00:00Z', 1);
+
+		INSERT INTO transaction_versions (
+			id, book_id, transaction_id, version_seq, status, transaction_kind,
+			transaction_date, recorded_at, changed_by_user_id, change_reason
+		)
+		VALUES (10, 1, 3, 1, 'posted', 'ordinary', '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test');
+	`)
+	require.NoError(t, err)
+
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO transaction_versions (
+			id, book_id, transaction_id, version_seq, supersedes_version_id, status,
+			transaction_kind, transaction_date, recorded_at, changed_by_user_id, change_reason
+		)
+		VALUES (11, 1, 4, 1, 10, 'posted', 'ordinary', '2026-06-06', '2026-06-06T00:00:00Z', 1, 'test');
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "superseded transaction version must belong to the same transaction")
+
+	// version_seq must be unique per transaction.
+	_, err = database.ExecContext(context.Background(), `
+		INSERT INTO transaction_versions (
+			id, book_id, transaction_id, version_seq, status, transaction_kind,
+			transaction_date, recorded_at, changed_by_user_id, change_reason
+		)
+		VALUES (12, 1, 3, 1, 'posted', 'ordinary', '2026-06-07', '2026-06-07T00:00:00Z', 1, 'test');
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "UNIQUE constraint failed")
+}
+
 func TestMigrationsEnforceTagIconFormat(t *testing.T) {
 	database := openTestDatabase(t)
 

@@ -4,7 +4,15 @@ Status: **design reference — implemented.** The transaction-ledger schema,
 lifecycle, reconciliation guard, and API slice described here all shipped (Phase 2,
 see `implemented.md`). This document is kept for the schema/design rationale only;
 it is not an active tracker. For current state see `docs/implemented.md`; for
-what's next, `docs/roadmap.md`.
+what's next, `docs/roadmap.md`. Re-verified against the code on 2026-07-14: every
+table, trigger, endpoint, and lifecycle rule below matches
+`backend/migrations/0001_initial_schema.sql` and `backend/internal/{app,api}`.
+The two items this document deliberately deferred (`rounding_adjustment`,
+closed-period posting guards) are still deferred — neither has a roadmap item —
+and remain the right call until a concrete workflow needs them. The "Investment
+Rule" and "Future tables" section below is superseded by the shipped investment
+system (see `docs/investments-plan.md`, status: R12 complete, Trading 212 lots
+shipped 2026-07-03); it is kept only as a historical note, not as a spec.
 
 This document updates the transaction schema proposal after the tags,
 categories, accounts, commodities, and system-account discussions.
@@ -835,7 +843,20 @@ Defer:
 
 Do not add rounding adjustment until a real rounding workflow requires it.
 
-## Investment Rule
+## Investment Rule (superseded — historical note only)
+
+This section is the pre-implementation sketch of lot accounting written before
+investments shipped. **It is stale and no longer describes the real schema or
+rules.** The shipped design lives in `docs/investments-plan.md` and the actual
+tables are `investment_lots`, `investment_lot_events` (event-sourced, not the
+`investment_lot_assignments` sketch below), `investment_provider_events`,
+`investment_event_suggestions`, `investment_automation_rules`,
+`cost_basis_profiles`, and `dividend_defaults` in
+`backend/migrations/0001_initial_schema.sql`. Realized gain/loss on sells is
+computed by the app service from lot assignments, matching the original
+intent; sells are fully supported (not blocked) as of R12/Trading 212 Slice 4b.
+The paragraphs and schema sketch below are preserved for historical rationale
+only — do not treat them as current design.
 
 Investment buys can be represented as postings and can create lots.
 
@@ -853,7 +874,7 @@ Until lot assignment is implemented:
 Do not let users manually type realized gain postings for investment sells and
 call them authoritative lot accounting.
 
-Future tables:
+Original future-tables sketch (superseded by the shipped schema above):
 
 ```text
 investment_lots
@@ -1022,12 +1043,23 @@ offsets over an append-only ledger.
   note, tags, global transaction sequence, or posting order wholly on one side
   of the boundary is allowed and keeps reconciliation intact.
 
-Manual `POST /transactions` accepts only `status='posted'` and must run the same
-period-impact check as edit/lifecycle operations. A backdated create that would
-enter an active checkpoint boundary returns reconciliation-override-required;
-the UI previews named checkpoints and may retry with
-`reconciliation_override=true`. `draft` creation is available only to future
-trusted internal producers, not the browser manual-entry route.
+Manual `POST /transactions` must run the same period-impact check as
+edit/lifecycle operations. A backdated create that would enter an active
+checkpoint boundary returns reconciliation-override-required; the UI previews
+named checkpoints and may retry with `reconciliation_override=true`.
+
+Design intent is that `draft` creation belongs only to a future trusted
+internal producer (R9 recurring transactions, or import review), not the
+browser manual-entry route — the frontend never sends `status="draft"` and
+there is no user-facing "save as draft." **This is not yet enforced at the API
+layer**: `POST /api/v1/transactions` currently accepts an explicit
+`status="draft"` from any caller, because no real internal producer exists yet
+to distinguish from the browser route, and the backend test suite uses this
+path to exercise the draft→post and draft→discard lifecycle in the absence of
+one. Add an origin-based guard (reject `status="draft"` unless
+`OriginType != "browser_api"`) when R9 or import-review lands a real producer;
+until then this is a deliberately deferred, low-severity gap in a single-user
+self-hosted app, not an open item to fix in isolation.
 
 `POST /api/v1/transactions/{transaction_id}/void` must accept a JSON request
 body with `change_reason` so the appended `status='voided'` transaction version
@@ -1038,6 +1070,17 @@ Payee endpoints are listed in the Payees section and should land before or with
 transaction entry UI.
 
 ## Validation And Tests
+
+Re-verified 2026-07-14: every item below is covered by a named backend test in
+`backend/internal/api/transactions_test.go` or `backend/internal/db/sqlite_test.go`.
+The last gaps found during this pass (cross-transaction `supersedes_version_id`,
+self-correction, archived-account rejection, hard-delete-of-posted rejection,
+PATCH-rejected-on-voided/soft-deleted) were closed the same day by adding
+`TestMigrationsEnforceTransactionAndVersionIntegrity` and extending
+`TestTransactionPostingAccountDateAndCommodityValidation`,
+`TestTransactionValidationAndLifecycleGuards`, and
+`TestTransactionUnvoidSoftDeleteAndRestoreAreDistinct`; no underlying validation
+logic was missing, only test coverage.
 
 Required backend tests:
 
