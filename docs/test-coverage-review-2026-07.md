@@ -167,13 +167,30 @@ contract before trusting the plan's assumptions about it:
   in `docs/backlog.md`, deliberately out of scope for this pass — needs a
   chosen data source and its own design.
 
-### G-05 Pricing service barely tested
+### G-05 Pricing service barely tested `[x]`
 
 `app/pricing_scheduler.go` **0%**, `pricing_worker.go` ~17%, and in
 `app/pricing.go`: `CreatePrice`, `CreateTradeImpliedPrice`, `SavePolicy`,
 `SaveSourceAssignment`, `cleanPricingPolicySpec` all **0%**. The import-side
 scheduler/worker pair has good tests to use as the pattern
 (`import_scheduler_test.go`, `import_fetch_worker_test.go`).
+
+Closed 2026-07-15: extended `app/pricing_test.go` (23 new tests) and added
+`api/pricing_test.go` (new file, 11 tests). `app/pricing.go` merged coverage
+→ 87.8%; the testable scheduler/worker units (`runScheduledRefreshIfDue`,
+`runDueFXCoverage`, `processFXCoverageWork`) went from 0% to 65–79% — the
+`Start*` goroutine-launching wrappers stay untested by design, same as the
+import-side scheduler/worker pair they were modeled on. Includes a DST
+transition test (`localDailyTimeUTC` across the 2026-03-29 Europe/Amsterdam
+spring-forward) — the classic silent-drift bug in daily schedulers that
+computes a fixed UTC offset once instead of recomputing per run.
+
+Writing these tests found (not a product bug this time, just a test-design
+trap worth recording): the fixture's per-currency account seeding fires a
+real DB trigger (`migrations/0001`, "currency_activated") that auto-enqueues
+its own `fxCoverageWorkKind` background-work item. Worker tests that count
+items by status must drain or baseline around this, or they silently count
+the trigger's item alongside the one the test itself enqueued.
 
 ### G-06 No race detector in CI `[x]`
 
@@ -210,7 +227,7 @@ sit.
 2. ~~**Service tests for `PreviewSell` vs `Sell` consistency and
    `ReinvestedDividend` postings** (G-04) — these guard real money math.~~
    **Closed 2026-07-15** — see G-04 above.
-3. **Pricing scheduler/worker tests** cloned from the import-side pattern
-   (G-05).
+3. ~~**Pricing scheduler/worker tests** cloned from the import-side pattern
+   (G-05).~~ **Closed 2026-07-15** — see G-05 above.
 4. **Frontend unit tests for money input parsing and balance validation**
    (G-02), then grow e2e per the already-tracked T-20.

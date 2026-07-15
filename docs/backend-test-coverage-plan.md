@@ -1,9 +1,9 @@
 # Backend Test Coverage Plan
 
-**Status:** Workstreams 1, 2, and 3 complete (2026-07-15) — see the status
-notes in each section below. Workstream 3 also fixed two confirmed product
-gaps found while writing its tests (automation-rules replace, suggestion
-accept-posts-transaction — see its status note). Workstreams 4–7 remain open.
+**Status:** Workstreams 1–4 complete (2026-07-15) — see the status notes in
+each section below. Workstream 3 also fixed two confirmed product gaps found
+while writing its tests (automation-rules replace, suggestion
+accept-posts-transaction — see its status note). Workstreams 5–7 remain open.
 
 A concrete plan to close the backend coverage gaps identified in
 `docs/test-coverage-review-2026-07.md`, verified against a fresh merged
@@ -325,6 +325,28 @@ gains math hand-verified in at least two currencies.
 
 ## Workstream 4 — Pricing configuration, scheduler, worker
 
+**Status: done 2026-07-15.** Extended `app/pricing_test.go` (23 new tests)
+and added `api/pricing_test.go` (new file, 11 tests). `app/pricing.go` merged
+coverage → 87.8%; `api/pricing.go` → 74.5%. `runScheduledRefreshIfDue`,
+`runDueFXCoverage`, `processFXCoverageWork` went from 0% to 65–79% each (the
+`Start*` goroutine wrappers stay untested by design, matching the import-side
+pattern). Includes the DST transition test for `localDailyTimeUTC` across the
+2026-03-29 Europe/Amsterdam spring-forward.
+
+One test-design trap found along the way, not a product bug: the shared
+`newPricingRefreshTestService` fixture's per-currency account seeding fires a
+real DB trigger (`migrations/0001`, `"currency_activated"`) that
+auto-enqueues its own `fxCoverageWorkKind` background-work item. Any worker
+test that counts items by status has to drain that item first or baseline
+around it — several of this workstream's tests initially failed on a
+"processed twice" symptom that was actually the trigger's item plus the
+test's own, not a real double-processing bug. `SaveSourceAssignment`'s
+"reassignment replaces" framing in the plan text below was also corrected
+before writing tests: multiple active assignments per pair are the real
+(and correct) data model — a priority-ordered fallback list, resolved by
+`SourceAssignmentForPair`'s `ORDER BY priority` — not a single-slot
+replace-on-save like automation rules.
+
 **Why:** pricing feeds unrealized gains and FX-converted reports; config
 writes are 0% and the scheduler/worker pair has no equivalent of the good
 import-side tests. Clone the proven patterns from
@@ -465,7 +487,7 @@ including debugging.
 | 1 | Interactive import pipeline (W1) | 2–3 sessions | — | **done 2026-07-15** |
 | 2 | Import connections HTTP (W2) | 1 session | — | **done 2026-07-15** |
 | 3 | Investment service + HTTP (W3) | 3–4 sessions | — | **done 2026-07-15** |
-| 4 | Pricing config/scheduler/worker (W4) | 2 sessions | — | open |
+| 4 | Pricing config/scheduler/worker (W4) | 2 sessions | — | **done 2026-07-15** |
 | 5 | Financial-core invariant suite (W5) | 1–2 sessions | helps to have W3 seeds | open |
 | 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a/6b/6c not started) |
 | 7 | CI coverage signal (W7) | ½ session | best after W1–W4 for the floor | open |
