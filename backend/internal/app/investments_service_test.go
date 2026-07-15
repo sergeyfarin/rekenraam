@@ -963,3 +963,48 @@ func TestListEventSuggestions_ReturnsSeededSuggestions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, suggestions, 2)
 }
+
+// TestSell_AverageCostMismatchedQuantityScaleFailsLoudlyAtServiceLayer is the
+// service-path counterpart to db.TestInvestmentLotsAverageCostMismatchedScaleReturnsError
+// (Workstream 5 item 6): two ordinary Buy calls with different QuantityScale
+// values for the same holding account/commodity is a real, reachable way to
+// end up with open lots at different scales (validateTradeInput has no
+// cross-lot scale consistency check) — average_cost must reject this loudly
+// through Sell/PreviewSell, not just at the raw disposeLotTx layer.
+func TestSell_AverageCostMismatchedQuantityScaleFailsLoudlyAtServiceLayer(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(1000), QuantityScale: 2, // same 10 units, expressed at a finer scale
+		CashAmountValue: 120000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+
+	_, err = f.investmentService.PreviewSell(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(5), QuantityScale: 0,
+		CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+		CostBasisMethod: "average_cost",
+	})
+	require.Error(t, err, "average_cost must fail loudly, not silently mis-compute, when open lots have mismatched quantity scales")
+
+	_, err = f.investmentService.Sell(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(5), QuantityScale: 0,
+		CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+		CostBasisMethod: "average_cost",
+	})
+	require.Error(t, err, "commit must reject the same way preview did")
+}

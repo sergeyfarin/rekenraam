@@ -1,6 +1,6 @@
 # Backend Test Coverage Plan
 
-**Status:** Workstreams 1–4 complete (2026-07-15) — see the status notes in
+**Status:** Workstreams 1–5 complete (2026-07-15) — see the status notes in
 each section below. Workstream 3 also fixed two confirmed product gaps found
 while writing its tests (automation-rules replace, suggestion
 accept-posts-transaction — see its status note). Workstreams 5–7 remain open.
@@ -389,6 +389,39 @@ cases.
 
 ## Workstream 5 — Financial-core edge-case hardening (invariant suite)
 
+**Status: done 2026-07-15.** New file `db/investments_invariants_test.go`
+(reusable assertion helpers + a scenario × method matrix: single-lot exact
+close, partial across three lots, 1-minor-unit truncation stress, large
+values near int64 range, interleaved buy/sell/buy/sell, FIFO ordered by
+`opened_on` not insertion order, method-actually-matters, oversell atomicity
+via full snapshot compare, average-cost residual determinism). Plus one
+service-layer test (`app/investments_service_test.go`) for item 6 — mismatched
+quantity scales failing loudly under average_cost through `Sell`/`PreviewSell`,
+not just the raw `disposeLotTx` layer the existing db-layer test covered.
+
+**Verified before writing anything, not assumed:** the plan's originally
+stated invariant #1 ("Σ disposed_basis + Σ remaining_basis == Σ
+acquired_basis exactly, after any sequence of buys/sells") does **not** hold
+for `average_cost` when open lots have different unit costs — confirmed with
+a hand-computed counter-example run against the real code before any test was
+written (two lots, qty 100 each, basis 10000 and 30000; average-cost sale of
+150 units reports 30000 disposed but leaves 15000 remaining — 45000, not the
+original pool's 40000). This is intentional, not a bug:
+`disposeAverageCostLotTx` (`db/investments.go`) deliberately computes two
+different numbers per touched lot — the *reported* basis (pool rate, what
+callers/`PreviewSell`/`ListRealizedGains` see) and the *DB-deducted* basis
+(each lot's own rate, what's actually subtracted from
+`remaining_cost_basis_value`) — because using the pool rate for the DB write
+could drive a below-average-cost lot's remaining basis negative on a partial
+sale. `db/investments_invariants_test.go`'s file-level comment documents this
+in full; the helpers test the invariants that actually hold (residual
+exactness against the pool-rate total, pool quantity conservation,
+non-negative remainders) instead of the ones that don't. This also means
+`investments-plan.md`'s "Pool conservation" invariant #4 (`Σ remaining_cost_basis
++ disposed_basis_total == pooled_remaining_basis_before`) is stale relative to
+the shipped implementation — left as-is since that doc is an explicitly
+historical design record, not corrected here.
+
 **Why:** the lot math is well tested example-by-example; this workstream
 makes the invariants *reusable* so current code is hardened and future
 methods (I-03 analytical reporting, I-04 gain postings, R13 analytics) get
@@ -488,7 +521,7 @@ including debugging.
 | 2 | Import connections HTTP (W2) | 1 session | — | **done 2026-07-15** |
 | 3 | Investment service + HTTP (W3) | 3–4 sessions | — | **done 2026-07-15** |
 | 4 | Pricing config/scheduler/worker (W4) | 2 sessions | — | **done 2026-07-15** |
-| 5 | Financial-core invariant suite (W5) | 1–2 sessions | helps to have W3 seeds | open |
+| 5 | Financial-core invariant suite (W5) | 1–2 sessions | helps to have W3 seeds | **done 2026-07-15** |
 | 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a/6b/6c not started) |
 | 7 | CI coverage signal (W7) | ½ session | best after W1–W4 for the floor | open |
 
