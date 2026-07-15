@@ -1,7 +1,9 @@
 # Backend Test Coverage Plan
 
-**Status:** Workstreams 1 and 2 complete (2026-07-15) — see the status notes
-in each section below. Workstreams 3–7 remain open.
+**Status:** Workstreams 1, 2, and 3 complete (2026-07-15) — see the status
+notes in each section below. Workstream 3 also fixed two confirmed product
+gaps found while writing its tests (automation-rules replace, suggestion
+accept-posts-transaction — see its status note). Workstreams 4–7 remain open.
 
 A concrete plan to close the backend coverage gaps identified in
 `docs/test-coverage-review-2026-07.md`, verified against a fresh merged
@@ -195,6 +197,51 @@ exists and scans raw bytes.
 ---
 
 ## Workstream 3 — Investment service + HTTP (current functionality)
+
+**Status: done 2026-07-15.** `app/investments_service_test.go` (new file, ~40
+tests covering 3a–3c) and `api/investments_test.go` (new file, 15 tests
+covering 3d) shipped. `app/investments.go` merged coverage 43% → 83.7%;
+`api/investments.go` 12.7% → 79.7% (both well past the ≥60%/"every exported
+method" exit criteria). Gains math itself was already hand-verified across
+multiple currencies at the DB layer (`db/investments_test.go`'s
+`ListRealizedGains`/`PositionsWithGains` suites); the app-layer tests here
+prove the thin service wrapper passes results through correctly (nil-vs-value
+shape, sign, date-filter inclusivity) rather than re-deriving that arithmetic.
+
+Reading the real code before writing tests surfaced two confirmed gaps
+between documented and actual behavior — bigger than ordinary missing
+coverage, so they were fixed first (see
+`docs/test-coverage-review-2026-07.md` G-04 for the full writeup, and
+`docs/backlog.T-34` for what's still open):
+
+- **`PUT /investments/automation-rules` didn't replace** — it only upserted
+  the rules present in the request; an existing active `auto_post` rule
+  omitted from a later PUT stayed active untouched, able to post real trades
+  unattended forever. Fixed with a new `db.InvestmentRepository.ReplaceAutomationRules`
+  (one transaction, archives every active rule not in the new set) and a
+  regression test that failed on the old code
+  (`TestReplaceAutomationRulesArchivesOmittedRules`, `db/investments_test.go`).
+- **`POST .../accept` didn't post anything** — it only flipped the
+  suggestion's status column; `proposed_transaction_json` was parsed nowhere
+  and no status-transition guard existed. Fixed by defining a
+  `dividend_income` proposed-transaction contract and routing acceptance
+  through the existing `dividendWithPostWrite` pattern (transaction + status
+  update in one DB transaction — no split-transaction crash hole), with
+  malformed/unsupported proposals and downstream validation failures moving
+  the suggestion to `failed` with a reason instead of surfacing as an API
+  error. Proven by `TestAcceptSuggestion_PostsProposedDividendAndMarksAccepted`
+  and its sibling failure-path tests in `app/investments_service_test.go`.
+  Digging further revealed **no code anywhere produces
+  `investment_provider_events`/suggestions** — this fix makes the existing
+  endpoints correct for whatever data exists, but nothing generates that data
+  yet (T-34, deliberately out of scope here: needs a chosen data source and
+  its own design).
+
+Also corrected during this pass: the plan's original assumption that
+`SaveAutomationRules` already had "replace-all semantics" and that "accept
+posts the proposed transaction and flips status" were both wrong — the code
+review above superseded them before any test was written against the
+incorrect assumption.
 
 **Why:** real-money surface. The lot math below it is excellent; the service
 orchestration and handler layer above it are the gap (G-04). Split into
@@ -417,7 +464,7 @@ including debugging.
 | --- | --- | --- | --- | --- |
 | 1 | Interactive import pipeline (W1) | 2–3 sessions | — | **done 2026-07-15** |
 | 2 | Import connections HTTP (W2) | 1 session | — | **done 2026-07-15** |
-| 3 | Investment service + HTTP (W3) | 3–4 sessions | — | open |
+| 3 | Investment service + HTTP (W3) | 3–4 sessions | — | **done 2026-07-15** |
 | 4 | Pricing config/scheduler/worker (W4) | 2 sessions | — | open |
 | 5 | Financial-core invariant suite (W5) | 1–2 sessions | helps to have W3 seeds | open |
 | 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a/6b/6c not started) |

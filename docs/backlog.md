@@ -9,6 +9,29 @@ not already scheduled as product work. It is intentionally short.
 
 Status legend: `[ ]` open.
 
+## General
+
+### T-34 No producer of investment provider events/suggestions `[ ]`
+
+**Files:** `backend/internal/app/investments.go` (`DividendProvider`,
+`CorporateActionProvider` interfaces, declared but never implemented or
+referenced); `investment_provider_events` / `investment_event_suggestions`
+tables (`backend/migrations/0001_initial_schema.sql`).
+
+Verified 2026-07-15 (Workstream 3 investment test coverage): nothing in the
+codebase writes to `investment_provider_events` or
+`investment_event_suggestions` — no fetcher, worker, or import path creates
+them. The review UI and the accept/ignore/automation-rules endpoints all work
+correctly (fixed the same day — see below), but have no data to act on until
+a producer exists. `docs/product-requirements.md` lists "provider events and
+reviewable suggestions" as a real requirement. Needs: a chosen data source
+(no candidate picked yet), a fetch/detection design, and — separately — a
+lot-mutation design for structural corporate actions (split, merger,
+spin_off, ticker_change, delisting, `corporate_action`), which
+`AcceptSuggestion` currently rejects outright since only the
+`dividend_income` proposed-transaction kind (dividend, distribution,
+cash_in_lieu, return_of_capital) is implemented.
+
 ## Public-deployment security gates
 
 These do not block private/local development. They must be complete before

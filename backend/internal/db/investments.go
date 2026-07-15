@@ -19,6 +19,7 @@ var (
 	ErrDividendDefaultExists      = errors.New("dividend default already exists")
 	ErrInsufficientLots           = errors.New("insufficient lots")
 	ErrInvalidDisposalParams      = errors.New("invalid disposal parameters")
+	ErrEventSuggestionNotPending  = errors.New("investment event suggestion is not pending")
 )
 
 type InvestmentRepository struct {
@@ -1708,7 +1709,7 @@ func (r *InvestmentRepository) SetSuggestionStatus(ctx context.Context, bookID i
 	result, err := tx.ExecContext(ctx, `
 		UPDATE investment_event_suggestions
 		SET status = ?, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-		WHERE book_id = ? AND id = ?
+		WHERE book_id = ? AND id = ? AND status = 'suggested'
 	`, status, now, actorUserID, auditEventID, bookID, suggestionID)
 	if err != nil {
 		return EventSuggestionRecord{}, fmt.Errorf("update event suggestion: %w", err)
@@ -1718,7 +1719,13 @@ func (r *InvestmentRepository) SetSuggestionStatus(ctx context.Context, bookID i
 		return EventSuggestionRecord{}, fmt.Errorf("read event suggestion update rows: %w", err)
 	}
 	if rowsAffected == 0 {
-		return EventSuggestionRecord{}, ErrNotFound
+		// Distinguish "doesn't exist" (ErrNotFound) from "exists but is no
+		// longer pending" (ErrEventSuggestionNotPending) — eventSuggestionByIDTx
+		// itself returns ErrNotFound when the row is genuinely missing.
+		if _, err := eventSuggestionByIDTx(ctx, tx, bookID, suggestionID); err != nil {
+			return EventSuggestionRecord{}, err
+		}
+		return EventSuggestionRecord{}, ErrEventSuggestionNotPending
 	}
 	record, err := eventSuggestionByIDTx(ctx, tx, bookID, suggestionID)
 	if err != nil {
@@ -1726,6 +1733,118 @@ func (r *InvestmentRepository) SetSuggestionStatus(ctx context.Context, bookID i
 	}
 	if err := tx.Commit(); err != nil {
 		return EventSuggestionRecord{}, fmt.Errorf("commit set event suggestion status: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+// EventSuggestionByID reads one suggestion outside a transaction.
+func (r *InvestmentRepository) EventSuggestionByID(ctx context.Context, bookID int64, suggestionID int64) (EventSuggestionRecord, error) {
+	var record EventSuggestionRecord
+	err := r.database.QueryRowContext(ctx, `
+		SELECT id, book_id, provider_event_id, instrument_id, confidence_bps, status, proposed_transaction_json,
+			generated_transaction_id, failure_reason, created_at, updated_at
+		FROM investment_event_suggestions
+		WHERE book_id = ? AND id = ?
+	`, bookID, suggestionID).Scan(&record.ID, &record.BookID, &record.ProviderEventID, &record.InstrumentID, &record.ConfidenceBPS, &record.Status, &record.ProposedTransactionJSON, &record.GeneratedTransactionID, &record.FailureReason, &record.CreatedAt, &record.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return EventSuggestionRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return EventSuggestionRecord{}, fmt.Errorf("read event suggestion: %w", err)
+	}
+	return record, nil
+}
+
+// MarkSuggestionAcceptedInTx records a suggestion's generated transaction
+// within the same transaction that created it — the postWrite callback for
+// InvestmentService.dividendWithPostWrite, so a crash between posting the
+// transaction and marking the suggestion accepted is impossible (same
+// split-transaction hazard this repo guards against elsewhere, e.g.
+// recordCommitIdentityAndMarkRowInTx for imports). 0 rows affected means the
+// suggestion is no longer 'suggested' (a concurrent accept/ignore won the
+// race); the caller's own transaction rolls back in that case.
+func (r *InvestmentRepository) MarkSuggestionAcceptedInTx(ctx context.Context, tx *sql.Tx, bookID int64, suggestionID int64, transactionID int64, now string, actorUserID int64, authSessionID int64, requestID string) error {
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        bookID,
+		ActorUserID:   actorUserID,
+		AuthSessionID: authSessionID,
+		OccurredAt:    now,
+		RequestID:     requestID,
+		OriginType:    "browser_api",
+		Operation:     "investment.event_suggestion.accept",
+		Reason:        "accepted investment event suggestion",
+	})
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE investment_event_suggestions
+		SET status = 'accepted', generated_transaction_id = ?, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
+		WHERE book_id = ? AND id = ? AND status = 'suggested'
+	`, transactionID, now, actorUserID, auditEventID, bookID, suggestionID)
+	if err != nil {
+		return fmt.Errorf("mark event suggestion accepted: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read mark suggestion accepted rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrEventSuggestionNotPending
+	}
+	return nil
+}
+
+// MarkSuggestionFailed records why a suggestion's proposed transaction could
+// not be posted, without creating any ledger transaction. Guarded the same
+// way as MarkSuggestionAcceptedInTx: only a 'suggested' suggestion can
+// transition.
+func (r *InvestmentRepository) MarkSuggestionFailed(ctx context.Context, bookID int64, suggestionID int64, reason string, now string, actorUserID int64, authSessionID int64, requestID string) (EventSuggestionRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return EventSuggestionRecord{}, fmt.Errorf("begin mark suggestion failed: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        bookID,
+		ActorUserID:   actorUserID,
+		AuthSessionID: authSessionID,
+		OccurredAt:    now,
+		RequestID:     requestID,
+		OriginType:    "browser_api",
+		Operation:     "investment.event_suggestion.fail",
+		Reason:        "investment event suggestion failed to post",
+	})
+	if err != nil {
+		return EventSuggestionRecord{}, err
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE investment_event_suggestions
+		SET status = 'failed', failure_reason = ?, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
+		WHERE book_id = ? AND id = ? AND status = 'suggested'
+	`, reason, now, actorUserID, auditEventID, bookID, suggestionID)
+	if err != nil {
+		return EventSuggestionRecord{}, fmt.Errorf("mark event suggestion failed: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return EventSuggestionRecord{}, fmt.Errorf("read mark suggestion failed rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return EventSuggestionRecord{}, ErrEventSuggestionNotPending
+	}
+	record, err := eventSuggestionByIDTx(ctx, tx, bookID, suggestionID)
+	if err != nil {
+		return EventSuggestionRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return EventSuggestionRecord{}, fmt.Errorf("commit mark suggestion failed: %w", err)
 	}
 	committed = true
 	return record, nil
@@ -1784,7 +1903,21 @@ func (r *InvestmentRepository) SaveAutomationRule(ctx context.Context, params Sa
 		return AutomationRuleRecord{}, err
 	}
 
-	ruleID := params.RuleID
+	record, err := upsertAutomationRuleTx(ctx, tx, params.BookID, params.RuleID, params.Spec, params.RecordedAt, params.ActorUserID, auditEventID)
+	if err != nil {
+		return AutomationRuleRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return AutomationRuleRecord{}, fmt.Errorf("commit save automation rule: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+// upsertAutomationRuleTx creates or updates one automation rule within an
+// already-open transaction, attributing the write to auditEventID (shared
+// across every row touched by the caller's operation).
+func upsertAutomationRuleTx(ctx context.Context, tx *sql.Tx, bookID int64, ruleID int64, spec AutomationRuleSpec, recordedAt string, actorUserID int64, auditEventID int64) (AutomationRuleRecord, error) {
 	if ruleID > 0 {
 		result, err := tx.ExecContext(ctx, `
 			UPDATE investment_automation_rules
@@ -1793,7 +1926,7 @@ func (r *InvestmentRepository) SaveAutomationRule(ctx context.Context, params Sa
 				effective_from = ?, effective_to = ?, updated_at = ?, updated_by_user_id = ?,
 				updated_audit_event_id = ?
 			WHERE book_id = ? AND id = ?
-		`, nullableInt64Value(params.Spec.SourceID), nullableInt64Value(params.Spec.InstrumentID), params.Spec.EventFamily, params.Spec.Mode, params.Spec.ConfidenceThresholdBPS, params.Spec.RequiredAccountsJSON, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.RecordedAt, params.ActorUserID, auditEventID, params.BookID, ruleID)
+		`, nullableInt64Value(spec.SourceID), nullableInt64Value(spec.InstrumentID), spec.EventFamily, spec.Mode, spec.ConfidenceThresholdBPS, spec.RequiredAccountsJSON, spec.Status, spec.EffectiveFrom, nullableStringValue(spec.EffectiveTo), recordedAt, actorUserID, auditEventID, bookID, ruleID)
 		if err != nil {
 			return AutomationRuleRecord{}, fmt.Errorf("update automation rule: %w", err)
 		}
@@ -1813,7 +1946,7 @@ func (r *InvestmentRepository) SaveAutomationRule(ctx context.Context, params Sa
 				created_audit_event_id, updated_audit_event_id
 			)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, nullableInt64Value(params.Spec.SourceID), nullableInt64Value(params.Spec.InstrumentID), params.Spec.EventFamily, params.Spec.Mode, params.Spec.ConfidenceThresholdBPS, params.Spec.RequiredAccountsJSON, params.Spec.Status, params.Spec.EffectiveFrom, nullableStringValue(params.Spec.EffectiveTo), params.RecordedAt, params.ActorUserID, params.RecordedAt, params.ActorUserID, auditEventID, auditEventID)
+		`, bookID, nullableInt64Value(spec.SourceID), nullableInt64Value(spec.InstrumentID), spec.EventFamily, spec.Mode, spec.ConfidenceThresholdBPS, spec.RequiredAccountsJSON, spec.Status, spec.EffectiveFrom, nullableStringValue(spec.EffectiveTo), recordedAt, actorUserID, recordedAt, actorUserID, auditEventID, auditEventID)
 		if err != nil {
 			return AutomationRuleRecord{}, fmt.Errorf("insert automation rule: %w", err)
 		}
@@ -1823,15 +1956,93 @@ func (r *InvestmentRepository) SaveAutomationRule(ctx context.Context, params Sa
 		}
 	}
 
-	record, err := automationRuleByIDTx(ctx, tx, params.BookID, ruleID)
+	return automationRuleByIDTx(ctx, tx, bookID, ruleID)
+}
+
+// AutomationRuleUpsert is one rule within a ReplaceAutomationRules call.
+type AutomationRuleUpsert struct {
+	RuleID int64
+	Spec   AutomationRuleSpec
+}
+
+// ReplaceAutomationRulesParams describes a full-set replace of a book's
+// active automation rules.
+type ReplaceAutomationRulesParams struct {
+	BookID        int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	RecordedAt    string
+	ChangeReason  string
+	Rules         []AutomationRuleUpsert
+}
+
+// ReplaceAutomationRules upserts every rule in params.Rules and archives any
+// other active rule for the book that isn't among them, all in one
+// transaction sharing one audit event — the "replace" semantics the API
+// contract documents (an active auto_post rule silently surviving an
+// omission would keep posting real trades unattended).
+func (r *InvestmentRepository) ReplaceAutomationRules(ctx context.Context, params ReplaceAutomationRulesParams) ([]AutomationRuleRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
-		return AutomationRuleRecord{}, err
+		return nil, fmt.Errorf("begin replace automation rules: %w", err)
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.RecordedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	records := make([]AutomationRuleRecord, 0, len(params.Rules))
+	touchedIDs := make([]int64, 0, len(params.Rules))
+	for _, rule := range params.Rules {
+		record, err := upsertAutomationRuleTx(ctx, tx, params.BookID, rule.RuleID, rule.Spec, params.RecordedAt, params.ActorUserID, auditEventID)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+		touchedIDs = append(touchedIDs, record.ID)
+	}
+
+	archiveQuery := `
+		UPDATE investment_automation_rules
+		SET status = 'archived', updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
+		WHERE book_id = ? AND status = 'active'`
+	archiveArgs := []any{params.RecordedAt, params.ActorUserID, auditEventID, params.BookID}
+	if len(touchedIDs) > 0 {
+		placeholders := make([]string, len(touchedIDs))
+		for i, id := range touchedIDs {
+			placeholders[i] = "?"
+			archiveArgs = append(archiveArgs, id)
+		}
+		archiveQuery += ` AND id NOT IN (` + strings.Join(placeholders, ", ") + `)`
+	}
+	if _, err := tx.ExecContext(ctx, archiveQuery, archiveArgs...); err != nil {
+		return nil, fmt.Errorf("archive superseded automation rules: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
-		return AutomationRuleRecord{}, fmt.Errorf("commit save automation rule: %w", err)
+		return nil, fmt.Errorf("commit replace automation rules: %w", err)
 	}
 	committed = true
-	return record, nil
+	return records, nil
 }
 
 func insertInvestmentInstrumentVersion(ctx context.Context, tx *sql.Tx, instrumentID int64, versionSeq int64, spec InvestmentInstrumentSpec, commodityID int64, effectiveFrom string, recordedAt string, actorUserID int64, changeReason string, auditEventID int64) (int64, error) {

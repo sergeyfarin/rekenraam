@@ -581,6 +581,81 @@ func TestAutomationRuleCreateAndUpdate(t *testing.T) {
 	assert.Equal(t, 1, countRows(t, database, "investment_automation_rules"))
 }
 
+// TestReplaceAutomationRulesArchivesOmittedRules pins the "replace" contract
+// the API documents (OpenAPI: "Save (replace) investment automation rules";
+// docs/implemented.md: "PUT replaces full set"). Before this fix,
+// SaveAutomationRules only upserted the rules present in the request — an
+// existing active rule omitted from a later call stayed active untouched,
+// including auto_post rules that can post real trades unattended.
+func TestReplaceAutomationRulesArchivesOmittedRules(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repository := NewInvestmentRepository(database)
+
+	baseSpec := AutomationRuleSpec{
+		InstrumentID:           sql.NullInt64{Int64: instrument.ID, Valid: true},
+		EventFamily:            "dividend",
+		Mode:                   "suggest",
+		ConfidenceThresholdBPS: 9000,
+		RequiredAccountsJSON:   `{}`,
+		Status:                 "active",
+		EffectiveFrom:          "2026-06-12",
+	}
+
+	created, err := repository.ReplaceAutomationRules(ctx, ReplaceAutomationRulesParams{
+		BookID: 1, ActorUserID: ownerID, RequestID: "request-replace-create",
+		OriginType: "browser_api", Operation: "investment.automation_rules.replace",
+		RecordedAt: "2026-06-12T12:00:00Z", ChangeReason: "create two rules",
+		Rules: []AutomationRuleUpsert{
+			{Spec: baseSpec},
+			{Spec: baseSpec},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, created, 2)
+	ruleA, ruleB := created[0].ID, created[1].ID
+
+	replaced, err := repository.ReplaceAutomationRules(ctx, ReplaceAutomationRulesParams{
+		BookID: 1, ActorUserID: ownerID, RequestID: "request-replace-keep-a",
+		OriginType: "browser_api", Operation: "investment.automation_rules.replace",
+		RecordedAt: "2026-06-12T12:01:00Z", ChangeReason: "keep only rule A",
+		Rules: []AutomationRuleUpsert{
+			{RuleID: ruleA, Spec: baseSpec},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, replaced, 1)
+	assert.Equal(t, ruleA, replaced[0].ID)
+	assert.Equal(t, "active", replaced[0].Status)
+
+	all, err := repository.ListAutomationRules(ctx, 1)
+	require.NoError(t, err)
+	statusByID := make(map[int64]string, len(all))
+	for _, rule := range all {
+		statusByID[rule.ID] = rule.Status
+	}
+	assert.Equal(t, "active", statusByID[ruleA], "rule kept in the replace call must stay active")
+	assert.Equal(t, "archived", statusByID[ruleB], "rule omitted from the replace call must be archived, not left active")
+
+	// An empty-list replace archives everything, including auto_post rules
+	// that would otherwise keep posting real trades unattended.
+	emptyReplace, err := repository.ReplaceAutomationRules(ctx, ReplaceAutomationRulesParams{
+		BookID: 1, ActorUserID: ownerID, RequestID: "request-replace-clear",
+		OriginType: "browser_api", Operation: "investment.automation_rules.replace",
+		RecordedAt: "2026-06-12T12:02:00Z", ChangeReason: "clear all rules",
+		Rules: nil,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, emptyReplace)
+
+	all, err = repository.ListAutomationRules(ctx, 1)
+	require.NoError(t, err)
+	for _, rule := range all {
+		assert.Equal(t, "archived", rule.Status, "every rule must be archived after an empty-list replace")
+	}
+}
+
 func migratedInvestmentTestDatabase(t *testing.T) (*sql.DB, int64, int64) {
 	t.Helper()
 	ctx := context.Background()

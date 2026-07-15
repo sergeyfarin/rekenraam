@@ -109,7 +109,7 @@ along the way:
   `TestPatchImportBatch_InvalidResolutionJSONRejectedAsValidationError` and
   `TestPatchImportBatch_InvalidDedupeStatusRejectedAsValidationError`.
 
-### G-04 Investment service orchestration is thin above the db layer
+### G-04 Investment service orchestration is thin above the db layer `[x]`
 
 The db-layer lot math is excellent, but in `app/investments.go` (1,940 LOC):
 `PreviewSell` and `computeSellDisposals` **0%**, `ReinvestedDividend` **0%**,
@@ -119,6 +119,53 @@ and `ListRealizedGains`/`ListUnrealizedGains` all **0%**. `Sell` is 57%,
 tests). `api/investments.go` handlers are ~13%. A sell-preview that disagrees
 with the actual sell, or a wrong reinvested-dividend posting, would not be
 caught today.
+
+Closed 2026-07-15: `app/investments_service_test.go` (~40 tests) and
+`api/investments_test.go` (15 tests) added — every exported
+`InvestmentService` method now has a direct test, including a table-driven
+preview/commit equivalence check across all four cost-basis methods (the
+single highest-value test: a preview/commit divergence is a user-facing trust
+bug). `app/investments.go` merged coverage 43% → 83.7%; `api/investments.go`
+12.7% → 79.7%. See `docs/backend-test-coverage-plan.md` Workstream 3 for the
+full design.
+
+Writing these tests surfaced two real product gaps, bigger than ordinary
+missing coverage, found by reading the actual code against its documented
+contract before trusting the plan's assumptions about it:
+
+- **`PUT /investments/automation-rules` didn't replace**, despite OpenAPI
+  ("Save (replace)...") and `docs/implemented.md` ("PUT replaces full set")
+  both documenting replace semantics. The code only upserted the rules in the
+  request — an existing active `auto_post` rule omitted from a later PUT
+  stayed active untouched, able to keep auto-posting real trades unattended.
+  Fixed with `db.InvestmentRepository.ReplaceAutomationRules` (one
+  transaction: upsert every given rule, archive every other active rule for
+  the book). Proven by
+  `TestReplaceAutomationRulesArchivesOmittedRules` (`db/investments_test.go`),
+  which failed on the pre-fix code on every run.
+- **`POST .../accept` didn't post anything**, despite OpenAPI documenting it
+  as "posts the proposed transaction" and `implemented.md` marking the whole
+  suggestions feature ✅ shipped. The code only flipped the suggestion's
+  `status` column — `proposed_transaction_json` was parsed nowhere in the
+  codebase, `generated_transaction_id` was never written by anything, and no
+  status-transition guard existed (accepting an already-accepted suggestion
+  silently re-wrote the status). Fixed by defining a `dividend_income`
+  proposed-transaction contract and routing acceptance through the existing
+  `dividendWithPostWrite` pattern, so the transaction post and the
+  suggestion's acceptance marker land in one DB transaction — no
+  split-transaction crash hole (the T-06 bug class). A malformed/unsupported
+  proposal or a downstream validation failure now moves the suggestion to
+  `failed` with a reason instead of silently doing nothing or crashing.
+  Proven by `TestAcceptSuggestion_PostsProposedDividendAndMarksAccepted` and
+  four sibling failure-path tests.
+  **Deeper finding:** grepping the whole codebase found **no code anywhere
+  writes to `investment_provider_events` or `investment_event_suggestions`**
+  — the entire "detect a corporate action → suggest it → review" pipeline
+  was never built, only its schema and CRUD/read scaffold. This fix makes
+  the existing endpoints correct for whatever suggestion data exists (seeded
+  directly in tests today); it does not create a producer. Tracked as T-34
+  in `docs/backlog.md`, deliberately out of scope for this pass — needs a
+  chosen data source and its own design.
 
 ### G-05 Pricing service barely tested
 
@@ -160,8 +207,9 @@ sit.
    lifecycle test each in the existing `api` test style (create connection →
    list shows `key_hint` not key → refresh → delete; start QIF import →
    preview → commit → batch status).~~ **Closed 2026-07-15** — see G-03 above.
-2. **Service tests for `PreviewSell` vs `Sell` consistency and
-   `ReinvestedDividend` postings** (G-04) — these guard real money math.
+2. ~~**Service tests for `PreviewSell` vs `Sell` consistency and
+   `ReinvestedDividend` postings** (G-04) — these guard real money math.~~
+   **Closed 2026-07-15** — see G-04 above.
 3. **Pricing scheduler/worker tests** cloned from the import-side pattern
    (G-05).
 4. **Frontend unit tests for money input parsing and balance validation**

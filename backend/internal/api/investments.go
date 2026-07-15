@@ -848,6 +848,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
 	case errors.Is(err, app.ErrInvestmentSuggestionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment event suggestion not found")
+	case errors.Is(err, app.ErrInvestmentSuggestionNotPending):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "investment event suggestion is not pending")
 	case errors.Is(err, app.ErrAutomationRuleNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment automation rule not found")
 	default:

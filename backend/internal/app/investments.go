@@ -21,14 +21,15 @@ const (
 )
 
 var (
-	ErrInvestmentInstrumentNotFound = errors.New("investment instrument not found")
-	ErrInvestmentInstrumentExists   = errors.New("investment instrument already exists")
-	ErrCostBasisProfileNotFound     = errors.New("cost basis profile not found")
-	ErrCostBasisProfileExists       = errors.New("cost basis profile already exists")
-	ErrDividendDefaultNotFound      = errors.New("dividend default not found")
-	ErrInvestmentLotsInsufficient   = errors.New("insufficient investment lots")
-	ErrInvestmentSuggestionNotFound = errors.New("investment event suggestion not found")
-	ErrAutomationRuleNotFound       = errors.New("investment automation rule not found")
+	ErrInvestmentInstrumentNotFound   = errors.New("investment instrument not found")
+	ErrInvestmentInstrumentExists     = errors.New("investment instrument already exists")
+	ErrCostBasisProfileNotFound       = errors.New("cost basis profile not found")
+	ErrCostBasisProfileExists         = errors.New("cost basis profile already exists")
+	ErrDividendDefaultNotFound        = errors.New("dividend default not found")
+	ErrInvestmentLotsInsufficient     = errors.New("insufficient investment lots")
+	ErrInvestmentSuggestionNotFound   = errors.New("investment event suggestion not found")
+	ErrInvestmentSuggestionNotPending = errors.New("investment event suggestion is not pending")
+	ErrAutomationRuleNotFound         = errors.New("investment automation rule not found")
 )
 
 type InstrumentSearchProvider interface {
@@ -1355,8 +1356,97 @@ func (s *InvestmentService) ListEventSuggestions(ctx context.Context) ([]Investm
 	return toInvestmentEventSuggestions(records), nil
 }
 
+// AcceptSuggestion parses the suggestion's proposed_transaction_json and
+// posts it as a real ledger transaction, recording the result on the
+// suggestion in the same DB transaction as the post (see
+// MarkSuggestionAcceptedInTx). A malformed proposal, an unsupported kind, or
+// a downstream validation failure moves the suggestion to 'failed' with a
+// reason and returns it with a nil error — the suggestion's own state
+// reflects the failure, this is not an API-level error. Only a genuine
+// infra failure or an already-non-pending suggestion is returned as an
+// error.
 func (s *InvestmentService) AcceptSuggestion(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, suggestionID int64) (InvestmentEventSuggestion, error) {
-	return s.setSuggestionStatus(ctx, ownerUserID, authSessionID, requestID, suggestionID, "accepted")
+	if ownerUserID <= 0 {
+		return InvestmentEventSuggestion{}, ValidationError{Message: "owner user is required"}
+	}
+	if suggestionID <= 0 {
+		return InvestmentEventSuggestion{}, ValidationError{Message: "suggestion id is required"}
+	}
+
+	record, err := s.repository.EventSuggestionByID(ctx, BookID, suggestionID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotFound
+		}
+		return InvestmentEventSuggestion{}, fmt.Errorf("read investment event suggestion: %w", err)
+	}
+	if record.Status != "suggested" {
+		return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotPending
+	}
+
+	now := s.now().UTC().Format(time.RFC3339)
+
+	proposal, err := parseProposedDividendTransaction(record.ProposedTransactionJSON)
+	if err != nil {
+		return s.failSuggestion(ctx, suggestionID, err.Error(), now, ownerUserID, authSessionID, requestID)
+	}
+
+	commodityID := proposal.CommodityID
+	if commodityID == nil && record.InstrumentID.Valid {
+		instrument, instrErr := s.Instrument(ctx, record.InstrumentID.Int64)
+		if instrErr != nil {
+			return s.failSuggestion(ctx, suggestionID, fmt.Sprintf("resolve instrument commodity: %v", instrErr), now, ownerUserID, authSessionID, requestID)
+		}
+		commodityID = &instrument.CommodityID
+	}
+
+	dividendInput := DividendInput{
+		OwnerUserID:          ownerUserID,
+		AuthSessionID:        authSessionID,
+		RequestID:            requestID,
+		TransactionDate:      proposal.TransactionDate,
+		CommodityID:          commodityID,
+		CashAccountID:        proposal.CashAccountID,
+		CashCommodityID:      proposal.CashCommodityID,
+		IncomeAccountID:      proposal.IncomeAccountID,
+		AmountValue:          proposal.AmountValue,
+		AmountScale:          proposal.AmountScale,
+		WithholdingValue:     proposal.WithholdingValue,
+		WithholdingScale:     proposal.WithholdingScale,
+		WithholdingAccountID: proposal.WithholdingAccountID,
+		Memo:                 proposal.Memo,
+		ExternalRefHint:      proposal.ExternalRefHint,
+		PayeeID:              proposal.PayeeID,
+		ChangeReason:         "accepted provider event suggestion",
+		Operation:            "investment.event_suggestion.accept",
+	}
+	_, err = s.dividendWithPostWrite(ctx, dividendInput, func(tx *sql.Tx, transactionID int64) error {
+		return s.repository.MarkSuggestionAcceptedInTx(ctx, tx, BookID, suggestionID, transactionID, now, ownerUserID, authSessionID, requestID)
+	})
+	if err != nil {
+		var validationErr ValidationError
+		if errors.As(err, &validationErr) {
+			return s.failSuggestion(ctx, suggestionID, validationErr.Error(), now, ownerUserID, authSessionID, requestID)
+		}
+		return InvestmentEventSuggestion{}, fmt.Errorf("post accepted suggestion transaction: %w", err)
+	}
+
+	accepted, err := s.repository.EventSuggestionByID(ctx, BookID, suggestionID)
+	if err != nil {
+		return InvestmentEventSuggestion{}, fmt.Errorf("reload accepted investment event suggestion: %w", err)
+	}
+	return toInvestmentEventSuggestion(accepted), nil
+}
+
+func (s *InvestmentService) failSuggestion(ctx context.Context, suggestionID int64, reason string, now string, ownerUserID int64, authSessionID int64, requestID string) (InvestmentEventSuggestion, error) {
+	failed, err := s.repository.MarkSuggestionFailed(ctx, BookID, suggestionID, reason, now, ownerUserID, authSessionID, requestID)
+	if err != nil {
+		if errors.Is(err, db.ErrEventSuggestionNotPending) {
+			return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotPending
+		}
+		return InvestmentEventSuggestion{}, fmt.Errorf("mark investment event suggestion failed: %w", err)
+	}
+	return toInvestmentEventSuggestion(failed), nil
 }
 
 func (s *InvestmentService) IgnoreSuggestion(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, suggestionID int64) (InvestmentEventSuggestion, error) {
@@ -1375,9 +1465,68 @@ func (s *InvestmentService) setSuggestionStatus(ctx context.Context, ownerUserID
 		if errors.Is(err, db.ErrNotFound) {
 			return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotFound
 		}
+		if errors.Is(err, db.ErrEventSuggestionNotPending) {
+			return InvestmentEventSuggestion{}, ErrInvestmentSuggestionNotPending
+		}
 		return InvestmentEventSuggestion{}, fmt.Errorf("update investment suggestion: %w", err)
 	}
 	return toInvestmentEventSuggestion(record), nil
+}
+
+// proposedTransactionKindDividendIncome is the only proposed_transaction_json
+// "kind" AcceptSuggestion knows how to post. It covers the cash-income-shaped
+// event families (dividend, distribution, cash_in_lieu, return_of_capital) —
+// all reduce to "cash in, income account credited, optional withholding",
+// exactly DividendInput's shape. Structural corporate actions (split,
+// merger, spin_off, ticker_change, delisting, corporate_action) have no
+// lot-mutation design yet and are rejected loudly, not silently ignored —
+// see docs/backlog.md.
+const proposedTransactionKindDividendIncome = "dividend_income"
+
+// proposedDividendTransaction is the contract a future provider-event
+// producer must write into investment_event_suggestions.proposed_transaction_json
+// for AcceptSuggestion to post it.
+type proposedDividendTransaction struct {
+	Kind                 string `json:"kind"`
+	TransactionDate      string `json:"transaction_date"`
+	CashAccountID        int64  `json:"cash_account_id"`
+	CashCommodityID      int64  `json:"cash_commodity_id"`
+	AmountValue          int64  `json:"amount_value"`
+	AmountScale          int    `json:"amount_scale"`
+	CommodityID          *int64 `json:"commodity_id,omitempty"`
+	IncomeAccountID      *int64 `json:"income_account_id,omitempty"`
+	WithholdingAccountID *int64 `json:"withholding_account_id,omitempty"`
+	WithholdingValue     *int64 `json:"withholding_value,omitempty"`
+	WithholdingScale     *int   `json:"withholding_scale,omitempty"`
+	Memo                 string `json:"memo,omitempty"`
+	ExternalRefHint      string `json:"external_ref_hint,omitempty"`
+	PayeeID              *int64 `json:"payee_id,omitempty"`
+}
+
+func parseProposedDividendTransaction(raw string) (proposedDividendTransaction, error) {
+	var proposal proposedDividendTransaction
+	if err := json.Unmarshal([]byte(raw), &proposal); err != nil {
+		return proposedDividendTransaction{}, fmt.Errorf("proposed transaction is not valid JSON: %w", err)
+	}
+	if proposal.Kind != proposedTransactionKindDividendIncome {
+		return proposedDividendTransaction{}, fmt.Errorf("unsupported proposed transaction kind %q", proposal.Kind)
+	}
+	if strings.TrimSpace(proposal.TransactionDate) == "" {
+		return proposedDividendTransaction{}, fmt.Errorf("proposed transaction date is required")
+	}
+	if proposal.CashAccountID <= 0 {
+		return proposedDividendTransaction{}, fmt.Errorf("proposed cash account is required")
+	}
+	if proposal.CashCommodityID <= 0 {
+		return proposedDividendTransaction{}, fmt.Errorf("proposed cash commodity is required")
+	}
+	if proposal.AmountValue <= 0 {
+		return proposedDividendTransaction{}, fmt.Errorf("proposed amount is required")
+	}
+	if proposal.AmountScale < 0 {
+		return proposedDividendTransaction{}, fmt.Errorf("proposed amount scale is invalid")
+	}
+	return proposal, nil
 }
 
 func (s *InvestmentService) ListAutomationRules(ctx context.Context) ([]InvestmentAutomationRule, error) {
@@ -1388,46 +1537,43 @@ func (s *InvestmentService) ListAutomationRules(ctx context.Context) ([]Investme
 	return toInvestmentAutomationRules(records), nil
 }
 
+// SaveAutomationRules replaces the book's full active automation-rule set
+// with input.Rules: every rule given is created or updated, and any
+// currently-active rule not among them is archived in the same transaction.
+// An empty Rules list is a legitimate "archive everything" request, not an
+// error — that's the correct reading of "replace".
 func (s *InvestmentService) SaveAutomationRules(ctx context.Context, input SaveAutomationRulesInput) ([]InvestmentAutomationRule, error) {
 	if input.OwnerUserID <= 0 {
 		return nil, ValidationError{Message: "owner user is required"}
 	}
-	if len(input.Rules) == 0 {
-		return nil, ValidationError{Message: "at least one automation rule is required"}
-	}
 	now := s.now().UTC()
 	recordedAt := now.Format(time.RFC3339)
-	rules := make([]InvestmentAutomationRule, 0, len(input.Rules))
+	upserts := make([]db.AutomationRuleUpsert, 0, len(input.Rules))
 	for _, ruleInput := range input.Rules {
 		spec, err := cleanAutomationRuleSpec(ruleInput, now)
 		if err != nil {
 			return nil, err
 		}
-		operation := "investment.automation_rule.create"
-		if ruleInput.RuleID > 0 {
-			operation = "investment.automation_rule.update"
-		}
-		record, err := s.repository.SaveAutomationRule(ctx, db.SaveAutomationRuleParams{
-			BookID:        BookID,
-			RuleID:        ruleInput.RuleID,
-			ActorUserID:   input.OwnerUserID,
-			AuthSessionID: input.AuthSessionID,
-			RequestID:     input.RequestID,
-			OriginType:    "browser_api",
-			Operation:     operation,
-			Spec:          spec,
-			RecordedAt:    recordedAt,
-			ChangeReason:  input.ChangeReason,
-		})
-		if err != nil {
-			if errors.Is(err, db.ErrNotFound) {
-				return nil, ErrAutomationRuleNotFound
-			}
-			return nil, fmt.Errorf("save investment automation rule: %w", err)
-		}
-		rules = append(rules, toInvestmentAutomationRule(record))
+		upserts = append(upserts, db.AutomationRuleUpsert{RuleID: ruleInput.RuleID, Spec: spec})
 	}
-	return rules, nil
+	records, err := s.repository.ReplaceAutomationRules(ctx, db.ReplaceAutomationRulesParams{
+		BookID:        BookID,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "investment.automation_rules.replace",
+		RecordedAt:    recordedAt,
+		ChangeReason:  input.ChangeReason,
+		Rules:         upserts,
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, ErrAutomationRuleNotFound
+		}
+		return nil, fmt.Errorf("save investment automation rules: %w", err)
+	}
+	return toInvestmentAutomationRules(records), nil
 }
 
 func cleanAutomationRuleSpec(input InvestmentAutomationRuleInput, now time.Time) (db.AutomationRuleSpec, error) {
