@@ -17,7 +17,7 @@ backend/        Go backend, SQLite access, migrations, backend tests, and embedd
 frontend/       SvelteKit app compiled to static files
 api/            Bruno API tests and OpenAPI description
 e2e/            End-to-end browser tests
-docs/           Architecture notes and early product decisions
+docs/           Product and architecture documentation (see docs/README.md)
 scripts/        Build and developer workflow scripts
 deploy/         Docker and deployment notes
 dist/           Local release output
@@ -43,27 +43,23 @@ Area notes:
 
 ## Architecture Notes
 
-The project has one active planning system:
+[docs/README.md](docs/README.md) is the documentation map. The four
+current-state files are:
 
 - [docs/roadmap.md](docs/roadmap.md) — the one prioritized plan for what is next.
+- [docs/todo.md](docs/todo.md) — the short-horizon working queue and pending decisions.
+- [docs/backlog.md](docs/backlog.md) — tracked defects, technical debt, and public-deployment gates.
 - [docs/implemented.md](docs/implemented.md) — the feature ledger of what ships today.
-- [docs/backlog.md](docs/backlog.md) — live technical-debt and public-deployment gates only.
 
-Completed plans and dated reviews are design and audit references, not active
-trackers. The resolved backlog record is in
-[docs/reviews/resolved-backlog-2026-07.md](docs/reviews/resolved-backlog-2026-07.md).
-
-Active product requirements and durable phase boundaries are documented in [docs/product-requirements.md](docs/product-requirements.md).
-
-Repo-wide conventions are documented in [docs/conventions.md](docs/conventions.md).
-
-Archive requirement review and near-term package or approach locks are documented in [docs/archive-requirements-review.md](docs/archive-requirements-review.md).
-
-Accepted decision records are documented in [docs/adrs/](docs/adrs/).
-
-Developer workflow, commands, and commit conventions are documented in [docs/developer-workflow.md](docs/developer-workflow.md).
-
-Early architecture decisions are documented in [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md).
+Reference material is sorted by kind: governance in
+[docs/product-requirements.md](docs/product-requirements.md) and
+[docs/conventions.md](docs/conventions.md); accepted decision records in
+[docs/adrs/](docs/adrs/) and [docs/early-architecture-decisions.md](docs/early-architecture-decisions.md);
+feature plans in [docs/plans/](docs/plans/); durable design documents in
+[docs/design/](docs/design/); dated audits, reviews, and analyses in
+[docs/reviews/](docs/reviews/); superseded trackers and pre-Go-stack reviews
+in [docs/archive/](docs/archive/). Developer workflow, commands, and commit
+conventions are in [docs/developer-workflow.md](docs/developer-workflow.md).
 
 Keep these documents current when a feature introduces a durable product or technical constraint.
 

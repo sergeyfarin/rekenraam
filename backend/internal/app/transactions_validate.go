@@ -26,9 +26,10 @@ const (
 // has no database row and triggers no side effects until it is saved as a draft
 // or posted transaction. "draft" here always means a persisted, durable draft
 // (autosave, scheduled generation, committed import awaiting review) excluded
-// from the ledger but able to trigger background work such as FX coverage —
-// never the unsaved working copy. Soft-delete is the separate deleted_at flag,
-// not a status value. See docs/transaction-ledger-core-plan.md.
+// from the ledger — never the unsaved working copy. Background FX coverage
+// fires on posted versions only; a promoted draft's foreign-currency dates get
+// coverage at promotion. Soft-delete is the separate deleted_at flag, not a
+// status value. See docs/plans/transaction-ledger-core-plan.md.
 var transactionStatuses = map[string]bool{
 	"draft":  true,
 	"posted": true,

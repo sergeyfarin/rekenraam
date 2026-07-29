@@ -11,7 +11,7 @@ The two items this document deliberately deferred (`rounding_adjustment`,
 closed-period posting guards) are still deferred — neither has a roadmap item —
 and remain the right call until a concrete workflow needs them. The "Investment
 Rule" and "Future tables" section below is superseded by the shipped investment
-system (see `docs/investments-plan.md`, status: R12 complete, Trading 212 lots
+system (see `docs/plans/investments-plan.md`, status: R12 complete, Trading 212 lots
 shipped 2026-07-03); it is kept only as a historical note, not as a spec.
 
 This document updates the transaction schema proposal after the tags,
@@ -847,7 +847,7 @@ Do not add rounding adjustment until a real rounding workflow requires it.
 
 This section is the pre-implementation sketch of lot accounting written before
 investments shipped. **It is stale and no longer describes the real schema or
-rules.** The shipped design lives in `docs/investments-plan.md` and the actual
+rules.** The shipped design lives in `docs/plans/investments-plan.md` and the actual
 tables are `investment_lots`, `investment_lot_events` (event-sourced, not the
 `investment_lot_assignments` sketch below), `investment_provider_events`,
 `investment_event_suggestions`, `investment_automation_rules`,

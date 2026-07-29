@@ -3,9 +3,50 @@
 This is the one active, forward-looking plan for Rekenraam. It answers
 **what to build next**, in order. It is governed by
 `docs/product-requirements.md`; shipped scope is recorded in
-`docs/implemented.md`; live technical debt is in `docs/backlog.md`.
+`docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
+short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-07-12.
+Last reviewed: 2026-07-12. Structure updated 2026-07-19 (slice index and
+pending-proposals pointer added; no priority changes).
+
+## Slice index
+
+Every R-number ever used, so references in other documents stay resolvable.
+Statuses: ✅ shipped · ▶ current · ⏭ planned (ordered below) · ⏸ deliberately
+later · — retired/unassigned.
+
+| Slice | Name | Status | Primary document |
+|---|---|---|---|
+| R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
+| R2 | Reports users can act on | ▶ | `docs/plans/reports-plan.md` |
+| R3 | Portable core data (CSV/QIF export) | ⏭ | this file |
+| R3a | Accessibility regression coverage | ⏭ | this file |
+| R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
+| R5 | Ordinary-bank CSV import + profiles | ⏭ | `docs/plans/import-plan.md` |
+| R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
+| R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
+| R7a | Daily-entry convenience | ⏸ | this file |
+| R8 | Budgets | ⏭ | this file |
+| R9 | Recurring transactions | ⏭ | this file |
+| R10 | Projected balances / forecasting | ⏭ | this file |
+| R11 | Pricing/FX management UI | ⏸ | this file |
+| R12 | — unassigned (reserved, never defined) | — | — |
+| R13 | Investment return analytics (TWR/MWR) | ⏸ | this file |
+| R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
+| R15 | Connections expansion (IBKR Flex, EU/UK banks, quote/event providers) | ⏸ | `docs/plans/connections-plan.md` |
+
+## Proposals pending decision
+
+`docs/reviews/roadmap-review-2026-07-19.md` (§3) proposes several sequencing
+changes (EU-import-correctness gate, R3 backup scope, rules-v1-in-R5, R10
+promotion, an investment-lifecycle slice, pre-announcement API tokens). None
+is adopted until accepted into this file; the decision checklist lives in
+`docs/todo.md`.
+
+The R14/R15 plans (2026-07-19) are scoped and sliced but deliberately later:
+their internal sequencing proposals (IBKR → quotes → GoCardless → T-34
+producer; R14a storage possibly pulled forward next to R3's backup work) are
+adopted or amended here when each becomes current work.
 
 ## Direction
 
@@ -20,7 +61,7 @@ The product is deliberately single-user and self-hosted. Connections are
 bring-your-own-key adapters, never guaranteed coverage. Native apps,
 small-business accounting, a hosted service, and broker trade execution are out
 of current scope. The trade-execution decision and market analysis are retained
-in `docs/competitive-analysis-2026-07.md`.
+in `docs/reviews/competitive-analysis-2026-07.md`.
 
 ## Current plan
 
@@ -31,7 +72,7 @@ must not create a competing sequence.
 ### Now — R2: reports users can act on
 
 Ship a reports route with net worth over time, spending by category/payee, and
-cashflow. `docs/reports-plan.md` is the implementation reference.
+cashflow. `docs/plans/reports-plan.md` is the implementation reference.
 
 **Started:** `/app/reports` now presents the exact net-worth series with
 URL-addressable date/bucket filters and an accessible per-commodity table.
@@ -50,7 +91,7 @@ Deliver in this order:
 The first implementation must be a coherent vertical slice, but this is a
 **sequencing constraint, not a deleted design decision**. The fuller report
 contract—including saved definitions/runs, cross-currency valuation, investment
-dimensions, and later snapshots—remains in `docs/reports-plan.md`. At the R2
+dimensions, and later snapshots—remains in `docs/plans/reports-plan.md`. At the R2
 acceptance review, explicitly decide which of those items is justified by real
 use before moving to R3; do not let it disappear by omission.
 
@@ -86,25 +127,33 @@ commit pipeline; do not build another import path.
 These are valuable, but they are not allowed to displace the current plan:
 
 - R6: XLSX and OFX/QFX adapters, import matching, per-split mapping, batch
-  rollback, and richer import history. `docs/import-plan.md` retains the detailed
+  rollback, and richer import history. `docs/plans/import-plan.md` retains the detailed
   data, lifecycle, and acceptance design.
 - Import rules and payee/category cleanup: persistent staged-pipeline rules that
   match payee/description/amount and set category, payee, or tags; duplicate
   payee merge, bulk recategorization, and the imported `needs_review` queue.
-- A second provider, with IBKR Flex Query the likely investor candidate;
-  GoCardless Bank Account Data (EU) and SimpleFIN Bridge (US) remain candidates
-  for the broader bank-feed need. All remain bring-your-own-key adapters.
+- R15 connections expansion: IBKR Flex Query (detailed plan ready), EU/UK
+  banks via GoCardless Bank Account Data (detailed plan ready), SimpleFIN
+  Bridge (US), security-quote and dividend/corporate-action event providers,
+  and CSV mapping-profile presets for API-less brokers (Trade Republic,
+  DeGiro, Raisin, HL/AJ Bell/ii). All bring-your-own-key; assessment matrix,
+  free-vs-paid verdicts, and slice designs in `docs/plans/connections-plan.md`.
 - R7a daily-entry convenience: transaction templates, payee defaults, saved
   views, and keyboard-first entry.
 - R11 pricing/FX management UI.
 - R13 investment return analytics (TWR/MWR, allocation, benchmark comparison).
-- Multi-currency reporting, report snapshots, attachment storage, multi-user,
-  and household features.
+- R14 receipts & attachments: durable attachment storage (resolves the open
+  attachment product decision), receipt capture with in-browser OCR, and a
+  match-or-draft inbox using the reserved draft-producer workflow —
+  `docs/plans/receipts-plan.md`. The storage slice (R14a) is a candidate to
+  pull forward alongside R3's backup work.
+- Multi-currency reporting, report snapshots, multi-user, and household
+  features.
 
 ## Competitor and parity check
 
 Keep `docs/competitor-comparison.md` as the maintained parity matrix and
-`docs/competitive-analysis-2026-07.md` as the dated deep dive. Before declaring
+`docs/reviews/competitive-analysis-2026-07.md` as the dated deep dive. Before declaring
 each roadmap initiative complete, update the comparison's implication section
 and record either the parity gained or the deliberate gap retained.
 
@@ -151,7 +200,9 @@ Resolve these only when their related slice becomes current work:
 - Export scope beyond core ledger CSV/QIF, including a full structured JSON
   backup of settings and metadata.
 - First non-English UI languages and the highest-priority mobile workflow.
-- Attachment storage, retention, access-control, backup, and encryption model.
+- Attachment storage, retention, access-control, backup, and encryption model
+  — a proposed resolution now exists in `docs/plans/receipts-plan.md` (R14a);
+  decide when that slice is scheduled.
 - I-03: whether gains reporting should offer read-only analytical methods in
   addition to the authoritative lot-disposal method.
 - I-04: whether realized gains/losses should remain computed reporting values or

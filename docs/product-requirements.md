@@ -79,7 +79,7 @@ These decisions must be locked before the first real domain slice beyond setup/a
   by **void** (stays visible, marked voided, reversible) or **soft-delete**
   (hidden from the table, durable, recoverable) — two distinct workflows — or by
   a corrective entry; never by hard delete. `reconciled` is an independent
-  posting-verification axis. See `docs/transaction-ledger-core-plan.md`.
+  posting-verification axis. See `docs/plans/transaction-ledger-core-plan.md`.
 
 Already locked before domain work:
 

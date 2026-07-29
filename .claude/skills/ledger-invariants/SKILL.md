@@ -44,8 +44,10 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   (no FX coverage, no side effects). Not a status.
 - **`draft`**: a real persisted `transaction_versions` row, excluded from ledger
   and reports. **System-only** — no user-facing "save as draft"; reserved for
-  future producers (import review, scheduled generation). Drafts may trigger
-  background FX coverage because they are durable.
+  future producers (import review, scheduled generation). Drafts do **not**
+  trigger background FX coverage — the coverage trigger fires on posted
+  versions only, so a promoted draft's foreign-currency dates get coverage at
+  promotion (see `implemented.md`: "Drafts/previews do not trigger downloads").
 - **`posted`**: in the ledger and reports. Manual entry goes directly to posted.
   Posted ≠ reconciled; posted stays editable until reconciliation locks it.
 - **`voided`**: stays visible in the UI marked voided (intentional reference

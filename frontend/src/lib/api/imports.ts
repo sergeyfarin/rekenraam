@@ -198,7 +198,7 @@ export function parseNormalized(row: ImportStagedRow): NormalizedRow {
 // ImportBatchSourceMeta is the shape app.trading212BatchMeta marshals into
 // batch.source_meta for online (fetch-driven) batches. It is not part of the
 // generated OpenAPI types because source_meta is an opaque JSON string by
-// design (see docs/trading212-import-plan.md "Data model").
+// design (see docs/plans/trading212-import-plan.md "Data model").
 export interface ImportBatchSourceMeta {
   fetch_status?: 'fetching' | 'ready' | 'failed';
   connection_display_name?: string;

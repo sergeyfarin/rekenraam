@@ -128,8 +128,8 @@ git diff --check
 
 - `docs/product-requirements.md`: high-level product requirements and phase
   boundaries.
-- `docs/accounts-system-design.md`: account/institution design reference.
-- `docs/account-hierarchy.md`: account taxonomy and hierarchy guidance.
-- `docs/categories-design.md`: category-as-account design reference.
-- `docs/transaction-ledger-core-plan.md`: ledger transaction reference for the
+- `docs/design/accounts-system-design.md`: account/institution design reference.
+- `docs/design/account-hierarchy.md`: account taxonomy and hierarchy guidance.
+- `docs/design/categories-design.md`: category-as-account design reference.
+- `docs/plans/transaction-ledger-core-plan.md`: ledger transaction reference for the
   later transaction UI/reporting work; not the immediate Phase 1 focus.

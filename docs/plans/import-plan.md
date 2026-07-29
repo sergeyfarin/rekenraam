@@ -413,7 +413,7 @@ R4–R7.
 - Fetched payloads flow into the *same* batch/preview/commit pipeline.
 - Trading 212 now proves credential handling, scheduling UI, a provider-specific
   adapter, durable fetching, and investment-lot import end to end. See
-  `docs/trading212-import-plan.md` and `docs/implemented.md`.
+  `docs/plans/trading212-import-plan.md` and `docs/implemented.md`.
 
 ### Slice 6 — Import automation and cleanup (deferred)
 

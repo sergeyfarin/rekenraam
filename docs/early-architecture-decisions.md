@@ -52,7 +52,7 @@ Do not optimize the first schema around a hypothetical PostgreSQL migration. Avo
 
 Use a double-entry-capable ledger from the first real transaction schema.
 The implemented Phase 2 ledger design is recorded in
-`docs/transaction-ledger-core-plan.md`; current work is sequenced in
+`docs/plans/transaction-ledger-core-plan.md`; current work is sequenced in
 `docs/roadmap.md`.
 
 Rules:
@@ -239,7 +239,7 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
   posting editing, lifecycle (unsaved entry vs persisted `draft` vs `posted`, and
   the distinct void vs soft-delete removals), correction behavior, and
   import-source metadata. The lifecycle is detailed in
-  `docs/transaction-ledger-core-plan.md`.
+  `docs/plans/transaction-ledger-core-plan.md`.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
 - Before budgets: period semantics, category/account mapping, rollover rules,
   whether budgets are book-wide or account-scoped, and the detailed UI for

@@ -16,7 +16,7 @@ import (
 
 // trading212FetchWorkKind is the durable work queue kind processed by
 // ImportService.StartBackgroundWorker. Payload shape per
-// docs/trading212-import-plan.md "Data model".
+// docs/plans/trading212-import-plan.md "Data model".
 const trading212FetchWorkKind = "import.fetch.trading212"
 
 // maxTrading212FetchAttempts bounds retries before a fetch is given up on as
@@ -395,7 +395,7 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 	// (B-T212-INVST) happens entirely at commit time (import_service.go
 	// CommitImportBatch), not here — a fetch only stages rows into preview,
 	// and resolution can create a new instrument/holding account (see the
-	// discard-orphan concern in docs/import-connection-accounts-plan.md);
+	// discard-orphan concern in docs/plans/import-connection-accounts-plan.md);
 	// only commit is allowed to create durable state. The preview UI shows
 	// these rows with their raw ticker/side/quantity but not yet a
 	// resolved/proposed instrument name — a documented, deferred UX

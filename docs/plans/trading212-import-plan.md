@@ -2,16 +2,16 @@
 
 A detailed, implementation-ready plan for **online import from the Trading 212
 public API**, built as the first concrete `OnlineSource` on top of the import
-pipeline already shipped in Slice 1 (`docs/import-plan.md`, roadmap R4).
+pipeline already shipped in Slice 1 (`docs/plans/import-plan.md`, roadmap R4).
 
 This is the plan that realises roadmap **R7 (Online ingestion)** for one real
 provider. It is written for the **Sonnet model to implement** directly: every
 slice names the exact existing files/types to reuse, the new files to add, and
 the acceptance test that proves it.
 
-Governed by `docs/import-plan.md` (the unified pipeline), `docs/roadmap.md` (R7),
+Governed by `docs/plans/import-plan.md` (the unified pipeline), `docs/roadmap.md` (R7),
 ADR 0010 (durable background work), and `docs/conventions.md`. Aligns with the
-FX-refresh precedent in `docs/fx-refresh-implementation-plan.md`, which is the
+FX-refresh precedent in `docs/archive/fx-refresh-implementation-plan.md`, which is the
 template for the durable-fetch machinery here.
 
 Status: **Slice 1 (Credential store + connection CRUD) shipped 2026-06-28. Slice 2
@@ -106,7 +106,7 @@ through T-17 — see `docs/backlog.md`).
 - Its public API is **token-based** (a personal API key minted in the app), not
   OAuth/PSD2 — so it proves the online model end-to-end **without** building an
   OAuth dance or open-banking connectivity first (both explicitly deferred in
-  `docs/import-plan.md` non-goals).
+  `docs/plans/import-plan.md` non-goals).
 - It exercises every hard part of online import exactly once: credential storage,
   durable polling, pagination/cursoring against a provider, native-currency money,
   and provider-id-based dedupe — giving the next provider a paved road.
@@ -483,7 +483,7 @@ the code — a slice is not done until its docs reflect it.
 Scoping this slice for real implementation (rather than the one-line stub
 above) surfaced that its two backlog items are not the same size. **4a is
 small and self-contained.** **4b turned out to depend on a design gap that
-didn't exist in any prior slice** — see `docs/import-connection-accounts-plan.md`
+didn't exist in any prior slice** — see `docs/plans/import-connection-accounts-plan.md`
 (new doc) for the full writeup. Splitting them so 4a can ship independently.
 
 #### Slice 4a — Scheduled auto-refresh (B-T212-SCHED) — ✅ shipped 2026-07-01
@@ -555,7 +555,7 @@ new fetch logic.
 
 #### Slice 4b — Investment lot import (B-T212-INVST) — ✅ shipped 2026-07-03
 
-Delivered on top of `docs/import-connection-accounts-plan.md`'s
+Delivered on top of `docs/plans/import-connection-accounts-plan.md`'s
 `cash_account_id` column and `import_connection_holdings` table (both
 shipped in the same pass — that doc was "planning only" before this). What
 actually shipped, and where it differs from the original plan above:

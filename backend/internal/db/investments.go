@@ -413,7 +413,7 @@ func (r *InvestmentRepository) InstrumentByCommodityID(ctx context.Context, book
 // InstrumentByISIN finds an active instrument whose identifiers_json.isin
 // matches (case-insensitive), used by online-import instrument resolution
 // (B-T212-INVST). ISIN is not a dedicated column (identifiers_json is a
-// free-form blob — see docs/import-connection-accounts-plan.md), so this is
+// free-form blob — see docs/plans/import-connection-accounts-plan.md), so this is
 // a json_extract scan rather than an indexed lookup; acceptable at the
 // personal-finance scale this table holds. Returns ErrNotFound if no active
 // instrument has a matching ISIN.

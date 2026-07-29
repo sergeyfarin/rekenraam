@@ -4,13 +4,13 @@ A plan to take the **investments backend** (already substantial — ~4,300 lines
 across `api/app/db`) to a **fully working feature including UI**, and to close the
 **cost-basis correctness gaps** that must be fixed *before* any sell flow is
 exposed. This is the prerequisite the Trading 212 online-import plan is now
-deferred behind (`docs/trading212-import-plan.md`).
+deferred behind (`docs/plans/trading212-import-plan.md`).
 
 Realises roadmap **R12 (Investments UI + gains reporting)**. Written for the
 Sonnet model to implement, grounded in the actual code as of 2026-06-27.
 
 Status: Slices 1, 2, 3, and 4 **complete** (R12 shipped). Slice 5 (Trading 212
-lots) shipped 2026-07-03 as Slice 4b of `docs/trading212-import-plan.md`.
+lots) shipped 2026-07-03 as Slice 4b of `docs/plans/trading212-import-plan.md`.
 Last updated 2026-07-03.
 
 > **Outcome (kept as the design record).** This plan is **done** through Slice 4 —
@@ -24,7 +24,7 @@ Last updated 2026-07-03.
 > - **OpenAPI coverage added** — all investment paths incl. `/investments/gains` now
 >   in `api/openapi/` with generated TS types; risk #1 below is resolved.
 > - **Slice 5 (Trading 212 lots, `B-T212-INVST`) shipped 2026-07-03** — see
->   `docs/trading212-import-plan.md` Slice 4b for what actually got built
+>   `docs/plans/trading212-import-plan.md` Slice 4b for what actually got built
 >   (order-fill/dividend fetching, instrument/holding-account resolution,
 >   `CommitImportBatch` routing to `Buy`/`Sell`/`Dividend`) and its one
 >   deliberate scope cut (no confirmation UI for linking to a pre-existing
@@ -762,7 +762,7 @@ server-computed figures and degrades gracefully to cost-only when no price exist
 
 ### Slice 5 (then) — Return to Trading 212 — ✅ shipped 2026-07-03
 
-See `docs/trading212-import-plan.md` Slice 4b for the full writeup. Summary:
+See `docs/plans/trading212-import-plan.md` Slice 4b for the full writeup. Summary:
 Trading 212 order fills now map to Buy/Sell (lots) and dividends to
 `InvestmentService.Dividend`, routed through the investment service via a
 new `CommitImportBatch` branch. Everything else in that plan (credential

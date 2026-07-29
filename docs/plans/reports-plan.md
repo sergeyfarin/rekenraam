@@ -7,7 +7,7 @@ read models are pending. Last verified against the codebase: 2026-07-13.
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
 `docs/product-requirements.md`, sequenced by `docs/roadmap.md`, and must follow
-the ledger invariants in `docs/transaction-ledger-core-plan.md`.
+the ledger invariants in `docs/plans/transaction-ledger-core-plan.md`.
 
 ## Verified starting point
 

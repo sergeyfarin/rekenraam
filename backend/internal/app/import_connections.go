@@ -87,7 +87,7 @@ type ImportConnection struct {
 	LastFetchedAt      *string
 	AutoRefreshEnabled bool
 	// CashAccountID is the settlement account for BUY/SELL/DIVIDEND cash
-	// legs (B-T212-INVST, docs/import-connection-accounts-plan.md). Nil
+	// legs (B-T212-INVST, docs/plans/import-connection-accounts-plan.md). Nil
 	// until the user sets one; rows resolve to needs_attention until then.
 	CashAccountID *int64
 	CreatedAt     string
@@ -420,7 +420,7 @@ func (s *ImportConnectionService) HoldingAccountForCommodity(ctx context.Context
 
 // LinkHolding records (connectionID, commodityID) -> holdingAccountID so
 // future fetches reuse the same holding account. Called only from the
-// commit path (never at fetch time — see docs/import-connection-accounts-plan.md).
+// commit path (never at fetch time — see docs/plans/import-connection-accounts-plan.md).
 func (s *ImportConnectionService) LinkHolding(ctx context.Context, connectionID int64, commodityID int64, holdingAccountID int64, createdAt string) error {
 	return s.repository.LinkHolding(ctx, connectionID, commodityID, holdingAccountID, createdAt)
 }

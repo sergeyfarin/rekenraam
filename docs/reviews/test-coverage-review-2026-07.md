@@ -88,7 +88,7 @@ lifecycle, a raw-bytes scan proving the API key never appears in any
 response, provider-rejection and duplicate-name error mapping, PATCH
 auto-refresh omission semantics). `api/import_connections.go` 0% → 72.6%,
 `api/imports.go` ~3% → 72.7%, `app/import_service.go` 51% → 82.4% (merged,
-statement coverage). See `docs/backend-test-coverage-plan.md` Workstreams
+statement coverage). See `docs/plans/backend-test-coverage-plan.md` Workstreams
 1–2 for the full design and the two real bugs this work found and fixed
 along the way:
 
@@ -126,7 +126,7 @@ Closed 2026-07-15: `app/investments_service_test.go` (~40 tests) and
 preview/commit equivalence check across all four cost-basis methods (the
 single highest-value test: a preview/commit divergence is a user-facing trust
 bug). `app/investments.go` merged coverage 43% → 83.7%; `api/investments.go`
-12.7% → 79.7%. See `docs/backend-test-coverage-plan.md` Workstream 3 for the
+12.7% → 79.7%. See `docs/plans/backend-test-coverage-plan.md` Workstream 3 for the
 full design.
 
 Writing these tests surfaced two real product gaps, bigger than ordinary

@@ -28,7 +28,7 @@ import (
 //
 // All instrument/holding-account resolution AND creation happens here, at
 // commit time, never at fetch time — see the discard-orphan concern in
-// docs/import-connection-accounts-plan.md.
+// docs/plans/import-connection-accounts-plan.md.
 func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row db.ImportStagedRowRecord, batch db.ImportBatchRecord, input CommitImportBatchInput, nowStr string) (handled bool, transactionID int64, identityAccountID int64, err error) {
 	if s.investmentService == nil || s.connectionService == nil || !batch.ConnectionID.Valid {
 		return false, 0, 0, nil
@@ -104,7 +104,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 // resolveTrading212HoldingAccount reuses the (connection, commodity) ->
 // holding account mapping if one exists, or creates a new holding account
 // and records the mapping — the "scenario 1: brand new instrument" path
-// from docs/import-connection-accounts-plan.md. The "scenario 2: link to an
+// from docs/plans/import-connection-accounts-plan.md. The "scenario 2: link to an
 // existing holding account with explicit confirmation" path is not
 // implemented here (tracked as a follow-up, see docs/backlog.md
 // B-T212-INVST) — an ambiguous or ignorable existing match simply isn't

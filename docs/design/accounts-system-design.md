@@ -35,7 +35,7 @@ Active repo source of truth:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/adrs/`
-- `docs/archive-fastapi-backend-review.md`
+- `docs/archive/fastapi-backend-review.md`
 
 Archived FastAPI implementation:
 
@@ -445,7 +445,7 @@ Initial supported kinds:
 The database stores the built-in account kind catalog in `account_kinds`. The
 backend validates that a requested kind exists, belongs to the requested class,
 and is user assignable. The frontend uses stable kind codes for labels and UI
-profiles. See `docs/account-hierarchy.md` for the readable taxonomy.
+profiles. See `docs/design/account-hierarchy.md` for the readable taxonomy.
 
 Account management UI exposes the kind as one grouped "Account type" field and
 derives `account_class` from it. The class remains visible in API/database
@@ -476,7 +476,7 @@ Income and expense categories are account-backed. A category is an account whose
 do not add a separate category version table. Built-in categories should store
 stable keys/codes so the UI can translate them. User-entered category names are
 data and are shown as entered. The detailed category API, lifecycle policy, and
-starter taxonomy live in `docs/categories-design.md`.
+starter taxonomy live in `docs/design/categories-design.md`.
 
 Categories answer "what kind of income or expense is this?" They may be nested:
 

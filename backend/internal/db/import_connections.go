@@ -256,7 +256,7 @@ func (r *ImportConnectionRepository) DeleteImportConnection(ctx context.Context,
 	return nil
 }
 
-// --- import_connection_holdings (B-T212-INVST, docs/import-connection-accounts-plan.md) ---
+// --- import_connection_holdings (B-T212-INVST, docs/plans/import-connection-accounts-plan.md) ---
 
 // HoldingAccountForCommodity looks up the holding account already linked to
 // (connectionID, commodityID), if any. Returns ErrNotFound if this

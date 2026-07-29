@@ -15,13 +15,13 @@ conflict:
 - `docs/conventions.md` — cross-cutting rules (money precision, API envelope,
   frontend stack, lifecycle vs reconciliation separation, the period-scoped
   reconciliation guard).
-- `docs/transaction-ledger-core-plan.md` — the ledger schema, the transaction
+- `docs/plans/transaction-ledger-core-plan.md` — the ledger schema, the transaction
   lifecycle, the reconciliation guard, and the API slice.
 - `docs/product-requirements.md` — product source of truth and durable phase
   boundaries; `docs/roadmap.md` — active sequencing.
 - `docs/early-architecture-decisions.md` and `docs/adrs/` — long-lived
   architectural constraints and decision records.
-- `docs/categories-design.md` — categories are income/expense accounts; the
+- `docs/design/categories-design.md` — categories are income/expense accounts; the
   built-in key lives in `metadata_json.$.category.builtin_key`.
 
 ### Lifecycle terms used throughout (do not conflate)

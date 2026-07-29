@@ -20,7 +20,7 @@ Use these archive documents as historical input:
 - `.archive/docs/architecture/frontend-testing.md` for testing tradeoffs.
 - `.archive/docs/parity/desktop-to-python.md` and `.archive/docs/parity/tauri-rust-function-audit-2026-05-18.md` for consciously dropped desktop behavior.
 - `.archive/docs/deployment/self-hosting.md` and `.archive/SELF_HOSTED_MIGRATION_PLAN.md` for deployment, backup, and restore lessons.
-- `docs/archive-fastapi-backend-review.md` for the consolidated pass over `.archive/apps/api` and the FastAPI-era requirements documents.
+- `docs/archive/fastapi-backend-review.md` for the consolidated pass over `.archive/apps/api` and the FastAPI-era requirements documents.
 
 ## Review Method
 

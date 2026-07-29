@@ -1,7 +1,7 @@
 # Import Connection ↔ Account Linking Plan
 
 Status: **shipped 2026-07-03** as part of Trading 212 Slice 4b
-(`docs/trading212-import-plan.md`). Written 2026-07-01 while scoping that
+(`docs/plans/trading212-import-plan.md`). Written 2026-07-01 while scoping that
 slice; this is a prerequisite design for **B-T212-INVST** (investment lot
 import) and is written generically because the same gap will hit every
 future online provider, not just Trading 212.
@@ -26,9 +26,9 @@ future online provider, not just Trading 212.
   below remain open exactly as documented — neither was hit or resolved
   during Slice 4b.
 
-Governed by `docs/accounts-system-design.md` (institutions/accounts),
-`docs/investments-plan.md` (holding accounts, lots), `docs/import-plan.md`
-(the batch pipeline), and `docs/trading212-import-plan.md` (the concrete
+Governed by `docs/design/accounts-system-design.md` (institutions/accounts),
+`docs/plans/investments-plan.md` (holding accounts, lots), `docs/plans/import-plan.md`
+(the batch pipeline), and `docs/plans/trading212-import-plan.md` (the concrete
 consumer of this plan).
 
 ## Why this doc exists
@@ -229,7 +229,7 @@ express something the account tree already expresses via
 
 ## What Slice 4b (Trading 212 investment lots) builds on top of this
 
-With the above in place, `docs/trading212-import-plan.md` Slice 4b's job
+With the above in place, `docs/plans/trading212-import-plan.md` Slice 4b's job
 narrows to:
 1. Fetch order-fill/dividend detail (ticker/ISIN, quantity, price, fees) —
    still an open API-shape question, see that doc.

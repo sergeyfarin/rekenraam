@@ -151,7 +151,7 @@ type fetchOnePage[T any] func(ctx context.Context, apiKey string, path string) (
 // the item type so the three endpoints (which only differ in JSON shape and
 // which field carries the item's timestamp) share one page-budget,
 // same-timestamp-rescan, and continuation-token implementation rather than
-// tripling it — see docs/trading212-import-plan.md Slice 4b, which calls
+// tripling it — see docs/plans/trading212-import-plan.md Slice 4b, which calls
 // this machinery out by name as something to reuse, not duplicate.
 func fetchPaginated[T any](
 	ctx context.Context,

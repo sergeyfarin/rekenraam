@@ -363,7 +363,7 @@ func TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods(t *
 func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {
 	// FIFO and LIFO over the same 2-lot seed must produce different disposed
 	// basis totals — proves the method resolver isn't silently always FIFO
-	// (the exact bug class I-02 in docs/investments-plan.md guarded against).
+	// (the exact bug class I-02 in docs/plans/investments-plan.md guarded against).
 	newSeededFixture := func(t *testing.T) *investmentsTestFixture {
 		f := newInvestmentsTestFixture(t)
 		ctx := context.Background()

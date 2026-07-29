@@ -7,7 +7,7 @@ This document fixes cross-cutting product, engineering, and workflow conventions
 - Active requirements live in `docs/product-requirements.md`.
 - Active architecture rules live in `docs/early-architecture-decisions.md`.
 - Active sequencing lives in `docs/roadmap.md`.
-- Archive review planning lives in `docs/archive-requirements-review.md`.
+- Archive review planning lives in `docs/archive/requirements-review.md`.
 - `.archive/` is historical reference only.
 
 When a feature introduces a durable new rule, update one of those documents in the same change.
@@ -51,9 +51,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   `account_class=expense` respectively; they are not equity summary accounts.
 - Categories are UI concepts mapped to income and expense accounts, not a separate ledger primitive.
 - Category API behavior, built-in metadata, lifecycle rules, and the starter
-  taxonomy are documented in `docs/categories-design.md`.
+  taxonomy are documented in `docs/design/categories-design.md`.
 - Transaction ledger schema planning is documented in
-  `docs/transaction-ledger-core-plan.md`.
+  `docs/plans/transaction-ledger-core-plan.md`.
 - Transactions contain postings. "Split" is acceptable user-facing copy for a
   split transaction UI, but schema, service, API, and docs should use
   "posting" as the canonical ledger term.

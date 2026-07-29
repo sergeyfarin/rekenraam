@@ -6,7 +6,7 @@ while writing its tests (automation-rules replace, suggestion
 accept-posts-transaction — see its status note). Workstreams 5–7 remain open.
 
 A concrete plan to close the backend coverage gaps identified in
-`docs/test-coverage-review-2026-07.md`, verified against a fresh merged
+`docs/reviews/test-coverage-review-2026-07.md`, verified against a fresh merged
 coverage run on **2026-07-15** (`go test ./... -coverpkg=./...`, merged total
 **65.4%**, up from 64.3% at review time). Scope is **backend only** — frontend
 (G-02) and Playwright e2e (T-20, R3a) are tracked elsewhere and deliberately
@@ -82,7 +82,7 @@ Inherited from the existing suite's strengths — keep these properties:
 **Status: done 2026-07-15.** `api/imports_test.go` (18 tests) and
 `app/import_service_test.go` (1 test) shipped. `api/imports.go` merged
 coverage 72.7% (exit criterion was ≥70%, met). Two real bugs found and fixed
-along the way — see `docs/test-coverage-review-2026-07.md` G-03 for the
+along the way — see `docs/reviews/test-coverage-review-2026-07.md` G-03 for the
 details: a concurrent-commit race on the plain (non-investment) row path that
 surfaced as a raw error instead of resolving idempotently, and a raw 500
 instead of 400 on malformed PATCH resolution JSON / dedupe_status.
@@ -211,7 +211,7 @@ shape, sign, date-filter inclusivity) rather than re-deriving that arithmetic.
 Reading the real code before writing tests surfaced two confirmed gaps
 between documented and actual behavior — bigger than ordinary missing
 coverage, so they were fixed first (see
-`docs/test-coverage-review-2026-07.md` G-04 for the full writeup, and
+`docs/reviews/test-coverage-review-2026-07.md` G-04 for the full writeup, and
 `docs/backlog.T-34` for what's still open):
 
 - **`PUT /investments/automation-rules` didn't replace** — it only upserted

@@ -531,7 +531,7 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 // back to ticker/symbol, creating a new one (named/coded from the ticker)
 // only if neither matches. Used by the Trading 212 import commit path
 // (B-T212-INVST): creation only ever happens here, at commit time, never at
-// fetch/preview time — see docs/import-connection-accounts-plan.md's
+// fetch/preview time — see docs/plans/import-connection-accounts-plan.md's
 // discard-orphan concern (a discarded preview batch must not leave behind a
 // durably-created instrument nobody asked for). Returns the resolved
 // instrument's InstrumentID and CommodityID together, since callers need

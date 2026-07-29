@@ -320,7 +320,7 @@ strict chronological order" or "a backdated correction arrives with a timestamp
 before the current cursor" (which would need a full re-fetch, `cursor=""`, to ever
 surface, since normal incremental refresh only looks forward from the cursor). Both
 depend on the live Trading 212 API's actual pagination/backdating semantics, which
-`docs/trading212-import-plan.md`'s "Risks & open questions" already flags as
+`docs/plans/trading212-import-plan.md`'s "Risks & open questions" already flags as
 unverified assumptions — not fixed here to avoid guessing at behavior no one has
 validated against the real API yet.
 
@@ -387,7 +387,7 @@ by `TestFetchHitsRealHistoryPath`, `TestProbeUsesAccountSummaryEndpointAndSuccee
 and `TestTrading212Adapter_CashMovementTypesMatchRealAPIEnum` (asserts the old
 guessed values now correctly flag `needs_attention`). This also resolved
 Slice 4b's biggest open risk — the order-fill/dividend endpoint shapes are
-now verified, not guessed (see `docs/trading212-import-plan.md` Slice 4b).
+now verified, not guessed (see `docs/plans/trading212-import-plan.md` Slice 4b).
 
 ### T-22 Every import commit failed "entry kind is invalid" — never caught by any test `[x]`
 **File:** `backend/internal/app/import_service.go` (`buildTransactionSpec`),
@@ -611,7 +611,7 @@ accept only active, non-system, postable asset accounts. Verified by
 `TestCreateImportConnection_CashAccountIDSystemAccountRejected`.
 
 ### B-T212-INVST Trading 212 investment lots not imported `[~]`
-**File:** `docs/trading212-import-plan.md` (Slice 4b), `docs/import-connection-accounts-plan.md`,
+**File:** `docs/plans/trading212-import-plan.md` (Slice 4b), `docs/plans/import-connection-accounts-plan.md`,
 `backend/internal/app/import_trading212_invest.go`.
 
 Closed 2026-07-03 (Slice 4b) for the core flow: order fills route through
@@ -625,7 +625,7 @@ time (the accounts-plan doc's discard-orphan concern). Anything that can't
 resolve (no `cash_account_id` configured, no instrument match, insufficient
 lots, no dividend default) falls back to the pre-4b plain-cash-row behavior
 — a strict superset, never a regression. See
-`docs/trading212-import-plan.md` Slice 4b for the full writeup, including
+`docs/plans/trading212-import-plan.md` Slice 4b for the full writeup, including
 two bugs found and fixed while building this (a holding-account
 `opened_on`/`effective_from` defaulting to "today" instead of the trade's
 own date, and the unrelated severity-1 `EntryKind: "main"` bug, T-22).
@@ -642,7 +642,7 @@ resolved/proposed instrument name before commit (resolution is commit-time
 only) — a deferred UX polish, not a correctness gap.
 
 ### B-T212-SCHED Trading 212 scheduled auto-refresh `[x]`
-**File:** `docs/trading212-import-plan.md` (Slice 4a), `backend/internal/app/import_scheduler.go`.
+**File:** `docs/plans/trading212-import-plan.md` (Slice 4a), `backend/internal/app/import_scheduler.go`.
 
 Closed 2026-07-01 (Slice 4a). Per-connection `auto_refresh_enabled` column
 (migration `0008`) drives `ImportService.StartScheduler` /
@@ -672,7 +672,7 @@ in-flight guard skips silently) and a manual pass driving the real built app
 > consciously rather than by omission.
 
 ### I-03 Multi-method analytical gains reporting `[ ]`
-**File:** `docs/investments-plan.md` ("Cost-basis methods → Future").
+**File:** `docs/plans/investments-plan.md` ("Cost-basis methods → Future").
 
 Tax vs. performance reporting can need *different* cost-basis methods. This is
 **read-side only**: the authoritative method (I-02) drives lot disposal and the
