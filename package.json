@@ -15,6 +15,6 @@
     "build": "./scripts/build-single-binary.sh"
   },
   "devDependencies": {
-    "concurrently": "10.0.3"
+    "concurrently": "10.0.4"
   }
 }
