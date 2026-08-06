@@ -14,6 +14,7 @@ export type PricingRefreshRunResponse = components['schemas']['PricingRefreshRun
 export type PricingRefreshRunsResponse = components['schemas']['PricingRefreshRunsResponse'];
 export type PricingRefreshRunRequest = components['schemas']['PricingRefreshRunRequest'];
 export type PricingSourceHealthListResponse = components['schemas']['PricingSourceHealthListResponse'];
+export type PricingBackgroundWorkResponse = components['schemas']['PricingBackgroundWorkResponse'];
 
 export const pricingSourcesQueryKey = ['api', 'pricing', 'sources'] as const;
 export const pricingPolicyQueryKey = ['api', 'pricing', 'policy'] as const;
@@ -281,6 +282,37 @@ export async function getPricingRefreshRuns(): Promise<PricingRefreshRunsRespons
 export async function getPricingSourceHealth(): Promise<PricingSourceHealthListResponse> {
   try {
     const { data, error, response } = await apiClient.GET('/api/v1/pricing/source-health');
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function retryPricingBackgroundWork(
+  workID: number,
+  csrfToken: string
+): Promise<PricingBackgroundWorkResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/pricing/background-work/{work_id}/retry',
+      {
+        params: {
+          path: { work_id: workID },
+          header: {
+            'X-CSRF-Token': csrfToken
+          }
+        }
+      }
+    );
 
     if (data !== undefined) {
       return data;

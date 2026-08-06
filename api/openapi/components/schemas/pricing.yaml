@@ -485,12 +485,53 @@ PricingSourceHealthResponse:
         - error
         - never_run
 
+PricingBackgroundWorkResponse:
+  type: object
+  description: >-
+    A durable pricing background work item. Only items that exhausted their
+    retry budget and moved to the failed status are surfaced; they stay queued
+    until re-enqueued manually.
+  required:
+    - id
+    - kind
+    - attempts
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    kind:
+      type: string
+      examples:
+        - pricing.fx_coverage
+    reason:
+      type: string
+      description: Why the work was originally enqueued.
+    attempts:
+      type: integer
+      description: Attempts made before the item was given up on.
+    last_error:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+
 PricingSourceHealthListResponse:
   type: object
   required:
     - sources
+    - failed_background_work
   properties:
     sources:
       type: array
       items:
         $ref: "#/PricingSourceHealthResponse"
+    failed_background_work:
+      type: array
+      description: Pricing background work that gave up after its maximum attempts.
+      items:
+        $ref: "#/PricingBackgroundWorkResponse"

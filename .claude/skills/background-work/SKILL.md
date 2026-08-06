@@ -18,10 +18,16 @@ hardened — copy this shape for new workers).
 - Handlers are **idempotent** (at-least-once delivery means re-runs happen).
 - Work is **leased** for a bounded period; expired leases are reclaimed.
 - Classify failures: **terminal** (e.g. 401/403 bad credentials → fail fast,
-  mark the domain object failed) vs **retryable** (bounded attempts — the
-  import fetch worker uses 8). Write failure state where the frontend actually
-  polls (the import worker writes both `import_batches.status` and
-  `source_meta_json`).
+  mark the domain object failed) vs **retryable**. Retries are always
+  **bounded** — every worker needs an attempt cap that flips the item to
+  `failed` (both workers use 8; T-39 was the FX worker not having one, so it
+  retried at the 6h backoff cap forever). Write failure state where the
+  frontend actually polls (the import worker writes both
+  `import_batches.status` and `source_meta_json`).
+- A cap is only safe with a way back: surface failed items in a read model the
+  UI already loads and expose a manual re-enqueue
+  (`RequeueBackgroundWork` resets `attempts` and refuses when an equivalent
+  item is already active — one live copy per payload).
 - `EnqueueBackgroundWork` (`db/background_work.go`) coalesces exact active
   duplicates via a partial unique index on `(book_id, kind, payload_json)
   WHERE status IN ('pending','running')` and returns the existing item;

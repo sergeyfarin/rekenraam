@@ -39,6 +39,9 @@ preconditions. Also in `roadmap.md`.
       the whole file).
 - [x] T-36 decimal-comma amounts 100× off — fixed 2026-08-06, same file
       (`canonicalDecimal`, profile `decimal_separator`).
+- [x] T-39 background work no longer retries forever — fixed 2026-08-06
+      (`app/pricing_worker.go` `maxFXCoverageAttempts`; failed items listed in
+      pricing source health with a manual re-enqueue endpoint).
 - [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
       `scaledAmount`/`scaledInteger`/`pow10DB`).

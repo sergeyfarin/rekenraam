@@ -55,16 +55,6 @@ realized gains. Audit P4. Needs a small product decision (which account the
 loss books against) plus either `CashAmountValue == 0` support on Sell or a
 dedicated write-off endpoint over the existing disposal engine.
 
-### T-39 Background work retries forever `[ ]`
-
-**Files:** `backend/internal/db/background_work.go`,
-`backend/internal/app/pricing_worker.go` (`retryDelay`).
-
-Exponential backoff caps at 6h but nothing ever gives up; a permanently
-failing item retries indefinitely. Add a max-attempts → `failed` transition
-(status exists), surface in pricing source health, and provide a manual
-re-enqueue. Audit P7.
-
 ### T-40 `TriangulationMaxHops` policy knob is not honored `[ ]`
 
 **File:** `backend/internal/app/pricing_refresh.go` (`refreshFXTarget`).

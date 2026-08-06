@@ -31,7 +31,10 @@ type currencySettingsPageResponse struct {
 	RefreshRuns        []pricingRefreshRunResponse       `json:"refresh_runs"`
 	RefreshRunsHasMore bool                              `json:"refresh_runs_has_more"`
 	SourceHealth       []pricingSourceHealthResponse     `json:"source_health"`
-	LatestRates        []priceObservationResponse        `json:"latest_rates"`
+	// FailedBackgroundWork is FX coverage work that exhausted its retries and
+	// needs a manual re-enqueue (T-39).
+	FailedBackgroundWork []pricingBackgroundWorkResponse `json:"failed_background_work"`
+	LatestRates          []priceObservationResponse      `json:"latest_rates"`
 }
 
 func userPreferences(logger *slog.Logger, authService *app.AuthService, settingsService *app.SettingsService) http.HandlerFunc {
@@ -135,6 +138,12 @@ func currencySettingsPageData(logger *slog.Logger, authService *app.AuthService,
 			return
 		}
 
+		failedWork, err := pricingService.FailedBackgroundWork(r.Context())
+		if err != nil {
+			writeCurrencySettingsPageError(w, r, logger, "read currency settings failed background work", err)
+			return
+		}
+
 		latestRates, err := pricingService.LatestPricesForPairs(r.Context(), currencySettingsRatePairs(currencies, book.DefaultCurrencyCommodityID))
 		if err != nil {
 			writeCurrencySettingsPageError(w, r, logger, "read currency settings latest rates", err)
@@ -142,16 +151,17 @@ func currencySettingsPageData(logger *slog.Logger, authService *app.AuthService,
 		}
 
 		writeJSON(w, http.StatusOK, currencySettingsPageResponse{
-			Book:               toBookResponse(book),
-			Preferences:        toUserPreferencesResponse(preferences),
-			Currencies:         toCurrencyResponses(currencies),
-			Sources:            toMarketDataSourceResponses(sources),
-			Policy:             toPricingPolicyResponse(policy),
-			Assignments:        toPricingSourceAssignmentResponses(assignments),
-			RefreshRuns:        toPricingRefreshRunResponses(refreshRuns.Runs),
-			RefreshRunsHasMore: refreshRuns.HasMore,
-			SourceHealth:       toPricingSourceHealthResponses(sourceHealth),
-			LatestRates:        toPriceObservationResponses(latestRates),
+			Book:                 toBookResponse(book),
+			Preferences:          toUserPreferencesResponse(preferences),
+			Currencies:           toCurrencyResponses(currencies),
+			Sources:              toMarketDataSourceResponses(sources),
+			Policy:               toPricingPolicyResponse(policy),
+			Assignments:          toPricingSourceAssignmentResponses(assignments),
+			RefreshRuns:          toPricingRefreshRunResponses(refreshRuns.Runs),
+			RefreshRunsHasMore:   refreshRuns.HasMore,
+			SourceHealth:         toPricingSourceHealthResponses(sourceHealth),
+			FailedBackgroundWork: toPricingBackgroundWorkResponses(failedWork),
+			LatestRates:          toPriceObservationResponses(latestRates),
 		})
 	}
 }

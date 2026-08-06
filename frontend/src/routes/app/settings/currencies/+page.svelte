@@ -15,6 +15,7 @@
   import { APIClientError } from '$lib/api/client';
   import {
     createPricingSourceAssignment,
+    retryPricingBackgroundWork,
     runPricingRefresh,
     savePricingPolicy,
     updatePricingSourceAssignment,
@@ -51,6 +52,7 @@
   let policySaving = $state(false);
   let refreshRunning = $state(false);
   let assignmentSavingKey = $state('');
+  let retryingWorkID = $state(0);
   let actionError = $state<unknown>(undefined);
   let actionMessage = $state('');
 
@@ -139,6 +141,7 @@
   const isError = $derived(pageQuery.isError || sessionQuery.isError);
 
   const latestRun = $derived(pageQuery.data?.refresh_runs[0]);
+  const failedBackgroundWork = $derived(pageQuery.data?.failed_background_work ?? []);
 
   const directionOptions: { value: RateDirection; label: string }[] = [
     { value: 'currency_default', label: m.currencies_rate_direction_currency_default() },
@@ -260,6 +263,22 @@
       actionError = error;
     } finally {
       refreshRunning = false;
+    }
+  }
+
+  async function handleRetryBackgroundWork(workID: number) {
+    retryingWorkID = workID;
+    actionError = undefined;
+    actionMessage = '';
+
+    try {
+      await retryPricingBackgroundWork(workID, await csrfToken());
+      actionMessage = m.currencies_failed_work_retried();
+      await refreshAfterMutation();
+    } catch (error) {
+      actionError = error;
+    } finally {
+      retryingWorkID = 0;
     }
   }
 
@@ -585,6 +604,47 @@
         </fieldset>
       </div>
     </Panel>
+
+    {#if failedBackgroundWork.length > 0}
+      <Panel>
+        <div class="flex items-start gap-3">
+          <AlertTriangle size={18} class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+          <div class="min-w-0 flex-1">
+            <h2 class="text-base font-semibold text-foreground">{m.currencies_failed_work_title()}</h2>
+            <p class="mt-1 text-sm text-muted">{m.currencies_failed_work_copy()}</p>
+
+            <ul class="mt-4 divide-y divide-border border-t border-border">
+              {#each failedBackgroundWork as work (work.id)}
+                <li class="flex flex-wrap items-start justify-between gap-3 py-3">
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-foreground">
+                      {m.currencies_failed_work_item({
+                        attempts: work.attempts,
+                        time: formatDateTime(work.updated_at)
+                      })}
+                    </p>
+                    {#if work.last_error}
+                      <p class="mt-1 break-words text-sm text-muted">{work.last_error}</p>
+                    {/if}
+                  </div>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={retryingWorkID === work.id}
+                    onclick={() => handleRetryBackgroundWork(work.id)}
+                  >
+                    <RefreshCw size={16} aria-hidden="true" />
+                    {retryingWorkID === work.id
+                      ? m.currencies_failed_work_retrying()
+                      : m.currencies_failed_work_retry()}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        </div>
+      </Panel>
+    {/if}
 
     <Panel padding="none">
       <div class="overflow-x-auto">

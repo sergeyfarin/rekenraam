@@ -55,6 +55,23 @@ current behaviour.
   `TruncatedTo`, `SubScaled`, operand immutability, and int64 overflow. The
   ledger-invariants skill now mandates the helper.
 
+- **T-39 background work no longer retries forever**, fixed 2026-08-06. FX
+  coverage work now gives up after `maxFXCoverageAttempts` (8) failed attempts
+  and moves to the existing `failed` status instead of retrying against the 6h
+  backoff cap indefinitely — matching what the Trading 212 fetch worker already
+  did. Because a bounded cap is only safe if the work is recoverable, three
+  things landed together: `BackgroundWorkRepository.ListBackgroundWorkByStatus`
+  surfaces given-up items through `PricingService.FailedBackgroundWork`, which
+  the source-health and currency-settings page responses now carry as
+  `failed_background_work`; `RequeueBackgroundWork` moves a failed item back to
+  pending with `attempts` reset, refusing the transition with
+  `ErrBackgroundWorkAlreadyActive` when an equivalent item is already live (the
+  active-unique index allows one); and
+  `POST /api/v1/pricing/background-work/{work_id}/retry` plus a re-enqueue
+  button on the currency settings page make that reachable from the UI. Covered
+  by `TestProcessFXCoverageWork_GivesUpAfterMaxAttempts` and the two
+  `TestRetryBackgroundWork_*` cases.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

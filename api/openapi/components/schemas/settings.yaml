@@ -52,6 +52,7 @@ CurrencySettingsPageResponse:
     - refresh_runs
     - refresh_runs_has_more
     - source_health
+    - failed_background_work
     - latest_rates
   properties:
     book:
@@ -82,6 +83,11 @@ CurrencySettingsPageResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/PricingSourceHealthResponse"
+    failed_background_work:
+      type: array
+      description: Pricing background work that gave up after its maximum attempts.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PricingBackgroundWorkResponse"
     latest_rates:
       type: array
       description: Latest known observations for active currency/default-currency pairs in both directions.

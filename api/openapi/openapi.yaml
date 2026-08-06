@@ -169,6 +169,8 @@ paths:
     $ref: "./paths/pricing-refresh-runs.yaml"
   /api/v1/pricing/source-health:
     $ref: "./paths/pricing-source-health.yaml"
+  /api/v1/pricing/background-work/{work_id}/retry:
+    $ref: "./paths/pricing-background-work-retry.yaml"
   /api/v1/investments/search:
     $ref: "./paths/investments-search.yaml"
   /api/v1/investments/instruments:
@@ -486,6 +488,8 @@ components:
       $ref: "./components/schemas/pricing.yaml#/PricingSourceHealthResponse"
     PricingSourceHealthListResponse:
       $ref: "./components/schemas/pricing.yaml#/PricingSourceHealthListResponse"
+    PricingBackgroundWorkResponse:
+      $ref: "./components/schemas/pricing.yaml#/PricingBackgroundWorkResponse"
     PostingResponse:
       $ref: "./components/schemas/transactions.yaml#/PostingResponse"
     JournalEntryResponse:

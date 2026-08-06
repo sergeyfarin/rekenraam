@@ -180,6 +180,18 @@ func TestPricingRefreshRunsAndSourceHealth_HTTP(t *testing.T) {
 	var health pricingSourceHealthListResponse
 	require.NoError(t, json.NewDecoder(healthRes.Body).Decode(&health))
 	assert.Empty(t, health.Sources)
+	assert.Empty(t, health.FailedBackgroundWork)
+}
+
+func TestRetryPricingBackgroundWork_UnknownWorkIDReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapPricingAPITest(t, handler)
+
+	res := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/background-work/999999/retry", nil, http.StatusNotFound)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "NOT_FOUND", body.Error.Code)
 }
 
 // --- Authentication / CSRF ---
@@ -201,6 +213,7 @@ func TestPricingEndpoints_RequireAuthentication(t *testing.T) {
 		{"source assignments", http.MethodGet, "/api/v1/pricing/source-assignments"},
 		{"refresh runs", http.MethodGet, "/api/v1/pricing/refresh/runs"},
 		{"source health", http.MethodGet, "/api/v1/pricing/source-health"},
+		{"retry background work", http.MethodPost, "/api/v1/pricing/background-work/1/retry"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -227,6 +240,7 @@ func TestPricingMutations_RequireCSRFToken(t *testing.T) {
 		{"save policy", http.MethodPut, "/api/v1/pricing/policy", pricingPolicyRequest{RoundingMode: "half_up", WeekendPolicy: "skip"}},
 		{"create source assignment", http.MethodPost, "/api/v1/pricing/source-assignments", pricingSourceAssignmentRequest{CommodityID: f.eurCommodity, QuoteCommodityID: f.usdCommodity, SourceID: 1, Status: "active", EffectiveFrom: "2026-01-01"}},
 		{"run refresh", http.MethodPost, "/api/v1/pricing/refresh/run", pricingRefreshRunRequest{}},
+		{"retry background work", http.MethodPost, "/api/v1/pricing/background-work/1/retry", struct{}{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

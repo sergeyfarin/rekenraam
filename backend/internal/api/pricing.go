@@ -184,8 +184,21 @@ type pricingSourceHealthResponse struct {
 	Status           string `json:"status"`
 }
 
+type pricingBackgroundWorkResponse struct {
+	ID        int64  `json:"id"`
+	Kind      string `json:"kind"`
+	Reason    string `json:"reason,omitempty"`
+	Attempts  int    `json:"attempts"`
+	LastError string `json:"last_error,omitempty"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type pricingSourceHealthListResponse struct {
 	Sources []pricingSourceHealthResponse `json:"sources"`
+	// FailedBackgroundWork is FX coverage work that exhausted its retries and
+	// needs a manual re-enqueue (T-39).
+	FailedBackgroundWork []pricingBackgroundWorkResponse `json:"failed_background_work"`
 }
 
 func listMarketDataSources(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
@@ -416,7 +429,57 @@ func pricingSourceHealth(logger *slog.Logger, authService *app.AuthService, pric
 			writePricingServiceError(w, r, logger, "pricing source health", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, pricingSourceHealthListResponse{Sources: toPricingSourceHealthResponses(sources)})
+		failedWork, err := pricingService.FailedBackgroundWork(r.Context())
+		if err != nil {
+			writePricingServiceError(w, r, logger, "pricing failed background work", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, pricingSourceHealthListResponse{
+			Sources:              toPricingSourceHealthResponses(sources),
+			FailedBackgroundWork: toPricingBackgroundWorkResponses(failedWork),
+		})
+	}
+}
+
+// retryPricingBackgroundWork re-enqueues one failed FX coverage work item. It
+// is the manual escape hatch that makes the bounded-retry cap safe: work that
+// gave up is not lost, it waits for the operator to fix the cause and ask for
+// another run.
+func retryPricingBackgroundWork(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedMutationOwner(w, r); !ok {
+			return
+		}
+		workID, ok := readPathInt64(w, r, "work_id", "background work id")
+		if !ok {
+			return
+		}
+		item, err := pricingService.RetryBackgroundWork(r.Context(), workID)
+		if err != nil {
+			writePricingServiceError(w, r, logger, "retry pricing background work", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toPricingBackgroundWorkResponse(item))
+	}))
+}
+
+func toPricingBackgroundWorkResponses(items []app.PricingBackgroundWorkItem) []pricingBackgroundWorkResponse {
+	responses := make([]pricingBackgroundWorkResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, toPricingBackgroundWorkResponse(item))
+	}
+	return responses
+}
+
+func toPricingBackgroundWorkResponse(item app.PricingBackgroundWorkItem) pricingBackgroundWorkResponse {
+	return pricingBackgroundWorkResponse{
+		ID:        item.ID,
+		Kind:      item.Kind,
+		Reason:    item.Reason,
+		Attempts:  item.Attempts,
+		LastError: item.LastError,
+		CreatedAt: item.CreatedAt,
+		UpdatedAt: item.UpdatedAt,
 	}
 }
 
@@ -429,6 +492,10 @@ func writePricingServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing policy not found")
 	case errors.Is(err, app.ErrPricingAssignmentNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing source assignment not found")
+	case errors.Is(err, app.ErrPricingBackgroundWorkNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "failed pricing background work not found")
+	case errors.Is(err, app.ErrPricingBackgroundWorkActive):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "equivalent pricing background work is already queued")
 	default:
 		writeServiceInternalError(w, r, logger, action, err)
 	}

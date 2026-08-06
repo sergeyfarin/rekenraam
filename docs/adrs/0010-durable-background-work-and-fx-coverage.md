@@ -42,7 +42,10 @@ at-least-once worker model.
 - Retryable failures use capped exponential backoff with jitter. Connectivity,
   timeout, provider availability, and server interruption are retryable. Invalid
   payloads and permanently unsupported currency pairs are terminal and visible to
-  the user. A terminal item can be explicitly retried after configuration changes.
+  the user. Retries are bounded: each work kind has a maximum attempt count, and
+  an item that exhausts it becomes terminal rather than retrying at the backoff
+  cap indefinitely. A terminal item can be explicitly retried after configuration
+  changes.
 - Equivalent pending FX work may be coalesced by keeping the earliest requested
   start date. Coalescing must never move the start date forward or lose work that
   arrives while an item is leased.

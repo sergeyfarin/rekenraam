@@ -130,7 +130,7 @@ series backend/API foundation).
 
 | Capability | Status | Notes |
 |---|---|---|
-| Durable background work queue (lease, retry, resume) | ✅ | ADR 0010; restart-safe. |
+| Durable background work queue (lease, retry, resume, bounded attempts) | ✅ | ADR 0010; restart-safe. Work gives up after its kind's attempt cap instead of retrying forever (T-39); failed pricing work is listed in source health and re-enqueued via `POST /pricing/background-work/{work_id}/retry`. |
 | Demand-driven FX coverage (activate currency / backdated posting) | ✅ | Drafts/previews do not trigger downloads. |
 | Price observations (manual, provider, FX, trade-implied) | ✅ | Source/quote-type/adjustment-basis series; valuation date preserved. |
 | Pricing sources, policy, source assignments, health | 🟡 | Full API (`/pricing/*`); no management UI. |

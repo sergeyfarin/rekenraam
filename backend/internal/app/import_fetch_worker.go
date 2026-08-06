@@ -20,7 +20,7 @@ import (
 const trading212FetchWorkKind = "import.fetch.trading212"
 
 // maxTrading212FetchAttempts bounds retries before a fetch is given up on as
-// terminal. Unlike FX coverage (which retries forever), an import fetch that
+// terminal. Like FX coverage (maxFXCoverageAttempts), an import fetch that
 // keeps failing must eventually surface to the user as a failed batch rather
 // than leave it "fetching" indefinitely.
 const maxTrading212FetchAttempts = 8

@@ -613,6 +613,104 @@ func TestProcessFXCoverageWork_ProviderFailureRetriesWithBackoff(t *testing.T) {
 	assert.Greater(t, availableAt, "2026-06-12T00:06:00Z", "retry must be scheduled after the backoff delay, not immediately")
 }
 
+func TestProcessFXCoverageWork_GivesUpAfterMaxAttempts(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
+	repository := db.NewBackgroundWorkRepository(database)
+
+	// Drain the fixture's own trigger-seeded item first — see the comment in
+	// TestProcessFXCoverageWork_InvalidPayloadFailsWithoutRetry.
+	service.runDueFXCoverage(ctx, testLogger(), "drain-worker")
+	require.Equal(t, 0, pendingFXCoverageWorkCount(t, database))
+
+	// Same permanently-failing setup as the backoff test: no default currency
+	// means every attempt fails for a reason retrying cannot fix (T-39).
+	_, err := database.ExecContext(ctx, `UPDATE books SET default_currency_commodity_id = NULL WHERE id = 1`)
+	require.NoError(t, err)
+	_, err = repository.EnqueueBackgroundWork(ctx, BookID, fxCoverageWorkKind, `{"reason":"manual"}`, "2026-06-12T00:00:00Z")
+	require.NoError(t, err)
+
+	// One attempt short of the cap: this attempt still retries.
+	_, err = database.ExecContext(ctx, `UPDATE background_work_items SET attempts = ? WHERE kind = ?`, maxFXCoverageAttempts-2, fxCoverageWorkKind)
+	require.NoError(t, err)
+
+	item, err := repository.ClaimBackgroundWork(ctx, fxCoverageWorkKind, "worker-one", "2026-06-12T00:01:00Z", "2026-06-12T00:06:00Z")
+	require.NoError(t, err)
+	require.Equal(t, maxFXCoverageAttempts-1, item.Attempts)
+	service.processFXCoverageWork(ctx, testLogger(), "worker-one", item)
+	assert.Equal(t, "pending", fxCoverageWorkStatus(t, database, item.ID), "below the cap the item still retries")
+
+	// The next attempt hits the cap and gives up permanently.
+	item, err = repository.ClaimBackgroundWork(ctx, fxCoverageWorkKind, "worker-one", "2026-07-12T00:01:00Z", "2026-07-12T00:06:00Z")
+	require.NoError(t, err)
+	require.Equal(t, maxFXCoverageAttempts, item.Attempts)
+	service.processFXCoverageWork(ctx, testLogger(), "worker-one", item)
+	assert.Equal(t, "failed", fxCoverageWorkStatus(t, database, item.ID), "at the cap the item stops retrying forever")
+
+	failed, err := service.FailedBackgroundWork(ctx)
+	require.NoError(t, err)
+	require.Len(t, failed, 1, "the given-up item surfaces in pricing source health")
+	assert.Equal(t, item.ID, failed[0].ID)
+	assert.Equal(t, maxFXCoverageAttempts, failed[0].Attempts)
+	assert.NotEmpty(t, failed[0].LastError)
+}
+
+func TestRetryBackgroundWork_RequeuesFailedItemAndResetsAttempts(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
+	repository := db.NewBackgroundWorkRepository(database)
+
+	service.runDueFXCoverage(ctx, testLogger(), "drain-worker")
+	require.Equal(t, 0, pendingFXCoverageWorkCount(t, database))
+
+	created, err := repository.EnqueueBackgroundWork(ctx, BookID, fxCoverageWorkKind, `{"reason":"manual"}`, "2026-06-12T00:00:00Z")
+	require.NoError(t, err)
+	item, err := repository.ClaimBackgroundWork(ctx, fxCoverageWorkKind, "worker-one", "2026-06-12T00:01:00Z", "2026-06-12T00:06:00Z")
+	require.NoError(t, err)
+	require.NoError(t, repository.FailBackgroundWork(ctx, item.ID, "worker-one", "2026-06-12T00:02:00Z", "provider unreachable"))
+
+	requeued, err := service.RetryBackgroundWork(ctx, created.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, requeued.Attempts, "backoff restarts from the bottom, not at the 6h cap")
+	assert.Equal(t, "pending", fxCoverageWorkStatus(t, database, created.ID))
+
+	// It is genuinely claimable again, not just marked pending.
+	claimed, err := repository.ClaimBackgroundWork(ctx, fxCoverageWorkKind, "worker-two", "2026-06-13T00:00:00Z", "2026-06-13T00:05:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, claimed.ID)
+}
+
+func TestRetryBackgroundWork_RejectsMissingAndAlreadyQueuedWork(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
+	repository := db.NewBackgroundWorkRepository(database)
+
+	service.runDueFXCoverage(ctx, testLogger(), "drain-worker")
+	require.Equal(t, 0, pendingFXCoverageWorkCount(t, database))
+
+	_, err := service.RetryBackgroundWork(ctx, 987654)
+	assert.ErrorIs(t, err, ErrPricingBackgroundWorkNotFound)
+
+	pending, err := repository.EnqueueBackgroundWork(ctx, BookID, fxCoverageWorkKind, `{"reason":"manual"}`, "2026-06-12T00:00:00Z")
+	require.NoError(t, err)
+	_, err = service.RetryBackgroundWork(ctx, pending.ID)
+	assert.ErrorIs(t, err, ErrPricingBackgroundWorkNotFound, "only failed work is re-enqueueable")
+
+	// A failed item whose payload matches still-active work must not be
+	// revived: the active-unique index allows only one live copy.
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO background_work_items (book_id, kind, payload_json, status, attempts, available_at, last_error, created_at, updated_at)
+		VALUES (?, ?, ?, 'failed', ?, '2026-06-12T00:00:00Z', 'boom', '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z')
+	`, BookID, fxCoverageWorkKind, `{"reason":"manual"}`, maxFXCoverageAttempts)
+	require.NoError(t, err)
+	var failedID int64
+	require.NoError(t, database.QueryRowContext(ctx, `SELECT id FROM background_work_items WHERE status = 'failed'`).Scan(&failedID))
+
+	_, err = service.RetryBackgroundWork(ctx, failedID)
+	assert.ErrorIs(t, err, ErrPricingBackgroundWorkActive)
+}
+
 func TestRunDueFXCoverage_PoisonItemDoesNotWedgeQueue(t *testing.T) {
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
@@ -639,6 +737,13 @@ func TestRunDueFXCoverage_PoisonItemDoesNotWedgeQueue(t *testing.T) {
 }
 
 // --- test helpers ---
+
+func fxCoverageWorkStatus(t *testing.T, database *sql.DB, id int64) string {
+	t.Helper()
+	var status string
+	require.NoError(t, database.QueryRowContext(context.Background(), `SELECT status FROM background_work_items WHERE id = ?`, id).Scan(&status))
+	return status
+}
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))

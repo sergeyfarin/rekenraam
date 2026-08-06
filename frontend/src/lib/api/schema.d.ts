@@ -7758,6 +7758,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pricing/background-work/{work_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-enqueue failed pricing background work
+         * @description Moves a failed pricing background work item back to pending with its attempt counter reset, so exponential backoff starts over. Only failed items are eligible.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    work_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Background work re-enqueued */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PricingBackgroundWorkResponse"];
+                    };
+                };
+                /** @description Invalid work id */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Failed background work not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Equivalent background work is already queued */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/search": {
         parameters: {
             query?: never;
@@ -9747,6 +9852,8 @@ export interface components {
             refresh_runs: components["schemas"]["PricingRefreshRunResponse"][];
             refresh_runs_has_more: boolean;
             source_health: components["schemas"]["PricingSourceHealthResponse"][];
+            /** @description Pricing background work that gave up after its maximum attempts. */
+            failed_background_work: components["schemas"]["PricingBackgroundWorkResponse"][];
             /** @description Latest known observations for active currency/default-currency pairs in both directions. */
             latest_rates: components["schemas"]["PriceObservationResponse"][];
         };
@@ -10555,6 +10662,24 @@ export interface components {
         };
         PricingSourceHealthListResponse: {
             sources: components["schemas"]["PricingSourceHealthResponse"][];
+            /** @description Pricing background work that gave up after its maximum attempts. */
+            failed_background_work: components["schemas"]["PricingBackgroundWorkResponse"][];
+        };
+        /** @description A durable pricing background work item. Only items that exhausted their retry budget and moved to the failed status are surfaced; they stay queued until re-enqueued manually. */
+        PricingBackgroundWorkResponse: {
+            /** Format: int64 */
+            id: number;
+            /** @example pricing.fx_coverage */
+            kind: string;
+            /** @description Why the work was originally enqueued. */
+            reason?: string;
+            /** @description Attempts made before the item was given up on. */
+            attempts: number;
+            last_error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         PostingResponse: {
             /** Format: int64 */
