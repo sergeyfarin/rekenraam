@@ -25,6 +25,19 @@ current behaviour.
   reconciliation guard for investment postings; T-25 pricing-history results
   signal; B-T212-SCHED scheduled refresh.
 
+## Resolved later (recorded here to keep one resolution record)
+
+- **T-35 QIF EU date misparse** and **T-36 decimal-comma amounts 100× off**,
+  both fixed 2026-08-06. New `backend/internal/app/import_locale.go` owns the
+  locale decisions for file imports: an import profile's `date_layout` and
+  `decimal_separator` win when set, and otherwise the QIF adapter resolves the
+  date field order across the whole file (one row with a day above 12 settles
+  it) and the decimal separator per amount. Staged rows now carry ISO dates and
+  canonical amounts; the raw fields keep the file's own spelling. A file whose
+  dates are all ambiguous, or whose rows disagree, parses as `MM/DD` with a
+  parse warning telling the user to set a profile layout. Covered by
+  `import_locale_test.go` and the EU cases in `import_qif_test.go`.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

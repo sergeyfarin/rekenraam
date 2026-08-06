@@ -33,29 +33,6 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
-### T-35 QIF import misparses EU date formats `[ ]`
-
-**Files:** `backend/internal/app/import_service.go` (`parseQIFDate`),
-`backend/internal/app/import_qif.go` (profile date-layout override is a stub).
-
-`parseQIFDate` tries `MM/DD` before `DD/MM`, so European QIF exports silently
-misdate every row whose day is ≤ 12; the import-profile `date_layout`
-override promised in `QIFAdapter.Parse` is unimplemented. Found by the
-2026-07-19 audit (P1, `docs/reviews/backend-comprehensive-audit-2026-07-19.md`).
-Fix: honor a profile `date_layout`, and detect the layout batch-wide when no
-profile is set (one row with day > 12 disambiguates the file). Candidate for
-the R5 mapping-profile work; proposed as a pre-announcement gate.
-
-### T-36 Decimal-comma amounts parse 100× off in file imports `[ ]`
-
-**File:** `backend/internal/app/import_service.go` (`parseDecimalAmount`).
-
-All commas are stripped as thousands separators, so a European `"1,50"`
-parses as `150`. Trading 212 CSV uses period decimals (online path safe);
-file imports are exposed. Audit P2, same doc as T-35. Fix alongside T-35:
-locale-aware separator from the import profile, or the single-comma-then-1-2-
-digits heuristic.
-
 ### T-37 Price observations can never be voided `[ ]`
 
 **Files:** `backend/internal/db/pricing.go`, `backend/internal/app/pricing.go`,

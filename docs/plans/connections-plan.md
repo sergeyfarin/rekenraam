@@ -18,8 +18,11 @@ else that was evaluated.
    SimpleFIN ~$1.5/mo) is acceptable; a provider that would require the
    *project* to buy a commercial license (Morningstar) is rejected.
 3. **No ToS-violating reverse engineering.** Unofficial APIs that require
-   impersonating the official app (Trade Republic, DeGiro) are not adapter
-   candidates; those brokers are served by CSV import profiles (R5).
+   impersonating the official app or replaying a login/device-pairing flow
+   (Trade Republic, DeGiro) are not adapter candidates; those brokers are
+   served by CSV import profiles (R5). This is narrower than "undocumented":
+   a public keyless endpoint that needs no credential and no impersonation
+   (Yahoo Finance quotes) is allowed, labeled unofficial.
 4. **Read-only.** No order placement (decided 2026-07-07, see
    `docs/reviews/competitive-analysis-2026-07.md` §4).
 5. **Reuse the pipeline.** Every adapter lands in the existing shape:
@@ -53,7 +56,7 @@ time (free tiers and signup policies shift).
 | Financial Modeling Prep | Quotes + dividends + splits | ✅ | Free ~250 req/day (verify EU coverage) | BYO API key | **T-34 producer candidate** (dividend/split event feed) |
 | Stooq | EOD quotes + indices (incl. EU) | quasi-official CSV endpoints | Free, keyless | none | Benchmark-series candidate for R13 |
 | CoinGecko | Crypto prices | ✅ | Free demo-key tier | BYO API key | Crypto quote candidate (pairs with the crypto-instrument proposal) |
-| Yahoo Finance | Quotes (broadest EU coverage) | ❌ unofficial | Free | none | Decision needed: best coverage, real ToS risk. If ever shipped, clearly labeled community-adapter status, off by default |
+| **Yahoo Finance** | Quotes (broadest EU coverage) | ❌ undocumented (public, keyless — no app impersonation) | Free | none | **Adapter — ship** (decided 2026-08-05). Keyless `PriceProvider`, opt-in, labeled "unofficial" in the provider picker; breakage is expected and non-blocking because a BYO-key provider is always available as the fallback |
 
 ## Architecture: what all adapters share
 
@@ -291,12 +294,19 @@ existing seams (`PriceProvider`, `DividendProvider`,
 `CorporateActionProvider` interfaces are declared and unimplemented; the FX
 registry shows the adapter pattern):
 
-1. **Security quotes** (closes the unrealized-gains staleness gap,
-   2026-07-19 audit §4): implement the `PriceProvider` registry mirroring
+1. **Security quotes — now delivered in R17, not R15** (decided 2026-08-05;
+   closes the unrealized-gains staleness gap, 2026-07-19 audit §4):
+   implement the `PriceProvider` registry mirroring
    the FX one; first adapter Twelve Data or Alpha Vantage (BYO free key —
    decide on measured EU-exchange coverage, which is the persona's actual
    requirement); Stooq keyless as index/benchmark source; CoinGecko if/when
-   the crypto instrument type ships. Scheduled refresh reuses the pricing
+   the crypto instrument type ships. **Yahoo Finance ships too** (decided
+   2026-08-05): keyless, broadest EU coverage, so it is the zero-setup
+   default in the registry, labeled "unofficial" in the picker with a
+   one-line note that the endpoint is undocumented and may break. Because
+   the registry is multi-provider, a user who hits breakage switches to a
+   BYO-key provider without losing data — that fallback is what makes the
+   ToS/stability risk acceptable rather than a coverage promise. Scheduled refresh reuses the pricing
    worker and refresh-run bookkeeping wholesale.
 2. **Dividend/corporate-action events — the T-34 producer**: Financial
    Modeling Prep's dividend + split endpoints are the leading free
@@ -314,16 +324,55 @@ user-visible value here (fund performance context) arrives with R13 over
 our own data; Wikifolio certificates price like any ISIN security through a
 quote provider that covers German certificate venues.
 
-## Recommended sequencing (proposal — adopt in roadmap.md, not here)
+## Sequencing (adopted 2026-08-05 in roadmap.md, amended)
+
+The proposed order was adopted; its **contents were amended** because the
+same-day R17 decision (crypto instrument type) also needs prices. The quote
+provider is no longer an R15 slice:
+
+0. **`PriceProvider` registry + quote adapters — moved to R17**, ahead of
+   all of R15. Crypto needs prices regardless, so the registry is built once
+   there (Yahoo keyless + CoinGecko + one BYO-key equity provider) rather
+   than claimed by two slices. This also closes the unrealized-gains
+   staleness gap earlier than planned.
+
+R15 itself is then:
 
 1. **IBKR Flex** (investor persona, roadmap already points here, no consent
-   treadmill — the gentlest second adapter).
-2. **Quote provider slice** (small, reuses pricing worker, immediately
-   improves every investor's daily view).
-3. **GoCardless BAD** (EU+UK banks — biggest manual-entry win, hardest UX
+   treadmill — the gentlest second adapter). Lands after R16, so its
+   corporate-action rows have somewhere real to go: write-off (T-38) and the
+   lot-mutation design exist by then, and IBKR-4 no longer stages into a
+   permanent holding pen.
+2. **GoCardless BAD** (EU+UK banks — biggest manual-entry win, hardest UX
    due to consent renewals; benefits from landing after R5's rules/profile
    work).
-4. **T-34 producer via FMP** (after quotes; shares the BYO-key plumbing).
-5. Raisin / Trade Republic / DeGiro / UK brokers ship as **R5 CSV mapping
+3. **T-34 producer via FMP** (shares the BYO-key plumbing the R17 registry
+   establishes).
+4. Raisin / Trade Republic / DeGiro / UK brokers ship as **R5 CSV mapping
    profile presets** — a documentation-plus-fixtures task per broker, not
    adapters.
+
+## Slice-start preconditions (blocking)
+
+Reclassified 2026-08-05: these were sitting in `todo.md` as "decisions
+awaiting the owner", where they could never be actioned — they are
+verification gates, not choices. Every "verify" marked inline above is
+re-checked when its slice starts, and these two block their slice from
+beginning:
+
+- **IBKR-1 cannot start** until the Flex Web Service `SendRequest` /
+  `GetStatement` URLs, version parameter, and error-code classes are
+  re-confirmed against current IBKR documentation. The retry logic is built
+  directly on the terminal-vs-retryable split, so guessing here produces a
+  connection that stalls silently instead of prompting for a new token.
+- **GC-1 cannot start** until the GoCardless Bank Account Data free tier is
+  re-confirmed: current personal-use terms, per-account rate caps, and
+  whether free access still exists at all. This one is strategic, not
+  cosmetic — if the free tier has closed, the only official fallback
+  (Enable Banking) is commercial, which ground rule 2 rejects, and EU bank
+  aggregation leaves the roadmap entirely rather than shipping degraded.
+  Escalate that outcome to a roadmap decision; do not quietly substitute a
+  paid provider.
+
+Research in this document dates from 2026-07. Free tiers and signup policies
+shift, so treat every figure here as provisional until its slice starts.

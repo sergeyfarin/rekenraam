@@ -1,5 +1,11 @@
 # Roadmap & product-direction review (2026-07-19)
 
+> **Status: resolved 2026-08-05.** All seven §3/§4 proposals were accepted by
+> the owner and are recorded in `docs/roadmap.md` ("Decisions adopted
+> 2026-08-05") with their scope fences. The §2 documentation-accuracy fixes
+> are tracked separately. This document stays as the dated rationale; the
+> roadmap is the source of truth for what was decided.
+
 Point-in-time review of `roadmap.md`, `product-requirements.md`,
 `competitor-comparison.md`, `competitive-analysis-2026-07.md`, `backlog.md`,
 and `implemented.md`, cross-checked against the actual code state established

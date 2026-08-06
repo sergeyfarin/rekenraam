@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -31,15 +32,59 @@ func (a *QIFAdapter) Detect(input RawInput) Confidence {
 }
 
 func (a *QIFAdapter) Parse(ctx context.Context, input RawInput, profile *ImportProfile) (ParseResult, error) {
-	dateLayout := "01/02/06" // US MM/DD/YY default; overridable via profile
-	if profile != nil {
-		// Future: parse profile.ConfigJSON for date_layout
-		_ = profile
+	opts, err := qifOptionsFromProfile(profile)
+	if err != nil {
+		return ParseResult{}, err
 	}
-	_ = dateLayout // layout stored in raw; normalization step applies it
-
 	scanner := bufio.NewScanner(bytes.NewReader(input.Bytes))
-	return parseQIF(scanner, input.Filename)
+	return parseQIFWithOptions(scanner, input.Filename, opts)
+}
+
+// qifOptions carries the locale decisions a QIF file cannot make for itself.
+type qifOptions struct {
+	// dateOrder is the profile's date_layout; dateOrderAuto means detect it
+	// from the file.
+	dateOrder dateOrder
+	// decimalSeparator is the profile's decimal_separator; 0 means detect it
+	// per amount.
+	decimalSeparator rune
+}
+
+// qifProfileConfig is the subset of an import profile's config_json the QIF
+// adapter reads.
+type qifProfileConfig struct {
+	DateLayout       string `json:"date_layout"`
+	DecimalSeparator string `json:"decimal_separator"`
+}
+
+func qifOptionsFromProfile(profile *ImportProfile) (qifOptions, error) {
+	var opts qifOptions
+	if profile == nil || strings.TrimSpace(profile.ConfigJSON) == "" {
+		return opts, nil
+	}
+
+	var config qifProfileConfig
+	if err := json.Unmarshal([]byte(profile.ConfigJSON), &config); err != nil {
+		return qifOptions{}, ValidationError{Message: "import profile config is not valid JSON"}
+	}
+
+	order, err := parseDateOrder(config.DateLayout)
+	if err != nil {
+		return qifOptions{}, ValidationError{Message: err.Error()}
+	}
+	opts.dateOrder = order
+
+	switch strings.TrimSpace(config.DecimalSeparator) {
+	case "":
+	case ".":
+		opts.decimalSeparator = '.'
+	case ",":
+		opts.decimalSeparator = ','
+	default:
+		return qifOptions{}, ValidationError{Message: "import profile decimal_separator must be \".\" or \",\""}
+	}
+
+	return opts, nil
 }
 
 // qifRecord accumulates fields for one QIF transaction record.
@@ -61,13 +106,19 @@ type qifSplit struct {
 	amount   string
 }
 
+// parseQIF parses a QIF file, detecting its date and decimal layout from its
+// own contents. Use parseQIFWithOptions to apply an import profile's overrides.
 func parseQIF(scanner *bufio.Scanner, filename string) (ParseResult, error) {
+	return parseQIFWithOptions(scanner, filename, qifOptions{})
+}
+
+func parseQIFWithOptions(scanner *bufio.Scanner, filename string, opts qifOptions) (ParseResult, error) {
 	var result ParseResult
 	var current *qifRecord
 	var inSplit bool
 	var currentSplit qifSplit
-	var recordType string   // "Bank", "Cash", "CCard", "Invst", etc.
-	var occurrenceIndex int // within-file occurrence counter for fingerprinting
+	var recordType string // "Bank", "Cash", "CCard", "Invst", etc.
+	var records []qifParsedRecord
 	var rowIndex int
 
 	flush := func() {
@@ -88,20 +139,8 @@ func parseQIF(scanner *bufio.Scanner, filename string) (ParseResult, error) {
 			})
 		}
 
-		row := qifRecordToStagedRow(current, occurrenceIndex, recordType, filename)
-		result.Rows = append(result.Rows, row)
-		occurrenceIndex++
+		records = append(records, qifParsedRecord{record: current, recordType: recordType})
 		rowIndex++
-
-		// Update date range metadata.
-		if row.Date != "" {
-			if result.Meta.DateFrom == "" || row.Date < result.Meta.DateFrom {
-				result.Meta.DateFrom = row.Date
-			}
-			if result.Meta.DateTo == "" || row.Date > result.Meta.DateTo {
-				result.Meta.DateTo = row.Date
-			}
-		}
 
 		current = nil
 	}
@@ -148,9 +187,10 @@ func parseQIF(scanner *bufio.Scanner, filename string) (ParseResult, error) {
 			if current == nil {
 				current = newQIFRecord()
 			}
+			// Kept verbatim: a comma here may be a thousands separator or a
+			// decimal comma, which only the whole-file normalization pass
+			// below can tell apart.
 			amt := strings.TrimSpace(value)
-			// Remove thousands separators (commas in US QIF).
-			amt = strings.ReplaceAll(amt, ",", "")
 			current.amount = amt
 			current.rawFields[code] = append(current.rawFields[code], amt)
 
@@ -217,7 +257,6 @@ func parseQIF(scanner *bufio.Scanner, filename string) (ParseResult, error) {
 			// Split amount.
 			if current != nil && inSplit {
 				amt := strings.TrimSpace(value)
-				amt = strings.ReplaceAll(amt, ",", "")
 				currentSplit.amount = amt
 				current.rawFields["$"] = append(current.rawFields["$"], currentSplit.amount)
 			}
@@ -237,7 +276,96 @@ func parseQIF(scanner *bufio.Scanner, filename string) (ParseResult, error) {
 		return ParseResult{}, fmt.Errorf("scan qif: %w", err)
 	}
 
+	normalizeQIFRecords(&result, records, filename, opts)
 	return result, nil
+}
+
+// qifParsedRecord is one record awaiting the whole-file normalization pass.
+type qifParsedRecord struct {
+	record     *qifRecord
+	recordType string
+}
+
+// normalizeQIFRecords rewrites every record's date to ISO and every amount to
+// canonical form, then builds the staged rows. It runs after the whole file has
+// been read because that is the only point where the date field order is
+// knowable: a single row with a day > 12 settles it for all the ambiguous ones.
+func normalizeQIFRecords(result *ParseResult, records []qifParsedRecord, filename string, opts qifOptions) {
+	order := opts.dateOrder
+	if order == dateOrderAuto {
+		dates := make([]string, 0, len(records))
+		for _, r := range records {
+			dates = append(dates, r.record.date)
+		}
+		detection := detectDateOrder(dates)
+		order = detection.Order
+		switch {
+		case detection.Conflict:
+			result.Warnings = append(result.Warnings, ParseWarning{
+				Message: fmt.Sprintf("dates in this file disagree on their layout; parsed as %s — set a date layout on an import profile if that is wrong", order),
+			})
+		case !detection.Decisive && detection.Ambiguous > 0:
+			result.Warnings = append(result.Warnings, ParseWarning{
+				Message: fmt.Sprintf("every date in this file is ambiguous (no day above 12); parsed as %s — set a date layout on an import profile if that is wrong", order),
+			})
+		}
+	}
+
+	for i, parsed := range records {
+		rec := parsed.record
+
+		if rec.date != "" {
+			iso, err := parseFlexibleDate(rec.date, order)
+			if err != nil {
+				result.Warnings = append(result.Warnings, ParseWarning{
+					RowIndex: i,
+					Message:  fmt.Sprintf("unrecognized date %q; review before committing", rec.date),
+				})
+			} else {
+				rec.date = iso
+			}
+		}
+
+		if rec.amount != "" {
+			canonical, err := canonicalDecimal(rec.amount, opts.decimalSeparator)
+			if err != nil {
+				result.Warnings = append(result.Warnings, ParseWarning{
+					RowIndex: i,
+					Message:  fmt.Sprintf("unrecognized amount %q; review before committing", rec.amount),
+				})
+			} else {
+				rec.amount = canonical
+			}
+		}
+
+		for j, split := range rec.splits {
+			if split.amount == "" {
+				continue
+			}
+			canonical, err := canonicalDecimal(split.amount, opts.decimalSeparator)
+			if err != nil {
+				result.Warnings = append(result.Warnings, ParseWarning{
+					RowIndex: i,
+					Message:  fmt.Sprintf("unrecognized split amount %q; review before committing", split.amount),
+				})
+				continue
+			}
+			rec.splits[j].amount = canonical
+		}
+
+		row := qifRecordToStagedRow(rec, i, parsed.recordType, filename)
+		result.Rows = append(result.Rows, row)
+
+		// Date range metadata: ISO dates compare correctly as strings.
+		if row.Date != "" {
+			if result.Meta.DateFrom == "" || row.Date < result.Meta.DateFrom {
+				result.Meta.DateFrom = row.Date
+			}
+			if result.Meta.DateTo == "" || row.Date > result.Meta.DateTo {
+				result.Meta.DateTo = row.Date
+			}
+		}
+	}
 }
 
 func newQIFRecord() *qifRecord {

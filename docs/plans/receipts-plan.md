@@ -109,12 +109,24 @@ confidence and is user-editable before anything touches the ledger.
   rules apply to receipt drafts too — one rules engine, three producers
   (file import, bank feeds, receipts).
 
-## Roadmap placement (proposal)
+## Roadmap placement (decided 2026-08-05)
 
-- **R14a (storage + manual attach)** is independent and small — it can slot
-  any time after R3, and pairs naturally with R3's backup work (both touch
-  the "your data is safe" story). Doing R14a early also de-risks the open
-  product decision cheaply.
+The pull-forward question was decided: **R14a ships after R5, not alongside
+R3.** R3 and R5 are announcement gates; R14a is not, and a non-gate slice
+does not go between two gates for a narrative benefit.
+
+What R3 does carry instead is an **attachments hook**: because files live
+outside SQLite where `VACUUM INTO` cannot reach them, R3's backup procedure
+names "the database *and* the attachments directory" from day one, and its
+trial-balance self-check reserves a slot for the file-integrity pass
+described above. The directory is empty until R14a. The point is that
+"backed up nightly" is never a claim that has to be walked back — which is
+the rework the pull-forward was trying to avoid, at a fraction of the cost.
+
+- **R14a (storage + manual attach)** after R5, before or alongside R16. Still
+  independent and small; still resolves the open attachment product decision
+  cheaply. Its backup-story work is now an extension of an existing hook
+  rather than a rewrite.
 - **R14b (capture + inbox)** after R5 — it reuses the review-queue UX
   muscle the import preview builds.
 - **R14c (recognition + match/draft)** after or alongside R9, because

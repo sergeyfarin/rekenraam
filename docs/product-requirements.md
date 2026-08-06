@@ -338,6 +338,7 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 - Attachments are out of scope until core ledger, reconciliation, import, and reporting workflows are stable.
 - Mobile support must cover full core workflows responsively, including transaction entry rather than read-only access.
 - User and permission language may stay explicitly single-user for now; future household support, if ever adopted, should be introduced as a deliberate product change rather than implied prematurely.
+- Crypto holdings are in scope as **manually or CSV-entered, priced holdings with lots** (roadmap R17, decided 2026-08-05). Exchange API integrations, DeFi positions, staking rewards, and NFTs are **rejected, not deferred**: they are an open-ended coverage promise that the bring-your-own-key adapter rule forbids, and each one is a permanent maintenance obligation. Prices come from a BYO-key adapter like any other commodity.
 
 ## Conventions Carried Forward From Archive Analysis
 

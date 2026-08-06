@@ -95,6 +95,9 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		return StartImportResult{}, ValidationError{Message: "no adapter can handle this file format"}
 	}
 
+	// Profiles are not persisted yet (R5 mapping-profile work owns that); the
+	// adapters already honor one when given it — a QIF profile's date_layout
+	// and decimal_separator override the per-file detection.
 	var profile *ImportProfile
 	// Future: load profile by input.ProfileID
 
@@ -1000,76 +1003,34 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 }
 
 // parseQIFDate parses common QIF date formats into YYYY-MM-DD.
+//
+// Staged rows produced by the QIF adapter already carry an ISO date — the
+// adapter resolves the file's field order once, from the import profile or by
+// detecting it across every row (see import_locale.go). This is the
+// last-resort parse for rows staged before that, and for adapters that emit
+// dates verbatim; with no file to look at it can only fall back to QIF's
+// historic US default for genuinely ambiguous dates.
 func parseQIFDate(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", fmt.Errorf("date is empty")
-	}
-
-	formats := []string{
-		"01/02/06",   // MM/DD/YY (US)
-		"01/02/2006", // MM/DD/YYYY (US)
-		"02/01/06",   // DD/MM/YY (EU — detected by profile, fallback here)
-		"02/01/2006", // DD/MM/YYYY (EU)
-		"2006-01-02", // ISO (already normalized)
-		"1/2/06",     // M/D/YY
-		"1/2/2006",   // M/D/YYYY
-		"2-Jan-06",   // D-Mon-YY (Quicken alternative)
-		"2-Jan-2006", // D-Mon-YYYY
-	}
-
-	// Replace dash with slash to normalize separators.
-	normalized := strings.ReplaceAll(raw, "-", "/")
-	// But keep ISO if it was already ISO.
-	if len(raw) == 10 && raw[4] == '-' && raw[7] == '-' {
-		return raw, nil
-	}
-
-	for _, layout := range formats {
-		layoutNorm := strings.ReplaceAll(layout, "-", "/")
-		t, err := time.Parse(layoutNorm, normalized)
-		if err == nil {
-			return t.Format("2006-01-02"), nil
-		}
-	}
-
-	// Try original formats (some use dash separators).
-	for _, layout := range formats {
-		t, err := time.Parse(layout, raw)
-		if err == nil {
-			return t.Format("2006-01-02"), nil
-		}
-	}
-
-	return "", fmt.Errorf("unrecognized date format")
+	return parseFlexibleDate(raw, dateOrderAuto)
 }
 
 // parseDecimalAmount parses a decimal string (e.g. "-123.45") into a Coefficient + scale.
-// No floating-point is used; we parse digit strings directly.
+// No floating-point is used; we parse digit strings directly. Decimal-comma
+// input ("1.234,56") is normalized first — see canonicalDecimal for how the
+// separator is decided.
 func parseDecimalAmount(raw string) (exact.Coefficient, int, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", 0, fmt.Errorf("amount is empty")
+	canonical, err := canonicalDecimal(raw, 0)
+	if err != nil {
+		return "", 0, err
 	}
 
 	negative := false
-	if raw[0] == '-' {
+	if canonical[0] == '-' {
 		negative = true
-		raw = raw[1:]
-	} else if raw[0] == '+' {
-		raw = raw[1:]
+		canonical = canonical[1:]
 	}
 
-	parts := strings.SplitN(raw, ".", 2)
-	intPart := parts[0]
-	fracPart := ""
-	if len(parts) == 2 {
-		fracPart = parts[1]
-	}
-
-	// Remove any remaining commas (thousands separators).
-	intPart = strings.ReplaceAll(intPart, ",", "")
-	fracPart = strings.ReplaceAll(fracPart, ",", "")
+	intPart, fracPart, _ := strings.Cut(canonical, ".")
 
 	scale := len(fracPart)
 	digits := intPart + fracPart

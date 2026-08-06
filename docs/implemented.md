@@ -88,6 +88,7 @@ series backend/API foundation).
 |---|---|---|
 | `SourceAdapter` interface + auto-detect registry | ✅ | `app/import_adapter.go`; confidence-ranked selection. |
 | QIF parser (full field set, splits, transfers, investment entries) | ✅ | `app/import_qif.go`; handles MS Money loose-QIF export format. |
+| EU date and decimal-comma handling in file imports | ✅ | `app/import_locale.go` (T-35, T-36): profile `date_layout` / `decimal_separator` when set, otherwise whole-file date-order detection (a day above 12 settles it) and per-amount separator detection; all-ambiguous or contradicting files parse as `MM/DD` with a parse warning. |
 | Import pipeline: parse → normalize → dedupe → stage → commit | ✅ | `app/import_service.go`. |
 | SHA-256 fingerprint deduplication (within-batch + ledger-level) | ✅ | `import_commit_identities` table; `INSERT OR IGNORE` with conflict detection. |
 | Import schema | ✅ | Included in the pre-beta Goose baseline (`migrations/0001_initial_schema.sql`). |
