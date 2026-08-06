@@ -169,8 +169,8 @@ func (s *TransactionService) ListDeletedTransactions(ctx context.Context, input 
 			return ListDeletedTransactionsResult{}, err
 		}
 		result[i] = DeletedTransaction{
-			Transaction:                   txns[i],
-			DeleteReason:                  rec.DeleteReason,
+			Transaction:                    txns[i],
+			DeleteReason:                   rec.DeleteReason,
 			RestoreBlockedByReconciliation: blocked,
 		}
 	}
