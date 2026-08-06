@@ -402,6 +402,7 @@
   "currencies_loading_copy": "Reading active currencies, default preference, and latest observed rates.",
   "currencies_loading_title": "Loading currencies",
   "currencies_policy_base_label": "FX base currency",
+  "currencies_policy_hops_hint": "Intermediate currencies a derived rate may route through when no direct rate exists. 0 turns derived rates off.",
   "currencies_policy_hops_label": "Hops",
   "currencies_policy_hour_label": "Hour",
   "currencies_policy_minute_label": "Minute",

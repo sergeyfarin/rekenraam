@@ -72,6 +72,26 @@ current behaviour.
   by `TestProcessFXCoverageWork_GivesUpAfterMaxAttempts` and the two
   `TestRetryBackgroundWork_*` cases.
 
+- **T-40 `triangulation_max_hops` is now honored**, fixed 2026-08-06. The
+  policy value used to be a bare on/off check (`<= 0` disabled derivation) with
+  the derived path hard-coded to exactly one intermediate currency, so a
+  configured 2 silently behaved as 1. `fetchAndStoreDerivedFX` now resolves a
+  chain of arbitrary length: `findFXPath` deepens one hop at a time and returns
+  the first chain it can complete, so the **shortest** available route always
+  wins — each extra leg compounds rounding and widens the vintage spread across
+  source observations. Every leg fetch is memoized, so deepening re-walks
+  shallower depths without extra provider calls, and the one-hop search order is
+  unchanged from before. Storage generalized with it: `scaledFXProduct` takes N
+  observations and stays a single exact `big.Int` quotient (no intermediate leg
+  product is ever rounded), the derivation metadata records every leg and an
+  N-factor formula, `via_currency_code` became `via_currency_codes`, and the
+  chain is dated by its stalest leg. The derived observation's dedupe key keeps
+  its single-hop spelling, so pre-existing derived rows still match. Covered by
+  `TestRefreshFXTarget_DerivesMultiHopChainWhenPolicyAllowsMoreHops`,
+  `TestRefreshFXTarget_PrefersShorterChainOverDeeperOneFoundFirst` (verified to
+  fail against a plain depth-first search), and
+  `TestRefreshFXTarget_ZeroHopsDisablesTriangulationEntirely`.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

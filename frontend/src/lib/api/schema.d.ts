@@ -10540,6 +10540,7 @@ export interface components {
             refresh_minute_local: number;
             max_backfill_days: number;
             staleness_max_days: number;
+            /** @description Intermediate currencies a derived FX rate may route through when no direct rate is available. 0 disables derivation entirely; 1 allows A->X->B; higher values allow longer chains. The shortest available chain is always used. */
             triangulation_max_hops: number;
             /** @enum {string} */
             rounding_mode: "half_up" | "half_even" | "down" | "up";
@@ -10563,6 +10564,7 @@ export interface components {
             refresh_minute_local?: number;
             max_backfill_days?: number;
             staleness_max_days?: number;
+            /** @description Intermediate currencies a derived FX rate may route through when no direct rate is available. 0 disables derivation entirely; 1 allows A->X->B; higher values allow longer chains. The shortest available chain is always used. */
             triangulation_max_hops?: number;
             rounding_mode?: string;
             prefer_official_fx?: boolean;

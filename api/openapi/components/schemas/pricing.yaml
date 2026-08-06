@@ -201,6 +201,11 @@ PricingPolicyResponse:
       minimum: 1
     triangulation_max_hops:
       type: integer
+      description: >-
+        Intermediate currencies a derived FX rate may route through when no
+        direct rate is available. 0 disables derivation entirely; 1 allows
+        A->X->B; higher values allow longer chains. The shortest available
+        chain is always used.
       minimum: 0
       maximum: 4
     rounding_mode:
@@ -260,6 +265,11 @@ PricingPolicyRequest:
       minimum: 1
     triangulation_max_hops:
       type: integer
+      description: >-
+        Intermediate currencies a derived FX rate may route through when no
+        direct rate is available. 0 disables derivation entirely; 1 allows
+        A->X->B; higher values allow longer chains. The shortest available
+        chain is always used.
       minimum: 0
       maximum: 4
     rounding_mode:

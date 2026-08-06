@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -139,6 +140,87 @@ func TestPricingRefreshStoresDerivedRateWithVintageMetadata(t *testing.T) {
 	assert.Equal(t, 12, derived.PriceScale)
 	assert.Contains(t, derived.DerivationJSON, `"mixed_vintage":true`)
 	assert.Contains(t, derived.DerivationJSON, `"source_published_at":"2026-06-11T00:00:00Z"`)
+}
+
+func TestRefreshFXTarget_DerivesMultiHopChainWhenPolicyAllowsMoreHops(t *testing.T) {
+	ctx := context.Background()
+	// USD -> EUR -> GBP -> JPY is the only chain the provider can serve: no
+	// direct USD/JPY, and no single intermediate covers it either.
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP", "JPY"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 9000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"EUR/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"GBP/JPY": {value: 2000000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+	target := fxTargetForTest(t, database, 1, 4)
+	now := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+
+	_, err := service.refreshFXTarget(ctx, 1, target, policyWithHops(1), 0, "", now)
+	require.Error(t, err, "one hop cannot reach JPY; the knob must actually bound the search")
+
+	outcome, err := service.refreshFXTarget(ctx, 1, target, policyWithHops(2), 0, "", now)
+
+	require.NoError(t, err)
+	assert.True(t, outcome.Observation.IsDerived)
+	// 0.9 USD/EUR * 0.8 EUR/GBP * 200 GBP/JPY = 144 JPY per USD, at scale 12.
+	assert.Equal(t, int64(144_000_000_000_000), outcome.Observation.PriceValue)
+	assert.Equal(t, fxDerivedPriceScale, outcome.Observation.PriceScale)
+	assert.Contains(t, outcome.Observation.DerivationJSON, `"formula":"USD/JPY = (USD/EUR) * (EUR/GBP) * (GBP/JPY)"`)
+	assert.Contains(t, outcome.Observation.MetadataJSON, `"via_currency_codes":["EUR","GBP"]`)
+	assert.Contains(t, outcome.Observation.DerivationJSON, `"mixed_vintage":false`)
+
+	var legs struct {
+		Legs []struct {
+			ObservationID int64 `json:"observation_id"`
+		} `json:"legs"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(outcome.Observation.DerivationJSON), &legs))
+	assert.Len(t, legs.Legs, 3, "every leg of the chain must be recorded, not just the first two")
+}
+
+func TestRefreshFXTarget_PrefersShorterChainOverDeeperOneFoundFirst(t *testing.T) {
+	ctx := context.Background()
+	// Two routes exist to JPY: USD -> EUR -> GBP -> JPY (two hops) and
+	// USD -> ZAR -> JPY (one hop). Candidates are ordered by code, so EUR is
+	// tried first and a plain depth-first search would return its two-hop
+	// chain. The shorter route must win instead, because every extra leg
+	// compounds rounding and widens the vintage spread.
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP", "JPY", "ZAR"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 9000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"EUR/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"GBP/JPY": {value: 2000000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"USD/ZAR": {value: 9000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"ZAR/JPY": {value: 1600000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+	target := fxTargetForTest(t, database, 1, 4)
+
+	outcome, err := service.refreshFXTarget(ctx, 1, target, policyWithHops(2), 0, "", time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC))
+
+	require.NoError(t, err)
+	assert.Contains(t, outcome.Observation.DerivationJSON, `"formula":"USD/JPY = (USD/ZAR) * (ZAR/JPY)"`)
+	assert.Contains(t, outcome.Observation.MetadataJSON, `"via_currency_codes":["ZAR"]`)
+}
+
+func TestRefreshFXTarget_ZeroHopsDisablesTriangulationEntirely(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 9000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"EUR/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+	target := fxTargetForTest(t, database, 1, 3)
+
+	_, err := service.refreshFXTarget(ctx, 1, target, policyWithHops(0), 0, "", time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "FX rate USD/GBP is unavailable")
 }
 
 func TestPricingRefreshRecordsFailureHealth(t *testing.T) {
@@ -737,6 +819,20 @@ func TestRunDueFXCoverage_PoisonItemDoesNotWedgeQueue(t *testing.T) {
 }
 
 // --- test helpers ---
+
+func policyWithHops(hops int) PricingPolicy {
+	return PricingPolicy{BookID: BookID, TriangulationMaxHops: hops, RoundingMode: "half_up", WeekendPolicy: "skip"}
+}
+
+func fxTargetForTest(t *testing.T, database *sql.DB, baseCommodityID int64, quoteCommodityID int64) fxRefreshTarget {
+	t.Helper()
+	repository := db.NewPricingRepository(database)
+	base, err := repository.CurrencyByID(context.Background(), BookID, baseCommodityID)
+	require.NoError(t, err)
+	quote, err := repository.CurrencyByID(context.Background(), BookID, quoteCommodityID)
+	require.NoError(t, err)
+	return fxRefreshTarget{Base: base, Quote: quote}
+}
 
 func fxCoverageWorkStatus(t *testing.T, database *sql.DB, id int64) string {
 	t.Helper()

@@ -157,7 +157,7 @@ func TestScaledFXProductUsesWideIntermediate(t *testing.T) {
 	first := PriceObservation{PriceValue: math.MaxInt64, PriceScale: 18, BaseQuantityValue: 1}
 	second := PriceObservation{PriceValue: 1_000_000_000_000_000_000, PriceScale: 18, BaseQuantityValue: 1}
 
-	got, err := scaledFXProduct(first, second, 18)
+	got, err := scaledFXProduct([]PriceObservation{first, second}, 18)
 	require.NoError(t, err)
 	assert.Equal(t, int64(math.MaxInt64), got)
 }
@@ -166,7 +166,7 @@ func TestScaledFXProductReportsResultOverflow(t *testing.T) {
 	first := PriceObservation{PriceValue: math.MaxInt64, BaseQuantityValue: 1}
 	second := PriceObservation{PriceValue: 2, BaseQuantityValue: 1}
 
-	_, err := scaledFXProduct(first, second, 0)
+	_, err := scaledFXProduct([]PriceObservation{first, second}, 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "overflows int64")
 }
@@ -175,9 +175,31 @@ func TestScaledFXProductRoundsHalfUpAtResultScale(t *testing.T) {
 	first := PriceObservation{PriceValue: 1, BaseQuantityValue: 2}
 	second := PriceObservation{PriceValue: 1, BaseQuantityValue: 1}
 
-	got, err := scaledFXProduct(first, second, 0)
+	got, err := scaledFXProduct([]PriceObservation{first, second}, 0)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), got)
+}
+
+func TestScaledFXProductChainsThreeLegsWithoutIntermediateRounding(t *testing.T) {
+	// 1/3 * 3/7 * 7/1 = 1 exactly. Rounding each leg product on the way would
+	// not land on 1, so this pins the single-quotient property of the chain.
+	legs := []PriceObservation{
+		{PriceValue: 1, BaseQuantityValue: 3},
+		{PriceValue: 3, BaseQuantityValue: 7},
+		{PriceValue: 7, BaseQuantityValue: 1},
+	}
+
+	got, err := scaledFXProduct(legs, 6)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1_000_000), got)
+}
+
+func TestScaledFXProductRejectsSingleLegChain(t *testing.T) {
+	_, err := scaledFXProduct([]PriceObservation{{PriceValue: 1, BaseQuantityValue: 1}}, 0)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least two legs")
 }
 
 // ---------------------------------------------------------------------------

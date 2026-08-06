@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,14 @@ type fxRefreshTarget struct {
 type fxRefreshSource struct {
 	Record      db.MarketDataSourceRecord
 	ProviderKey string
+}
+
+// fxPathLeg is one provider-backed leg of a triangulation chain. A chain of N
+// legs routes through N-1 intermediate currencies (the policy's "hops").
+type fxPathLeg struct {
+	Target      fxRefreshTarget
+	Observation PriceObservation
+	SourceID    int64
 }
 
 type fxRefreshOutcome struct {
@@ -283,45 +292,125 @@ func (s *PricingService) fetchAndStoreDirectFX(ctx context.Context, ownerUserID 
 }
 
 func (s *PricingService) fetchAndStoreDerivedFX(ctx context.Context, ownerUserID int64, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) (fxRefreshOutcome, error) {
-	currencies, err := s.repository.ActiveAccountCurrencies(ctx, BookID)
+	candidates, err := s.triangulationCandidates(ctx, target)
 	if err != nil {
 		return fxRefreshOutcome{}, err
 	}
-	defaultCurrency, err := s.repository.DefaultCurrency(ctx, BookID)
-	if err == nil {
+
+	legs, err := s.findFXPath(ctx, ownerUserID, target, candidates, policy, overrideSourceID, valuationDate, now)
+	if err != nil {
+		return fxRefreshOutcome{}, err
+	}
+
+	// The chain is attributed to its first leg's source, as the single-hop
+	// derivation always was; every leg's own source is recorded per-leg in the
+	// derivation metadata.
+	sourceID := legs[0].SourceID
+	price, skipped, err := s.storeDerivedFXObservation(ctx, ownerUserID, target, legs, sourceID, now)
+	if err != nil {
+		return fxRefreshOutcome{}, err
+	}
+	return fxRefreshOutcome{Observation: price, SourceID: sourceID, Skipped: skipped}, nil
+}
+
+// triangulationCandidates is the set of currencies a derived chain may route
+// through: every currency an active account uses, plus the book default,
+// minus the pair's own endpoints.
+func (s *PricingService) triangulationCandidates(ctx context.Context, target fxRefreshTarget) ([]db.PricingCurrencyRecord, error) {
+	currencies, err := s.repository.ActiveAccountCurrencies(ctx, BookID)
+	if err != nil {
+		return nil, err
+	}
+	if defaultCurrency, err := s.repository.DefaultCurrency(ctx, BookID); err == nil {
 		currencies = append(currencies, defaultCurrency)
 	}
 
-	var lastErr error
 	seen := map[int64]bool{}
-	for _, via := range currencies {
-		if seen[via.ID] || via.ID == target.Base.ID || via.ID == target.Quote.ID {
+	candidates := make([]db.PricingCurrencyRecord, 0, len(currencies))
+	for _, currency := range currencies {
+		if seen[currency.ID] || currency.ID == target.Base.ID || currency.ID == target.Quote.ID {
 			continue
 		}
-		seen[via.ID] = true
+		seen[currency.ID] = true
+		candidates = append(candidates, currency)
+	}
+	return candidates, nil
+}
 
-		first, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, fxRefreshTarget{Base: target.Base, Quote: via}, policy, overrideSourceID, valuationDate, now)
-		if err != nil {
-			lastErr = err
-			continue
+// findFXPath resolves the shortest chain base -> via... -> quote whose every
+// leg a provider can actually serve, routing through at most
+// policy.TriangulationMaxHops intermediate currencies (T-40: the knob used to
+// be a bare on/off check with the path hard-coded to one hop).
+//
+// Shortest matters: each additional leg compounds rounding and widens the
+// vintage spread across the source observations, so the search deepens one hop
+// at a time and returns the first chain it can complete. Re-walking the
+// shallower depths costs nothing because every leg fetch is memoized — legs are
+// shared across candidate paths and each miss is a provider call.
+func (s *PricingService) findFXPath(ctx context.Context, ownerUserID int64, target fxRefreshTarget, candidates []db.PricingCurrencyRecord, policy PricingPolicy, overrideSourceID int64, valuationDate string, now time.Time) ([]fxPathLeg, error) {
+	type legResult struct {
+		leg fxPathLeg
+		err error
+	}
+	legCache := map[string]legResult{}
+	fetchLeg := func(from db.PricingCurrencyRecord, to db.PricingCurrencyRecord) (fxPathLeg, error) {
+		key := fxPairKey(from.ID, to.ID)
+		if cached, ok := legCache[key]; ok {
+			return cached.leg, cached.err
 		}
-		second, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, fxRefreshTarget{Base: via, Quote: target.Quote}, policy, overrideSourceID, valuationDate, now)
-		if err != nil {
-			lastErr = err
-			continue
-		}
+		legTarget := fxRefreshTarget{Base: from, Quote: to}
+		outcome, err := s.fetchAndStoreDirectFX(ctx, ownerUserID, legTarget, policy, overrideSourceID, valuationDate, now)
+		result := legResult{leg: fxPathLeg{Target: legTarget, Observation: outcome.Observation, SourceID: outcome.SourceID}, err: err}
+		legCache[key] = result
+		return result.leg, result.err
+	}
 
-		price, skipped, err := s.storeDerivedFXObservation(ctx, ownerUserID, target, via, first.Observation, second.Observation, first.SourceID, now)
-		if err != nil {
-			lastErr = err
-			continue
+	var lastErr error
+	used := map[int64]bool{}
+	for hops := 1; hops <= policy.TriangulationMaxHops; hops++ {
+		if legs := searchFXPath(target.Base, target.Quote, candidates, hops, used, fetchLeg, &lastErr); legs != nil {
+			return legs, nil
 		}
-		return fxRefreshOutcome{Observation: price, SourceID: first.SourceID, Skipped: skipped}, nil
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no triangulation currency is available for %s/%s", target.Base.Code, target.Quote.Code)
 	}
-	return fxRefreshOutcome{}, lastErr
+	return nil, lastErr
+}
+
+// searchFXPath walks candidate chains from `from` to `quote` using at most
+// remainingHops intermediate currencies, returning nil when none completes.
+// Callers deepen remainingHops one at a time (see findFXPath), which is what
+// makes the first chain returned a shortest one.
+func searchFXPath(from db.PricingCurrencyRecord, quote db.PricingCurrencyRecord, candidates []db.PricingCurrencyRecord, remainingHops int, used map[int64]bool, fetchLeg func(db.PricingCurrencyRecord, db.PricingCurrencyRecord) (fxPathLeg, error), lastErr *error) []fxPathLeg {
+	if remainingHops <= 0 {
+		return nil
+	}
+	for _, via := range candidates {
+		if used[via.ID] {
+			continue
+		}
+		first, err := fetchLeg(from, via)
+		if err != nil {
+			*lastErr = err
+			continue
+		}
+		if last, err := fetchLeg(via, quote); err == nil {
+			return []fxPathLeg{first, last}
+		} else {
+			*lastErr = err
+		}
+
+		used[via.ID] = true
+		rest := searchFXPath(via, quote, candidates, remainingHops-1, used, fetchLeg, lastErr)
+		used[via.ID] = false
+		if rest != nil {
+			// Fresh slice: siblings in the search must not share a backing array.
+			legs := make([]fxPathLeg, 0, len(rest)+1)
+			return append(append(legs, first), rest...)
+		}
+	}
+	return nil
 }
 
 func (s *PricingService) sourcesForFXPair(ctx context.Context, target fxRefreshTarget, policy PricingPolicy, overrideSourceID int64, valuationDate string) ([]fxRefreshSource, error) {
@@ -438,24 +527,28 @@ func (s *PricingService) storeProviderFXObservation(ctx context.Context, ownerUs
 	return toPriceObservation(record), false, nil
 }
 
-func (s *PricingService) storeDerivedFXObservation(ctx context.Context, ownerUserID int64, target fxRefreshTarget, via db.PricingCurrencyRecord, first PriceObservation, second PriceObservation, sourceID int64, now time.Time) (PriceObservation, bool, error) {
-	priceValue, err := scaledFXProduct(first, second, fxDerivedPriceScale)
+func (s *PricingService) storeDerivedFXObservation(ctx context.Context, ownerUserID int64, target fxRefreshTarget, legs []fxPathLeg, sourceID int64, now time.Time) (PriceObservation, bool, error) {
+	observations := fxPathObservations(legs)
+	priceValue, err := scaledFXProduct(observations, fxDerivedPriceScale)
 	if err != nil {
 		return PriceObservation{}, false, err
 	}
-	valuationDate := olderDate(first.ValuationDate, second.ValuationDate)
-	providerObservationID := fmt.Sprintf("DERIVED:%s:%d:%d:via:%d:%s:%s", valuationDate, target.Base.ID, target.Quote.ID, via.ID, first.ProviderObservationID, second.ProviderObservationID)
+	valuationDate := oldestFXDate(observations)
+	providerObservationID := fxDerivedProviderObservationID(target, legs, valuationDate)
 	if existing, err := s.repository.PriceObservationByProviderID(ctx, sourceID, providerObservationID); err == nil {
 		return toPriceObservation(existing), true, nil
 	} else if !errors.Is(err, db.ErrNotFound) {
 		return PriceObservation{}, false, err
 	}
 
-	derivationJSON, err := fxDerivationJSON(first, second, sourceID, target, via)
+	derivationJSON, err := fxDerivationJSON(legs, sourceID, target)
 	if err != nil {
 		return PriceObservation{}, false, err
 	}
-	metadataJSON := fmt.Sprintf(`{"source":"fx_refresh","derived":true,"via_currency_code":%q,"mixed_vintage":%t}`, via.Code, fxMixedVintage(first, second))
+	metadataJSON, err := fxDerivedMetadataJSON(legs)
+	if err != nil {
+		return PriceObservation{}, false, err
+	}
 	record, err := s.repository.CreatePriceObservation(ctx, db.CreatePriceObservationParams{
 		BookID:       BookID,
 		ActorUserID:  ownerUserID,
@@ -504,14 +597,26 @@ func (s *PricingService) recordFXRefreshItem(ctx context.Context, runID int64, t
 	})
 }
 
-func scaledFXProduct(first PriceObservation, second PriceObservation, resultScale int) (int64, error) {
-	numerator := big.NewInt(first.PriceValue)
-	numerator.Mul(numerator, big.NewInt(second.PriceValue))
-	numerator.Mul(numerator, exact.Pow10(first.BaseQuantityScale+second.BaseQuantityScale+resultScale))
-
-	denominator := big.NewInt(first.BaseQuantityValue)
-	denominator.Mul(denominator, big.NewInt(second.BaseQuantityValue))
-	denominator.Mul(denominator, exact.Pow10(first.PriceScale+second.PriceScale))
+// scaledFXProduct multiplies every leg's rate (priceValue/10^priceScale per
+// baseQuantityValue/10^baseQuantityScale) into one rate at resultScale. The
+// whole chain is one exact big.Int quotient, so no intermediate leg product is
+// ever rounded — only the final result is.
+func scaledFXProduct(observations []PriceObservation, resultScale int) (int64, error) {
+	if len(observations) < 2 {
+		return 0, fmt.Errorf("derived FX needs at least two legs")
+	}
+	numerator := big.NewInt(1)
+	denominator := big.NewInt(1)
+	baseQuantityScaleSum := resultScale
+	priceScaleSum := 0
+	for _, observation := range observations {
+		numerator.Mul(numerator, big.NewInt(observation.PriceValue))
+		denominator.Mul(denominator, big.NewInt(observation.BaseQuantityValue))
+		baseQuantityScaleSum += observation.BaseQuantityScale
+		priceScaleSum += observation.PriceScale
+	}
+	numerator.Mul(numerator, exact.Pow10(baseQuantityScaleSum))
+	denominator.Mul(denominator, exact.Pow10(priceScaleSum))
 	if denominator.Sign() == 0 {
 		return 0, fmt.Errorf("derived FX denominator is zero")
 	}
@@ -532,22 +637,75 @@ func scaledFXProduct(first PriceObservation, second PriceObservation, resultScal
 	return value.Int64(), nil
 }
 
-func fxDerivationJSON(first PriceObservation, second PriceObservation, sourceID int64, target fxRefreshTarget, via db.PricingCurrencyRecord) (string, error) {
+func fxDerivationJSON(legs []fxPathLeg, sourceID int64, target fxRefreshTarget) (string, error) {
+	derivationLegs := make([]fxDerivationLeg, 0, len(legs))
+	factors := make([]string, 0, len(legs))
+	for _, leg := range legs {
+		derivationLegs = append(derivationLegs, fxObservationLeg(leg.Observation, sourceID))
+		factors = append(factors, fmt.Sprintf("(%s/%s)", leg.Target.Base.Code, leg.Target.Quote.Code))
+	}
 	payload := fxDerivationMetadata{
 		Kind:         "triangulated_fx",
 		Warning:      "Derived from multiple FX observations; source legs may have different valuation, observation, or publication times.",
-		MixedVintage: fxMixedVintage(first, second),
-		Formula:      fmt.Sprintf("%s/%s = (%s/%s) * (%s/%s)", target.Base.Code, target.Quote.Code, target.Base.Code, via.Code, via.Code, target.Quote.Code),
-		Legs: []fxDerivationLeg{
-			fxObservationLeg(first, sourceID),
-			fxObservationLeg(second, sourceID),
-		},
+		MixedVintage: fxMixedVintage(fxPathObservations(legs)),
+		Formula:      fmt.Sprintf("%s/%s = %s", target.Base.Code, target.Quote.Code, strings.Join(factors, " * ")),
+		Legs:         derivationLegs,
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("encode FX derivation metadata: %w", err)
 	}
 	return string(encoded), nil
+}
+
+type fxDerivedMetadata struct {
+	Source           string   `json:"source"`
+	Derived          bool     `json:"derived"`
+	ViaCurrencyCodes []string `json:"via_currency_codes"`
+	MixedVintage     bool     `json:"mixed_vintage"`
+}
+
+func fxDerivedMetadataJSON(legs []fxPathLeg) (string, error) {
+	// One entry per intermediate currency: every leg's quote except the last,
+	// which is the target's own quote.
+	viaCodes := make([]string, 0, len(legs)-1)
+	for _, leg := range legs[:len(legs)-1] {
+		viaCodes = append(viaCodes, leg.Target.Quote.Code)
+	}
+	encoded, err := json.Marshal(fxDerivedMetadata{
+		Source:           "fx_refresh",
+		Derived:          true,
+		ViaCurrencyCodes: viaCodes,
+		MixedVintage:     fxMixedVintage(fxPathObservations(legs)),
+	})
+	if err != nil {
+		return "", fmt.Errorf("encode derived FX metadata: %w", err)
+	}
+	return string(encoded), nil
+}
+
+// fxDerivedProviderObservationID is the chain's dedupe key. The single-hop
+// spelling is unchanged, so pre-T-40 derived rows still match and are not
+// re-derived.
+func fxDerivedProviderObservationID(target fxRefreshTarget, legs []fxPathLeg, valuationDate string) string {
+	viaIDs := make([]string, 0, len(legs)-1)
+	for _, leg := range legs[:len(legs)-1] {
+		viaIDs = append(viaIDs, strconv.FormatInt(leg.Target.Quote.ID, 10))
+	}
+	observationIDs := make([]string, 0, len(legs))
+	for _, leg := range legs {
+		observationIDs = append(observationIDs, leg.Observation.ProviderObservationID)
+	}
+	return fmt.Sprintf("DERIVED:%s:%d:%d:via:%s:%s", valuationDate, target.Base.ID, target.Quote.ID,
+		strings.Join(viaIDs, "-"), strings.Join(observationIDs, ":"))
+}
+
+func fxPathObservations(legs []fxPathLeg) []PriceObservation {
+	observations := make([]PriceObservation, 0, len(legs))
+	for _, leg := range legs {
+		observations = append(observations, leg.Observation)
+	}
+	return observations
 }
 
 func fxObservationLeg(observation PriceObservation, fallbackSourceID int64) fxDerivationLeg {
@@ -571,10 +729,27 @@ func fxObservationLeg(observation PriceObservation, fallbackSourceID int64) fxDe
 	}
 }
 
-func fxMixedVintage(first PriceObservation, second PriceObservation) bool {
-	return first.ValuationDate != second.ValuationDate ||
-		first.ObservedAt != second.ObservedAt ||
-		first.SourcePublishedAt != second.SourcePublishedAt
+// fxMixedVintage reports whether the chain's legs disagree on when they were
+// valued, observed, or published — the caveat a reader of a derived rate needs.
+func fxMixedVintage(observations []PriceObservation) bool {
+	for _, observation := range observations[1:] {
+		if observation.ValuationDate != observations[0].ValuationDate ||
+			observation.ObservedAt != observations[0].ObservedAt ||
+			observation.SourcePublishedAt != observations[0].SourcePublishedAt {
+			return true
+		}
+	}
+	return false
+}
+
+// oldestFXDate dates the chain by its stalest leg: a derived rate is only as
+// current as its least current input.
+func oldestFXDate(observations []PriceObservation) string {
+	oldest := ""
+	for _, observation := range observations {
+		oldest = olderDate(oldest, observation.ValuationDate)
+	}
+	return oldest
 }
 
 func olderDate(left string, right string) string {

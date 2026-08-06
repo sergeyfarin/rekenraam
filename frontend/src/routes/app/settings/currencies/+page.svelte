@@ -538,6 +538,7 @@
               bind:value={triangulationMaxHops}
               class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
             />
+            <span class="mt-1 block text-sm font-normal text-muted">{m.currencies_policy_hops_hint()}</span>
           </label>
         </div>
         <p class="text-sm text-muted">{m.currencies_policy_time_zone_note({ timeZone: preferencesTimeZone })}</p>

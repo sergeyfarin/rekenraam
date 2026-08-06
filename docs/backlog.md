@@ -55,14 +55,6 @@ realized gains. Audit P4. Needs a small product decision (which account the
 loss books against) plus either `CashAmountValue == 0` support on Sell or a
 dedicated write-off endpoint over the existing disposal engine.
 
-### T-40 `TriangulationMaxHops` policy knob is not honored `[ ]`
-
-**File:** `backend/internal/app/pricing_refresh.go` (`refreshFXTarget`).
-
-The stored policy value is only checked for `<= 0`; derivation is hard-coded
-to one hop, so a configured `2` silently behaves as `1`. Implement multi-hop
-or clamp/remove the knob. Audit P6.
-
 ## Public-deployment security gates
 
 These do not block private/local development. They must be complete before
