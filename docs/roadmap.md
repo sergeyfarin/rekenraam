@@ -208,10 +208,12 @@ actions as shipped, but there is **no implementation** — not even manual
 entry. This slice makes the moat claim honest. Sequenced after R5, and
 split by risk:
 
-1. **Now — independent and small:** zero-proceeds write-off (T-38), price
-   observation voiding (T-37 — **done 2026-08-06**, backend endpoint only;
-   the operator-facing surface still belongs to R11), return-of-capital as
-   basis reduction. None needs a provider feed.
+1. **Now — independent and small:** zero-proceeds write-off (T-38 — **done
+   2026-08-06**, backend only), price observation voiding (T-37 — **done
+   2026-08-06**, backend endpoint only; the operator-facing surface still
+   belongs to R11), return-of-capital as basis reduction. None needs a
+   provider feed. What remains in this sub-slice is return-of-capital plus
+   the UI for all three.
 2. **Behind a design note — manual split / reverse-split entry.** Splits
    mutate historical lots, which is the unbuilt half of T-34 and touches the
    ledger code both 2026-07 audits certified as correct. Write the

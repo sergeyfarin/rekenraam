@@ -15,6 +15,7 @@ export type DividendDefaultsResponse = components['schemas']['DividendDefaultsRe
 export type SellPreviewResponse = components['schemas']['SellPreviewResponse'];
 export type InvestmentTradeResponse = components['schemas']['InvestmentTradeResponse'];
 export type InvestmentTradeRequest = components['schemas']['InvestmentTradeRequest'];
+export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
 export type CostBasisMethod = components['schemas']['CostBasisMethod'];
@@ -214,6 +215,55 @@ export async function recordSell(
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/sell', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+// A write-off disposes lots at zero proceeds: the whole remaining basis is
+// realized as a loss. Separate from recordSell so a mistyped sale amount can
+// never become a total loss.
+export async function previewWriteOff(
+  input: InvestmentWriteOffRequest
+): Promise<SellPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/write-off/preview', {
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordWriteOff(
+  input: InvestmentWriteOffRequest,
+  csrfToken: string
+): Promise<InvestmentTradeResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/write-off', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });

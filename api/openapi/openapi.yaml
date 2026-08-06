@@ -199,6 +199,10 @@ paths:
     $ref: "./paths/investments-sell.yaml"
   /api/v1/investments/sell/preview:
     $ref: "./paths/investments-sell-preview.yaml"
+  /api/v1/investments/write-off:
+    $ref: "./paths/investments-write-off.yaml"
+  /api/v1/investments/write-off/preview:
+    $ref: "./paths/investments-write-off-preview.yaml"
   /api/v1/investments/dividend:
     $ref: "./paths/investments-dividend.yaml"
   /api/v1/investments/reinvested-dividend:
@@ -620,6 +624,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotAllocationRequest"
     InvestmentTradeRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeRequest"
+    InvestmentWriteOffRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentWriteOffRequest"
     InvestmentLotDisposalResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotDisposalResponse"
     InvestmentTradeResponse:

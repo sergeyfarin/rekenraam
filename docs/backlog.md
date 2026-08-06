@@ -33,17 +33,6 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
-### T-38 Zero-proceeds disposal (write-off) is impossible `[ ]`
-
-**Files:** `backend/internal/app/investments.go` (`validateTradeInput`
-requires `CashAmountValue > 0`; repository `DisposeLots` is unexposed).
-
-A fund closure, worthless delisting, or any total-loss position cannot be
-recorded: shares stay in open lots forever and the loss never reaches
-realized gains. Audit P4. Needs a small product decision (which account the
-loss books against) plus either `CashAmountValue == 0` support on Sell or a
-dedicated write-off endpoint over the existing disposal engine.
-
 ## Public-deployment security gates
 
 These do not block private/local development. They must be complete before

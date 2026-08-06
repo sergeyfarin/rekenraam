@@ -143,6 +143,8 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/investments/buy", buyInvestment(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/sell", sellInvestment(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/sell/preview", sellPreviewInvestment(logger, services.Auth, services.Investment))
+	mux.HandleFunc("POST /api/v1/investments/write-off", writeOffInvestment(logger, services.Auth, services.Investment, options))
+	mux.HandleFunc("POST /api/v1/investments/write-off/preview", writeOffPreviewInvestment(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/dividend", createDividend(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/reinvested-dividend", createReinvestedDividend(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("GET /api/v1/investments/events", listInvestmentEvents(logger, services.Auth, services.Investment))

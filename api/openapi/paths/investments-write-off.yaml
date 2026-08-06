@@ -1,0 +1,82 @@
+post:
+  summary: Write off a holding as worthless (zero-proceeds disposal)
+  description: >-
+    Records a total loss — a fund closure, a worthless delisting, a liquidated
+    issuer. The lots are disposed at zero proceeds, so the entire remaining
+    cost basis is realized as a loss. There is no cash account, cash commodity
+    or amount: the postings are the holding credit and the matching
+    `commodity_trading` debit only.
+
+    This is a separate endpoint rather than a sell with a zero amount on
+    purpose, so a mistyped sale amount can never silently become a total loss.
+    A reason is required. The loss is not posted to an expense account —
+    realized gains and losses are computed reporting values in this ledger and
+    appear in `GET /investments/gains`.
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentWriteOffRequest"
+  responses:
+    "201":
+      description: Write-off recorded
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentTradeResponse"
+    "400":
+      description: Invalid request body, missing reason, or validation failure
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Insufficient lots to cover the written-off quantity
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

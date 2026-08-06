@@ -255,6 +255,51 @@ type InvestmentTradeInput struct {
 	Operation  string
 }
 
+// InvestmentWriteOffInput records a total loss on a holding. There is no cash
+// account or amount: proceeds are zero by definition, which is what separates
+// it from a sale (T-38).
+type InvestmentWriteOffInput struct {
+	OwnerUserID      int64
+	AuthSessionID    int64
+	RequestID        string
+	TransactionDate  string
+	CommodityID      int64
+	HoldingAccountID int64
+	QuantityValue    exact.Coefficient
+	QuantityScale    int
+	// Reason is required: "delisted", "fund closed", "issuer liquidated". A
+	// position declared worthless without a stated cause is not auditable.
+	Reason          string
+	Memo            string
+	ExternalRefHint string
+	MetadataJSON    string
+	PayeeID         *int64
+	Status          string
+	LotAllocations  []InvestmentLotAllocationInput
+	ChangeReason    string
+	CostBasisMethod string
+	// ReconciliationOverride lets a backdated write-off invalidate affected
+	// checkpoints through the normal transaction write guard.
+	ReconciliationOverride bool
+	OriginType             string
+	Operation              string
+}
+
+// asTradeInput reuses the shared disposal planner, which only reads the lot
+// selection fields. The zero cash fields are never consulted.
+func (input InvestmentWriteOffInput) asTradeInput() InvestmentTradeInput {
+	return InvestmentTradeInput{
+		OwnerUserID:      input.OwnerUserID,
+		TransactionDate:  input.TransactionDate,
+		CommodityID:      input.CommodityID,
+		HoldingAccountID: input.HoldingAccountID,
+		QuantityValue:    input.QuantityValue,
+		QuantityScale:    input.QuantityScale,
+		LotAllocations:   input.LotAllocations,
+		CostBasisMethod:  input.CostBasisMethod,
+	}
+}
+
 type SellPreviewResult struct {
 	CostBasisMethod   string
 	Allocations       []InvestmentLotDisposal
@@ -1105,6 +1150,163 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals)}, nil
 }
 
+// WriteOff records a zero-proceeds disposal: a fund closure, a worthless
+// delisting, or any other total loss. Without it the shares stay in open lots
+// forever and the loss never reaches realized gains (T-38).
+//
+// It is a separate entry point rather than a Sell with a zero cash amount on
+// purpose: a mistyped amount on an ordinary sale must not silently become a
+// total loss. Declaring a position worthless is an explicit act and carries a
+// required reason.
+//
+// The postings are exactly a sale's commodity legs with the cash legs absent —
+// the holding is credited and `commodity_trading` debited, so the transaction
+// balances per commodity with genuinely zero proceeds. The loss is not posted
+// to an expense account: realized gains and losses are computed reporting
+// values in this ledger, not postings, and the gains report already reads this
+// disposal as proceeds 0 against the disposed basis. Open decision I-04 covers
+// whether that changes; when it does, a write-off needs no separate treatment
+// because it is already an ordinary disposal with no cash leg.
+func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentWriteOffInput) (InvestmentTradeResult, error) {
+	reason, err := validateWriteOffInput(input)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return InvestmentTradeResult{}, ValidationError{Message: "commodity trading system account is required"}
+		}
+		return InvestmentTradeResult{}, err
+	}
+	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	if memo == "" {
+		memo = reason
+	}
+	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", investmentJSONMaxBytes)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	status := input.Status
+	if strings.TrimSpace(status) == "" {
+		status = "posted"
+	}
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID:            input.OwnerUserID,
+		AuthSessionID:          input.AuthSessionID,
+		RequestID:              input.RequestID,
+		OriginType:             defaultString(input.OriginType, "browser_api"),
+		Operation:              defaultString(input.Operation, "investment.write_off"),
+		ChangeReason:           defaultString(input.ChangeReason, "wrote off worthless holding: "+reason),
+		ReconciliationOverride: input.ReconciliationOverride,
+		Spec: TransactionInput{
+			Status:          status,
+			TransactionKind: "investment",
+			TransactionDate: input.TransactionDate,
+			PayeeID:         input.PayeeID,
+			Description:     memo,
+			ExternalRefHint: input.ExternalRefHint,
+			MetadataJSON:    metadataJSON,
+			JournalEntries: []JournalEntryInput{{
+				EntryDate: input.TransactionDate,
+				EntryKind: "investment",
+				Memo:      memo,
+				Postings: []PostingInput{
+					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+				},
+			}},
+		},
+	})
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	allocations := make([]db.LotAllocation, 0, len(input.LotAllocations))
+	for _, allocation := range input.LotAllocations {
+		allocations = append(allocations, db.LotAllocation{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
+	}
+	transactionRecord, disposals, err := s.repository.CreateTransactionAndDisposeLots(ctx, transactionParams, db.DisposeLotsParams{
+		BookID:          BookID,
+		AccountID:       input.HoldingAccountID,
+		CommodityID:     input.CommodityID,
+		EventDate:       input.TransactionDate,
+		QuantityValue:   input.QuantityValue,
+		QuantityScale:   input.QuantityScale,
+		Allocations:     allocations,
+		CostBasisMethod: method,
+		CreatedAt:       s.now().UTC().Format(time.RFC3339),
+		ActorUserID:     input.OwnerUserID,
+		AuthSessionID:   input.AuthSessionID,
+		RequestID:       input.RequestID,
+		OriginType:      defaultString(input.OriginType, "browser_api"),
+		Operation:       "investment.lot.dispose",
+		ChangeReason:    "disposed lots from write-off transaction",
+		MetadataJSON:    metadataJSON,
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrInsufficientLots) {
+			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
+		}
+		if errors.Is(err, db.ErrInvalidDisposalParams) {
+			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
+		}
+		return InvestmentTradeResult{}, fmt.Errorf("dispose write-off lots: %w", err)
+	}
+	// Deliberately no trade-implied price: a write-off implies a price of
+	// zero, which price_observations rejects (price_value must be positive),
+	// and recording one would corrupt the instrument's price history.
+	return InvestmentTradeResult{Transaction: toTransaction(transactionRecord), Allocations: toInvestmentLotDisposals(disposals)}, nil
+}
+
+// PreviewWriteOff reports which lots a write-off would consume and the loss it
+// would realize, without writing anything.
+func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input InvestmentWriteOffInput) (SellPreviewResult, error) {
+	if _, err := validateWriteOffInput(input); err != nil {
+		return SellPreviewResult{}, err
+	}
+	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	if err != nil {
+		return SellPreviewResult{}, err
+	}
+	disposals, err := s.computeSellDisposals(ctx, input.asTradeInput(), method)
+	if err != nil {
+		if errors.Is(err, db.ErrInsufficientLots) {
+			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
+		}
+		if errors.Is(err, db.ErrInvalidDisposalParams) {
+			return SellPreviewResult{}, ValidationError{Message: err.Error()}
+		}
+		return SellPreviewResult{}, fmt.Errorf("preview write-off disposals: %w", err)
+	}
+	disposedBasis := exact.NewScaledInt()
+	for _, disposal := range disposals {
+		disposedBasis.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
+	}
+	// Proceeds are zero by definition, so the realized gain is the whole
+	// disposed basis as a loss.
+	gain := exact.NewScaledInt()
+	gain.SubScaled(disposedBasis)
+	gainValue, err := gain.Int64()
+	if err != nil {
+		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CommodityID}
+	}
+	return SellPreviewResult{
+		CostBasisMethod:   method,
+		Allocations:       toInvestmentLotDisposals(disposals),
+		RealizedGain:      gainValue,
+		RealizedGainScale: gain.Scale(),
+		CashAmountValue:   0,
+		CashAmountScale:   0,
+	}, nil
+}
+
 func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (Transaction, error) {
 	return s.dividend(ctx, input, nil)
 }
@@ -1815,6 +2017,46 @@ func validateTradeInput(input InvestmentTradeInput) error {
 		return ValidationError{Message: "specific_lot cost basis method requires lot allocations"}
 	}
 	return nil
+}
+
+// validateWriteOffInput returns the cleaned reason. It deliberately does not
+// share validateTradeInput: a write-off has no cash account, no cash commodity
+// and no amount, and requiring those would be the very confusion this endpoint
+// exists to avoid.
+func validateWriteOffInput(input InvestmentWriteOffInput) (string, error) {
+	if input.OwnerUserID <= 0 {
+		return "", ValidationError{Message: "owner user is required"}
+	}
+	if _, err := cleanRequiredDate(input.TransactionDate, "transaction date"); err != nil {
+		return "", err
+	}
+	if input.CommodityID <= 0 || input.HoldingAccountID <= 0 {
+		return "", ValidationError{Message: "write-off references are required"}
+	}
+	if input.QuantityValue.Sign() <= 0 {
+		return "", ValidationError{Message: "quantity is required"}
+	}
+	if input.QuantityScale < 0 || input.QuantityScale > exact.MaxCryptoScale {
+		return "", ValidationError{Message: "quantity scale is invalid"}
+	}
+	if strings.TrimSpace(input.Reason) == "" {
+		return "", ValidationError{Message: "write-off reason is required"}
+	}
+	reason, err := cleanOptionalText(input.Reason, "write-off reason", investmentTextMaxBytes)
+	if err != nil {
+		return "", err
+	}
+	method := strings.TrimSpace(input.CostBasisMethod)
+	if method != "" && !validCostBasisMethods[method] {
+		return "", ValidationError{Message: "cost basis method is invalid"}
+	}
+	if len(input.LotAllocations) > 0 && method != "specific_lot" {
+		return "", ValidationError{Message: "lot allocations are only permitted with specific_lot cost basis method"}
+	}
+	if method == "specific_lot" && len(input.LotAllocations) == 0 {
+		return "", ValidationError{Message: "specific_lot cost basis method requires lot allocations"}
+	}
+	return reason, nil
 }
 
 func validateDividendInput(input DividendInput) (string, error) {

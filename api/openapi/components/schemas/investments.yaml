@@ -424,6 +424,59 @@ InvestmentTradeRequest:
     cost_basis_method:
       $ref: "#/CostBasisMethod"
 
+InvestmentWriteOffRequest:
+  type: object
+  description: >-
+    A zero-proceeds disposal. Deliberately has no cash account, cash commodity
+    or amount — those fields are what make a sale a sale.
+  required:
+    - transaction_date
+    - commodity_id
+    - holding_account_id
+    - quantity_value
+    - quantity_scale
+    - reason
+  properties:
+    transaction_date:
+      type: string
+      format: date
+    commodity_id:
+      type: integer
+      format: int64
+    holding_account_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+      description: >-
+        Exact quantity coefficient as a canonical decimal string. Must be
+        positive and no larger than the remaining holding.
+    quantity_scale:
+      type: integer
+    reason:
+      type: string
+      minLength: 1
+      description: >-
+        Why the holding is worthless ("delisted", "fund closed", "issuer
+        liquidated"). Required — a position declared worthless without a
+        stated cause is not auditable.
+    memo:
+      type: string
+      description: Defaults to the reason when omitted.
+    payee_id:
+      type: integer
+      format: int64
+    status:
+      type: string
+    lot_allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotAllocationRequest"
+    change_reason:
+      type: string
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+
 InvestmentLotDisposalResponse:
   type: object
   required:

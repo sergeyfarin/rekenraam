@@ -9248,6 +9248,188 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/write-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write off a holding as worthless (zero-proceeds disposal)
+         * @description Records a total loss — a fund closure, a worthless delisting, a liquidated issuer. The lots are disposed at zero proceeds, so the entire remaining cost basis is realized as a loss. There is no cash account, cash commodity or amount: the postings are the holding credit and the matching `commodity_trading` debit only.
+         *     This is a separate endpoint rather than a sell with a zero amount on purpose, so a mistyped sale amount can never silently become a total loss. A reason is required. The loss is not posted to an expense account — realized gains and losses are computed reporting values in this ledger and appear in `GET /investments/gains`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentWriteOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Write-off recorded */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentTradeResponse"];
+                    };
+                };
+                /** @description Invalid request body, missing reason, or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Insufficient lots to cover the written-off quantity */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/write-off/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a write-off (lot selection and realized loss, no writes)
+         * @description Reports which lots a write-off would consume and the loss it would realize, without writing anything. Proceeds are zero, so the realized gain is the negated disposed basis. Read-only, so no CSRF token is required.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentWriteOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Write-off preview */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SellPreviewResponse"];
+                    };
+                };
+                /** @description Invalid request body, missing reason, or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Insufficient lots to cover the written-off quantity */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/dividend": {
         parameters: {
             query?: never;
@@ -11618,6 +11800,28 @@ export interface components {
             cash_amount_scale: number;
             /** Format: int64 */
             cash_commodity_id: number;
+            memo?: string;
+            /** Format: int64 */
+            payee_id?: number;
+            status?: string;
+            lot_allocations?: components["schemas"]["InvestmentLotAllocationRequest"][];
+            change_reason?: string;
+            cost_basis_method?: components["schemas"]["CostBasisMethod"];
+        };
+        /** @description A zero-proceeds disposal. Deliberately has no cash account, cash commodity or amount — those fields are what make a sale a sale. */
+        InvestmentWriteOffRequest: {
+            /** Format: date */
+            transaction_date: string;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** @description Exact quantity coefficient as a canonical decimal string. Must be positive and no larger than the remaining holding. */
+            quantity_value: string;
+            quantity_scale: number;
+            /** @description Why the holding is worthless ("delisted", "fund closed", "issuer liquidated"). Required — a position declared worthless without a stated cause is not auditable. */
+            reason: string;
+            /** @description Defaults to the reason when omitted. */
             memo?: string;
             /** Format: int64 */
             payee_id?: number;

@@ -154,6 +154,23 @@ type investmentTradeRequest struct {
 	CostBasisMethod  string                           `json:"cost_basis_method"`
 }
 
+// investmentWriteOffRequest has no cash account, commodity or amount: a
+// write-off's proceeds are zero by definition (T-38).
+type investmentWriteOffRequest struct {
+	TransactionDate  string                           `json:"transaction_date"`
+	CommodityID      int64                            `json:"commodity_id"`
+	HoldingAccountID int64                            `json:"holding_account_id"`
+	QuantityValue    exact.Coefficient                `json:"quantity_value"`
+	QuantityScale    int                              `json:"quantity_scale"`
+	Reason           string                           `json:"reason"`
+	Memo             string                           `json:"memo"`
+	PayeeID          *int64                           `json:"payee_id"`
+	Status           string                           `json:"status"`
+	LotAllocations   []investmentLotAllocationRequest `json:"lot_allocations"`
+	ChangeReason     string                           `json:"change_reason"`
+	CostBasisMethod  string                           `json:"cost_basis_method"`
+}
+
 type sellPreviewResponse struct {
 	CostBasisMethod   string                          `json:"cost_basis_method"`
 	Allocations       []investmentLotDisposalResponse `json:"allocations"`
@@ -594,6 +611,53 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 	}
 }
 
+func writeOffInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request investmentWriteOffRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.WriteOff(r.Context(), toInvestmentWriteOffInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "investment write-off", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, toInvestmentTradeResponse(result))
+	}))
+}
+
+func writeOffPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request investmentWriteOffRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewWriteOff(r.Context(), toInvestmentWriteOffInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview write-off", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, sellPreviewResponse{
+			CostBasisMethod:   preview.CostBasisMethod,
+			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
+			RealizedGain:      preview.RealizedGain,
+			RealizedGainScale: preview.RealizedGainScale,
+			CashAmountValue:   preview.CashAmountValue,
+			CashAmountScale:   preview.CashAmountScale,
+		})
+	}
+}
+
 func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, action string) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -888,6 +952,20 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
 		CashAccountID: request.CashAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 		CashAmountValue: request.CashAmountValue, CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
+		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
+		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
+	}
+}
+
+func toInvestmentWriteOffInput(owner app.Owner, r *http.Request, request investmentWriteOffRequest) app.InvestmentWriteOffInput {
+	allocations := make([]app.InvestmentLotAllocationInput, 0, len(request.LotAllocations))
+	for _, allocation := range request.LotAllocations {
+		allocations = append(allocations, app.InvestmentLotAllocationInput{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
+	}
+	return app.InvestmentWriteOffInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
+		QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale, Reason: request.Reason,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
 	}

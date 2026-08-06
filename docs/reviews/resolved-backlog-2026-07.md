@@ -117,6 +117,44 @@ current behaviour.
   `..._StopsTheObservationBeingUsedForValuation` — plus `TestVoidPrice_HTTP`.
   The R11 pricing UI still owns the operator-facing surface.
 
+- **T-38 zero-proceeds disposals are now possible**, fixed 2026-08-06 (audit
+  P4, R16 slice 1). `POST /api/v1/investments/write-off` and its `/preview`
+  sibling record a total loss — fund closure, worthless delisting, liquidated
+  issuer — over the existing lot-disposal engine. Before this, the shares
+  stayed in open lots forever and the loss never reached realized gains.
+
+  The backlog framed this as "either `CashAmountValue == 0` support on Sell
+  or a dedicated write-off endpoint". **A dedicated endpoint was chosen**: a
+  zero on a sale is indistinguishable from a typo, and making the most
+  destructive investment operation reachable by clearing one field is a trap.
+  `InvestmentWriteOffInput` therefore has no cash account, cash commodity or
+  cash amount at all, and carries a **required reason** instead.
+
+  The open "which account does the loss book against" decision resolved to
+  **none, deliberately**. The postings are the sale's two commodity legs with
+  the cash legs absent (holding credit, `commodity_trading` debit), so the
+  transaction balances per commodity at genuinely zero proceeds and the
+  existing `realizedGainCashProceeds` join reads proceeds 0 against the
+  disposed basis with no change. Booking the basis to an expense account
+  would have been worse than cosmetic: that query counts *any* positive
+  non-trading posting in the cost commodity as proceeds, so an expense debit
+  would have reported the realized gain as **zero** instead of a full loss.
+  It would also have pre-empted open decision **I-04** (whether realized
+  gains/losses become ledger postings at all) for one transaction kind only.
+  When I-04 lands, a write-off needs no special case — it is already an
+  ordinary disposal with no cash leg.
+
+  Two smaller decisions: no trade-implied price is recorded (a zero price
+  violates the positive-price trigger, and a near-zero stand-in would poison
+  the instrument's history), and `validateWriteOffInput` is deliberately
+  separate from `validateTradeInput` rather than a relaxation of it. Covered
+  by five `TestWriteOff_*` service cases — including
+  `..._RealizesTheWholeBasisAsALoss`, which asserts the loss reaches
+  `ListRealizedGains`, and `..._DoesNotRecordAZeroTradeImpliedPrice` — plus
+  `TestWriteOffInvestment_PreviewAndCommitCloseThePositionAtALoss` at the
+  HTTP layer. No UI yet; entry belongs with the R16 investment-lifecycle
+  surface.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP
