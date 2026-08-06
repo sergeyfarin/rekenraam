@@ -92,6 +92,31 @@ current behaviour.
   fail against a plain depth-first search), and
   `TestRefreshFXTarget_ZeroHopsDisablesTriangulationEntirely`.
 
+- **T-37 price observations can now be voided**, fixed 2026-08-06 (audit P3,
+  R16 slice 1). `price_observations.voided_at` was written by nothing;
+  `POST /api/v1/pricing/prices/{price_id}/void` now retires an observation
+  with a **required** reason, so a poisoned rate stops feeding valuations
+  while the row itself survives — prices are corrected by superseding or
+  voiding, never edited or deleted. Three decisions are worth recording.
+  (1) **The void cascades.** A triangulated rate is a separate observation
+  carrying the same poisoned number under a new id, so
+  `VoidPriceObservation` walks `derivation_json`'s `legs[].observation_id`
+  (SQLite `json_each`, breadth-first, bounded by `maxVoidCascadeDepth`) and
+  retires every rate derived from the voided one, tagging their reason with
+  the originating id. Voiding only the leg would have left the bad number
+  live. (2) **Not idempotent** — a second void would overwrite the first
+  reason, so it returns `ErrPriceObservationAlreadyVoided` → 409. (3) **No
+  reconciliation guard is involved**: observations carry no postings, so a
+  void cannot change a reconciled balance; it changes reported market values
+  only. Migration `0002` adds `voided_audit_event_id` so the one
+  `audit_events` row per void is referenced from every row it retired, and a
+  partial index over voided rows. `GET /pricing/prices` gained
+  `include_voided=true` so what was retired stays inspectable. Covered by the
+  five `TestVoidPrice_*` cases in `app/pricing_test.go` — including
+  `..._CascadesToRatesTriangulatedFromTheVoidedLeg` and
+  `..._StopsTheObservationBeingUsedForValuation` — plus `TestVoidPrice_HTTP`.
+  The R11 pricing UI still owns the operator-facing surface.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

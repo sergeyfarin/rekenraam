@@ -33,17 +33,6 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
-### T-37 Price observations can never be voided `[ ]`
-
-**Files:** `backend/internal/db/pricing.go`, `backend/internal/app/pricing.go`,
-`backend/internal/api/pricing.go`.
-
-`price_observations.voided_at` exists and every read filters on it, but no
-repository/service/endpoint ever sets it — the "correct a price by
-superseding **or voiding**" invariant is half-implemented, and a poisoned
-observation cannot be retired from historical listings or derivations.
-Audit P3. Natural home: R11 pricing UI, but the endpoint can land earlier.
-
 ### T-38 Zero-proceeds disposal (write-off) is impossible `[ ]`
 
 **Files:** `backend/internal/app/investments.go` (`validateTradeInput`

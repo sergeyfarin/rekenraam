@@ -456,7 +456,7 @@ func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
 	assert.True(t, price.IsManual)
 	assert.False(t, price.IsDerived)
 
-	prices, err := repository.ListPriceObservations(ctx, 1, instrument.CommodityID, currencyID, 10)
+	prices, err := repository.ListPriceObservations(ctx, 1, instrument.CommodityID, currencyID, 10, false)
 	require.NoError(t, err)
 	require.Len(t, prices, 1)
 	assert.Equal(t, price.ID, prices[0].ID)

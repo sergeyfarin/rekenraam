@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	ErrPriceObservationNotFound  = errors.New("price observation not found")
-	ErrPricingPolicyNotFound     = errors.New("pricing policy not found")
-	ErrPricingAssignmentNotFound = errors.New("pricing source assignment not found")
+	ErrPriceObservationNotFound      = errors.New("price observation not found")
+	ErrPriceObservationAlreadyVoided = errors.New("price observation is already voided")
+	ErrPricingPolicyNotFound         = errors.New("pricing policy not found")
+	ErrPricingAssignmentNotFound     = errors.New("pricing source assignment not found")
 )
 
 type MarketDataSource struct {
@@ -54,7 +55,18 @@ type PriceObservation struct {
 	SupersedesObservationID *int64
 	DerivationJSON          string
 	MetadataJSON            string
+	VoidedAt                string
+	VoidReason              string
 	RecordedAt              string
+}
+
+type VoidPriceInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	ObservationID int64
+	VoidReason    string
+	ChangeReason  string
 }
 
 type PriceObservationInput struct {
@@ -225,14 +237,14 @@ func (s *PricingService) ListSources(ctx context.Context) ([]MarketDataSource, e
 	return toMarketDataSources(records), nil
 }
 
-func (s *PricingService) ListPrices(ctx context.Context, commodityID int64, quoteCommodityID int64, limit int) ([]PriceObservation, error) {
+func (s *PricingService) ListPrices(ctx context.Context, commodityID int64, quoteCommodityID int64, limit int, includeVoided bool) ([]PriceObservation, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	if limit > 500 {
 		limit = 500
 	}
-	records, err := s.repository.ListPriceObservations(ctx, BookID, commodityID, quoteCommodityID, limit)
+	records, err := s.repository.ListPriceObservations(ctx, BookID, commodityID, quoteCommodityID, limit, includeVoided)
 	if err != nil {
 		return nil, fmt.Errorf("list price observations: %w", err)
 	}
@@ -275,6 +287,57 @@ func (s *PricingService) CreatePrice(ctx context.Context, input PriceObservation
 		return PriceObservation{}, fmt.Errorf("persist price observation: %w", err)
 	}
 	return toPriceObservation(record), nil
+}
+
+// VoidPrice retires a price observation instead of deleting or overwriting it.
+// Prices are corrected by superseding or voiding — never in place — so a
+// poisoned observation stays on the record with a reason and stops being used
+// for valuations. It cascades to observations triangulated from this one.
+//
+// This does not touch the reconciliation guard: observations carry no
+// postings, so voiding one cannot change a reconciled account balance. It
+// changes reported market values only.
+func (s *PricingService) VoidPrice(ctx context.Context, input VoidPriceInput) ([]PriceObservation, error) {
+	if input.OwnerUserID <= 0 {
+		return nil, ValidationError{Message: "owner user is required"}
+	}
+	if input.ObservationID <= 0 {
+		return nil, ValidationError{Message: "price observation id is required"}
+	}
+	if strings.TrimSpace(input.VoidReason) == "" {
+		return nil, ValidationError{Message: "void reason is required"}
+	}
+	voidReason, err := cleanChangeReason(input.VoidReason, "")
+	if err != nil {
+		return nil, err
+	}
+	changeReason, err := cleanChangeReason(input.ChangeReason, "voided price observation")
+	if err != nil {
+		return nil, err
+	}
+	records, err := s.repository.VoidPriceObservation(ctx, db.VoidPriceObservationParams{
+		BookID:        BookID,
+		ObservationID: input.ObservationID,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "pricing.price.void",
+		VoidedAt:      s.now().UTC().Format(time.RFC3339),
+		VoidReason:    voidReason,
+		ChangeReason:  changeReason,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			return nil, ErrPriceObservationNotFound
+		case errors.Is(err, db.ErrPriceObservationAlreadyVoided):
+			return nil, ErrPriceObservationAlreadyVoided
+		default:
+			return nil, fmt.Errorf("void price observation: %w", err)
+		}
+	}
+	return toPriceObservations(records), nil
 }
 
 func (s *PricingService) CreateTradeImpliedPrice(ctx context.Context, input CreateTradeImpliedPriceInput) error {
@@ -713,6 +776,8 @@ func toPriceObservation(record db.PriceObservationRecord) PriceObservation {
 		SupersedesObservationID: nullableSQLInt64Ptr(record.SupersedesObservationID),
 		DerivationJSON:          record.DerivationJSON,
 		MetadataJSON:            record.MetadataJSON,
+		VoidedAt:                nullableString(record.VoidedAt),
+		VoidReason:              record.VoidReason,
 		RecordedAt:              record.RecordedAt,
 	}
 }

@@ -7088,6 +7088,8 @@ export interface paths {
                     base_commodity_id?: number;
                     /** @description Filter observations by quote commodity. */
                     quote_commodity_id?: number;
+                    /** @description Include voided observations. Voided observations are excluded from every valuation and from this listing by default; set this to inspect what was retired and why. */
+                    include_voided?: boolean;
                     /** @description Maximum number of observations to return. */
                     limit?: number;
                 };
@@ -7141,6 +7143,115 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pricing/prices/{price_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a price observation
+         * @description Retires a price observation so it stops being used for valuations, without deleting or overwriting it. A price is corrected by superseding or voiding, never edited in place. The void cascades to every still-active observation triangulated from this one, because a derived rate carries the same poisoned number under a different id. Voiding is not idempotent: a second void would overwrite the first reason and returns 409.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    price_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PriceObservationVoidRequest"];
+                };
+            };
+            responses: {
+                /** @description Every observation the void retired: the requested one first, then anything derived from it. */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PriceObservationVoidResponse"];
+                    };
+                };
+                /** @description Invalid price id or missing void reason */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Price observation not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Price observation is already voided */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -10498,10 +10609,26 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /**
+             * Format: date-time
+             * @description Set when the observation has been retired. Voided observations are excluded from every valuation and from listings unless include_voided is requested.
+             */
+            voided_at?: string;
+            /** @description Why the observation was retired. */
+            void_reason?: string;
             /** Format: date-time */
             recorded_at: string;
         };
         PriceObservationsResponse: {
+            prices: components["schemas"]["PriceObservationResponse"][];
+        };
+        PriceObservationVoidRequest: {
+            /** @description Why this observation must stop being used. Required. */
+            void_reason: string;
+            change_reason?: string;
+        };
+        PriceObservationVoidResponse: {
+            /** @description The voided observation first, followed by every observation triangulated from it that the void also retired. */
             prices: components["schemas"]["PriceObservationResponse"][];
         };
         MarketDataSourceResponse: {

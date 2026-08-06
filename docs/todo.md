@@ -44,6 +44,9 @@ preconditions. Also in `roadmap.md`.
       pricing source health with a manual re-enqueue endpoint).
 - [x] T-40 `triangulation_max_hops` now honored — done 2026-08-06
       (`app/pricing_refresh.go`: multi-hop chain search, shortest route wins).
+- [x] T-37 price observations can be voided — done 2026-08-06
+      (`POST /pricing/prices/{id}/void`; cascades to rates triangulated from
+      the voided leg; R11 still owns the UI).
 - [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
       `scaledAmount`/`scaledInteger`/`pow10DB`).

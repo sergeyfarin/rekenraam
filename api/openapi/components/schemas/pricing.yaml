@@ -80,9 +80,46 @@ PriceObservationResponse:
     metadata:
       type: object
       additionalProperties: true
+    voided_at:
+      type: string
+      format: date-time
+      description: >-
+        Set when the observation has been retired. Voided observations are
+        excluded from every valuation and from listings unless include_voided
+        is requested.
+    void_reason:
+      type: string
+      description: Why the observation was retired.
     recorded_at:
       type: string
       format: date-time
+
+PriceObservationVoidRequest:
+  type: object
+  required:
+    - void_reason
+  properties:
+    void_reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: Why this observation must stop being used. Required.
+    change_reason:
+      type: string
+  additionalProperties: false
+
+PriceObservationVoidResponse:
+  type: object
+  required:
+    - prices
+  properties:
+    prices:
+      type: array
+      description: >-
+        The voided observation first, followed by every observation
+        triangulated from it that the void also retired.
+      items:
+        $ref: "#/PriceObservationResponse"
 
 PriceObservationsResponse:
   type: object

@@ -3,6 +3,7 @@ import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$li
 
 export type PriceObservationResponse = components['schemas']['PriceObservationResponse'];
 export type PriceObservationsResponse = components['schemas']['PriceObservationsResponse'];
+export type PriceObservationVoidResponse = components['schemas']['PriceObservationVoidResponse'];
 export type MarketDataSourceResponse = components['schemas']['MarketDataSourceResponse'];
 export type MarketDataSourcesResponse = components['schemas']['MarketDataSourcesResponse'];
 export type PricingPolicyResponse = components['schemas']['PricingPolicyResponse'];
@@ -79,6 +80,39 @@ export async function getLatestPriceObservation(
 
     if (data !== undefined) {
       return data.prices[0] ?? null;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+// Retires a price observation instead of editing or deleting it. Resolves with
+// every observation the void retired: the requested one, then anything
+// triangulated from it.
+export async function voidPriceObservation(
+  priceID: number,
+  voidReason: string,
+  csrfToken: string
+): Promise<PriceObservationVoidResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/pricing/prices/{price_id}/void', {
+      params: {
+        path: { price_id: priceID },
+        header: {
+          'X-CSRF-Token': csrfToken
+        }
+      },
+      body: { void_reason: voidReason }
+    });
+
+    if (data !== undefined) {
+      return data;
     }
 
     throw toAPIClientError(response, error);

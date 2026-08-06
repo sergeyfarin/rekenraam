@@ -133,6 +133,7 @@ series backend/API foundation).
 | Durable background work queue (lease, retry, resume, bounded attempts) | ✅ | ADR 0010; restart-safe. Work gives up after its kind's attempt cap instead of retrying forever (T-39); failed pricing work is listed in source health and re-enqueued via `POST /pricing/background-work/{work_id}/retry`. |
 | Demand-driven FX coverage (activate currency / backdated posting) | ✅ | Drafts/previews do not trigger downloads. |
 | Price observations (manual, provider, FX, trade-implied) | ✅ | Source/quote-type/adjustment-basis series; valuation date preserved. Derived FX routes through up to `triangulation_max_hops` intermediate currencies, shortest chain first (T-40). |
+| Price observation voiding | ✅ | `POST /pricing/prices/{price_id}/void` (T-37). Retires a poisoned observation with a required reason instead of editing or deleting it; cascades to every rate triangulated from it (derivation-leg lookup), one `audit_events` row per void referenced from each retired row (`voided_audit_event_id`, migration 0002). Voided rows leave all valuations and are listed only with `include_voided=true`. Not idempotent — a second void is 409. |
 | Pricing sources, policy, source assignments, health | 🟡 | Full API (`/pricing/*`); no management UI. |
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
 | **Pricing/FX management UI** | ⬜ | |
