@@ -12,6 +12,32 @@ Status legend: `[ ]` open.
 
 ## General
 
+### T-42 A currency's enable date blocks earlier history `[ ]`
+
+**Files:** `backend/internal/db/transactions_rules.go`
+(`PostingCommodityRule`), `backend/internal/app/transactions_validate.go`
+(`cleanPosting`).
+
+Posting rules resolve the commodity version **as of the entry date**. A
+currency's first `commodity_versions` row is effective from the day it was
+enabled in the app, so **every transaction dated before setup is rejected** —
+`posting date is before the commodity was enabled`. Found 2026-08-06 while
+tracing the e2e transaction-entry failure; the misleading wording was fixed
+then, but the underlying rule was not.
+
+This collides directly with the announcement's centerpiece: a migrating user
+installs today, enables EUR today, and imports several years of history.
+Every row fails. The account-side equivalent is fine and intended —
+`opened_on` is a real financial fact the user can set — but a currency's
+*enable date* is app bookkeeping, not a financial fact, and arguably should
+not constrain history at all.
+
+Needs a product decision, not just a patch. Options: (a) commodity versions
+default to an open-ended past effective date; (b) posting validation resolves
+the commodity's **earliest** version when the entry date precedes it;
+(c) keep the rule and let setup/import backdate the enable date. Schedule
+with R5 (CSV import) at the latest, since that slice is the migration path.
+
 ### T-34 No producer of investment provider events/suggestions `[ ]`
 
 **Files:** `backend/internal/app/investments.go` (`DividendProvider`,

@@ -301,6 +301,16 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	accountRule, err := s.repository.PostingAccountRule(ctx, BookID, input.AccountID, entryDate)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
+			// The as-of lookup misses both for an account that does not exist
+			// and for one that existed only after this date. Entering history
+			// for an account opened later is an ordinary user mistake and must
+			// say so — otherwise the opened-date check below is unreachable in
+			// exactly the case it was written for.
+			if earliest, earliestErr := s.repository.EarliestPostingAccountRule(ctx, BookID, input.AccountID); earliestErr == nil {
+				if entryDate < earliest.OpenedOn {
+					return db.PostingSpec{}, ValidationError{Message: "posting date is before account opened date"}
+				}
+			}
 			return db.PostingSpec{}, ValidationError{Message: "posting account is invalid"}
 		}
 		return db.PostingSpec{}, fmt.Errorf("read posting account rule: %w", err)
@@ -324,6 +334,12 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID, entryDate)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
+			// Same distinction as the account rule above. A commodity's first
+			// version is effective from the day it was enabled in the app, so
+			// backdated entry hits this whenever the history predates setup.
+			if exists, existsErr := s.repository.CommodityExists(ctx, BookID, input.CommodityID); existsErr == nil && exists {
+				return db.PostingSpec{}, ValidationError{Message: "posting date is before the commodity was enabled"}
+			}
 			return db.PostingSpec{}, ValidationError{Message: "posting commodity is invalid"}
 		}
 		return db.PostingSpec{}, fmt.Errorf("read posting commodity rule: %w", err)

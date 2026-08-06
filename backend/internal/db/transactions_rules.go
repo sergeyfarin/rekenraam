@@ -57,6 +57,80 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 	return rule, nil
 }
 
+// EarliestPostingAccountRule returns the account's first version, ignoring the
+// entry date. It exists so callers can tell "there is no such account" apart
+// from "the account did not exist yet on that date" — PostingAccountRule's
+// as-of lookup returns ErrNotFound for both, which turns the ordinary mistake
+// of entering history for a later-opened account into a message claiming the
+// account itself is invalid.
+func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, bookID int64, accountID int64) (PostingAccountRule, error) {
+	var rule PostingAccountRule
+	var systemRole sql.NullString
+	var allowsPostings int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT
+			a.id,
+			av.account_class,
+			av.status,
+			av.opened_on,
+			av.closed_on,
+			av.default_commodity_id,
+			av.quantity_scale_override,
+			av.allows_postings,
+			a.system_role
+		FROM accounts a
+		JOIN account_versions av ON av.account_id = a.id
+		WHERE a.book_id = ?
+			AND a.id = ?
+			AND av.id = (
+				SELECT first_av.id
+				FROM account_versions first_av
+				WHERE first_av.account_id = a.id
+				ORDER BY first_av.effective_from, first_av.version_seq
+				LIMIT 1
+			)
+	`, bookID, accountID).Scan(
+		&rule.AccountID,
+		&rule.AccountClass,
+		&rule.Status,
+		&rule.OpenedOn,
+		&rule.ClosedOn,
+		&rule.DefaultCommodityID,
+		&rule.QuantityScaleOverride,
+		&allowsPostings,
+		&systemRole,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PostingAccountRule{}, ErrNotFound
+		}
+		return PostingAccountRule{}, fmt.Errorf("read earliest posting account rule: %w", err)
+	}
+	rule.AllowsPostings = allowsPostings == 1
+	rule.IsSystem = systemRole.Valid
+
+	return rule, nil
+}
+
+// CommodityExists reports whether the commodity exists in the book at all,
+// regardless of when its first version became effective. Same purpose as
+// EarliestPostingAccountRule: separate "no such commodity" from "not yet
+// enabled on that date".
+func (r *TransactionRepository) CommodityExists(ctx context.Context, bookID int64, commodityID int64) (bool, error) {
+	var exists int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM commodities c
+			JOIN commodity_versions cv ON cv.commodity_id = c.id
+			WHERE c.book_id = ? AND c.id = ?
+		)
+	`, bookID, commodityID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("read commodity existence: %w", err)
+	}
+
+	return exists == 1, nil
+}
+
 func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID int64, commodityID int64, entryDate string) (PostingCommodityRule, error) {
 	var rule PostingCommodityRule
 	if err := r.database.QueryRowContext(ctx, `
