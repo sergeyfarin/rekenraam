@@ -233,6 +233,55 @@ current behaviour.
   Documented in `docs/deployment-security.md`. No UI yet. **MFA (S-06)
   remains the one open public-deployment gate.**
 
+- **T-42 a commodity's enable date no longer blocks earlier history**, fixed
+  2026-08-06. Posting validation resolves the commodity version *as of the
+  entry date*, and a commodity's first `commodity_versions` row was effective
+  from the day it was created — so every transaction dated before setup was
+  rejected. That collided head-on with the announcement's centerpiece: install
+  today, enable EUR today, import several years of history, and every row
+  fails.
+
+  **Decision: option (a), backdate the first version.** `commodity_versions`
+  is write-once in practice (one `INSERT` path, no archive or update service
+  method), so the as-of lookup never actually chose between versions — its
+  only observable effect was to reject earlier dates. `db.CommodityGenesisDate`
+  ("0001-01-01") is now stamped on every commodity's first version, mirroring
+  `app.systemAccountDate`, which already makes the same call for system
+  accounts and seeded categories. A genuine later change (archive, rename,
+  scale) is a *new* version with a real effective date, which as-of resolution
+  still honours.
+
+  Applied at the single writer rather than passed in by callers, deliberately.
+  Three production paths reach `createCurrency` — including account creation,
+  which was passing the *account's* date as the currency's — and the Trading
+  212 import had already had to work around the old default twice. A default
+  that every producer of historical data must remember to override is the bug,
+  so it is now impossible to get wrong.
+
+  The redundant half of that import workaround is gone:
+  `ResolveOrCreateInstrumentForImport` no longer takes an `effectiveFrom`. The
+  holding-account backdating stays — `opened_on` = the trade's date is correct
+  behaviour, not a workaround. The commodity-side fallback added earlier the
+  same day (`CommodityExists` → "posting date is before the commodity was
+  enabled") is also gone: with genesis dating it became unreachable, and
+  unreachable checks are what caused this investigation in the first place.
+  The account-side fallback stays, because accounts legitimately open later.
+
+  Two test fixtures were seeding commodities and the `commodity_trading`
+  system account at a 2026 date via raw SQL, which is not what production
+  does; both now use the genesis date, so back-dated import journeys are
+  reachable in tests at all. Covered by
+  `TestCreateTransaction_HistoryPredatingCurrencySetupIsAccepted` and
+  `TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating`, both
+  confirmed to fail against the old default.
+
+  **Two related gaps stay open, deliberately** — see the backlog: user-created
+  categories still default to opening today (they accept an explicit date, so
+  there is a workaround), and an import that later receives an *earlier* trade
+  for an already-known instrument still fails on the holding account's
+  `opened_on`, which interacts with the locked-structural-fields rule and needs
+  its own design.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

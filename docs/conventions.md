@@ -71,6 +71,14 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Investment lots and lot events are durable accounting facts. FIFO is the
   default disposal method until a user-selected cost-basis policy says
   otherwise; never infer cost basis from current holdings alone.
+- A commodity's first version is effective from `db.CommodityGenesisDate`
+  (`0001-01-01`), not its creation date. When you enabled a currency or added
+  an instrument is app bookkeeping, not a financial fact, and posting rules
+  resolve the commodity as of the entry date — so a creation-dated first
+  version rejects all earlier history (T-42). Real later changes (archive,
+  rename, scale) are new versions with real effective dates. Account
+  `opened_on` is the opposite case: a genuine financial fact that legitimately
+  rejects earlier postings.
 - Market prices, FX rates, manual prices, provider prices, and trade-implied
   prices must use the generic commodity-pair pricing model: `price_series`
   identifies the source/quote-type/adjustment-basis stream, and

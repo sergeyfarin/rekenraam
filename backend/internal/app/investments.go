@@ -581,7 +581,7 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 // durably-created instrument nobody asked for). Returns the resolved
 // instrument's InstrumentID and CommodityID together, since callers need
 // both (CommodityID for postings, InstrumentID for CreateHoldingAccount).
-func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string, effectiveFrom string) (instrumentID int64, commodityID int64, created bool, err error) {
+func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string) (instrumentID int64, commodityID int64, created bool, err error) {
 	isin = strings.TrimSpace(isin)
 	ticker = strings.TrimSpace(ticker)
 
@@ -621,11 +621,12 @@ func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Conte
 		Symbol:         ticker,
 		QuantityScale:  6,
 		PriceScale:     4,
-		// EffectiveFrom must be no later than the importing trade's own
-		// date — the CreateInstrument default ("today") would otherwise
-		// make PostingCommodityRule find no commodity version effective as
-		// of a back-dated fill and fail "posting commodity is invalid".
-		EffectiveFrom:   effectiveFrom,
+		// No EffectiveFrom: the commodity's first version is stamped
+		// db.CommodityGenesisDate, so a back-dated fill resolves whatever the
+		// instrument's own version date is (T-42). This used to have to be
+		// the trade's date, and even then only covered the instrument's first
+		// sighting — a later import carrying an *earlier* trade for an
+		// already-known instrument still failed.
 		IdentifiersJSON: identifiersJSON,
 		MetadataJSON:    "{}",
 		ChangeReason:    "created from Trading 212 import",

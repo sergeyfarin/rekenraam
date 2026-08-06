@@ -334,12 +334,11 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID, entryDate)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			// Same distinction as the account rule above. A commodity's first
-			// version is effective from the day it was enabled in the app, so
-			// backdated entry hits this whenever the history predates setup.
-			if exists, existsErr := s.repository.CommodityExists(ctx, BookID, input.CommodityID); existsErr == nil && exists {
-				return db.PostingSpec{}, ValidationError{Message: "posting date is before the commodity was enabled"}
-			}
+			// Unlike the account rule above, this cannot mean "not yet
+			// effective on that date": a commodity's first version is stamped
+			// db.CommodityGenesisDate, so the as-of lookup always resolves it
+			// for any entry date (T-42). A miss here means the commodity does
+			// not exist.
 			return db.PostingSpec{}, ValidationError{Message: "posting commodity is invalid"}
 		}
 		return db.PostingSpec{}, fmt.Errorf("read posting commodity rule: %w", err)

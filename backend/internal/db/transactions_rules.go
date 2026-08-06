@@ -111,26 +111,6 @@ func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, 
 	return rule, nil
 }
 
-// CommodityExists reports whether the commodity exists in the book at all,
-// regardless of when its first version became effective. Same purpose as
-// EarliestPostingAccountRule: separate "no such commodity" from "not yet
-// enabled on that date".
-func (r *TransactionRepository) CommodityExists(ctx context.Context, bookID int64, commodityID int64) (bool, error) {
-	var exists int
-	if err := r.database.QueryRowContext(ctx, `
-		SELECT EXISTS(
-			SELECT 1
-			FROM commodities c
-			JOIN commodity_versions cv ON cv.commodity_id = c.id
-			WHERE c.book_id = ? AND c.id = ?
-		)
-	`, bookID, commodityID).Scan(&exists); err != nil {
-		return false, fmt.Errorf("read commodity existence: %w", err)
-	}
-
-	return exists == 1, nil
-}
-
 func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID int64, commodityID int64, entryDate string) (PostingCommodityRule, error) {
 	var rule PostingCommodityRule
 	if err := r.database.QueryRowContext(ctx, `

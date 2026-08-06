@@ -43,6 +43,7 @@ series backend/API foundation).
 | Embedded currency catalog + active-currency derivation | ✅ | Default currency is a preference, not a base currency. |
 | Currency setup & management UI | ✅ | `settings/currencies`. |
 | Commodity metadata (scale, max quantity scale) | ✅ | Lossless precision per ADR 0009. |
+| Historical entry predating setup | ✅ | A commodity's first version is stamped `db.CommodityGenesisDate` (`0001-01-01`), not its creation date (T-42), so installing today and importing years of history works. When you enabled a currency is app bookkeeping, not a financial fact; real later changes are new versions with real dates. Account `opened_on` deliberately still rejects earlier postings. |
 | Institutions: CRUD, archive/restore, versions | ✅ (API) / 🟦 (UI) | Backend + API client complete; standalone management UI minimal. |
 | Accounts: classes, kinds, full lifecycle (close/reopen, archive/restore), versions | ✅ | `app/accounts.go`; append-only versioned tree. |
 | Account list + account detail UI | ✅ | `routes/app/accounts`. |

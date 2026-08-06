@@ -1579,31 +1579,42 @@ func TestCreateTransaction_UnknownAccountStillReportsAnInvalidAccount(t *testing
 	assert.Equal(t, "posting account is invalid", body.Error.Message)
 }
 
-// Same distinction for commodities: a currency's first version is effective
-// from the day it was enabled, so any history predating setup lands here.
-func TestCreateTransaction_BeforeCommodityEnabledReportsTheDateNotTheCommodity(t *testing.T) {
+// A currency's enable date is app bookkeeping, not a financial fact, so it
+// must not constrain the ledger: history predating setup has to post. This is
+// the migration story — install today, import last year (T-42).
+func TestCreateTransaction_HistoryPredatingCurrencySetupIsAccepted(t *testing.T) {
 	t.Parallel()
 
 	handler, _ := newSetupTestHandler(t)
 	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
-	// The fixture clock enables the currency on 2026-01-01. The account is
-	// backdated further, so the account rule resolves and validation reaches
-	// the commodity rule — which is the branch under test.
+	// The fixture clock enables the currency on 2026-01-01; the account really
+	// opened in 2025. Before T-42 the commodity as-of lookup rejected this
+	// with "posting commodity is invalid".
 	checking := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Early Cash", "asset", "checking", commodityID, 2, "2025-01-01")
-	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Early Groceries","category_type":"expense"}`)
+	// Categories default to opening today too, but unlike currencies they
+	// accept an explicit date, so backdate this one to keep the test about
+	// the commodity rule.
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Early Groceries",
+		"category_type":"expense",
+		"opened_on":"2025-01-01",
+		"effective_from":"2025-01-01"
+	}`)
 
 	res := createTransactionResponseForSession(t, handler, sessionCookie, csrfToken, `{
 		"transaction_date":"2025-06-01",
-		"description":"Before the currency was enabled",
+		"description":"History from before setup",
 		"journal_entries":[{"entry_date":"2025-06-01","postings":[
 			{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":"-1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
 			{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":"1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
 		]}]
-	}`, http.StatusBadRequest)
+	}`, http.StatusCreated)
 
-	var body errorResponse
-	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	assert.Equal(t, "posting date is before the commodity was enabled", body.Error.Message)
+	var created transactionResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&created))
+	assert.Equal(t, "2025-06-01", created.TransactionDate)
+	require.Len(t, created.JournalEntries, 1)
+	assert.Len(t, created.JournalEntries[0].Postings, 2)
 }
 
 // createTransactionResponseForSession returns the raw recorder so a test can

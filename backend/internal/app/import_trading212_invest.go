@@ -65,7 +65,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 	}
 
 	instrumentID, commodityID, createdInstrument, err := s.investmentService.ResolveOrCreateInstrumentForImport(
-		ctx, input.OwnerUserID, input.AuthSessionID, input.RequestID, raw[rawKeyISIN], raw[rawKeyTicker], normalized.Date,
+		ctx, input.OwnerUserID, input.AuthSessionID, input.RequestID, raw[rawKeyISIN], raw[rawKeyTicker],
 	)
 	if err != nil {
 		return false, 0, 0, nil

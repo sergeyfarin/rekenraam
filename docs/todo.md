@@ -47,6 +47,11 @@ preconditions. Also in `roadmap.md`.
 - [x] T-37 price observations can be voided — done 2026-08-06
       (`POST /pricing/prices/{id}/void`; cascades to rates triangulated from
       the voided leg; R11 still owns the UI).
+- [x] T-42 commodity enable date no longer blocks earlier history — done
+      2026-08-06 (`db.CommodityGenesisDate`; retired the Trading 212
+      instrument-backdating workaround). Follow-ups filed as T-43
+      (categories) and T-44 (holding account on a later-arriving
+      earlier trade).
 - [x] S-04 lockout-safe login throttle — done 2026-08-06 (approved-device
       cookie moves a known device onto its own throttle scope; the cookie is
       not a credential). Public-deployment gate closed.
