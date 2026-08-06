@@ -8,12 +8,19 @@ CostBasisMethod:
 
 InstrumentType:
   type: string
+  description: >-
+    Accepted instrument types, matching `cleanInvestmentInstrumentSpec` in
+    `app/investments.go`. Until 2026-08-06 this enum advertised `equity` and
+    `crypto` — which the backend rejects — and omitted `stock`, `option` and
+    `future`, which it accepts. `crypto` is planned for R17.
+  default: stock
   enum:
-    - equity
+    - stock
     - etf
     - fund
     - bond
-    - crypto
+    - option
+    - future
     - other
 
 InvestmentInstrumentResponse:
@@ -107,7 +114,7 @@ InvestmentInstrumentRequest:
     commodity_code:
       type: string
     instrument_type:
-      type: string
+      $ref: "#/InstrumentType"
     display_name:
       type: string
     symbol:

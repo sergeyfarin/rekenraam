@@ -11927,7 +11927,7 @@ export interface components {
             /** Format: int64 */
             commodity_id?: number;
             commodity_code?: string;
-            instrument_type: string;
+            instrument_type: components["schemas"]["InstrumentType"];
             display_name: string;
             symbol?: string;
             exchange_code?: string;
@@ -12453,6 +12453,12 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /**
+         * @description Accepted instrument types, matching `cleanInvestmentInstrumentSpec` in `app/investments.go`. Until 2026-08-06 this enum advertised `equity` and `crypto` — which the backend rejects — and omitted `stock`, `option` and `future`, which it accepts. `crypto` is planned for R17.
+         * @default stock
+         * @enum {string}
+         */
+        InstrumentType: "stock" | "etf" | "fund" | "bond" | "option" | "future" | "other";
     };
     responses: never;
     parameters: {
