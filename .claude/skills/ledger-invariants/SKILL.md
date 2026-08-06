@@ -17,7 +17,19 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   signed decimal **string** in SQLite and JSON, max 38 digits, computed with
   `math/big`.
 - **Never aggregate coefficient columns with SQLite `SUM`** — they are strings.
-  Sum in Go with `big.Int` (see `backend/internal/app/ledger.go`).
+  Sum in Go.
+- **All coefficient + scale arithmetic goes through `exact.ScaledInt`**
+  (`backend/internal/exact/scaled.go`): `Add`/`AddCoefficient`/`AddInt64`,
+  `AddScaled`/`SubScaled`, `Align`, `Cmp`, `TruncatedTo`, and the
+  overflow-checked `Int64()` / `Coefficient()`. Never sum, subtract, or compare
+  raw `int64` coefficients whose scales may differ, and never hand-roll
+  `Mul(value, pow10(...))` alignment at a call site — use `exact.Pow10` only
+  where `ScaledInt` genuinely cannot express the operation. **Every historical
+  severity-1 money bug in this repo (audit 2026-07-13, F1–F6) was scale-aware
+  arithmetic done outside a shared helper.**
+- Values headed for an `int64` column must go through `ScaledInt.Int64()`, which
+  returns `exact.ErrInt64Range` instead of wrapping silently; `big.Int.Int64()`
+  on an unchecked value is a bug.
 - Scale ceilings: 24 for crypto, 12 for everything else; a commodity's own
   `max_quantity_scale` may be lower. Display scale is independent from storage
   scale — don't render trailing zeros just because they're permitted.

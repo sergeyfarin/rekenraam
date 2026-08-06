@@ -436,7 +436,7 @@ func validateBalanced(entries []db.JournalEntrySpec) error {
 			value := posting.QuantityValue.BigInt()
 			scaleDiff := maxScales[posting.CommodityID] - posting.QuantityScale
 			if scaleDiff > 0 {
-				value.Mul(value, pow10(scaleDiff))
+				value.Mul(value, exact.Pow10(scaleDiff))
 			}
 			sum.Add(sum, value)
 		}

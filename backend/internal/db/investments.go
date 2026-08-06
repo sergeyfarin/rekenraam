@@ -1134,14 +1134,14 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 			commonScale = lot.scale
 		}
 	}
-	remaining := new(big.Int).Mul(params.QuantityValue.BigInt(), pow10DB(commonScale-params.QuantityScale))
+	remaining := new(big.Int).Mul(params.QuantityValue.BigInt(), exact.Pow10(commonScale-params.QuantityScale))
 
 	disposals := make([]LotDisposalRecord, 0)
 	for _, lot := range lots {
 		if remaining.Sign() <= 0 {
 			break
 		}
-		lotScaleFactor := pow10DB(commonScale - lot.scale)
+		lotScaleFactor := exact.Pow10(commonScale - lot.scale)
 		lotAtCommonScale := new(big.Int).Mul(lot.value.BigInt(), lotScaleFactor)
 
 		takeAtCommonScale := new(big.Int).Set(lotAtCommonScale)
@@ -1549,8 +1549,8 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 	}
 	type accumulatedPosition struct {
 		record   InvestmentPositionRecord
-		quantity *scaledInteger
-		cost     *scaledInteger
+		quantity *exact.ScaledInt
+		cost     *exact.ScaledInt
 	}
 	positions := map[positionKey]*accumulatedPosition{}
 	var order []positionKey
@@ -1566,12 +1566,12 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
 		position := positions[key]
 		if position == nil {
-			position = &accumulatedPosition{record: record, quantity: newScaledInteger(), cost: newScaledInteger()}
+			position = &accumulatedPosition{record: record, quantity: exact.NewScaledInt(), cost: exact.NewScaledInt()}
 			positions[key] = position
 			order = append(order, key)
 		}
-		position.quantity.add(quantity.BigInt(), quantityScale)
-		position.cost.add(big.NewInt(costValue), costScale)
+		position.quantity.Add(quantity.BigInt(), quantityScale)
+		position.cost.Add(big.NewInt(costValue), costScale)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate investment positions: %w", err)
@@ -1579,43 +1579,21 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 	records := make([]InvestmentPositionRecord, 0, len(order))
 	for _, key := range order {
 		position := positions[key]
-		quantity, err := exact.FromBig(position.quantity.value)
+		quantity, err := position.quantity.Coefficient()
 		if err != nil {
 			return nil, err
 		}
-		if !position.cost.value.IsInt64() {
-			return nil, fmt.Errorf("investment position cost basis exceeds int64 range")
+		cost, err := position.cost.Int64()
+		if err != nil {
+			return nil, fmt.Errorf("investment position cost basis: %w", err)
 		}
 		position.record.QuantityValue = quantity
-		position.record.QuantityScale = position.quantity.scale
-		position.record.RemainingCostBasisValue = position.cost.value.Int64()
-		position.record.RemainingCostBasisScale = position.cost.scale
+		position.record.QuantityScale = position.quantity.Scale()
+		position.record.RemainingCostBasisValue = cost
+		position.record.RemainingCostBasisScale = position.cost.Scale()
 		records = append(records, position.record)
 	}
 	return records, nil
-}
-
-type scaledInteger struct {
-	value *big.Int
-	scale int
-}
-
-func newScaledInteger() *scaledInteger { return &scaledInteger{value: big.NewInt(0)} }
-
-func (s *scaledInteger) add(value *big.Int, scale int) {
-	if scale > s.scale {
-		s.value.Mul(s.value, pow10DB(scale-s.scale))
-		s.scale = scale
-	}
-	addend := new(big.Int).Set(value)
-	if scale < s.scale {
-		addend.Mul(addend, pow10DB(s.scale-scale))
-	}
-	s.value.Add(s.value, addend)
-}
-
-func pow10DB(scale int) *big.Int {
-	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(scale)), nil)
 }
 
 func (r *InvestmentRepository) CommodityTradingAccountID(ctx context.Context, bookID int64) (int64, error) {
@@ -2450,8 +2428,8 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		key           groupKey
 		transactionID sql.NullInt64
 		minEventID    int64
-		quantity      *scaledInteger
-		costBasis     *scaledInteger
+		quantity      *exact.ScaledInt
+		costBasis     *exact.ScaledInt
 	}
 	groups := map[groupKey]*group{}
 	var order []groupKey
@@ -2464,15 +2442,15 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		}
 		g := groups[key]
 		if g == nil {
-			g = &group{key: key, transactionID: e.transactionID, minEventID: e.id, quantity: newScaledInteger(), costBasis: newScaledInteger()}
+			g = &group{key: key, transactionID: e.transactionID, minEventID: e.id, quantity: exact.NewScaledInt(), costBasis: exact.NewScaledInt()}
 			groups[key] = g
 			order = append(order, key)
 		}
 		if e.id < g.minEventID {
 			g.minEventID = e.id
 		}
-		g.quantity.add(e.quantityValue.BigInt(), e.quantityScale)
-		g.costBasis.add(big.NewInt(e.costBasisValue), e.costBasisScale)
+		g.quantity.Add(e.quantityValue.BigInt(), e.quantityScale)
+		g.costBasis.Add(big.NewInt(e.costBasisValue), e.costBasisScale)
 	}
 
 	// Replicate ORDER BY le.event_date DESC, MIN(le.id) DESC.
@@ -2489,12 +2467,13 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		g := groups[key]
 		// quantity_value in disposal events is stored negated (reduction of
 		// holding); negate back to expose the sold quantity as positive.
-		quantityValue, err := exact.FromBig(new(big.Int).Neg(g.quantity.value))
+		quantityValue, err := g.quantity.Negated().Coefficient()
 		if err != nil {
 			return nil, err
 		}
-		if !g.costBasis.value.IsInt64() {
-			return nil, fmt.Errorf("realized gain disposed basis exceeds int64 range")
+		disposedBasis, err := g.costBasis.Int64()
+		if err != nil {
+			return nil, fmt.Errorf("realized gain disposed basis: %w", err)
 		}
 		record := RealizedGainRecord{
 			AccountID:          key.accountID,
@@ -2503,41 +2482,39 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			DisposalDate:       key.eventDate,
 			TransactionID:      g.transactionID,
 			QuantityValue:      quantityValue,
-			QuantityScale:      g.quantity.scale,
-			DisposedBasisValue: g.costBasis.value.Int64(),
-			DisposedBasisScale: g.costBasis.scale,
+			QuantityScale:      g.quantity.Scale(),
+			DisposedBasisValue: disposedBasis,
+			DisposedBasisScale: g.costBasis.Scale(),
 		}
 
-		var matchedProceeds *scaledInteger
+		var matchedProceeds *exact.ScaledInt
 		if g.transactionID.Valid {
 			matchedProceeds = proceeds[proceedsKey{transactionID: g.transactionID.Int64, costCommodityID: key.costCommodityID}]
 		}
 		if matchedProceeds != nil {
-			if !matchedProceeds.value.IsInt64() {
-				return nil, fmt.Errorf("realized gain proceeds exceed int64 range")
+			proceedsValue, err := matchedProceeds.Int64()
+			if err != nil {
+				return nil, fmt.Errorf("realized gain proceeds: %w", err)
 			}
-			record.ProceedsValue = matchedProceeds.value.Int64()
-			record.ProceedsScale = matchedProceeds.scale
+			record.ProceedsValue = proceedsValue
+			record.ProceedsScale = matchedProceeds.Scale()
 		} else {
 			// No matching transaction or posting found (e.g. manual lot creation).
 			record.ProceedsValue = 0
 			record.ProceedsScale = record.DisposedBasisScale
 		}
 
-		// Align disposed basis to proceeds scale for gain computation.
-		disposedAtProceedsScale := new(big.Int).Set(g.costBasis.value)
-		if record.DisposedBasisScale < record.ProceedsScale {
-			disposedAtProceedsScale.Mul(disposedAtProceedsScale, pow10DB(record.ProceedsScale-record.DisposedBasisScale))
-		} else if record.DisposedBasisScale > record.ProceedsScale {
-			disposedAtProceedsScale.Quo(disposedAtProceedsScale, pow10DB(record.DisposedBasisScale-record.ProceedsScale))
-		}
+		// The gain is reported at the proceeds scale, so restate the disposed
+		// basis there first.
 		// disposed_basis_value is stored as a negative number (the lot event records
 		// the deduction from cost basis). Gain = proceeds − |cost| = proceeds + disposed_basis.
-		gain := new(big.Int).Add(big.NewInt(record.ProceedsValue), disposedAtProceedsScale)
-		if !gain.IsInt64() {
-			return nil, fmt.Errorf("realized gain value exceeds int64 range")
+		gain := exact.ScaledIntFromInt64(record.ProceedsValue, record.ProceedsScale)
+		gain.AddScaled(g.costBasis.TruncatedTo(record.ProceedsScale))
+		gainValue, err := gain.Int64()
+		if err != nil {
+			return nil, fmt.Errorf("realized gain value: %w", err)
 		}
-		record.RealizedGainValue = gain.Int64()
+		record.RealizedGainValue = gainValue
 		records = append(records, record)
 	}
 	return records, nil
@@ -2553,7 +2530,7 @@ type proceedsKey struct {
 // commodity matches the lot's cost commodity and whose account is not the internal
 // commodity_trading clearing account. Deduplicated by posting id because a
 // multi-lot sale joins to the same cash posting once per disposed lot event.
-func (r *InvestmentRepository) realizedGainCashProceeds(ctx context.Context, bookID int64) (map[proceedsKey]*scaledInteger, error) {
+func (r *InvestmentRepository) realizedGainCashProceeds(ctx context.Context, bookID int64) (map[proceedsKey]*exact.ScaledInt, error) {
 	rows, err := r.database.QueryContext(ctx, `
 		SELECT DISTINCT
 			le2.transaction_id,
@@ -2580,7 +2557,7 @@ func (r *InvestmentRepository) realizedGainCashProceeds(ctx context.Context, boo
 	}
 	defer rows.Close()
 
-	proceeds := map[proceedsKey]*scaledInteger{}
+	proceeds := map[proceedsKey]*exact.ScaledInt{}
 	for rows.Next() {
 		var transactionID int64
 		var costCommodityID int64
@@ -2596,10 +2573,10 @@ func (r *InvestmentRepository) realizedGainCashProceeds(ctx context.Context, boo
 		key := proceedsKey{transactionID: transactionID, costCommodityID: costCommodityID}
 		total := proceeds[key]
 		if total == nil {
-			total = newScaledInteger()
+			total = exact.NewScaledInt()
 			proceeds[key] = total
 		}
-		total.add(quantityValue.BigInt(), quantityScale)
+		total.Add(quantityValue.BigInt(), quantityScale)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate realized gain cash proceeds: %w", err)

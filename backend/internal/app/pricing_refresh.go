@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 	"rekenraam/backend/internal/marketdata"
 )
 
@@ -506,11 +507,11 @@ func (s *PricingService) recordFXRefreshItem(ctx context.Context, runID int64, t
 func scaledFXProduct(first PriceObservation, second PriceObservation, resultScale int) (int64, error) {
 	numerator := big.NewInt(first.PriceValue)
 	numerator.Mul(numerator, big.NewInt(second.PriceValue))
-	numerator.Mul(numerator, pow10(first.BaseQuantityScale+second.BaseQuantityScale+resultScale))
+	numerator.Mul(numerator, exact.Pow10(first.BaseQuantityScale+second.BaseQuantityScale+resultScale))
 
 	denominator := big.NewInt(first.BaseQuantityValue)
 	denominator.Mul(denominator, big.NewInt(second.BaseQuantityValue))
-	denominator.Mul(denominator, pow10(first.PriceScale+second.PriceScale))
+	denominator.Mul(denominator, exact.Pow10(first.PriceScale+second.PriceScale))
 	if denominator.Sign() == 0 {
 		return 0, fmt.Errorf("derived FX denominator is zero")
 	}

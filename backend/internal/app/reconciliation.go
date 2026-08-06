@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"math/big"
 	"strings"
 	"time"
 
@@ -451,36 +450,35 @@ func (s *TransactionService) ChangePostingReconciliationStatus(ctx context.Conte
 }
 
 func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.ReconciliationPostingRecord) (BalanceQuantity, BalanceQuantity, error) {
-	selectedAmount := newScaledAmount()
+	selectedAmount := exact.NewScaledInt()
 	for _, posting := range selected {
-		selectedAmount.add(posting.QuantityValue, posting.QuantityScale)
+		selectedAmount.AddCoefficient(posting.QuantityValue, posting.QuantityScale)
 	}
-	selectedValue, err := selectedAmount.coefficient()
+	selectedValue, err := selectedAmount.Coefficient()
 	if err != nil {
 		return BalanceQuantity{}, BalanceQuantity{}, err
 	}
 
-	expected := newScaledAmount()
-	expected.add(session.StartingBalanceValue, session.StartingBalanceScale)
-	expected.addScaled(selectedAmount)
+	expected := exact.NewScaledInt()
+	expected.AddCoefficient(session.StartingBalanceValue, session.StartingBalanceScale)
+	expected.AddScaled(selectedAmount)
 
-	difference := newScaledAmount()
-	difference.add(session.StatementBalanceValue, session.StatementBalanceScale)
-	expectedNegative := &scaledAmount{value: new(big.Int).Neg(expected.value), scale: expected.scale}
-	difference.addScaled(expectedNegative)
-	differenceValue, err := difference.coefficient()
+	difference := exact.NewScaledInt()
+	difference.AddCoefficient(session.StatementBalanceValue, session.StatementBalanceScale)
+	difference.SubScaled(expected)
+	differenceValue, err := difference.Coefficient()
 	if err != nil {
 		return BalanceQuantity{}, BalanceQuantity{}, err
 	}
 	return BalanceQuantity{
 			CommodityID:         session.CommodityID,
 			QuantityValue:       selectedValue,
-			QuantityScale:       selectedAmount.scale,
+			QuantityScale:       selectedAmount.Scale(),
 			NormalQuantityValue: selectedValue,
 		}, BalanceQuantity{
 			CommodityID:         session.CommodityID,
 			QuantityValue:       differenceValue,
-			QuantityScale:       difference.scale,
+			QuantityScale:       difference.Scale(),
 			NormalQuantityValue: differenceValue,
 		}, nil
 }

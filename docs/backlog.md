@@ -73,18 +73,6 @@ The stored policy value is only checked for `<= 0`; derivation is hard-coded
 to one hop, so a configured `2` silently behaves as `1`. Implement multi-hop
 or clamp/remove the knob. Audit P6.
 
-### T-41 Consolidate scaled-integer arithmetic into `exact` `[ ]`
-
-**Files:** `backend/internal/app/ledger.go` (`scaledAmount`),
-`backend/internal/db/investments.go` (`scaledInteger`, inline alignment in
-`ListRealizedGains`/`PositionsWithGains`).
-
-Every historical severity-1 money bug (2026-07-13 audit F1–F6 family) shared
-one root cause: int64+scale math done outside a shared helper. Promote one
-`exact.ScaledInt` (add/sub/align/cmp, overflow-checked `Int64()`), migrate
-both helpers and the inline call sites, then update the ledger-invariants
-skill to mandate it. Refactor recommendation §5.1 of the 2026-07-19 audit.
-
 ## Public-deployment security gates
 
 These do not block private/local development. They must be complete before

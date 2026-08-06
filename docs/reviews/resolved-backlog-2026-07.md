@@ -38,6 +38,23 @@ current behaviour.
   parse warning telling the user to set a profile layout. Covered by
   `import_locale_test.go` and the EU cases in `import_qif_test.go`.
 
+- **T-41 scaled-integer arithmetic consolidated into `exact`**, done 2026-08-06.
+  The two near-identical private helpers (`scaledAmount` in `app`,
+  `scaledInteger` in `db`) and the duplicate `pow10`/`pow10DB` tables are gone,
+  replaced by `exact.ScaledInt` and `exact.Pow10` in
+  `backend/internal/exact/scaled.go`. `ScaledInt` carries
+  add/sub/align/compare/truncate plus overflow-checked `Int64()` (returns
+  `exact.ErrInt64Range`) and `Coefficient()`. Migrated call sites: ledger
+  balances and register running balances, reconciliation totals, `PreviewSell`
+  gain, and the `db` investment aggregations — `PositionsWithGains` and
+  `ListRealizedGains`, whose hand-rolled basis→proceeds scale alignment is now
+  `TruncatedTo`. The lot-selection loop in `disposeLotsTx` keeps its explicit
+  `exact.Pow10` alignment because its exactness check (`QuoRem` remainder at the
+  lot's own scale) has no `ScaledInt` equivalent. Behaviour is unchanged; tests
+  moved to `internal/exact/scaled_test.go` and were extended to cover `Cmp`,
+  `TruncatedTo`, `SubScaled`, operand immutability, and int64 overflow. The
+  ledger-invariants skill now mandates the helper.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

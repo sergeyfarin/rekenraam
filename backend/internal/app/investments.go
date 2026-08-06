@@ -953,39 +953,27 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 		return SellPreviewResult{}, fmt.Errorf("preview sell disposals: %w", err)
 	}
 	// Disposals can carry different CostBasisScales (lots opened at different
-	// cash scales, e.g. via import); align in Go with big.Int rather than
-	// summing raw int64s at mismatched scales (same defect class as F5,
+	// cash scales, e.g. via import); accumulate through exact.ScaledInt rather
+	// than summing raw int64s at mismatched scales (same defect class as F5,
 	// ListRealizedGains).
-	disposedBasis := newScaledAmount()
+	disposedBasis := exact.NewScaledInt()
 	for _, d := range disposals {
-		basisCoefficient, err := exact.FromBig(big.NewInt(d.CostBasisValue))
-		if err != nil {
-			return SellPreviewResult{}, fmt.Errorf("preview sell disposed basis: %w", err)
-		}
-		disposedBasis.add(basisCoefficient, d.CostBasisScale)
+		disposedBasis.AddInt64(d.CostBasisValue, d.CostBasisScale)
 	}
-	cashCoefficient, err := exact.FromBig(big.NewInt(input.CashAmountValue))
-	if err != nil {
-		return SellPreviewResult{}, fmt.Errorf("preview sell cash amount: %w", err)
-	}
-	cashProceeds := newScaledAmount()
-	cashProceeds.add(cashCoefficient, input.CashAmountScale)
+	cashProceeds := exact.ScaledIntFromInt64(input.CashAmountValue, input.CashAmountScale)
 
-	gainScale := disposedBasis.scale
-	if cashProceeds.scale > gainScale {
-		gainScale = cashProceeds.scale
-	}
-	disposedBasis.align(gainScale)
-	cashProceeds.align(gainScale)
-	gain := new(big.Int).Sub(cashProceeds.value, disposedBasis.value)
-	if !gain.IsInt64() {
+	gain := exact.NewScaledInt()
+	gain.AddScaled(cashProceeds)
+	gain.SubScaled(disposedBasis)
+	gainValue, err := gain.Int64()
+	if err != nil {
 		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
 	}
 	return SellPreviewResult{
 		CostBasisMethod:   method,
 		Allocations:       toInvestmentLotDisposals(disposals),
-		RealizedGain:      gain.Int64(),
-		RealizedGainScale: gainScale,
+		RealizedGain:      gainValue,
+		RealizedGainScale: gain.Scale(),
 		CashAmountValue:   input.CashAmountValue,
 		CashAmountScale:   input.CashAmountScale,
 	}, nil
@@ -2101,9 +2089,9 @@ func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coeff
 	n := new(big.Int).SetInt64(numerator)
 	d := denominator.BigInt()
 	if exponent >= 0 {
-		n.Mul(n, pow10(exponent))
+		n.Mul(n, exact.Pow10(exponent))
 	} else {
-		d.Mul(d, pow10(-exponent))
+		d.Mul(d, exact.Pow10(-exponent))
 	}
 
 	sign := n.Sign() * d.Sign()

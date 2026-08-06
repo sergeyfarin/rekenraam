@@ -39,9 +39,10 @@ preconditions. Also in `roadmap.md`.
       the whole file).
 - [x] T-36 decimal-comma amounts 100× off — fixed 2026-08-06, same file
       (`canonicalDecimal`, profile `decimal_separator`).
+- [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
+      (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
+      `scaledAmount`/`scaledInteger`/`pow10DB`).
 
 ## Hygiene
 
 - [ ] Keep `docs/README.md` accurate when adding or moving documentation.
-- [ ] After the next ledger-touching refactor lands (`exact.ScaledInt`,
-      T-41), update the ledger-invariants skill to mandate it.

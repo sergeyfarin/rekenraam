@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 
 	"rekenraam/backend/internal/db"
 )
@@ -66,28 +65,6 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 		return ReconciliationImpact{}, err
 	}
 	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
-}
-
-// maxPow10Scale caps the exponent accepted by pow10. No legitimate financial
-// quantity or alignment delta should exceed this; a larger value indicates a
-// logic bug in the caller, not a data problem.
-const maxPow10Scale = 60
-
-// pow10Cache holds precomputed 10^i for i in [0, maxPow10Scale].
-var pow10Cache = func() [maxPow10Scale + 1]*big.Int {
-	var t [maxPow10Scale + 1]*big.Int
-	t[0] = big.NewInt(1)
-	for i := 1; i <= maxPow10Scale; i++ {
-		t[i] = new(big.Int).Mul(t[i-1], big.NewInt(10))
-	}
-	return t
-}()
-
-func pow10(scale int) *big.Int {
-	if scale < 0 || scale > maxPow10Scale {
-		panic(fmt.Sprintf("pow10: scale %d out of range [0, %d]", scale, maxPow10Scale))
-	}
-	return new(big.Int).Set(pow10Cache[scale])
 }
 
 // periodScopedRefsFromTransaction returns CheckpointInvalidationRefs for all

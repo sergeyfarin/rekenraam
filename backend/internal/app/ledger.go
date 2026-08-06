@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -281,7 +280,7 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 	}
 
 	accountMap := ledgerAccountMap(accounts)
-	totals := map[int64]*scaledAmount{}
+	totals := map[int64]*exact.ScaledInt{}
 	for _, posting := range postings {
 		account, ok := accountMap[posting.AccountID]
 		if !ok || (account.AccountClass != "asset" && account.AccountClass != "liability") {
@@ -385,19 +384,19 @@ func (s *TransactionService) accountRegisterRunningBalances(ctx context.Context,
 		return nil, fmt.Errorf("read register running postings: %w", err)
 	}
 
-	running := map[int64]*scaledAmount{}
+	running := map[int64]*exact.ScaledInt{}
 	byPostingID := map[int64]BalanceQuantity{}
 	for _, posting := range postings {
 		addPosting(running, posting)
 		amount := running[posting.CommodityID]
-		value, err := amount.coefficient()
+		value, err := amount.Coefficient()
 		if err != nil {
 			return nil, LedgerOverflowError{CommodityID: posting.CommodityID}
 		}
 		byPostingID[posting.PostingID] = BalanceQuantity{
 			CommodityID:         posting.CommodityID,
 			QuantityValue:       value,
-			QuantityScale:       amount.scale,
+			QuantityScale:       amount.Scale(),
 			NormalQuantityValue: value,
 		}
 	}
@@ -445,12 +444,12 @@ func ledgerAccountMap(accounts []db.LedgerAccountRecord) map[int64]db.LedgerAcco
 	return accountMap
 }
 
-func aggregatePostings(postings []db.LedgerPostingRecord) map[int64]map[int64]*scaledAmount {
-	balances := map[int64]map[int64]*scaledAmount{}
+func aggregatePostings(postings []db.LedgerPostingRecord) map[int64]map[int64]*exact.ScaledInt {
+	balances := map[int64]map[int64]*exact.ScaledInt{}
 	for _, posting := range postings {
 		accountBalances := balances[posting.AccountID]
 		if accountBalances == nil {
-			accountBalances = map[int64]*scaledAmount{}
+			accountBalances = map[int64]*exact.ScaledInt{}
 			balances[posting.AccountID] = accountBalances
 		}
 		addPosting(accountBalances, posting)
@@ -458,8 +457,8 @@ func aggregatePostings(postings []db.LedgerPostingRecord) map[int64]map[int64]*s
 	return balances
 }
 
-func excludeSystemAccountBalances(accounts map[int64]db.LedgerAccountRecord, balances map[int64]map[int64]*scaledAmount) map[int64]map[int64]*scaledAmount {
-	filtered := map[int64]map[int64]*scaledAmount{}
+func excludeSystemAccountBalances(accounts map[int64]db.LedgerAccountRecord, balances map[int64]map[int64]*exact.ScaledInt) map[int64]map[int64]*exact.ScaledInt {
+	filtered := map[int64]map[int64]*exact.ScaledInt{}
 	for accountID, accountBalances := range balances {
 		account, ok := accounts[accountID]
 		if ok && account.SystemRole.Valid {
@@ -470,17 +469,17 @@ func excludeSystemAccountBalances(accounts map[int64]db.LedgerAccountRecord, bal
 	return filtered
 }
 
-func addPosting(amounts map[int64]*scaledAmount, posting db.LedgerPostingRecord) {
+func addPosting(amounts map[int64]*exact.ScaledInt, posting db.LedgerPostingRecord) {
 	amount := amounts[posting.CommodityID]
 	if amount == nil {
-		amount = newScaledAmount()
+		amount = exact.NewScaledInt()
 		amounts[posting.CommodityID] = amount
 	}
-	amount.add(posting.QuantityValue, posting.QuantityScale)
+	amount.AddCoefficient(posting.QuantityValue, posting.QuantityScale)
 }
 
-func rollupBalances(accounts map[int64]db.LedgerAccountRecord, direct map[int64]map[int64]*scaledAmount) map[int64]map[int64]*scaledAmount {
-	rolled := map[int64]map[int64]*scaledAmount{}
+func rollupBalances(accounts map[int64]db.LedgerAccountRecord, direct map[int64]map[int64]*exact.ScaledInt) map[int64]map[int64]*exact.ScaledInt {
+	rolled := map[int64]map[int64]*exact.ScaledInt{}
 	for accountID, balances := range direct {
 		currentID := accountID
 		seen := map[int64]bool{}
@@ -491,7 +490,7 @@ func rollupBalances(accounts map[int64]db.LedgerAccountRecord, direct map[int64]
 			seen[currentID] = true
 			target := rolled[currentID]
 			if target == nil {
-				target = map[int64]*scaledAmount{}
+				target = map[int64]*exact.ScaledInt{}
 				rolled[currentID] = target
 			}
 			addBalanceMap(target, balances)
@@ -505,24 +504,24 @@ func rollupBalances(accounts map[int64]db.LedgerAccountRecord, direct map[int64]
 	return rolled
 }
 
-func addBalanceMap(target map[int64]*scaledAmount, source map[int64]*scaledAmount) {
+func addBalanceMap(target map[int64]*exact.ScaledInt, source map[int64]*exact.ScaledInt) {
 	for commodityID, amount := range source {
 		targetAmount := target[commodityID]
 		if targetAmount == nil {
-			targetAmount = newScaledAmount()
+			targetAmount = exact.NewScaledInt()
 			target[commodityID] = targetAmount
 		}
-		targetAmount.addScaled(amount)
+		targetAmount.AddScaled(amount)
 	}
 }
 
-func balanceMapToQuantities(balances map[int64]*scaledAmount, normalClass string) ([]BalanceQuantity, error) {
+func balanceMapToQuantities(balances map[int64]*exact.ScaledInt, normalClass string) ([]BalanceQuantity, error) {
 	if len(balances) == 0 {
 		return []BalanceQuantity{}, nil
 	}
 	quantities := make([]BalanceQuantity, 0, len(balances))
 	for commodityID, amount := range balances {
-		value, err := amount.coefficient()
+		value, err := amount.Coefficient()
 		if err != nil {
 			return nil, LedgerOverflowError{CommodityID: commodityID}
 		}
@@ -533,14 +532,14 @@ func balanceMapToQuantities(balances map[int64]*scaledAmount, normalClass string
 		quantities = append(quantities, BalanceQuantity{
 			CommodityID:         commodityID,
 			QuantityValue:       value,
-			QuantityScale:       amount.scale,
+			QuantityScale:       amount.Scale(),
 			NormalQuantityValue: normalValue,
 		})
 	}
 	return quantities, nil
 }
 
-func toAccountBalance(account db.LedgerAccountRecord, direct map[int64]*scaledAmount, subtree map[int64]*scaledAmount) (AccountBalance, error) {
+func toAccountBalance(account db.LedgerAccountRecord, direct map[int64]*exact.ScaledInt, subtree map[int64]*exact.ScaledInt) (AccountBalance, error) {
 	directBalances, err := balanceMapToQuantities(direct, account.AccountClass)
 	if err != nil {
 		return AccountBalance{}, err
@@ -566,7 +565,7 @@ func toAccountBalance(account db.LedgerAccountRecord, direct map[int64]*scaledAm
 	}, nil
 }
 
-func toCategoryTotal(account db.LedgerAccountRecord, direct map[int64]*scaledAmount, subtree map[int64]*scaledAmount) (CategoryTotal, error) {
+func toCategoryTotal(account db.LedgerAccountRecord, direct map[int64]*exact.ScaledInt, subtree map[int64]*exact.ScaledInt) (CategoryTotal, error) {
 	directTotals, err := balanceMapToQuantities(direct, account.AccountClass)
 	if err != nil {
 		return CategoryTotal{}, err
@@ -595,49 +594,4 @@ func nullableSQLInt64Ptr(value sql.NullInt64) *int64 {
 	}
 	copied := value.Int64
 	return &copied
-}
-
-type scaledAmount struct {
-	value *big.Int
-	scale int
-}
-
-func newScaledAmount() *scaledAmount {
-	return &scaledAmount{value: big.NewInt(0)}
-}
-
-func (a *scaledAmount) add(value exact.Coefficient, scale int) {
-	a.align(scale)
-	addend := value.BigInt()
-	if scale < a.scale {
-		addend.Mul(addend, pow10(a.scale-scale))
-	}
-	a.value.Add(a.value, addend)
-}
-
-func (a *scaledAmount) addScaled(other *scaledAmount) {
-	if other == nil {
-		return
-	}
-	a.align(other.scale)
-	addend := new(big.Int).Set(other.value)
-	if other.scale < a.scale {
-		addend.Mul(addend, pow10(a.scale-other.scale))
-	}
-	a.value.Add(a.value, addend)
-}
-
-func (a *scaledAmount) align(scale int) {
-	if scale < 0 {
-		panic(fmt.Sprintf("scaledAmount.align: negative scale %d", scale))
-	}
-	if scale <= a.scale {
-		return
-	}
-	a.value.Mul(a.value, pow10(scale-a.scale))
-	a.scale = scale
-}
-
-func (a *scaledAmount) coefficient() (exact.Coefficient, error) {
-	return exact.FromBig(a.value)
 }

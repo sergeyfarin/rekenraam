@@ -2,7 +2,6 @@ package app
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -74,172 +73,6 @@ func TestCalendarBucketBoundsUsesCalendarBoundariesAndClipsRange(t *testing.T) {
 			assert.Equal(t, test.want, got)
 		})
 	}
-}
-
-// ---------------------------------------------------------------------------
-// scaledAmount
-// ---------------------------------------------------------------------------
-
-func TestScaledAmountAddSameScale(t *testing.T) {
-	a := newScaledAmount()
-	a.add(exact.New(100), 2)
-	a.add(exact.New(250), 2)
-
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "350", got.String())
-	assert.Equal(t, 2, a.scale)
-}
-
-func TestScaledAmountAddAlignsToDeeperScale(t *testing.T) {
-	// 1.00 at scale 2  +  0.001 at scale 3  =  1.001 at scale 3
-	a := newScaledAmount()
-	a.add(exact.New(100), 2) // 100 * 10^-2 = 1.00
-	a.add(exact.New(1), 3)   // 1   * 10^-3 = 0.001
-
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "1001", got.String()) // 1.001 * 10^3
-	assert.Equal(t, 3, a.scale)
-}
-
-func TestScaledAmountAddNegativeValues(t *testing.T) {
-	a := newScaledAmount()
-	a.add(exact.New(500), 2)
-	a.add(exact.New(-200), 2)
-
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "300", got.String())
-}
-
-func TestScaledAmountAddDoesNotMutateSourceCoefficient(t *testing.T) {
-	// BigInt() returns a fresh *big.Int, so align+Mul on the addend must not
-	// corrupt the original Coefficient value.
-	original := exact.MustParse("12345")
-	a := newScaledAmount()
-	a.add(original, 0)
-	a.add(original, 2) // triggers alignment: addend gets Mul by pow10(2)
-
-	// original must still read as 12345
-	assert.Equal(t, "12345", original.String())
-
-	// a should equal 12345 + 12345*100 = 12345 + 1234500 = 1246845 at scale 2
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "1246845", got.String())
-	assert.Equal(t, 2, a.scale)
-}
-
-func TestScaledAmountAddScaled(t *testing.T) {
-	a := newScaledAmount()
-	a.add(exact.New(100), 2)
-
-	b := newScaledAmount()
-	b.add(exact.New(50), 3) // different scale
-
-	a.addScaled(b)
-
-	// 100 @ scale 2  +  50 @ scale 3
-	// align a to scale 3: 1000 @ scale 3
-	// 1000 + 50 = 1050 @ scale 3
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "1050", got.String())
-	assert.Equal(t, 3, a.scale)
-}
-
-func TestScaledAmountAddScaledNilIsNoop(t *testing.T) {
-	a := newScaledAmount()
-	a.add(exact.New(42), 0)
-	a.addScaled(nil) // must not panic
-
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "42", got.String())
-}
-
-func TestScaledAmountCoefficientRejectsOverflow(t *testing.T) {
-	// Manually stuff a value larger than 38 digits into scaledAmount.
-	a := newScaledAmount()
-	a.value, _ = new(big.Int).SetString("1"+string(make([]byte, 38)), 10) // 10^38 — 39 digits
-	a.scale = 0
-
-	_, err := a.coefficient()
-	require.Error(t, err, "coefficient must reject values exceeding MaxCoefficientDigits")
-}
-
-func TestScaledAmountCryptoScaleAlignment(t *testing.T) {
-	// Mix a scale-2 fiat posting with a scale-24 crypto posting for the SAME
-	// commodity (unusual but must not panic or corrupt).
-	a := newScaledAmount()
-	a.add(exact.New(1), 2)  // 0.01 at scale 2
-	a.add(exact.New(1), 24) // 10^-24 at scale 24
-
-	// After alignment both are at scale 24.
-	// 0.01 = 1 * 10^-2 → coefficient 10^22 at scale 24
-	// 10^-24 → coefficient 1 at scale 24
-	// Total coefficient = 10^22 + 1
-	got, err := a.coefficient()
-	require.NoError(t, err)
-
-	expected, _ := new(big.Int).SetString("10000000000000000000001", 10) // 10^22 + 1
-	assert.Equal(t, expected.String(), got.String())
-	assert.Equal(t, 24, a.scale)
-}
-
-func TestScaledAmountAddsAtThirtyEightDigitBoundary(t *testing.T) {
-	// The largest positive 38-digit coefficient remains valid. Arithmetic is
-	// performed with big.Int, so no machine-integer overflow occurs first.
-	a := newScaledAmount()
-	a.add(exact.MustParse("99999999999999999999999999999999999998"), 24)
-	a.add(exact.New(1), 24)
-
-	got, err := a.coefficient()
-	require.NoError(t, err)
-	assert.Equal(t, "99999999999999999999999999999999999999", got.String())
-}
-
-func TestScaledAmountReportsThirtyNineDigitResult(t *testing.T) {
-	// Crossing the documented 38-digit storage boundary is rejected instead
-	// of wrapping, even though the intermediate big.Int remains exact.
-	a := newScaledAmount()
-	a.add(exact.MustParse("99999999999999999999999999999999999999"), 24)
-	a.add(exact.New(1), 24)
-
-	_, err := a.coefficient()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "at most 38 digits")
-}
-
-// ---------------------------------------------------------------------------
-// pow10
-// ---------------------------------------------------------------------------
-
-func TestPow10(t *testing.T) {
-	cases := []struct {
-		scale    int
-		expected string
-	}{
-		{0, "1"},
-		{1, "10"},
-		{2, "100"},
-		{12, "1000000000000"},
-		{24, "1000000000000000000000000"},
-		{60, "1000000000000000000000000000000000000000000000000000000000000"},
-	}
-	for _, tc := range cases {
-		got := pow10(tc.scale)
-		assert.Equal(t, tc.expected, got.String(), "pow10(%d)", tc.scale)
-	}
-}
-
-func TestPow10PanicsOnNegativeScale(t *testing.T) {
-	assert.Panics(t, func() { pow10(-1) }, "pow10 must panic on negative scale")
-}
-
-func TestPow10PanicsOnExcessiveScale(t *testing.T) {
-	assert.Panics(t, func() { pow10(maxPow10Scale + 1) }, "pow10 must panic when scale > maxPow10Scale")
 }
 
 // ---------------------------------------------------------------------------
@@ -362,10 +195,10 @@ func TestAggregatePostingsAccumulatesCorrectly(t *testing.T) {
 	amount := balances[1][10]
 	require.NotNil(t, amount)
 
-	got, err := amount.coefficient()
+	got, err := amount.Coefficient()
 	require.NoError(t, err)
 	assert.Equal(t, "700", got.String()) // 5.00 + 3.00 - 1.00 = 7.00
-	assert.Equal(t, 2, amount.scale)
+	assert.Equal(t, 2, amount.Scale())
 }
 
 func TestAggregatePostingsMixedScalesSameCommodity(t *testing.T) {
@@ -378,8 +211,8 @@ func TestAggregatePostingsMixedScalesSameCommodity(t *testing.T) {
 	amount := balances[1][10]
 	require.NotNil(t, amount)
 
-	got, err := amount.coefficient()
+	got, err := amount.Coefficient()
 	require.NoError(t, err)
 	assert.Equal(t, "20", got.String()) // 1 + 1 = 2, at scale 1 = coefficient 20
-	assert.Equal(t, 1, amount.scale)
+	assert.Equal(t, 1, amount.Scale())
 }
