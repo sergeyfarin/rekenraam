@@ -191,9 +191,10 @@
     const cash = parseDecimalField(cashAmountStr);
     if (qty.value === null || cash.value === null) return;
 
-    const qtyInt = toSafeInt(qty.value);
+    // quantity_value is an exact coefficient string on the wire, so it needs
+    // no safe-integer cap; cash_amount_value is a real int64 and still does.
     const cashInt = toSafeInt(cash.value);
-    if (qtyInt === null || cashInt === null) {
+    if (cashInt === null) {
       previewError = new Error(m.investments_form_amount_too_large());
       return;
     }
@@ -208,7 +209,7 @@
         commodity_id: selectedInstrument.commodity_id,
         holding_account_id: Number(holdingAccountID),
         cash_account_id: Number(cashAccountID),
-        quantity_value: qtyInt,
+        quantity_value: qty.value.toString(),
         quantity_scale: qty.scale,
         cash_amount_value: cashInt,
         cash_amount_scale: cash.scale,
@@ -230,9 +231,9 @@
     const cash = parseDecimalField(cashAmountStr);
     if (qty.value === null || cash.value === null) return;
 
-    const qtyInt = toSafeInt(qty.value);
+    // Same wire contract as the preview above — the two must agree exactly.
     const cashInt = toSafeInt(cash.value);
-    if (qtyInt === null || cashInt === null) {
+    if (cashInt === null) {
       formError = new Error(m.investments_form_amount_too_large());
       return;
     }
@@ -247,7 +248,7 @@
           commodity_id: selectedInstrument.commodity_id,
           holding_account_id: Number(holdingAccountID),
           cash_account_id: Number(cashAccountID),
-          quantity_value: qtyInt,
+          quantity_value: qty.value.toString(),
           quantity_scale: qty.scale,
           cash_amount_value: cashInt,
           cash_amount_scale: cash.scale,

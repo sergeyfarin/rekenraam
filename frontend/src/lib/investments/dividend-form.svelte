@@ -260,12 +260,9 @@
         if (!selectedInstrument) return;
         const qty = parseDecimalField(quantityStr);
         if (qty.value === null) return;
-        const qtyInt = toSafeInt(qty.value);
-        if (qtyInt === null) {
-          formError = new Error(m.investments_form_amount_too_large());
-          pending = false;
-          return;
-        }
+        // quantity_value is an exact coefficient string on the wire, so it
+        // needs no safe-integer cap. amount_value above is a real int64 and
+        // keeps its own.
 
         await recordReinvestedDividend(
           {
@@ -273,7 +270,7 @@
             commodity_id: selectedInstrument.commodity_id,
             holding_account_id: Number(holdingAccountID),
             income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            quantity_value: qtyInt,
+            quantity_value: qty.value.toString(),
             quantity_scale: qty.scale,
             amount_value: amountInt,
             amount_scale: amount.scale,

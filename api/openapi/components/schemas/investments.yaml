@@ -365,9 +365,9 @@ InvestmentLotAllocationRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
-      description: Exact quantity integer coefficient.
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
 
@@ -396,8 +396,9 @@ InvestmentTradeRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     cash_amount_value:
@@ -448,9 +449,10 @@ InvestmentWriteOffRequest:
       format: int64
     quantity_value:
       type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
       description: >-
-        Exact quantity coefficient as a canonical decimal string. Must be
-        positive and no larger than the remaining holding.
+        Lossless exact integer coefficient normalized to quantity_scale. Must
+        be positive and no larger than the remaining holding.
     quantity_scale:
       type: integer
     reason:
@@ -490,8 +492,9 @@ InvestmentLotDisposalResponse:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     cost_basis_value:
@@ -618,8 +621,9 @@ ReinvestedDividendRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     amount_value:
@@ -683,13 +687,15 @@ InvestmentLotResponse:
     status:
       type: string
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     remaining_quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to remaining_quantity_scale.
     remaining_quantity_scale:
       type: integer
     cost_basis_value:
@@ -743,8 +749,9 @@ InvestmentPositionResponse:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     remaining_cost_basis_value:

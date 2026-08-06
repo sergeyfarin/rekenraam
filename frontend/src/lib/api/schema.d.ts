@@ -12059,11 +12059,8 @@ export interface components {
         InvestmentLotAllocationRequest: {
             /** Format: int64 */
             lot_id: number;
-            /**
-             * Format: int64
-             * @description Exact quantity integer coefficient.
-             */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
         };
         InvestmentTradeRequest: {
@@ -12075,8 +12072,8 @@ export interface components {
             holding_account_id: number;
             /** Format: int64 */
             cash_account_id?: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             cash_amount_value: number;
@@ -12099,7 +12096,7 @@ export interface components {
             commodity_id: number;
             /** Format: int64 */
             holding_account_id: number;
-            /** @description Exact quantity coefficient as a canonical decimal string. Must be positive and no larger than the remaining holding. */
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. Must be positive and no larger than the remaining holding. */
             quantity_value: string;
             quantity_scale: number;
             /** @description Why the holding is worthless ("delisted", "fund closed", "issuer liquidated"). Required — a position declared worthless without a stated cause is not auditable. */
@@ -12116,8 +12113,8 @@ export interface components {
         InvestmentLotDisposalResponse: {
             /** Format: int64 */
             lot_id: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             cost_basis_value: number;
@@ -12180,8 +12177,8 @@ export interface components {
             holding_account_id: number;
             /** Format: int64 */
             income_account_id?: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             amount_value: number;
@@ -12208,11 +12205,11 @@ export interface components {
             /** Format: int64 */
             source_transaction_id?: number;
             status: string;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            remaining_quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to remaining_quantity_scale. */
+            remaining_quantity_value: string;
             remaining_quantity_scale: number;
             /** Format: int64 */
             cost_basis_value: number;
@@ -12238,8 +12235,8 @@ export interface components {
             account_id: number;
             /** Format: int64 */
             commodity_id: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             remaining_cost_basis_value: number;

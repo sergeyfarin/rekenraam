@@ -121,6 +121,16 @@ When a feature introduces a durable new rule, update one of those documents in t
   commodity kind. A commodity's own `max_quantity_scale` may be lower.
 - Standard/display scale is independent from maximum storage scale; do not
   render trailing places merely because a commodity permits them.
+- **In OpenAPI a quantity coefficient is `type: string` with the shared
+  `pattern: '^-?(0|[1-9][0-9]{0,37})$'`, never `type: integer`.** The
+  generator turns `integer` into a TypeScript `number`, which silently
+  reintroduces exactly the JavaScript precision loss the string form exists to
+  prevent — and because `Coefficient.UnmarshalJSON` also accepts a bare JSON
+  number, the backend keeps working and nothing fails loudly. Seven investment
+  schemas drifted this way undetected until 2026-08-06. Amount fields backed
+  by a real Go `int64` (`cash_amount_value`, `cost_basis_value`,
+  `price_value`) stay `integer`; the distinguishing question is whether the Go
+  field is `exact.Coefficient`.
 ## Data And Persistence Conventions
 
 - Never store money or quantities as floating point.
