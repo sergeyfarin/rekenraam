@@ -4,8 +4,11 @@ import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$li
 export type AuthSessionResponse = components['schemas']['AuthSessionResponse'];
 export type LoginRequest = components['schemas']['LoginRequest'];
 export type LoginResponse = components['schemas']['LoginResponse'];
+export type AuthenticationEventResponse = components['schemas']['AuthenticationEventResponse'];
+export type AuthenticationEventsResponse = components['schemas']['AuthenticationEventsResponse'];
 
 export const authSessionQueryKey = ['api', 'auth', 'session'] as const;
+export const authenticationEventsQueryKey = ['api', 'auth', 'events'] as const;
 
 export function authSessionQueryOptions() {
   return {
@@ -13,6 +16,38 @@ export function authSessionQueryOptions() {
     queryFn: getAuthSession,
     staleTime: 10_000
   };
+}
+
+export function authenticationEventsQueryOptions(limit?: number) {
+  return {
+    queryKey: [...authenticationEventsQueryKey, { limit }] as const,
+    queryFn: () => getAuthenticationEvents(limit),
+    staleTime: 10_000
+  };
+}
+
+// The operator-facing authentication log: successful and failed attempts with
+// the proxy-aware client IP, newest first.
+export async function getAuthenticationEvents(
+  limit?: number
+): Promise<AuthenticationEventsResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/auth/events', {
+      params: { query: { limit } }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
 }
 
 export async function getAuthSession(): Promise<AuthSessionResponse> {

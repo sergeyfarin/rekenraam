@@ -30,6 +30,31 @@ type CreateSessionParams struct {
 	ExpiresAt string
 }
 
+type AuthenticationEventParams struct {
+	OccurredAt    string
+	EventType     string
+	Outcome       string
+	Username      string
+	UserID        int64
+	AuthSessionID int64
+	ClientIP      string
+	FailureReason string
+	RequestID     string
+}
+
+type AuthenticationEventRecord struct {
+	ID            int64
+	OccurredAt    string
+	EventType     string
+	Outcome       string
+	Username      string
+	UserID        sql.NullInt64
+	AuthSessionID sql.NullInt64
+	ClientIP      string
+	FailureReason string
+	RequestID     string
+}
+
 type UpdatePasswordHashParams struct {
 	UserID       int64
 	PasswordHash string
@@ -81,15 +106,22 @@ func (r *AuthRepository) ReadOwnerCredentials(ctx context.Context, username stri
 	return record, nil
 }
 
-func (r *AuthRepository) CreateSession(ctx context.Context, params CreateSessionParams) error {
-	if _, err := r.database.ExecContext(ctx, `
+// CreateSession returns the new session id so an authentication event can be
+// correlated with the session it created (S-07).
+func (r *AuthRepository) CreateSession(ctx context.Context, params CreateSessionParams) (int64, error) {
+	result, err := r.database.ExecContext(ctx, `
 		INSERT INTO auth_sessions (user_id, token_hash, created_at, expires_at, revoked_at)
 		VALUES (?, ?, ?, ?, NULL)
-	`, params.UserID, params.TokenHash, params.CreatedAt, params.ExpiresAt); err != nil {
-		return fmt.Errorf("insert auth session: %w", err)
+	`, params.UserID, params.TokenHash, params.CreatedAt, params.ExpiresAt)
+	if err != nil {
+		return 0, fmt.Errorf("insert auth session: %w", err)
+	}
+	sessionID, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("read auth session id: %w", err)
 	}
 
-	return nil
+	return sessionID, nil
 }
 
 func (r *AuthRepository) ReadSessionUser(ctx context.Context, tokenHash string, now string) (AuthenticatedUserRecord, error) {
@@ -191,6 +223,92 @@ func (r *AuthRepository) UpsertLoginThrottle(ctx context.Context, params UpsertL
 	}
 
 	return nil
+}
+
+// RecordAuthenticationEvent appends one row to the operational authentication
+// log (S-07). It never stores password material or session tokens.
+func (r *AuthRepository) RecordAuthenticationEvent(ctx context.Context, params AuthenticationEventParams) error {
+	if _, err := r.database.ExecContext(ctx, `
+		INSERT INTO authentication_events (
+			occurred_at, event_type, outcome, username, user_id, auth_session_id,
+			client_ip, failure_reason, request_id
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.OccurredAt, params.EventType, params.Outcome, params.Username,
+		nullablePositiveInt64(params.UserID), nullablePositiveInt64(params.AuthSessionID),
+		params.ClientIP, params.FailureReason, params.RequestID); err != nil {
+		return fmt.Errorf("insert authentication event: %w", err)
+	}
+
+	return nil
+}
+
+// ListAuthenticationEvents returns the most recent events first. The caller
+// asks for one more than it needs to detect a further page.
+func (r *AuthRepository) ListAuthenticationEvents(ctx context.Context, limit int) ([]AuthenticationEventRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, occurred_at, event_type, outcome, username, user_id, auth_session_id,
+			client_ip, failure_reason, request_id
+		FROM authentication_events
+		ORDER BY occurred_at DESC, id DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list authentication events: %w", err)
+	}
+	defer rows.Close()
+
+	var records []AuthenticationEventRecord
+	for rows.Next() {
+		var record AuthenticationEventRecord
+		if err := rows.Scan(&record.ID, &record.OccurredAt, &record.EventType, &record.Outcome,
+			&record.Username, &record.UserID, &record.AuthSessionID, &record.ClientIP,
+			&record.FailureReason, &record.RequestID); err != nil {
+			return nil, fmt.Errorf("scan authentication event: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate authentication events: %w", err)
+	}
+
+	return records, nil
+}
+
+// DeleteAuthenticationEventsBefore prunes the log to its retention window.
+func (r *AuthRepository) DeleteAuthenticationEventsBefore(ctx context.Context, cutoff string) (int64, error) {
+	result, err := r.database.ExecContext(ctx, `DELETE FROM authentication_events WHERE occurred_at < ?`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("delete authentication events: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read deleted authentication event rows affected: %w", err)
+	}
+
+	return rowsAffected, nil
+}
+
+// FailedLoginsSince counts failed attempts in a window, optionally narrowed to
+// one client IP. It is the number an operator needs to answer "is this a
+// brute-force run or one fat-fingered password?".
+func (r *AuthRepository) FailedLoginsSince(ctx context.Context, since string, clientIP string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM authentication_events
+		WHERE outcome = 'failure' AND occurred_at >= ?
+	`
+	args := []any{since}
+	if clientIP != "" {
+		query += ` AND client_ip = ?`
+		args = append(args, clientIP)
+	}
+	var count int
+	if err := r.database.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count failed logins: %w", err)
+	}
+
+	return count, nil
 }
 
 func (r *AuthRepository) DeleteLoginThrottle(ctx context.Context, scopeType string, scopeKey string) error {

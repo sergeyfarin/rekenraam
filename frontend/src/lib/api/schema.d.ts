@@ -261,6 +261,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent authentication events (operator visibility)
+         * @description The durable log of successful and failed authentication attempts, newest first, so an operator can detect a brute-force run and reconstruct an incident (S-07). Each event carries the proxy-aware client IP.
+         *     Owner-only: the log names client IPs and attempted usernames. It never contains password material or session tokens — `auth_session_id` is the only session reference. Rows are pruned to a 90-day retention window by the daily session-cleanup pass.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Maximum number of events to return. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Authentication events, newest first */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuthenticationEventsResponse"];
+                    };
+                };
+                /** @description Invalid query parameter */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/preferences": {
         parameters: {
             query?: never;
@@ -11594,6 +11668,40 @@ export interface components {
             user?: components["schemas"]["OwnerResponse"];
             /** @description Session-bound CSRF token for authenticated mutating requests. */
             csrf_token?: string;
+        };
+        /** @description One recorded authentication attempt or session end. Never contains password material or session tokens. */
+        AuthenticationEventResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            occurred_at: string;
+            /** @enum {string} */
+            event_type: "login_succeeded" | "login_failed" | "login_blocked" | "logout";
+            /** @enum {string} */
+            outcome: "success" | "failure";
+            /** @description The username that was attempted. */
+            username?: string;
+            /**
+             * Format: int64
+             * @description Set when the attempt named an existing user.
+             */
+            user_id?: number;
+            /**
+             * Format: int64
+             * @description The session created or ended by this event. Becomes absent once the session row is cleaned up.
+             */
+            auth_session_id?: number;
+            /** @description Proxy-aware client address as resolved by the API layer. */
+            client_ip?: string;
+            /** @enum {string} */
+            failure_reason?: "unknown_user" | "invalid_credentials" | "rate_limited";
+            request_id?: string;
+        };
+        AuthenticationEventsResponse: {
+            events: components["schemas"]["AuthenticationEventResponse"][];
+            has_more: boolean;
+            /** @description Failed attempts in the last 24 hours. A spike here is the signal an operator is looking for, without scanning the list. */
+            failed_last_24h: number;
         };
         LoginResponse: {
             user: components["schemas"]["OwnerResponse"];

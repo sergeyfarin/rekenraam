@@ -70,9 +70,10 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 		}
 
 		result, err := authService.Login(r.Context(), app.LoginInput{
-			Username: request.Username,
-			Password: request.Password,
-			ClientIP: loginClientIP(r, options),
+			Username:  request.Username,
+			Password:  request.Password,
+			ClientIP:  loginClientIP(r, options),
+			RequestID: RequestIDFromContext(r.Context()),
 		})
 		if err != nil {
 			writeAuthServiceError(w, r, logger, "login owner", err)
@@ -88,7 +89,11 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 
 func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := authService.Logout(r.Context(), readSessionToken(r)); err != nil {
+		if err := authService.Logout(r.Context(), app.LogoutInput{
+			Token:     readSessionToken(r),
+			ClientIP:  loginClientIP(r, options),
+			RequestID: RequestIDFromContext(r.Context()),
+		}); err != nil {
 			writeAuthServiceError(w, r, logger, "logout owner", err)
 			return
 		}
@@ -96,6 +101,63 @@ func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOp
 		clearSessionCookie(w, r, options)
 		w.WriteHeader(http.StatusNoContent)
 	}))
+}
+
+type authenticationEventResponse struct {
+	ID            int64  `json:"id"`
+	OccurredAt    string `json:"occurred_at"`
+	EventType     string `json:"event_type"`
+	Outcome       string `json:"outcome"`
+	Username      string `json:"username,omitempty"`
+	UserID        *int64 `json:"user_id,omitempty"`
+	AuthSessionID *int64 `json:"auth_session_id,omitempty"`
+	ClientIP      string `json:"client_ip,omitempty"`
+	FailureReason string `json:"failure_reason,omitempty"`
+	RequestID     string `json:"request_id,omitempty"`
+}
+
+type authenticationEventsResponse struct {
+	Events  []authenticationEventResponse `json:"events"`
+	HasMore bool                          `json:"has_more"`
+	// FailedLast24h makes a brute-force run visible without scanning the list.
+	FailedLast24h int `json:"failed_last_24h"`
+}
+
+// authenticationEvents exposes the authentication log to the owner (S-07).
+// Owner-only: the log names client IPs and attempted usernames, so it is not
+// something an unauthenticated caller may read.
+func authenticationEvents(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		limit := 50
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed <= 0 {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "limit is invalid")
+				return
+			}
+			limit = parsed
+		}
+		events, err := authService.AuthenticationEvents(r.Context(), limit)
+		if err != nil {
+			writeAuthServiceError(w, r, logger, "list authentication events", err)
+			return
+		}
+		responses := make([]authenticationEventResponse, 0, len(events.Events))
+		for _, event := range events.Events {
+			responses = append(responses, authenticationEventResponse{
+				ID: event.ID, OccurredAt: event.OccurredAt, EventType: event.EventType,
+				Outcome: event.Outcome, Username: event.Username, UserID: event.UserID,
+				AuthSessionID: event.AuthSessionID, ClientIP: event.ClientIP,
+				FailureReason: event.FailureReason, RequestID: event.RequestID,
+			})
+		}
+		writeJSON(w, http.StatusOK, authenticationEventsResponse{
+			Events: responses, HasMore: events.HasMore, FailedLast24h: events.FailedLast24h,
+		})
+	}
 }
 
 func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {

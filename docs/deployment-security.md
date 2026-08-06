@@ -67,6 +67,26 @@ client can connect to the app directly. The app parses XFF right-to-left and
 stops at the first non-trusted hop; the proxy must overwrite or append the
 actual client address instead of forwarding unverified client headers unchanged.
 
+## Monitoring authentication
+
+Every successful and failed authentication attempt is recorded durably, with
+the proxy-aware client IP resolved by the rules above. Two ways to consume it:
+
+- `GET /api/v1/auth/events` (owner session required) returns the recent log,
+  newest first, plus `failed_last_24h` — the number to watch. A steady trickle
+  of `login_failed` from one address is a brute-force run; `unknown_user`
+  failures mean someone is guessing account names, not passwords.
+- The same events are emitted as structured `slog` records ("authentication
+  event"), failures at `WARN`, so a log shipper can alert on them without
+  querying SQLite.
+
+Events never contain password material or session tokens. They are pruned to a
+90-day retention window by the daily session-cleanup pass, so this is an
+incident-response aid, not a permanent sign-in archive.
+
+Note that repeated failures against the known owner username currently rate
+limit that username — see the open lockout concern in `docs/backlog.md` (S-04).
+
 ## Secrets and data files
 
 `REKENRAAM_SECRET_KEY` encrypts stored online-provider credentials. It is a

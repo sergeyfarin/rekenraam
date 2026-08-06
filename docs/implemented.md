@@ -27,6 +27,7 @@ series backend/API foundation).
 | Connection PRAGMAs (WAL, FK, busy timeout) | ✅ | `db/sqlite.go`; single-connection contract documented. |
 | Browser first-run setup (owner → book → currencies → system accounts → categories) | ✅ | Persisted `setup_steps`, derived install state. |
 | Auth: Argon2id, sessions, CSRF, origin checks | ✅ | `app/auth.go`, `api/auth.go`; rehash-on-login, dual-scope throttling. |
+| Authentication-event visibility | 🟡 | `authentication_events` (migration 0003) + `GET /api/v1/auth/events`, S-07 — backend only, no UI. Records login success/failure/blocked and logout with the proxy-aware client IP, attempted username, failure reason and request id; mirrored to structured `slog` (failures at WARN) so a log shipper works without querying SQLite. Never stores password material or session tokens. `failed_last_24h` is the brute-force signal. Pruned to a 90-day retention window by the existing daily session-cleanup pass. |
 | Operator owner-recovery (backup-first, override) | ✅ | `recover-owner` command. |
 | `/api/v1` envelope, error codes, request IDs | ✅ | Inbound `X-Request-ID` honored. |
 | i18n boundary (Paraglide/Inlang) | ✅ | All UI copy and built-in labels keyed. |

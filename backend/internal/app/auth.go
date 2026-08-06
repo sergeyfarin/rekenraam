@@ -78,9 +78,57 @@ type SessionStatus struct {
 }
 
 type LoginInput struct {
-	Username string
-	Password string
-	ClientIP string
+	Username  string
+	Password  string
+	ClientIP  string
+	RequestID string
+}
+
+type LogoutInput struct {
+	Token     string
+	ClientIP  string
+	RequestID string
+}
+
+// Authentication event types and failure reasons (S-07). These are stable
+// strings: the DB constrains event_type, and an operator's alerting keys off
+// failure_reason.
+const (
+	authEventLoginSucceeded = "login_succeeded"
+	authEventLoginFailed    = "login_failed"
+	authEventLoginBlocked   = "login_blocked"
+	authEventLogout         = "logout"
+
+	authFailureUnknownUser        = "unknown_user"
+	authFailureInvalidCredentials = "invalid_credentials"
+	authFailureRateLimited        = "rate_limited"
+
+	// authEventRetention bounds how long the authentication log is kept. It is
+	// an operational log for spotting brute-force runs and reconstructing a
+	// recent incident, not a permanent archive of who signed in when.
+	authEventRetention = 90 * 24 * time.Hour
+)
+
+// AuthenticationEvent is one recorded authentication attempt or session end.
+type AuthenticationEvent struct {
+	ID            int64
+	OccurredAt    string
+	EventType     string
+	Outcome       string
+	Username      string
+	UserID        *int64
+	AuthSessionID *int64
+	ClientIP      string
+	FailureReason string
+	RequestID     string
+}
+
+type AuthenticationEvents struct {
+	Events  []AuthenticationEvent
+	HasMore bool
+	// FailedLast24h is the headline number: a spike here is the signal an
+	// operator is looking for.
+	FailedLast24h int
 }
 
 type LoginResult struct {
@@ -143,6 +191,10 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	if blockedUntil, err := s.isLoginBlocked(ctx, scopes); err != nil {
 		return LoginResult{}, fmt.Errorf("check login throttle: %w", err)
 	} else if !blockedUntil.IsZero() {
+		s.recordAuthEvent(ctx, db.AuthenticationEventParams{
+			EventType: authEventLoginBlocked, Outcome: "failure", Username: username,
+			ClientIP: input.ClientIP, FailureReason: authFailureRateLimited, RequestID: input.RequestID,
+		})
 		return LoginResult{}, RateLimitError{RetryAfter: time.Until(blockedUntil)}
 	}
 
@@ -164,6 +216,10 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 			if err != nil {
 				return LoginResult{}, fmt.Errorf("record login throttle failure: %w", err)
 			}
+			s.recordAuthEvent(ctx, db.AuthenticationEventParams{
+				EventType: authEventLoginFailed, Outcome: "failure", Username: username,
+				ClientIP: input.ClientIP, FailureReason: authFailureUnknownUser, RequestID: input.RequestID,
+			})
 			if !blockedUntil.IsZero() {
 				return LoginResult{}, RateLimitError{RetryAfter: time.Until(blockedUntil)}
 			}
@@ -182,6 +238,11 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		if err != nil {
 			return LoginResult{}, fmt.Errorf("record login throttle failure: %w", err)
 		}
+		s.recordAuthEvent(ctx, db.AuthenticationEventParams{
+			EventType: authEventLoginFailed, Outcome: "failure", Username: username,
+			UserID: credentials.ID, ClientIP: input.ClientIP,
+			FailureReason: authFailureInvalidCredentials, RequestID: input.RequestID,
+		})
 		if !blockedUntil.IsZero() {
 			return LoginResult{}, RateLimitError{RetryAfter: time.Until(blockedUntil)}
 		}
@@ -210,18 +271,25 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 
 	now := s.now().UTC()
 	createdAt := now.Format(time.RFC3339)
-	if err := s.repository.CreateSession(ctx, db.CreateSessionParams{
+	sessionID, err := s.repository.CreateSession(ctx, db.CreateSessionParams{
 		UserID:    credentials.ID,
 		TokenHash: sessionTokenHash,
 		CreatedAt: createdAt,
 		ExpiresAt: sessionExpiresAt(now, s.sessionLifetime),
-	}); err != nil {
+	})
+	if err != nil {
 		return LoginResult{}, fmt.Errorf("persist auth session: %w", err)
 	}
 
 	if err := s.clearLoginFailures(ctx, scopes); err != nil {
 		return LoginResult{}, fmt.Errorf("clear login throttle: %w", err)
 	}
+
+	s.recordAuthEvent(ctx, db.AuthenticationEventParams{
+		EventType: authEventLoginSucceeded, Outcome: "success", Username: credentials.Username,
+		UserID: credentials.ID, AuthSessionID: sessionID, ClientIP: input.ClientIP,
+		RequestID: input.RequestID,
+	})
 
 	return LoginResult{
 		User: Owner{
@@ -232,16 +300,110 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	}, nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, token string) error {
-	if strings.TrimSpace(token) == "" {
+func (s *AuthService) Logout(ctx context.Context, input LogoutInput) error {
+	token := strings.TrimSpace(input.Token)
+	if token == "" {
 		return nil
 	}
 
-	if err := s.repository.RevokeSession(ctx, hashSessionToken(token), s.now().UTC().Format(time.RFC3339)); err != nil {
+	// Resolve the session before revoking it, so the event can name the user
+	// and the session it ended. A token that no longer resolves is a no-op
+	// logout and records nothing.
+	tokenHash := hashSessionToken(token)
+	now := s.now().UTC()
+	session, sessionErr := s.repository.ReadSessionUser(ctx, tokenHash, now.Format(time.RFC3339))
+
+	if err := s.repository.RevokeSession(ctx, tokenHash, now.Format(time.RFC3339)); err != nil {
 		return fmt.Errorf("revoke auth session: %w", err)
 	}
 
+	if sessionErr == nil {
+		s.recordAuthEvent(ctx, db.AuthenticationEventParams{
+			EventType: authEventLogout, Outcome: "success", Username: session.Username,
+			UserID: session.ID, AuthSessionID: session.SessionID, ClientIP: input.ClientIP,
+			RequestID: input.RequestID,
+		})
+	}
+
 	return nil
+}
+
+// AuthenticationEvents returns the recent authentication log for an operator,
+// newest first, plus the 24-hour failure count that makes a brute-force run
+// visible at a glance.
+func (s *AuthService) AuthenticationEvents(ctx context.Context, limit int) (AuthenticationEvents, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	records, err := s.repository.ListAuthenticationEvents(ctx, limit+1)
+	if err != nil {
+		return AuthenticationEvents{}, fmt.Errorf("list authentication events: %w", err)
+	}
+	hasMore := len(records) > limit
+	if hasMore {
+		records = records[:limit]
+	}
+	failedLast24h, err := s.repository.FailedLoginsSince(ctx, s.now().UTC().Add(-24*time.Hour).Format(time.RFC3339), "")
+	if err != nil {
+		return AuthenticationEvents{}, fmt.Errorf("count recent failed logins: %w", err)
+	}
+
+	events := make([]AuthenticationEvent, 0, len(records))
+	for _, record := range records {
+		events = append(events, AuthenticationEvent{
+			ID:            record.ID,
+			OccurredAt:    record.OccurredAt,
+			EventType:     record.EventType,
+			Outcome:       record.Outcome,
+			Username:      record.Username,
+			UserID:        nullableSQLInt64Ptr(record.UserID),
+			AuthSessionID: nullableSQLInt64Ptr(record.AuthSessionID),
+			ClientIP:      record.ClientIP,
+			FailureReason: record.FailureReason,
+			RequestID:     record.RequestID,
+		})
+	}
+
+	return AuthenticationEvents{Events: events, HasMore: hasMore, FailedLast24h: failedLast24h}, nil
+}
+
+// recordAuthEvent writes the durable event and mirrors it to the structured
+// log, so an operator shipping logs elsewhere sees the same thing without
+// querying SQLite.
+//
+// It never returns an error: failing a successful login because its audit row
+// could not be written would turn a logging fault into a lockout. The failure
+// is logged loudly instead.
+func (s *AuthService) recordAuthEvent(ctx context.Context, params db.AuthenticationEventParams) {
+	if params.OccurredAt == "" {
+		params.OccurredAt = s.now().UTC().Format(time.RFC3339)
+	}
+	if err := s.repository.RecordAuthenticationEvent(ctx, params); err != nil && s.logger != nil {
+		s.logger.ErrorContext(ctx, "failed to record authentication event",
+			slog.String("event_type", params.EventType), slog.Any("err", err))
+	}
+	if s.logger == nil {
+		return
+	}
+	// No password material, no session token — the session id is enough to
+	// correlate, and the username is already in the durable row.
+	attrs := []any{
+		slog.String("event_type", params.EventType),
+		slog.String("outcome", params.Outcome),
+		slog.String("client_ip", params.ClientIP),
+		slog.String("request_id", params.RequestID),
+	}
+	if params.FailureReason != "" {
+		attrs = append(attrs, slog.String("failure_reason", params.FailureReason))
+	}
+	if params.Outcome == "failure" {
+		s.logger.WarnContext(ctx, "authentication event", attrs...)
+		return
+	}
+	s.logger.InfoContext(ctx, "authentication event", attrs...)
 }
 
 func (s *AuthService) CleanupExpiredAndRevokedSessions(ctx context.Context) (int64, error) {
@@ -286,6 +448,21 @@ func (s *AuthService) cleanupExpiredAndRevokedSessions(ctx context.Context, logg
 	}
 	if deleted > 0 {
 		logger.InfoContext(ctx, "cleaned up auth sessions", slog.Int64("deleted", deleted))
+	}
+	s.pruneAuthenticationEvents(ctx, logger)
+}
+
+// pruneAuthenticationEvents enforces authEventRetention. It rides the existing
+// daily session-cleanup tick rather than adding a second timer.
+func (s *AuthService) pruneAuthenticationEvents(ctx context.Context, logger *slog.Logger) {
+	cutoff := s.now().UTC().Add(-authEventRetention).Format(time.RFC3339)
+	deleted, err := s.repository.DeleteAuthenticationEventsBefore(ctx, cutoff)
+	if err != nil {
+		logger.WarnContext(ctx, "prune authentication events", slog.Any("err", err))
+		return
+	}
+	if deleted > 0 {
+		logger.InfoContext(ctx, "pruned authentication events", slog.Int64("deleted", deleted))
 	}
 }
 

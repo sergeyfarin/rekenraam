@@ -335,3 +335,64 @@ func bootstrapOwner(t *testing.T, handler http.Handler) *http.Cookie {
 	require.Len(t, cookies, 1)
 	return cookies[0]
 }
+
+// --- Authentication event visibility (S-07) ---
+
+func TestAuthenticationEvents_HTTP(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	cookie := bootstrapOwner(t, handler)
+
+	failed := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong"}`))
+	failed.Header.Set("Content-Type", "application/json")
+	setSameOrigin(failed)
+	failedRes := httptest.NewRecorder()
+	handler.ServeHTTP(failedRes, failed)
+	require.Equal(t, http.StatusUnauthorized, failedRes.Code)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/events", nil)
+	req.AddCookie(cookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+
+	var body authenticationEventsResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	require.NotEmpty(t, body.Events)
+	assert.Equal(t, "login_failed", body.Events[0].EventType)
+	assert.Equal(t, "invalid_credentials", body.Events[0].FailureReason)
+	assert.Equal(t, 1, body.FailedLast24h)
+	// httptest's RemoteAddr is 192.0.2.1:1234; the resolved client IP must be
+	// recorded, not left blank.
+	assert.NotEmpty(t, body.Events[0].ClientIP)
+}
+
+func TestAuthenticationEvents_RequireAuthentication(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	// The log names client IPs and attempted usernames — it must never be
+	// readable without a session.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/events", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	assert.Equal(t, http.StatusUnauthorized, res.Code)
+}
+
+func TestAuthenticationEvents_RejectsInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	cookie := bootstrapOwner(t, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/events?limit=0", nil)
+	req.AddCookie(cookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusBadRequest, res.Code)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+}

@@ -54,10 +54,3 @@ Public deployment with real financial data remains prohibited until MFA has an
 approved design and implementation. Select and implement TOTP, WebAuthn, or an
 approved equivalent before lifting this product gate.
 
-### S-07 Authentication-event visibility `[ ]`
-
-**File:** `backend/internal/api/auth.go`, `backend/internal/app/auth.go`.
-
-Add privacy-conscious, durable or operator-consumable visibility for successful
-and failed authentication events, including the proxy-aware client IP, so
-operators can detect brute-force attempts and support incident response.

@@ -155,6 +155,41 @@ current behaviour.
   HTTP layer. No UI yet; entry belongs with the R16 investment-lifecycle
   surface.
 
+- **S-07 authentication events are now visible**, done 2026-08-06. There was
+  no record at all of who signed in, who failed, or from where — an operator
+  could not tell a brute-force run from a forgotten password, and had nothing
+  to reconstruct an incident from. New `authentication_events` table
+  (migration `0003`) records `login_succeeded`, `login_failed`,
+  `login_blocked` and `logout` with the **proxy-aware** client IP (the one
+  `loginClientIP` resolves through the trusted-proxy allowlist, not the raw
+  peer address), attempted username, failure reason, request id, and the
+  session id where one exists.
+
+  Privacy posture is deliberate and tested: no password material, no session
+  token, not even the token hash — the session id is enough to correlate with
+  `auth_sessions`. `TestAuthenticationEvents_NeverStorePasswordOrSessionToken
+  Material` asserts it against the real rows. Rows are pruned to a 90-day
+  window by `pruneAuthenticationEvents`, riding the existing daily
+  session-cleanup tick rather than adding a second timer; this is an
+  incident-response log, not a permanent sign-in archive.
+
+  Two consumption paths, because "durable **or** operator-consumable" is
+  weaker than the operator needs: `GET /api/v1/auth/events` (owner session
+  required — the log names IPs and attempted usernames) returns the recent
+  list plus `failed_last_24h`, the number that makes a run visible without
+  scanning; and every event is mirrored to structured `slog`, failures at
+  `WARN`, so a log shipper can alert without querying SQLite.
+
+  `recordAuthEvent` deliberately swallows its write error after logging it:
+  failing a *successful* login because its audit row could not be written
+  would turn a logging fault into a lockout. `login_blocked` is a separate
+  event type from `login_failed` because a throttled attempt never reaches
+  password verification and is a different operational fact. `CreateSession`
+  now returns the new session id, and `Logout` takes a `LogoutInput` so it
+  can record the client IP and resolve the user before revoking. Documented
+  for operators in `docs/deployment-security.md` (§ Monitoring
+  authentication). No UI yet.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

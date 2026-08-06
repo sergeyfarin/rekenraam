@@ -334,8 +334,8 @@ daily-driver work.
    versions, exact decimals, trial balance).
 
 Public internet deployment with real financial data remains blocked by the live
-security gates in `docs/backlog.md`: lockout-safe login throttling, MFA, and
-authentication-event visibility.
+security gates in `docs/backlog.md`: lockout-safe login throttling (S-04) and
+MFA (S-06). Authentication-event visibility (S-07) closed 2026-08-06.
 
 ## Open product decisions
 

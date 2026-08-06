@@ -33,6 +33,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/auth/session", sessionStatus(logger, services.Auth))
 	mux.HandleFunc("POST /api/v1/auth/login", requireSameOrigin(options, login(logger, services.Auth, options)))
 	mux.HandleFunc("POST /api/v1/auth/logout", logout(logger, services.Auth, options))
+	mux.HandleFunc("GET /api/v1/auth/events", authenticationEvents(logger, services.Auth))
 	mux.HandleFunc("GET /api/v1/settings/preferences", userPreferences(logger, services.Auth, services.Settings))
 	mux.HandleFunc("PUT /api/v1/settings/preferences", saveUserPreferences(logger, services.Auth, services.Settings, options))
 	mux.HandleFunc("GET /api/v1/settings/currencies/page-data", currencySettingsPageData(logger, services.Auth, services.Settings, services.Book, services.Currency, services.Pricing))

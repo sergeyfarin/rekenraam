@@ -47,6 +47,9 @@ preconditions. Also in `roadmap.md`.
 - [x] T-37 price observations can be voided — done 2026-08-06
       (`POST /pricing/prices/{id}/void`; cascades to rates triangulated from
       the voided leg; R11 still owns the UI).
+- [x] S-07 authentication-event visibility — done 2026-08-06
+      (`authentication_events` + `GET /auth/events` + structured logs;
+      90-day retention). Public-deployment gate closed.
 - [x] T-38 zero-proceeds write-off — done 2026-08-06
       (`POST /investments/write-off`; dedicated endpoint, not a zero-amount
       sell; loss stays a computed gains value, see I-04).
