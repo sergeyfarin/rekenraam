@@ -190,6 +190,49 @@ current behaviour.
   for operators in `docs/deployment-security.md` (§ Monitoring
   authentication). No UI yet.
 
+- **S-04 the login throttle is now lockout-safe**, done 2026-08-06. The
+  throttle blocked on a username scope, and a single-owner app publishes its
+  owner's username by construction — so the throttle was a remote lockout
+  switch. Any internet attacker could fail five logins every fifteen minutes
+  and keep the real owner out of their own finances indefinitely. The
+  protection *was* the denial of service.
+
+  Fixed with approved devices (`login_trusted_devices`, migration `0004`). A
+  device that completes a successful login — or first-run owner setup, so a
+  fresh install is never briefly vulnerable before earning one — receives a
+  random token as an HttpOnly, SameSite=Strict cookie, hashed at rest exactly
+  like a session token. `loginThrottleScopesForAttempt` then puts that
+  device's attempts on a `trusted_device` scope keyed by device id, instead
+  of the shared `username` and `client_ip` scopes. An attacker filling the
+  username scope no longer touches the owner's budget.
+
+  The security properties that make this safe, each with a named test:
+
+  * **The cookie is not a credential.** It grants no access; a login still
+    needs the password, and presenting it alone authenticates nothing
+    (`TestSetupAndLoginIssueTrustedDeviceCookie_HTTP` asserts the session
+    endpoint stays unauthenticated with only the device cookie).
+  * **The bypass is opt-in by proof, not by claim.** An absent, garbage,
+    expired or revoked token changes nothing —
+    `TestLogin_UnapprovedDeviceKeepsTheOriginalUsernameAndIPThrottle` and
+    `TestLogin_ExpiredOrRevokedDeviceGrantsNoBypass`.
+  * **Devices are user-bound**, so an approval for one account can never lend
+    its budget to guesses against another
+    (`TestLogin_DeviceApprovedForAnotherUserGrantsNoBypass`).
+  * **A stolen cookie buys no extra guesses.** The device scope keeps the
+    same 5-in-15 budget; the bypass isolates the blast radius rather than
+    removing the limit
+    (`TestLogin_ApprovedDeviceStillHasItsOwnFailureBudget`).
+
+  Approval lapses after 180 days unused and slides forward on each successful
+  login; expired and revoked rows are pruned on the same daily tick as
+  sessions and authentication events. `GET`/`DELETE
+  /api/v1/auth/trusted-devices` let the owner review and revoke, with the
+  current device flagged so it is not revoked by accident. The IP scope is
+  still never cleared on success, preserving the original NAT reasoning.
+  Documented in `docs/deployment-security.md`. No UI yet. **MFA (S-06)
+  remains the one open public-deployment gate.**
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

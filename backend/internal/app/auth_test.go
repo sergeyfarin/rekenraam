@@ -299,3 +299,209 @@ func TestPruneAuthenticationEvents_KeepsOnlyTheRetentionWindow(t *testing.T) {
 	require.Len(t, events.Events, 1, "events older than the retention window must be pruned")
 	assert.Equal(t, now.Add(-time.Hour).Format(time.RFC3339), events.Events[0].OccurredAt)
 }
+
+// --- Lockout-safe login throttle (S-04) ---
+
+// exhaustThrottle burns the failure budget with wrong passwords from the given
+// client, so the next attempt is blocked.
+func exhaustThrottle(t *testing.T, service *AuthService, clientIP string) {
+	t.Helper()
+	ctx := context.Background()
+	for attempt := 0; attempt < loginThrottleMaxFailures; attempt++ {
+		_, err := service.Login(ctx, LoginInput{Username: "owner", Password: "wrong", ClientIP: clientIP})
+		require.Error(t, err)
+	}
+}
+
+func TestLogin_AttackerCannotLockTheOwnerOutOfAnApprovedDevice(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	_, service := newAuthEventTestService(t, now)
+
+	// The owner signs in once from their own device and earns approval.
+	owner, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+	})
+	require.NoError(t, err)
+	deviceToken := owner.TrustedDeviceToken
+	require.NotEmpty(t, deviceToken, "a successful login must approve the device it came from")
+
+	// An attacker from the internet hammers the — publicly known — owner
+	// username until the username scope is blocked.
+	exhaustThrottle(t, service, "203.0.113.66")
+	_, err = service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "203.0.113.66",
+	})
+	require.ErrorIs(t, err, ErrRateLimited, "the attacker's own attempts must still be throttled")
+
+	// This is the whole point of S-04: the owner must still get in.
+	result, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+		TrustedDeviceToken: deviceToken,
+	})
+	require.NoError(t, err, "an approved device must not be locked out by an attacker filling the shared throttle")
+	assert.NotEmpty(t, result.SessionToken)
+	assert.Empty(t, result.TrustedDeviceToken, "an already-approved device keeps its cookie rather than being reissued")
+}
+
+func TestLogin_ApprovedDeviceStillHasItsOwnFailureBudget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	_, service := newAuthEventTestService(t, now)
+
+	owner, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+	})
+	require.NoError(t, err)
+	deviceToken := owner.TrustedDeviceToken
+
+	// A stolen device cookie must not buy unlimited password guesses: the
+	// bypass isolates the blast radius, it does not remove the limit.
+	for attempt := 0; attempt < loginThrottleMaxFailures; attempt++ {
+		_, err = service.Login(ctx, LoginInput{
+			Username: "owner", Password: "wrong", ClientIP: "198.51.100.4", TrustedDeviceToken: deviceToken,
+		})
+		require.Error(t, err)
+	}
+	_, err = service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+		TrustedDeviceToken: deviceToken,
+	})
+	require.ErrorIs(t, err, ErrRateLimited)
+}
+
+func TestLogin_UnapprovedDeviceKeepsTheOriginalUsernameAndIPThrottle(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	_, service := newAuthEventTestService(t, now)
+
+	exhaustThrottle(t, service, "203.0.113.66")
+
+	// A garbage or absent device token must change nothing about the existing
+	// protection — the bypass is opt-in by proof, not by claim.
+	for _, token := range []string{"", "not-a-real-device-token"} {
+		_, err := service.Login(ctx, LoginInput{
+			Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.9",
+			TrustedDeviceToken: token,
+		})
+		require.ErrorIs(t, err, ErrRateLimited, "token %q must not grant a bypass", token)
+	}
+}
+
+func TestLogin_DeviceApprovedForAnotherUserGrantsNoBypass(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	database, service := newAuthEventTestService(t, now)
+
+	owner, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+	})
+	require.NoError(t, err)
+
+	// Re-point the approval at a different user; the token itself is unchanged.
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (2, 'second', 'hash', 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+		UPDATE login_trusted_devices SET user_id = 2;
+	`)
+	require.NoError(t, err)
+
+	exhaustThrottle(t, service, "203.0.113.66")
+	_, err = service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+		TrustedDeviceToken: owner.TrustedDeviceToken,
+	})
+	require.ErrorIs(t, err, ErrRateLimited, "a device approved for one account must not lend its budget to another")
+}
+
+func TestLogin_ExpiredOrRevokedDeviceGrantsNoBypass(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	database, service := newAuthEventTestService(t, now)
+
+	owner, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+	})
+	require.NoError(t, err)
+	exhaustThrottle(t, service, "203.0.113.66")
+
+	_, err = database.ExecContext(ctx, `UPDATE login_trusted_devices SET expires_at = ?`,
+		now.Add(-time.Hour).Format(time.RFC3339))
+	require.NoError(t, err)
+	_, err = service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+		TrustedDeviceToken: owner.TrustedDeviceToken,
+	})
+	require.ErrorIs(t, err, ErrRateLimited, "an expired approval must not grant a bypass")
+
+	_, err = database.ExecContext(ctx, `UPDATE login_trusted_devices SET expires_at = ?, revoked_at = ?`,
+		now.Add(time.Hour).Format(time.RFC3339), now.Format(time.RFC3339))
+	require.NoError(t, err)
+	_, err = service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+		TrustedDeviceToken: owner.TrustedDeviceToken,
+	})
+	require.ErrorIs(t, err, ErrRateLimited, "a revoked approval must not grant a bypass")
+}
+
+func TestTrustedDevices_ListRevokeAndRevokedDeviceLosesItsBypass(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	_, service := newAuthEventTestService(t, now)
+
+	owner, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+	})
+	require.NoError(t, err)
+
+	devices, err := service.ListTrustedDevices(ctx, 1, owner.TrustedDeviceToken)
+	require.NoError(t, err)
+	require.Len(t, devices, 1)
+	assert.True(t, devices[0].Current, "the device making the request must be marked, so it is not revoked by accident")
+	assert.Equal(t, "198.51.100.4", devices[0].CreatedClientIP)
+
+	require.ErrorIs(t, service.RevokeTrustedDevice(ctx, 1, 999999), ErrTrustedDeviceNotFound)
+	require.NoError(t, service.RevokeTrustedDevice(ctx, 1, devices[0].ID))
+	require.ErrorIs(t, service.RevokeTrustedDevice(ctx, 1, devices[0].ID), ErrTrustedDeviceNotFound,
+		"revoking twice must not silently succeed")
+
+	remaining, err := service.ListTrustedDevices(ctx, 1, owner.TrustedDeviceToken)
+	require.NoError(t, err)
+	assert.Empty(t, remaining)
+}
+
+func TestLogin_DeviceApprovalSlidesForwardOnUse(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	start := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	_, service := newAuthEventTestService(t, start)
+
+	owner, err := service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+	})
+	require.NoError(t, err)
+	first, err := service.ListTrustedDevices(ctx, 1, owner.TrustedDeviceToken)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+
+	// A device in regular use must never lapse; an abandoned one must.
+	later := start.Add(30 * 24 * time.Hour)
+	service.now = func() time.Time { return later }
+	_, err = service.Login(ctx, LoginInput{
+		Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4",
+		TrustedDeviceToken: owner.TrustedDeviceToken,
+	})
+	require.NoError(t, err)
+
+	after, err := service.ListTrustedDevices(ctx, 1, owner.TrustedDeviceToken)
+	require.NoError(t, err)
+	require.Len(t, after, 1)
+	assert.Equal(t, first[0].ID, after[0].ID)
+	assert.Equal(t, later.Add(TrustedDeviceLifetime).Format(time.RFC3339), after[0].ExpiresAt)
+}

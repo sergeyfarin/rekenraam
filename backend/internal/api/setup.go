@@ -62,7 +62,7 @@ func setupStatus(logger *slog.Logger, setupService *app.SetupService) http.Handl
 	}
 }
 
-func createOwner(logger *slog.Logger, setupService *app.SetupService, options HandlerOptions) http.HandlerFunc {
+func createOwner(logger *slog.Logger, setupService *app.SetupService, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !setupTokenMatches(options.SetupToken, r.Header.Get(setupTokenHeader)) {
 			writeAPIError(w, http.StatusForbidden, "FORBIDDEN", "valid setup token is required")
@@ -86,6 +86,18 @@ func createOwner(logger *slog.Logger, setupService *app.SetupService, options Ha
 		}
 
 		writeSessionCookie(w, r, options, result.SessionToken)
+		// Approve the setup device immediately, so a fresh install is never
+		// briefly lockout-vulnerable before the owner's first real login
+		// (S-04). Failure here is not fatal: setup succeeded, and the device
+		// will be approved on the next login instead.
+		if authService != nil {
+			token, lifetime, err := authService.ApproveDeviceForUser(r.Context(), result.Owner.ID, loginClientIP(r, options))
+			if err != nil {
+				logger.WarnContext(r.Context(), "failed to approve setup device", slog.Any("err", err))
+			} else if token != "" {
+				writeTrustedDeviceCookie(w, r, options, token, lifetime)
+			}
+		}
 		writeJSON(w, http.StatusCreated, createOwnerResponse{
 			Owner: OwnerResponse{
 				ID:       result.Owner.ID,

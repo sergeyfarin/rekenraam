@@ -311,6 +311,132 @@ func (r *AuthRepository) FailedLoginsSince(ctx context.Context, since string, cl
 	return count, nil
 }
 
+// --- Approved-device records (S-04) ---
+
+type TrustedDeviceRecord struct {
+	ID              int64
+	UserID          int64
+	CreatedAt       string
+	LastUsedAt      string
+	ExpiresAt       string
+	CreatedClientIP string
+}
+
+type CreateTrustedDeviceParams struct {
+	UserID          int64
+	TokenHash       string
+	CreatedAt       string
+	ExpiresAt       string
+	CreatedClientIP string
+}
+
+func (r *AuthRepository) CreateTrustedDevice(ctx context.Context, params CreateTrustedDeviceParams) error {
+	if _, err := r.database.ExecContext(ctx, `
+		INSERT INTO login_trusted_devices (user_id, token_hash, created_at, last_used_at, expires_at, created_client_ip)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, params.UserID, params.TokenHash, params.CreatedAt, params.CreatedAt, params.ExpiresAt, params.CreatedClientIP); err != nil {
+		return fmt.Errorf("insert login trusted device: %w", err)
+	}
+
+	return nil
+}
+
+// ReadTrustedDevice resolves an unexpired, unrevoked device by token hash.
+func (r *AuthRepository) ReadTrustedDevice(ctx context.Context, tokenHash string, now string) (TrustedDeviceRecord, error) {
+	var record TrustedDeviceRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT id, user_id, created_at, last_used_at, expires_at, created_client_ip
+		FROM login_trusted_devices
+		WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
+	`, tokenHash, now).Scan(&record.ID, &record.UserID, &record.CreatedAt, &record.LastUsedAt,
+		&record.ExpiresAt, &record.CreatedClientIP); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return TrustedDeviceRecord{}, ErrNotFound
+		}
+		return TrustedDeviceRecord{}, fmt.Errorf("read login trusted device: %w", err)
+	}
+
+	return record, nil
+}
+
+// TouchTrustedDevice records use and slides the expiry forward, so a device in
+// regular use never lapses and an abandoned one does.
+func (r *AuthRepository) TouchTrustedDevice(ctx context.Context, deviceID int64, now string, expiresAt string) error {
+	if _, err := r.database.ExecContext(ctx, `
+		UPDATE login_trusted_devices
+		SET last_used_at = ?, expires_at = ?
+		WHERE id = ? AND revoked_at IS NULL
+	`, now, expiresAt, deviceID); err != nil {
+		return fmt.Errorf("touch login trusted device: %w", err)
+	}
+
+	return nil
+}
+
+func (r *AuthRepository) ListTrustedDevices(ctx context.Context, userID int64, now string) ([]TrustedDeviceRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT id, user_id, created_at, last_used_at, expires_at, created_client_ip
+		FROM login_trusted_devices
+		WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+		ORDER BY last_used_at DESC, id DESC
+	`, userID, now)
+	if err != nil {
+		return nil, fmt.Errorf("list login trusted devices: %w", err)
+	}
+	defer rows.Close()
+
+	var records []TrustedDeviceRecord
+	for rows.Next() {
+		var record TrustedDeviceRecord
+		if err := rows.Scan(&record.ID, &record.UserID, &record.CreatedAt, &record.LastUsedAt,
+			&record.ExpiresAt, &record.CreatedClientIP); err != nil {
+			return nil, fmt.Errorf("scan login trusted device: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate login trusted devices: %w", err)
+	}
+
+	return records, nil
+}
+
+func (r *AuthRepository) RevokeTrustedDevice(ctx context.Context, userID int64, deviceID int64, revokedAt string) error {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE login_trusted_devices
+		SET revoked_at = ?
+		WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+	`, revokedAt, deviceID, userID)
+	if err != nil {
+		return fmt.Errorf("revoke login trusted device: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read revoked login trusted device rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *AuthRepository) DeleteExpiredOrRevokedTrustedDevices(ctx context.Context, now string) (int64, error) {
+	result, err := r.database.ExecContext(ctx, `
+		DELETE FROM login_trusted_devices
+		WHERE revoked_at IS NOT NULL OR expires_at <= ?
+	`, now)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired login trusted devices: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read deleted login trusted device rows: %w", err)
+	}
+
+	return rowsAffected, nil
+}
+
 func (r *AuthRepository) DeleteLoginThrottle(ctx context.Context, scopeType string, scopeKey string) error {
 	if _, err := r.database.ExecContext(ctx, `DELETE FROM login_throttles WHERE scope_type = ? AND scope_key = ?`, scopeType, scopeKey); err != nil {
 		return fmt.Errorf("delete login throttle: %w", err)

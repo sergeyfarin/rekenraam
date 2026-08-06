@@ -47,6 +47,9 @@ preconditions. Also in `roadmap.md`.
 - [x] T-37 price observations can be voided — done 2026-08-06
       (`POST /pricing/prices/{id}/void`; cascades to rates triangulated from
       the voided leg; R11 still owns the UI).
+- [x] S-04 lockout-safe login throttle — done 2026-08-06 (approved-device
+      cookie moves a known device onto its own throttle scope; the cookie is
+      not a credential). Public-deployment gate closed.
 - [x] S-07 authentication-event visibility — done 2026-08-06
       (`authentication_events` + `GET /auth/events` + structured logs;
       90-day retention). Public-deployment gate closed.

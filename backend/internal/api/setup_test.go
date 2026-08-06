@@ -75,14 +75,14 @@ func TestCreateOwnerCompletesOwnerStepAndSetsSessionCookie(t *testing.T) {
 
 	response := res.Result()
 	cookies := response.Cookies()
-	require.Len(t, cookies, 1)
-	assert.Equal(t, sessionCookieName, cookies[0].Name)
-	assert.NotEmpty(t, cookies[0].Value)
-	assert.Equal(t, "/", cookies[0].Path)
-	assert.True(t, cookies[0].HttpOnly)
-	assert.Equal(t, http.SameSiteStrictMode, cookies[0].SameSite)
-	assert.True(t, cookies[0].Secure)
-	assert.Equal(t, int(app.SessionLifetime.Seconds()), cookies[0].MaxAge)
+	sessionCookie := sessionCookieFrom(t, cookies)
+	assert.Equal(t, sessionCookieName, sessionCookie.Name)
+	assert.NotEmpty(t, sessionCookie.Value)
+	assert.Equal(t, "/", sessionCookie.Path)
+	assert.True(t, sessionCookie.HttpOnly)
+	assert.Equal(t, http.SameSiteStrictMode, sessionCookie.SameSite)
+	assert.True(t, sessionCookie.Secure)
+	assert.Equal(t, int(app.SessionLifetime.Seconds()), sessionCookie.MaxAge)
 
 	var passwordHash string
 	err := database.QueryRowContext(context.Background(), `SELECT password_hash FROM users WHERE username = ?`, "owner").Scan(&passwordHash)
@@ -151,10 +151,9 @@ func TestCreateOwnerSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testi
 
 	require.Equal(t, http.StatusCreated, res.Code)
 
-	cookies := res.Result().Cookies()
-	require.Len(t, cookies, 1)
-	assert.Equal(t, secureSessionCookieName, cookies[0].Name)
-	assert.True(t, cookies[0].Secure)
+	sessionCookie := sessionCookieFrom(t, res.Result().Cookies())
+	assert.Equal(t, secureSessionCookieName, sessionCookie.Name)
+	assert.True(t, sessionCookie.Secure)
 }
 
 func TestCreateOwnerRejectsCrossOriginRequest(t *testing.T) {

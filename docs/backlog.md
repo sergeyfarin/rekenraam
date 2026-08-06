@@ -38,14 +38,6 @@ cash_in_lieu, return_of_capital) is implemented.
 These do not block private/local development. They must be complete before
 allowing real financial data on an internet-exposed deployment.
 
-### S-04 Username login throttle can cause owner lockout `[ ]`
-
-**File:** `backend/internal/app/auth.go` (username-scope throttle).
-
-An internet attacker can keep the known single-owner username rate-limited.
-Design and implement an approved-device cookie or equivalent lockout-safe
-throttle before public beta.
-
 ### S-06 Multi-factor authentication `[ ]`
 
 **File:** `docs/product-requirements.md` (public-deployment requirement).

@@ -7,8 +7,63 @@ export type LoginResponse = components['schemas']['LoginResponse'];
 export type AuthenticationEventResponse = components['schemas']['AuthenticationEventResponse'];
 export type AuthenticationEventsResponse = components['schemas']['AuthenticationEventsResponse'];
 
+export type TrustedDeviceResponse = components['schemas']['TrustedDeviceResponse'];
+export type TrustedDevicesResponse = components['schemas']['TrustedDevicesResponse'];
+
 export const authSessionQueryKey = ['api', 'auth', 'session'] as const;
 export const authenticationEventsQueryKey = ['api', 'auth', 'events'] as const;
+export const trustedDevicesQueryKey = ['api', 'auth', 'trusted-devices'] as const;
+
+export function trustedDevicesQueryOptions() {
+  return {
+    queryKey: trustedDevicesQueryKey,
+    queryFn: getTrustedDevices,
+    staleTime: 30_000
+  };
+}
+
+// Devices holding a login-throttle bypass. The approval cookie is not a
+// credential — it only decides which throttle budget a login attempt spends.
+export async function getTrustedDevices(): Promise<TrustedDevicesResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/auth/trusted-devices');
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function revokeTrustedDevice(deviceID: number, csrfToken: string): Promise<void> {
+  try {
+    const { error, response } = await apiClient.DELETE('/api/v1/auth/trusted-devices/{device_id}', {
+      params: {
+        path: { device_id: deviceID },
+        header: { 'X-CSRF-Token': csrfToken }
+      }
+    });
+
+    if (response?.ok) {
+      return;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
 
 export function authSessionQueryOptions() {
   return {

@@ -331,9 +331,7 @@ func bootstrapOwner(t *testing.T, handler http.Handler) *http.Cookie {
 
 	require.Equal(t, http.StatusCreated, res.Code)
 	response := res.Result()
-	cookies := response.Cookies()
-	require.Len(t, cookies, 1)
-	return cookies[0]
+	return sessionCookieFrom(t, response.Cookies())
 }
 
 // --- Authentication event visibility (S-07) ---
@@ -395,4 +393,124 @@ func TestAuthenticationEvents_RejectsInvalidLimit(t *testing.T) {
 	var body errorResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+}
+
+// sessionCookieFrom picks the session cookie out of a response by name.
+// Setup and login also set the approved-device cookie (S-04), so
+// "the one cookie" is no longer a safe assumption.
+func sessionCookieFrom(t *testing.T, cookies []*http.Cookie) *http.Cookie {
+	t.Helper()
+	for _, cookie := range cookies {
+		if cookie.Name == sessionCookieName || cookie.Name == secureSessionCookieName {
+			return cookie
+		}
+	}
+	t.Fatalf("no session cookie in %v", cookies)
+	return nil
+}
+
+func trustedDeviceCookieFrom(cookies []*http.Cookie) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie.Name == trustedDeviceCookieName || cookie.Name == secureTrustedDeviceCookieName {
+			return cookie
+		}
+	}
+	return nil
+}
+
+// --- Approved devices (S-04) ---
+
+func TestSetupAndLoginIssueTrustedDeviceCookie_HTTP(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+
+	// A fresh install must not be briefly lockout-vulnerable: the setup
+	// device is approved immediately.
+	setupReq := httptest.NewRequest(http.MethodPost, "/api/v1/setup/owner", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	setupReq.Header.Set("Content-Type", "application/json")
+	setSameOrigin(setupReq)
+	setupRes := httptest.NewRecorder()
+	handler.ServeHTTP(setupRes, setupReq)
+	require.Equal(t, http.StatusCreated, setupRes.Code)
+
+	deviceCookie := trustedDeviceCookieFrom(setupRes.Result().Cookies())
+	require.NotNil(t, deviceCookie, "owner setup must approve the device it ran on")
+	assert.True(t, deviceCookie.HttpOnly, "the device cookie must not be readable from script")
+	assert.Equal(t, http.SameSiteStrictMode, deviceCookie.SameSite)
+	assert.Equal(t, int(app.TrustedDeviceLifetime.Seconds()), deviceCookie.MaxAge)
+
+	// The device cookie is a throttle-scope selector, never a credential: on
+	// its own it authenticates nothing.
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	sessionReq.AddCookie(deviceCookie)
+	sessionRes := httptest.NewRecorder()
+	handler.ServeHTTP(sessionRes, sessionReq)
+	require.Equal(t, http.StatusOK, sessionRes.Code)
+	var session authSessionResponse
+	require.NoError(t, json.NewDecoder(sessionRes.Body).Decode(&session))
+	assert.False(t, session.Authenticated, "the device cookie must never authenticate a request")
+
+	// Logging in from a device that already holds a valid approval reuses it.
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"test-password"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	setSameOrigin(loginReq)
+	loginReq.AddCookie(deviceCookie)
+	loginRes := httptest.NewRecorder()
+	handler.ServeHTTP(loginRes, loginReq)
+	require.Equal(t, http.StatusOK, loginRes.Code)
+	assert.Nil(t, trustedDeviceCookieFrom(loginRes.Result().Cookies()),
+		"an already-approved device must not be handed a fresh cookie on every login")
+}
+
+func TestTrustedDevices_ListAndRevoke_HTTP(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	cookie := bootstrapOwner(t, handler)
+	csrfToken := authSessionCSRFToken(t, handler, cookie)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/trusted-devices", nil)
+	listReq.AddCookie(cookie)
+	listRes := httptest.NewRecorder()
+	handler.ServeHTTP(listRes, listReq)
+	require.Equal(t, http.StatusOK, listRes.Code, listRes.Body.String())
+
+	var devices trustedDevicesResponse
+	require.NoError(t, json.NewDecoder(listRes.Body).Decode(&devices))
+	require.Len(t, devices.Devices, 1)
+
+	revokeReq := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/trusted-devices/"+itoa(devices.Devices[0].ID), nil)
+	revokeReq.AddCookie(cookie)
+	setSameOrigin(revokeReq)
+	revokeReq.Header.Set(csrfTokenHeader, csrfToken)
+	revokeRes := httptest.NewRecorder()
+	handler.ServeHTTP(revokeRes, revokeReq)
+	require.Equal(t, http.StatusNoContent, revokeRes.Code)
+
+	missingReq := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/trusted-devices/999999", nil)
+	missingReq.AddCookie(cookie)
+	setSameOrigin(missingReq)
+	missingReq.Header.Set(csrfTokenHeader, csrfToken)
+	missingRes := httptest.NewRecorder()
+	handler.ServeHTTP(missingRes, missingReq)
+	require.Equal(t, http.StatusNotFound, missingRes.Code)
+}
+
+func TestTrustedDevices_RequireAuthentication(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/v1/auth/trusted-devices"},
+		{http.MethodDelete, "/api/v1/auth/trusted-devices/1"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		assert.Equal(t, http.StatusUnauthorized, res.Code, tc.path)
+	}
 }

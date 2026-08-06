@@ -335,6 +335,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/trusted-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List approved devices
+         * @description Devices that carry a login-throttle bypass (S-04). Approval is earned by completing a successful login (or first-run owner setup) and is stored as an HttpOnly cookie whose hash alone is kept server-side.
+         *     The cookie is a throttle-scope selector, **not** a credential: it grants no access, and a login still requires the password. Its only effect is that attempts from that device spend their own failure budget instead of the shared username and client-IP budgets — so an attacker cannot lock the single known owner out by failing logins from elsewhere.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Approved devices, most recently used first */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrustedDevicesResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/trusted-devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an approved device
+         * @description Removes that device's login-throttle bypass. It does not end the device's session — the approval cookie was never a credential.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    device_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Device approval revoked */
+                204: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid device id */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Approved device not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/preferences": {
         parameters: {
             query?: never;
@@ -11702,6 +11856,27 @@ export interface components {
             has_more: boolean;
             /** @description Failed attempts in the last 24 hours. A spike here is the signal an operator is looking for, without scanning the list. */
             failed_last_24h: number;
+        };
+        /** @description A device holding a login-throttle bypass. The approval token itself is never returned; only its hash is stored server-side. */
+        TrustedDeviceResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at: string;
+            /**
+             * Format: date-time
+             * @description Slides forward on every successful login from this device.
+             */
+            expires_at: string;
+            /** @description Proxy-aware client address the device was approved from. */
+            created_client_ip?: string;
+            /** @description True for the device making this request, so it is not revoked by accident. */
+            current: boolean;
+        };
+        TrustedDevicesResponse: {
+            devices: components["schemas"]["TrustedDeviceResponse"][];
         };
         LoginResponse: {
             user: components["schemas"]["OwnerResponse"];

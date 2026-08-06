@@ -84,8 +84,32 @@ Events never contain password material or session tokens. They are pruned to a
 90-day retention window by the daily session-cleanup pass, so this is an
 incident-response aid, not a permanent sign-in archive.
 
-Note that repeated failures against the known owner username currently rate
-limit that username — see the open lockout concern in `docs/backlog.md` (S-04).
+## Login throttling and approved devices
+
+Failed logins are throttled at five attempts per fifteen minutes. Because a
+single-owner install publishes its owner's username by construction, a plain
+username-scoped throttle would be a remote lockout switch: anyone could fail
+five logins and keep the owner out of their own finances indefinitely.
+
+A device that has completed a successful login (or first-run owner setup) is
+therefore issued an **approved-device cookie**, and attempts from it are
+throttled on that device's own budget instead of the shared username and
+client-IP budgets. An attacker elsewhere on the internet can no longer lock the
+owner out.
+
+Read this carefully when reasoning about the security posture:
+
+- The cookie is **not a credential**. It grants no access at all — a login
+  still requires the password, and presenting the cookie alone authenticates
+  nothing. Its only effect is which throttle budget an attempt spends.
+- It is HttpOnly, SameSite=Strict, and only its SHA-256 hash is stored.
+- The approved device keeps the same five-in-fifteen budget, so a stolen
+  cookie buys no extra password guesses.
+- Approval lapses after 180 days unused and slides forward on each successful
+  login. Review and revoke devices at `GET`/`DELETE /api/v1/auth/trusted-devices`.
+
+Public deployment with real financial data is still blocked by the MFA gate
+above.
 
 ## Secrets and data files
 

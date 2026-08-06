@@ -23,6 +23,9 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrSetupRequired      = errors.New("setup required")
 	ErrRateLimited        = errors.New("rate limited")
+	// ErrTrustedDeviceNotFound is returned when revoking a device that does
+	// not exist, is already revoked, or belongs to another user.
+	ErrTrustedDeviceNotFound = errors.New("trusted device not found")
 )
 
 // dummyPasswordHash is a precomputed argon2id hash used to ensure the "user not
@@ -46,8 +49,15 @@ const (
 	loginThrottleMaxFailures = 5
 	loginThrottleWindow      = 15 * time.Minute
 
-	throttleScopeUsername = "username"
-	throttleScopeClientIP = "client_ip"
+	throttleScopeUsername      = "username"
+	throttleScopeClientIP      = "client_ip"
+	throttleScopeTrustedDevice = "trusted_device"
+
+	// TrustedDeviceLifetime is how long an approved device stays approved
+	// without being used. Every successful login on the device slides it
+	// forward, so a device in regular use never lapses and an abandoned one
+	// does (S-04).
+	TrustedDeviceLifetime = 180 * 24 * time.Hour
 )
 
 type AuthService struct {
@@ -82,6 +92,34 @@ type LoginInput struct {
 	Password  string
 	ClientIP  string
 	RequestID string
+	// TrustedDeviceToken is the approved-device cookie value, if the browser
+	// presented one. It is a throttle-scope selector, never a credential:
+	// possessing it lets the attempt use its own throttle budget instead of
+	// the shared username/IP budgets, and grants nothing else.
+	TrustedDeviceToken string
+}
+
+type LoginResult struct {
+	User         Owner
+	SessionToken string
+	// TrustedDeviceToken is set when the caller should store a new
+	// approved-device cookie. Empty means the device it presented is still
+	// valid and needs no change.
+	TrustedDeviceToken string
+	// TrustedDeviceLifetime is how long the caller should keep the cookie.
+	TrustedDeviceLifetime time.Duration
+}
+
+// TrustedDevice is an approved device as shown to the owner.
+type TrustedDevice struct {
+	ID              int64
+	CreatedAt       string
+	LastUsedAt      string
+	ExpiresAt       string
+	CreatedClientIP string
+	// Current marks the device making this request, so the owner does not
+	// revoke the one they are sitting at by accident.
+	Current bool
 }
 
 type LogoutInput struct {
@@ -129,11 +167,6 @@ type AuthenticationEvents struct {
 	// FailedLast24h is the headline number: a spike here is the signal an
 	// operator is looking for.
 	FailedLast24h int
-}
-
-type LoginResult struct {
-	User         Owner
-	SessionToken string
 }
 
 func NewAuthService(repository *db.AuthRepository, logger *slog.Logger) *AuthService {
@@ -187,7 +220,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	if err := validateLoginPassword(input.Password); err != nil {
 		return LoginResult{}, err
 	}
-	scopes := loginThrottleScopes(username, input.ClientIP)
+	scopes, trustedDevice, deviceTrusted := s.loginThrottleScopesForAttempt(ctx, input, username)
 	if blockedUntil, err := s.isLoginBlocked(ctx, scopes); err != nil {
 		return LoginResult{}, fmt.Errorf("check login throttle: %w", err)
 	} else if !blockedUntil.IsZero() {
@@ -285,6 +318,12 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		return LoginResult{}, fmt.Errorf("clear login throttle: %w", err)
 	}
 
+	// Approve the device only now, after the password actually verified.
+	trustedDeviceToken, err := s.approveDevice(ctx, credentials.ID, input.ClientIP, trustedDevice, deviceTrusted)
+	if err != nil {
+		return LoginResult{}, err
+	}
+
 	s.recordAuthEvent(ctx, db.AuthenticationEventParams{
 		EventType: authEventLoginSucceeded, Outcome: "success", Username: credentials.Username,
 		UserID: credentials.ID, AuthSessionID: sessionID, ClientIP: input.ClientIP,
@@ -296,7 +335,9 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 			ID:       credentials.ID,
 			Username: credentials.Username,
 		},
-		SessionToken: sessionToken,
+		SessionToken:          sessionToken,
+		TrustedDeviceToken:    trustedDeviceToken,
+		TrustedDeviceLifetime: TrustedDeviceLifetime,
 	}, nil
 }
 
@@ -450,6 +491,20 @@ func (s *AuthService) cleanupExpiredAndRevokedSessions(ctx context.Context, logg
 		logger.InfoContext(ctx, "cleaned up auth sessions", slog.Int64("deleted", deleted))
 	}
 	s.pruneAuthenticationEvents(ctx, logger)
+	s.pruneTrustedDevices(ctx, logger)
+}
+
+// pruneTrustedDevices drops expired and revoked approved-device rows on the
+// same daily tick.
+func (s *AuthService) pruneTrustedDevices(ctx context.Context, logger *slog.Logger) {
+	deleted, err := s.repository.DeleteExpiredOrRevokedTrustedDevices(ctx, s.now().UTC().Format(time.RFC3339))
+	if err != nil {
+		logger.WarnContext(ctx, "prune trusted devices", slog.Any("err", err))
+		return
+	}
+	if deleted > 0 {
+		logger.InfoContext(ctx, "pruned trusted devices", slog.Int64("deleted", deleted))
+	}
 }
 
 // pruneAuthenticationEvents enforces authEventRetention. It rides the existing
@@ -600,10 +655,11 @@ func (s *AuthService) recordLoginFailure(ctx context.Context, scopes []loginThro
 
 func (s *AuthService) clearLoginFailures(ctx context.Context, scopes []loginThrottleScope) error {
 	for _, scope := range scopes {
-		// Only clear the username-scoped throttle on success. The IP-scoped throttle
-		// is intentionally kept: clearing it on a successful login from the same IP
-		// would un-block an attacker sharing a NAT address with the legitimate user.
-		if scope.ScopeType != throttleScopeUsername {
+		// Only clear the username- and device-scoped throttles on success. The
+		// IP-scoped throttle is intentionally kept: clearing it on a successful
+		// login from the same IP would un-block an attacker sharing a NAT
+		// address with the legitimate user.
+		if scope.ScopeType != throttleScopeUsername && scope.ScopeType != throttleScopeTrustedDevice {
 			continue
 		}
 		if err := s.repository.DeleteLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey); err != nil {
@@ -706,6 +762,149 @@ func loginThrottleScopes(username string, clientIP string) []loginThrottleScope 
 	}
 
 	return scopes
+}
+
+// resolveTrustedDevice looks up the presented approved-device token. A miss —
+// no cookie, unknown, expired, revoked, or belonging to a different user — is
+// not an error: the attempt simply falls back to the shared throttle scopes.
+//
+// The device is bound to a user id, so a device approved for one account can
+// never lend its throttle budget to guesses against another.
+func (s *AuthService) resolveTrustedDevice(ctx context.Context, token string, username string) (db.TrustedDeviceRecord, bool) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return db.TrustedDeviceRecord{}, false
+	}
+	device, err := s.repository.ReadTrustedDevice(ctx, hashSessionToken(token), s.now().UTC().Format(time.RFC3339))
+	if err != nil {
+		if !errors.Is(err, db.ErrNotFound) && s.logger != nil {
+			s.logger.WarnContext(ctx, "failed to read trusted device", slog.Any("err", err))
+		}
+		return db.TrustedDeviceRecord{}, false
+	}
+	credentials, err := s.repository.ReadOwnerCredentials(ctx, username)
+	if err != nil || credentials.ID != device.UserID {
+		return db.TrustedDeviceRecord{}, false
+	}
+
+	return device, true
+}
+
+// loginThrottleScopesForAttempt is the S-04 fix. A single-owner app publishes
+// its owner's username by construction, so a username-scoped throttle is a
+// remote lockout switch: any attacker can fail five logins and keep the owner
+// out of their own finances for as long as they care to keep trying.
+//
+// An attempt from a device that has previously completed a successful login is
+// therefore throttled on that device's own scope instead of the shared
+// username and IP scopes — a budget nobody else can fill, so an attacker can
+// no longer lock the owner out. The device scope keeps the same 5-in-15
+// budget, so a stolen cookie still buys no extra password guesses; it only
+// isolates the blast radius.
+//
+// Everything else keeps the original behaviour: an unrecognised device is
+// throttled by username and IP exactly as before.
+func (s *AuthService) loginThrottleScopesForAttempt(ctx context.Context, input LoginInput, username string) ([]loginThrottleScope, db.TrustedDeviceRecord, bool) {
+	device, trusted := s.resolveTrustedDevice(ctx, input.TrustedDeviceToken, username)
+	if !trusted {
+		return loginThrottleScopes(username, input.ClientIP), db.TrustedDeviceRecord{}, false
+	}
+
+	return []loginThrottleScope{{
+		ScopeType: throttleScopeTrustedDevice,
+		ScopeKey:  strconv.FormatInt(device.ID, 10),
+	}}, device, true
+}
+
+// ListTrustedDevices shows the owner which devices carry a throttle bypass.
+func (s *AuthService) ListTrustedDevices(ctx context.Context, userID int64, currentDeviceToken string) ([]TrustedDevice, error) {
+	now := s.now().UTC().Format(time.RFC3339)
+	records, err := s.repository.ListTrustedDevices(ctx, userID, now)
+	if err != nil {
+		return nil, fmt.Errorf("list trusted devices: %w", err)
+	}
+	currentDeviceID := int64(0)
+	if token := strings.TrimSpace(currentDeviceToken); token != "" {
+		if current, err := s.repository.ReadTrustedDevice(ctx, hashSessionToken(token), now); err == nil {
+			currentDeviceID = current.ID
+		}
+	}
+
+	devices := make([]TrustedDevice, 0, len(records))
+	for _, record := range records {
+		devices = append(devices, TrustedDevice{
+			ID:              record.ID,
+			CreatedAt:       record.CreatedAt,
+			LastUsedAt:      record.LastUsedAt,
+			ExpiresAt:       record.ExpiresAt,
+			CreatedClientIP: record.CreatedClientIP,
+			Current:         record.ID == currentDeviceID,
+		})
+	}
+
+	return devices, nil
+}
+
+// RevokeTrustedDevice removes a device's throttle bypass. It does not end that
+// device's session: the cookie was never a credential.
+func (s *AuthService) RevokeTrustedDevice(ctx context.Context, userID int64, deviceID int64) error {
+	if deviceID <= 0 {
+		return ValidationError{Message: "trusted device id is required"}
+	}
+	if err := s.repository.RevokeTrustedDevice(ctx, userID, deviceID, s.now().UTC().Format(time.RFC3339)); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return ErrTrustedDeviceNotFound
+		}
+		return fmt.Errorf("revoke trusted device: %w", err)
+	}
+
+	return nil
+}
+
+// ApproveDeviceForUser approves the device that just completed first-run owner
+// setup. Without this the brand-new install has no approved device at all, so
+// an attacker could start locking the owner's username out before they have
+// ever had the chance to earn one (S-04).
+func (s *AuthService) ApproveDeviceForUser(ctx context.Context, userID int64, clientIP string) (string, time.Duration, error) {
+	if userID <= 0 {
+		return "", 0, ValidationError{Message: "user is required"}
+	}
+	token, err := s.approveDevice(ctx, userID, clientIP, db.TrustedDeviceRecord{}, false)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return token, TrustedDeviceLifetime, nil
+}
+
+// approveDevice issues a new approved-device token, or extends the one the
+// caller already presented. Called only after a password has actually
+// verified, so approval always follows proof of the credential.
+func (s *AuthService) approveDevice(ctx context.Context, userID int64, clientIP string, device db.TrustedDeviceRecord, trusted bool) (string, error) {
+	now := s.now().UTC()
+	expiresAt := now.Add(TrustedDeviceLifetime).Format(time.RFC3339)
+	if trusted {
+		if err := s.repository.TouchTrustedDevice(ctx, device.ID, now.Format(time.RFC3339), expiresAt); err != nil {
+			return "", fmt.Errorf("touch trusted device: %w", err)
+		}
+		return "", nil
+	}
+
+	token, tokenHash, err := newSessionToken()
+	if err != nil {
+		return "", fmt.Errorf("create trusted device token: %w", err)
+	}
+	if err := s.repository.CreateTrustedDevice(ctx, db.CreateTrustedDeviceParams{
+		UserID:          userID,
+		TokenHash:       tokenHash,
+		CreatedAt:       now.Format(time.RFC3339),
+		ExpiresAt:       expiresAt,
+		CreatedClientIP: clientIP,
+	}); err != nil {
+		return "", fmt.Errorf("create trusted device: %w", err)
+	}
+
+	return token, nil
 }
 
 func readArgonParameter(segment string, expectedKey string) (int, error) {

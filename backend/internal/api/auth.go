@@ -70,10 +70,11 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 		}
 
 		result, err := authService.Login(r.Context(), app.LoginInput{
-			Username:  request.Username,
-			Password:  request.Password,
-			ClientIP:  loginClientIP(r, options),
-			RequestID: RequestIDFromContext(r.Context()),
+			Username:           request.Username,
+			Password:           request.Password,
+			ClientIP:           loginClientIP(r, options),
+			RequestID:          RequestIDFromContext(r.Context()),
+			TrustedDeviceToken: readTrustedDeviceToken(r),
 		})
 		if err != nil {
 			writeAuthServiceError(w, r, logger, "login owner", err)
@@ -81,6 +82,9 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 		}
 
 		writeSessionCookie(w, r, options, result.SessionToken)
+		if result.TrustedDeviceToken != "" {
+			writeTrustedDeviceCookie(w, r, options, result.TrustedDeviceToken, result.TrustedDeviceLifetime)
+		}
 		writeJSON(w, http.StatusOK, loginResponse{
 			User: OwnerResponse{ID: result.User.ID, Username: result.User.Username},
 		})
@@ -160,6 +164,99 @@ func authenticationEvents(logger *slog.Logger, authService *app.AuthService) htt
 	}
 }
 
+// --- Approved devices (S-04) ---
+
+const (
+	trustedDeviceCookieName       = "rekenraam_device"
+	secureTrustedDeviceCookieName = "__Host-rekenraam_device"
+)
+
+type trustedDeviceResponse struct {
+	ID              int64  `json:"id"`
+	CreatedAt       string `json:"created_at"`
+	LastUsedAt      string `json:"last_used_at"`
+	ExpiresAt       string `json:"expires_at"`
+	CreatedClientIP string `json:"created_client_ip,omitempty"`
+	Current         bool   `json:"current"`
+}
+
+type trustedDevicesResponse struct {
+	Devices []trustedDeviceResponse `json:"devices"`
+}
+
+// readTrustedDeviceToken reads the approved-device cookie. It is deliberately
+// never used for authentication — only to pick which login-throttle scope the
+// attempt spends.
+func readTrustedDeviceToken(r *http.Request) string {
+	for _, name := range []string{secureTrustedDeviceCookieName, trustedDeviceCookieName} {
+		if cookie, err := r.Cookie(name); err == nil {
+			return strings.TrimSpace(cookie.Value)
+		}
+	}
+
+	return ""
+}
+
+func writeTrustedDeviceCookie(w http.ResponseWriter, r *http.Request, options HandlerOptions, token string, lifetime time.Duration) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     requestTrustedDeviceCookieName(r, options),
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+		MaxAge:   int(lifetime.Seconds()),
+	})
+}
+
+func requestTrustedDeviceCookieName(r *http.Request, options HandlerOptions) string {
+	if requestUsesHTTPS(r, options) {
+		return secureTrustedDeviceCookieName
+	}
+
+	return trustedDeviceCookieName
+}
+
+func listTrustedDevices(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		devices, err := authService.ListTrustedDevices(r.Context(), owner.ID, readTrustedDeviceToken(r))
+		if err != nil {
+			writeAuthServiceError(w, r, logger, "list trusted devices", err)
+			return
+		}
+		responses := make([]trustedDeviceResponse, 0, len(devices))
+		for _, device := range devices {
+			responses = append(responses, trustedDeviceResponse{
+				ID: device.ID, CreatedAt: device.CreatedAt, LastUsedAt: device.LastUsedAt,
+				ExpiresAt: device.ExpiresAt, CreatedClientIP: device.CreatedClientIP, Current: device.Current,
+			})
+		}
+		writeJSON(w, http.StatusOK, trustedDevicesResponse{Devices: responses})
+	}
+}
+
+func revokeTrustedDevice(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		deviceID, ok := readPathInt64(w, r, "device_id", "trusted device id")
+		if !ok {
+			return
+		}
+		if err := authService.RevokeTrustedDevice(r.Context(), owner.ID, deviceID); err != nil {
+			writeAuthServiceError(w, r, logger, "revoke trusted device", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}
+
 func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
 	var validationError app.ValidationError
 	var rateLimitError app.RateLimitError
@@ -173,6 +270,8 @@ func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
 		writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
+	case errors.Is(err, app.ErrTrustedDeviceNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "trusted device not found")
 	case errors.Is(err, app.ErrSetupRequired):
 		writeAPIError(w, http.StatusConflict, "SETUP_REQUIRED", "owner setup is required before login")
 	case errors.Is(err, app.ErrInvalidCredentials):
