@@ -260,8 +260,9 @@ current behaviour.
 
   The redundant half of that import workaround is gone:
   `ResolveOrCreateInstrumentForImport` no longer takes an `effectiveFrom`. The
-  holding-account backdating stays — `opened_on` = the trade's date is correct
-  behaviour, not a workaround. The commodity-side fallback added earlier the
+  holding-account backdating stayed at the time — `opened_on` = the trade's
+  date was judged correct behaviour rather than a workaround; T-44 below
+  overturned that a day later. The commodity-side fallback added earlier the
   same day (`CommodityExists` → "posting date is before the commodity was
   enabled") is also gone: with genesis dating it became unreachable, and
   unreachable checks are what caused this investigation in the first place.
@@ -275,12 +276,44 @@ current behaviour.
   `TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating`, both
   confirmed to fail against the old default.
 
-  **Two related gaps stay open, deliberately** — see the backlog: user-created
-  categories still default to opening today (they accept an explicit date, so
-  there is a workaround), and an import that later receives an *earlier* trade
-  for an already-known instrument still fails on the holding account's
-  `opened_on`, which interacts with the locked-structural-fields rule and needs
-  its own design.
+  Both follow-ups it filed — T-43 and T-44 — were fixed 2026-08-07; see below.
+
+- **T-43 user-created categories no longer open today**, fixed 2026-08-07.
+  Seeded categories were stamped `0001-01-01` but a category the user created
+  got today, so it could not take an imported transaction from last year.
+
+  **Decision: categories join system accounts and seeded categories on the
+  genesis date**, and creation no longer accepts a date at all. A category is a
+  classification bucket, not something you open — `app.categoryGenesisDate` is
+  now stamped on every category's `opened_on` and first-version
+  `effective_from`, seeded or user-created. `opened_on` was removed from
+  `CreateCategoryRequest` and `UpdateCategoryRequest`, and `effective_from`
+  from create (a first version has no other honest date); an *edit* still
+  carries a real `effective_from`, because a genuine change does happen on a
+  date. The category editor's "Opened on" field is gone with it. Asset and
+  liability accounts are deliberately untouched: there `opened_on` is a real
+  financial fact. Covered by
+  `TestUserCreatedCategoryOpensAtGenesisSoItTakesEarlierHistory`, confirmed to
+  fail against the old default, plus rejection cases in
+  `TestCategoryValidationRejectsParentMismatchCycleAndAccountFields`.
+  Documented in `docs/design/categories-design.md`.
+
+- **T-44 a later import carrying an earlier trade no longer fails on the
+  holding account**, fixed 2026-08-07. The importer stamped a new holding
+  account's `opened_on` with the date of whichever fill it saw first and never
+  revisited it, so a backfill or later sync carrying an *earlier* trade failed
+  `posting date is before account opened date` with no repair available.
+
+  **Decision: import-created holding accounts open at the genesis date** —
+  design note, and the two rejected options (widening `opened_on` backwards;
+  rejecting the row with an actionable message), in
+  `docs/design/holding-account-opened-date.md`. Same reasoning as T-42 and
+  T-43: the date is app bookkeeping about a container the importer
+  materializes, not a financial fact, and the lock on structural fields stays
+  intact because nothing is ever changed. **Hand-created holding accounts are
+  deliberately unchanged** and still take a user-supplied `opened_on`. Covered
+  by `TestCommitImportBatch_LaterImportCarryingAnEarlierTradeStillCommits`,
+  confirmed to fail against the old behaviour.
 
 ## Deliberate non-work
 

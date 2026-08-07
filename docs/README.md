@@ -45,8 +45,8 @@ have exactly one home.
   design record (status is stated in each header); some describe future
   slices. New feature design docs go here.
 - **[design/](design/)** — durable design documents for shipped foundations
-  (account hierarchy, accounts system, categories) that are not tied to one
-  roadmap slice.
+  (account hierarchy, accounts system, categories, the opened date of an
+  import-created holding account) that are not tied to one roadmap slice.
 - **[reviews/](reviews/)** — dated, point-in-time documents: audits, reviews,
   analyses, resolution records. Named `<topic>-<yyyy-mm[-dd]>.md`. These are
   never updated to stay current — supersede them with a newer dated file.

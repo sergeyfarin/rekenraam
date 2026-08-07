@@ -49,9 +49,14 @@ preconditions. Also in `roadmap.md`.
       the voided leg; R11 still owns the UI).
 - [x] T-42 commodity enable date no longer blocks earlier history — done
       2026-08-06 (`db.CommodityGenesisDate`; retired the Trading 212
-      instrument-backdating workaround). Follow-ups filed as T-43
-      (categories) and T-44 (holding account on a later-arriving
-      earlier trade).
+      instrument-backdating workaround). Follow-ups T-43 and T-44 both
+      done 2026-08-07.
+- [x] T-43 user-created categories open at the genesis date — done
+      2026-08-07 (`app.categoryGenesisDate`; `opened_on` removed from the
+      category create/update API and the editor).
+- [x] T-44 a later import carrying an earlier trade commits — done
+      2026-08-07 (import-created holding accounts open at the genesis date;
+      `docs/design/holding-account-opened-date.md`).
 - [x] S-04 lockout-safe login throttle — done 2026-08-06 (approved-device
       cookie moves a known device onto its own throttle scope; the cookie is
       not a credential). Public-deployment gate closed.

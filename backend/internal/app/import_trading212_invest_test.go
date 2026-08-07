@@ -1139,6 +1139,43 @@ func TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating(t *tes
 	assert.Equal(t, "2", positions[0].QuantityValue.String())
 }
 
+// A later sync or a backfill can carry a trade that is *earlier* than the one
+// the holding account was created from. The account's opened date was a guess
+// made from whichever fill arrived first, so it must not reject the earlier
+// one (T-44 — see docs/design/holding-account-opened-date.md).
+func TestCommitImportBatch_LaterImportCarryingAnEarlierTradeStillCommits(t *testing.T) {
+	f := newInvestTestFixture(t)
+	cashAccountID := seedTestAccountOpenedOn(t, f.database, "2023-01-01")
+	conn := f.createConnection(t, &cashAccountID)
+
+	fill := func(fillID string, filledAt string) trading212OrderFill {
+		return trading212OrderFill{
+			FillID: fillID, OrderID: "order-" + fillID, Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+			Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
+			FilledAt: filledAt, NetValue: "-150.00", NetValueCurrency: "EUR",
+		}
+	}
+
+	firstBatch, _ := f.stageOrderFillRow(t, conn.ID, fill("fill-recent", "2026-06-01T10:00:00Z"))
+	_, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: firstBatch})
+	require.NoError(t, err)
+
+	backfillBatch, _ := f.stageOrderFillRow(t, conn.ID, fill("fill-older", "2023-06-05T10:00:00Z"))
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: backfillBatch})
+	require.NoError(t, err)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), backfillBatch)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Empty(t, rows[0].CommitError, "an earlier trade for an existing holding must not fail on the account's opened date")
+	assert.Equal(t, 1, result.CommittedCount)
+
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, positions, 1, "both fills belong to the same lot pool")
+	assert.Equal(t, "2", positions[0].QuantityValue.String())
+}
+
 // seedTestAccountOpenedOn is seedTestAccount with a caller-chosen opening
 // date, for import journeys that predate the app's own setup date.
 func seedTestAccountOpenedOn(t *testing.T, database *sql.DB, openedOn string) int64 {
