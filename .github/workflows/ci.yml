@@ -30,7 +30,10 @@ jobs:
         with:
           go-version-file: backend/go.mod
       - name: Run backend tests with coverage
-        run: COVERAGE=1 ./scripts/test-backend.sh | tee coverage-summary.txt
+        # pipefail: without it, tee's exit status would hide a failing suite.
+        run: |
+          set -o pipefail
+          COVERAGE=1 ./scripts/test-backend.sh | tee coverage-summary.txt
       - name: Upload coverage profile
         uses: actions/upload-artifact@v5
         with:
