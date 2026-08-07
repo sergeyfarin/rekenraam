@@ -1591,14 +1591,11 @@ func TestCreateTransaction_HistoryPredatingCurrencySetupIsAccepted(t *testing.T)
 	// opened in 2025. Before T-42 the commodity as-of lookup rejected this
 	// with "posting commodity is invalid".
 	checking := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Early Cash", "asset", "checking", commodityID, 2, "2025-01-01")
-	// Categories default to opening today too, but unlike currencies they
-	// accept an explicit date, so backdate this one to keep the test about
-	// the commodity rule.
+	// The category needs no date of its own: since T-43 every category opens
+	// at the genesis date, so this stays a test about the commodity rule.
 	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
 		"name":"Early Groceries",
-		"category_type":"expense",
-		"opened_on":"2025-01-01",
-		"effective_from":"2025-01-01"
+		"category_type":"expense"
 	}`)
 
 	res := createTransactionResponseForSession(t, handler, sessionCookie, csrfToken, `{

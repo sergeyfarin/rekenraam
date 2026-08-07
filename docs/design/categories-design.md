@@ -60,8 +60,19 @@ The category API is a constrained wrapper over the account tables:
 - `POST /api/v1/setup/categories`
 
 The wrapper rejects account-only fields such as institution, account number,
-country, and default commodity. Parents must be categories of the same type.
-Category type is immutable after creation.
+country, default commodity, and **opened date**. Parents must be categories of
+the same type. Category type is immutable after creation.
+
+Every category — seeded or user-created — is stamped `opened_on` and a first
+version `effective_from` of the genesis date `0001-01-01`
+(`app.categoryGenesisDate`). A category is a classification bucket, not
+something opened on a date, so it must never reject a posting that predates the
+day the user happened to create it (T-43; the same reasoning as
+`db.CommodityGenesisDate` for commodities, T-42). Asset and liability accounts
+are deliberately different: there `opened_on` is a real financial fact.
+Creation therefore takes no `opened_on` or `effective_from`; a later edit still
+carries a real `effective_from`, because a genuine change to a category does
+happen on a date.
 
 ## Lifecycle Rules
 

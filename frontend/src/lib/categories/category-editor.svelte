@@ -53,7 +53,6 @@
   let parentCategoryID = $state('');
   let allowsPostings = $state(true);
   let icon = $state<CategoryIconName>('tags');
-  let openedOn = $state('');
   let effectiveFrom = $state('');
   let changeReason = $state('');
   let pending = $state(false);
@@ -96,7 +95,6 @@
     parentCategoryID = category?.parent_category_id ? String(category.parent_category_id) : '';
     allowsPostings = category?.allows_postings ?? true;
     icon = categoryIconName(category);
-    openedOn = category?.opened_on ?? '';
     effectiveFrom = '';
     changeReason = '';
     formError = undefined;
@@ -144,8 +142,6 @@
 
     assignString(request, 'code', code);
     assignNumber(request, 'parent_category_id', parentCategoryID);
-    assignString(request, 'opened_on', openedOn);
-    assignString(request, 'effective_from', effectiveFrom);
     assignString(request, 'change_reason', changeReason);
 
     return request;
@@ -169,7 +165,6 @@
       assignNumber(request, 'parent_category_id', parentCategoryID);
     }
 
-    assignString(request, 'opened_on', openedOn);
     assignString(request, 'effective_from', effectiveFrom);
     assignString(request, 'change_reason', changeReason);
 
@@ -282,15 +277,12 @@
         <input value={code} class={inputClass} maxlength="100" disabled={category?.is_builtin} oninput={handleCodeInput} />
       </label>
 
-      <label>
-        <span class={labelClass}>{m.categories_field_opened_on()}</span>
-        <input bind:value={openedOn} class={inputClass} type="date" />
-      </label>
-
-      <label>
-        <span class={labelClass}>{m.categories_field_effective_from()}</span>
-        <input bind:value={effectiveFrom} class={inputClass} type="date" />
-      </label>
+      {#if mode === 'edit'}
+        <label>
+          <span class={labelClass}>{m.categories_field_effective_from()}</span>
+          <input bind:value={effectiveFrom} class={inputClass} type="date" />
+        </label>
+      {/if}
 
       <label>
         <span class={labelClass}>{m.categories_field_reason()}</span>

@@ -10716,7 +10716,10 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Always the genesis date 0001-01-01. A category is a classification bucket rather than something opened on a date, so it never constrains which dates may be posted to it; it is not settable by clients.
+             */
             opened_on: string;
             /** Format: date */
             closed_on?: string;
@@ -10741,10 +10744,6 @@ export interface components {
             allows_postings?: boolean;
             /** @description Optional stable icon token for category UI. */
             icon?: string;
-            /** Format: date */
-            opened_on?: string;
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         UpdateCategoryRequest: {
@@ -10759,8 +10758,6 @@ export interface components {
             allows_postings?: boolean;
             /** @description Optional stable icon token for category UI. */
             icon?: string;
-            /** Format: date */
-            opened_on?: string;
             /** Format: date */
             effective_from?: string;
             change_reason?: string;

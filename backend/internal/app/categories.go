@@ -13,6 +13,19 @@ import (
 	"rekenraam/backend/internal/db"
 )
 
+// categoryGenesisDate is the opened_on and first-version effective_from
+// stamped on every category, seeded or user-created. A category is a
+// classification bucket, not something you open on a date — the day it was
+// created is app bookkeeping, and any later date rejects earlier history with
+// "posting date is before account opened date" (T-43, the category half of
+// T-42). Applied here, at the service, rather than accepted from the caller,
+// so no producer of historical data has to remember to backdate.
+//
+// Asset and liability accounts deliberately do *not* work this way:
+// there, opened_on is a real financial fact. Mirrors systemAccountDate
+// (app/accounts.go) and db.CommodityGenesisDate.
+const categoryGenesisDate = systemAccountDate
+
 const (
 	categoryNameMaxBytes = 200
 	categoryCodeMaxBytes = 100
@@ -76,8 +89,6 @@ type CreateCategoryInput struct {
 	ParentCategoryID *int64
 	AllowsPostings   *bool
 	Icon             string
-	OpenedOn         string
-	EffectiveFrom    string
 	ChangeReason     string
 }
 
@@ -95,7 +106,6 @@ type UpdateCategoryInput struct {
 	ClearParent      bool
 	AllowsPostings   *bool
 	Icon             *string
-	OpenedOn         string
 	EffectiveFrom    string
 	ChangeReason     string
 }
@@ -195,18 +205,8 @@ func (s *CategoryService) CreateCategory(ctx context.Context, input CreateCatego
 		ParentCategoryID: input.ParentCategoryID,
 		AllowsPostings:   input.AllowsPostings,
 		Icon:             input.Icon,
-		OpenedOn:         input.OpenedOn,
-		EffectiveFrom:    input.EffectiveFrom,
 		Now:              now,
 	})
-	if err != nil {
-		return Category{}, err
-	}
-	effectiveInput := input.EffectiveFrom
-	if strings.TrimSpace(effectiveInput) == "" {
-		effectiveInput = spec.OpenedOn
-	}
-	effectiveFrom, err := cleanEffectiveFrom(effectiveInput, now)
 	if err != nil {
 		return Category{}, err
 	}
@@ -225,7 +225,7 @@ func (s *CategoryService) CreateCategory(ctx context.Context, input CreateCatego
 		Spec:            spec,
 		ChangeReason:    changeReason,
 		CreatedAt:       now.Format(time.RFC3339),
-		EffectiveFrom:   effectiveFrom,
+		EffectiveFrom:   categoryGenesisDate,
 	})
 	if err != nil {
 		return Category{}, categoryRepositoryError("persist category", err)
@@ -286,8 +286,6 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, input UpdateCatego
 		ParentCategoryID: parentID,
 		AllowsPostings:   &allowsPostings,
 		Icon:             icon,
-		OpenedOn:         input.OpenedOn,
-		EffectiveFrom:    input.EffectiveFrom,
 		Now:              now,
 		Current:          &current,
 	})
@@ -371,7 +369,7 @@ func (s *CategoryService) EnsureCategories(ctx context.Context, input EnsureCate
 		Operation:       input.Operation,
 		Specs:           builtinCategorySpecs(),
 		CreatedAt:       now.Format(time.RFC3339),
-		EffectiveFrom:   systemAccountDate,
+		EffectiveFrom:   categoryGenesisDate,
 	})
 	if err != nil {
 		switch {
@@ -455,8 +453,6 @@ type categorySpecInput struct {
 	ParentCategoryID *int64
 	AllowsPostings   *bool
 	Icon             string
-	OpenedOn         string
-	EffectiveFrom    string
 	Now              time.Time
 	Current          *Category
 }
@@ -525,23 +521,9 @@ func (s *CategoryService) newCategorySpec(ctx context.Context, input categorySpe
 		}
 	}
 
-	openedOn, err := cleanAccountOpenedOn(input.OpenedOn, input.EffectiveFrom, input.Now)
-	if err != nil {
-		return db.AccountSpec{}, err
-	}
-	if input.Current != nil && strings.TrimSpace(input.OpenedOn) == "" {
+	openedOn := categoryGenesisDate
+	if input.Current != nil {
 		openedOn = input.Current.OpenedOn
-	}
-	effectiveInput := input.EffectiveFrom
-	if strings.TrimSpace(effectiveInput) == "" {
-		effectiveInput = openedOn
-	}
-	effectiveFrom, err := cleanEffectiveFrom(effectiveInput, input.Now)
-	if err != nil {
-		return db.AccountSpec{}, err
-	}
-	if effectiveFrom < openedOn {
-		return db.AccountSpec{}, ValidationError{Message: "category effective date must not be before opened date"}
 	}
 
 	metadata, err := categoryMetadataJSON(categoryMetadata{
