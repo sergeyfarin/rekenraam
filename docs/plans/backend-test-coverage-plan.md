@@ -1,9 +1,12 @@
 # Backend Test Coverage Plan
 
-**Status:** Workstreams 1–5 complete (2026-07-15) — see the status notes in
-each section below. Workstream 3 also fixed two confirmed product gaps found
-while writing its tests (automation-rules replace, suggestion
-accept-posts-transaction — see its status note). Workstreams 5–7 remain open.
+**Status:** Workstreams 1–5 and 7 complete — see the status notes in each
+section below. Workstream 3 also fixed two confirmed product gaps found while
+writing its tests (automation-rules replace, suggestion
+accept-posts-transaction — see its status note). **Workstream 6 is the only
+one still open**, and deliberately so: 6a/6b/6c are harnesses that must land
+with their first real consumer (R5 CSV import, IBKR Flex, R13 analytics), none
+of which has started.
 
 A concrete plan to close the backend coverage gaps identified in
 `docs/reviews/test-coverage-review-2026-07.md`, verified against a fresh merged
@@ -31,7 +34,7 @@ The plan has two goals, in this order:
 - **`PreviewSell` / `computeSellDisposals` are no longer 0%** (65.6% / 75%)
   via the F6 scale-alignment fix and its test. The rest of G-04 stands.
 - **G-06 (race detector) and G-01 (frontend vitest in CI) are closed.**
-  G-07 (no coverage signal in CI) is still open.
+  G-07 (coverage signal in CI) closed 2026-08-07 — see Workstream 7.
 
 Still at or near zero, confirmed by function-level inspection:
 
@@ -212,7 +215,7 @@ Reading the real code before writing tests surfaced two confirmed gaps
 between documented and actual behavior — bigger than ordinary missing
 coverage, so they were fixed first (see
 `docs/reviews/test-coverage-review-2026-07.md` G-04 for the full writeup, and
-`docs/backlog.T-34` for what's still open):
+`docs/backlog.md` T-34 for what's still open):
 
 - **`PUT /investments/automation-rules` didn't replace** — it only upserted
   the rules present in the request; an existing active `auto_post` rule
@@ -494,7 +497,17 @@ abstraction beyond what those tests already need.
 
 ## Workstream 7 — CI coverage signal (closes G-07)
 
-The last open CI item from the review. Minimal, non-flaky version:
+**Status: done 2026-08-07.** `scripts/test-backend.sh` gained a `COVERAGE=1`
+mode (`go test ./... -coverpkg=./... -coverprofile=coverage.out`, merged total
+printed via `go tool cover -func | tail -1`); the default `-race` run is
+unchanged. A separate, non-gating `backend-coverage` CI job runs it, uploads
+`coverage.out` as an artifact, and calls `scripts/check-coverage-floor.sh`,
+which echoes the total into the job summary and fails below
+`COVERAGE_FLOOR` (default **73.0%**, set ~2 points under the 2026-08-07
+merged total of **75.2%**). The job is not in `app-build`'s `needs`, so a
+floor breach is a loud signal without blocking the release build.
+
+The plan as written, for reference:
 
 - `scripts/test-backend.sh`: add a second mode (env var, e.g.
   `COVERAGE=1`) running `go test ./... -coverpkg=./... -coverprofile=...`
@@ -522,8 +535,8 @@ including debugging.
 | 3 | Investment service + HTTP (W3) | 3–4 sessions | — | **done 2026-07-15** |
 | 4 | Pricing config/scheduler/worker (W4) | 2 sessions | — | **done 2026-07-15** |
 | 5 | Financial-core invariant suite (W5) | 1–2 sessions | helps to have W3 seeds | **done 2026-07-15** |
-| 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a/6b/6c not started) |
-| 7 | CI coverage signal (W7) | ½ session | best after W1–W4 for the floor | open |
+| 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a/6b/6c wait for their first consumer) |
+| 7 | CI coverage signal (W7) | ½ session | best after W1–W4 for the floor | **done 2026-08-07** |
 
 W1–W4 are independent and can be interleaved; each should land as its own
 commit(s) with the doc updates per `validate-and-ship`. Expected merged

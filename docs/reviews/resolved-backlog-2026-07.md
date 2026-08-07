@@ -355,6 +355,31 @@ current behaviour.
   `docs/deployment-security.md` now states the operator requirement — the gate
   is no longer "MFA does not exist" but "the owner account must be enrolled".
 
+- **G-07 no coverage signal in CI**, closed 2026-08-07 — the last open item of
+  `docs/plans/backend-test-coverage-plan.md` (Workstream 7) and of the
+  2026-07-07 test-coverage review's CI gaps. `scripts/test-backend.sh` gained a
+  `COVERAGE=1` mode; the default run stays `-race`, because a combined run is
+  slow and muddies both signals. A separate `backend-coverage` CI job runs it,
+  uploads `coverage.out`, echoes the merged total into the job summary, and
+  calls `scripts/check-coverage-floor.sh`, which fails below `COVERAGE_FLOOR`
+  (default **73.0%**, roughly two points under the 2026-08-07 merged total of
+  **75.2%**). **Decision: a floor, not a target** — it is a tripwire against
+  erosion, raised deliberately when the level rises and never lowered to make a
+  change pass. The job is intentionally outside `app-build`'s `needs`, so a
+  breach is loud without blocking the release build.
+
+- **P5 drafts vs FX coverage** (2026-07-19 audit), closed 2026-08-07 as a
+  **documentation** fix, not a code change. The audit was right that the docs
+  and the code disagreed and wrong about which was at fault: posted-only
+  coverage is the intended behavior (a promoted draft gets coverage at
+  promotion, and nothing today produces drafts at all). The
+  `ledger-invariants` skill had already been corrected; `docs/conventions.md`
+  still carried the old "a draft may trigger FX coverage" wording and now
+  states the posted-only rule, leaving room for a future draft producer that
+  needs converted amounts on its own review surface. This also closes item 2 of
+  `roadmap-review-2026-07-19.md` §2, the last unapplied documentation-accuracy
+  fix from that review.
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

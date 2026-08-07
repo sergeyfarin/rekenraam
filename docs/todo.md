@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-05.
+Last updated: 2026-08-07.
 
 ## Decisions — none pending
 
@@ -73,6 +73,21 @@ preconditions. Also in `roadmap.md`.
       codes, `internal/totp/` + migration 0005 + Settings → Security). The
       last public-deployment gate; what remains is enrolling the owner
       account before an internet deployment.
+
+- [x] G-07 CI coverage signal — done 2026-08-07 (`COVERAGE=1
+      scripts/test-backend.sh` + non-gating `backend-coverage` job + soft floor
+      `scripts/check-coverage-floor.sh`; merged total 75.2%, floor 73.0%).
+      Closes the last open item of `plans/backend-test-coverage-plan.md`
+      besides Workstream 6, whose harnesses wait for their first consumer.
+
+## Open, unscheduled (from the doc sweep of 2026-08-07)
+
+- [ ] G-02 frontend money logic untested — 337 lines of Vitest against the
+      whole frontend. Not blocked; the real work is **extracting** amount
+      parsing and balance math out of `transaction-editor.svelte` and the
+      investment forms into testable `.ts` modules. See `backlog.md` G-02.
+- [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
+      slice and an unmade provider choice. See `backlog.md`.
 
 ## Hygiene
 

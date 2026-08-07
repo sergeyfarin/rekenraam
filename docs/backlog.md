@@ -55,6 +55,31 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
+### G-02 Frontend money logic is effectively untested `[ ]`
+
+Open and **not blocked** — actionable in any session, deliberately unstarted
+while R2 is the current initiative. From
+`docs/reviews/test-coverage-review-2026-07.md` G-02; re-verified 2026-08-07:
+four Vitest files, **337 lines of test** (`reconcile/statement-balance`,
+`api/imports`, `transactions/transaction-labels`, `reports/net-worth`) against
+the whole frontend. The backend equivalent of this gap is now closed —
+merged Go coverage is 75.2% with a CI floor (G-07, closed 2026-08-07) — which makes the
+frontend the remaining blind spot.
+
+The gap is not "components lack tests"; it is that **money logic living
+inside `.svelte` files cannot be tested at all**. The highest-value work is
+therefore extraction, not test volume: pull the transaction editor's amount
+parsing and its balance check
+(`frontend/src/lib/transactions/transaction-editor.svelte`) and the
+investment forms' quantity/price math (`lib/investments/buy-form.svelte`,
+`sell-form.svelte`) into plain `.ts` modules next to the existing tested ones,
+then table-test them on the cases that have burned this repo before:
+scale mismatch between commodities, values beyond `Number.MAX_SAFE_INTEGER`,
+decimal comma input, and negative/zero amounts.
+
+E2E growth is tracked separately (T-20, R3a) and is not a substitute:
+Playwright is still an intentionally unscheduled CI decision.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07.** S-04 (lockout-safe throttle) and S-07

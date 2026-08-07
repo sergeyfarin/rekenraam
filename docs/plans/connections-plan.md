@@ -153,7 +153,7 @@ period — document this.
 | `type="Payment In Lieu Of Dividends"` | Dividend (flagged in memo) |
 | `type="Broker Interest Received/Paid"`, `"Other Fees"` | Generic staged cash rows → user-resolved income/expense categories (import rules will help here) |
 | `type="Deposits/Withdrawals"`, `<Transfer>` | Generic staged rows with transfer hints (QIF `[Account]` precedent) |
-| `<CorporateAction>` (splits FS/RS, ticker changes TC, spin-offs SO, mergers TO/TC, delistings) | **Stage, never auto-post.** Until the lot-mutation design exists (backlog T-34) and write-offs are possible (T-38), these rows land as `needs_attention` with the action description and a link to manual guidance. This is the honest version of "supported": visible, never silently dropped, never wrongly booked |
+| `<CorporateAction>` (splits FS/RS, ticker changes TC, spin-offs SO, mergers TO/TC, delistings) | **Stage, never auto-post.** Write-offs landed 2026-08-06 (T-38), so delistings have a real destination; until the lot-mutation design exists (backlog T-34), the rest of these rows land as `needs_attention` with the action description and a link to manual guidance. This is the honest version of "supported": visible, never silently dropped, never wrongly booked |
 | `<OpenPosition>` | Not imported — used for a post-import **position reconciliation check**: compare IBKR-reported open quantity per instrument against Rekenraam lots, surface mismatches in the batch result. This is the trust feature that catches missed history |
 
 ### Slices and acceptance

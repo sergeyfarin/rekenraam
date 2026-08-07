@@ -25,7 +25,8 @@ Recovery) — it backs up and revokes sessions; never edit the users table.
 
 | Changed | Run |
 |---|---|
-| `backend/**` | `./scripts/test-backend.sh` (= `go test ./...`), plus `go vet ./...`, `gofmt -l .` in `backend/` |
+| `backend/**` | `./scripts/test-backend.sh` (= `go test -race ./...`), plus `go vet ./...`, `gofmt -l .` in `backend/` |
+| Backend coverage check (optional, same script) | `COVERAGE=1 ./scripts/test-backend.sh` — non-race coverage pass, prints the merged total; CI enforces a soft floor (`scripts/check-coverage-floor.sh`) |
 | `frontend/**` | `./scripts/test-frontend.sh` (openapi:generate + paraglide:compile + svelte-check); `pnpm --dir frontend run test` for unit-tested logic |
 | OpenAPI | both scripts above |
 | Integrated shape / static serving / embed | `pnpm build` (builds frontend, copies into `backend/internal/web/dist/`, runs embed test, compiles `dist/rekenraam`) |

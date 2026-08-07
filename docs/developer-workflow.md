@@ -37,6 +37,13 @@ Runs the full Go suite with the race detector.
 ./scripts/test-backend.sh
 ```
 
+`COVERAGE=1 ./scripts/test-backend.sh` runs the same suite without `-race`,
+writes `backend/coverage.out`, and prints the merged total. CI runs this in a
+non-gating `backend-coverage` job and fails it below a soft floor
+(`scripts/check-coverage-floor.sh`, `COVERAGE_FLOOR` default 73.0%) — raise
+the floor deliberately when the level rises; never lower it to make a change
+pass.
+
 ### Local Owner Recovery
 
 Reset the owner password locally with a verified SQLite backup first:
