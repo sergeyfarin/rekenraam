@@ -58,6 +58,22 @@ func (r *RecoveryRepository) ResetOwnerPasswordAndRevokeSessions(ctx context.Con
 		return fmt.Errorf("revoke owner sessions: %w", err)
 	}
 
+	// Clear any MFA enrollment in the same transaction (S-06). This command is
+	// the documented last resort for an owner locked out of their own install,
+	// and it already requires filesystem access to the database — an
+	// authenticator that is gone along with the recovery codes must not be able
+	// to outlast it. Leaving the enrollment would hand back an account the new
+	// password cannot open.
+	for _, statement := range []string{
+		`DELETE FROM user_mfa_recovery_codes`,
+		`DELETE FROM login_mfa_challenges`,
+		`DELETE FROM user_mfa_totp`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("clear owner mfa enrollment: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit recovery transaction: %w", err)
 	}

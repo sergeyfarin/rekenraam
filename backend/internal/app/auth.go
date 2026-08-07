@@ -65,6 +65,10 @@ type AuthService struct {
 	logger          *slog.Logger
 	now             func() time.Time
 	sessionLifetime time.Duration
+	// secretKey seals the TOTP shared secret at rest (S-06). nil = not
+	// configured, which refuses MFA enrollment rather than storing the secret
+	// in the clear.
+	secretKey []byte
 }
 
 type loginThrottleScope struct {
@@ -108,6 +112,14 @@ type LoginResult struct {
 	TrustedDeviceToken string
 	// TrustedDeviceLifetime is how long the caller should keep the cookie.
 	TrustedDeviceLifetime time.Duration
+	// MFARequired reports that the password verified but a second factor is
+	// still owed (S-06). SessionToken is empty in that case: the caller must
+	// carry MFAChallengeToken to CompleteLoginMFA.
+	MFARequired bool
+	// MFAChallengeToken identifies the half-authenticated attempt. It is not a
+	// credential and grants nothing on its own.
+	MFAChallengeToken    string
+	MFAChallengeLifetime time.Duration
 }
 
 // TrustedDevice is an approved device as shown to the owner.
@@ -171,6 +183,12 @@ type AuthenticationEvents struct {
 
 func NewAuthService(repository *db.AuthRepository, logger *slog.Logger) *AuthService {
 	return NewAuthServiceWithSessionLifetime(repository, logger, SessionLifetime)
+}
+
+// SetSecretKey supplies the key that seals MFA secrets at rest. Called during
+// wiring; without it, MFA enrollment returns ErrSecretKeyMissing.
+func (s *AuthService) SetSecretKey(secretKey []byte) {
+	s.secretKey = secretKey
 }
 
 func NewAuthServiceWithSessionLifetime(repository *db.AuthRepository, logger *slog.Logger, sessionLifetime time.Duration) *AuthService {
@@ -297,6 +315,53 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		}
 	}
 
+	// The password is proved; whether that is a login depends on the second
+	// factor (S-06). With MFA active this attempt gets a short-lived challenge
+	// and no session, no device approval, and no throttle reset — none of
+	// those are earned until the second factor verifies.
+	mfaActive, err := s.mfaActive(ctx, credentials.ID)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	if mfaActive {
+		challengeToken, challengeLifetime, err := s.mfaChallengeFor(ctx, credentials.ID, input.ClientIP)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		return LoginResult{
+			User:                 Owner{ID: credentials.ID, Username: credentials.Username},
+			MFARequired:          true,
+			MFAChallengeToken:    challengeToken,
+			MFAChallengeLifetime: challengeLifetime,
+		}, nil
+	}
+
+	return s.completeLogin(ctx, completeLoginInput{
+		UserID:        credentials.ID,
+		Username:      credentials.Username,
+		ClientIP:      input.ClientIP,
+		RequestID:     input.RequestID,
+		Scopes:        scopes,
+		TrustedDevice: trustedDevice,
+		DeviceTrusted: deviceTrusted,
+	})
+}
+
+// completeLoginInput carries the state a verified attempt needs to become a
+// session. It exists so the password-only and password-plus-MFA paths issue
+// sessions through exactly one piece of code — a second factor that skipped
+// the throttle reset or the device approval would be a subtle mess.
+type completeLoginInput struct {
+	UserID        int64
+	Username      string
+	ClientIP      string
+	RequestID     string
+	Scopes        []loginThrottleScope
+	TrustedDevice db.TrustedDeviceRecord
+	DeviceTrusted bool
+}
+
+func (s *AuthService) completeLogin(ctx context.Context, input completeLoginInput) (LoginResult, error) {
 	sessionToken, sessionTokenHash, err := newSessionToken()
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("create auth session token: %w", err)
@@ -305,7 +370,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 	now := s.now().UTC()
 	createdAt := now.Format(time.RFC3339)
 	sessionID, err := s.repository.CreateSession(ctx, db.CreateSessionParams{
-		UserID:    credentials.ID,
+		UserID:    input.UserID,
 		TokenHash: sessionTokenHash,
 		CreatedAt: createdAt,
 		ExpiresAt: sessionExpiresAt(now, s.sessionLifetime),
@@ -314,26 +379,26 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (LoginResult,
 		return LoginResult{}, fmt.Errorf("persist auth session: %w", err)
 	}
 
-	if err := s.clearLoginFailures(ctx, scopes); err != nil {
+	if err := s.clearLoginFailures(ctx, input.Scopes); err != nil {
 		return LoginResult{}, fmt.Errorf("clear login throttle: %w", err)
 	}
 
-	// Approve the device only now, after the password actually verified.
-	trustedDeviceToken, err := s.approveDevice(ctx, credentials.ID, input.ClientIP, trustedDevice, deviceTrusted)
+	// Approve the device only now, after every factor actually verified.
+	trustedDeviceToken, err := s.approveDevice(ctx, input.UserID, input.ClientIP, input.TrustedDevice, input.DeviceTrusted)
 	if err != nil {
 		return LoginResult{}, err
 	}
 
 	s.recordAuthEvent(ctx, db.AuthenticationEventParams{
-		EventType: authEventLoginSucceeded, Outcome: "success", Username: credentials.Username,
-		UserID: credentials.ID, AuthSessionID: sessionID, ClientIP: input.ClientIP,
+		EventType: authEventLoginSucceeded, Outcome: "success", Username: input.Username,
+		UserID: input.UserID, AuthSessionID: sessionID, ClientIP: input.ClientIP,
 		RequestID: input.RequestID,
 	})
 
 	return LoginResult{
 		User: Owner{
-			ID:       credentials.ID,
-			Username: credentials.Username,
+			ID:       input.UserID,
+			Username: input.Username,
 		},
 		SessionToken:          sessionToken,
 		TrustedDeviceToken:    trustedDeviceToken,
@@ -492,6 +557,7 @@ func (s *AuthService) cleanupExpiredAndRevokedSessions(ctx context.Context, logg
 	}
 	s.pruneAuthenticationEvents(ctx, logger)
 	s.pruneTrustedDevices(ctx, logger)
+	s.pruneMFAChallenges(ctx, logger)
 }
 
 // pruneTrustedDevices drops expired and revoked approved-device rows on the

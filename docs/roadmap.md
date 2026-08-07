@@ -333,10 +333,14 @@ daily-driver work.
    explicitly by leading with the correctness architecture (append-only
    versions, exact decimals, trial balance).
 
-Public internet deployment with real financial data remains blocked by the one
-live security gate in `docs/backlog.md`: **MFA (S-06)**. Lockout-safe login
-throttling (S-04) and authentication-event visibility (S-07) both closed
-2026-08-06.
+**Every public-deployment security gate is now closed.** MFA (S-06) shipped
+2026-08-07 as TOTP plus single-use recovery codes, with a Settings → Security
+screen and the second step in the login flow; lockout-safe login throttling
+(S-04) and authentication-event visibility (S-07) closed 2026-08-06. What is
+left is an operator action rather than product work: the owner account must be
+**enrolled** before real financial data goes on the internet, and
+`REKENRAAM_SECRET_KEY` must be configured for enrolment to be possible. See
+`docs/deployment-security.md`.
 
 ## Open product decisions
 

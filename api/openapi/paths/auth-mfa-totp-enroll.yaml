@@ -1,0 +1,84 @@
+post:
+  summary: Begin TOTP enrollment
+  description: >-
+    Issues a new shared secret and returns it once, for display as a manual
+    key and an otpauth URI. The enrollment stays pending — and does not gate
+    any login — until POST /api/v1/auth/mfa/totp/activate confirms a code from
+    it. Refused while MFA is already active: turning it off is an explicit act.
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/MFAPasswordRequest"
+  responses:
+    "201":
+      description: Enrollment started; secret returned once
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/MFAEnrollResponse"
+    "400":
+      description: Invalid request body or validation failure
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required, or the password did not verify
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: CSRF or origin validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Multi-factor authentication is already active
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured on the server
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

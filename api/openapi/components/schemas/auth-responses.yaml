@@ -12,11 +12,70 @@ AuthSessionResponse:
       description: Session-bound CSRF token for authenticated mutating requests.
 LoginResponse:
   type: object
-  required:
-    - user
+  description: >-
+    Either a completed login (user present) or the instruction to present a
+    second factor (mfa_required true). Clients must branch on mfa_required
+    rather than assuming a session cookie was set.
   properties:
     user:
       $ref: "../../openapi.yaml#/components/schemas/OwnerResponse"
+    mfa_required:
+      type: boolean
+      description: >-
+        True when the password verified but multi-factor authentication is
+        still owed. No session cookie is set; a short-lived HttpOnly challenge
+        cookie is, and POST /api/v1/auth/login/mfa completes the login.
+MFAStatusResponse:
+  type: object
+  required:
+    - status
+    - recovery_codes_remaining
+    - configured
+  properties:
+    status:
+      type: string
+      enum:
+        - disabled
+        - pending
+        - active
+      description: >-
+        pending means a secret was issued but never confirmed by a code; only
+        active gates a login.
+    activated_at:
+      type: string
+      format: date-time
+    recovery_codes_remaining:
+      type: integer
+      description: Unused single-use recovery codes.
+    configured:
+      type: boolean
+      description: >-
+        False when REKENRAAM_SECRET_KEY is not set on the server, in which case
+        enrollment is refused rather than storing the shared secret in the clear.
+MFAEnrollResponse:
+  type: object
+  required:
+    - secret
+    - otpauth_uri
+  properties:
+    secret:
+      type: string
+      description: Base32 TOTP shared secret, for manual entry. Shown once.
+    otpauth_uri:
+      type: string
+      description: otpauth:// URI for an authenticator app. Shown once.
+MFARecoveryCodesResponse:
+  type: object
+  required:
+    - recovery_codes
+  properties:
+    recovery_codes:
+      type: array
+      description: >-
+        The full replacement set of single-use recovery codes. Displayed once
+        and never retrievable again; regenerating invalidates every earlier code.
+      items:
+        type: string
 CreateOwnerResponse:
   type: object
   required:

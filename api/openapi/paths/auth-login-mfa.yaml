@@ -1,0 +1,91 @@
+post:
+  summary: Complete a login by presenting the second factor
+  description: >-
+    Continues the login started by POST /api/v1/auth/login when it answered
+    mfa_required. The challenge travels as an HttpOnly cookie set by that
+    response, so no token is handled by page scripts. Accepts a TOTP code or a
+    single-use recovery code. Failed codes spend the same throttle budget as
+    failed passwords.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/MFACodeRequest"
+  responses:
+    "200":
+      description: Login completed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+        Set-Cookie:
+          schema:
+            type: string
+          description: Browser session cookie for the authenticated owner.
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/LoginResponse"
+    "400":
+      description: Invalid request body or validation failure
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Invalid code, or an expired or already-used challenge
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Multi-factor authentication is not enrolled
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "429":
+      description: Too many failed attempts
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: REKENRAAM_SECRET_KEY is not configured on the server
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

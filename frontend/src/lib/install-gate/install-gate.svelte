@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { createQuery } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
-  import { authSessionQueryOptions, login } from '$lib/api/auth';
+  import { authSessionQueryOptions, completeLoginMFA, login } from '$lib/api/auth';
   import { completeCurrencySetup, currencyCatalogQueryOptions } from '$lib/api/currencies';
   import { healthQueryOptions } from '$lib/api/health';
   import { createBook, createOwner, setupStatusQueryOptions } from '$lib/api/setup';
@@ -13,6 +13,7 @@
   import CurrencySetupForm from './currency-setup-form.svelte';
   import InstallGateHero from './install-gate-hero.svelte';
   import LoginForm from './login-form.svelte';
+  import MFAForm from './mfa-form.svelte';
   import OwnerSetupForm from './owner-setup-form.svelte';
   import RecoveryPanel from './recovery-panel.svelte';
   import WorkspacePreparingPanel from './workspace-preparing-panel.svelte';
@@ -41,6 +42,12 @@
   let currencySearchCode = $state('');
   let ownerError = $state<unknown>(undefined);
   let loginError = $state<unknown>(undefined);
+  // The password verified but a second factor is owed. The challenge itself
+  // lives in an HttpOnly cookie; this only decides which form to show.
+  let mfaRequired = $state(false);
+  let mfaCode = $state('');
+  let mfaError = $state<unknown>(undefined);
+  let mfaPending = $state(false);
   let bookError = $state<unknown>(undefined);
   let currencyError = $state<unknown>(undefined);
   let ownerPending = $state(false);
@@ -167,14 +174,44 @@
     loginError = undefined;
 
     try {
-      await login({ username: loginUsername, password: loginPassword });
+      const result = await login({ username: loginUsername, password: loginPassword });
       loginPassword = '';
+      if (result.mfa_required) {
+        mfaRequired = true;
+        mfaCode = '';
+        mfaError = undefined;
+        return;
+      }
       await refreshInstallGate();
     } catch (error) {
       loginError = error;
     } finally {
       loginPending = false;
     }
+  }
+
+  async function handleMFA(event: SubmitEvent) {
+    event.preventDefault();
+    mfaPending = true;
+    mfaError = undefined;
+
+    try {
+      await completeLoginMFA(mfaCode);
+      mfaCode = '';
+      mfaRequired = false;
+      await refreshInstallGate();
+    } catch (error) {
+      mfaError = error;
+    } finally {
+      mfaPending = false;
+    }
+  }
+
+  function cancelMFA() {
+    mfaRequired = false;
+    mfaCode = '';
+    mfaError = undefined;
+    loginPassword = '';
   }
 
   async function createDefaultBook() {
@@ -262,6 +299,14 @@
           error={ownerError}
           pending={ownerPending}
           onsubmit={handleCreateOwner}
+        />
+      {:else if pageState === 'login' && mfaRequired}
+        <MFAForm
+          bind:code={mfaCode}
+          error={mfaError}
+          pending={mfaPending}
+          onsubmit={handleMFA}
+          oncancel={cancelMFA}
         />
       {:else if pageState === 'login'}
         <LoginForm

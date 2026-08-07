@@ -32,7 +32,13 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 
 	mux.HandleFunc("GET /api/v1/auth/session", sessionStatus(logger, services.Auth))
 	mux.HandleFunc("POST /api/v1/auth/login", requireSameOrigin(options, login(logger, services.Auth, options)))
+	mux.HandleFunc("POST /api/v1/auth/login/mfa", requireSameOrigin(options, completeLoginMFA(logger, services.Auth, options)))
 	mux.HandleFunc("POST /api/v1/auth/logout", logout(logger, services.Auth, options))
+	mux.HandleFunc("GET /api/v1/auth/mfa", mfaStatus(logger, services.Auth))
+	mux.HandleFunc("POST /api/v1/auth/mfa/totp/enroll", enrollMFATOTP(logger, services.Auth, options))
+	mux.HandleFunc("POST /api/v1/auth/mfa/totp/activate", activateMFATOTP(logger, services.Auth, options))
+	mux.HandleFunc("POST /api/v1/auth/mfa/disable", disableMFA(logger, services.Auth, options))
+	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", regenerateMFARecoveryCodes(logger, services.Auth, options))
 	mux.HandleFunc("GET /api/v1/auth/events", authenticationEvents(logger, services.Auth))
 	mux.HandleFunc("GET /api/v1/auth/trusted-devices", listTrustedDevices(logger, services.Auth))
 	mux.HandleFunc("DELETE /api/v1/auth/trusted-devices/{device_id}", revokeTrustedDevice(logger, services.Auth, options))

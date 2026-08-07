@@ -318,6 +318,9 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	authRepository := db.NewAuthRepository(database)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	authService := app.NewAuthService(authRepository, logger)
+	// Production wires the configured REKENRAAM_SECRET_KEY here; MFA
+	// enrollment refuses without it (S-06).
+	authService.SetSecretKey([]byte("0123456789abcdef0123456789abcdef"))
 	settingsService := app.NewSettingsService(db.NewSettingsRepository(database))
 	bookService := app.NewBookService(db.NewBookRepository(database), setupService)
 	commodityRepository := db.NewCommodityRepository(database)

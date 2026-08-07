@@ -272,10 +272,27 @@ For Docker Compose, stop the app before restore and copy the verified backup int
 
 The local owner recovery command also creates and verifies a SQLite backup by default before changing the owner password.
 
+## Two-Factor Authentication
+
+Turn it on at **Settings → Security**: scan the setup key into any authenticator
+app, confirm one code, and save the ten recovery codes it shows — they are
+displayed once, work once each, and are the only way in if the authenticator is
+lost. Enrolment needs `REKENRAAM_SECRET_KEY` (below), because the shared secret
+is encrypted at rest rather than stored in the clear.
+
+After that, signing in asks for a code after the password. Wrong codes count
+against the same login throttle as wrong passwords, and turning two-factor off
+or replacing the recovery codes asks for the password again.
+
+**Enrol before putting real financial data on the public internet** — see
+`docs/deployment-security.md`. If both the authenticator and the recovery codes
+are gone, the last resort is the `recover-owner` command on the host, which
+resets the owner password and clears the enrolment.
+
 ## Online Provider Secret Key
 
-Online provider credentials, such as Trading 212 API keys, are encrypted at rest
-with `REKENRAAM_SECRET_KEY`. The value must be base64 for exactly 32 random bytes.
+Online provider credentials (such as Trading 212 API keys) and the two-factor
+shared secret are encrypted at rest with `REKENRAAM_SECRET_KEY`. The value must be base64 for exactly 32 random bytes.
 Generate one with:
 
 ```sh
@@ -284,7 +301,9 @@ openssl rand -base64 32
 
 Keep this value in the service environment or secret manager and back it up with
 the same care as the SQLite database. Losing it does not delete ledger data, but
-it makes stored online provider credentials unreadable.
+it makes stored online provider credentials unreadable, and a two-factor
+enrolment can then only be satisfied with a recovery code (those are hashed, not
+encrypted, so they keep working).
 
 If `REKENRAAM_SECRET_KEY` is lost, restore it from backup if possible. If it
 cannot be restored, stop the app, take and verify a SQLite backup, start the app

@@ -106,6 +106,25 @@ func (r *AuthRepository) ReadOwnerCredentials(ctx context.Context, username stri
 	return record, nil
 }
 
+// ReadOwnerCredentialsByID is the lookup for a caller that already holds a
+// session (re-authentication before a security change) or a resolved MFA
+// challenge, where the user id is known and the username is not.
+func (r *AuthRepository) ReadOwnerCredentialsByID(ctx context.Context, userID int64) (OwnerCredentialsRecord, error) {
+	var record OwnerCredentialsRecord
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT id, username, password_hash
+		FROM users
+		WHERE is_owner = 1 AND id = ?
+	`, userID).Scan(&record.ID, &record.Username, &record.PasswordHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return OwnerCredentialsRecord{}, ErrNotFound
+		}
+		return OwnerCredentialsRecord{}, fmt.Errorf("read owner credentials by id: %w", err)
+	}
+
+	return record, nil
+}
+
 // CreateSession returns the new session id so an authentication event can be
 // correlated with the session it created (S-07).
 func (r *AuthRepository) CreateSession(ctx context.Context, params CreateSessionParams) (int64, error) {

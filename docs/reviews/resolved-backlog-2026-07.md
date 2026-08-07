@@ -315,6 +315,46 @@ current behaviour.
   by `TestCommitImportBatch_LaterImportCarryingAnEarlierTradeStillCommits`,
   confirmed to fail against the old behaviour.
 
+- **S-06 multi-factor authentication**, shipped 2026-08-07 — the last public
+  deployment gate. **Decision: TOTP (RFC 6238) plus ten single-use recovery
+  codes**, chosen over WebAuthn because this app is single-owner and routinely
+  reached at a LAN address or a private hostname, where WebAuthn's origin
+  binding is awkward and the recovery story for an owner who loses their only
+  authenticator is worse. An authenticator app works everywhere the app does.
+
+  The algorithm is a truncated HMAC, so `internal/totp/` implements it in ~150
+  dependency-free lines against the RFC 6238 test vectors rather than adding a
+  library to the authentication path. Migration 0005 adds `user_mfa_totp`,
+  `user_mfa_recovery_codes`, and `login_mfa_challenges`.
+
+  Shape of the login change: once MFA is active a verified password no longer
+  produces a session, a device approval, or a throttle reset. It produces a
+  five-minute single-use challenge — a durable row, carried by an HttpOnly
+  cookie so no token is handled by page scripts — which `POST
+  /api/v1/auth/login/mfa` exchanges for a session on a valid code. Both paths
+  issue sessions through one `completeLogin`, so the second factor cannot
+  quietly skip a step the password path does.
+
+  The details that make it real rather than decorative, each with a named test:
+  wrong codes spend the same 5-in-15 throttle budget as wrong passwords; a code
+  cannot be replayed inside its own 30-second step (atomic counter advance in
+  the `UPDATE`'s `WHERE`); a challenge is single-use; a *pending* enrolment
+  never gates a login, so an abandoned setup cannot lock the owner out;
+  enrolling, disabling, and regenerating recovery codes each re-confirm the
+  password, so a stolen session cannot change what protects the account; and
+  the shared secret is sealed with `REKENRAAM_SECRET_KEY` (absent ⇒ enrolment
+  refused, never stored in the clear).
+
+  One deliberate asymmetry: recovery codes are SHA-256 hashed rather than
+  sealed, and the verification path falls through to them when the secret
+  cannot be opened. Losing the key must not lock the owner out of their own
+  finances — that is exactly the situation recovery codes exist for.
+
+  UI shipped with it: Settings → Security for enrol/activate/disable/regenerate
+  (secret and codes shown once), and the code step in the install-gate login.
+  `docs/deployment-security.md` now states the operator requirement — the gate
+  is no longer "MFA does not exist" but "the owner account must be enrolled".
+
 ## Deliberate non-work
 
 - T-02 single runtime book ID, T-03 CSRF-token rotation, and T-04 CSP

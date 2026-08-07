@@ -59,7 +59,9 @@ printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run .
 
 ### Online Provider Secret Key
 
-`REKENRAAM_SECRET_KEY` encrypts online provider credentials at rest. It must be
+`REKENRAAM_SECRET_KEY` encrypts online provider credentials **and the two-factor
+shared secret** at rest; without it, both connection creation and MFA enrolment
+return `CONFIG_REQUIRED` rather than storing anything in the clear. It must be
 base64 for exactly 32 random bytes:
 
 ```sh

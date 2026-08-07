@@ -69,6 +69,10 @@ preconditions. Also in `roadmap.md`.
 - [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
       `scaledAmount`/`scaledInteger`/`pow10DB`).
+- [x] S-06 multi-factor authentication — done 2026-08-07 (TOTP + recovery
+      codes, `internal/totp/` + migration 0005 + Settings → Security). The
+      last public-deployment gate; what remains is enrolling the owner
+      account before an internet deployment.
 
 ## Hygiene
 

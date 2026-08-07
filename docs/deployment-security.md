@@ -4,12 +4,33 @@ This guide is the minimum security posture for a LAN or externally reachable
 Rekenraam deployment. The app is a single HTTP process; it does not terminate
 TLS itself. Put it behind a reverse proxy for HTTPS.
 
-## Non-negotiable public-deployment gate
+## Public-deployment gate: turn MFA on
 
-**Do not deploy real financial data on the public internet until MFA has an
-approved design and implementation.** This is a product requirement, not an
-operator choice. The measures below make a future external deployment safer;
-they do not lift the MFA gate.
+**Shipped 2026-08-07 (S-06).** Multi-factor authentication is TOTP (RFC 6238,
+any authenticator app) plus ten single-use recovery codes. The product gate is
+no longer "MFA does not exist"; it is now an operator step:
+
+**Before exposing real financial data to the public internet, enrol the owner
+account in two-factor authentication** at Settings → Security, and store the
+recovery codes somewhere other than the machine running the app. Enrolment
+requires `REKENRAAM_SECRET_KEY` (see below), because the shared secret is
+sealed at rest rather than stored in the clear — without the key the server
+refuses to enrol rather than degrade quietly.
+
+What it does and does not do:
+
+- A verified password alone no longer produces a session once MFA is active.
+  It produces a five-minute, single-use challenge cookie that grants nothing.
+- Wrong codes spend the same five-in-fifteen throttle budget as wrong
+  passwords, so a six-digit code is not a free guessing target.
+- A code cannot be replayed inside its own 30-second step.
+- Enrolling, disabling, and regenerating recovery codes each require the
+  password again, so a stolen session cannot change what protects the account.
+- Recovery codes are the only remote way back in if the authenticator is lost.
+  There is no server-side bypass, by design. With both gone, the last resort is
+  the `recover-owner` command on the host, which resets the owner password and
+  clears the enrolment in the same transaction — it already requires filesystem
+  access to the database, so an enrolment must not outlast it.
 
 Localhost development may use HTTP. For LAN use, HTTPS through a reverse proxy
 is strongly preferred. A browser-warning-free private deployment needs a
@@ -108,12 +129,13 @@ Read this carefully when reasoning about the security posture:
 - Approval lapses after 180 days unused and slides forward on each successful
   login. Review and revoke devices at `GET`/`DELETE /api/v1/auth/trusted-devices`.
 
-Public deployment with real financial data is still blocked by the MFA gate
-above.
+Approved devices are a throttle mechanism only, and are unrelated to the second
+factor: an approved device still has to present a code.
 
 ## Secrets and data files
 
-`REKENRAAM_SECRET_KEY` encrypts stored online-provider credentials. It is a
+`REKENRAAM_SECRET_KEY` encrypts stored online-provider credentials **and the
+MFA shared secret**. It is a
 base64 value for exactly 32 random bytes:
 
 ```sh
@@ -122,7 +144,8 @@ openssl rand -base64 32
 
 Keep it in the service environment or a secret manager, outside Git, and back
 it up with the SQLite database. Losing it leaves ledger data intact but makes
-stored provider credentials unreadable; see the root README for the
+stored provider credentials and any MFA enrolment unreadable — recover with a
+recovery code, or with the `recover-owner` command from the host; see the root README for the
 backup-first recovery procedure. Do not change it casually: no in-place key
 rotation command exists yet.
 

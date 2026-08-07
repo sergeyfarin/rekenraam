@@ -9,8 +9,20 @@ paths:
     $ref: "./paths/auth-session.yaml"
   /api/v1/auth/login:
     $ref: "./paths/auth-login.yaml"
+  /api/v1/auth/login/mfa:
+    $ref: "./paths/auth-login-mfa.yaml"
   /api/v1/auth/logout:
     $ref: "./paths/auth-logout.yaml"
+  /api/v1/auth/mfa:
+    $ref: "./paths/auth-mfa.yaml"
+  /api/v1/auth/mfa/totp/enroll:
+    $ref: "./paths/auth-mfa-totp-enroll.yaml"
+  /api/v1/auth/mfa/totp/activate:
+    $ref: "./paths/auth-mfa-totp-activate.yaml"
+  /api/v1/auth/mfa/disable:
+    $ref: "./paths/auth-mfa-disable.yaml"
+  /api/v1/auth/mfa/recovery-codes:
+    $ref: "./paths/auth-mfa-recovery-codes.yaml"
   /api/v1/auth/events:
     $ref: "./paths/auth-events.yaml"
   /api/v1/auth/trusted-devices:
@@ -336,6 +348,10 @@ components:
       $ref: "./components/schemas/common.yaml#/HealthResponse"
     LoginRequest:
       $ref: "./components/schemas/auth-requests.yaml#/LoginRequest"
+    MFAPasswordRequest:
+      $ref: "./components/schemas/auth-requests.yaml#/MFAPasswordRequest"
+    MFACodeRequest:
+      $ref: "./components/schemas/auth-requests.yaml#/MFACodeRequest"
     SetupStep:
       $ref: "./components/schemas/setup.yaml#/SetupStep"
     SetupStatusResponse:
@@ -610,6 +626,12 @@ components:
       $ref: "./components/schemas/auth-responses.yaml#/TrustedDevicesResponse"
     LoginResponse:
       $ref: "./components/schemas/auth-responses.yaml#/LoginResponse"
+    MFAStatusResponse:
+      $ref: "./components/schemas/auth-responses.yaml#/MFAStatusResponse"
+    MFAEnrollResponse:
+      $ref: "./components/schemas/auth-responses.yaml#/MFAEnrollResponse"
+    MFARecoveryCodesResponse:
+      $ref: "./components/schemas/auth-responses.yaml#/MFARecoveryCodesResponse"
     CreateOwnerResponse:
       $ref: "./components/schemas/auth-responses.yaml#/CreateOwnerResponse"
     CostBasisMethod:

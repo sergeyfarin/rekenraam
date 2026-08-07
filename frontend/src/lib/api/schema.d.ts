@@ -191,6 +191,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a login by presenting the second factor
+         * @description Continues the login started by POST /api/v1/auth/login when it answered mfa_required. The challenge travels as an HttpOnly cookie set by that response, so no token is handled by page scripts. Accepts a TOTP code or a single-use recovery code. Failed codes spend the same throttle budget as failed passwords.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFACodeRequest"];
+                };
+            };
+            responses: {
+                /** @description Login completed */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        /** @description Browser session cookie for the authenticated owner. */
+                        "Set-Cookie"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LoginResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Invalid code, or an expired or already-used challenge */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Multi-factor authentication is not enrolled */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Too many failed attempts */
+                429: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured on the server */
+                503: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -235,6 +351,459 @@ export interface paths {
                 };
                 /** @description Origin or CSRF validation failed */
                 403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the owner's multi-factor authentication status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current MFA status */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFAStatusResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/totp/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin TOTP enrollment
+         * @description Issues a new shared secret and returns it once, for display as a manual key and an otpauth URI. The enrollment stays pending — and does not gate any login — until POST /api/v1/auth/mfa/totp/activate confirms a code from it. Refused while MFA is already active: turning it off is an explicit act.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFAPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description Enrollment started; secret returned once */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFAEnrollResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the password did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Multi-factor authentication is already active */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured on the server */
+                503: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/totp/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate a pending TOTP enrollment
+         * @description Confirms the authenticator really holds the secret, turns MFA on, and returns the recovery codes. The codes are shown once and cannot be retrieved again.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFACodeRequest"];
+                };
+            };
+            responses: {
+                /** @description MFA activated; recovery codes returned once */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFARecoveryCodesResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the code did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No pending enrollment, or MFA is already active */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured on the server */
+                503: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn multi-factor authentication off
+         * @description Removes the enrollment and every recovery code with it. Password-confirmed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFAPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description Multi-factor authentication disabled */
+                204: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the password did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the set of recovery codes
+         * @description Issues a fresh set and invalidates every earlier code, including any already written down. Password-confirmed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFAPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description New recovery codes returned once */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFARecoveryCodesResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the password did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Multi-factor authentication is not active */
+                409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -10308,6 +10877,14 @@ export interface components {
             /** @description Password for the single owner account. */
             password: string;
         };
+        MFAPasswordRequest: {
+            /** @description The account password, re-confirmed. Changing what protects the account is not something a stolen session may do on its own. */
+            password: string;
+        };
+        MFACodeRequest: {
+            /** @description A six-digit authenticator code, or — when completing a login — a single-use recovery code. Spaces and dashes are ignored. */
+            code: string;
+        };
         SetupStep: {
             /** @enum {string} */
             key: "owner" | "book" | "currencies" | "system_accounts" | "categories";
@@ -11875,8 +12452,34 @@ export interface components {
         TrustedDevicesResponse: {
             devices: components["schemas"]["TrustedDeviceResponse"][];
         };
+        /** @description Either a completed login (user present) or the instruction to present a second factor (mfa_required true). Clients must branch on mfa_required rather than assuming a session cookie was set. */
         LoginResponse: {
-            user: components["schemas"]["OwnerResponse"];
+            user?: components["schemas"]["OwnerResponse"];
+            /** @description True when the password verified but multi-factor authentication is still owed. No session cookie is set; a short-lived HttpOnly challenge cookie is, and POST /api/v1/auth/login/mfa completes the login. */
+            mfa_required?: boolean;
+        };
+        MFAStatusResponse: {
+            /**
+             * @description pending means a secret was issued but never confirmed by a code; only active gates a login.
+             * @enum {string}
+             */
+            status: "disabled" | "pending" | "active";
+            /** Format: date-time */
+            activated_at?: string;
+            /** @description Unused single-use recovery codes. */
+            recovery_codes_remaining: number;
+            /** @description False when REKENRAAM_SECRET_KEY is not set on the server, in which case enrollment is refused rather than storing the shared secret in the clear. */
+            configured: boolean;
+        };
+        MFAEnrollResponse: {
+            /** @description Base32 TOTP shared secret, for manual entry. Shown once. */
+            secret: string;
+            /** @description otpauth:// URI for an authenticator app. Shown once. */
+            otpauth_uri: string;
+        };
+        MFARecoveryCodesResponse: {
+            /** @description The full replacement set of single-use recovery codes. Displayed once and never retrievable again; regenerating invalidates every earlier code. */
+            recovery_codes: string[];
         };
         CreateOwnerResponse: {
             owner: components["schemas"]["OwnerResponse"];

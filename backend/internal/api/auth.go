@@ -35,8 +35,13 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+// loginResponse carries either a completed login (user set) or the
+// instruction to present a second factor (mfa_required). Exactly one of the
+// two is meaningful, and the client must branch on mfa_required rather than
+// assuming a session exists (S-06).
 type loginResponse struct {
-	User OwnerResponse `json:"user"`
+	User        *OwnerResponse `json:"user,omitempty"`
+	MFARequired bool           `json:"mfa_required,omitempty"`
 }
 
 func sessionStatus(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
@@ -81,12 +86,21 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 			return
 		}
 
+		// A password that verified but still owes a second factor gets no
+		// session cookie and no device approval — only the short-lived
+		// challenge.
+		if result.MFARequired {
+			writeMFAChallengeCookie(w, r, options, result.MFAChallengeToken, result.MFAChallengeLifetime)
+			writeJSON(w, http.StatusOK, loginResponse{MFARequired: true})
+			return
+		}
+
 		writeSessionCookie(w, r, options, result.SessionToken)
 		if result.TrustedDeviceToken != "" {
 			writeTrustedDeviceCookie(w, r, options, result.TrustedDeviceToken, result.TrustedDeviceLifetime)
 		}
 		writeJSON(w, http.StatusOK, loginResponse{
-			User: OwnerResponse{ID: result.User.ID, Username: result.User.Username},
+			User: &OwnerResponse{ID: result.User.ID, Username: result.User.Username},
 		})
 	}
 }
@@ -270,6 +284,16 @@ func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
 		writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
+	case errors.Is(err, app.ErrSecretKeyMissing):
+		writeAPIError(w, http.StatusServiceUnavailable, "CONFIG_REQUIRED", "REKENRAAM_SECRET_KEY is not configured on the server")
+	case errors.Is(err, app.ErrMFAChallengeInvalid):
+		writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "the sign-in attempt expired, start again")
+	case errors.Is(err, app.ErrMFACodeInvalid):
+		writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid authentication code")
+	case errors.Is(err, app.ErrMFANotEnrolled):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "multi-factor authentication is not enrolled")
+	case errors.Is(err, app.ErrMFAAlreadyActive):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "multi-factor authentication is already active")
 	case errors.Is(err, app.ErrTrustedDeviceNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "trusted device not found")
 	case errors.Is(err, app.ErrSetupRequired):
