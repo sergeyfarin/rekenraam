@@ -4,7 +4,7 @@ Durable reference for how Rekenraam positions against commercial and
 open-source personal finance software. The roadmap
 (`docs/roadmap.md`) links here instead of carrying its own gap table; update
 this file when the landscape shifts. Point-in-time deep dives:
-`docs/reviews/competitive-analysis-2026-07.md`. Last full revision: 2026-07-07.
+`docs/reviews/competitive-analysis-2026-07.md`. Last full revision: 2026-07-07; spot-corrected 2026-08-07 (write-off and price voiding shipped backend-only).
 
 ## Positioning
 
@@ -50,10 +50,10 @@ spreadsheet."
 | Cashflow forecasting | ⬜ (R10) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
 | Investment lots & cost basis | ✅ (4 methods) | ✅ | ⬜ | ⬜ | ⬜ | basic FIFO/avg | partial | ✅ |
 | Dividends (incl. withholding, reinvest) | ✅ | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ |
-| Corporate actions (splits/mergers/delist) | ⬜ (T-34; no manual entry either) | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ (manual) |
+| Corporate actions (splits/mergers/delist) | ⬜ (T-34; splits/mergers have no manual entry either — only a worthless-holding write-off, backend-only, ships today) | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ (manual) |
 | Realized/unrealized gains | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | partial | ✅ |
 | Returns analytics (TWR/MWR) | ⬜ (R13) | ⬜ | ⬜ | ⬜ | ✅ | ✅ (strongest) | ⬜ | via tools |
-| Price/FX history + refresh | 🟦 (R11) | ✅ | ✅ | ⬜ | ✅ | ✅ | partial | ✅ |
+| Price/FX history + refresh | 🟦 (R11; backend incl. voiding, no UI) | ✅ | ✅ | ⬜ | ✅ | ✅ | partial | ✅ |
 | Broker/bank online feeds | ✅ T212 (BYO-key) | partial | via importer | via SimpleFIN | partial | partial | ⬜ | via tools |
 | Self-hosted web UI | ✅ | ⬜ desktop | ✅ | ✅ | ✅ | ⬜ desktop | 🟦 | ✅ (Fava) |
 | Single-binary deploy | ✅ | n/a | ⬜ (2–3 containers) | ✅ | ⬜ (3 containers) | n/a | n/a | ✅ |

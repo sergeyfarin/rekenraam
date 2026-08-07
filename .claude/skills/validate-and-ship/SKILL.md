@@ -48,7 +48,7 @@ non-trivial diff (yours or reviewed):
    auto-refresh.
 3. **TOCTOU guard races** — check + insert in separate statements/transactions.
 4. **Split-transaction crash holes** — a row and its idempotency marker written
-   in different transactions (open item T-06).
+   in different transactions (T-06, T-26 — both closed; the pattern recurs).
 5. **Cursor boundaries** — `<=` vs `<`, resume token vs incremental boundary
    (see `background-work`).
 6. **Unconsumed pagination** — frontend fetching page one and ignoring
@@ -70,6 +70,14 @@ non-trivial diff (yours or reviewed):
     against a real account (T-22). When testing a function that produces
     input for another service, add at least one test that calls the
     consumer for real, not just asserts on the producer's output shape.
+12. **Creation dates masquerading as financial facts** — stamping a record's
+    `effective_from`/`opened_on` with "today" makes every earlier posting
+    fail, so installing the app now and importing years of history breaks.
+    Shipped three times: commodities (T-42), user-created categories (T-43),
+    import-created holding accounts (T-44), each fixed by opening the record
+    at the genesis date `0001-01-01`. Ask of any new dated container: is this
+    date a real financial fact (account `opened_on` — keep it, it should
+    reject earlier postings) or app bookkeeping (everything above — genesis)?
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
