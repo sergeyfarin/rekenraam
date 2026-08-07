@@ -6,16 +6,18 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-07-12. Structure updated 2026-07-19 (slice index and
-pending-proposals pointer added; no priority changes). **Priorities updated
-2026-08-05**: the 2026-07-19 review's seven proposals were all accepted —
-see "Decisions adopted 2026-08-05" below.
+Last reviewed: 2026-08-07 (documentation sweep — no priority changes; R16
+marked partly shipped, since its write-off and price-void items landed
+2026-08-06 ahead of the slice). Structure updated 2026-07-19 (slice index and
+pending-proposals pointer added). **Priorities updated 2026-08-05**: the
+2026-07-19 review's seven proposals were all accepted — see "Decisions adopted
+2026-08-05" below.
 
 ## Slice index
 
 Every R-number ever used, so references in other documents stay resolvable.
-Statuses: ✅ shipped · ▶ current · ⏭ planned (ordered below) · ⏸ deliberately
-later · — retired/unassigned.
+Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
+⏭ planned (ordered below) · ⏸ deliberately later · — retired/unassigned.
 
 | Slice | Name | Status | Primary document |
 |---|---|---|---|
@@ -37,7 +39,7 @@ later · — retired/unassigned.
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
 | R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
-| R16 | Investment lifecycle completeness (write-off, price void, return of capital, manual splits) | ⏭ | this file |
+| R16 | Investment lifecycle completeness (write-off, price void, return of capital, manual splits) | ◐ | this file |
 | R17 | Crypto instrument type + `PriceProvider` registry and quote adapters | ⏭ | this file |
 
 ## Decisions adopted 2026-08-05

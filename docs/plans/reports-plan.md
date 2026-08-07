@@ -1,8 +1,11 @@
 # Reports Plan
 
-Status: **active implementation plan for roadmap R2**. The net-worth-series
-backend/OpenAPI foundation is shipped; the reports route and the remaining R2
-read models are pending. Last verified against the codebase: 2026-07-13.
+Status: **active implementation plan for roadmap R2**. Shipped so far: the
+net-worth-series backend/OpenAPI foundation (`GET /api/v1/reports/net-worth`)
+and the `/app/reports` route presenting it as an accessible per-commodity
+table with URL-addressable date/bucket filters. Still pending: the spending
+and cashflow read models, account/category/payee/commodity filters, CSV and
+print output, and charts. Last verified against the codebase: 2026-08-07.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
