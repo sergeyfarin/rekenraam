@@ -87,8 +87,24 @@ of the extraction: T-45 and T-46 below.
 
 - `lib/investments/dividend-form.svelte` — retire both helpers onto
   `$lib/money/amount`; the `bigint` return needs its call sites checked.
-- `lib/investments/buy-form.svelte`, `sell-form.svelte` — quantity × price
-  math, including implied-price rounding, is untested and inline.
+- `lib/investments/buy-form.svelte`, `sell-form.svelte` — a fifth and sixth
+  copy of `parseDecimalField`, each with its own `toSafeInt`. Note these
+  parsers reject a leading `-` outright (the `/^\d+$/` check runs on the whole
+  coefficient), which is correct for quantity and cash but means the shared
+  parser cannot be dropped in unchanged — the forms need an explicit
+  non-negative check where the sign rejection used to be implicit.
+
+Surveyed 2026-08-08 while scoping the above, and **not** a defect: the
+investment endpoints take `cash_amount_value` as an OpenAPI
+`integer/int64` — a JSON number — while `quantity_value` and every other
+money field on the wire is a coefficient string. That is why `toSafeInt`
+exists: a JSON number is only exact to 2^53−1, about a thousand times tighter
+than the int64 the backend accepts. Both forms handle it correctly and
+visibly (`investments_form_amount_too_large`), and at realistic cash scales
+the cap is ~90 trillion currency units, so there is nothing to fix urgently.
+It is recorded because it is a real inconsistency in the API contract, and
+the cap does bite at scale 10+; worth folding into R16 rather than a
+standalone change.
 
 E2E growth is tracked separately (T-20, R3a) and is not a substitute:
 Playwright is still an intentionally unscheduled CI decision.
