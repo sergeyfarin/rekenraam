@@ -188,3 +188,75 @@ export function commodityImbalance(legs: AmountLeg[]): { commodityID: string; am
 	}
 	return null;
 }
+
+/**
+ * A posting reduced to the three fields any sign- or scale-aware operation
+ * needs. Matches what `inflowPositiveAmount` already takes, plus the commodity
+ * that groups it.
+ */
+export interface PostingAmount {
+	commodity_id: number;
+	quantity_value: string;
+	quantity_scale: number;
+	account_class: string;
+}
+
+/** One commodity's signed total, in the ledger's normal-sign convention. */
+export interface CommodityTotal {
+	commodityID: number;
+	/** Signed coefficient string. Positive means "activity", per the rule below. */
+	value: string;
+	/** The widest scale any posting in this commodity carried. */
+	scale: number;
+}
+
+/**
+ * Sum postings per commodity, scale-aware, in the ledger's normal-sign
+ * convention.
+ *
+ * The convention is the same one `inflowPositiveAmount` applies to a single
+ * posting and `balanceMapToQuantities` applies on the backend: storage is
+ * debit-positive, so a liability, income, or equity posting has its sign
+ * flipped to make "money in" and "activity" read positive. Expense and asset
+ * postings pass through unchanged.
+ *
+ * Legs at different scales are aligned to the widest scale before adding —
+ * the frontend counterpart of `exact.ScaledInt` alignment, and the step whose
+ * omission caused every historical severity-1 money bug in this repo. Nothing
+ * is converted to a `Number`, so a total past `Number.MAX_SAFE_INTEGER` stays
+ * exact.
+ *
+ * Commodities are returned in first-seen order, so a caller rendering them gets
+ * a stable sequence rather than one that depends on map iteration.
+ */
+export function sumByCommodity(postings: PostingAmount[]): CommodityTotal[] {
+	const totals = new Map<number, { total: bigint; scale: number }>();
+	const order: number[] = [];
+
+	for (const posting of postings) {
+		const signed =
+			posting.account_class === 'liability' ||
+			posting.account_class === 'income' ||
+			posting.account_class === 'equity'
+				? -BigInt(posting.quantity_value)
+				: BigInt(posting.quantity_value);
+
+		const prev = totals.get(posting.commodity_id);
+		if (prev === undefined) {
+			order.push(posting.commodity_id);
+			totals.set(posting.commodity_id, { total: signed, scale: posting.quantity_scale });
+			continue;
+		}
+
+		const scale = Math.max(prev.scale, posting.quantity_scale);
+		totals.set(posting.commodity_id, {
+			total: rescale(prev.total, prev.scale, scale) + rescale(signed, posting.quantity_scale, scale),
+			scale
+		});
+	}
+
+	return order.map((commodityID) => {
+		const { total, scale } = totals.get(commodityID)!;
+		return { commodityID, value: total.toString(), scale };
+	});
+}

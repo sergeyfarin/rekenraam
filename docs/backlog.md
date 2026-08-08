@@ -122,27 +122,55 @@ tracked separately as G-09 rather than reopening this item.
 E2E growth is tracked separately (T-20, R3a) and is not a substitute:
 Playwright is still an intentionally unscheduled CI decision.
 
-### G-09 Three more `.svelte` files carry private money math `[ ]`
+### G-09 `.svelte` files carrying private money math `[~]`
 
 Found 2026-08-08 by sweeping every `.svelte` file for inline coefficient
-arithmetic, once G-02's investment forms were done. **None of these is a
-defect** — each aligns scales correctly today. They are recorded because they
-are private copies that can drift, which is the entire reason
-`docs/conventions.md` requires one module: every copy that has drifted in this
-repo so far shipped a bug (T-45, T-46, T-47).
+arithmetic, once G-02's investment forms were done.
 
-- `lib/transactions/category-transactions.svelte` — a private `rescaleUp`
-  plus scale-aware per-commodity summing (lines ~48–99). `commodityImbalance`
-  in `$lib/money/amount.ts` already encapsulates exactly this.
-- `routes/app/settings/currencies/+page.svelte` — inline `10n ** BigInt(...)`
-  price scaling (lines ~373–419).
-- `lib/investments/gains-report.svelte` — `BigInt(Math.trunc(Number(value)))`
-  (line ~55). The one remaining place a `Number` briefly touches a
-  coefficient, so it is the only one of the three with a real precision
-  ceiling rather than only a drift risk. Take this one first.
+**Done — `lib/transactions/category-transactions.svelte` (2026-08-08).** It
+held a private `rescaleUp` plus per-commodity scale-aware summing with its own
+income/liability/equity sign switch. That switch is the ledger's **normal-sign
+convention** — the same rule `inflowPositiveAmount` applies to a single posting
+and `balanceMapToQuantities` applies on the backend — so the component was
+carrying a third copy of a rule that already existed twice. Retired onto a new
+`sumByCommodity` in `$lib/money/amount.ts`, table-tested for the sign rule per
+account class, scale alignment, commodity separation, refund netting, and
+exactness past `Number.MAX_SAFE_INTEGER`.
 
-Lower priority than G-02 was: that item was chasing a live 100× error, this
-one is preventing a future one.
+**Not a defect after all — `lib/investments/gains-report.svelte`.** Recorded
+initially as the highest-priority item of the three, on the strength of a
+`BigInt(Math.trunc(Number(value)))` at line ~55. Checked properly: that
+conversion feeds **only `gainClass`**, whose entire output is a CSS colour
+chosen by a sign comparison, and `Number()` rounding preserves sign. Also
+checked and correct: `formatGain(entry.realized_gain_value,
+entry.proceeds_scale)` uses `proceeds_scale` deliberately — the OpenAPI
+description of `realized_gain_value` is "proceeds_value − disposed_basis
+(**aligned to proceeds_scale**)", so there is no `realized_gain_scale` to use.
+And `formatScaledValue` in `investment-labels.ts` is already a thin alias over
+the shared `formatQuantity`, not a duplicate. Nothing to do here.
+
+**Open, and larger than first recorded —
+`routes/app/settings/currencies/+page.svelte`.** Two separate issues in
+`scaledRatioToDecimalText` (lines ~391–419), which renders an FX rate as a
+ratio of two scaled values:
+
+1. **Ad-hoc truncating division on an implied price.** It does integer division
+   and strips trailing zeros, truncating at 8 decimals. `ledger-invariants`
+   states that division and implied prices round **half-up via the shared
+   helpers** and that ad-hoc rounding is never to be written. Truncation on a
+   *displayed* rate is defensible, but it is inconsistent with the stated rule
+   and with `scaledDivision` on the backend, and the difference is visible to
+   the user at the 8th decimal.
+2. **`Number(decimalText)` before formatting.** The function computes an exact
+   decimal string and then throws the exactness away to hand a `double` to
+   `Intl`. Harmless at realistic FX magnitudes, but it is the one remaining
+   place in the frontend where a `Number` touches a computed money value, and
+   `formatQuantity` exists precisely so it does not have to.
+
+Issue 2 is a mechanical fix. Issue 1 needs a decision first — whether a
+displayed rate truncates or rounds half-up — so this was **not** folded into
+the 2026-08-08 sweep silently. Worth pairing with R16, which already owns the
+`integer/int64` money-field inconsistency in the investments contract.
 
 ### G-08 Amount input is not locale-aware `[~]`
 

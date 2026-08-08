@@ -7,7 +7,7 @@ be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-08.
 
-## Decisions — none pending
+## Decisions — one pending
 
 All seven `reviews/roadmap-review-2026-07-19.md` §3/§4 proposals were decided
 2026-08-05 — **all accepted**, each with a scope fence. Recorded in
@@ -19,7 +19,14 @@ slice moved into R17; R14a stays after R5 with an attachments hook in R3;
 the provider "verify" items reclassified as blocking slice-start
 preconditions. Also in `roadmap.md`.
 
-**Nothing is currently awaiting an owner decision.**
+**One decision is now pending (opened 2026-08-08).** `scaledRatioToDecimalText`
+in `routes/app/settings/currencies/+page.svelte` renders an FX rate by
+**truncating** the division at 8 decimals. `ledger-invariants` says division and
+implied prices round **half-up via the shared helpers**, and the backend's
+`scaledDivision` does. Should a *displayed* rate follow that rule, or is
+truncation correct because it never overstates a rate? The difference is visible
+at the 8th decimal. Deliberately not decided while closing G-09 — see
+`backlog.md` G-09.
 
 ## Current initiative — R2 reports (see roadmap.md) — **complete 2026-08-08**
 
@@ -108,11 +115,17 @@ preconditions. Also in `roadmap.md`.
       place. `toSafeInt` became `toInt64Coefficient` in `lib/api/investments.ts`
       — it adapts an API contract quirk and is not money arithmetic, so it
       stayed out of `$lib/money`.
-- [ ] G-09 three more `.svelte` files carry private money math — new
-      2026-08-08, found by sweeping every component once the forms were done.
-      None is a defect today; all three are drift risks. Take
-      `gains-report.svelte` first — it is the only one where a `Number` still
-      touches a coefficient. See `backlog.md` G-09.
+- [~] G-09 `.svelte` files carrying private money math — opened and mostly
+      closed 2026-08-08. `category-transactions.svelte` retired onto a new
+      `sumByCommodity` in `$lib/money/amount.ts` (it held a third copy of the
+      ledger's normal-sign rule). `gains-report.svelte` turned out **not** to be
+      a defect on closer reading — its lossy conversion feeds only a sign test
+      that picks a CSS colour. Remaining: `settings/currencies/+page.svelte`,
+      which is larger than first recorded — it does ad-hoc *truncating* division
+      on an implied FX rate where `ledger-invariants` requires half-up via a
+      shared helper, and then drops the exact result through `Number()` before
+      formatting. **Needs a decision** (truncate or round a displayed rate?) so
+      it was not folded in silently. See `backlog.md` G-09.
 - [~] G-08 amount input is not locale-aware — **display half settled
       2026-08-08**: `Intl.NumberFormat` wins over Dinero.js, the unused
       `dinero.js` dependency is gone, and `formatQuantity` now lives in

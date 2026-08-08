@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	commodityImbalance,
+	sumByCommodity,
 	formatLedgerAmount,
 	inflowPositiveAmount,
 	negateCoefficient,
@@ -290,4 +291,90 @@ describe('commodityImbalance', () => {
 	it('returns null for no legs at all', () => {
 		expect(commodityImbalance([])).toBeNull();
 	});
+});
+
+describe('sumByCommodity', () => {
+  const posting = (
+    commodity_id: number,
+    quantity_value: string,
+    quantity_scale: number,
+    account_class: string
+  ) => ({ commodity_id, quantity_value, quantity_scale, account_class });
+
+  it('returns nothing for no postings', () => {
+    expect(sumByCommodity([])).toEqual([]);
+  });
+
+  it('keeps an expense debit positive', () => {
+    expect(sumByCommodity([posting(1, '3000', 2, 'expense')])).toEqual([
+      { commodityID: 1, value: '3000', scale: 2 }
+    ]);
+  });
+
+  it('flips an income credit so activity reads positive', () => {
+    // Storage is debit-positive, so income arrives negative. The normal-sign
+    // convention makes it read as a positive amount of income.
+    expect(sumByCommodity([posting(1, '-200000', 2, 'income')])).toEqual([
+      { commodityID: 1, value: '200000', scale: 2 }
+    ]);
+  });
+
+  it.each([
+    ['liability', '-500', '500'],
+    ['equity', '-500', '500'],
+    ['asset', '500', '500'],
+    ['expense', '500', '500']
+  ])('applies the normal-sign rule for %s', (accountClass, raw, expected) => {
+    expect(sumByCommodity([posting(1, raw, 2, accountClass)])[0].value).toBe(expected);
+  });
+
+  it('aligns differing scales before adding', () => {
+    // 5.00 (scale 2) + 0.1234 (scale 4) = 5.1234, not 500 + 1234.
+    expect(sumByCommodity([posting(1, '500', 2, 'expense'), posting(1, '1234', 4, 'expense')])).toEqual([
+      { commodityID: 1, value: '51234', scale: 4 }
+    ]);
+  });
+
+  it('keeps commodities separate rather than summing across them', () => {
+    const totals = sumByCommodity([posting(1, '500', 2, 'expense'), posting(2, '300', 2, 'expense')]);
+
+    expect(totals).toEqual([
+      { commodityID: 1, value: '500', scale: 2 },
+      { commodityID: 2, value: '300', scale: 2 }
+    ]);
+  });
+
+  it('returns commodities in first-seen order, not map order', () => {
+    const totals = sumByCommodity([
+      posting(9, '100', 2, 'expense'),
+      posting(2, '100', 2, 'expense'),
+      posting(9, '100', 2, 'expense')
+    ]);
+
+    expect(totals.map((total) => total.commodityID)).toEqual([9, 2]);
+  });
+
+  it('nets a refund against its own category', () => {
+    expect(sumByCommodity([posting(1, '5000', 2, 'expense'), posting(1, '-2000', 2, 'expense')])).toEqual([
+      { commodityID: 1, value: '3000', scale: 2 }
+    ]);
+  });
+
+  it('stays exact past Number.MAX_SAFE_INTEGER', () => {
+    const totals = sumByCommodity([
+      posting(1, '9007199254740993', 2, 'expense'),
+      posting(1, '1', 2, 'expense')
+    ]);
+
+    expect(totals[0].value).toBe('9007199254740994');
+  });
+
+  it('mixes classes within one commodity using each posting’s own rule', () => {
+    // Both legs are positive once normal-signed — 30.00 of expense activity
+    // plus 200.00 of income activity — so they add to 230.00 rather than
+    // cancelling. Normal sign measures activity, not direction of cash.
+    expect(sumByCommodity([posting(1, '3000', 2, 'expense'), posting(1, '-20000', 2, 'income')])).toEqual([
+      { commodityID: 1, value: '23000', scale: 2 }
+    ]);
+  });
 });
