@@ -27,8 +27,18 @@
 
   type JournalEntryResponse = components['schemas']['JournalEntryResponse'];
   type PostingResponse = components['schemas']['PostingResponse'];
+  type JournalEntryPostingRequest = NonNullable<
+    NonNullable<TransactionRequest['journal_entries']>[number]['postings']
+  >[number];
   import { categoryDisplayName } from '$lib/categories/category-labels';
   import { APIClientError } from '$lib/api/client';
+  import {
+    commodityImbalance,
+    formatLedgerAmount,
+    inflowPositiveAmount,
+    negateCoefficient,
+    parseDecimalAmount
+  } from '$lib/money/amount';
 
   // ── Tier types ────────────────────────────────────────────────────
   type Tier = 'simple' | 'split';
@@ -166,8 +176,8 @@
     )
   );
 
-  // For Tier 3 imbalance check — sum within each commodity using BigInt string arithmetic.
-  const splitImbalance = $derived.by(() => computeSplitImbalance(splitLegs));
+  // For Tier 3 imbalance check — summed per commodity, scale-aware, in $lib/money.
+  const splitImbalance = $derived.by(() => commodityImbalance(splitLegs));
 
   const title = $derived(
     mode === 'correct'
@@ -240,7 +250,7 @@
         accountID = assetLeg.account_id;
         simpleCommodityID = assetLeg.commodity_id;
         // Format the amount with correct sign: positive = inflow to account.
-        amountStr = postingToDisplayAmount(assetLeg);
+        amountStr = inflowPositiveAmount(assetLeg);
       }
       if (catLeg) {
         categoryID = catLeg.account_id;
@@ -253,7 +263,7 @@
       splitLegs = nonSystemPostings.map((p: PostingResponse) => ({
         accountID: String(p.account_id),
         commodityID: String(p.commodity_id),
-        amountStr: rawLedgerToDisplay(p.quantity_value, p.quantity_scale),
+        amountStr: formatLedgerAmount(p.quantity_value, p.quantity_scale),
         memo: p.memo ?? ''
       }));
     }
@@ -381,14 +391,15 @@
 
     // Convert user-entered display amount to ledger coefficient.
     // User enters inflow-positive relative to the asset/liability account.
-    const { value: assetValue, scale } = parseDisplayAmount(amountStr);
-    if (assetValue === null) return [];
+    const parsed = parseDecimalAmount(amountStr);
+    if (parsed === null) return [];
+    const { value: assetValue, scale } = parsed;
 
     // Ledger sign: for asset → positive value = debit = inflow; credit = outflow.
     // For liability → positive debit = outflow; so we flip.
-    const assetLedgerValue = account.account_class === 'liability' ? negateStr(assetValue) : assetValue;
+    const assetLedgerValue = account.account_class === 'liability' ? negateCoefficient(assetValue) : assetValue;
     // Category posting is the balancing leg — opposite sign.
-    const catLedgerValue = negateStr(assetLedgerValue);
+    const catLedgerValue = negateCoefficient(assetLedgerValue);
 
     return [
       {
@@ -414,136 +425,28 @@
   }
 
   function buildSplitJournalEntries(): TransactionRequest['journal_entries'] {
-    const postings = splitLegs
-      .filter((leg) => leg.accountID !== '' && leg.commodityID !== '' && leg.amountStr.trim() !== '')
-      .map((leg) => {
-        const { value, scale } = parseDisplayAmount(leg.amountStr);
-        return {
-          account_id: Number(leg.accountID),
-          commodity_id: Number(leg.commodityID),
-          quantity_value: value ?? '0',
-          quantity_scale: scale,
-          memo: leg.memo.trim()
-        };
+    const legs = splitLegs.filter(
+      (leg) => leg.accountID !== '' && leg.commodityID !== '' && leg.amountStr.trim() !== ''
+    );
+
+    const postings: JournalEntryPostingRequest[] = [];
+    for (const leg of legs) {
+      const parsed = parseDecimalAmount(leg.amountStr);
+      // A leg the user filled in but we cannot parse must not silently become a
+      // zero posting — refuse to build the payload, as the simple tier does.
+      if (parsed === null) return [];
+      postings.push({
+        account_id: Number(leg.accountID),
+        commodity_id: Number(leg.commodityID),
+        quantity_value: parsed.value,
+        quantity_scale: parsed.scale,
+        memo: leg.memo.trim()
       });
+    }
 
     if (postings.length === 0) return [];
 
     return [{ entry_date: transactionDate, postings }];
-  }
-
-  // ── Amount helpers ────────────────────────────────────────────────
-
-  /**
-   * Parse a user-entered decimal string like "25.00" or "-10.5" into
-   * { value: integer-coefficient string, scale: number }.
-   * Never builds a JS number from a large value — uses string arithmetic.
-   */
-  function parseDisplayAmount(s: string): { value: string | null; scale: number } {
-    const trimmed = s.trim().replace(/,/g, '');
-    if (!trimmed) return { value: null, scale: 0 };
-
-    const isNeg = trimmed.startsWith('-');
-    const abs = isNeg ? trimmed.slice(1) : trimmed;
-    const dotIdx = abs.indexOf('.');
-
-    let intStr: string;
-    let fracStr: string;
-    let scale: number;
-
-    if (dotIdx === -1) {
-      intStr = abs || '0';
-      fracStr = '';
-      scale = 0;
-    } else {
-      intStr = abs.slice(0, dotIdx) || '0';
-      fracStr = abs.slice(dotIdx + 1);
-      scale = fracStr.length;
-    }
-
-    // Remove leading zeros from integer part (but keep at least one digit).
-    intStr = intStr.replace(/^0+/, '') || '0';
-
-    const coefficient = intStr + fracStr;
-    // Sanity-check: only digits.
-    if (!/^\d+$/.test(coefficient)) return { value: null, scale };
-
-    const value = isNeg ? `-${coefficient}` : coefficient;
-    return { value, scale };
-  }
-
-  /** Convert a ledger quantity_value + scale to a user-visible decimal string. */
-  function rawLedgerToDisplay(quantityValue: string, scale: number): string {
-    const isNeg = quantityValue.startsWith('-');
-    const abs = isNeg ? quantityValue.slice(1) : quantityValue;
-    if (scale === 0) return isNeg ? `-${abs}` : abs;
-    if (abs.length <= scale) {
-      const padded = abs.padStart(scale + 1, '0');
-      const int = padded.slice(0, padded.length - scale);
-      const frac = padded.slice(padded.length - scale);
-      return isNeg ? `-${int}.${frac}` : `${int}.${frac}`;
-    }
-    const int = abs.slice(0, abs.length - scale);
-    const frac = abs.slice(abs.length - scale);
-    return isNeg ? `-${int}.${frac}` : `${int}.${frac}`;
-  }
-
-  /**
-   * Convert a posting's quantity_value + scale to a user-facing inflow-positive
-   * display amount relative to the posting's account class.
-   */
-  function postingToDisplayAmount(posting: { quantity_value: string; quantity_scale: number; account_class: string }): string {
-    const raw = rawLedgerToDisplay(posting.quantity_value, posting.quantity_scale);
-    // For liability/income/equity: flip sign.
-    if (posting.account_class === 'liability' || posting.account_class === 'income' || posting.account_class === 'equity') {
-      return raw.startsWith('-') ? raw.slice(1) : `-${raw}`;
-    }
-    return raw;
-  }
-
-  function negateStr(v: string): string {
-    if (!v || v === '0') return '0';
-    return v.startsWith('-') ? v.slice(1) : `-${v}`;
-  }
-
-  /** Sum all split legs per commodity using BigInt string arithmetic. Returns null on clean balance. */
-  function computeSplitImbalance(legs: SplitLeg[]): { commodityID: string; amount: string } | null {
-    const totals = new Map<string, bigint>();
-    const scales = new Map<string, number>();
-
-    for (const leg of legs) {
-      if (!leg.commodityID || !leg.amountStr.trim()) continue;
-      const { value, scale } = parseDisplayAmount(leg.amountStr);
-      if (value === null) continue;
-
-      const prevScale = scales.get(leg.commodityID) ?? scale;
-      const maxScale = Math.max(prevScale, scale);
-      scales.set(leg.commodityID, maxScale);
-
-      // Rescale both to maxScale before summing.
-      const rescale = (v: string, from: number, to: number): bigint => {
-        const factor = 10n ** BigInt(to - from);
-        const neg = v.startsWith('-');
-        const absCoef = BigInt(neg ? v.slice(1) : v) * factor;
-        return neg ? -absCoef : absCoef;
-      };
-
-      const prev = totals.get(leg.commodityID) ?? 0n;
-      const thisScale = scales.get(leg.commodityID)!;
-      // Rescale existing total if scale grew.
-      const prevRescaled = prevScale < maxScale
-        ? (prev * 10n ** BigInt(maxScale - prevScale))
-        : prev;
-      totals.set(leg.commodityID, prevRescaled + rescale(value, scale, maxScale));
-    }
-
-    for (const [commodityID, total] of totals.entries()) {
-      if (total !== 0n) {
-        const scale = scales.get(commodityID) ?? 0;
-        return { commodityID, amount: rawLedgerToDisplay(total.toString(), scale) };
-      }
-    }
-    return null;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
@@ -582,21 +485,22 @@
 
   function switchToSplit() {
     // Copy existing simple fields into split legs.
-    if (accountID && amountStr) {
-      const { value, scale } = parseDisplayAmount(amountStr);
+    const parsed = accountID && amountStr ? parseDecimalAmount(amountStr) : null;
+    if (parsed !== null) {
+      const { value, scale } = parsed;
       const account = assetLiabilityAccounts.find((a: AccountResponse) => a.id === accountID);
-      const assetLedger = account?.account_class === 'liability' ? negateStr(value ?? '0') : (value ?? '0');
+      const assetLedger = account?.account_class === 'liability' ? negateCoefficient(value) : value;
       splitLegs = [
         {
           accountID: String(accountID),
           commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
-          amountStr: rawLedgerToDisplay(assetLedger, scale),
+          amountStr: formatLedgerAmount(assetLedger, scale),
           memo: ''
         },
         {
           accountID: categoryID ? String(categoryID) : '',
           commodityID: inferredCommodityID ? String(inferredCommodityID) : '',
-          amountStr: value ? rawLedgerToDisplay(negateStr(assetLedger), scale) : '',
+          amountStr: formatLedgerAmount(negateCoefficient(assetLedger), scale),
           memo: ''
         }
       ];

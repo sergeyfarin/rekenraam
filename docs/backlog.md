@@ -8,8 +8,8 @@ not already scheduled as product work. It is intentionally short.
 - **Shipped capability:** `docs/implemented.md`.
 - **Resolved and deliberate decisions:** `docs/reviews/resolved-backlog-2026-07.md`.
 
-Status legend: `[ ]` open · `[blocked]` open with a stated dependency that must
-land first.
+Status legend: `[ ]` open · `[~]` partly done, with the remainder stated ·
+`[blocked]` open with a stated dependency that must land first.
 
 ## General
 
@@ -55,30 +55,72 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
-### G-02 Frontend money logic is effectively untested `[ ]`
+### G-02 Frontend money logic is effectively untested `[~]`
 
-Open and **not blocked** — actionable in any session, deliberately unstarted
-while R2 is the current initiative. From
-`docs/reviews/test-coverage-review-2026-07.md` G-02; re-verified 2026-08-07:
-four Vitest files, **337 lines of test** (`reconcile/statement-balance`,
-`api/imports`, `transactions/transaction-labels`, `reports/net-worth`) against
-the whole frontend. The backend equivalent of this gap is now closed —
-merged Go coverage is 75.2% with a CI floor (G-07, closed 2026-08-07) — which makes the
-frontend the remaining blind spot.
+**Partly done — the transaction editor half landed 2026-08-08.** From
+`docs/reviews/test-coverage-review-2026-07.md` G-02. The gap was never
+"components lack tests"; it is that **money logic living inside `.svelte`
+files cannot be tested at all**, so the work is extraction, not test volume.
 
-The gap is not "components lack tests"; it is that **money logic living
-inside `.svelte` files cannot be tested at all**. The highest-value work is
-therefore extraction, not test volume: pull the transaction editor's amount
-parsing and its balance check
-(`frontend/src/lib/transactions/transaction-editor.svelte`) and the
-investment forms' quantity/price math (`lib/investments/buy-form.svelte`,
-`sell-form.svelte`) into plain `.ts` modules next to the existing tested ones,
-then table-test them on the cases that have burned this repo before:
-scale mismatch between commodities, values beyond `Number.MAX_SAFE_INTEGER`,
-decimal comma input, and negative/zero amounts.
+The backend equivalent of this gap is closed — merged Go coverage is 75.2%
+with a CI floor (G-07, closed 2026-08-07) — which is what made the frontend
+the remaining blind spot.
+
+**Done (2026-08-08).** `frontend/src/lib/money/amount.ts` is now the single
+money-parsing and money-formatting layer: `parseDecimalAmount`,
+`formatLedgerAmount`, `negateCoefficient`, `inflowPositiveAmount`, and the
+scale-aware `commodityImbalance`. It replaced two divergent copies of the
+same logic — the private helpers inside `transactions/transaction-editor.svelte`
+and `reconcile/statement-balance.ts`, which is now a thin alias over it. This
+is the frontend counterpart of the backend's `exact.ScaledInt` consolidation
+(T-41): one place where scale alignment happens, so a fix lands once.
+`money/amount.test.ts` table-tests it on all four cases that have burned this
+repo — cross-commodity scale mismatch, values past
+`Number.MAX_SAFE_INTEGER`, decimal-comma input, negative/zero amounts —
+plus the backend's 38-digit and 24-scale ceilings. Two real defects fell out
+of the extraction: T-45 and T-46 below.
+
+**Remaining.** The investment forms still hold untested money math and, in
+`dividend-form.svelte`, a **third and fourth** copy of the same helpers
+(`rawLedgerToDisplay` at line 155, and `parseDecimalField`, which returns a
+`bigint` rather than a coefficient string):
+
+- `lib/investments/dividend-form.svelte` — retire both helpers onto
+  `$lib/money/amount`; the `bigint` return needs its call sites checked.
+- `lib/investments/buy-form.svelte`, `sell-form.svelte` — quantity × price
+  math, including implied-price rounding, is untested and inline.
 
 E2E growth is tracked separately (T-20, R3a) and is not a substitute:
 Playwright is still an intentionally unscheduled CI decision.
+
+### G-08 Amount input is not locale-aware `[ ]`
+
+Found while doing G-02's first half, 2026-08-08. `frontend/src/lib/money/amount.ts`
+reads "," as a thousands separator, which is right for the only locale the app
+ships (`en`, per `frontend/project.inlang/settings.json`) and wrong the moment a
+decimal-comma locale is added: a user typing `1,50` means 1.5, not 150.
+
+The immediate hazard is closed (see T-45) — malformed grouping is now rejected
+rather than silently mangled, so the user gets a rejection instead of a 100×
+error. What is missing is the real fix: resolve the separator from the active
+locale, in both directions (parsing input and rendering an editable value back
+into a form field), the way `app/import_locale.go` does for file imports.
+
+Deliberately not done now: with one locale there is nothing to resolve
+against, and guessing per-value is how T-36 happened. This blocks nothing
+today but is a prerequisite for the multi-currency/expat direction in
+`docs/roadmap.md`, and should be picked up with the first non-`en` locale.
+
+Noted while confirming the above: **`dinero.js` 2.0.2 is a declared dependency
+with zero imports anywhere in `frontend/src`.** `docs/conventions.md` claimed it
+was used "for all frontend money arithmetic … input parsing", which was never
+true — parsing has always been hand-rolled, correctly, because Dinero's default
+calculator is JS numbers and breaks past `Number.MAX_SAFE_INTEGER`. The
+convention was corrected 2026-08-08 to match reality: exact arithmetic in
+`$lib/money/amount.ts`, Dinero reserved for locale-aware display. Whoever picks
+up G-08 should decide whether Dinero (with its BigInt calculator) is actually
+the display layer we want, or whether `Intl.NumberFormat` alone is enough and
+the dependency should be dropped.
 
 ## Public-deployment security gates
 

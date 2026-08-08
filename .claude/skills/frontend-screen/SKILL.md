@@ -38,6 +38,12 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 - Formatting of money, dates, numbers is locale-aware (Dinero.js formatting
   layer, `Intl.DateTimeFormat`, `date-fns` v4) and separate from translation.
   Never use the `Date` constructor or luxon/moment for financial date logic.
+- **All money parsing and exact arithmetic goes through `$lib/money/amount.ts`**
+  (`parseDecimalAmount`, `formatLedgerAmount`, `negateCoefficient`,
+  `inflowPositiveAmount`, `commodityImbalance`) — string/BigInt over the ledger's
+  `{ value, scale }` pair, never a `Number`. Never write a private amount helper
+  inside a `.svelte` file: every copy that existed had drifted, and two of them
+  shipped a silent 100× error (T-45).
 - Built-in DB labels arrive as stable codes; resolve display text here, at
   render time.
 - Regenerate outside dev/check/build with

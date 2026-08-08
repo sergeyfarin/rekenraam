@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-07.
+Last updated: 2026-08-08.
 
 ## Decisions — none pending
 
@@ -82,10 +82,17 @@ preconditions. Also in `roadmap.md`.
 
 ## Open, unscheduled (from the doc sweep of 2026-08-07)
 
-- [ ] G-02 frontend money logic untested — 337 lines of Vitest against the
-      whole frontend. Not blocked; the real work is **extracting** amount
-      parsing and balance math out of `transaction-editor.svelte` and the
-      investment forms into testable `.ts` modules. See `backlog.md` G-02.
+- [~] G-02 frontend money logic untested — **half done 2026-08-08**. The
+      transaction editor's and reconcile form's amount parsing, formatting and
+      balance math now live in `frontend/src/lib/money/amount.ts` behind table
+      tests; the extraction turned up two real defects (T-45 decimal-comma
+      100×, T-46 unparseable split leg posted as zero), both fixed. Remaining:
+      the investment forms, which hold two more copies of the same helpers —
+      `dividend-form.svelte` first, then `buy-form`/`sell-form`. Best done at
+      the R2 acceptance review. See `backlog.md` G-02.
+- [ ] G-08 amount input is not locale-aware — new 2026-08-08, opened by the
+      G-02 work. Not blocking anything while the app ships `en` only; a
+      prerequisite for the multi-currency direction. See `backlog.md` G-08.
 - [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
       slice and an unmade provider choice. See `backlog.md`.
 

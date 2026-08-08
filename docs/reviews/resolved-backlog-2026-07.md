@@ -368,6 +368,42 @@ current behaviour.
   change pass. The job is intentionally outside `app-build`'s `needs`, so a
   breach is loud without blocking the release build.
 
+- **T-45 decimal-comma amounts 100× off in the browser**, found and fixed
+  2026-08-08 while extracting G-02's shared money module. The frontend twin of
+  T-36, which had only ever been fixed on the file-import side. Both frontend
+  amount parsers — the private `parseDisplayAmount` in
+  `transactions/transaction-editor.svelte` and `parseStatementBalance` in
+  `reconcile/statement-balance.ts` — opened with
+  `input.trim().replace(/,/g, '')`, stripping *every* comma. That is correct
+  for the `en` thousands separator (`1,234.56` → 1234.56) and silently wrong
+  for decimal-comma input: typing `1,50` posted **150.00**, with no warning,
+  straight into the ledger.
+
+  Fixed in the new `frontend/src/lib/money/amount.ts` by validating the shape
+  before stripping: the integer part must be either plain digits or correctly
+  grouped in threes (`/^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/`). Well-formed
+  grouping still parses; `1,50`, `12,3`, `1,2345` and friends now return `null`
+  and the form rejects them. **Deliberately a rejection, not a guess** — `1,234`
+  is genuinely ambiguous between the two conventions, and inferring per value is
+  exactly how T-36 happened. Resolving the separator from the active locale is
+  tracked as G-08. Proven by the `decimal-comma input` cases in
+  `frontend/src/lib/money/amount.test.ts`.
+
+- **T-46 an unparseable split leg posted as zero**, found and fixed 2026-08-08,
+  same extraction. `buildSplitJournalEntries` in
+  `transactions/transaction-editor.svelte` mapped each filled-in leg through the
+  parser and wrote `quantity_value: value ?? '0'`, so a leg the parser rejected
+  became a **zero posting** rather than an error. The client-side balance hint
+  hid it rather than catching it: `computeSplitImbalance` *skipped* unparseable
+  legs, so the form showed "balanced" while submitting a leg the user had filled
+  in as 0.00. Reachable through T-45 above — `1,50` in a split leg parsed fine
+  and was wrong; anything the regex now rejects would have posted zero.
+
+  Fixed by refusing to build the payload at all when a filled-in leg fails to
+  parse, which is what the simple tier already did. `commodityImbalance` still
+  skips unparseable legs and now says so in its contract: a leg it ignores is
+  not a leg the backend ignores, so callers must reject separately.
+
 - **P5 drafts vs FX coverage** (2026-07-19 audit), closed 2026-08-07 as a
   **documentation** fix, not a code change. The audit was right that the docs
   and the code disagreed and wrong about which was at fault: posted-only

@@ -237,7 +237,15 @@ When a feature introduces a durable new rule, update one of those documents in t
 - UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.
 - Do not concatenate translated fragments to form sentences.
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.
-- Use **Dinero.js v2** for all frontend money arithmetic and display (balance checks before submission, running totals, input parsing). Use `Intl.NumberFormat` via Dinero's formatting layer for locale-aware rendering.
+- All frontend money **parsing and exact arithmetic** goes through
+  `frontend/src/lib/money/amount.ts` — one module, string/BigInt arithmetic over the
+  ledger's `{ value, scale }` pair, never a JS `Number`. Do not add a second parser or
+  a private copy of a helper to a `.svelte` file; this is the frontend counterpart of
+  the backend's `exact.ScaledInt` rule above, and every copy that existed had drifted.
+- **Dinero.js v2** is for locale-aware **display** of read-only money (via
+  `Intl.NumberFormat` through Dinero's formatting layer). It is not used for parsing
+  or for values that must round-trip back into an editable form field, and it must
+  never be the source of a figure the user acts on.
 - Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
 - Report calculations must be backend-composed read models with explicit filter
   contracts. Reuse the same report semantics across full report pages,
