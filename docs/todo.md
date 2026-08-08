@@ -98,15 +98,21 @@ preconditions. Also in `roadmap.md`.
 
 ## Open, unscheduled (from the doc sweep of 2026-08-07)
 
-- [~] G-02 frontend money logic untested — **half done 2026-08-08**. The
-      transaction editor's and reconcile form's amount parsing, formatting and
-      balance math now live in `frontend/src/lib/money/amount.ts` behind table
-      tests; the extraction turned up two real defects (T-45 decimal-comma
-      100×, T-46 unparseable split leg posted as zero), both fixed. Remaining:
-      the investment forms, which hold two more copies of the same helpers —
-      `dividend-form.svelte` first, then `buy-form`/`sell-form`. **No longer
-      gated:** this was queued behind the R2 acceptance review, which completed
-      2026-08-08, so it is now simply next up. See `backlog.md` G-02.
+- [x] G-02 frontend money logic untested — **done 2026-08-08**. The editor and
+      reconcile form landed first (turning up T-45 and T-46); the three
+      investment forms followed, turning up **T-47 — the same decimal-comma
+      100× error, still live in every one of them**. They held seven copies of
+      three helpers, not the two the survey counted. Validation is now in
+      `lib/investments/form-amounts.ts` behind 35 named tests, because with no
+      component-test harness a per-form behaviour change cannot be pinned in
+      place. `toSafeInt` became `toInt64Coefficient` in `lib/api/investments.ts`
+      — it adapts an API contract quirk and is not money arithmetic, so it
+      stayed out of `$lib/money`.
+- [ ] G-09 three more `.svelte` files carry private money math — new
+      2026-08-08, found by sweeping every component once the forms were done.
+      None is a defect today; all three are drift risks. Take
+      `gains-report.svelte` first — it is the only one where a `Number` still
+      touches a coefficient. See `backlog.md` G-09.
 - [~] G-08 amount input is not locale-aware — **display half settled
       2026-08-08**: `Intl.NumberFormat` wins over Dinero.js, the unused
       `dinero.js` dependency is gone, and `formatQuantity` now lives in

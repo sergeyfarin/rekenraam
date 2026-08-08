@@ -55,9 +55,9 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
-### G-02 Frontend money logic is effectively untested `[~]`
+### G-02 Frontend money logic is effectively untested `[x]`
 
-**Partly done — the transaction editor half landed 2026-08-08.** From
+**Done 2026-08-08** (editor half, then the investment forms). From
 `docs/reviews/test-coverage-review-2026-07.md` G-02. The gap was never
 "components lack tests"; it is that **money logic living inside `.svelte`
 files cannot be tested at all**, so the work is extraction, not test volume.
@@ -80,34 +80,69 @@ repo — cross-commodity scale mismatch, values past
 plus the backend's 38-digit and 24-scale ceilings. Two real defects fell out
 of the extraction: T-45 and T-46 below.
 
-**Remaining.** The investment forms still hold untested money math and, in
-`dividend-form.svelte`, a **third and fourth** copy of the same helpers
-(`rawLedgerToDisplay` at line 155, and `parseDecimalField`, which returns a
-`bigint` rather than a coefficient string):
+**Done (2026-08-08), and it turned up a live 100x bug — see T-47.** The three
+investment forms held **seven** copies of three helpers, one more than the
+survey above counted: `dividend-form.svelte` also carried its own `toSafeInt`
+beside `rawLedgerToDisplay` and `parseDecimalField`.
 
-- `lib/investments/dividend-form.svelte` — retire both helpers onto
-  `$lib/money/amount`; the `bigint` return needs its call sites checked.
-- `lib/investments/buy-form.svelte`, `sell-form.svelte` — a fifth and sixth
-  copy of `parseDecimalField`, each with its own `toSafeInt`. Note these
-  parsers reject a leading `-` outright (the `/^\d+$/` check runs on the whole
-  coefficient), which is correct for quantity and cash but means the shared
-  parser cannot be dropped in unchanged — the forms need an explicit
-  non-negative check where the sign rejection used to be implicit.
+The non-negative note above was exactly right and was the shape of the work.
+The old parsers rejected a leading `-` only as a side effect — they
+concatenated the integer and fractional digits and ran `/^\d+$/` on the
+result, so `-5.00` built `"-500"` and failed the digit check.
+`parseDecimalAmount` handles signs correctly, so the swap needed an explicit,
+named non-negative guard per form or negative quantities would have started
+being accepted.
 
-Surveyed 2026-08-08 while scoping the above, and **not** a defect: the
-investment endpoints take `cash_amount_value` as an OpenAPI
-`integer/int64` — a JSON number — while `quantity_value` and every other
-money field on the wire is a coefficient string. That is why `toSafeInt`
-exists: a JSON number is only exact to 2^53−1, about a thousand times tighter
-than the int64 the backend accepts. Both forms handle it correctly and
-visibly (`investments_form_amount_too_large`), and at realistic cash scales
-the cap is ~90 trillion currency units, so there is nothing to fix urgently.
-It is recorded because it is a real inconsistency in the API contract, and
-the cap does bite at scale 10+; worth folding into R16 rather than a
-standalone change.
+Because there is **no component-test harness** in this project (no
+`testing-library`, no `jsdom`/`happy-dom` — vitest runs plain `.ts` only), a
+per-form behaviour change could not be tested in place. The validation was
+extracted to `lib/investments/form-amounts.ts` (`parseMagnitude`,
+`parseMoneyMagnitude`, `parseTradeAmounts`, `parseDividendAmounts`) with 35
+named tests, and the components now just call it.
+
+`toSafeInt` deliberately did **not** move onto `$lib/money`. It is not money
+arithmetic that drifted; it is the adapter for the `integer/int64` contract
+quirk described below. It now lives once as `toInt64Coefficient` in
+`lib/api/investments.ts`, next to the contract it adapts — putting a
+`BigInt`→`Number` converter into `amount.ts` would contradict that module's
+invariant that no `Number` ever touches a coefficient.
+
+Also fixed in passing: `dividend-form` and `sell-form` returned silently when
+an amount failed to parse, so a typo left the submit button doing nothing with
+no explanation. Both now surface an error, as `buy-form` already did.
+`sell-form`'s debounced preview keeps its silence for half-typed values but
+reports `too_large` immediately, since that will not become valid by typing
+more.
+
+G-02's stated scope — the editor, the reconcile form, and the investment
+forms — is now closed. A sweep done afterwards found three further `.svelte`
+files with private money math that were never part of that scope; they are
+tracked separately as G-09 rather than reopening this item.
 
 E2E growth is tracked separately (T-20, R3a) and is not a substitute:
 Playwright is still an intentionally unscheduled CI decision.
+
+### G-09 Three more `.svelte` files carry private money math `[ ]`
+
+Found 2026-08-08 by sweeping every `.svelte` file for inline coefficient
+arithmetic, once G-02's investment forms were done. **None of these is a
+defect** — each aligns scales correctly today. They are recorded because they
+are private copies that can drift, which is the entire reason
+`docs/conventions.md` requires one module: every copy that has drifted in this
+repo so far shipped a bug (T-45, T-46, T-47).
+
+- `lib/transactions/category-transactions.svelte` — a private `rescaleUp`
+  plus scale-aware per-commodity summing (lines ~48–99). `commodityImbalance`
+  in `$lib/money/amount.ts` already encapsulates exactly this.
+- `routes/app/settings/currencies/+page.svelte` — inline `10n ** BigInt(...)`
+  price scaling (lines ~373–419).
+- `lib/investments/gains-report.svelte` — `BigInt(Math.trunc(Number(value)))`
+  (line ~55). The one remaining place a `Number` briefly touches a
+  coefficient, so it is the only one of the three with a real precision
+  ceiling rather than only a drift risk. Take this one first.
+
+Lower priority than G-02 was: that item was chasing a live 100× error, this
+one is preventing a future one.
 
 ### G-08 Amount input is not locale-aware `[~]`
 

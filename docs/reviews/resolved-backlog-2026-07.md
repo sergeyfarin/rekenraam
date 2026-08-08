@@ -389,6 +389,36 @@ current behaviour.
   tracked as G-08. Proven by the `decimal-comma input` cases in
   `frontend/src/lib/money/amount.test.ts`.
 
+- **T-47 the same decimal-comma 100× error, still live in all three investment
+  forms**, found and fixed 2026-08-08 while closing G-02's second half. The
+  third appearance of the T-36/T-45 defect. `parseDecimalField` — duplicated
+  privately in `investments/buy-form.svelte`, `sell-form.svelte`, and
+  `dividend-form.svelte` — opened with the identical
+  `s.trim().replace(/,/g, '')`, so `1,50` typed as a share quantity, a cash
+  amount, a dividend amount, or a withholding amount became **150** at scale 0.
+  Confirmed by running the shipped parser against the input before touching it.
+
+  T-45 fixed the two copies the editor and reconcile form used; these three
+  were never reached because the survey that scoped that work treated the
+  investment forms as a later slice. That is the lesson worth keeping: the fix
+  was correct but the *sweep* was incomplete, and a duplicated helper is only
+  as fixed as its least-visited copy.
+
+  Fixed by retiring all three onto `parseDecimalAmount`, which validates the
+  grouping shape before stripping. Proven by the `rejects "1,50" instead of
+  silently reading it as 150` cases in
+  `frontend/src/lib/investments/form-amounts.test.ts`, asserted per form rather
+  than once on the shared module — the forms are where the bug actually shipped.
+
+  Two things had to change with it, or the fix would have introduced a worse
+  bug than it removed. The old parsers rejected a leading `-` only as a side
+  effect of running `/^\d+$/` over the concatenated coefficient, so swapping in
+  a sign-aware parser would have started accepting **negative share
+  quantities**; every form now carries an explicit, named non-negative guard.
+  And because the project has no component-test harness, the validation was
+  extracted to `lib/investments/form-amounts.ts` so the per-form behaviour
+  change could be pinned by name at all.
+
 - **T-46 an unparseable split leg posted as zero**, found and fixed 2026-08-08,
   same extraction. `buildSplitJournalEntries` in
   `transactions/transaction-editor.svelte` mapped each filled-in leg through the

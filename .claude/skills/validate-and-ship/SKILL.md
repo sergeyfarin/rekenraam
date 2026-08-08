@@ -79,6 +79,34 @@ non-trivial diff (yours or reviewed):
     date a real financial fact (account `opened_on` — keep it, it should
     reject earlier postings) or app bookkeeping (everything above — genesis)?
 
+13. **A duplicated helper is only as fixed as its least-visited copy** — the
+    decimal-comma 100x error has now shipped **three** times from the same
+    two-line pattern, `input.replace(/,/g, '')` before parsing, which reads
+    `1,50` as 150. Fixed on the import side (T-36), then in the transaction
+    editor and reconcile form (T-45), and it was *still live* in all three
+    investment forms four months later (T-47) because the survey that scoped
+    T-45 treated those forms as a later slice. The fix each time was correct;
+    the **sweep** was what failed. So: when fixing a helper that exists in more
+    than one place, grep the whole tree for the *pattern* before declaring it
+    done, not just the copies the current ticket names — and count what you
+    find, because the T-47 survey said two copies and there were seven.
+
+14. **Consolidation that silently widens what is accepted** — retiring a
+    private helper onto a shared one is a behaviour change unless proven
+    otherwise. The investment forms' parsers rejected a leading `-` only as a
+    *side effect* of running `/^\d+$/` over the concatenated coefficient;
+    `parseDecimalAmount` handles signs properly, so a like-for-like swap would
+    have started accepting negative share quantities (T-47). Ask of any such
+    swap: what did the old code reject *incidentally* that the new code
+    accepts? Then make the rejection explicit and named, and test it where the
+    behaviour changed — per call site, not once on the shared module.
+
+    Corollary: if the call sites are `.svelte` files, that test is impossible
+    in place. This project has **no component-test harness** (no
+    `testing-library`, no `jsdom`; vitest runs plain `.ts` only), so the
+    validation has to be extracted to a module first. That is a feature, not an
+    obstacle — it is the same reason G-02 existed.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 
