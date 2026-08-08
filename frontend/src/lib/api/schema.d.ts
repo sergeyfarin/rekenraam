@@ -3728,6 +3728,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/spending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read income or expense totals ranked by category or payee
+         * @description Answers "where did money go, and who received it?" over an inclusive date range. Operates over income/expense category postings rather than an inferred bank-statement classification, so transfers between the user's own accounts do not appear. System accounts are excluded, so an investment trade's commodity_trading clearing leg cannot be mistaken for spending.
+         */
+        get: {
+            parameters: {
+                query: {
+                    start_date: string;
+                    /** @description Inclusive. */
+                    end_date: string;
+                    /** @description One dimension per request. Defaults to category. */
+                    group_by?: "category" | "payee";
+                    /** @description Defaults to expense. Income is a separate, explicitly selected mode and is labelled as income, never as spending. */
+                    direction?: "expense" | "income";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Exact per-commodity totals per group, ranked within one commodity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpendingResponse"];
+                    };
+                };
+                /** @description Invalid report query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Report arithmetic exceeded exact quantity limits */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -11542,6 +11616,68 @@ export interface components {
             bucket: "day" | "week" | "month" | "quarter" | "year";
             query: components["schemas"]["NetWorthSeriesQuery"];
             buckets: components["schemas"]["NetWorthSeriesBucket"][];
+            excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        /** @description One row of the ranking. Exactly one of `category_account_id`, `payee_id`, or `unassigned` identifies the group. */
+        SpendingGroup: {
+            /**
+             * Format: int64
+             * @description Set when group_by=category. No label is returned: built-in categories carry a localized label, so the client resolves it against the categories read model.
+             */
+            category_account_id?: number;
+            /**
+             * Format: int64
+             * @description Set when group_by=payee.
+             */
+            payee_id?: number;
+            /** @description The payee's current name. Returned by the server because payee names are canonical user data rather than localized built-ins. */
+            payee_label?: string;
+            /** @description Activity with no linked payee, including transactions carrying only a free-text payee name. Reported rather than dropped so the group totals still reconcile to commodity_totals. */
+            unassigned: boolean;
+            totals: components["schemas"]["SpendingGroupTotal"][];
+        };
+        /** @description One commodity's exact total for one group. `normal_quantity_value` is the positive magnitude in the requested direction; a refund can legitimately leave it negative. */
+        SpendingGroupTotal: {
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            normal_quantity_value: string;
+            /**
+             * Format: int64
+             * @description Share of the report-wide total for this same commodity, in hundredths of a percent (10000 = 100%). Presentational only; never a figure to act on. Zero when the report-wide total for the commodity is zero. Shares are never comparable across commodities.
+             */
+            share_basis_points: number;
+        };
+        SpendingQuery: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            group_by: "category" | "payee";
+            /** @enum {string} */
+            direction: "expense" | "income";
+        };
+        /** @description Income or expense totals for an inclusive date range, ranked by one dimension. Computed over category postings only, so transfers between the user's own accounts never appear. Posted, non-voided, non-soft-deleted records only. */
+        SpendingResponse: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            group_by: "category" | "payee";
+            /** @enum {string} */
+            direction: "expense" | "income";
+            /**
+             * Format: int64
+             * @description The commodity whose magnitudes determined the order of `groups`. Ranking uses a single commodity because comparing unlike commodities as one number is not meaningful; this field makes the ordering explainable. Zero when the report is empty.
+             */
+            rank_commodity_id: number;
+            query: components["schemas"]["SpendingQuery"];
+            /** @description Report-wide total per commodity — the denominator each group's share_basis_points is taken against. */
+            commodity_totals: components["schemas"]["BalanceQuantity"][];
+            groups: components["schemas"]["SpendingGroup"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
         };
         PriceObservationResponse: {

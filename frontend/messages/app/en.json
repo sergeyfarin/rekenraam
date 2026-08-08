@@ -1,6 +1,5 @@
 {
   "app_name": "Rekenraam",
-
   "reports_title": "Reports",
   "reports_nav": "Reports",
   "reports_shell_copy": "Understand net worth, spending, and cashflow from exact posted ledger data.",
@@ -29,11 +28,9 @@
   "reports_column_net_worth": "Net worth",
   "reports_date_range": "{start} – {end}",
   "reports_commodity_unknown": "Commodity #{commodityId}",
-
   "import_title": "Import",
   "import_shell_copy": "Import transactions from QIF files exported by MS Money, Quicken, and other applications.",
   "import_nav": "Import",
-
   "import_upload_title": "Upload a file",
   "import_upload_copy": "Choose a QIF file to import. You can export per-account QIF files from MS Money via File → Export → Loose QIF.",
   "import_upload_choose_file": "Choose file",
@@ -42,7 +39,6 @@
   "import_upload_submitting": "Uploading…",
   "import_upload_ms_money_help": "How to export from MS Money",
   "import_upload_ms_money_steps": "In MS Money: open the account → File → Export → choose Loose QIF → save and upload here.",
-
   "import_preview_title": "Preview import",
   "import_preview_copy": "Review the transactions below. Assign an account, currency, and default category to each import, then click Commit.",
   "import_preview_apply_all": "Apply to all rows",
@@ -73,24 +69,20 @@
   "import_preview_loading": "Loading preview…",
   "import_preview_error": "Failed to load preview.",
   "import_preview_date_range": "Date range: {from} – {to}",
-
   "import_commit_button": "Commit to ledger",
   "import_commit_pending": "Committing…",
   "import_commit_reconciliation_override": "Override reconciliation guards",
   "import_commit_reconciliation_override_hint": "Allow imported rows to land inside already-reconciled periods. Use with care.",
-
   "import_result_title": "Import complete",
   "import_result_committed": "{count} transactions committed",
   "import_result_skipped": "{count} skipped (duplicates or excluded)",
   "import_result_failed": "{count} failed — review errors below",
   "import_result_view_transactions": "View imported transactions",
   "import_result_import_another": "Import another file",
-
   "import_discard_button": "Discard",
   "import_discard_confirm": "Discard this import batch? The staged rows will be removed.",
   "import_discard_cancel": "Cancel",
   "import_discard_confirm_button": "Discard",
-
   "import_history_title": "Import history",
   "import_history_empty": "No imports yet.",
   "import_history_col_file": "File",
@@ -101,15 +93,12 @@
   "import_history_status_partially_committed": "Partial",
   "import_history_status_discarded": "Discarded",
   "import_history_status_failed": "Failed",
-
   "import_error_no_adapter": "This file format is not supported. Please upload a QIF file.",
   "import_error_generic": "Import failed. Please try again.",
   "import_retry": "Try again",
-
   "reconcile_title": "Reconcile",
   "reconcile_nav": "Reconcile",
   "reconcile_shell_copy": "Match an account against a statement: clear the postings that appear on it, then finish when the difference is zero.",
-
   "reconcile_start_title": "Start a reconciliation",
   "reconcile_start_copy": "Pick an account, then enter the closing date and balance from your statement.",
   "reconcile_start_account_label": "Account",
@@ -123,7 +112,6 @@
   "reconcile_start_submit": "Start reconciling",
   "reconcile_start_submitting": "Starting…",
   "reconcile_start_invalid_balance": "Enter a valid amount, for example 1234.56.",
-
   "reconcile_session_title": "Clear postings",
   "reconcile_session_copy": "Tick each posting that appears on the statement. The difference updates as you go.",
   "reconcile_session_account": "Account",
@@ -137,14 +125,12 @@
   "reconcile_session_error_title": "Could not load the reconciliation",
   "reconcile_session_error_copy": "Something went wrong loading this reconciliation session.",
   "reconcile_session_retry": "Try again",
-
   "reconcile_summary_statement_balance": "Statement balance",
   "reconcile_summary_starting_balance": "Starting balance",
   "reconcile_summary_cleared_balance": "Cleared balance",
   "reconcile_summary_difference": "Difference",
   "reconcile_summary_balanced": "Balanced",
   "reconcile_summary_unbalanced": "Not yet balanced",
-
   "reconcile_reason_label": "Reason",
   "reconcile_reason_placeholder": "Reason for this reconciliation",
   "reconcile_finish": "Finish reconciliation",
@@ -153,16 +139,13 @@
   "reconcile_finish_needs_reason": "Enter a reason to finish.",
   "reconcile_void": "Discard",
   "reconcile_voiding": "Discarding…",
-
   "reconcile_finished_title": "Reconciliation complete",
   "reconcile_finished_copy": "This account is reconciled through the statement date. A checkpoint was recorded.",
   "reconcile_finished_again": "Reconcile another account",
-
   "reconcile_checkpoints_title": "Reconciled through",
   "reconcile_checkpoints_empty": "This account has not been reconciled yet.",
   "reconcile_checkpoints_col_date": "Date",
   "reconcile_checkpoints_col_balance": "Balance",
-
   "import_connections_title": "Online connections",
   "import_connections_copy": "Connect an online provider to import transactions automatically.",
   "import_connections_add": "Add connection",
@@ -207,10 +190,43 @@
   "import_connections_refresh": "Refresh",
   "import_connections_starting": "Starting…",
   "import_connections_fetch_error": "Could not start the fetch. Check the connection and try again.",
-
   "import_fetching_title": "Fetching from Trading 212…",
   "import_fetching_copy": "This can take a moment. You can leave this page; the fetch keeps running in the background.",
   "import_fetching_cancel": "Cancel",
   "import_fetching_failed_title": "The fetch failed",
-  "import_fetching_failed_copy": "Check the connection's API key and try again."
+  "import_fetching_failed_copy": "Check the connection's API key and try again.",
+  "reports_view_nav_label": "Report",
+  "reports_view_net_worth": "Net worth",
+  "reports_view_spending": "Spending",
+  "reports_view_cashflow": "Cashflow",
+  "reports_net_worth_table_caption": "Net worth at each period end, listed separately per commodity.",
+  "reports_group_by": "Group by",
+  "reports_group_by_category": "Category",
+  "reports_group_by_payee": "Payee",
+  "reports_direction": "Direction",
+  "reports_direction_expense": "Spending",
+  "reports_direction_income": "Income",
+  "reports_spending_title": "Spending by category or payee",
+  "reports_spending_copy": "Where money went over the selected period, ranked by amount.",
+  "reports_income_title": "Income by category or payee",
+  "reports_income_copy": "Where money came from over the selected period, ranked by amount.",
+  "reports_spending_loading_title": "Loading spending",
+  "reports_spending_error_title": "Spending could not load",
+  "reports_spending_empty_title": "No spending in this period",
+  "reports_spending_empty_copy": "Post transactions with a category in the selected period to see where money went.",
+  "reports_spending_transfers_excluded": "Transfers between your own accounts are not spending and are excluded, as is investment trade clearing.",
+  "reports_spending_multi_commodity_notice": "Totals are shown separately by commodity, and shares compare only within a commodity. Rows are ordered by {commodity}.",
+  "reports_spending_table_caption": "Totals per group, listed separately per commodity, with each group's share of its own commodity's total.",
+  "reports_spending_no_payee": "No payee",
+  "reports_spending_no_category": "No category",
+  "reports_spending_unassigned_hint": "(included in totals)",
+  "reports_spending_payee_unknown": "Payee #{payeeId}",
+  "reports_spending_category_unknown": "Category #{categoryId}",
+  "reports_column_category": "Category",
+  "reports_column_payee": "Payee",
+  "reports_column_spending": "Spending",
+  "reports_column_income": "Income",
+  "reports_column_share": "Share",
+  "reports_column_total": "Total",
+  "reports_share_percent": "{share}%"
 }

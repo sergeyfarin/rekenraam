@@ -62,3 +62,147 @@ NetWorthSeriesResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+
+SpendingGroupTotal:
+  type: object
+  description: >-
+    One commodity's exact total for one group. `normal_quantity_value` is the
+    positive magnitude in the requested direction; a refund can legitimately
+    leave it negative.
+  required:
+    - commodity_id
+    - quantity_value
+    - quantity_scale
+    - normal_quantity_value
+    - share_basis_points
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+    quantity_scale:
+      type: integer
+    normal_quantity_value:
+      type: string
+    share_basis_points:
+      type: integer
+      format: int64
+      description: >-
+        Share of the report-wide total for this same commodity, in hundredths
+        of a percent (10000 = 100%). Presentational only; never a figure to act
+        on. Zero when the report-wide total for the commodity is zero. Shares
+        are never comparable across commodities.
+
+SpendingGroup:
+  type: object
+  description: >-
+    One row of the ranking. Exactly one of `category_account_id`, `payee_id`,
+    or `unassigned` identifies the group.
+  required:
+    - unassigned
+    - totals
+  properties:
+    category_account_id:
+      type: integer
+      format: int64
+      description: >-
+        Set when group_by=category. No label is returned: built-in categories
+        carry a localized label, so the client resolves it against the
+        categories read model.
+    payee_id:
+      type: integer
+      format: int64
+      description: Set when group_by=payee.
+    payee_label:
+      type: string
+      description: >-
+        The payee's current name. Returned by the server because payee names
+        are canonical user data rather than localized built-ins.
+    unassigned:
+      type: boolean
+      description: >-
+        Activity with no linked payee, including transactions carrying only a
+        free-text payee name. Reported rather than dropped so the group totals
+        still reconcile to commodity_totals.
+    totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SpendingGroupTotal"
+
+SpendingQuery:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - group_by
+    - direction
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    group_by:
+      type: string
+      enum: [category, payee]
+    direction:
+      type: string
+      enum: [expense, income]
+
+SpendingResponse:
+  type: object
+  description: >-
+    Income or expense totals for an inclusive date range, ranked by one
+    dimension. Computed over category postings only, so transfers between the
+    user's own accounts never appear. Posted, non-voided, non-soft-deleted
+    records only.
+  required:
+    - start_date
+    - end_date
+    - group_by
+    - direction
+    - rank_commodity_id
+    - query
+    - commodity_totals
+    - groups
+    - excluded_system_roles
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    group_by:
+      type: string
+      enum: [category, payee]
+    direction:
+      type: string
+      enum: [expense, income]
+    rank_commodity_id:
+      type: integer
+      format: int64
+      description: >-
+        The commodity whose magnitudes determined the order of `groups`.
+        Ranking uses a single commodity because comparing unlike commodities as
+        one number is not meaningful; this field makes the ordering
+        explainable. Zero when the report is empty.
+    query:
+      $ref: "../../openapi.yaml#/components/schemas/SpendingQuery"
+    commodity_totals:
+      type: array
+      description: >-
+        Report-wide total per commodity — the denominator each group's
+        share_basis_points is taken against.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    groups:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SpendingGroup"
+    excluded_system_roles:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"

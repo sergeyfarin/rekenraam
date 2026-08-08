@@ -6,6 +6,9 @@ export type AccountBalancesResponse = components['schemas']['AccountBalancesResp
 export type CategoryTotalsResponse = components['schemas']['CategoryTotalsResponse'];
 export type NetWorthResponse = components['schemas']['NetWorthResponse'];
 export type NetWorthSeriesResponse = components['schemas']['NetWorthSeriesResponse'];
+export type SpendingResponse = components['schemas']['SpendingResponse'];
+export type SpendingGroup = components['schemas']['SpendingGroup'];
+export type SpendingGroupTotal = components['schemas']['SpendingGroupTotal'];
 
 export type LedgerStatus = components['schemas']['LedgerStatus'];
 
@@ -31,6 +34,13 @@ export type NetWorthSeriesOptions = {
   startDate: string;
   endDate: string;
   bucket: 'day' | 'week' | 'month' | 'quarter' | 'year';
+};
+
+export type SpendingOptions = {
+  startDate: string;
+  endDate: string;
+  groupBy: 'category' | 'payee';
+  direction: 'expense' | 'income';
 };
 
 export const ledgerQueryKey = ['api', 'ledger'] as const;
@@ -63,6 +73,14 @@ export function netWorthSeriesQueryOptions(options: NetWorthSeriesOptions) {
   return {
     queryKey: [...ledgerQueryKey, 'reports', 'net-worth', options] as const,
     queryFn: () => getNetWorthSeries(options),
+    staleTime: 5_000
+  };
+}
+
+export function spendingQueryOptions(options: SpendingOptions) {
+  return {
+    queryKey: [...ledgerQueryKey, 'reports', 'spending', options] as const,
+    queryFn: () => getSpending(options),
     staleTime: 5_000
   };
 }
@@ -153,6 +171,33 @@ export async function getNetWorthSeries(options: NetWorthSeriesOptions): Promise
           start_date: options.startDate,
           end_date: options.endDate,
           bucket: options.bucket
+        }
+      }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function getSpending(options: SpendingOptions): Promise<SpendingResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/reports/spending', {
+      params: {
+        query: {
+          start_date: options.startDate,
+          end_date: options.endDate,
+          group_by: options.groupBy,
+          direction: options.direction
         }
       }
     });

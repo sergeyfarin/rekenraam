@@ -89,6 +89,8 @@ paths:
     $ref: "./paths/ledger-net-worth.yaml"
   /api/v1/reports/net-worth:
     $ref: "./paths/reports-net-worth.yaml"
+  /api/v1/reports/spending:
+    $ref: "./paths/reports-spending.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -488,6 +490,14 @@ components:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesQuery"
     NetWorthSeriesResponse:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesResponse"
+    SpendingGroup:
+      $ref: "./components/schemas/reports.yaml#/SpendingGroup"
+    SpendingGroupTotal:
+      $ref: "./components/schemas/reports.yaml#/SpendingGroupTotal"
+    SpendingQuery:
+      $ref: "./components/schemas/reports.yaml#/SpendingQuery"
+    SpendingResponse:
+      $ref: "./components/schemas/reports.yaml#/SpendingResponse"
     PriceObservationResponse:
       $ref: "./components/schemas/pricing.yaml#/PriceObservationResponse"
     PriceObservationsResponse:

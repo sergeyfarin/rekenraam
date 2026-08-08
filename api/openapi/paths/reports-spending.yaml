@@ -1,0 +1,65 @@
+get:
+  summary: Read income or expense totals ranked by category or payee
+  description: >-
+    Answers "where did money go, and who received it?" over an inclusive date
+    range. Operates over income/expense category postings rather than an
+    inferred bank-statement classification, so transfers between the user's own
+    accounts do not appear. System accounts are excluded, so an investment
+    trade's commodity_trading clearing leg cannot be mistaken for spending.
+  parameters:
+    - in: query
+      name: start_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: end_date
+      required: true
+      description: Inclusive.
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: group_by
+      required: false
+      description: One dimension per request. Defaults to category.
+      schema:
+        type: string
+        enum: [category, payee]
+        default: category
+    - in: query
+      name: direction
+      required: false
+      description: >-
+        Defaults to expense. Income is a separate, explicitly selected mode and
+        is labelled as income, never as spending.
+      schema:
+        type: string
+        enum: [expense, income]
+        default: expense
+  responses:
+    "200":
+      description: Exact per-commodity totals per group, ranked within one commodity
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/SpendingResponse"
+    "400":
+      description: Invalid report query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Report arithmetic exceeded exact quantity limits
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
