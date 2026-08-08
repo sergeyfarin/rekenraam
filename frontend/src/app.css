@@ -382,3 +382,58 @@
     @apply bg-control-hover;
   }
 }
+
+/*
+ * Print output.
+ *
+ * A printed report is a financial document someone may keep, so it must carry
+ * its own context: the filters that produced it are visible on paper, colours
+ * collapse to black on white so a photocopy stays legible, and tables are
+ * allowed to break across pages without splitting a row in half.
+ *
+ * Elements marked `print:hidden` (navigation, the filter form, export and
+ * retry buttons) are interactive controls that mean nothing on paper.
+ */
+@media print {
+  :root {
+    --color-background: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-strong: #ffffff;
+    --color-control: #ffffff;
+    --color-foreground: #000000;
+    --color-muted: #333333;
+    --color-border: #999999;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  /* Panels lose their screen chrome; the table is the document. */
+  section {
+    box-shadow: none !important;
+    border-color: #999999 !important;
+  }
+
+  /* A horizontal scroll container has no meaning on paper — let it spill onto
+     the page rather than clipping columns off the right edge. */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 10pt;
+  }
+
+  /* Repeat the header on every page, and never split a row across a break. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

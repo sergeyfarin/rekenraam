@@ -21,16 +21,32 @@ preconditions. Also in `roadmap.md`.
 
 **Nothing is currently awaiting an owner decision.**
 
-## Current initiative — R2 reports (see roadmap.md)
+## Current initiative — R2 reports (see roadmap.md) — **complete 2026-08-08**
 
-- [ ] Spending view over the existing category-totals read model.
-- [ ] Cashflow read model + view (inflow / outflow / transfers / net).
-- [ ] Date/account/category/payee/commodity filters.
-- [ ] CSV + print-friendly tables; summary charts alongside (not replacing)
-      the accessible data table.
-- [ ] R2 acceptance review: explicitly decide which `plans/reports-plan.md`
-      items (saved definitions, cross-currency valuation, investment
-      dimensions, snapshots) are justified before starting R3.
+- [x] Spending view — done 2026-08-08 (`GET /api/v1/reports/spending`,
+      `group_by=category|payee`, `direction=expense|income`; its own read model
+      rather than an overload of `ledger/category-totals`).
+- [x] Cashflow read model + view — done 2026-08-08
+      (`GET /api/v1/reports/cashflow`; classification derived from the
+      per-journal-entry balancing identity, so `net_movement` reconciles to the
+      cash balance change by construction and a many-counterpart split needs no
+      allocation rule).
+- [~] Filters — **date, bucket, group_by, and direction shipped; the repeated-ID
+      filters (`account_id`/`category_id`/`payee_id`/`commodity_id`) and
+      drill-down did not.** Recorded as the one delivery gap in the R2
+      acceptance review and scheduled as the next reports work. The URL filter
+      parser already carries more state than the reports read, so this is
+      additive.
+- [x] CSV + print-friendly tables; summary charts alongside (not replacing) the
+      accessible data table — done 2026-08-08. CSV uses `formatLedgerAmount`,
+      not the display formatter, because a spreadsheet cannot parse locale group
+      separators. Charts are `aria-hidden`, single-commodity only.
+- [x] R2 acceptance review — done 2026-08-08. Every preserved follow-up is
+      answered yes or no with reasoning at the end of
+      `docs/plans/reports-plan.md`. Next: ID filters + drill-down, then the
+      named reporting-currency valuation method. Saved definitions, snapshots,
+      tax/jurisdiction dimensions, and a report builder are all deferred with
+      stated reasons.
 
 ## Bug-fix queue (from backlog — schedule independent of R2)
 
@@ -88,8 +104,9 @@ preconditions. Also in `roadmap.md`.
       tests; the extraction turned up two real defects (T-45 decimal-comma
       100×, T-46 unparseable split leg posted as zero), both fixed. Remaining:
       the investment forms, which hold two more copies of the same helpers —
-      `dividend-form.svelte` first, then `buy-form`/`sell-form`. Best done at
-      the R2 acceptance review. See `backlog.md` G-02.
+      `dividend-form.svelte` first, then `buy-form`/`sell-form`. **No longer
+      gated:** this was queued behind the R2 acceptance review, which completed
+      2026-08-08, so it is now simply next up. See `backlog.md` G-02.
 - [~] G-08 amount input is not locale-aware — **display half settled
       2026-08-08**: `Intl.NumberFormat` wins over Dinero.js, the unused
       `dinero.js` dependency is gone, and `formatQuantity` now lives in

@@ -6,6 +6,8 @@
   import { formatQuantity } from '$lib/money/format';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
+  import { downloadCSV, netWorthCSV, reportFilename } from './report-csv';
+  import LineChart from './line-chart.svelte';
   import type { ReportFilters } from './report-filters';
 
   let {
@@ -30,6 +32,26 @@
 
   const rows = $derived(query.data ? netWorthRows(query.data) : []);
   const multiCommodity = $derived(hasMultipleCommodities(rows));
+
+  // Offered only for a single commodity: one axis cannot honestly carry two
+  // currencies, which is the same reason the totals are never combined.
+  const chartPoints = $derived(
+    multiCommodity
+      ? []
+      : rows.map((row) => ({
+          value: row.normal_quantity_value,
+          scale: row.quantity_scale,
+          label: row.endDate
+        }))
+  );
+
+  function exportCSV() {
+    if (!query.data) return;
+    downloadCSV(
+      reportFilename('net-worth', query.data.start_date, query.data.end_date),
+      netWorthCSV(query.data, commodityLabel)
+    );
+  }
 </script>
 
 {#if query.isPending}
@@ -53,7 +75,16 @@
         <h2 class="text-lg font-semibold tracking-tight text-foreground">{m.reports_net_worth_title()}</h2>
         <p class="mt-1 text-sm text-muted">{m.reports_net_worth_copy()}</p>
       </div>
-      <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+      <div class="flex items-center gap-3">
+        <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+        <button
+          type="button"
+          class="h-9 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold text-foreground transition hover:bg-control-hover print:hidden"
+          onclick={exportCSV}
+        >
+          {m.reports_export_csv()}
+        </button>
+      </div>
     </div>
 
     {#if multiCommodity}
@@ -61,6 +92,8 @@
         {m.reports_multi_commodity_notice()}
       </p>
     {/if}
+
+    <LineChart points={chartPoints} title={m.reports_net_worth_chart_title()} />
 
     <div class="mt-5 overflow-x-auto">
       <table class="w-full min-w-[34rem] border-collapse text-left text-sm">

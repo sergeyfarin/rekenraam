@@ -8,6 +8,7 @@
   import { currenciesQueryOptions } from '$lib/api/currencies';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
+  import CashflowReport from './cashflow-report.svelte';
   import NetWorthReport from './net-worth-report.svelte';
   import SpendingReport from './spending-report.svelte';
   import {
@@ -100,7 +101,7 @@
 </script>
 
 <div class="space-y-5">
-  <nav aria-label={m.reports_view_nav_label()}>
+  <nav aria-label={m.reports_view_nav_label()} class="print:hidden">
     <ul class="flex flex-wrap gap-2">
       {#each ['net-worth', 'spending', 'cashflow'] as const as view (view)}
         <li>
@@ -119,6 +120,22 @@
     </ul>
   </nav>
 
+  <!--
+    The filter form is interactive and means nothing on paper, but the filters
+    it holds do — so the print sheet below restates the active range as text
+    rather than dropping that context from the printed document.
+  -->
+  <p class="hidden text-sm text-muted print:block">
+    {m.reports_print_filters({
+      range: formatRange(
+        (activeFilters ?? initialFilters).startDate,
+        (activeFilters ?? initialFilters).endDate
+      ),
+      basis: m.reports_posted_only()
+    })}
+  </p>
+
+  <div class="print:hidden">
   <Panel>
     <form
       class="flex flex-wrap items-end gap-3"
@@ -174,12 +191,15 @@
       </button>
     </form>
   </Panel>
+  </div>
 
   {#if activeFilters}
     {#if activeView === 'net-worth'}
       <NetWorthReport filters={activeFilters} {locale} {commodityLabel} {formatRange} />
     {:else if activeView === 'spending'}
       <SpendingReport filters={activeFilters} {locale} {commodityLabel} />
+    {:else if activeView === 'cashflow'}
+      <CashflowReport filters={activeFilters} {locale} {commodityLabel} {formatRange} />
     {/if}
   {/if}
 </div>

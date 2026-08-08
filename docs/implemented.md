@@ -15,9 +15,9 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-Last reconciled with the codebase: 2026-07-13 (Trading 212 investment-import
-hardening through migration `0011`; documentation consolidation; R2 net-worth
-series backend/API foundation).
+Last reconciled with the codebase: 2026-08-08 (R2 complete — spending and
+cashflow read models, the composed reports screen, CSV/print/charts, and the R2
+acceptance review).
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -120,15 +120,19 @@ series backend/API foundation).
 | **Dedicated reconcile workflow screen** | ✅ | `routes/app/reconcile` (R1): pick account → statement date/balance → clear postings against a server-authoritative live difference → finish only at zero, or discard. Prior active checkpoints shown read-only. Reuses the existing typed client (`lib/api/reconciliation.ts`). |
 | Void-checkpoint controls / out-of-session mark-cleared UI | ⬜ | API exists; deferred beyond the R1 trust loop. |
 
-## Reports (Phase 3) — 🟡 Backend only
+## Reports (Phase 3) — ✅ R2 complete
 
 | Capability | Status | Notes |
 |---|---|---|
-| Net worth read models | 🟦 | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth`; `/app/reports` consumes the date/bucket contract, while account/commodity filters remain pending. |
+| Net worth read models | ✅ | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth`; `/app/reports` consumes the date/bucket contract. |
 | Account balances read model | 🟡 | `GET /ledger/account-balances`; overflow-guarded (422 on precision limit). |
-| Category totals (spending) read model | 🟡 | `GET /ledger/category-totals`. |
-| **Reports UI (net worth / cashflow / spending)** | 🟦 | `/app/reports` ships net-worth date/bucket filters and an exact commodity-grouped table; spending and cashflow remain pending. |
-| Cashflow read model | ⬜ | Not yet a dedicated endpoint. |
+| Category totals read model | 🟡 | `GET /ledger/category-totals`. A building block for other screens; the spending report has its own read model rather than overloading this one. |
+| Spending read model | ✅ | `GET /reports/spending`, `group_by=category|payee`, `direction=expense|income`. Reads category postings, so transfers between own accounts can never be counted as spending. Per-commodity exact totals with within-commodity `share_basis_points` (integer, no float) and a named `rank_commodity_id` so the ordering is explainable rather than an implicit cross-currency comparison. |
+| Cashflow read model | ✅ | `GET /reports/cashflow`. Inflow / outflow / operating net / transfer in / transfer out / net movement per bucket per commodity. Classification is derived from the per-journal-entry balancing identity, not an allocation heuristic: a many-counterpart split needs no rule, a transfer between two in-scope cash accounts contributes exactly zero, and `net_movement` reconciles to the cash balance change by construction. Default scope is active non-system `cash`/`checking`/`savings`/`brokerage_cash`, named in the response. |
+| **Reports UI (net worth / cashflow / spending)** | ✅ | `/app/reports` with URL-addressable view tabs and shared filter state (`lib/reports/report-filters.ts`). Accessible per-commodity tables, loading/empty/error/multi-commodity states, CSV export carrying its own query and exclusion policy, and print output that restates the active period as text. |
+| Report summary charts | ✅ | Inline SVG, single-commodity only, `aria-hidden` — the table stays the accessible source of truth. Normalisation is `BigInt` against a zero baseline, so a large book is not corrupted and a flat series is not exaggerated. |
+| Report ID filters + drill-down | ⬜ | `account_id`/`category_id`/`payee_id`/`commodity_id` and row drill-down are the one R2 plan item not delivered; scheduled next by the acceptance review in `plans/reports-plan.md`. |
+| Reporting-currency valuation method | ⬜ | Deliberately deferred. Reports show unlike commodities separately and say so; combining them needs a named, auditable valuation method, not a silent conversion. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 

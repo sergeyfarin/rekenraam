@@ -41,7 +41,7 @@ spreadsheet."
 | Double-entry ledger | ✅ | ✅ | ✅ | ⬜ (envelope) | ⬜ | partial | partial | ✅ |
 | Multi-currency accounts | ✅ | ✅ | ✅ | limited | display only | ✅ | ✅ | ✅ |
 | Reconciliation workflow | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | 🟦 (assert) |
-| Core reports UI | 🟦 (R2) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Fava) |
+| Core reports UI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Fava) |
 | CSV import + profiles | ⬜ (R5) | ✅ | ✅ (importer) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | QIF/OFX import | ✅ QIF | ✅ | partial | ⬜ | ⬜ | partial | ✅ | via tools |
 | Import rules engine | ⬜ | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
@@ -151,8 +151,16 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
 
 ## What the comparison implies (kept in sync with roadmap)
 
-1. **Reports UI (R2) is the perceived-completeness gap** — every comparison
-   review leads with dashboards.
+1. **Reports UI (R2) — closed 2026-08-08.** Net worth, spending/income, and
+   cashflow all ship with export-ready tables, reaching Money/Quicken/Monarch
+   parity on visible reporting and Firefly III parity on category/payee insight
+   without loosening ledger semantics. Two deliberate differences remain and are
+   differentiators rather than gaps: cashflow is **exact per currency** with no
+   fabricated base-currency number, which is the groundwork R10 forecasting
+   needs; and returns/allocation/benchmarks stay R13 work rather than an
+   accidental partial promise here. What is genuinely still missing is
+   narrowing a report to specific accounts or categories, and drill-down from a
+   report row — see the R2 acceptance review in `plans/reports-plan.md`.
 2. **Import rules engine** — Firefly's stickiest feature; belongs in R7's
    scope as persistent user-defined rules over the staged pipeline.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by

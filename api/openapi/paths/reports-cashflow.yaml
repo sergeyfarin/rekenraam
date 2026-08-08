@@ -1,0 +1,61 @@
+get:
+  summary: Read cash movement classified as inflow, outflow, transfer, and net movement
+  description: >-
+    Answers "what changed my liquid cash, without treating transfers as
+    spending?". The default cash scope is active, non-system accounts of kinds
+    cash, checking, savings, and brokerage_cash; the response names that policy
+    and the accounts it resolved to.
+
+
+    Classification is derived from double entry rather than a per-transaction
+    heuristic: postings are grouped by journal entry, which is the unit balance
+    is enforced over and which carries a single date, so a transaction with many
+    counterparts needs no allocation rule and a transfer between two in-scope
+    accounts contributes exactly zero.
+  parameters:
+    - in: query
+      name: start_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: end_date
+      required: true
+      description: Inclusive.
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: bucket
+      required: false
+      description: Defaults to month.
+      schema:
+        type: string
+        enum: [day, week, month, quarter, year]
+        default: month
+  responses:
+    "200":
+      description: Exact classified cash movement per bucket, grouped by commodity
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CashflowResponse"
+    "400":
+      description: Invalid report query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Report arithmetic exceeded exact quantity limits
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

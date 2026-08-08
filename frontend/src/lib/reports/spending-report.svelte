@@ -9,6 +9,8 @@
   import { m } from '$lib/paraglide/messages.js';
   import { formatShare, spendingIsMultiCommodity, spendingRows, type SpendingRow } from './spending';
   import type { ReportFilters } from './report-filters';
+  import { downloadCSV, reportFilename, spendingCSV } from './report-csv';
+  import BarChart from './bar-chart.svelte';
 
   let {
     filters,
@@ -60,6 +62,28 @@
     return categoryNameByID.get(categoryID) ?? m.reports_spending_category_unknown({ categoryId: categoryID });
   }
 
+  // Offered only for a single commodity: a bar chart across unlike commodities
+  // would draw exactly the comparison this report refuses to make numerically.
+  const chartPoints = $derived(
+    multiCommodity
+      ? []
+      : rows.map((row) => ({
+          value: row.normalQuantityValue,
+          scale: row.quantityScale,
+          label: groupLabel(row)
+        }))
+  );
+
+  function exportCSV() {
+    if (!query.data) return;
+    downloadCSV(
+      reportFilename(filters.direction === 'income' ? 'income' : 'spending', query.data.start_date, query.data.end_date),
+      // groupLabel resolves localized built-in category names, so the export
+      // carries the same labels the user is reading on screen.
+      spendingCSV(query.data, commodityLabel, groupLabel)
+    );
+  }
+
   const dimensionHeader = $derived(
     filters.groupBy === 'payee' ? m.reports_column_payee() : m.reports_column_category()
   );
@@ -95,7 +119,16 @@
         <h2 class="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
         <p class="mt-1 text-sm text-muted">{copy}</p>
       </div>
-      <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+      <div class="flex items-center gap-3">
+        <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+        <button
+          type="button"
+          class="h-9 rounded-(--radius-control) border border-border bg-control px-3 text-sm font-semibold text-foreground transition hover:bg-control-hover print:hidden"
+          onclick={exportCSV}
+        >
+          {m.reports_export_csv()}
+        </button>
+      </div>
     </div>
 
     <!--
@@ -112,6 +145,8 @@
         })}
       </p>
     {/if}
+
+    <BarChart points={chartPoints} title={m.reports_spending_chart_title()} />
 
     <div class="mt-5 overflow-x-auto">
       <table class="w-full min-w-[34rem] border-collapse text-left text-sm">

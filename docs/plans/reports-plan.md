@@ -1,11 +1,16 @@
 # Reports Plan
 
-Status: **active implementation plan for roadmap R2**. Shipped so far: the
-net-worth-series backend/OpenAPI foundation (`GET /api/v1/reports/net-worth`)
-and the `/app/reports` route presenting it as an accessible per-commodity
-table with URL-addressable date/bucket filters. Still pending: the spending
-and cashflow read models, account/category/payee/commodity filters, CSV and
-print output, and charts. Last verified against the codebase: 2026-08-07.
+Status: **active implementation plan for roadmap R2**. All three reports now
+ship: `GET /api/v1/reports/net-worth`, `/reports/spending`, and
+`/reports/cashflow`, presented at `/app/reports` as URL-addressable views with
+accessible per-commodity tables, summary charts, CSV export, and print output.
+
+**One contract item from this plan is not implemented: the repeated-ID filters**
+(`account_id`, `category_id`, `payee_id`, `commodity_id`) described under
+"Shared contract". Date, bucket, `group_by`, and `direction` filters are all
+delivered; narrowing a report to specific accounts or categories is not. See the
+acceptance review at the end of this document. Last verified against the
+codebase: 2026-08-08.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -232,23 +237,78 @@ UI:
    accessible, responsive table with currency labels. It deliberately keeps
    unlike commodities on separate rows and explains why they cannot be summed;
    charts and account/commodity filters remain pending.
-3. **Spending**
+3. **Spending** — **done 2026-08-08.**
    - Implement category/payee grouping, exact totals, filters, table/chart, and
      safe drill-down.
    - Acceptance: expense/refund/transfer fixture results match manual ledger
      arithmetic, and category versus payee changes grouping rather than source
      data.
-4. **Cashflow**
+
+   **Result:** `GET /api/v1/reports/spending` with `group_by=category|payee` and
+   `direction=expense|income`. Acceptance is covered by named API tests in
+   `api/reports_spending_test.go`: a transfer between own accounts is absent
+   from the totals, a refund reduces its own category instead of ranking as a
+   second row, income is returned as a positive magnitude with the raw
+   debit-positive value beside it, and switching `group_by` re-groups the same
+   source postings. Activity with no linked payee is reported as an explicit
+   unassigned bucket so the groups still sum to `commodity_totals`.
+
+   **Not delivered:** the account/category/payee/commodity ID filters, and
+   drill-down links into the transactions route.
+4. **Cashflow** — **done 2026-08-08.**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.
    - Acceptance: for every commodity and bucket, `net_movement` reconciles to
      the selected-cash balance delta; transfers within scope net to zero; a
      split transaction is not misclassified.
-5. **Trust and release quality**
+
+   **Result:** `GET /api/v1/reports/cashflow`. All three acceptance criteria are
+   covered by named tests in `api/reports_cashflow_test.go`, and the
+   reconciliation identity is asserted on *every* scenario rather than in one
+   dedicated case.
+
+   The classification turned out not to need an allocation rule at all.
+   Postings are grouped by **journal entry** — the unit `validateBalanced`
+   enforces balance over, and which carries a single `entry_date`, so an entry
+   never straddles a bucket. Within one entry and commodity,
+   `sum(in-scope cash) + sum(counterparts) = 0`, so splitting the counterparts
+   by account class splits the movement exactly:
+
+       inflow       = -sum(income counterparts)
+       outflow      =  sum(expense counterparts)
+       transfer_net = -sum(other counterparts)
+       net_movement =  inflow - outflow + transfer_net
+
+   Three of this plan's requirements then fall out rather than being
+   special-cased: a many-counterpart transaction needs no allocation rule
+   ("first counterpart wins" is not merely forbidden, it is unnecessary); a
+   transfer between two in-scope accounts contributes exactly zero because it
+   has no out-of-scope counterpart; and a partial internal transfer splits
+   correctly. `net_movement` reconciles to the cash balance change by
+   construction, not by a rounding adjustment.
+5. **Trust and release quality** — **mostly done 2026-08-08.**
    - Add print-friendly and CSV views, accessibility smoke coverage, responsive
      review, and backend/API/frontend/E2E regression tests.
    - Acceptance: all three reports have loading, empty, error, populated, and
      multi-commodity states; their tables are usable without a pointing device.
+
+   **Result:** all three reports define loading, empty, error, populated, and
+   multi-commodity states. CSV export exists for each, carrying a header block
+   that names the query, the basis, and the exclusion policy, so an exported
+   file is still explainable months later. Amounts in CSV use
+   `formatLedgerAmount` (plain decimal) rather than the display formatter,
+   because a spreadsheet cannot parse locale group separators — the two-function
+   choice the convention forces, instead of a third inline formatting rule.
+   Print output restates the active period as text and drops interactive chrome.
+
+   Summary charts are inline SVG, offered only when a single commodity is
+   selected, and marked `aria-hidden` — the table stays the accessible source of
+   truth. Chart normalisation runs in `BigInt` and measures against a zero
+   baseline, so a large book is not corrupted and a flat series is not
+   exaggerated into a climb.
+
+   **Not delivered:** E2E (Playwright) coverage for the reports route, which
+   remains the intentionally unscheduled CI decision recorded in `backlog.md`.
 
 ## Validation matrix
 
@@ -277,3 +337,62 @@ Before closing R2, update `docs/competitor-comparison.md` with the result:
   for R10 forecasting rather than a single fabricated base-currency number.
 - Ghostfolio/Portfolio Performance gap retained: returns, allocation, and
   benchmarks remain R13 work, not an accidental partial R2 promise.
+
+## R2 acceptance review — 2026-08-08
+
+The roadmap requires this decision to be explicit rather than left to omission.
+Each preserved follow-up below was reconsidered against real use, and the
+answer is recorded whether it is yes or no.
+
+### The one R2 item not delivered: repeated-ID filters
+
+The "Shared contract" section above specifies `account_id`, `category_id`,
+`payee_id`, and `commodity_id` as repeated OR-set query parameters, with
+`include_descendants` for account trees. **These are not implemented.** What
+ships is dates, `bucket`, `group_by`, and `direction`.
+
+This is a genuine gap against the plan, not a redefinition of it. It is
+recorded here rather than quietly dropped, and the contract text above is left
+intact so the intended shape survives. Two things make it a smaller gap than it
+first appears:
+
+- The three reports each already answer their headline question over a period
+  without narrowing. Ranking is what makes spending useful, and cashflow's
+  default liquid-cash scope is the scope a user actually wants.
+- The URL-addressable filter state and its parser
+  (`frontend/src/lib/reports/report-filters.ts`) were built to carry more
+  filters than the three reports currently read, so adding them is additive on
+  the frontend.
+
+What it costs today: a user cannot ask "spending at this one account" or
+"cashflow for this one savings account", and there is no drill-down from a
+report row into the transactions route. Both are worth doing; neither blocks
+R3, which is export.
+
+### Follow-ups reconsidered
+
+| Follow-up | Decision | Reasoning |
+| --- | --- | --- |
+| Repeated-ID filters + drill-down | **Yes — schedule next** | The only delivery gap against this plan. Narrowing a report is ordinary daily-driver behaviour, and drill-down is what turns a ranking into an action. |
+| Reporting-currency selector and named FX/price valuation method | **Yes — but not before R3** | The multi-commodity notice currently tells the user their totals cannot be combined, which is honest but unsatisfying, and the expat/multi-currency direction depends on it. It needs a *named, auditable* valuation method rather than a silent conversion, so it is real design work and not a filter. |
+| Named saved report definitions and live report runs | **No — not yet** | With three fixed reports and URL-addressable state, a saved report is a bookmark. Revisit when the filter set is large enough that reconstructing a view is genuinely tedious. |
+| Immutable/reproducible report snapshots | **No — not yet** | A snapshot's value is proving what a report said on a date, which matters for tax and audit workflows the app does not have. Premature without the valuation method above, since a snapshot of uncombined per-commodity totals proves little. |
+| Country, jurisdiction, tax, investment, benchmark dimensions | **No — belongs to its own roadmap item** | Investment returns/allocation are R13 by design; folding a partial version into R2 would make an accidental promise. Recorded in `competitor-comparison.md` as a retained gap, not an oversight. |
+| User-configurable report builder | **No** | Nothing observed in building these three suggests the shape of a generic builder. Deciding it now would be guessing. |
+
+### Acceptance criteria: status
+
+- Net worth, spending, and cashflow are answerable from one route. **Met.**
+- The server is the sole source of calculation. **Met** — the frontend modules
+  under `lib/reports/` do layout and formatting only; not one performs
+  arithmetic on a money value.
+- Money stays exact and unlike commodities are never combined. **Met**, and
+  enforced in the ranking (`rank_commodity_id`) and share
+  (`share_basis_points`, within-commodity only) design.
+- Posted-only basis. **Met**, with named tests for voided exclusion on both new
+  reports.
+- Tables are the accessible source of truth; charts summarize them. **Met** —
+  charts are `aria-hidden`, single-commodity only, and add no figure absent
+  from the table.
+- Every result returns its effective query and exclusion policy. **Met** in the
+  API responses, on screen, and in the CSV header block.

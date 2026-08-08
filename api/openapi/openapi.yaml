@@ -91,6 +91,8 @@ paths:
     $ref: "./paths/reports-net-worth.yaml"
   /api/v1/reports/spending:
     $ref: "./paths/reports-spending.yaml"
+  /api/v1/reports/cashflow:
+    $ref: "./paths/reports-cashflow.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -490,6 +492,16 @@ components:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesQuery"
     NetWorthSeriesResponse:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesResponse"
+    CashflowBucket:
+      $ref: "./components/schemas/reports.yaml#/CashflowBucket"
+    CashflowBucketTotal:
+      $ref: "./components/schemas/reports.yaml#/CashflowBucketTotal"
+    CashflowQuery:
+      $ref: "./components/schemas/reports.yaml#/CashflowQuery"
+    CashflowResponse:
+      $ref: "./components/schemas/reports.yaml#/CashflowResponse"
+    CashflowScopeAccount:
+      $ref: "./components/schemas/reports.yaml#/CashflowScopeAccount"
     SpendingGroup:
       $ref: "./components/schemas/reports.yaml#/SpendingGroup"
     SpendingGroupTotal:

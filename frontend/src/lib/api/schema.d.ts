@@ -3802,6 +3802,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/cashflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read cash movement classified as inflow, outflow, transfer, and net movement
+         * @description Answers "what changed my liquid cash, without treating transfers as spending?". The default cash scope is active, non-system accounts of kinds cash, checking, savings, and brokerage_cash; the response names that policy and the accounts it resolved to.
+         *
+         *     Classification is derived from double entry rather than a per-transaction heuristic: postings are grouped by journal entry, which is the unit balance is enforced over and which carries a single date, so a transaction with many counterparts needs no allocation rule and a transfer between two in-scope accounts contributes exactly zero.
+         */
+        get: {
+            parameters: {
+                query: {
+                    start_date: string;
+                    /** @description Inclusive. */
+                    end_date: string;
+                    /** @description Defaults to month. */
+                    bucket?: "day" | "week" | "month" | "quarter" | "year";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Exact classified cash movement per bucket, grouped by commodity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CashflowResponse"];
+                    };
+                };
+                /** @description Invalid report query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Report arithmetic exceeded exact quantity limits */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -11617,6 +11691,63 @@ export interface components {
             query: components["schemas"]["NetWorthSeriesQuery"];
             buckets: components["schemas"]["NetWorthSeriesBucket"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        CashflowBucket: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            totals: components["schemas"]["CashflowBucketTotal"][];
+        };
+        /** @description One commodity's classified cash movement for one bucket. All six figures share `quantity_scale` so they are directly comparable, and they reconcile exactly: `net_movement = inflow - outflow + transfer_in - transfer_out`, and `operating_net = inflow - outflow`. The identity holds by construction from double entry, not from a rounding adjustment. */
+        CashflowBucketTotal: {
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_scale: number;
+            /** @description Money arriving from an income counterpart, as a positive magnitude. */
+            inflow: string;
+            /** @description Money leaving to an expense counterpart, as a positive magnitude. */
+            outflow: string;
+            /** @description inflow - outflow. Deliberately excludes transfer and financing movement, so moving savings into checking never reads as income. */
+            operating_net: string;
+            /** @description Movement into the cash scope from an unselected asset, liability, or equity account, as a positive magnitude. Never income. */
+            transfer_in: string;
+            /** @description Movement out of the cash scope to an unselected asset, liability, or equity account, as a positive magnitude. Never spending. */
+            transfer_out: string;
+            /** @description Signed change in the selected cash total for the bucket. Reconciles exactly to the cash balance change across the bucket boundaries. */
+            net_movement: string;
+        };
+        CashflowQuery: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            bucket: "day" | "week" | "month" | "quarter" | "year";
+        };
+        /** @description Cash movement classified as inflow, outflow, transfer/financing, and net movement. Posted, non-voided, non-soft-deleted records only. */
+        CashflowResponse: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            bucket: "day" | "week" | "month" | "quarter" | "year";
+            query: components["schemas"]["CashflowQuery"];
+            /** @description The named account-kind policy that selected the cash scope. Stated explicitly rather than left as an invisible "all assets" shortcut. */
+            scope_kinds: string[];
+            /** @description The accounts that policy resolved to, so the result can name what was measured. */
+            scope_accounts: components["schemas"]["CashflowScopeAccount"][];
+            buckets: components["schemas"]["CashflowBucket"][];
+            excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        /** @description One account in the effective cash scope. */
+        CashflowScopeAccount: {
+            /** Format: int64 */
+            account_id: number;
+            name?: string;
+            code?: string;
+            account_kind: string;
         };
         /** @description One row of the ranking. Exactly one of `category_account_id`, `payee_id`, or `unassigned` identifies the group. */
         SpendingGroup: {

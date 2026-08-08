@@ -128,6 +128,21 @@ func (r *TransactionRepository) LedgerCategoryPostings(ctx context.Context, book
 	return r.ledgerPostings(ctx, query)
 }
 
+// LedgerPostingsInRange reads every posting whose entry date falls in an
+// inclusive range, with no account or category filter.
+//
+// Cashflow needs the unfiltered set: classifying a cash posting depends on what
+// its counterparts are, so filtering counterparts out at the SQL layer would
+// destroy the very relationships the classification reads.
+func (r *TransactionRepository) LedgerPostingsInRange(ctx context.Context, bookID int64, afterDate string, beforeDate string, status string) ([]LedgerPostingRecord, error) {
+	return r.ledgerPostings(ctx, ledgerPostingQuery{
+		BookID:     bookID,
+		Status:     status,
+		AfterDate:  afterDate,
+		BeforeDate: beforeDate,
+	})
+}
+
 func (r *TransactionRepository) AccountRegisterRunningPostings(ctx context.Context, params ListTransactionsParams) ([]LedgerPostingRecord, error) {
 	return r.ledgerPostings(ctx, ledgerPostingQuery{
 		BookID:     params.BookID,

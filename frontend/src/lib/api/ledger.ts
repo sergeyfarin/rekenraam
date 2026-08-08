@@ -9,6 +9,9 @@ export type NetWorthSeriesResponse = components['schemas']['NetWorthSeriesRespon
 export type SpendingResponse = components['schemas']['SpendingResponse'];
 export type SpendingGroup = components['schemas']['SpendingGroup'];
 export type SpendingGroupTotal = components['schemas']['SpendingGroupTotal'];
+export type CashflowResponse = components['schemas']['CashflowResponse'];
+export type CashflowBucket = components['schemas']['CashflowBucket'];
+export type CashflowBucketTotal = components['schemas']['CashflowBucketTotal'];
 
 export type LedgerStatus = components['schemas']['LedgerStatus'];
 
@@ -41,6 +44,12 @@ export type SpendingOptions = {
   endDate: string;
   groupBy: 'category' | 'payee';
   direction: 'expense' | 'income';
+};
+
+export type CashflowOptions = {
+  startDate: string;
+  endDate: string;
+  bucket: 'day' | 'week' | 'month' | 'quarter' | 'year';
 };
 
 export const ledgerQueryKey = ['api', 'ledger'] as const;
@@ -81,6 +90,14 @@ export function spendingQueryOptions(options: SpendingOptions) {
   return {
     queryKey: [...ledgerQueryKey, 'reports', 'spending', options] as const,
     queryFn: () => getSpending(options),
+    staleTime: 5_000
+  };
+}
+
+export function cashflowQueryOptions(options: CashflowOptions) {
+  return {
+    queryKey: [...ledgerQueryKey, 'reports', 'cashflow', options] as const,
+    queryFn: () => getCashflow(options),
     staleTime: 5_000
   };
 }
@@ -198,6 +215,32 @@ export async function getSpending(options: SpendingOptions): Promise<SpendingRes
           end_date: options.endDate,
           group_by: options.groupBy,
           direction: options.direction
+        }
+      }
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function getCashflow(options: CashflowOptions): Promise<CashflowResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/reports/cashflow', {
+      params: {
+        query: {
+          start_date: options.startDate,
+          end_date: options.endDate,
+          bucket: options.bucket
         }
       }
     });

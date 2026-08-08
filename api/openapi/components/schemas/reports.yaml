@@ -206,3 +206,152 @@ SpendingResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+
+CashflowBucketTotal:
+  type: object
+  description: >-
+    One commodity's classified cash movement for one bucket. All six figures
+    share `quantity_scale` so they are directly comparable, and they reconcile
+    exactly: `net_movement = inflow - outflow + transfer_in - transfer_out`,
+    and `operating_net = inflow - outflow`. The identity holds by construction
+    from double entry, not from a rounding adjustment.
+  required:
+    - commodity_id
+    - quantity_scale
+    - inflow
+    - outflow
+    - operating_net
+    - transfer_in
+    - transfer_out
+    - net_movement
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_scale:
+      type: integer
+    inflow:
+      type: string
+      description: Money arriving from an income counterpart, as a positive magnitude.
+    outflow:
+      type: string
+      description: Money leaving to an expense counterpart, as a positive magnitude.
+    operating_net:
+      type: string
+      description: >-
+        inflow - outflow. Deliberately excludes transfer and financing
+        movement, so moving savings into checking never reads as income.
+    transfer_in:
+      type: string
+      description: >-
+        Movement into the cash scope from an unselected asset, liability, or
+        equity account, as a positive magnitude. Never income.
+    transfer_out:
+      type: string
+      description: >-
+        Movement out of the cash scope to an unselected asset, liability, or
+        equity account, as a positive magnitude. Never spending.
+    net_movement:
+      type: string
+      description: >-
+        Signed change in the selected cash total for the bucket. Reconciles
+        exactly to the cash balance change across the bucket boundaries.
+
+CashflowBucket:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - totals
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CashflowBucketTotal"
+
+CashflowScopeAccount:
+  type: object
+  description: One account in the effective cash scope.
+  required:
+    - account_id
+    - account_kind
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    name:
+      type: string
+    code:
+      type: string
+    account_kind:
+      type: string
+
+CashflowQuery:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - bucket
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    bucket:
+      type: string
+      enum: [day, week, month, quarter, year]
+
+CashflowResponse:
+  type: object
+  description: >-
+    Cash movement classified as inflow, outflow, transfer/financing, and net
+    movement. Posted, non-voided, non-soft-deleted records only.
+  required:
+    - start_date
+    - end_date
+    - bucket
+    - query
+    - scope_kinds
+    - scope_accounts
+    - buckets
+    - excluded_system_roles
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    bucket:
+      type: string
+      enum: [day, week, month, quarter, year]
+    query:
+      $ref: "../../openapi.yaml#/components/schemas/CashflowQuery"
+    scope_kinds:
+      type: array
+      description: >-
+        The named account-kind policy that selected the cash scope. Stated
+        explicitly rather than left as an invisible "all assets" shortcut.
+      items:
+        type: string
+    scope_accounts:
+      type: array
+      description: The accounts that policy resolved to, so the result can name what was measured.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CashflowScopeAccount"
+    buckets:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CashflowBucket"
+    excluded_system_roles:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"

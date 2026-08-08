@@ -22,7 +22,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | Slice | Name | Status | Primary document |
 |---|---|---|---|
 | R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
-| R2 | Reports users can act on | ▶ | `docs/plans/reports-plan.md` |
+| R2 | Reports users can act on | ✅ | `docs/plans/reports-plan.md` |
 | R3 | Portable core data (CSV/QIF export) | ⏭ | this file |
 | R3a | Accessibility regression coverage | ⏭ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
@@ -102,10 +102,25 @@ must not create a competing sequence.
 Ship a reports route with net worth over time, spending by category/payee, and
 cashflow. `docs/plans/reports-plan.md` is the implementation reference.
 
-**Started:** `/app/reports` now presents the exact net-worth series with
-URL-addressable date/bucket filters and an accessible per-commodity table.
-Account/commodity filters, charts, and the spending/cashflow read models remain
-to be delivered.
+**Delivered 2026-08-08.** `/app/reports` presents all three reports as
+URL-addressable views: the net-worth series, spending/income ranked by category
+or payee, and cashflow classified into inflow, outflow, operating net,
+transfer/financing movement, and net movement. Each has an accessible
+per-commodity table, a single-commodity summary chart that adds no information
+the table lacks, CSV export carrying its own query and exclusion policy, and
+print output.
+
+Cashflow's counterpart classification is derived from the balancing identity
+per journal entry rather than from an allocation heuristic, so `net_movement`
+reconciles to the cash balance change by construction — see
+`docs/plans/reports-plan.md` slice 4.
+
+**One planned item was not delivered:** the repeated-ID filters
+(`account_id`/`category_id`/`payee_id`/`commodity_id`) and report drill-down.
+The R2 acceptance review at the end of `docs/plans/reports-plan.md` records this
+explicitly and schedules it next, ahead of the reporting-currency valuation
+method and ahead of every other preserved follow-up, all of which were
+reconsidered and answered there.
 
 Deliver in this order:
 
