@@ -3,6 +3,8 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
+  import { formatLedgerAmount } from '$lib/money/amount';
+  import { parseDividendAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
     investmentPositionsQueryKey,
@@ -147,51 +149,22 @@
       withholdingAccountID = String(match.withholding_account_id);
     }
     if (withholdingStr === '' && match.default_withholding_value && match.default_withholding_scale !== undefined) {
-      withholdingStr = rawLedgerToDisplay(String(match.default_withholding_value), match.default_withholding_scale);
+      withholdingStr = formatLedgerAmount(String(match.default_withholding_value), match.default_withholding_scale);
       showWithholding = true;
     }
   }
 
-  function rawLedgerToDisplay(quantityValue: string, scale: number): string {
-    const abs = quantityValue.startsWith('-') ? quantityValue.slice(1) : quantityValue;
-    const isNeg = quantityValue.startsWith('-');
-    if (scale === 0) return isNeg ? `-${abs}` : abs;
-    if (abs.length <= scale) {
-      const padded = abs.padStart(scale + 1, '0');
-      const int = padded.slice(0, padded.length - scale);
-      const frac = padded.slice(padded.length - scale);
-      return isNeg ? `-${int}.${frac}` : `${int}.${frac}`;
+  // Amount validation lives in $lib/investments/form-amounts.ts so its
+  // behaviour can be pinned by name; see that module for what changed.
+  function amountErrorMessage(reason: AmountFieldError): string {
+    switch (reason) {
+      case 'negative':
+        return m.investments_form_negative_number();
+      case 'too_large':
+        return m.investments_form_amount_too_large();
+      case 'invalid':
+        return m.investments_form_invalid_number();
     }
-    const int = abs.slice(0, abs.length - scale);
-    const frac = abs.slice(abs.length - scale);
-    return isNeg ? `-${int}.${frac}` : `${int}.${frac}`;
-  }
-
-  function parseDecimalField(s: string): { value: bigint | null; scale: number } {
-    const trimmed = s.trim().replace(/,/g, '');
-    if (!trimmed) return { value: null, scale: 0 };
-    const dotIdx = trimmed.indexOf('.');
-    let intStr: string;
-    let fracStr: string;
-    let scale: number;
-    if (dotIdx === -1) {
-      intStr = trimmed || '0';
-      fracStr = '';
-      scale = 0;
-    } else {
-      intStr = trimmed.slice(0, dotIdx) || '0';
-      fracStr = trimmed.slice(dotIdx + 1);
-      scale = fracStr.length;
-    }
-    intStr = intStr.replace(/^0+/, '') || '0';
-    const coefficient = intStr + fracStr;
-    if (!/^\d+$/.test(coefficient)) return { value: null, scale };
-    return { value: BigInt(coefficient), scale };
-  }
-
-  function toSafeInt(v: bigint): number | null {
-    if (v > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-    return Number(v);
   }
 
   const canSubmitCash = $derived(
@@ -216,27 +189,27 @@
     e.preventDefault();
     if (!canSubmit || !cashCommodityID) return;
 
-    const amount = parseDecimalField(amountStr);
-    if (amount.value === null) return;
-
-    const amountInt = toSafeInt(amount.value);
-    if (amountInt === null) {
-      formError = new Error(m.investments_form_amount_too_large());
+    // Every field is validated up front, before any request is built. The
+    // previous version returned silently on an unparseable amount or quantity,
+    // so a typo left the submit button doing nothing with no explanation.
+    const amounts = parseDividendAmounts({
+      amountStr,
+      withholdingStr,
+      includeWithholding: showWithholding,
+      quantityStr,
+      includeQuantity: mode === 'reinvested'
+    });
+    if (!amounts.ok) {
+      formError = new Error(amountErrorMessage(amounts.reason));
       return;
     }
+    const { amount, withholding, quantity } = amounts.values;
 
     pending = true;
     formError = undefined;
 
     try {
       if (mode === 'cash') {
-        const withholding = showWithholding && withholdingStr.trim() ? parseDecimalField(withholdingStr) : { value: null, scale: 0 };
-        const withholdingInt = withholding.value !== null ? toSafeInt(withholding.value) : null;
-        if (withholding.value !== null && withholdingInt === null) {
-          formError = new Error(m.investments_form_amount_too_large());
-          pending = false;
-          return;
-        }
         await recordDividend(
           {
             transaction_date: transactionDate,
@@ -244,35 +217,30 @@
             cash_account_id: Number(cashAccountID),
             cash_commodity_id: cashCommodityID,
             income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            amount_value: amountInt,
+            amount_value: amount.int64,
             amount_scale: amount.scale,
-            withholding_value: withholdingInt !== null ? withholdingInt : undefined,
-            withholding_scale: withholdingInt !== null ? withholding.scale : undefined,
+            withholding_value: withholding?.int64,
+            withholding_scale: withholding?.scale,
             withholding_account_id:
-              withholdingInt !== null && withholdingAccountID
-                ? Number(withholdingAccountID)
-                : undefined,
+              withholding && withholdingAccountID ? Number(withholdingAccountID) : undefined,
             memo: memo.trim() || undefined
           },
           csrfToken
         );
       } else {
-        if (!selectedInstrument) return;
-        const qty = parseDecimalField(quantityStr);
-        if (qty.value === null) return;
+        if (!selectedInstrument || !quantity) return;
         // quantity_value is an exact coefficient string on the wire, so it
         // needs no safe-integer cap. amount_value above is a real int64 and
         // keeps its own.
-
         await recordReinvestedDividend(
           {
             transaction_date: transactionDate,
             commodity_id: selectedInstrument.commodity_id,
             holding_account_id: Number(holdingAccountID),
             income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            quantity_value: qty.value.toString(),
-            quantity_scale: qty.scale,
-            amount_value: amountInt,
+            quantity_value: quantity.value,
+            quantity_scale: quantity.scale,
+            amount_value: amount.int64,
             amount_scale: amount.scale,
             cash_commodity_id: cashCommodityID,
             memo: memo.trim() || undefined
