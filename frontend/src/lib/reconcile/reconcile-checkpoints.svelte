@@ -3,7 +3,7 @@
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import Panel from '$lib/components/panel.svelte';
-  import { formatQuantity } from '$lib/transactions/transaction-labels';
+  import { formatQuantity } from '$lib/money/format';
   import {
     reconciliationCheckpointsQueryOptions,
     type ReconciliationCheckpointResponse

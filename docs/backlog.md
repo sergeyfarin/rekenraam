@@ -109,7 +109,7 @@ standalone change.
 E2E growth is tracked separately (T-20, R3a) and is not a substitute:
 Playwright is still an intentionally unscheduled CI decision.
 
-### G-08 Amount input is not locale-aware `[ ]`
+### G-08 Amount input is not locale-aware `[~]`
 
 Found while doing G-02's first half, 2026-08-08. `frontend/src/lib/money/amount.ts`
 reads "," as a thousands separator, which is right for the only locale the app
@@ -127,16 +127,34 @@ against, and guessing per-value is how T-36 happened. This blocks nothing
 today but is a prerequisite for the multi-currency/expat direction in
 `docs/roadmap.md`, and should be picked up with the first non-`en` locale.
 
-Noted while confirming the above: **`dinero.js` 2.0.2 is a declared dependency
-with zero imports anywhere in `frontend/src`.** `docs/conventions.md` claimed it
-was used "for all frontend money arithmetic … input parsing", which was never
-true — parsing has always been hand-rolled, correctly, because Dinero's default
-calculator is JS numbers and breaks past `Number.MAX_SAFE_INTEGER`. The
-convention was corrected 2026-08-08 to match reality: exact arithmetic in
-`$lib/money/amount.ts`, Dinero reserved for locale-aware display. Whoever picks
-up G-08 should decide whether Dinero (with its BigInt calculator) is actually
-the display layer we want, or whether `Intl.NumberFormat` alone is enough and
-the dependency should be dropped.
+**The display-layer half of this item is now resolved; only input parsing is
+still open.** Noted while confirming the above: `dinero.js` 2.0.2 was a declared
+dependency with zero imports anywhere in `frontend/src`. `docs/conventions.md`
+claimed it was used "for all frontend money arithmetic … input parsing", which
+was never true — parsing has always been hand-rolled, correctly, because
+Dinero's default calculator is JS numbers and breaks past
+`Number.MAX_SAFE_INTEGER`.
+
+Decided 2026-08-08, at the start of R2's remaining reports work, because
+cashflow and CSV output both needed a named display formatter and deferring
+again would have meant a third round of inline formatting:
+
+- **`Intl.NumberFormat` alone is enough; `dinero.js` was removed** from
+  `frontend/package.json`. Dinero formats through `Intl` regardless, so it adds
+  no capability; reaching it safely would mean wiring its BigInt calculator to
+  get arithmetic we already do and test directly; and it models money as an
+  amount in a currency with one fixed exponent, which cannot represent a book
+  holding a 24-scale crypto quantity beside a 2-scale euro.
+- The formatter that already existed — `formatQuantity`, previously buried in
+  `$lib/transactions/transaction-labels.ts` and imported by seven unrelated
+  modules including reports — moved to **`frontend/src/lib/money/format.ts`**,
+  the read-only display half of `$lib/money`. `format.test.ts` pins how it
+  differs from `amount.ts`'s editable `formatLedgerAmount` so neither half
+  drifts into the other's job.
+
+What remains under G-08 is only the input direction: resolving the separator
+from the active locale when parsing, and when rendering an editable value back
+into a form field. That is still gated on the first non-`en` locale.
 
 ## Public-deployment security gates
 

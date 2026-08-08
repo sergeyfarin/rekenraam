@@ -13,7 +13,8 @@
     movePosting,
     type AccountRegisterEntryResponse
   } from '$lib/api/transactions';
-  import { formatQuantity, formatSignedAmount, statusTone } from './transaction-labels';
+  import { formatQuantity } from '$lib/money/format';
+  import { formatSignedAmount, statusTone } from './transaction-labels';
   import type { AccountClass } from './transaction-labels';
   import TransactionTable from './transaction-table.svelte';
   import TransactionFilterBar from './transaction-filter-bar.svelte';

@@ -242,10 +242,17 @@ When a feature introduces a durable new rule, update one of those documents in t
   ledger's `{ value, scale }` pair, never a JS `Number`. Do not add a second parser or
   a private copy of a helper to a `.svelte` file; this is the frontend counterpart of
   the backend's `exact.ScaledInt` rule above, and every copy that existed had drifted.
-- **Dinero.js v2** is for locale-aware **display** of read-only money (via
-  `Intl.NumberFormat` through Dinero's formatting layer). It is not used for parsing
-  or for values that must round-trip back into an editable form field, and it must
-  never be the source of a figure the user acts on.
+- All frontend money **display** goes through `frontend/src/lib/money/format.ts`
+  (`formatQuantity`) — locale-aware presentation via `Intl.NumberFormat` over a
+  `BigInt`, for read-only money only. **No money-formatting dependency**: G-08 was
+  settled against Dinero.js on 2026-08-08 and the package was removed. Dinero
+  formats through `Intl` anyway, its default calculator is JS numbers, and it models
+  a fixed exponent per currency, which is the wrong shape for a ledger that stores a
+  24-scale crypto quantity beside a 2-scale euro. The reasoning is in `format.ts`.
+- The two halves of `$lib/money` are not interchangeable, and a report or export must
+  pick the right one rather than growing inline math: `format.ts` for anything a user
+  only reads, `amount.ts` (`formatLedgerAmount`) for anything that must round-trip
+  back into an editable input unchanged. `format.test.ts` pins the difference.
 - Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
 - Report calculations must be backend-composed read models with explicit filter
   contracts. Reuse the same report semantics across full report pages,

@@ -8,7 +8,7 @@
   import StatePanel from '$lib/components/state-panel.svelte';
   import { currenciesQueryOptions } from '$lib/api/currencies';
   import { netWorthSeriesQueryOptions, type NetWorthSeriesOptions } from '$lib/api/ledger';
-  import { formatQuantity } from '$lib/transactions/transaction-labels';
+  import { formatQuantity } from '$lib/money/format';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';

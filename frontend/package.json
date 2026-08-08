@@ -39,7 +39,6 @@
         "@inlang/paraglide-js": "2.23.1",
         "@tanstack/svelte-query": "6.1.38",
         "date-fns": "4.4.0",
-        "dinero.js": "2.0.2",
         "openapi-fetch": "0.17.0"
     }
 }

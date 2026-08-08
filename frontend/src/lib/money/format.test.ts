@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatQuantity } from './transaction-labels';
+import { formatQuantity } from './format';
+import { formatLedgerAmount, parseDecimalAmount } from './amount';
 
 describe('formatQuantity', () => {
   it('scale 0: integer amount', () => {
@@ -57,5 +58,40 @@ describe('formatQuantity', () => {
     const enResult = formatQuantity('12345', 2, 'en-US');
     expect(enResult).toContain('123');
     expect(enResult).toContain('45');
+  });
+});
+
+/**
+ * The two halves of `$lib/money` deliberately render the same value
+ * differently. These tests pin that difference so neither half drifts into
+ * doing the other's job — the mistake that produced the duplicated,
+ * divergent copies G-02 cleaned up.
+ */
+describe('display formatting vs editable formatting', () => {
+  it('differs from formatLedgerAmount only by locale presentation', () => {
+    // Same coefficient, two audiences: a reader gets group separators, an
+    // editable <input> gets a bare decimal it can round-trip.
+    expect(formatQuantity('123456789', 2, 'en-US')).toBe('1,234,567.89');
+    expect(formatLedgerAmount('123456789', 2)).toBe('1234567.89');
+  });
+
+  it('preserves a value negative and sub-unit in both halves', () => {
+    expect(formatQuantity('-5', 2, 'en-US')).toBe('-0.05');
+    expect(formatLedgerAmount('-5', 2)).toBe('-0.05');
+  });
+
+  it('preserves a high-scale crypto quantity rather than rounding to 2', () => {
+    // A commodity may carry up to MAX_SUPPORTED_SCALE digits. Display must not
+    // silently truncate them — the reader would see a different quantity than
+    // the ledger holds.
+    expect(formatQuantity('100000000000000000', 18, 'en-US')).toBe('0.100000000000000000');
+  });
+
+  it('en display output is re-parseable, since en groups in threes', () => {
+    // Not a general guarantee — it holds because `en` uses "," as a thousands
+    // separator, which is exactly the grouping parseDecimalAmount accepts. A
+    // decimal-comma locale breaks this, which is the open half of G-08.
+    const displayed = formatQuantity('123456789', 2, 'en-US');
+    expect(parseDecimalAmount(displayed)).toEqual({ value: '123456789', scale: 2 });
   });
 });

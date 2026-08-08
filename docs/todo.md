@@ -90,9 +90,13 @@ preconditions. Also in `roadmap.md`.
       the investment forms, which hold two more copies of the same helpers —
       `dividend-form.svelte` first, then `buy-form`/`sell-form`. Best done at
       the R2 acceptance review. See `backlog.md` G-02.
-- [ ] G-08 amount input is not locale-aware — new 2026-08-08, opened by the
-      G-02 work. Not blocking anything while the app ships `en` only; a
-      prerequisite for the multi-currency direction. See `backlog.md` G-08.
+- [~] G-08 amount input is not locale-aware — **display half settled
+      2026-08-08**: `Intl.NumberFormat` wins over Dinero.js, the unused
+      `dinero.js` dependency is gone, and `formatQuantity` now lives in
+      `frontend/src/lib/money/format.ts` as the read-only display half of
+      `$lib/money`. The input half (resolving the separator from the active
+      locale when parsing and when refilling a form field) stays open and is
+      still gated on the first non-`en` locale. See `backlog.md` G-08.
 - [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
       slice and an unmade provider choice. See `backlog.md`.
 

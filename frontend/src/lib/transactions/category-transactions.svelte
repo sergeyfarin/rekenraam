@@ -8,8 +8,8 @@
     transactionsInfiniteQueryOptions,
     type TransactionResponse
   } from '$lib/api/transactions';
+  import { formatQuantity } from '$lib/money/format';
   import {
-    formatQuantity,
     resolveAccountLabel,
     statusLabel,
     statusTone,
