@@ -26,8 +26,8 @@ importers:
   frontend:
     dependencies:
       '@inlang/paraglide-js':
-        specifier: 2.23.1
-        version: 2.23.1(typescript@6.0.3)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0))
+        specifier: 2.23.2
+        version: 2.23.2(typescript@6.0.3)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0))
       '@tanstack/svelte-query':
         specifier: 6.1.38
         version: 6.1.38(svelte@5.56.8)
@@ -124,8 +124,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@inlang/paraglide-js@2.23.1':
-    resolution: {integrity: sha512-KEnJhvRLhB1zbGNmt2DHi4SuIbr7ZcZ0tftFYxQDDSpS1GqjJJ+b+ZaxVC2PElpgcQYNgD5Bt9hYUpV+et8IMw==}
+  '@inlang/paraglide-js@2.23.2':
+    resolution: {integrity: sha512-tzWnZ6DEQ3JRxpSM/lsmfUFSNXLymvlfUei4uX1lo/Qh3a8OfxZ5nchGrEM+p0aLX4m5ZMrVuMKfaD0qXJFeoA==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.6'
@@ -1323,7 +1323,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@inlang/paraglide-js@2.23.1(typescript@6.0.3)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0))':
+  '@inlang/paraglide-js@2.23.2(typescript@6.0.3)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0))':
     dependencies:
       '@inlang/recommend-sherlock': 0.2.1
       '@inlang/sdk': 2.10.2
