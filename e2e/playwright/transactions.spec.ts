@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { todayISO } from './support/dates';
 
 test('creates a simple transaction through the browser form', async ({ page }) => {
   await ensureBrowserSession(page);
@@ -23,7 +24,7 @@ test('creates a simple transaction through the browser form', async ({ page }) =
 
   await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
-  await form.getByLabel('Date').fill('2026-07-08');
+  await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Payee').fill('E2E Cafe');
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption({ label: accountName });

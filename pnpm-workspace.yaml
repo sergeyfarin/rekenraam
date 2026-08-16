@@ -44,6 +44,13 @@ minimumReleaseAgeExclude:
   - typescript@7.0.2
   - '@types/node@26.1.1'
   - shadcn-svelte@1.4.0
+  - '@inlang/plugin-m-function-matcher@2.2.11'
+  - '@inlang/sdk@3.0.1'
+  - '@lix-js/sdk-darwin-arm64@0.12.2'
+  - '@lix-js/sdk-linux-arm64@0.12.2'
+  - '@lix-js/sdk-linux-x64@0.12.2'
+  - '@lix-js/sdk-win32-x64@0.12.2'
+  - '@lix-js/sdk@0.12.2'
 
 overrides:
   # brace-expansion: 5.0.9

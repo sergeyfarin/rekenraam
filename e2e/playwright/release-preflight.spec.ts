@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { monthStartISO, todayISO, todayQIF } from './support/dates';
 
 test.describe.serial('release preflight journeys', () => {
   test('enters a balanced split transfer', async ({ page }) => {
@@ -10,7 +11,7 @@ test.describe.serial('release preflight journeys', () => {
     await page.goto('/app/transactions');
     await page.getByRole('button', { name: 'New transaction' }).click();
     const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
-    await form.getByLabel('Date').fill('2026-07-08');
+    await form.getByLabel('Date').fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight transfer ${suffix}`);
     await form.getByRole('button', { name: 'Use split entry' }).click();
 
@@ -23,7 +24,7 @@ test.describe.serial('release preflight journeys', () => {
     await expect(form.getByText('Balanced')).toBeVisible();
     await form.getByRole('button', { name: 'Add transaction' }).click();
 
-    await expect(page.getByText(`Preflight transfer ${suffix}`)).toBeVisible();
+    await expect(transactionTable(page).getByText(`Preflight transfer ${suffix}`)).toBeVisible();
   });
 
   test('reconciles a selected posting to zero', async ({ page }) => {
@@ -34,9 +35,9 @@ test.describe.serial('release preflight journeys', () => {
 
     await page.goto('/app/reconcile');
     await page.getByLabel('Account').selectOption({ label: account.name });
-    await page.getByLabel('Statement date').fill('2026-07-08');
+    await page.getByLabel('Statement closing date').fill(todayISO());
     await page.getByLabel('Statement ending balance').fill('10.00');
-    await page.getByRole('button', { name: 'Start reconciliation' }).click();
+    await page.getByRole('button', { name: 'Start reconciling' }).click();
 
     await page.getByRole('checkbox').first().check();
     await expect(page.getByText('Balanced')).toBeVisible();
@@ -54,16 +55,17 @@ test.describe.serial('release preflight journeys', () => {
     await page.locator('input[type="file"]').setInputFiles({
       name: 'preflight.qif',
       mimeType: 'application/qif',
-      buffer: Buffer.from('!Type:Bank\nD07/08/2026\nT-12.34\nPPreflight QIF Payee\nMPreflight QIF memo\n^\n')
+      buffer: Buffer.from(`!Type:Bank\nD${todayQIF()}\nT-12.34\nPPreflight QIF Payee\nMPreflight QIF memo\n^\n`)
     });
     await page.getByRole('button', { name: 'Upload & preview' }).click();
-    await expect(page.getByText('Preview import')).toBeVisible();
+    await expect(page.getByLabel('Target account')).toBeVisible();
     await page.getByLabel('Target account').selectOption(String(account.id));
     await page.getByLabel('Currency').selectOption(String(currencyID));
+    await page.getByLabel('Default category').selectOption({ index: 1 });
     await page.getByRole('button', { name: 'Apply to all rows' }).click();
     await page.getByRole('button', { name: 'Commit to ledger' }).click();
     await expect(page.getByText('Import complete')).toBeVisible();
-    await expect(page.getByText('1 transaction committed.')).toBeVisible();
+    await expect(page.getByText('1 transactions committed')).toBeVisible();
   });
 
   test('records a buy, previews a sell, and commits it', async ({ page }) => {
@@ -72,7 +74,7 @@ test.describe.serial('release preflight journeys', () => {
     const cash = await createCashAccount(page, csrfToken, `Preflight brokerage cash ${suffix}`, currencyID);
     const instrument = await apiJSON<{ id: number; display_name: string }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
       commodity_code: `PF${suffix}`,
-      instrument_type: 'equity',
+      instrument_type: 'stock',
       display_name: `Preflight Equity ${suffix}`,
       symbol: `PF${suffix}`,
       quote_commodity_id: currencyID,
@@ -83,7 +85,7 @@ test.describe.serial('release preflight journeys', () => {
     const holding = await apiJSON<{ id: number; name: string }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
       instrument_id: instrument.id,
       name: `Preflight holding ${suffix}`,
-      opened_on: '2026-07-01'
+      opened_on: monthStartISO()
     });
 
     await page.goto('/app/investments');
@@ -118,16 +120,25 @@ test.describe.serial('release preflight journeys', () => {
     await page.goto('/app/transactions');
     await page.getByRole('button', { name: 'New transaction' }).click();
     const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
-    await form.getByLabel('Date').fill('2026-07-08');
+    await form.getByLabel('Date').fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight mobile entry ${suffix}`);
     await form.getByLabel('Account').selectOption(String(account.id));
     await form.getByLabel('Amount').fill('-3.50');
     await form.getByPlaceholder('Search categories').click();
     await form.locator('ul[role="listbox"] button[role="option"]').first().click();
     await form.getByRole('button', { name: 'Add transaction' }).click();
-    await expect(page.getByText(`Preflight mobile entry ${suffix}`)).toBeVisible();
+    await expect(transactionTable(page).getByText(`Preflight mobile entry ${suffix}`)).toBeVisible();
   });
 });
+
+/**
+ * The transaction list. Saving a transaction also opens the detail panel, so
+ * an unscoped text locator matches the row, the panel heading and the panel
+ * field alike — scope list assertions to the table.
+ */
+function transactionTable(page: Page) {
+  return page.locator('[data-transaction-table]');
+}
 
 async function readyForLedger(page: Page): Promise<{ csrfToken: string; currencyID: number }> {
   await ensureBrowserSession(page);
@@ -155,14 +166,14 @@ async function createSimpleTransaction(page: Page, csrfToken: string, accountID:
   await page.goto('/app/transactions');
   await page.getByRole('button', { name: 'New transaction' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
-  await form.getByLabel('Date').fill('2026-07-08');
+  await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);
   await form.getByLabel('Account').selectOption(String(accountID));
   await form.getByLabel('Amount').fill(amount);
   await form.getByPlaceholder('Search categories').click();
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
   await form.getByRole('button', { name: 'Add transaction' }).click();
-  await expect(page.getByText(description)).toBeVisible();
+  await expect(transactionTable(page).getByText(description)).toBeVisible();
 }
 
 async function ensureBrowserSession(page: Page) {

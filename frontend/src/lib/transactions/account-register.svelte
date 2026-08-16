@@ -202,6 +202,7 @@
 
   <TransactionTable
     {rows}
+    rowId={(entry) => `${entry.transaction_id}:${entry.version_id}`}
     columns={[
       { key: 'date', header: m.register_col_date(), priority: 1, width: '9rem', cell: dateCell },
       { key: 'payee', header: m.register_col_payee(), priority: 1, cell: payeeCell },

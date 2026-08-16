@@ -212,6 +212,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - All production data access goes through Go API endpoints under `/api/v1`; unknown `/api/` paths must not fall back to the frontend shell.
 - The frontend foundation stack uses **SvelteKit**, **Tailwind CSS**, **Bits UI**, and **shadcn-svelte**. Bits UI provides accessible primitives; shadcn-svelte is a component scaffolding source, not the product design system.
 - The frontend i18n library is **Paraglide JS** (Inlang). Use its compile-time message functions for all user-facing copy.
+- Inlang plugins in `frontend/project.inlang/settings.json` resolve from local `./node_modules/...` paths, not `https://cdn.jsdelivr.net/...`. CDN modules are invisible to the lockfile and to pnpm's supply-chain check, and they make `paraglide:compile` — and therefore every build — fail on a network-restricted machine. Add the plugin as a `devDependency` and reference its `dist` entry by path.
 - Add the Paraglide/Inlang message catalog structure before the first non-placeholder user-facing screen.
 - Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
 - All user-facing copy goes through a translation boundary.
@@ -243,7 +244,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Prefer shared frontend helpers and API seams over route-local ad hoc logic.
 - Use **`openapi-typescript`** (type generation) + **`openapi-fetch`** (typed HTTP client) for all frontend API calls. The OpenAPI spec is the single source of type truth.
 - Use **`@tanstack/svelte-query`** as the data layer for all server state. Use `createInfiniteQuery` for paginated lists; use query key composition to cache search results per search string.
-- Add **`@tanstack/svelte-table`** and TanStack Virtual only when the first dense table or virtualized list screen actually needs them; do not lock them into the baseline dependency set before first use.
+- Dense ledger tables are built on **`@tanstack/svelte-table` v9** (Svelte 5 runes native — no v8 compatibility wrapper). Register features explicitly through the shared `transactionTableFeatures` in `frontend/src/lib/transactions/transaction-table-types.ts`; sorting, filtering, and pagination stay server-side, so those features are deliberately not registered. Responsive column hiding stays CSS-driven (column `meta.priority`) rather than `columnVisibilityFeature`, because the static adapter prerenders without `matchMedia`. Always supply a `rowId` so rows keep identity across refetches. Add TanStack Virtual only when a screen actually needs virtualized rendering.
 - Use **`minisearch`** for client-side fuzzy filtering of small in-memory sets (account name dropdowns, payee autocomplete). Do not use client-side search for full transaction lists.
 - Use **`date-fns` v4** for frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
 - All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
@@ -323,6 +324,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Frontend logic gets Svelte checks and focused component or unit tests when introduced.
 - Bruno covers important API workflows.
 - Playwright covers critical user journeys.
+- Playwright specs must never hard-code a ledger date. Accounts created during a run get `effective_from` set to the run date, and `PostingAccountRule` resolves the account version as-of the posting's entry date, so a fixed posting date starts failing with `VALIDATION_FAILED: posting account is invalid` the moment wall-clock time passes it. Derive dates from `todayISO()` / `todayQIF()` / `monthStartISO()` in `e2e/playwright/support/dates.ts`.
 - Financial invariants, reconciliation behavior, imports, and calculations require named backend test cases.
 
 ## Archive Translation Rules

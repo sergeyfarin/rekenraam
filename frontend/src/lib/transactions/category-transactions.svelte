@@ -187,6 +187,7 @@
 
   <TransactionTable
     {rows}
+    rowId={(tx) => String(tx.id)}
     columns={[
       { key: 'date', header: m.category_tx_col_date(), priority: 1, width: '9rem', cell: dateCell },
       { key: 'payee', header: m.category_tx_col_payee(), priority: 1, cell: payeeCell },

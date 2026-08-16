@@ -178,6 +178,7 @@
 
   <TransactionTable
     {rows}
+    rowId={(tx) => String(tx.id)}
     columns={[
       { key: 'deleted', header: m.trash_col_deleted(), priority: 2, width: '11rem', cell: deletedCell },
       { key: 'date', header: m.trash_col_date(), priority: 1, width: '8rem', cell: dateCell },

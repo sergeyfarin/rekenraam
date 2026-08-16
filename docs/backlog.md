@@ -55,6 +55,34 @@ realized gains. Audit P4. Needs a small product decision (which account the
 loss books against) plus either `CashAmountValue == 0` support on Sell or a
 dedicated write-off endpoint over the existing disposal engine.
 
+### T-42 TypeScript 7 upgrade blocked by `openapi-typescript` `[ ]`
+
+**Files:** `frontend/package.json` (`typescript`, `openapi-typescript`);
+`frontend/src/lib/api/schema.d.ts` generation step.
+
+TypeScript 7.0.2 is released, but `openapi-typescript` 7.13.0 (latest) still
+declares `peerDependencies.typescript: ^5.x` and emits `schema.d.ts` through
+the TypeScript JS compiler API (`ts.factory`). TS 7 no longer exposes it, so
+`pnpm run openapi:generate` fails immediately with
+`TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')`,
+taking `dev`, `check`, and `build` down with it. The frontend is pinned to
+TypeScript 6.0.3 until `openapi-typescript` ships TS 7 support; re-check on
+each `openapi-typescript` release. The stale `typescript@7.0.2` and
+`@typescript/typescript-*@7.0.2` entries were left in
+`pnpm-workspace.yaml`'s `minimumReleaseAgeExclude` so the retry is a one-line
+version bump.
+
+### T-43 `gofmt` drift in four backend files `[ ]`
+
+**Files:** `backend/internal/app/transactions_service.go`,
+`backend/internal/db/reconciliation.go`, `backend/internal/db/recovery.go`,
+`backend/internal/web/static_integration_test.go`.
+
+`gofmt -l .` in `backend/` lists these four files. `go vet ./...` is clean and
+the tests pass, but CI does not currently run a formatting gate, so the drift
+is invisible. Run `gofmt -w` on them and add the check to
+`.github/workflows/ci.yml` so it cannot recur.
+
 ## Public-deployment security gates
 
 These do not block private/local development. They must be complete before

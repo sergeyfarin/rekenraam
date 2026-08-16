@@ -1,11 +1,18 @@
-<script lang="ts" generics="R">
+<script lang="ts" generics="R extends Record<string, any>">
+  import { createTable, FlexRender, renderSnippet } from '@tanstack/svelte-table';
+  import type { DisplayColumnDef } from '@tanstack/svelte-table';
   import StatePanel from '$lib/components/state-panel.svelte';
   import { m } from '$lib/paraglide/messages.js';
-  import type { Column } from './transaction-table-types';
+  import {
+    transactionTableFeatures,
+    type Column,
+    type TransactionTableFeatures
+  } from './transaction-table-types';
 
   let {
     rows,
     columns,
+    rowId,
     isLoading = false,
     isFetchingNextPage = false,
     hasNextPage = false,
@@ -16,6 +23,12 @@
   }: {
     rows: R[];
     columns: Column<R>[];
+    /**
+     * Stable identity for a row. Supply it whenever the row carries a server
+     * ID — without it TanStack falls back to the array index, so rows that
+     * shift position across refetches reuse each other's DOM and focus.
+     */
+    rowId?: (row: R) => string;
     isLoading?: boolean;
     isFetchingNextPage?: boolean;
     hasNextPage?: boolean;
@@ -25,6 +38,34 @@
     onRowClick?: (row: R) => void;
   } = $props();
 
+  const columnDefs = $derived(
+    columns.map(
+      (col): DisplayColumnDef<TransactionTableFeatures, R> => ({
+        id: col.key,
+        header: col.header,
+        meta: { width: col.width, align: col.align, priority: col.priority },
+        cell: (ctx) => renderSnippet(col.cell, ctx.row.original)
+      })
+    )
+  );
+
+  // Getters (not snapshots) so the adapter's $effect.pre re-reads current
+  // runes before the DOM renders.
+  const table = createTable<TransactionTableFeatures, R>({
+    features: transactionTableFeatures,
+    get columns() {
+      return columnDefs;
+    },
+    get data() {
+      return rows;
+    },
+    // Undefined falls back to TanStack's index-based row ids.
+    get getRowId() {
+      return rowId;
+    }
+  });
+
+  let container: HTMLDivElement | undefined = $state();
   let sentinel: HTMLDivElement | undefined = $state();
   let focusedRowIndex = $state(-1);
 
@@ -59,10 +100,8 @@
   }
 
   function focusRow(index: number) {
-    const tableEl = document.querySelector('[data-transaction-table]');
-    if (!tableEl) return;
-    const rows = tableEl.querySelectorAll<HTMLElement>('[data-table-row]');
-    rows[index]?.focus();
+    const rowEls = container?.querySelectorAll<HTMLElement>('[data-table-row]');
+    rowEls?.[index]?.focus();
   }
 
   const PRIORITY_CLASSES: Record<number, string> = {
@@ -70,30 +109,47 @@
     2: 'hidden min-[600px]:table-cell',
     3: 'hidden min-[900px]:table-cell'
   };
+
+  function priorityClass(meta: { priority?: number } | undefined) {
+    return PRIORITY_CLASSES[meta?.priority ?? 1];
+  }
+
+  function alignClass(meta: { align?: string } | undefined) {
+    return meta?.align === 'right' ? 'text-right' : 'text-left';
+  }
 </script>
 
-<div class="flex flex-col overflow-hidden" data-transaction-table>
+{#snippet headerRow(skeleton: boolean)}
+  <thead>
+    {#each table.getHeaderGroups() as group (group.id)}
+      <tr class="sticky top-0 z-10 border-b border-border bg-surface">
+        {#each group.headers as header (header.id)}
+          {@const meta = header.column.columnDef.meta}
+          <th
+            class={`px-3 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted ${skeleton ? 'text-left' : alignClass(meta)} ${priorityClass(meta)}`}
+            style={meta?.width ? `width: ${meta.width}` : undefined}
+          >
+            {#if !header.isPlaceholder}
+              <FlexRender {header} />
+            {/if}
+          </th>
+        {/each}
+      </tr>
+    {/each}
+  </thead>
+{/snippet}
+
+<div class="flex flex-col overflow-hidden" bind:this={container} data-transaction-table>
   {#if isLoading && rows.length === 0}
     <!-- Initial loading skeleton -->
     <div class="overflow-x-auto">
       <table class="w-full border-collapse text-sm">
-        <thead>
-          <tr class="sticky top-0 z-10 border-b border-border bg-surface">
-            {#each columns as col (col.key)}
-              <th
-                class={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-widest text-muted ${PRIORITY_CLASSES[col.priority ?? 1]}`}
-                style={col.width ? `width: ${col.width}` : undefined}
-              >
-                {col.header}
-              </th>
-            {/each}
-          </tr>
-        </thead>
+        {@render headerRow(true)}
         <tbody>
           {#each { length: 6 } as _, i (i)}
             <tr class="border-b border-border/50">
-              {#each columns as col (col.key)}
-                <td class={`px-3 py-3 ${PRIORITY_CLASSES[col.priority ?? 1]}`}>
+              {#each table.getAllColumns() as col (col.id)}
+                <td class={`px-3 py-3 ${priorityClass(col.columnDef.meta)}`}>
                   <div class="h-4 animate-pulse rounded bg-surface-strong"></div>
                 </td>
               {/each}
@@ -123,20 +179,9 @@
   {:else}
     <div class="overflow-x-auto">
       <table class="w-full border-collapse text-sm">
-        <thead>
-          <tr class="sticky top-0 z-10 border-b border-border bg-surface">
-            {#each columns as col (col.key)}
-              <th
-                class={`px-3 py-2.5 text-xs font-semibold uppercase tracking-widest text-muted ${col.align === 'right' ? 'text-right' : 'text-left'} ${PRIORITY_CLASSES[col.priority ?? 1]}`}
-                style={col.width ? `width: ${col.width}` : undefined}
-              >
-                {col.header}
-              </th>
-            {/each}
-          </tr>
-        </thead>
+        {@render headerRow(false)}
         <tbody>
-          {#each rows as row, i (i)}
+          {#each table.getRowModel().rows as row, i (row.id)}
             {@const isClickable = !!onRowClick}
             <tr
               data-table-row
@@ -144,14 +189,13 @@
               role={isClickable ? 'button' : undefined}
               aria-selected={focusedRowIndex === i}
               class={`border-b border-border/50 outline-none transition-colors ${isClickable ? 'cursor-pointer hover:bg-row-hover focus:bg-row-hover' : ''}`}
-              onclick={() => onRowClick?.(row)}
-              onkeydown={(e) => handleRowKeydown(e, i, row)}
+              onclick={() => onRowClick?.(row.original)}
+              onkeydown={(e) => handleRowKeydown(e, i, row.original)}
             >
-              {#each columns as col (col.key)}
-                <td
-                  class={`px-3 py-3 ${col.align === 'right' ? 'text-right' : 'text-left'} ${PRIORITY_CLASSES[col.priority ?? 1]}`}
-                >
-                  {@render col.cell(row)}
+              {#each row.getAllCells() as cell (cell.id)}
+                {@const meta = cell.column.columnDef.meta}
+                <td class={`px-3 py-3 ${alignClass(meta)} ${priorityClass(meta)}`}>
+                  <FlexRender {cell} />
                 </td>
               {/each}
             </tr>
