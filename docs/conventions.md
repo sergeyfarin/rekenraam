@@ -256,6 +256,17 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Use clear information hierarchy, explicit totals, and obvious destructive-action warnings.
 - Preserve readability for dense ledger and reporting screens.
 - Charts and color usage must remain understandable in all supported themes.
+- **Charts summarize an accessible table; they never replace it.** Render a chart
+  only when it can be honest: a magnitude chart over unlike commodities is a
+  fabricated comparison, so it appears only once a single commodity is in range.
+  A single-series chart uses one semantic hue (`--color-accent`) and needs no
+  legend — the heading names the series. Categorical hues are assigned in a fixed
+  order, never cycled, and never a rainbow. Any state a chart encodes with colour
+  (a negative total, a warning) also carries a non-colour cue such as texture
+  plus explanatory text. Chart geometry may use floating point; displayed amounts
+  never do — they come from the exact coefficient strings.
+- Prefer inline SVG built from the token system over a charting dependency until
+  a screen genuinely needs interaction a hand-rolled chart cannot provide.
 - Theme support should include a non-color cue strategy for critical financial states such as positive, negative, warning, reconciled, and locked.
 
 ## Security And Deployment Conventions

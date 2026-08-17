@@ -116,15 +116,18 @@ series backend/API foundation).
 | **Dedicated reconcile workflow screen** | ✅ | `routes/app/reconcile` (R1): pick account → statement date/balance → clear postings against a server-authoritative live difference → finish only at zero, or discard. Prior active checkpoints shown read-only. Reuses the existing typed client (`lib/api/reconciliation.ts`). |
 | Void-checkpoint controls / out-of-session mark-cleared UI | ⬜ | API exists; deferred beyond the R1 trust loop. |
 
-## Reports (Phase 3) — 🟡 Backend only
+## Reports (Phase 3) — 🟦 Net worth and spending shipped, cashflow pending
 
 | Capability | Status | Notes |
 |---|---|---|
-| Net worth read models | 🟦 | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth`; `/app/reports` consumes the date/bucket contract, while account/commodity filters remain pending. |
+| Net worth read models | 🟦 | Single-point `GET /ledger/net-worth` plus exact calendar series `GET /reports/net-worth`; `/app/reports` consumes the date/bucket contract. Asset/liability split per bucket is still pending in the series response. |
+| Shared report filter contract | ✅ | Repeatable `account_id` / `commodity_id` plus `include_descendants` on `/reports/*`, echoed as `query.filters` with the resolved descendant expansion. Descendants resolve per reporting date because parent links are versioned. Inaccessible IDs are `VALIDATION_FAILED`, never a quietly narrower result. |
+| Spending / income read model | ✅ | `GET /reports/spending` ranks category or payee totals over a range, exact per commodity, with within-commodity shares as integer basis points and a per-row drill-down query. Transfers cannot enter the basis (they have no category posting). `grouping_policy: direct_postings` — parents do not absorb children. |
 | Account balances read model | 🟡 | `GET /ledger/account-balances`; overflow-guarded (422 on precision limit). |
-| Category totals (spending) read model | 🟡 | `GET /ledger/category-totals`. |
-| **Reports UI (net worth / cashflow / spending)** | 🟦 | `/app/reports` ships net-worth date/bucket filters and an exact commodity-grouped table; spending and cashflow remain pending. |
-| Cashflow read model | ⬜ | Not yet a dedicated endpoint. |
+| Category totals read model | 🟡 | `GET /ledger/category-totals`; a building block, superseded for reporting by `/reports/spending`. |
+| **Reports UI — net worth** | 🟦 | `/app/reports` ships date/bucket filters and an exact commodity-grouped table. Chart and filter controls pending. |
+| **Reports UI — spending / income** | 🟦 | View switch, dense table, category/payee and spending/income switches, single-commodity bar chart with a non-colour cue for negative rows, and all four screen states. Filter controls and drill-down links pending. |
+| Cashflow read model and view | ⬜ | Not yet a dedicated endpoint. Semantics locked in `docs/plans/reports-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 

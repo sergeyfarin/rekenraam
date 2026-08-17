@@ -1,9 +1,9 @@
 # Reports Plan
 
-Status: **active implementation plan for roadmap R2**. The net-worth-series and
-spending read models plus the shared filter contract are shipped on the backend;
-the cashflow read model and the spending/cashflow frontend are pending. Last
-verified against the codebase: 2026-08-17.
+Status: **active implementation plan for roadmap R2**. Net worth and spending are
+shipped end to end (read models, shared filter contract, and screens); the
+cashflow read model and view are pending, as are the filter controls and
+drill-down links. Last verified against the codebase: 2026-08-17.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -276,7 +276,34 @@ UI:
      (income is credit-normal in the ledger) and labelled `income`, never
      folded into a spending number.
 
-   Frontend table/chart, the category/payee switch, and drill-down links remain.
+   **Progress (2026-08-17, frontend):** `/app/reports` now hosts a view switch
+   (net worth / spending) with the whole filter set in the URL, so a link
+   restores the exact report. The spending view ships the dense table first
+   (dimension, commodity, amount, share), the category/payee switch, the
+   spending/income direction switch, and all four screen states.
+
+   - **The chart is a summary, and only when it is honest.** A horizontal bar
+     chart renders only for a single-commodity report — bars across unlike
+     commodities would be a comparison the ledger cannot justify. It is one
+     accent hue (single-series magnitude), so no categorical palette and no
+     legend are involved; the heading names the series and the table above
+     stays the accessible source of truth.
+   - **Negative rows carry a non-colour cue.** A refund-dominated row is
+     hatched and explained in text, not signalled by colour alone.
+   - **Built-in category labels resolve at render time** through
+     `categoryDisplayName`, so seeded categories show "Rent/Mortgage" rather
+     than `expense_housing_rent_mortgage`, and a user rename wins. One
+     categories request per page, never per row.
+   - **Responsive priority keeps the amount.** The commodity column (redundant
+     when a single commodity is in range — the amount cell carries the code)
+     hides below 600px and share below 460px, so a 390px phone still shows
+     dimension and amount instead of scrolling them off.
+
+   Remaining in this slice: category/payee/account/commodity filter *controls*
+   (the backend accepts them and the URL carries them; the UI has no pickers
+   yet) and drill-down links, which need the transactions route to honour the
+   same date/category/payee semantics before a link can be anything but
+   misleading.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.

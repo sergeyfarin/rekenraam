@@ -29,7 +29,13 @@ preconditions. Also in `roadmap.md`.
 - [x] Spending read model: `GET /api/v1/reports/spending`, category/payee
       grouping, exact per-commodity totals, within-commodity shares, and
       drill-down queries — done 2026-08-17 (backend only).
-- [ ] Spending view (frontend): table, category/payee switch, chart, drill-down.
+- [x] Spending view (frontend): view switch, dense table, category/payee and
+      spending/income switches, single-commodity bar chart, all screen states —
+      done 2026-08-17. Filter *controls* and drill-down links still open below.
+- [ ] Filter controls (account / commodity / category / payee pickers) for both
+      views. The backend and the URL already carry them; only the UI is missing.
+- [ ] Drill-down links from a spending row, once the transactions route can
+      honour the same date/category/payee semantics.
 - [ ] Cashflow read model + view (inflow / outflow / transfers / net).
 - [ ] Date/account/category/payee/commodity filters.
 - [ ] CSV + print-friendly tables; summary charts alongside (not replacing)

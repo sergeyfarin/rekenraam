@@ -12,6 +12,10 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
+  import SpendingView from './spending-view.svelte';
+  import type { SpendingGroupBy, SpendingMode, SpendingOptions } from '$lib/api/reports';
+
+  type ReportView = 'net-worth' | 'spending';
 
   const locale = $derived(getLocale());
   const dateFormatter = $derived(
@@ -47,7 +51,22 @@
     return { startDate, endDate, bucket };
   }
 
+  function parseView(): ReportView {
+    return $page.url.searchParams.get('view') === 'spending' ? 'spending' : 'net-worth';
+  }
+
+  function parseGroupBy(): SpendingGroupBy {
+    return $page.url.searchParams.get('group_by') === 'payee' ? 'payee' : 'category';
+  }
+
+  function parseMode(): SpendingMode {
+    return $page.url.searchParams.get('mode') === 'income' ? 'income' : 'spending';
+  }
+
   const activeFilters = $derived.by(parseFilters);
+  const view = $derived.by(parseView);
+  const groupBy = $derived.by(parseGroupBy);
+  const mode = $derived.by(parseMode);
   const initialFilters = defaultFilters();
   let startDate = $state(initialFilters.startDate);
   let endDate = $state(initialFilters.endDate);
@@ -70,6 +89,15 @@
         noScroll: true
       });
     }
+  });
+
+  // The spending report shares the shell's date range. Bucketing is a net-worth
+  // concern only: spending ranks one range, it is not a series.
+  const spendingOptions = $derived<SpendingOptions>({
+    startDate: (activeFilters ?? initialFilters).startDate,
+    endDate: (activeFilters ?? initialFilters).endDate,
+    groupBy,
+    mode
   });
 
   const netWorthQuery = createQuery(() => ({
@@ -105,7 +133,18 @@
   }
 
   function applyFilters() {
-    const params = new URLSearchParams({ start_date: startDate, end_date: endDate, bucket });
+    const params = new URLSearchParams($page.url.searchParams);
+    params.set('start_date', startDate);
+    params.set('end_date', endDate);
+    params.set('bucket', bucket);
+    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+  }
+
+  // Every control writes the URL, then the typed query follows. Switching one
+  // dimension preserves the rest so a shared link keeps its full state.
+  function setParam(name: string, value: string) {
+    const params = new URLSearchParams($page.url.searchParams);
+    params.set(name, value);
     void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
   }
 </script>
@@ -129,19 +168,22 @@
           class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent"
         />
       </label>
-      <label class="block min-w-36 flex-1 sm:flex-none">
-        <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.reports_bucket()}</span>
-        <select
-          bind:value={bucket}
-          class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent"
-        >
-          <option value="day">{m.reports_bucket_day()}</option>
-          <option value="week">{m.reports_bucket_week()}</option>
-          <option value="month">{m.reports_bucket_month()}</option>
-          <option value="quarter">{m.reports_bucket_quarter()}</option>
-          <option value="year">{m.reports_bucket_year()}</option>
-        </select>
-      </label>
+      <!-- Bucketing is a net-worth series concern; spending ranks one range. -->
+      {#if view === 'net-worth'}
+        <label class="block min-w-36 flex-1 sm:flex-none">
+          <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.reports_bucket()}</span>
+          <select
+            bind:value={bucket}
+            class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent"
+          >
+            <option value="day">{m.reports_bucket_day()}</option>
+            <option value="week">{m.reports_bucket_week()}</option>
+            <option value="month">{m.reports_bucket_month()}</option>
+            <option value="quarter">{m.reports_bucket_quarter()}</option>
+            <option value="year">{m.reports_bucket_year()}</option>
+          </select>
+        </label>
+      {/if}
       <button
         type="submit"
         class="h-10 rounded-(--radius-control) bg-foreground px-4 text-sm font-semibold text-background transition hover:opacity-90"
@@ -151,7 +193,31 @@
     </form>
   </Panel>
 
-  {#if netWorthQuery.isPending}
+  <nav aria-label={m.reports_view_switch_legend()} class="flex flex-wrap gap-2">
+    {#each [{ value: 'net-worth' as const, label: m.reports_view_net_worth() }, { value: 'spending' as const, label: m.reports_view_spending() }] as choice (choice.value)}
+      <button
+        type="button"
+        aria-current={view === choice.value ? 'page' : undefined}
+        onclick={() => setParam('view', choice.value)}
+        class={`h-9 rounded-(--radius-control) border px-3 text-sm font-medium transition ${
+          view === choice.value
+            ? 'border-accent bg-accent text-accent-foreground'
+            : 'border-border bg-control text-foreground hover:bg-control-hover'
+        }`}
+      >
+        {choice.label}
+      </button>
+    {/each}
+  </nav>
+
+  {#if view === 'spending'}
+    <SpendingView
+      options={spendingOptions}
+      {commodityLabel}
+      onGroupByChange={(next) => setParam('group_by', next)}
+      onModeChange={(next) => setParam('mode', next)}
+    />
+  {:else if netWorthQuery.isPending}
     <StatePanel title={m.reports_loading_title()} copy={m.reports_loading_copy()} />
   {:else if netWorthQuery.isError}
     <StatePanel title={m.reports_error_title()} copy={m.reports_error_copy()}>
