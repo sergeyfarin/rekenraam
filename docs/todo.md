@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-05.
+Last updated: 2026-08-17.
 
 ## Decisions — none pending
 
@@ -47,6 +47,14 @@ preconditions. Also in `roadmap.md`.
 - [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
       `scaledAmount`/`scaledInteger`/`pow10DB`).
+- [x] T-43 gofmt drift cleared — done 2026-08-17; `gofmt -l` and `go vet` moved
+      into `scripts/test-backend.sh` so CI enforces them.
+- [ ] T-42 TypeScript 7 — blocked upstream on `openapi-typescript` TS 7
+      support. Re-check on each of its releases; nothing to do here until then.
+
+Everything else open in `backlog.md` is either roadmap-scheduled (T-37/T-38 are
+R16 slice 1; T-34's producer is R15) or awaiting an owner decision
+(S-04 throttle design, S-06 MFA mechanism, S-07 log-vs-table).
 
 ## Hygiene
 

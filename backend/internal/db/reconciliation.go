@@ -48,23 +48,23 @@ type ReconciliationSessionRecord struct {
 }
 
 type ReconciliationCheckpointRecord struct {
-	ID                      int64
-	BookID                  int64
-	AccountID               int64
-	CommodityID             int64
-	SessionID               sql.NullInt64
-	PreviousCheckpointID    sql.NullInt64
-	Status                  string
-	StatementDate           string
+	ID                       int64
+	BookID                   int64
+	AccountID                int64
+	CommodityID              int64
+	SessionID                sql.NullInt64
+	PreviousCheckpointID     sql.NullInt64
+	Status                   string
+	StatementDate            string
 	StatementAccountSequence int64
-	StatementBalanceValue   exact.Coefficient
-	StatementBalanceScale   int
-	CreatedAt               string
-	CreatedByUserID         int64
-	InvalidatedAt           sql.NullString
-	InvalidationReason      string
-	VoidedAt                sql.NullString
-	VoidReason              string
+	StatementBalanceValue    exact.Coefficient
+	StatementBalanceScale    int
+	CreatedAt                string
+	CreatedByUserID          int64
+	InvalidatedAt            sql.NullString
+	InvalidationReason       string
+	VoidedAt                 sql.NullString
+	VoidReason               string
 }
 
 type ReconciliationPostingRecord struct {
@@ -1234,8 +1234,9 @@ type PeriodScopedCheckpointRef struct {
 // PeriodScopedCheckpointInvalidationRefs returns a CheckpointInvalidationRef for
 // each ref in candidates that falls within the latest active checkpoint's period
 // for its (account_id, commodity_id). A posting is inside the period when:
-//   entry_date < statement_date
-//   OR (entry_date = statement_date AND account_day_sequence <= statement_account_sequence)
+//
+//	entry_date < statement_date
+//	OR (entry_date = statement_date AND account_day_sequence <= statement_account_sequence)
 //
 // Candidates with no active checkpoint are silently excluded.
 func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx context.Context, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {

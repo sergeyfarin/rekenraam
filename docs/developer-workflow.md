@@ -31,7 +31,10 @@ pnpm dev:frontend
 
 ### Backend Validation
 
-Runs the full Go suite with the race detector.
+Checks formatting (`gofmt -l`), runs `go vet ./...`, then the full Go suite with
+the race detector. The formatting and vet gates live inside the wrapper script
+so CI enforces them too — before they were added, `gofmt` drift could sit in the
+tree with a green pipeline (backlog T-43).
 
 ```sh
 ./scripts/test-backend.sh
@@ -165,7 +168,7 @@ Use the smallest honest scope. Avoid mixing unrelated concerns in one commit.
 
 ### Backend
 
-- Usually validate with `./scripts/test-backend.sh`.
+- Usually validate with `./scripts/test-backend.sh` — it gates on `gofmt -l`, then runs `go vet ./...` and `go test -race ./...`.
 - If backend changes affect the integrated binary shape, also run `pnpm build`.
 
 ### Frontend

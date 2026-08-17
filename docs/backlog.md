@@ -8,7 +8,8 @@ not already scheduled as product work. It is intentionally short.
 - **Shipped capability:** `docs/implemented.md`.
 - **Resolved and deliberate decisions:** `docs/reviews/resolved-backlog-2026-07.md`.
 
-Status legend: `[ ]` open.
+Status legend: `[ ]` open, `[x]` closed (kept briefly with the fix and the
+gate that prevents recurrence, then moved to `docs/reviews/`).
 
 ## General
 
@@ -72,16 +73,24 @@ each `openapi-typescript` release. The stale `typescript@7.0.2` and
 `pnpm-workspace.yaml`'s `minimumReleaseAgeExclude` so the retry is a one-line
 version bump.
 
-### T-43 `gofmt` drift in four backend files `[ ]`
+## Closed
 
-**Files:** `backend/internal/app/transactions_service.go`,
-`backend/internal/db/reconciliation.go`, `backend/internal/db/recovery.go`,
-`backend/internal/web/static_integration_test.go`.
+### T-43 `gofmt` drift in four backend files `[x]`
 
-`gofmt -l .` in `backend/` lists these four files. `go vet ./...` is clean and
-the tests pass, but CI does not currently run a formatting gate, so the drift
-is invisible. Run `gofmt -w` on them and add the check to
-`.github/workflows/ci.yml` so it cannot recur.
+Fixed 2026-08-17. `gofmt -w` applied to
+`backend/internal/app/transactions_service.go`,
+`backend/internal/db/reconciliation.go`, `backend/internal/db/recovery.go`, and
+`backend/internal/web/static_integration_test.go` (struct-field alignment, a
+gofmt comment-block reindent, two missing trailing newlines — no behavior
+change).
+
+The drift was invisible because the validation contract was wider than the
+script: `docs/developer-workflow.md` called for `gofmt -l .` and `go vet ./...`
+alongside the tests, but `scripts/test-backend.sh` only ran
+`go test -race ./...`, and CI runs the script. Both gates now live in the
+script, so CI enforces them and local matches. Proven by
+`./scripts/test-backend.sh` failing on unformatted input and passing on the
+formatted tree.
 
 ## Public-deployment security gates
 
