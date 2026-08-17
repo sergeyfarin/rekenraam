@@ -63,6 +63,11 @@ preconditions. Also in `roadmap.md`.
       into `scripts/test-backend.sh` so CI enforces them.
 - [ ] T-42 TypeScript 7 — blocked upstream on `openapi-typescript` TS 7
       support. Re-check on each of its releases; nothing to do here until then.
+- [ ] T-45 net-worth series re-reads the ledger per bucket (`bucket=day` over a
+      year is ~1.4 s on only 600 transactions). Worth fixing before the
+      net-worth chart makes fine buckets attractive.
+- [ ] T-46 one inline style is CSP-blocked on every page load; no visual defect
+      found, but the violation hides real ones.
 
 Everything else open in `backlog.md` is either roadmap-scheduled (T-37/T-38 are
 R16 slice 1; T-34's producer is R15) or awaiting an owner decision

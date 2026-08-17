@@ -73,6 +73,55 @@ spelling and casing variants. Needs a product decision on whether transaction
 entry should resolve or create a payee record from a typed name, then the
 report follows for free.
 
+### T-45 Net-worth series re-reads the whole ledger once per bucket `[ ]`
+
+**Files:** `backend/internal/app/ledger.go` (`NetWorthSeries` loops buckets and
+calls `netWorthTotals` per bucket; each call issues
+`LedgerAccountsAsOf` + `LedgerPostingsThrough(asOf)`, and
+`LedgerPostingsThrough` reads every posting from the beginning of time through
+that date).
+
+Cost is buckets x postings, so a fine bucket over a long range degrades
+quadratically. Measured 2026-08-17 against the integrated binary with only
+**600 transactions (1200 postings)**, one year requested:
+
+| Bucket | Buckets | Response time |
+|---|---|---|
+| `year` | 1 | 11-13 ms |
+| `month` | 12 | 53-61 ms |
+| `day` | 365 | **1359-1403 ms** |
+
+`day` is ~120x the single-bucket cost, and the ledger is tiny. A few years of
+ordinary use makes `bucket=day` unusable, and `include_descendants` adds another
+`LedgerAccountsAsOf` per bucket on top. The fix is to read the postings once for
+the whole range plus an opening balance before `start_date`, then fold forward
+across bucket boundaries in one pass — the accumulation is already exact and
+order-independent (`exact.ScaledInt`), so this is a loop restructure, not a
+financial change. `/reports/spending` does not have the problem (one range, one
+read: 14 ms on the same data).
+
+### T-46 One inline style is blocked by CSP on every page load `[ ]`
+
+**Files:** `backend/internal/api/middleware.go` (CSP: `style-src 'self'` with no
+`'unsafe-inline'`); source of the injected style not yet identified.
+
+Every page load logs `Refused to apply inline style ... "style-src 'self'"` with
+a stable hash (`sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=`), so one
+fixed stylesheet is being dropped. Investigated 2026-08-17 without a conclusion:
+the shipped `index.html` contains no `<style>` element, the built bundle contains
+no `createElement('style')`, and no `<style>` node is present in the DOM even
+with `bypassCSP` enabled — so it is injected and discarded, or built through the
+CSSOM, most likely by a dependency rather than app code.
+
+Not reproduced as a visual defect: light, dark, and 390px-wide renders of the
+install gate, reports, settings, and appearance screens were all checked and look
+correct, and inline style *attributes* (theme swatches, table column widths) do
+apply — they are not what is being blocked. Worth resolving anyway: a CSP
+violation on every load is noise that hides real ones, and whatever is being
+dropped is presumably meant to do something. Identify the injector, then either
+give it a nonce/hash or remove it. Do **not** add `'unsafe-inline'` to
+`style-src` as the fix.
+
 ### T-42 TypeScript 7 upgrade blocked by `openapi-typescript` `[ ]`
 
 **Files:** `frontend/package.json` (`typescript`, `openapi-typescript`);
