@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { completeCurrencySetupIfNeeded } from './support/session';
 
 test('bootstraps the owner account, signs out, and signs back in', async ({ page }) => {
   await page.goto('/');
@@ -63,15 +64,4 @@ async function ensureOwnerExistsAndReachLogin(page: Parameters<typeof test>[0]['
 
   await expect(page).toHaveURL('/');
   await expect(loginHeading).toBeVisible();
-}
-
-async function completeCurrencySetupIfNeeded(page: Parameters<typeof test>[0]['page']) {
-  const currencyHeading = page.getByRole('heading', { name: 'Choose default currencies' });
-  const overviewHeading = page.getByRole('heading', { name: 'Overview' });
-
-  await expect(currencyHeading.or(overviewHeading)).toBeVisible({ timeout: 10_000 });
-  if (await currencyHeading.isVisible()) {
-    await page.getByRole('button', { name: /USD/ }).first().click();
-    await page.getByRole('button', { name: 'Save currencies' }).click();
-  }
 }
