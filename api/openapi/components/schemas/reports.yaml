@@ -1,3 +1,184 @@
+ReportFilters:
+  type: object
+  description: >
+    The effective shared report filter set. account_ids echoes what was
+    requested; resolved_account_ids is the descendant expansion the calculation
+    actually used, so an exported report stays interpretable later.
+  required:
+    - account_ids
+    - include_descendants
+    - commodity_ids
+    - resolved_account_ids
+  properties:
+    account_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    include_descendants:
+      type: boolean
+    commodity_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    resolved_account_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+
+SpendingReportQuery:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - group_by
+    - mode
+    - category_ids
+    - payee_ids
+    - filters
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    group_by:
+      type: string
+      enum: [category, payee]
+    mode:
+      type: string
+      enum: [spending, income]
+    category_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    payee_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    filters:
+      $ref: "../../openapi.yaml#/components/schemas/ReportFilters"
+
+SpendingReportGroupTotal:
+  type: object
+  required:
+    - commodity_id
+    - quantity_value
+    - quantity_scale
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless integer coefficient normalized to quantity_scale, presented as a spending or income magnitude.
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    share_basis_points:
+      type: integer
+      format: int64
+      description: >
+        This group's share of the same commodity's report total, in basis points
+        (10000 = 100%), rounded half-up. Only ever computed within one commodity;
+        unlike commodities are never compared as one number. Absent when the
+        commodity total is zero, and negative when the group nets negative (a
+        category dominated by refunds).
+
+SpendingReportDrillDown:
+  type: object
+  description: The query that reproduces this row's underlying postings.
+  required:
+    - start_date
+    - end_date
+    - account_ids
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    category_id:
+      type: integer
+      format: int64
+    payee_id:
+      type: integer
+      format: int64
+    account_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+
+SpendingReportGroup:
+  type: object
+  description: >
+    One ranked row. On a payee grouping, a row with no payee_id is the real
+    "no payee recorded" group — those postings are money that moved, so omitting
+    them would stop the ranking reconciling to commodity_totals.
+  required:
+    - category_type
+    - totals
+    - drill_down
+  properties:
+    category_id:
+      type: integer
+      format: int64
+    payee_id:
+      type: integer
+      format: int64
+    code:
+      type: string
+    name:
+      type: string
+    category_type:
+      type: string
+      enum: [income, expense]
+    totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SpendingReportGroupTotal"
+    drill_down:
+      $ref: "../../openapi.yaml#/components/schemas/SpendingReportDrillDown"
+
+SpendingReportResponse:
+  type: object
+  required:
+    - query
+    - groups
+    - commodity_totals
+    - excluded_system_roles
+    - grouping_policy
+  properties:
+    query:
+      $ref: "../../openapi.yaml#/components/schemas/SpendingReportQuery"
+    groups:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SpendingReportGroup"
+    commodity_totals:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    excluded_system_roles:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+    grouping_policy:
+      type: string
+      enum: [direct_postings]
+      description: >
+        direct_postings means rows are the categories the postings landed on;
+        parent categories do not include their children's amounts.
+
 NetWorthSeriesBucket:
   type: object
   required:
@@ -22,6 +203,7 @@ NetWorthSeriesQuery:
     - start_date
     - end_date
     - bucket
+    - filters
   properties:
     start_date:
       type: string
@@ -32,6 +214,8 @@ NetWorthSeriesQuery:
     bucket:
       type: string
       enum: [day, week, month, quarter, year]
+    filters:
+      $ref: "../../openapi.yaml#/components/schemas/ReportFilters"
 
 NetWorthSeriesResponse:
   type: object

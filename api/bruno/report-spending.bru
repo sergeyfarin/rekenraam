@@ -1,0 +1,23 @@
+meta {
+  name: Report Spending
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category
+  body: none
+  auth: none
+}
+
+params:query {
+  start_date: 2026-06-01
+  end_date: 2026-06-30
+  group_by: category
+  ~mode: spending
+  ~category_id: 1
+  ~payee_id: 1
+  ~account_id: 1
+  ~include_descendants: true
+  ~commodity_id: 1
+}

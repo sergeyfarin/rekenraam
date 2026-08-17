@@ -9,7 +9,13 @@ const report: NetWorthSeriesResponse = {
   query: {
     start_date: '2026-06-01',
     end_date: '2026-06-14',
-    bucket: 'week'
+    bucket: 'week',
+    filters: {
+      account_ids: [],
+      include_descendants: false,
+      commodity_ids: [],
+      resolved_account_ids: []
+    }
   },
   buckets: [
     {

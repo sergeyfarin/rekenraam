@@ -1,0 +1,478 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// spendingFixture is the deterministic multi-account/multi-commodity basis the
+// reports plan asks for: one checking account under a parent, a credit card, an
+// expense and income category, a refund, a pure transfer, a voided expense, and
+// a EUR expense.
+type spendingFixture struct {
+	sessionCookie *http.Cookie
+	csrfToken     string
+	usdID         int64
+	eurID         int64
+	cashParent    accountResponse
+	checking      accountResponse
+	card          accountResponse
+	groceries     categoryResponse
+	travel        categoryResponse
+	salary        categoryResponse
+}
+
+func newSpendingFixture(t *testing.T, handler http.Handler) spendingFixture {
+	t.Helper()
+
+	sessionCookie, csrfToken := createOwnerSession(t, handler)
+	createBookForSession(t, handler, sessionCookie, csrfToken, "Personal")
+	currencySetup := completeCurrencySetupForSession(t, handler, sessionCookie, csrfToken, "USD", []setupCurrencySelectionRequest{
+		{Code: "USD", Name: "US Dollar"},
+	})
+	usdID := currencySetup.DefaultCurrency.ID
+	eurID := createCurrencyForSession(t, handler, sessionCookie, csrfToken, `{"code":"EUR","name":"Euro"}`).ID
+	require.NotZero(t, eurID)
+
+	mutateAccount(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/setup/system-accounts", http.StatusCreated)
+
+	cashParent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Cash Parent",
+		"account_class":"asset",
+		"account_kind":"other_asset",
+		"allows_postings":false,
+		"opened_on":"2026-01-01",
+		"effective_from":"2026-01-01"
+	}`)
+	checking := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Checking",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"parent_account_id":`+strconvFormatInt(cashParent.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(usdID)+`,
+		"quantity_scale_override":2,
+		"allows_postings":true,
+		"opened_on":"2026-01-01",
+		"effective_from":"2026-01-01"
+	}`)
+	card := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Credit Card", "liability", "credit_card", usdID, 2)
+	euroCash := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Euro Cash", "asset", "cash", eurID, 2)
+
+	marketHall := createPayeeForSession(t, handler, sessionCookie, csrfToken, `{"name":"Market Hall"}`)
+
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	travel := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Travel","category_type":"expense"}`)
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Salary","category_type":"income"}`)
+
+	// 120.00 groceries from checking, with a payee.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, payeeBody("2026-06-03", marketHall.ID,
+		posting(checking.ID, -12000, 2, usdID),
+		posting(groceries.ID, 12000, 2, usdID),
+	), http.StatusCreated)
+	// 20.00 grocery refund, same payee: reduces the grocery total.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, payeeBody("2026-06-05", marketHall.ID,
+		posting(checking.ID, 2000, 2, usdID),
+		posting(groceries.ID, -2000, 2, usdID),
+	), http.StatusCreated)
+	// 300.00 travel on the card, no payee recorded.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
+		posting(card.ID, -30000, 2, usdID),
+		posting(travel.ID, 30000, 2, usdID),
+	), http.StatusCreated)
+	// 2000.00 salary into checking.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-01",
+		posting(checking.ID, 200000, 2, usdID),
+		posting(salary.ID, -200000, 2, usdID),
+	), http.StatusCreated)
+	// A pure transfer: no category posting, so it can never enter the basis.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-09",
+		posting(checking.ID, -5000, 2, usdID),
+		posting(card.ID, 5000, 2, usdID),
+	), http.StatusCreated)
+	// A voided expense must not count.
+	voided := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-10",
+		posting(checking.ID, -9900, 2, usdID),
+		posting(groceries.ID, 9900, 2, usdID),
+	), http.StatusCreated)
+	mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconvFormatInt(voided.ID)+"/void",
+		`{"change_reason":"reports fixture"}`, http.StatusOK)
+	// 50.00 EUR travel: a second commodity that must never be summed with USD.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-11",
+		posting(euroCash.ID, -5000, 2, eurID),
+		posting(travel.ID, 5000, 2, eurID),
+	), http.StatusCreated)
+	// Outside the reported range.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-07-02",
+		posting(checking.ID, -7700, 2, usdID),
+		posting(groceries.ID, 7700, 2, usdID),
+	), http.StatusCreated)
+
+	return spendingFixture{
+		sessionCookie: sessionCookie,
+		csrfToken:     csrfToken,
+		usdID:         usdID,
+		eurID:         eurID,
+		cashParent:    cashParent,
+		checking:      checking,
+		card:          card,
+		groceries:     groceries,
+		travel:        travel,
+		salary:        salary,
+	}
+}
+
+func TestSpendingReportRanksExpenseCategoriesAndNetsRefunds(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category")
+
+	require.Len(t, report.Groups, 2)
+	// Travel (300.00 USD) outranks groceries (120.00 - 20.00 = 100.00 USD).
+	assert.Equal(t, fixture.travel.ID, *report.Groups[0].CategoryID)
+	assert.Equal(t, "expense", report.Groups[0].CategoryType)
+	assertGroupTotal(t, report.Groups[0], fixture.usdID, "30000", 2)
+	assert.Equal(t, fixture.groceries.ID, *report.Groups[1].CategoryID)
+	assertGroupTotal(t, report.Groups[1], fixture.usdID, "10000", 2)
+
+	// EUR travel stays on its own commodity row and is never folded into USD.
+	assertGroupTotal(t, report.Groups[0], fixture.eurID, "5000", 2)
+
+	// Commodity totals are per commodity: 400.00 USD and 50.00 EUR.
+	assertBalance(t, report.CommodityTotals, fixture.usdID, 40000, 2, 40000)
+	assertBalance(t, report.CommodityTotals, fixture.eurID, 5000, 2, 5000)
+
+	// Shares are within-commodity only: 300/400 = 75%, 100/400 = 25%.
+	assert.Equal(t, int64(7500), *groupTotal(t, report.Groups[0], fixture.usdID).ShareBasisPoints)
+	assert.Equal(t, int64(2500), *groupTotal(t, report.Groups[1], fixture.usdID).ShareBasisPoints)
+	// The only EUR spender holds 100% of EUR.
+	assert.Equal(t, int64(10000), *groupTotal(t, report.Groups[0], fixture.eurID).ShareBasisPoints)
+
+	assert.Equal(t, "direct_postings", report.GroupingPolicy)
+	assert.Equal(t, "spending", report.Query.Mode)
+}
+
+func TestSpendingReportGroupsByPayeeIncludingUnattributedPostings(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=payee")
+
+	require.Len(t, report.Groups, 2)
+	// The card travel has no payee: it must still appear, or the ranking would
+	// not reconcile to the commodity totals.
+	unattributed := spendingGroupWithoutPayee(t, report.Groups)
+	assert.Empty(t, unattributed.Name)
+	assertGroupTotal(t, unattributed, fixture.usdID, "30000", 2)
+
+	named := spendingGroupWithPayee(t, report.Groups)
+	assert.Equal(t, "Market Hall", named.Name)
+	assertGroupTotal(t, named, fixture.usdID, "10000", 2)
+
+	// Groups reconcile exactly to the commodity total for every commodity.
+	assertGroupsReconcileToCommodityTotals(t, report)
+}
+
+func TestSpendingReportExcludesTransfersVoidedAndOutOfRangePostings(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category")
+
+	// The 99.00 voided grocery expense and the 77.00 July expense are both out
+	// of the basis, so groceries stays at exactly 100.00.
+	assertGroupTotal(t, spendingGroupForCategory(t, report.Groups, fixture.groceries.ID), fixture.usdID, "10000", 2)
+	// The checking-to-card transfer has no category posting and cannot appear.
+	assertBalance(t, report.CommodityTotals, fixture.usdID, 40000, 2, 40000)
+	assert.Contains(t, report.ExcludedSystemRoles, "commodity_trading")
+}
+
+func TestSpendingReportIncomeModeReportsPositiveMagnitudes(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&mode=income")
+
+	require.Len(t, report.Groups, 1)
+	assert.Equal(t, fixture.salary.ID, *report.Groups[0].CategoryID)
+	assert.Equal(t, "income", report.Groups[0].CategoryType)
+	// Income is credit-normal in the ledger; the report presents +2000.00.
+	assertGroupTotal(t, report.Groups[0], fixture.usdID, "200000", 2)
+	assertBalance(t, report.CommodityTotals, fixture.usdID, 200000, 2, 200000)
+	assert.Equal(t, "income", report.Query.Mode)
+}
+
+func TestSpendingReportCounterpartAccountFilterResolvesDescendants(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	// Checking directly: groceries only. The card travel is excluded.
+	direct := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id="+strconvFormatInt(fixture.checking.ID))
+	require.Len(t, direct.Groups, 1)
+	assert.Equal(t, fixture.groceries.ID, *direct.Groups[0].CategoryID)
+	assertGroupTotal(t, direct.Groups[0], fixture.usdID, "10000", 2)
+
+	// The non-posting parent alone matches nothing without descendants.
+	parentOnly := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id="+strconvFormatInt(fixture.cashParent.ID))
+	assert.Empty(t, parentOnly.Groups)
+
+	// With descendants the parent picks checking's activity up.
+	subtree := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&include_descendants=true&account_id="+strconvFormatInt(fixture.cashParent.ID))
+	require.Len(t, subtree.Groups, 1)
+	assertGroupTotal(t, subtree.Groups[0], fixture.usdID, "10000", 2)
+	assert.Contains(t, subtree.Query.Filters.ResolvedAccountIDs, fixture.checking.ID)
+	assert.Equal(t, []int64{fixture.cashParent.ID}, subtree.Query.Filters.AccountIDs)
+	assert.True(t, subtree.Query.Filters.IncludeDescendants)
+}
+
+func TestSpendingReportCommodityFilterKeepsOneCommodity(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&commodity_id="+strconvFormatInt(fixture.eurID))
+
+	require.Len(t, report.Groups, 1)
+	assert.Equal(t, fixture.travel.ID, *report.Groups[0].CategoryID)
+	require.Len(t, report.Groups[0].Totals, 1)
+	assert.Equal(t, fixture.eurID, report.Groups[0].Totals[0].CommodityID)
+	assertBalance(t, report.CommodityTotals, fixture.eurID, 5000, 2, 5000)
+}
+
+func TestSpendingReportRejectsInvalidQuery(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	for name, suffix := range map[string]string{
+		"missing end date":     "?start_date=2026-06-01&group_by=category",
+		"missing group by":     "?start_date=2026-06-01&end_date=2026-06-30",
+		"inverted range":       "?start_date=2026-06-30&end_date=2026-06-01&group_by=category",
+		"unknown group by":     "?start_date=2026-06-01&end_date=2026-06-30&group_by=commodity",
+		"unknown mode":         "?start_date=2026-06-01&end_date=2026-06-30&group_by=category&mode=savings",
+		"unparsable id":        "?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id=abc",
+		"inaccessible account": "?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id=999999",
+		"inaccessible payee":   "?start_date=2026-06-01&end_date=2026-06-30&group_by=payee&payee_id=999999",
+		"unknown commodity":    "?start_date=2026-06-01&end_date=2026-06-30&group_by=category&commodity_id=999999",
+		"bad boolean":          "?start_date=2026-06-01&end_date=2026-06-30&group_by=category&include_descendants=maybe",
+		"non positive id":      "?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id=0",
+		"malformed date":       "?start_date=06-01-2026&end_date=2026-06-30&group_by=category",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/spending"+suffix, nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusBadRequest, res.Code, name)
+	}
+}
+
+func TestSpendingReportRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	assert.Equal(t, http.StatusUnauthorized, res.Code)
+}
+
+func TestNetWorthSeriesAccountAndCommodityFiltersNarrowTheSeries(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	unfiltered := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month")
+	require.Len(t, unfiltered.Buckets, 1)
+	// Checking: +2000.00 - 120.00 + 20.00 - 50.00 transfer = 1850.00.
+	// Card: +50.00 - 300.00 = -250.00. Net USD = 1600.00.
+	assertBalance(t, unfiltered.Buckets[0].Totals, fixture.usdID, 160000, 2, 160000)
+	assertBalance(t, unfiltered.Buckets[0].Totals, fixture.eurID, -5000, 2, -5000)
+
+	checkingOnly := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(fixture.checking.ID))
+	require.Len(t, checkingOnly.Buckets, 1)
+	assertBalance(t, checkingOnly.Buckets[0].Totals, fixture.usdID, 185000, 2, 185000)
+	assert.Equal(t, []int64{fixture.checking.ID}, checkingOnly.Query.Filters.AccountIDs)
+
+	// The non-posting parent contributes nothing until descendants are resolved.
+	parentOnly := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(fixture.cashParent.ID))
+	assert.Empty(t, parentOnly.Buckets[0].Totals)
+
+	subtree := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&include_descendants=true&account_id="+strconvFormatInt(fixture.cashParent.ID))
+	assertBalance(t, subtree.Buckets[0].Totals, fixture.usdID, 185000, 2, 185000)
+
+	usdOnly := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&commodity_id="+strconvFormatInt(fixture.usdID))
+	require.Len(t, usdOnly.Buckets[0].Totals, 1)
+	assertBalance(t, usdOnly.Buckets[0].Totals, fixture.usdID, 160000, 2, 160000)
+}
+
+func TestNetWorthSeriesRejectsInvalidFilters(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	for name, suffix := range map[string]string{
+		"inaccessible account": "?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id=999999",
+		"unknown commodity":    "?start_date=2026-06-01&end_date=2026-06-30&bucket=month&commodity_id=999999",
+		"unparsable id":        "?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id=abc",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/net-worth"+suffix, nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusBadRequest, res.Code, name)
+	}
+}
+
+// payeeBody references a payee by id. A bare payee_name is free text on the
+// transaction version and never sets payee_id, so it would not group.
+func payeeBody(transactionDate string, payeeID int64, postings ...string) string {
+	return `{
+		"transaction_date":"` + transactionDate + `",
+		"payee_id":` + strconvFormatInt(payeeID) + `,
+		"journal_entries":[{
+			"entry_date":"` + transactionDate + `",
+			"postings":[` + strings.Join(postings, ",") + `]
+		}]
+	}`
+}
+
+func readSpendingForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) spendingResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/spending"+suffix, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+	var response spendingResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func groupTotal(t *testing.T, group spendingGroupResponse, commodityID int64) spendingGroupTotalResponse {
+	t.Helper()
+
+	for _, total := range group.Totals {
+		if total.CommodityID == commodityID {
+			return total
+		}
+	}
+	t.Fatalf("group has no total for commodity %d", commodityID)
+	return spendingGroupTotalResponse{}
+}
+
+func assertGroupTotal(t *testing.T, group spendingGroupResponse, commodityID int64, wantValue string, wantScale int) {
+	t.Helper()
+
+	total := groupTotal(t, group, commodityID)
+	assert.Equal(t, wantValue, total.QuantityValue.String())
+	assert.Equal(t, wantScale, total.QuantityScale)
+}
+
+func spendingGroupForCategory(t *testing.T, groups []spendingGroupResponse, categoryID int64) spendingGroupResponse {
+	t.Helper()
+
+	for _, group := range groups {
+		if group.CategoryID != nil && *group.CategoryID == categoryID {
+			return group
+		}
+	}
+	t.Fatalf("no group for category %d", categoryID)
+	return spendingGroupResponse{}
+}
+
+func spendingGroupWithPayee(t *testing.T, groups []spendingGroupResponse) spendingGroupResponse {
+	t.Helper()
+
+	for _, group := range groups {
+		if group.PayeeID != nil {
+			return group
+		}
+	}
+	t.Fatal("expected a group with a payee")
+	return spendingGroupResponse{}
+}
+
+func spendingGroupWithoutPayee(t *testing.T, groups []spendingGroupResponse) spendingGroupResponse {
+	t.Helper()
+
+	for _, group := range groups {
+		if group.PayeeID == nil {
+			return group
+		}
+	}
+	t.Fatal("expected the unattributed group")
+	return spendingGroupResponse{}
+}
+
+// assertGroupsReconcileToCommodityTotals is the invariant that makes the ranking
+// trustworthy: every commodity's group magnitudes must sum exactly to that
+// commodity's reported total, with nothing silently dropped.
+func assertGroupsReconcileToCommodityTotals(t *testing.T, report spendingResponse) {
+	t.Helper()
+
+	sums := map[int64]int64{}
+	for _, group := range report.Groups {
+		for _, total := range group.Totals {
+			require.Equal(t, 2, total.QuantityScale, "fixture uses scale 2 throughout")
+			sums[total.CommodityID] += mustParseInt64(t, total.QuantityValue.String())
+		}
+	}
+	for _, total := range report.CommodityTotals {
+		require.Equal(t, 2, total.QuantityScale)
+		assert.Equal(t, mustParseInt64(t, total.QuantityValue.String()), sums[total.CommodityID],
+			"groups must reconcile to the commodity total for commodity %d", total.CommodityID)
+	}
+}
+
+func mustParseInt64(t *testing.T, value string) int64 {
+	t.Helper()
+
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	require.NoError(t, err)
+	return parsed
+}

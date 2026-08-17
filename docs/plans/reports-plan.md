@@ -1,8 +1,9 @@
 # Reports Plan
 
-Status: **active implementation plan for roadmap R2**. The net-worth-series
-backend/OpenAPI foundation is shipped; the reports route and the remaining R2
-read models are pending. Last verified against the codebase: 2026-07-13.
+Status: **active implementation plan for roadmap R2**. The net-worth-series and
+spending read models plus the shared filter contract are shipped on the backend;
+the cashflow read model and the spending/cashflow frontend are pending. Last
+verified against the codebase: 2026-08-17.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -217,8 +218,21 @@ UI:
    `commodity_trading` exclusion, OpenAPI types, and named API/application
    tests. `/app/reports` now provides the shared report shell, navigation,
    URL-addressable date/bucket filters, and loading/empty/error states for the
-   net-worth view. Account/commodity filters and the common fixture remain in
-   this slice.
+   net-worth view.
+
+   **Progress (2026-08-17):** the shared filter contract is implemented on the
+   backend. `account_id` (repeatable), `include_descendants`, and `commodity_id`
+   (repeatable) now apply to `/reports/net-worth`, and every report echoes a
+   `query.filters` object carrying both the requested account IDs and the
+   `resolved_account_ids` the calculation actually used. Descendants are
+   resolved per bucket date, because parent links are versioned and a
+   reparenting must not retroactively move history between buckets.
+   Inaccessible account/commodity IDs are `VALIDATION_FAILED`, never a silently
+   narrower result. The deterministic multi-account/multi-commodity fixture now
+   exists as `newSpendingFixture` in `backend/internal/api/reports_test.go`
+   (parent + checking + card + EUR cash, an expense, a refund, income, a pure
+   transfer, a voided expense, and an out-of-range expense). Frontend account
+   and commodity filter controls remain.
 2. **Net-worth series**
    - Implement the series read model, API, table/chart, and account/commodity
      filters. Reuse the typed result later for account-detail history.
@@ -235,6 +249,34 @@ UI:
    - Acceptance: expense/refund/transfer fixture results match manual ledger
      arithmetic, and category versus payee changes grouping rather than source
      data.
+
+   **Progress (2026-08-17):** the backend read model is shipped as
+   `GET /api/v1/reports/spending` (`app/reports.go`, `db/reports.go`,
+   `api/reports.go`), with OpenAPI paths/schemas, generated frontend types, and
+   named tests. Decisions worth not re-litigating:
+
+   - **Transfers need no exclusion rule.** The basis is income/expense category
+     postings, and an asset-to-asset transfer has none, so it cannot enter the
+     report. This is the plan's "not an inferred bank-statement
+     classification" choice, made concrete.
+   - **`grouping_policy: direct_postings`.** Rows are the categories the
+     postings landed on; a parent category does not absorb its children's
+     amounts. Named in the response so a printed report is unambiguous.
+   - **Shares are `share_basis_points`,** integer basis points rounded half-up
+     via `math/big`, computed strictly within one commodity. No float touches
+     the money path. Absent when a commodity total is zero, signed when a group
+     nets negative (a refund-dominated category).
+   - **The unattributed payee group is emitted, not dropped.** Postings whose
+     transaction has no `payee_id` are real money; omitting them would break the
+     invariant that group magnitudes reconcile exactly to `commodity_totals`
+     (asserted by `assertGroupsReconcileToCommodityTotals`). Note the gap in
+     backlog T-44: a transaction may carry a free-text `payee_name` with no
+     `payee_id`, and those land here rather than under a named payee.
+   - **Income is a separate `mode`,** presented as a positive magnitude
+     (income is credit-normal in the ledger) and labelled `income`, never
+     folded into a spending number.
+
+   Frontend table/chart, the category/payee switch, and drill-down links remain.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.

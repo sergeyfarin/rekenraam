@@ -56,6 +56,23 @@ realized gains. Audit P4. Needs a small product decision (which account the
 loss books against) plus either `CashAmountValue == 0` support on Sell or a
 dedicated write-off endpoint over the existing disposal engine.
 
+### T-44 Free-text payees never group in reports `[ ]`
+
+**Files:** `backend/internal/app/transactions_validate.go` (payee resolution:
+`payee_name` is stored as free text and only `payee_id` links a payee record);
+`backend/internal/app/reports.go` (`Spending`, payee grouping).
+
+A transaction may carry a `payee_name` with no `payee_id` — the create path
+accepts the name as free text and only sets `payee_id` when the caller supplies
+one. The spending report groups by `payee_id`, so every free-text payee falls
+into the single "no payee recorded" group. The report still reconciles exactly
+(the unattributed group is emitted, never dropped), but a user who typed payee
+names without picking records sees one undifferentiated bucket instead of a
+ranking. Grouping on the raw text is not the fix: it would duplicate rows across
+spelling and casing variants. Needs a product decision on whether transaction
+entry should resolve or create a payee record from a typed name, then the
+report follows for free.
+
 ### T-42 TypeScript 7 upgrade blocked by `openapi-typescript` `[ ]`
 
 **Files:** `frontend/package.json` (`typescript`, `openapi-typescript`);

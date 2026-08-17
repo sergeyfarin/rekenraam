@@ -72,9 +72,10 @@ type netWorthSeriesBucketResponse struct {
 }
 
 type netWorthSeriesQueryResponse struct {
-	StartDate string `json:"start_date"`
-	EndDate   string `json:"end_date"`
-	Bucket    string `json:"bucket"`
+	StartDate string                `json:"start_date"`
+	EndDate   string                `json:"end_date"`
+	Bucket    string                `json:"bucket"`
+	Filters   reportFiltersResponse `json:"filters"`
 }
 
 type netWorthSeriesResponse struct {
@@ -162,10 +163,17 @@ func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transacti
 			return
 		}
 
+		filters, err := parseReportFilters(r.URL.Query())
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
 		result, err := transactionService.NetWorthSeries(r.Context(), app.NetWorthSeriesInput{
 			StartDate: r.URL.Query().Get("start_date"),
 			EndDate:   r.URL.Query().Get("end_date"),
 			Bucket:    r.URL.Query().Get("bucket"),
+			Filters:   filters,
 		})
 		if err != nil {
 			writeLedgerServiceError(w, r, logger, "read net worth series", err)
@@ -188,6 +196,7 @@ func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transacti
 				StartDate: result.StartDate,
 				EndDate:   result.EndDate,
 				Bucket:    result.Bucket,
+				Filters:   toReportFiltersResponse(result.Filters),
 			},
 			Buckets:             buckets,
 			ExcludedSystemRoles: result.ExcludedSystemRoles,

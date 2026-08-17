@@ -2931,6 +2931,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/spending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read spending or income totals ranked by category or payee
+         * @description Ranks posted income/expense (category) postings over an inclusive date range by one dimension. Transfers need no explicit exclusion: an asset-to-asset transfer has no category posting, so it cannot enter this basis. Drafts, voided transactions, and soft-deleted transactions are never included. Repeated ID parameters are an OR-set within that dimension and combine with AND across dimensions.
+         */
+        get: {
+            parameters: {
+                query: {
+                    start_date: string;
+                    end_date: string;
+                    group_by: "category" | "payee";
+                    /** @description Defaults to spending. Income is a distinct, explicitly selected mode and is labelled as income, never folded into a spending number. */
+                    mode?: "spending" | "income";
+                    /** @description Repeatable. Restricts the report to these category accounts. */
+                    category_id?: number[];
+                    /** @description Repeatable. Restricts the report to these payees. */
+                    payee_id?: number[];
+                    /** @description Repeatable counterpart filter. Keeps category postings whose transaction also touches one of these accounts — "what did I spend from here" — without inferring a bank-statement classification. */
+                    account_id?: number[];
+                    /** @description Expands each account_id to itself plus every descendant, using the account versions in effect on the reporting date. */
+                    include_descendants?: boolean;
+                    /** @description Repeatable. Restricts the report to postings in these commodities. */
+                    commodity_id?: number[];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Exact per-commodity totals per group, ranked, with the effective query */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpendingReportResponse"];
+                    };
+                };
+                /** @description Invalid report query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Report arithmetic exceeded exact quantity limits */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -10437,6 +10519,7 @@ export interface components {
             end_date: string;
             /** @enum {string} */
             bucket: "day" | "week" | "month" | "quarter" | "year";
+            filters: components["schemas"]["ReportFilters"];
         };
         NetWorthSeriesResponse: {
             /** Format: date */
@@ -10448,6 +10531,74 @@ export interface components {
             query: components["schemas"]["NetWorthSeriesQuery"];
             buckets: components["schemas"]["NetWorthSeriesBucket"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        /** @description The effective shared report filter set. account_ids echoes what was requested; resolved_account_ids is the descendant expansion the calculation actually used, so an exported report stays interpretable later. */
+        ReportFilters: {
+            account_ids: number[];
+            include_descendants: boolean;
+            commodity_ids: number[];
+            resolved_account_ids: number[];
+        };
+        SpendingReportQuery: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            group_by: "category" | "payee";
+            /** @enum {string} */
+            mode: "spending" | "income";
+            category_ids: number[];
+            payee_ids: number[];
+            filters: components["schemas"]["ReportFilters"];
+        };
+        SpendingReportGroupTotal: {
+            /** Format: int64 */
+            commodity_id: number;
+            /** @description Lossless integer coefficient normalized to quantity_scale, presented as a spending or income magnitude. */
+            quantity_value: string;
+            quantity_scale: number;
+            /**
+             * Format: int64
+             * @description This group's share of the same commodity's report total, in basis points (10000 = 100%), rounded half-up. Only ever computed within one commodity; unlike commodities are never compared as one number. Absent when the commodity total is zero, and negative when the group nets negative (a category dominated by refunds).
+             */
+            share_basis_points?: number;
+        };
+        /** @description The query that reproduces this row's underlying postings. */
+        SpendingReportDrillDown: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** Format: int64 */
+            payee_id?: number;
+            account_ids: number[];
+        };
+        /** @description One ranked row. On a payee grouping, a row with no payee_id is the real "no payee recorded" group — those postings are money that moved, so omitting them would stop the ranking reconciling to commodity_totals. */
+        SpendingReportGroup: {
+            /** Format: int64 */
+            category_id?: number;
+            /** Format: int64 */
+            payee_id?: number;
+            code?: string;
+            name?: string;
+            /** @enum {string} */
+            category_type: "income" | "expense";
+            totals: components["schemas"]["SpendingReportGroupTotal"][];
+            drill_down: components["schemas"]["SpendingReportDrillDown"];
+        };
+        SpendingReportResponse: {
+            query: components["schemas"]["SpendingReportQuery"];
+            groups: components["schemas"]["SpendingReportGroup"][];
+            commodity_totals: components["schemas"]["BalanceQuantity"][];
+            excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+            /**
+             * @description direct_postings means rows are the categories the postings landed on; parent categories do not include their children's amounts.
+             * @enum {string}
+             */
+            grouping_policy: "direct_postings";
         };
         PriceObservationResponse: {
             /** Format: int64 */

@@ -100,6 +100,7 @@ type NetWorthSeriesInput struct {
 	StartDate string
 	EndDate   string
 	Bucket    string
+	Filters   ReportFilters
 }
 
 type NetWorthSeriesBucket struct {
@@ -112,6 +113,7 @@ type NetWorthSeriesResult struct {
 	StartDate           string
 	EndDate             string
 	Bucket              string
+	Filters             ReportFiltersEcho
 	Buckets             []NetWorthSeriesBucket
 	ExcludedSystemRoles []string
 }
@@ -220,7 +222,7 @@ func (s *TransactionService) NetWorth(ctx context.Context, input NetWorthInput) 
 	if err != nil {
 		return NetWorthResult{}, err
 	}
-	totals, err := s.netWorthTotals(ctx, asOf, status)
+	totals, err := s.netWorthTotals(ctx, asOf, status, ReportFilters{})
 	if err != nil {
 		return NetWorthResult{}, err
 	}
@@ -242,13 +244,20 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 		return NetWorthSeriesResult{}, err
 	}
 
+	// Descendants are resolved per reporting date inside netWorthTotals; the
+	// echo uses the series end date so the response names one stable expansion.
+	filters, _, err := s.resolveReportFilters(ctx, input.Filters, endDate)
+	if err != nil {
+		return NetWorthSeriesResult{}, err
+	}
+
 	bounds, err := calendarBucketBounds(startDate, endDate, bucket)
 	if err != nil {
 		return NetWorthSeriesResult{}, err
 	}
 	resultBuckets := make([]NetWorthSeriesBucket, 0, len(bounds))
 	for _, bound := range bounds {
-		totals, err := s.netWorthTotals(ctx, bound.endDate, "posted")
+		totals, err := s.netWorthTotals(ctx, bound.endDate, "posted", input.Filters)
 		if err != nil {
 			return NetWorthSeriesResult{}, err
 		}
@@ -263,12 +272,13 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 		StartDate:           startDate,
 		EndDate:             endDate,
 		Bucket:              bucket,
+		Filters:             filters,
 		Buckets:             resultBuckets,
 		ExcludedSystemRoles: []string{"commodity_trading"},
 	}, nil
 }
 
-func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string) ([]BalanceQuantity, error) {
+func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string, filters ReportFilters) ([]BalanceQuantity, error) {
 
 	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
 	if err != nil {
@@ -279,6 +289,31 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 		return nil, fmt.Errorf("read net worth postings: %w", err)
 	}
 
+	// Account descendants are resolved as of this bucket's own date, because
+	// parent links are versioned and a reparenting must not retroactively move
+	// history between buckets.
+	var accountFilter map[int64]bool
+	if len(filters.AccountIDs) > 0 {
+		selected := dedupeIDs(filters.AccountIDs)
+		if filters.IncludeDescendants {
+			selected, err = s.reportAccountSubtreeIDs(ctx, selected, asOf)
+			if err != nil {
+				return nil, err
+			}
+		}
+		accountFilter = make(map[int64]bool, len(selected))
+		for _, accountID := range selected {
+			accountFilter[accountID] = true
+		}
+	}
+	var commodityFilter map[int64]bool
+	if len(filters.CommodityIDs) > 0 {
+		commodityFilter = make(map[int64]bool, len(filters.CommodityIDs))
+		for _, commodityID := range filters.CommodityIDs {
+			commodityFilter[commodityID] = true
+		}
+	}
+
 	accountMap := ledgerAccountMap(accounts)
 	totals := map[int64]*exact.ScaledInt{}
 	for _, posting := range postings {
@@ -287,6 +322,12 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 			continue
 		}
 		if account.SystemRole.Valid && account.SystemRole.String == "commodity_trading" {
+			continue
+		}
+		if accountFilter != nil && !accountFilter[posting.AccountID] {
+			continue
+		}
+		if commodityFilter != nil && !commodityFilter[posting.CommodityID] {
 			continue
 		}
 		addPosting(totals, posting)

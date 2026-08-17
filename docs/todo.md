@@ -23,7 +23,13 @@ preconditions. Also in `roadmap.md`.
 
 ## Current initiative — R2 reports (see roadmap.md)
 
-- [ ] Spending view over the existing category-totals read model.
+- [x] Shared report filter contract (`account_id`, `include_descendants`,
+      `commodity_id`) on the backend, with a `query.filters` echo carrying the
+      resolved account expansion — done 2026-08-17.
+- [x] Spending read model: `GET /api/v1/reports/spending`, category/payee
+      grouping, exact per-commodity totals, within-commodity shares, and
+      drill-down queries — done 2026-08-17 (backend only).
+- [ ] Spending view (frontend): table, category/payee switch, chart, drill-down.
 - [ ] Cashflow read model + view (inflow / outflow / transfers / net).
 - [ ] Date/account/category/payee/commodity filters.
 - [ ] CSV + print-friendly tables; summary charts alongside (not replacing)

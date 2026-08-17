@@ -1,0 +1,113 @@
+get:
+  summary: Read spending or income totals ranked by category or payee
+  description: >
+    Ranks posted income/expense (category) postings over an inclusive date range
+    by one dimension. Transfers need no explicit exclusion: an asset-to-asset
+    transfer has no category posting, so it cannot enter this basis. Drafts,
+    voided transactions, and soft-deleted transactions are never included.
+    Repeated ID parameters are an OR-set within that dimension and combine with
+    AND across dimensions.
+  parameters:
+    - in: query
+      name: start_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: end_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: group_by
+      required: true
+      schema:
+        type: string
+        enum: [category, payee]
+    - in: query
+      name: mode
+      description: >
+        Defaults to spending. Income is a distinct, explicitly selected mode and
+        is labelled as income, never folded into a spending number.
+      schema:
+        type: string
+        enum: [spending, income]
+        default: spending
+    - in: query
+      name: category_id
+      description: Repeatable. Restricts the report to these category accounts.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+    - in: query
+      name: payee_id
+      description: Repeatable. Restricts the report to these payees.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+    - in: query
+      name: account_id
+      description: >
+        Repeatable counterpart filter. Keeps category postings whose transaction
+        also touches one of these accounts — "what did I spend from here" —
+        without inferring a bank-statement classification.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+    - in: query
+      name: include_descendants
+      description: >
+        Expands each account_id to itself plus every descendant, using the
+        account versions in effect on the reporting date.
+      schema:
+        type: boolean
+        default: false
+    - in: query
+      name: commodity_id
+      description: Repeatable. Restricts the report to postings in these commodities.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+  responses:
+    "200":
+      description: Exact per-commodity totals per group, ranked, with the effective query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/SpendingReportResponse"
+    "400":
+      description: Invalid report query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Report arithmetic exceeded exact quantity limits
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
