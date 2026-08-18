@@ -244,12 +244,15 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 		return NetWorthSeriesResult{}, err
 	}
 
-	// Descendants are resolved per reporting date inside netWorthTotals; the
-	// echo uses the series end date so the response names one stable expansion.
+	// Filters are validated and normalized once here; descendants are then
+	// re-resolved per reporting date inside netWorthTotals, because parent links
+	// are versioned. The echo uses the series end date so the response names one
+	// stable expansion.
 	filters, _, err := s.resolveReportFilters(ctx, input.Filters, endDate)
 	if err != nil {
 		return NetWorthSeriesResult{}, err
 	}
+	normalizedFilters := echoedReportFilters(filters)
 
 	bounds, err := calendarBucketBounds(startDate, endDate, bucket)
 	if err != nil {
@@ -257,7 +260,7 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 	}
 	resultBuckets := make([]NetWorthSeriesBucket, 0, len(bounds))
 	for _, bound := range bounds {
-		totals, err := s.netWorthTotals(ctx, bound.endDate, "posted", input.Filters)
+		totals, err := s.netWorthTotals(ctx, bound.endDate, "posted", normalizedFilters)
 		if err != nil {
 			return NetWorthSeriesResult{}, err
 		}
@@ -291,28 +294,9 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 
 	// Account descendants are resolved as of this bucket's own date, because
 	// parent links are versioned and a reparenting must not retroactively move
-	// history between buckets.
-	var accountFilter map[int64]bool
-	if len(filters.AccountIDs) > 0 {
-		selected := dedupeIDs(filters.AccountIDs)
-		if filters.IncludeDescendants {
-			selected, err = s.reportAccountSubtreeIDs(ctx, selected, asOf)
-			if err != nil {
-				return nil, err
-			}
-		}
-		accountFilter = make(map[int64]bool, len(selected))
-		for _, accountID := range selected {
-			accountFilter[accountID] = true
-		}
-	}
-	var commodityFilter map[int64]bool
-	if len(filters.CommodityIDs) > 0 {
-		commodityFilter = make(map[int64]bool, len(filters.CommodityIDs))
-		for _, commodityID := range filters.CommodityIDs {
-			commodityFilter[commodityID] = true
-		}
-	}
+	// history between buckets. The selection itself was validated and normalized
+	// once by the caller; this shares that path so the two never diverge.
+	filterSet := reportFilterSetFrom(accounts, filters)
 
 	accountMap := ledgerAccountMap(accounts)
 	totals := map[int64]*exact.ScaledInt{}
@@ -324,10 +308,7 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 		if account.SystemRole.Valid && account.SystemRole.String == "commodity_trading" {
 			continue
 		}
-		if accountFilter != nil && !accountFilter[posting.AccountID] {
-			continue
-		}
-		if commodityFilter != nil && !commodityFilter[posting.CommodityID] {
+		if !filterSet.includes(posting.AccountID, posting.CommodityID) {
 			continue
 		}
 		addPosting(totals, posting)

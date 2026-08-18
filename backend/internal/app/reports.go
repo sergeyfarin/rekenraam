@@ -410,14 +410,29 @@ func alignedBigInt(value *exact.ScaledInt, scale int) *big.Int {
 	return aligned
 }
 
+// normalizeReportFilters drops non-positive and duplicate IDs and sorts what
+// remains, so every report path starts from the same selection. It is
+// idempotent, which is what lets a caller normalize once and re-expand later
+// without the two steps disagreeing.
+func normalizeReportFilters(filters ReportFilters) ReportFilters {
+	return ReportFilters{
+		AccountIDs:         dedupeIDs(filters.AccountIDs),
+		IncludeDescendants: filters.IncludeDescendants,
+		CommodityIDs:       dedupeIDs(filters.CommodityIDs),
+	}
+}
+
 // resolveReportFilters validates the shared filter dimensions and expands the
 // account selection. Inaccessible IDs are VALIDATION_FAILED, never a silently
 // narrower result.
+//
+// The returned echo carries the normalized selection, so a caller that must
+// re-expand per reporting date (net-worth series) feeds the echo back in rather
+// than re-deriving the selection from raw input.
 func (s *TransactionService) resolveReportFilters(ctx context.Context, filters ReportFilters, asOf string) (ReportFiltersEcho, []int64, error) {
-	accountIDs := dedupeIDs(filters.AccountIDs)
-	commodityIDs := dedupeIDs(filters.CommodityIDs)
+	normalized := normalizeReportFilters(filters)
 
-	for _, accountID := range accountIDs {
+	for _, accountID := range normalized.AccountIDs {
 		if err := s.repository.EnsureAccountInBook(ctx, BookID, accountID); err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				return ReportFiltersEcho{}, nil, ValidationError{Message: "account filter is invalid"}
@@ -425,33 +440,98 @@ func (s *TransactionService) resolveReportFilters(ctx context.Context, filters R
 			return ReportFiltersEcho{}, nil, fmt.Errorf("check report account filter: %w", err)
 		}
 	}
-	if len(commodityIDs) > 0 {
-		known, err := s.commodityRepository.CommoditiesByIDs(ctx, BookID, commodityIDs)
+	if len(normalized.CommodityIDs) > 0 {
+		known, err := s.commodityRepository.CommoditiesByIDs(ctx, BookID, normalized.CommodityIDs)
 		if err != nil {
 			return ReportFiltersEcho{}, nil, fmt.Errorf("check report commodity filter: %w", err)
 		}
-		for _, commodityID := range commodityIDs {
+		for _, commodityID := range normalized.CommodityIDs {
 			if _, ok := known[commodityID]; !ok {
 				return ReportFiltersEcho{}, nil, ValidationError{Message: "commodity filter is invalid"}
 			}
 		}
 	}
 
-	resolved := accountIDs
-	if filters.IncludeDescendants && len(accountIDs) > 0 {
-		expanded, err := s.reportAccountSubtreeIDs(ctx, accountIDs, asOf)
-		if err != nil {
-			return ReportFiltersEcho{}, nil, err
-		}
-		resolved = expanded
+	resolved, err := s.resolveReportAccountIDs(ctx, normalized, asOf)
+	if err != nil {
+		return ReportFiltersEcho{}, nil, err
 	}
 
 	return ReportFiltersEcho{
-		AccountIDs:         accountIDs,
-		IncludeDescendants: filters.IncludeDescendants,
-		CommodityIDs:       commodityIDs,
+		AccountIDs:         normalized.AccountIDs,
+		IncludeDescendants: normalized.IncludeDescendants,
+		CommodityIDs:       normalized.CommodityIDs,
 		ResolvedAccountIDs: resolved,
 	}, resolved, nil
+}
+
+// echoedReportFilters turns a resolved echo back into the normalized selection
+// it came from, for callers that re-expand the same selection at another date.
+func echoedReportFilters(echo ReportFiltersEcho) ReportFilters {
+	return ReportFilters{
+		AccountIDs:         echo.AccountIDs,
+		IncludeDescendants: echo.IncludeDescendants,
+		CommodityIDs:       echo.CommodityIDs,
+	}
+}
+
+// resolveReportAccountIDs expands a normalized account selection as of asOf.
+// An empty selection stays empty: no account filter, never "match nothing".
+func (s *TransactionService) resolveReportAccountIDs(ctx context.Context, normalized ReportFilters, asOf string) ([]int64, error) {
+	if len(normalized.AccountIDs) == 0 || !normalized.IncludeDescendants {
+		return normalized.AccountIDs, nil
+	}
+	return s.reportAccountSubtreeIDs(ctx, normalized.AccountIDs, asOf)
+}
+
+// reportFilterSet is the in-memory membership test used by reports that filter
+// postings in Go rather than in SQL. A nil map means that dimension is
+// unrestricted; an empty non-nil map would mean "match nothing", which is never
+// what an empty selection means.
+type reportFilterSet struct {
+	accountIDs   map[int64]bool
+	commodityIDs map[int64]bool
+}
+
+// reportFilterSetFrom builds the membership test for an already-validated
+// selection from the account versions in effect on the reporting date. Parent
+// links are versioned, so the expansion is date-dependent and cannot be hoisted
+// out of a per-bucket loop; taking the accounts as an argument keeps that loop
+// from re-reading them.
+func reportFilterSetFrom(accounts []db.LedgerAccountRecord, filters ReportFilters) reportFilterSet {
+	normalized := normalizeReportFilters(filters)
+	accountIDs := normalized.AccountIDs
+	if len(accountIDs) > 0 && normalized.IncludeDescendants {
+		accountIDs = accountSubtreeIDs(accounts, accountIDs)
+	}
+	return reportFilterSet{
+		accountIDs:   idSet(accountIDs),
+		commodityIDs: idSet(normalized.CommodityIDs),
+	}
+}
+
+// includes reports whether a posting survives the filter on both dimensions.
+func (f reportFilterSet) includes(accountID int64, commodityID int64) bool {
+	if f.accountIDs != nil && !f.accountIDs[accountID] {
+		return false
+	}
+	if f.commodityIDs != nil && !f.commodityIDs[commodityID] {
+		return false
+	}
+	return true
+}
+
+// idSet returns nil for an empty selection, so "no filter" and "matches
+// nothing" stay distinguishable.
+func idSet(ids []int64) map[int64]bool {
+	if len(ids) == 0 {
+		return nil
+	}
+	set := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		set[id] = true
+	}
+	return set
 }
 
 // reportAccountSubtreeIDs expands each selected account to itself plus every
@@ -463,7 +543,12 @@ func (s *TransactionService) reportAccountSubtreeIDs(ctx context.Context, accoun
 	if err != nil {
 		return nil, fmt.Errorf("read accounts for report subtree: %w", err)
 	}
+	return accountSubtreeIDs(accounts, accountIDs), nil
+}
 
+// accountSubtreeIDs is the expansion itself, over account versions the caller
+// already holds.
+func accountSubtreeIDs(accounts []db.LedgerAccountRecord, accountIDs []int64) []int64 {
 	childrenByParent := map[int64][]int64{}
 	for _, account := range accounts {
 		if account.ParentAccountID.Valid {
@@ -485,7 +570,7 @@ func (s *TransactionService) reportAccountSubtreeIDs(ctx context.Context, accoun
 		pending = append(pending, childrenByParent[current]...)
 	}
 	sort.Slice(resolved, func(i, j int) bool { return resolved[i] < resolved[j] })
-	return resolved, nil
+	return resolved
 }
 
 func (s *TransactionService) ensureCategoriesExist(ctx context.Context, categoryIDs []int64) error {

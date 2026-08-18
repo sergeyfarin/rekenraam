@@ -248,4 +248,106 @@ describe('spendingBars', () => {
     expect(bars[0].ratio).toBe(1);
     expect(bars[1].ratio).toBe(0.5);
   });
+
+  it('picks the widest row exactly when coefficients exceed float precision', () => {
+    // Two 38-digit coefficients differing only in their last digit: a float
+    // compares them as equal and can size both bars against the wrong track.
+    const hugeRows = spendingRows(
+      report({
+        groups: [
+          {
+            category_id: 1,
+            name: 'Smaller',
+            category_type: 'expense',
+            drill_down: drillDown,
+            totals: [
+              {
+                commodity_id: 1,
+                quantity_value: '10000000000000000000000000000000000001',
+                quantity_scale: 2
+              }
+            ]
+          },
+          {
+            category_id: 2,
+            name: 'Larger',
+            category_type: 'expense',
+            drill_down: drillDown,
+            totals: [
+              {
+                commodity_id: 1,
+                quantity_value: '10000000000000000000000000000000000002',
+                quantity_scale: 2
+              }
+            ]
+          }
+        ]
+      })
+    );
+
+    const bars = spendingBars(hugeRows, (row) => row.name);
+
+    expect(bars[1].ratio).toBe(1);
+    expect(bars[0].ratio).toBeLessThan(1);
+  });
+
+  it('ranks a scale-24 crypto row against a scale-2 cash row by value', () => {
+    // 1.5 units at scale 24 versus 3.00 at scale 2. Aligning to scale 24 makes
+    // the crypto coefficient 25 digits wide, so digit count must not decide.
+    const cryptoRows = spendingRows(
+      report({
+        groups: [
+          {
+            category_id: 1,
+            name: 'Crypto',
+            category_type: 'expense',
+            drill_down: drillDown,
+            totals: [
+              { commodity_id: 1, quantity_value: '1500000000000000000000000', quantity_scale: 24 }
+            ]
+          },
+          {
+            category_id: 2,
+            name: 'Cash',
+            category_type: 'expense',
+            drill_down: drillDown,
+            totals: [{ commodity_id: 1, quantity_value: '300', quantity_scale: 2 }]
+          }
+        ]
+      })
+    );
+
+    const bars = spendingBars(cryptoRows, (row) => row.name);
+
+    expect(bars[1].ratio).toBe(1);
+    expect(bars[0].ratio).toBe(0.5);
+  });
+
+  it('sizes no bar for a coefficient the backend could not have produced', () => {
+    const malformed = spendingRows(
+      report({
+        groups: [
+          {
+            category_id: 1,
+            name: 'Malformed',
+            category_type: 'expense',
+            drill_down: drillDown,
+            totals: [{ commodity_id: 1, quantity_value: 'not-a-number', quantity_scale: 2 }]
+          },
+          {
+            category_id: 2,
+            name: 'Good',
+            category_type: 'expense',
+            drill_down: drillDown,
+            totals: [{ commodity_id: 1, quantity_value: '10000', quantity_scale: 2 }]
+          }
+        ]
+      })
+    );
+
+    const bars = spendingBars(malformed, (row) => row.name);
+
+    expect(bars[0].ratio).toBe(0);
+    expect(bars[1].ratio).toBe(1);
+  });
 });

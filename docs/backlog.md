@@ -92,13 +92,19 @@ quadratically. Measured 2026-08-17 against the integrated binary with only
 | `day` | 365 | **1359-1403 ms** |
 
 `day` is ~120x the single-bucket cost, and the ledger is tiny. A few years of
-ordinary use makes `bucket=day` unusable, and `include_descendants` adds another
-`LedgerAccountsAsOf` per bucket on top. The fix is to read the postings once for
-the whole range plus an opening balance before `start_date`, then fold forward
-across bucket boundaries in one pass — the accumulation is already exact and
+ordinary use makes `bucket=day` unusable. The fix is to read the postings once
+for the whole range plus an opening balance before `start_date`, then fold
+forward across bucket boundaries in one pass — the accumulation is already exact and
 order-independent (`exact.ScaledInt`), so this is a loop restructure, not a
 financial change. `/reports/spending` does not have the problem (one range, one
 read: 14 ms on the same data).
+
+Prep landed 2026-08-18: account and commodity filtering is now one path
+(`reportFilterSet` in `reports.go`) shared by the SQL-side spending filter and
+the in-Go net-worth filter, and the per-bucket subtree expansion reuses the
+accounts `netWorthTotals` already loaded instead of issuing its own
+`LedgerAccountsAsOf`. The loop restructure only has to preserve
+`reportFilterSetFrom` per bucket, not re-derive a filter.
 
 ### T-46 One inline style is blocked by CSP on every page load `[ ]`
 
