@@ -44,7 +44,12 @@ preconditions. Also in `roadmap.md`.
       list now reads its filters from the URL. Rows the route cannot express
       (the unattributed group, a report narrowed to several accounts) stay
       unlinked rather than leading somewhere that disagrees with the number.
-- [ ] Cashflow read model + view (inflow / outflow / transfers / net).
+- [ ] Cashflow **view** (inflow / outflow / transfers / net). The read model
+      shipped 2026-08-18: `GET /api/v1/reports/cashflow`, exact per commodity
+      per bucket, with `net_movement = operating_net + transfer_net` holding as
+      an identity because journal entries balance per commodity. Category and
+      payee filters on cashflow are deferred with a recorded reason — they break
+      `net_movement`'s reconciliation guarantee.
 - [ ] Date/account/category/payee/commodity filters.
 - [ ] CSV + print-friendly tables; summary charts alongside (not replacing)
       the accessible data table.

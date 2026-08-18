@@ -1,0 +1,87 @@
+get:
+  summary: Read cash movement classified as inflow, outflow, transfers, and net movement
+  description: >
+    What changed the selected liquid cash, without treating a transfer as
+    spending. Classification is exact rather than heuristic: journal entries
+    balance per commodity, so a cash posting's counterparts inside the same
+    entry account for precisely the movement it represents. Each counterpart is
+    classified on its own account class, so a transaction with several
+    counterparts needs no allocation rule. In every commodity of every bucket,
+    net_movement equals operating_net plus transfer_net, and net_movement
+    reconciles to the selected cash balance change across the bucket boundaries.
+  parameters:
+    - in: query
+      name: start_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: end_date
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: bucket
+      required: true
+      schema:
+        type: string
+        enum: [day, week, month, quarter, year]
+    - in: query
+      name: account_id
+      description: >
+        Repeatable. Selects the cash scope. Omitted, the report uses the named
+        liquid-cash default — active, non-system accounts of the kinds echoed in
+        query.default_cash_account_kinds — and echoes what that resolved to.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+    - in: query
+      name: include_descendants
+      description: >
+        Expands each account_id to itself plus every descendant. The scope is
+        resolved once, as of end_date, and applied to the whole range so
+        net_movement keeps reconciling to one stable set of accounts.
+      schema:
+        type: boolean
+        default: false
+    - in: query
+      name: commodity_id
+      description: Repeatable. Restricts the report to postings in these commodities.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+  responses:
+    "200":
+      description: Exact per-commodity cash movement for each calendar bucket
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CashflowReportResponse"
+    "400":
+      description: Invalid report query
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Report arithmetic exceeded exact quantity limits
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

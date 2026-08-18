@@ -2940,6 +2940,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/cashflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read cash movement classified as inflow, outflow, transfers, and net movement
+         * @description What changed the selected liquid cash, without treating a transfer as spending. Classification is exact rather than heuristic: journal entries balance per commodity, so a cash posting's counterparts inside the same entry account for precisely the movement it represents. Each counterpart is classified on its own account class, so a transaction with several counterparts needs no allocation rule. In every commodity of every bucket, net_movement equals operating_net plus transfer_net, and net_movement reconciles to the selected cash balance change across the bucket boundaries.
+         */
+        get: {
+            parameters: {
+                query: {
+                    start_date: string;
+                    end_date: string;
+                    bucket: "day" | "week" | "month" | "quarter" | "year";
+                    /** @description Repeatable. Selects the cash scope. Omitted, the report uses the named liquid-cash default — active, non-system accounts of the kinds echoed in query.default_cash_account_kinds — and echoes what that resolved to. */
+                    account_id?: number[];
+                    /** @description Expands each account_id to itself plus every descendant. The scope is resolved once, as of end_date, and applied to the whole range so net_movement keeps reconciling to one stable set of accounts. */
+                    include_descendants?: boolean;
+                    /** @description Repeatable. Restricts the report to postings in these commodities. */
+                    commodity_id?: number[];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Exact per-commodity cash movement for each calendar bucket */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CashflowReportResponse"];
+                    };
+                };
+                /** @description Invalid report query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Report arithmetic exceeded exact quantity limits */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/spending": {
         parameters: {
             query?: never;
@@ -10612,6 +10688,48 @@ export interface components {
              * @enum {string}
              */
             grouping_policy: "direct_postings";
+        };
+        CashflowReportQuery: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            bucket: "day" | "week" | "month" | "quarter" | "year";
+            filters: components["schemas"]["ReportFilters"];
+            /**
+             * @description Which scope produced this report. The default is named rather than invisible, and filters.resolved_account_ids always lists the accounts it came out as.
+             * @enum {string}
+             */
+            cash_scope: "default_liquid_cash" | "selected_accounts";
+            /** @description The account kinds the default liquid-cash scope is built from. */
+            default_cash_account_kinds: string[];
+        };
+        CashflowReportBucket: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @description Positive magnitudes of money entering the selected cash against income counterparts. */
+            inflow: components["schemas"]["BalanceQuantity"][];
+            /** @description Positive magnitudes of money leaving the selected cash against expense counterparts. */
+            outflow: components["schemas"]["BalanceQuantity"][];
+            /** @description Positive magnitudes of movement in from asset, liability, or equity accounts outside the selected scope. Never income. */
+            transfer_in: components["schemas"]["BalanceQuantity"][];
+            /** @description Positive magnitudes of movement out to asset, liability, or equity accounts outside the selected scope. Never spending. */
+            transfer_out: components["schemas"]["BalanceQuantity"][];
+            /** @description inflow - outflow, excluding transfer and financing movement. */
+            operating_net: components["schemas"]["BalanceQuantity"][];
+            /** @description transfer_in - transfer_out. */
+            transfer_net: components["schemas"]["BalanceQuantity"][];
+            /** @description The signed sum of every selected-cash posting in the bucket. Equals operating_net plus transfer_net, and reconciles to the selected cash balance change across the bucket boundaries. */
+            net_movement: components["schemas"]["BalanceQuantity"][];
+        };
+        CashflowReportResponse: {
+            query: components["schemas"]["CashflowReportQuery"];
+            buckets: components["schemas"]["CashflowReportBucket"][];
+            /** @description System accounts never join the cash scope, so this is ["all"]. They stay visible as counterparts: transfer clearing is financing movement, not spending. */
+            excluded_system_roles: string[];
         };
         PriceObservationResponse: {
             /** Format: int64 */

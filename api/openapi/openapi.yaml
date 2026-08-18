@@ -71,6 +71,8 @@ paths:
     $ref: "./paths/ledger-net-worth.yaml"
   /api/v1/reports/net-worth:
     $ref: "./paths/reports-net-worth.yaml"
+  /api/v1/reports/cashflow:
+    $ref: "./paths/reports-cashflow.yaml"
   /api/v1/reports/spending:
     $ref: "./paths/reports-spending.yaml"
   /api/v1/setup/system-accounts:
@@ -474,6 +476,12 @@ components:
       $ref: "./components/schemas/reports.yaml#/SpendingReportGroup"
     SpendingReportResponse:
       $ref: "./components/schemas/reports.yaml#/SpendingReportResponse"
+    CashflowReportQuery:
+      $ref: "./components/schemas/reports.yaml#/CashflowReportQuery"
+    CashflowReportBucket:
+      $ref: "./components/schemas/reports.yaml#/CashflowReportBucket"
+    CashflowReportResponse:
+      $ref: "./components/schemas/reports.yaml#/CashflowReportResponse"
     PriceObservationResponse:
       $ref: "./components/schemas/pricing.yaml#/PriceObservationResponse"
     PriceObservationsResponse:

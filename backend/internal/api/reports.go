@@ -216,3 +216,84 @@ func emptyIfNil(ids []int64) []int64 {
 	}
 	return ids
 }
+
+type cashflowBucketResponse struct {
+	StartDate    string                    `json:"start_date"`
+	EndDate      string                    `json:"end_date"`
+	Inflow       []balanceQuantityResponse `json:"inflow"`
+	Outflow      []balanceQuantityResponse `json:"outflow"`
+	TransferIn   []balanceQuantityResponse `json:"transfer_in"`
+	TransferOut  []balanceQuantityResponse `json:"transfer_out"`
+	OperatingNet []balanceQuantityResponse `json:"operating_net"`
+	TransferNet  []balanceQuantityResponse `json:"transfer_net"`
+	NetMovement  []balanceQuantityResponse `json:"net_movement"`
+}
+
+type cashflowQueryResponse struct {
+	StartDate string                `json:"start_date"`
+	EndDate   string                `json:"end_date"`
+	Bucket    string                `json:"bucket"`
+	Filters   reportFiltersResponse `json:"filters"`
+	CashScope string                `json:"cash_scope"`
+	CashKinds []string              `json:"default_cash_account_kinds"`
+}
+
+type cashflowResponse struct {
+	Query               cashflowQueryResponse    `json:"query"`
+	Buckets             []cashflowBucketResponse `json:"buckets"`
+	ExcludedSystemRoles []string                 `json:"excluded_system_roles"`
+}
+
+func cashflowReport(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		query := r.URL.Query()
+		filters, err := parseReportFilters(query)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
+		result, err := transactionService.Cashflow(r.Context(), app.CashflowInput{
+			StartDate: query.Get("start_date"),
+			EndDate:   query.Get("end_date"),
+			Bucket:    query.Get("bucket"),
+			Filters:   filters,
+		})
+		if err != nil {
+			writeLedgerServiceError(w, r, logger, "read cashflow", err)
+			return
+		}
+
+		buckets := make([]cashflowBucketResponse, 0, len(result.Buckets))
+		for _, bucket := range result.Buckets {
+			buckets = append(buckets, cashflowBucketResponse{
+				StartDate:    bucket.StartDate,
+				EndDate:      bucket.EndDate,
+				Inflow:       toBalanceQuantityResponses(bucket.Inflow),
+				Outflow:      toBalanceQuantityResponses(bucket.Outflow),
+				TransferIn:   toBalanceQuantityResponses(bucket.TransferIn),
+				TransferOut:  toBalanceQuantityResponses(bucket.TransferOut),
+				OperatingNet: toBalanceQuantityResponses(bucket.OperatingNet),
+				TransferNet:  toBalanceQuantityResponses(bucket.TransferNet),
+				NetMovement:  toBalanceQuantityResponses(bucket.NetMovement),
+			})
+		}
+
+		writeJSON(w, http.StatusOK, cashflowResponse{
+			Query: cashflowQueryResponse{
+				StartDate: result.StartDate,
+				EndDate:   result.EndDate,
+				Bucket:    result.Bucket,
+				Filters:   toReportFiltersResponse(result.Filters),
+				CashScope: result.CashScope,
+				CashKinds: result.CashAccountKinds,
+			},
+			Buckets:             buckets,
+			ExcludedSystemRoles: result.ExcludedSystemRoles,
+		})
+	}
+}

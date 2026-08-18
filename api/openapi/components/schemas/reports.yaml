@@ -246,3 +246,121 @@ NetWorthSeriesResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+
+CashflowReportQuery:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - bucket
+    - filters
+    - cash_scope
+    - default_cash_account_kinds
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    bucket:
+      type: string
+      enum: [day, week, month, quarter, year]
+    filters:
+      $ref: "../../openapi.yaml#/components/schemas/ReportFilters"
+    cash_scope:
+      type: string
+      enum: [default_liquid_cash, selected_accounts]
+      description: >
+        Which scope produced this report. The default is named rather than
+        invisible, and filters.resolved_account_ids always lists the accounts it
+        came out as.
+    default_cash_account_kinds:
+      type: array
+      description: The account kinds the default liquid-cash scope is built from.
+      items:
+        type: string
+
+CashflowReportBucket:
+  type: object
+  required:
+    - start_date
+    - end_date
+    - inflow
+    - outflow
+    - transfer_in
+    - transfer_out
+    - operating_net
+    - transfer_net
+    - net_movement
+  properties:
+    start_date:
+      type: string
+      format: date
+    end_date:
+      type: string
+      format: date
+    inflow:
+      description: Positive magnitudes of money entering the selected cash against income counterparts.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    outflow:
+      description: Positive magnitudes of money leaving the selected cash against expense counterparts.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    transfer_in:
+      description: >
+        Positive magnitudes of movement in from asset, liability, or equity
+        accounts outside the selected scope. Never income.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    transfer_out:
+      description: >
+        Positive magnitudes of movement out to asset, liability, or equity
+        accounts outside the selected scope. Never spending.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    operating_net:
+      description: inflow - outflow, excluding transfer and financing movement.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    transfer_net:
+      description: transfer_in - transfer_out.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    net_movement:
+      description: >
+        The signed sum of every selected-cash posting in the bucket. Equals
+        operating_net plus transfer_net, and reconciles to the selected cash
+        balance change across the bucket boundaries.
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+
+CashflowReportResponse:
+  type: object
+  required:
+    - query
+    - buckets
+    - excluded_system_roles
+  properties:
+    query:
+      $ref: "../../openapi.yaml#/components/schemas/CashflowReportQuery"
+    buckets:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CashflowReportBucket"
+    excluded_system_roles:
+      description: >
+        System accounts never join the cash scope, so this is ["all"]. They stay
+        visible as counterparts: transfer clearing is financing movement, not
+        spending.
+      type: array
+      items:
+        type: string

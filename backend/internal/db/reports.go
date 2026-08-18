@@ -204,3 +204,114 @@ func inClause(column string, values []int64) (string, []any) {
 	}
 	return column + " IN (" + strings.Join(placeholders, ", ") + ")", args
 }
+
+// ReportCashflowPostingRecord is one posting inside the cashflow range, carrying
+// its journal entry and the account classification in effect on the entry's own
+// date.
+//
+// The journal entry is what makes the classification well defined: entries
+// balance per commodity, so a cash posting's counterparts within the same entry
+// account for exactly the movement it represents. Without the entry id the
+// cashflow report would be back to guessing which counterpart belongs to which
+// cash leg.
+type ReportCashflowPostingRecord struct {
+	PostingID      int64
+	JournalEntryID int64
+	AccountID      int64
+	CommodityID    int64
+	QuantityValue  exact.Coefficient
+	QuantityScale  int
+	EntryDate      string
+	AccountClass   string
+	AccountKind    string
+	SystemRole     sql.NullString
+}
+
+// ReportCashflowPostingsParams selects every posting of every journal entry that
+// falls inside the range. Filtering to the cash accounts happens in Go, because
+// the counterpart postings — the ones that say whether money came from income,
+// went to an expense, or merely moved — are exactly the rows a SQL-side cash
+// filter would discard.
+type ReportCashflowPostingsParams struct {
+	BookID       int64
+	StartDate    string
+	EndDate      string
+	CommodityIDs []int64
+}
+
+// ReportCashflowPostings returns posted, non-voided, non-soft-deleted postings
+// in the inclusive range, with each account's class and kind as of the entry
+// date. Coefficients come back as strings and are summed in Go.
+func (r *TransactionRepository) ReportCashflowPostings(ctx context.Context, params ReportCashflowPostingsParams) ([]ReportCashflowPostingRecord, error) {
+	where := []string{
+		"tv.book_id = ?",
+		"tv.status = 'posted'",
+		"t.deleted_at IS NULL",
+		"je.entry_date >= ?",
+		"je.entry_date <= ?",
+	}
+	args := []any{params.BookID, params.StartDate, params.EndDate}
+
+	if clause, clauseArgs := inClause("pv.commodity_id", params.CommodityIDs); clause != "" {
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
+	}
+
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT
+			pv.id,
+			pv.journal_entry_id,
+			pv.account_id,
+			pv.commodity_id,
+			pv.quantity_value,
+			pv.quantity_scale,
+			je.entry_date,
+			av.account_class,
+			av.account_kind,
+			a.system_role
+		FROM current_transaction_versions tv
+		JOIN transactions t ON t.id = tv.transaction_id
+		JOIN journal_entries je ON je.transaction_version_id = tv.id
+		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		JOIN accounts a ON a.id = pv.account_id
+		JOIN account_versions av ON av.id = (
+			SELECT asof_av.id
+			FROM account_versions asof_av
+			WHERE asof_av.account_id = a.id
+				AND asof_av.effective_from <= je.entry_date
+			ORDER BY asof_av.effective_from DESC, asof_av.version_seq DESC
+			LIMIT 1
+		)
+		WHERE `+strings.Join(where, " AND ")+`
+		ORDER BY je.entry_date, pv.journal_entry_id, pv.id
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read report cashflow postings: %w", err)
+	}
+	defer rows.Close()
+
+	var postings []ReportCashflowPostingRecord
+	for rows.Next() {
+		var posting ReportCashflowPostingRecord
+		if err := rows.Scan(
+			&posting.PostingID,
+			&posting.JournalEntryID,
+			&posting.AccountID,
+			&posting.CommodityID,
+			&posting.QuantityValue,
+			&posting.QuantityScale,
+			&posting.EntryDate,
+			&posting.AccountClass,
+			&posting.AccountKind,
+			&posting.SystemRole,
+		); err != nil {
+			return nil, fmt.Errorf("scan report cashflow posting: %w", err)
+		}
+		postings = append(postings, posting)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate report cashflow postings: %w", err)
+	}
+
+	return postings, nil
+}

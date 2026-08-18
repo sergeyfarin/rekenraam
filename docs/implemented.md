@@ -130,7 +130,8 @@ series backend/API foundation).
 | **Reports UI — filter controls** | ✅ | Multi-select account, commodity, category, and payee pickers on `/app/reports`, each writing the URL so a link reproduces the exact report. Only the dimensions a report can express are offered; a spending-only selection survives a switch to net worth in the URL. |
 | **Reports UI — spending / income** | ✅ | View switch, dense table, category/payee and spending/income switches, single-commodity bar chart with a non-colour cue for negative rows, all four screen states, and drill-down links to the transactions the row was summed from. |
 | **Reports UI — drill-down** | ✅ | A spending row links to `/app/transactions` with the report's own semantics — entry-date basis, posted only, the row's category or payee and direction. Rows the transactions route cannot express (unattributed, or several accounts) stay unlinked rather than showing a different set. |
-| Cashflow read model and view | ⬜ | Not yet a dedicated endpoint. Semantics locked in `docs/plans/reports-plan.md`. |
+| Cashflow read model | ✅ | `GET /reports/cashflow` classifies movement of the selected liquid cash as inflow, outflow, and transfer/financing, per commodity per calendar bucket. Classification is exact, not heuristic: journal entries balance per commodity, so each counterpart is classified on its own class and `net_movement = operating_net + transfer_net` is an identity. A transfer inside the selected scope nets to an explicit zero. Default scope is a named liquid-cash set (cash, checking, savings, brokerage_cash), echoed as resolved account ids. Category/payee filters deferred — see the plan. |
+| Cashflow view | ⬜ | The screen is the remaining R2 piece. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 

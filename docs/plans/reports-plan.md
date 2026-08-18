@@ -349,10 +349,51 @@ UI:
      arrived-from-report notice explains the narrowing and offers the way out.
      A silently filtered list reads as a broken one.
 
-   Remaining in this slice: the cashflow read model and view.
+   Remaining in this slice: the cashflow view.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.
+
+   **Progress (2026-08-18): read model shipped**, `GET /api/v1/reports/cashflow`
+   (`app/cashflow.go`, `db/reports.go#ReportCashflowPostings`). The view is the
+   remaining piece.
+
+   The classification turned out to need no allocation rule at all, because
+   **journal entries balance per commodity** (`validateBalanced` enforces it per
+   entry, not merely per transaction). Within one entry the selected-cash
+   postings therefore sum to the negation of their counterparts, so each
+   counterpart can be classified on its own account class and contribute its own
+   signed amount. That satisfies rule 5's "no first-counterpart-wins" directly,
+   and makes `net_movement = operating_net + transfer_net` an identity rather
+   than something to be reconciled after the fact:
+
+       cash = -(income + expense + other)
+            = (-income) - expense + (-other)
+            = inflow - outflow + transfer_net
+
+   Rule 2 falls out for free: a transfer between two selected accounts puts both
+   legs in `net_movement` where they cancel, and leaves no counterpart to
+   classify. It nets to an explicit zero rather than vanishing — the commodity
+   did move, and the report says the move left the cash total unchanged.
+
+   Two decisions worth recording:
+
+   - **The cash scope is resolved once, as of `end_date`, for the whole range.**
+     Re-resolving per bucket would let an account join or leave mid-series, and
+     `net_movement` would stop reconciling to the balance change of any one
+     stable set of accounts (rule 4).
+   - **System accounts never join the cash scope but stay visible as
+     counterparts**, so transfer clearing reads as financing movement rather
+     than spending. `excluded_system_roles` is `["all"]` for this endpoint.
+
+   **Deliberately deferred, not forgotten:** category and payee filters, and the
+   transfer policy toggle, are listed in the contract table above but are not
+   implemented. A category or payee filter removes counterpart postings from the
+   basis, at which point `net_movement` can no longer reconcile to the cash
+   balance change — rule 4's guarantee would quietly stop holding. Shipping the
+   exact core first is the honest order; those filters need their own decision
+   about what `net_movement` means under them, plus the UI explanation this plan
+   already calls for.
    - Acceptance: for every commodity and bucket, `net_movement` reconciles to
      the selected-cash balance delta; transfers within scope net to zero; a
      split transaction is not misclassified.
