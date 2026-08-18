@@ -99,6 +99,19 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 		}
 	}
 
+	categoryType := strings.TrimSpace(input.CategoryType)
+	if categoryType != "" && categoryType != "income" && categoryType != "expense" {
+		return db.ListTransactionsParams{}, ValidationError{Message: "category type is invalid"}
+	}
+
+	dateBasis := strings.TrimSpace(input.DateBasis)
+	if dateBasis == "" {
+		dateBasis = "transaction"
+	}
+	if dateBasis != "transaction" && dateBasis != "entry" {
+		return db.ListTransactionsParams{}, ValidationError{Message: "date basis is invalid"}
+	}
+
 	limit := input.Limit
 	if limit <= 0 {
 		limit = transactionListLimit
@@ -124,6 +137,8 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 		CursorID:          cursorID,
 		Limit:             limit,
 		FilterEntryDate:   filterEntryDate,
+		EntryDateBasis:    dateBasis == "entry",
+		CategoryType:      categoryType,
 	}, nil
 }
 

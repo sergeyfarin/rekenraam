@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { createInfiniteQuery } from '@tanstack/svelte-query';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -20,10 +21,13 @@
   import TransactionFilterBar from './transaction-filter-bar.svelte';
   import TransactionRowActions from './transaction-row-actions.svelte';
   import type { TransactionFilters } from './transaction-filter-bar.svelte';
+  import type { TransactionQueryFilters } from './transaction-url-filters';
   import type { Column } from './transaction-table-types';
 
   let {
     csrfToken,
+    initialFilters,
+    onFiltersChange,
     onRowClick,
     onEdit,
     onCreateCorrection,
@@ -31,6 +35,10 @@
     onUnvoid
   }: {
     csrfToken?: string;
+    /** Seeds the bar from the URL, so a drill-down link lands pre-filtered. */
+    initialFilters?: TransactionQueryFilters;
+    /** Reports each change back so the route can keep the URL in step. */
+    onFiltersChange?: (filters: TransactionQueryFilters) => void;
     onRowClick?: (tx: TransactionResponse) => void;
     onEdit?: (tx: TransactionResponse) => void;
     onCreateCorrection?: (tx: TransactionResponse) => void;
@@ -38,23 +46,39 @@
     onUnvoid?: (tx: TransactionResponse) => void;
   } = $props();
 
-  let filters = $state<TransactionFilters>({});
+  // Filters the bar cannot set — a drill-down's category and date basis — are
+  // held separately so the bar's own edits never silently drop them.
+  // `untrack` states the intent the warning asks about: the URL seeds this list
+  // once. After that the bar owns the filters and the route follows it.
+  const seed = untrack(() => initialFilters);
+  let linkFilters = $state<TransactionQueryFilters>({
+    categoryID: seed?.categoryID,
+    categoryType: seed?.categoryType,
+    dateBasis: seed?.dateBasis
+  });
+  const fromReport = $derived(linkFilters.categoryID !== undefined || linkFilters.categoryType !== undefined);
+  let filters = $state<TransactionFilters>({
+    status: seed?.status,
+    kind: seed?.kind,
+    accountID: seed?.accountID,
+    payeeID: seed?.payeeID,
+    q: seed?.q,
+    needsReview: seed?.needsReview,
+    afterDate: seed?.afterDate,
+    beforeDate: seed?.beforeDate
+  });
+  const activeFilters = $derived<TransactionQueryFilters>({ ...linkFilters, ...filters });
+
+  $effect(() => {
+    onFiltersChange?.(activeFilters);
+  });
   let movePendingID = $state<number | undefined>(undefined);
   let moveError = $state<unknown>(undefined);
 
   const locale = $derived(getLocale());
 
   const query = createInfiniteQuery(() =>
-    transactionsInfiniteQueryOptions({
-      status: filters.status,
-      kind: filters.kind,
-      accountID: filters.accountID,
-      payeeID: filters.payeeID,
-      q: filters.q,
-      needsReview: filters.needsReview,
-      afterDate: filters.afterDate,
-      beforeDate: filters.beforeDate
-    })
+    transactionsInfiniteQueryOptions(activeFilters)
   );
 
   const rows = $derived(
@@ -96,6 +120,24 @@
 </script>
 
 <div class="space-y-4">
+  {#if fromReport}
+    <!-- A drill-down narrows the list by a category and date basis the filter
+         bar cannot show. Saying so, and offering the way out, is the difference
+         between a filtered list and a list that looks broken. -->
+    <Panel variant="toolbar">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm text-foreground">{m.transactions_from_report()}</p>
+        <button
+          type="button"
+          class="text-sm font-semibold text-accent underline underline-offset-2 transition hover:opacity-80"
+          onclick={() => (linkFilters = {})}
+        >
+          {m.transactions_from_report_clear()}
+        </button>
+      </div>
+    </Panel>
+  {/if}
+
   <Panel variant="toolbar">
     <TransactionFilterBar
       bind:filters

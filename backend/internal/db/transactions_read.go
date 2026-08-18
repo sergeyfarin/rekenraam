@@ -37,30 +37,47 @@ func (r *TransactionRepository) ListTransactions(ctx context.Context, params Lis
 		)`)
 		args = append(args, params.AccountID)
 	}
-	if params.CategoryID > 0 {
-		where = append(where, `EXISTS (
+	if params.NeedsReview {
+		where = append(where, "tv.needs_review = 1")
+	}
+
+	// On the entry-date basis every posting-shaped filter has to be satisfied by
+	// one and the same journal entry — that is what reproduces the set a
+	// spending row was summed from. A transaction whose groceries entry sits
+	// outside the range must not match a groceries row inside it, and separate
+	// EXISTS clauses would let it through.
+	if params.EntryDateBasis {
+		clause, clauseArgs := matchingEntryClause(params)
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
+	} else {
+		if params.CategoryID > 0 {
+			where = append(where, `EXISTS (
 			SELECT 1
 			FROM journal_entries category_je
 			JOIN posting_versions category_pv ON category_pv.journal_entry_id = category_je.id
 			WHERE category_je.transaction_version_id = tv.id
 				AND category_pv.account_id = ?
 		)`)
-		args = append(args, params.CategoryID)
-	}
-	if params.NeedsReview {
-		where = append(where, "tv.needs_review = 1")
-	}
-	dateColumn := "tv.transaction_date"
-	if params.FilterEntryDate {
-		dateColumn = `(SELECT MAX(date_je.entry_date) FROM journal_entries date_je WHERE date_je.transaction_version_id = tv.id)`
-	}
-	if params.AfterDate != "" {
-		where = append(where, dateColumn+" >= ?")
-		args = append(args, params.AfterDate)
-	}
-	if params.BeforeDate != "" {
-		where = append(where, dateColumn+" <= ?")
-		args = append(args, params.BeforeDate)
+			args = append(args, params.CategoryID)
+		}
+		if params.CategoryType != "" {
+			clause, clauseArgs := categoryTypeClause(params.CategoryType)
+			where = append(where, clause)
+			args = append(args, clauseArgs...)
+		}
+		dateColumn := "tv.transaction_date"
+		if params.FilterEntryDate {
+			dateColumn = `(SELECT MAX(date_je.entry_date) FROM journal_entries date_je WHERE date_je.transaction_version_id = tv.id)`
+		}
+		if params.AfterDate != "" {
+			where = append(where, dateColumn+" >= ?")
+			args = append(args, params.AfterDate)
+		}
+		if params.BeforeDate != "" {
+			where = append(where, dateColumn+" <= ?")
+			args = append(args, params.BeforeDate)
+		}
 	}
 	if params.CursorDate != "" && params.CursorID > 0 {
 		where = append(where, `(
@@ -822,4 +839,84 @@ func DecodeDeletionCursor(cursor string) (deletedAt string, id int64, err error)
 		return "", 0, fmt.Errorf("cursor is invalid")
 	}
 	return ts, txID, nil
+}
+
+// matchingEntryClause requires one journal entry of the transaction to satisfy
+// every entry-scoped filter at once: the date range, the category account, and
+// the category direction. It exists so a drill-down from a spending row lists
+// exactly the transactions that row was built from.
+func matchingEntryClause(params ListTransactionsParams) (string, []any) {
+	conditions := []string{"range_je.transaction_version_id = tv.id"}
+	args := []any{}
+
+	if params.AfterDate != "" {
+		conditions = append(conditions, "range_je.entry_date >= ?")
+		args = append(args, params.AfterDate)
+	}
+	if params.BeforeDate != "" {
+		conditions = append(conditions, "range_je.entry_date <= ?")
+		args = append(args, params.BeforeDate)
+	}
+	if params.CategoryID > 0 {
+		conditions = append(conditions, "range_pv.account_id = ?")
+		args = append(args, params.CategoryID)
+	}
+	if params.CategoryType != "" {
+		// Same shape as the spending report: the class is read from the account
+		// version in effect on the entry's own date, because parent links and
+		// classes are versioned, and account_kind = account_class keeps this to
+		// real category accounts rather than anything merely income-classed.
+		conditions = append(conditions, `EXISTS (
+				SELECT 1
+				FROM accounts type_account
+				JOIN account_versions type_av ON type_av.account_id = type_account.id
+				WHERE type_account.id = range_pv.account_id
+					AND type_account.book_id = tv.book_id
+					AND type_account.system_role IS NULL
+					AND type_av.id = (
+						SELECT asof_type_av.id
+						FROM account_versions asof_type_av
+						WHERE asof_type_av.account_id = type_account.id
+							AND asof_type_av.effective_from <= range_je.entry_date
+						ORDER BY asof_type_av.effective_from DESC, asof_type_av.version_seq DESC
+						LIMIT 1
+					)
+					AND type_av.account_class = ?
+					AND type_av.account_kind = type_av.account_class
+			)`)
+		args = append(args, params.CategoryType)
+	}
+
+	return `EXISTS (
+			SELECT 1
+			FROM journal_entries range_je
+			JOIN posting_versions range_pv ON range_pv.journal_entry_id = range_je.id
+			WHERE ` + strings.Join(conditions, "\n\t\t\t\t AND ") + `
+		)`, args
+}
+
+// categoryTypeClause is the transaction-date-basis form: the direction still
+// has to hold somewhere in the transaction, but no entry has to carry it
+// together with the date.
+func categoryTypeClause(categoryType string) (string, []any) {
+	return `EXISTS (
+			SELECT 1
+			FROM journal_entries type_je
+			JOIN posting_versions type_pv ON type_pv.journal_entry_id = type_je.id
+			JOIN accounts type_account ON type_account.id = type_pv.account_id
+			JOIN account_versions type_av ON type_av.account_id = type_account.id
+			WHERE type_je.transaction_version_id = tv.id
+				AND type_account.book_id = tv.book_id
+				AND type_account.system_role IS NULL
+				AND type_av.id = (
+					SELECT asof_type_av.id
+					FROM account_versions asof_type_av
+					WHERE asof_type_av.account_id = type_account.id
+						AND asof_type_av.effective_from <= type_je.entry_date
+					ORDER BY asof_type_av.effective_from DESC, asof_type_av.version_seq DESC
+					LIMIT 1
+				)
+				AND type_av.account_class = ?
+				AND type_av.account_kind = type_av.account_class
+		)`, []any{categoryType}
 }

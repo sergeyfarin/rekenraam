@@ -137,6 +137,46 @@ test('report filters narrow the result and travel in the URL', async ({ page }) 
   await expect(netWorth).not.toContainText('-200.00');
 });
 
+test('a spending row drills down to exactly its transactions', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const checking = await createCashAccount(page, csrfToken, `Drill checking ${suffix}`, currencyID);
+
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const category = (code: string) => {
+    const found = categories.categories.find((item) => item.code === code && item.allows_postings);
+    if (!found) throw new Error(`seeded category ${code} not found`);
+    return found.id;
+  };
+
+  await postTransaction(page, today, checking.id, category('expense_food_groceries'), currencyID, 4200);
+  await postTransaction(page, today, checking.id, category('expense_transport_fuel'), currencyID, 3100);
+
+  await page.goto(`/app/reports?view=spending&group_by=category&start_date=${today}&end_date=${today}&bucket=month`);
+
+  await page.getByRole('link', { name: 'Groceries' }).click();
+
+  // The link carries the report's own semantics, not just its dates.
+  await expect(page).toHaveURL(/\/app\/transactions\?/);
+  await expect(page).toHaveURL(/date_basis=entry/);
+  await expect(page).toHaveURL(/status=posted/);
+  await expect(page).toHaveURL(new RegExp(`category_id=${category('expense_food_groceries')}`));
+
+  // The list is narrowed to that row, and says why — the filter bar cannot show
+  // a category, so without the notice it would look like a broken list.
+  await expect(page.getByText('Showing the transactions behind one report row.')).toBeVisible();
+  await expect(page.getByRole('table').getByText('42.00')).toBeVisible();
+  await expect(page.getByRole('table').getByText('31.00')).toHaveCount(0);
+
+  // The way out restores the unfiltered list.
+  await page.getByRole('button', { name: 'Show all transactions' }).click();
+  await expect(page.getByRole('table').getByText('31.00')).toBeVisible();
+});
+
 async function postTransaction(
   page: Page,
   date: string,

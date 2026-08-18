@@ -149,17 +149,19 @@ func readTransactionListInput(w http.ResponseWriter, r *http.Request) (app.ListT
 	}
 
 	return app.ListTransactionsInput{
-		AccountID:   accountID,
-		CategoryID:  categoryID,
-		PayeeID:     payeeID,
-		Status:      query.Get("status"),
-		Kind:        query.Get("kind"),
-		NeedsReview: query.Get("needs_review") == "true",
-		Query:       query.Get("q"),
-		AfterDate:   query.Get("after_date"),
-		BeforeDate:  query.Get("before_date"),
-		Limit:       limit,
-		Cursor:      query.Get("cursor"),
+		AccountID:    accountID,
+		CategoryID:   categoryID,
+		PayeeID:      payeeID,
+		Status:       query.Get("status"),
+		Kind:         query.Get("kind"),
+		NeedsReview:  query.Get("needs_review") == "true",
+		Query:        query.Get("q"),
+		AfterDate:    query.Get("after_date"),
+		BeforeDate:   query.Get("before_date"),
+		CategoryType: query.Get("category_type"),
+		DateBasis:    query.Get("date_basis"),
+		Limit:        limit,
+		Cursor:       query.Get("cursor"),
 	}, true
 }
 

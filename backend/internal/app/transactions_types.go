@@ -123,8 +123,14 @@ type ListTransactionsInput struct {
 	Query       string
 	AfterDate   string
 	BeforeDate  string
-	Limit       int
-	Cursor      string
+	// CategoryType restricts to transactions touching an income or expense
+	// category, matching the spending report's direction.
+	CategoryType string
+	// DateBasis selects which date the range applies to: "transaction"
+	// (default) or "entry", the basis the reports sum on.
+	DateBasis string
+	Limit     int
+	Cursor    string
 }
 
 type ListTransactionsResult struct {

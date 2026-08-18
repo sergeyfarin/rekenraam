@@ -1,5 +1,7 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import Plus from '@lucide/svelte/icons/plus';
   import { m } from '$lib/paraglide/messages.js';
   import Panel from '$lib/components/panel.svelte';
@@ -7,6 +9,11 @@
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { transactionsQueryKey, type TransactionResponse } from '$lib/api/transactions';
   import TransactionList from '$lib/transactions/transaction-list.svelte';
+  import {
+    parseTransactionFilters,
+    writeTransactionFilters,
+    type TransactionQueryFilters
+  } from '$lib/transactions/transaction-url-filters';
   import TransactionDetailPanel from '$lib/transactions/transaction-detail-panel.svelte';
   import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
 
@@ -20,6 +27,24 @@
     | { type: 'just-deleted'; transaction: TransactionResponse };
 
   let panel = $state<PanelState>({ type: 'none' });
+
+  // The URL seeds the list once, so a report drill-down lands pre-filtered, and
+  // is rewritten in place as the bar changes. `replaceState` keeps filter
+  // tweaking out of history — Back returns to wherever the link came from.
+  const initialFilters = parseTransactionFilters($page.url.searchParams);
+
+  function handleFiltersChange(filters: TransactionQueryFilters) {
+    const params = writeTransactionFilters($page.url.searchParams, filters);
+    const search = params.toString();
+    if (search === $page.url.searchParams.toString()) {
+      return;
+    }
+    void goto(`/app/transactions${search ? `?${search}` : ''}`, {
+      replaceState: true,
+      keepFocus: true,
+      noScroll: true
+    });
+  }
 
   // ── Session ───────────────────────────────────────────────────────
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -125,6 +150,8 @@
 
     <TransactionList
       {csrfToken}
+      {initialFilters}
+      onFiltersChange={handleFiltersChange}
       onRowClick={handleRowClick}
       onEdit={handleEdit}
       onCreateCorrection={handleCreateCorrection}

@@ -175,6 +175,12 @@ type ListTransactionsParams struct {
 	CursorID          int64
 	Limit             int
 	FilterEntryDate   bool
+	// EntryDateBasis narrows by journal-entry date the way the reports do:
+	// a transaction matches when one of its entries falls inside the range,
+	// rather than by the transaction's own date. FilterEntryDate is the
+	// register's coarser MAX(entry_date) variant and stays separate.
+	EntryDateBasis bool
+	CategoryType   string
 }
 
 type ListDeletedTransactionsParams struct {

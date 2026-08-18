@@ -322,9 +322,34 @@ UI:
    - **`include_descendants` appears with an account selection** and is dropped
      from the URL without one, where it expands nothing.
 
-   Remaining in this slice: drill-down links, which need the transactions route
-   to honour the same date/category/payee semantics before a link can be
-   anything but misleading.
+   **Drill-down links (2026-08-18).** The transactions list already accepted
+   account, category, payee, and inclusive dates — but it applied the range to
+   `tv.transaction_date`, while every report sums on `je.entry_date`. A link
+   built from `drill_down` would therefore have listed a different set whenever
+   the two dates differ, which is precisely the misleading link this plan
+   forbids. Resolved by:
+
+   - `GET /transactions` gained `date_basis` (`transaction` default, `entry`)
+     and `category_type` (`income`/`expense`). On the entry basis the date,
+     `category_id`, and `category_type` must be satisfied by **one and the same
+     journal entry**, so a transaction whose groceries entry is in May cannot
+     match a June groceries row. The account register keeps its own fixed basis
+     and rejects both parameters rather than ignoring them.
+   - The link also pins `status=posted`, because the report counts posted
+     transactions only.
+   - `/app/transactions` now reads its filters from the URL
+     (`lib/transactions/transaction-url-filters.ts`) and rewrites them in place
+     with `replaceState`, so Back returns to the report rather than walking
+     through filter edits.
+   - A row is linked **only when the route can ask the same question**. The
+     unattributed group has no expressible filter ("has no category"), and a
+     report narrowed to several accounts exceeds the route's single
+     `account_id`; both stay plain text.
+   - Because the filter bar cannot display a category or a date basis, an
+     arrived-from-report notice explains the narrowing and offers the way out.
+     A silently filtered list reads as a broken one.
+
+   Remaining in this slice: the cashflow read model and view.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.

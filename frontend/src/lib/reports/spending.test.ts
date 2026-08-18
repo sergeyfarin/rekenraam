@@ -5,7 +5,9 @@ import {
   isSingleCommodity,
   reportCommodityIDs,
   spendingBars,
-  spendingRows
+  spendingDrillDownQuery,
+  spendingRows,
+  type SpendingRow
 } from './spending';
 
 function report(overrides: Partial<SpendingReportResponse> = {}): SpendingReportResponse {
@@ -349,5 +351,57 @@ describe('spendingBars', () => {
 
     expect(bars[0].ratio).toBe(0);
     expect(bars[1].ratio).toBe(1);
+  });
+});
+
+describe('spendingDrillDownQuery', () => {
+  const row = (overrides: Partial<SpendingRow> = {}): SpendingRow => ({
+    key: 'k',
+    code: '',
+    name: 'Groceries',
+    commodityID: 1,
+    quantityValue: '5000',
+    quantityScale: 2,
+    unattributed: false,
+    drillDown: {
+      start_date: '2026-06-01',
+      end_date: '2026-06-30',
+      category_id: 7,
+      account_ids: []
+    },
+    ...overrides
+  });
+
+  it('asks the transactions route the report’s own question', () => {
+    const params = spendingDrillDownQuery(row(), 'category', 'spending');
+    expect(params?.get('after_date')).toBe('2026-06-01');
+    expect(params?.get('before_date')).toBe('2026-06-30');
+    expect(params?.get('category_id')).toBe('7');
+    // The report sums entry dates and counts posted transactions only.
+    expect(params?.get('date_basis')).toBe('entry');
+    expect(params?.get('status')).toBe('posted');
+  });
+
+  it('carries the direction on a payee grouping, which no category pins', () => {
+    const payeeRow = row({ drillDown: { start_date: '2026-06-01', end_date: '2026-06-30', payee_id: 3, account_ids: [] } });
+    expect(spendingDrillDownQuery(payeeRow, 'payee', 'spending')?.get('category_type')).toBe('expense');
+    expect(spendingDrillDownQuery(payeeRow, 'payee', 'income')?.get('category_type')).toBe('income');
+    expect(spendingDrillDownQuery(payeeRow, 'payee', 'spending')?.get('payee_id')).toBe('3');
+  });
+
+  it('passes a single resolved account through', () => {
+    const scoped = row({ drillDown: { start_date: '2026-06-01', end_date: '2026-06-30', category_id: 7, account_ids: [12] } });
+    expect(spendingDrillDownQuery(scoped, 'category', 'spending')?.get('account_id')).toBe('12');
+  });
+
+  it('refuses to link what the transactions route cannot express', () => {
+    // No "has no category" filter exists.
+    expect(spendingDrillDownQuery(row({ unattributed: true }), 'category', 'spending')).toBeUndefined();
+    // The route takes one account_id, so several would silently widen the list.
+    const manyAccounts = row({ drillDown: { start_date: '2026-06-01', end_date: '2026-06-30', category_id: 7, account_ids: [1, 2] } });
+    expect(spendingDrillDownQuery(manyAccounts, 'category', 'spending')).toBeUndefined();
+    // A category grouping with no category on the row is not reproducible.
+    const noCategory = row({ drillDown: { start_date: '2026-06-01', end_date: '2026-06-30', account_ids: [] } });
+    expect(spendingDrillDownQuery(noCategory, 'category', 'spending')).toBeUndefined();
   });
 });

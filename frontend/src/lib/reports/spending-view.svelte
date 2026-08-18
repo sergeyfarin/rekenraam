@@ -18,6 +18,7 @@
     formatShare,
     isSingleCommodity,
     spendingBars,
+    spendingDrillDownHref,
     spendingRows,
     type SpendingRow
   } from './spending';
@@ -65,6 +66,10 @@
       }
     }
     return row.name || row.code || m.reports_spending_unnamed();
+  }
+
+  function drillDownHref(row: SpendingRow): string | undefined {
+    return spendingDrillDownHref(row, groupBy, mode);
   }
 
   function formatAmount(value: string, scale: number): string {
@@ -203,7 +208,19 @@
           {#each rows as row (row.key)}
             <tr class="border-b border-border/70 last:border-b-0">
               <td class="px-3 py-3 text-foreground">
-                {rowLabel(row)}
+                <!-- Linked only when the transactions route can ask the same
+                     question; otherwise the label stays plain text rather than
+                     leading to a list that disagrees with the number. -->
+                {#if drillDownHref(row)}
+                  <a
+                    href={drillDownHref(row)}
+                    class="font-medium text-accent underline underline-offset-2 transition hover:opacity-80"
+                  >
+                    {rowLabel(row)}
+                  </a>
+                {:else}
+                  {rowLabel(row)}
+                {/if}
                 {#if row.unattributed}
                   <span class="ml-1 text-xs text-muted">({m.reports_spending_unattributed_hint()})</span>
                 {/if}

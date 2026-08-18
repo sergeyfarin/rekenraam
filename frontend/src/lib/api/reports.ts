@@ -5,6 +5,7 @@ export type ReportFilters = components['schemas']['ReportFilters'];
 export type SpendingReportResponse = components['schemas']['SpendingReportResponse'];
 export type SpendingReportGroup = components['schemas']['SpendingReportGroup'];
 export type SpendingReportGroupTotal = components['schemas']['SpendingReportGroupTotal'];
+export type SpendingReportDrillDown = components['schemas']['SpendingReportDrillDown'];
 export type NetWorthSeriesResponse = components['schemas']['NetWorthSeriesResponse'];
 
 export type SpendingGroupBy = 'category' | 'payee';

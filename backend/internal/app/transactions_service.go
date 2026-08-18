@@ -73,6 +73,12 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	if strings.TrimSpace(input.Status) == "" {
 		input.Status = "posted"
 	}
+	// The register's date basis is fixed (entry date) and it has no category
+	// direction. Rejecting these is better than accepting a filter and quietly
+	// returning an unfiltered register.
+	if strings.TrimSpace(input.CategoryType) != "" || strings.TrimSpace(input.DateBasis) != "" {
+		return AccountRegisterResult{}, ValidationError{Message: "category type and date basis are not supported on the register"}
+	}
 
 	params, err := s.listParams(ctx, input, true)
 	if err != nil {

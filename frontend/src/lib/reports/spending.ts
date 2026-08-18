@@ -1,4 +1,10 @@
-import type { SpendingReportResponse, SpendingReportGroup } from '$lib/api/reports';
+import type {
+  SpendingGroupBy,
+  SpendingMode,
+  SpendingReportDrillDown,
+  SpendingReportGroup,
+  SpendingReportResponse
+} from '$lib/api/reports';
 
 /**
  * One table row: a single group's total in a single commodity. The backend
@@ -18,6 +24,8 @@ export type SpendingRow = {
   shareBasisPoints?: number;
   /** True for the group holding postings with no payee record. */
   unattributed: boolean;
+  /** The server's description of the postings behind this row. */
+  drillDown: SpendingReportDrillDown;
 };
 
 export function spendingRows(report: SpendingReportResponse): SpendingRow[] {
@@ -32,7 +40,8 @@ export function spendingRows(report: SpendingReportResponse): SpendingRow[] {
       quantityValue: total.quantity_value,
       quantityScale: total.quantity_scale,
       shareBasisPoints: total.share_basis_points,
-      unattributed: group.category_id === undefined && group.payee_id === undefined
+      unattributed: group.category_id === undefined && group.payee_id === undefined,
+      drillDown: group.drill_down
     }))
   );
 }
@@ -146,4 +155,65 @@ function scaleOf(row: SpendingRow): number {
  */
 function ratioOf(magnitude: bigint, widest: bigint): number {
   return Number((magnitude * RATIO_PRECISION) / widest) / Number(RATIO_PRECISION);
+}
+
+/**
+ * The transactions link that reproduces a row's postings, or `undefined` when
+ * the transactions route cannot express the same query.
+ *
+ * `reports-plan.md` is explicit that a drill-down link is only allowed when it
+ * carries the same date and filter semantics — a link that quietly shows a
+ * different set is worse than no link, because the number and the list would
+ * disagree with no way to tell which is wrong. Three cases cannot be
+ * represented, and each returns `undefined`:
+ *
+ * - the unattributed group, since there is no "has no category" filter;
+ * - a report narrowed to several accounts, since the transactions route takes
+ *   one `account_id`;
+ * - a payee row with no direction, which cannot happen today but would silently
+ *   mix income and spending if it did.
+ */
+export function spendingDrillDownQuery(
+  row: SpendingRow,
+  groupBy: SpendingGroupBy,
+  mode: SpendingMode
+): URLSearchParams | undefined {
+  if (row.unattributed) return undefined;
+
+  const accountIDs = row.drillDown.account_ids ?? [];
+  if (accountIDs.length > 1) return undefined;
+
+  const params = new URLSearchParams();
+  params.set('after_date', row.drillDown.start_date);
+  params.set('before_date', row.drillDown.end_date);
+  // The report sums on entry dates and counts posted transactions only; the
+  // list has to be asked for both explicitly or it answers a different question.
+  params.set('date_basis', 'entry');
+  params.set('status', 'posted');
+
+  if (groupBy === 'category') {
+    if (row.drillDown.category_id === undefined) return undefined;
+    params.set('category_id', String(row.drillDown.category_id));
+  } else {
+    if (row.drillDown.payee_id === undefined) return undefined;
+    params.set('payee_id', String(row.drillDown.payee_id));
+    // Without the category direction a payee's income would join its spending.
+    params.set('category_type', mode === 'income' ? 'income' : 'expense');
+  }
+
+  if (accountIDs.length === 1) {
+    params.set('account_id', String(accountIDs[0]));
+  }
+
+  return params;
+}
+
+/** The same query as a route the anchor can use directly. */
+export function spendingDrillDownHref(
+  row: SpendingRow,
+  groupBy: SpendingGroupBy,
+  mode: SpendingMode
+): string | undefined {
+  const params = spendingDrillDownQuery(row, groupBy, mode);
+  return params ? `/app/transactions?${params.toString()}` : undefined;
 }

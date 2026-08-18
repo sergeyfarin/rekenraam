@@ -1524,3 +1524,94 @@ func listDeletedTransactionsForSession(t *testing.T, handler http.Handler, sessi
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 	return response
 }
+
+// TestDrillDownFilters covers the parameters a spending-report drill-down needs
+// to list exactly the transactions a row was summed from: the entry-date basis
+// and the category direction.
+func TestDrillDownFilters(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Salary","category_type":"income"}`)
+
+	// Dated 2026-05-31 but posted into June: the transaction date is outside the
+	// June range while its only entry is inside it.
+	juneEntry := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-05-31",
+		"journal_entries":[{
+			"entry_date":"2026-06-10",
+			"postings":[`+posting(checking.ID, -5000, 2, commodityID)+`,`+posting(groceries.ID, 5000, 2, commodityID)+`]
+		}]
+	}`, http.StatusCreated)
+
+	// Two entries on different dates and different categories. A June groceries
+	// row must not include it: its groceries entry is in May.
+	straddling := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-05-20",
+		"journal_entries":[{
+			"entry_date":"2026-05-20",
+			"postings":[`+posting(checking.ID, -3000, 2, commodityID)+`,`+posting(groceries.ID, 3000, 2, commodityID)+`]
+		},{
+			"entry_date":"2026-06-20",
+			"postings":[`+posting(checking.ID, 40000, 2, commodityID)+`,`+posting(salary.ID, -40000, 2, commodityID)+`]
+		}]
+	}`, http.StatusCreated)
+
+	juneRange := "?after_date=2026-06-01&before_date=2026-06-30"
+
+	// Transaction-date basis misses the entry posted into June from a May date.
+	transactionBasis := listTransactionsForSession(t, handler, sessionCookie, juneRange+"&category_id="+strconvFormatInt(groceries.ID))
+	require.Len(t, transactionBasis.Transactions, 0)
+
+	// Entry-date basis finds it, because that is the date the report summed on.
+	entryBasis := listTransactionsForSession(t, handler, sessionCookie, juneRange+"&date_basis=entry&category_id="+strconvFormatInt(groceries.ID))
+	require.Len(t, entryBasis.Transactions, 1)
+	assert.Equal(t, juneEntry.ID, entryBasis.Transactions[0].ID)
+
+	// The straddling transaction is excluded: the same entry has to carry both
+	// the date and the category, and its groceries entry is in May.
+	for _, tx := range entryBasis.Transactions {
+		assert.NotEqual(t, straddling.ID, tx.ID)
+	}
+
+	// Its June entry is income, so it belongs to a June salary drill-down.
+	salaryDrillDown := listTransactionsForSession(t, handler, sessionCookie, juneRange+"&date_basis=entry&category_id="+strconvFormatInt(salary.ID))
+	require.Len(t, salaryDrillDown.Transactions, 1)
+	assert.Equal(t, straddling.ID, salaryDrillDown.Transactions[0].ID)
+
+	// category_type carries the report's direction when no single category pins
+	// it, as on a payee grouping.
+	juneExpense := listTransactionsForSession(t, handler, sessionCookie, juneRange+"&date_basis=entry&category_type=expense")
+	require.Len(t, juneExpense.Transactions, 1)
+	assert.Equal(t, juneEntry.ID, juneExpense.Transactions[0].ID)
+
+	juneIncome := listTransactionsForSession(t, handler, sessionCookie, juneRange+"&date_basis=entry&category_type=income")
+	require.Len(t, juneIncome.Transactions, 1)
+	assert.Equal(t, straddling.ID, juneIncome.Transactions[0].ID)
+
+	// Invalid values are refused rather than silently ignored.
+	assertListTransactionsStatus(t, handler, sessionCookie, "?date_basis=nonsense", http.StatusBadRequest)
+	assertListTransactionsStatus(t, handler, sessionCookie, "?category_type=asset", http.StatusBadRequest)
+
+	// The register's basis is fixed, so it must not accept these and quietly
+	// return an unfiltered result.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/accounts/"+strconvFormatInt(checking.ID)+"/register?date_basis=entry", nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	assert.Equal(t, http.StatusBadRequest, res.Code)
+}
+
+func assertListTransactionsStatus(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, query string, wantStatus int) {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions"+query, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	assert.Equal(t, wantStatus, res.Code)
+}

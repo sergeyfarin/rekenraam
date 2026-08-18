@@ -23,6 +23,13 @@ export type TransactionListOptions = {
   needsReview?: boolean;
   afterDate?: string;
   beforeDate?: string;
+  /** Restricts to transactions touching an income or expense category. */
+  categoryType?: 'income' | 'expense';
+  /**
+   * Which date `afterDate`/`beforeDate` apply to. `entry` is the basis the
+   * reports sum on, and is what a spending drill-down must ask for.
+   */
+  dateBasis?: 'transaction' | 'entry';
   limit?: number;
   cursor?: string;
 };
@@ -110,6 +117,8 @@ export async function getTransactions(options: TransactionListOptions = {}): Pro
         query: {
           account_id: options.accountID,
           category_id: options.categoryID,
+          category_type: options.categoryType,
+          date_basis: options.dateBasis,
           payee_id: options.payeeID,
           q: options.q || undefined,
           status: options.status,

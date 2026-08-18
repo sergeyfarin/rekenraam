@@ -36,8 +36,14 @@ preconditions. Also in `roadmap.md`.
       views — done 2026-08-18. Also fixed the net-worth OpenAPI path, which
       never declared the shared filter parameters its handler already parsed,
       so the generated client could not send them.
-- [ ] Drill-down links from a spending row, once the transactions route can
-      honour the same date/category/payee semantics.
+- [x] Drill-down links from a spending row — done 2026-08-18. The blocker was
+      real but narrower than stated: the transactions list already took
+      account/category/payee and inclusive dates, but filtered on the
+      transaction's own date while the reports sum on entry dates. Added
+      `date_basis=entry` and `category_type` to `GET /transactions`, and the
+      list now reads its filters from the URL. Rows the route cannot express
+      (the unattributed group, a report narrowed to several accounts) stay
+      unlinked rather than leading somewhere that disagrees with the number.
 - [ ] Cashflow read model + view (inflow / outflow / transfers / net).
 - [ ] Date/account/category/payee/commodity filters.
 - [ ] CSV + print-friendly tables; summary charts alongside (not replacing)
