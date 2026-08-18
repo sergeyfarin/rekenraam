@@ -31,6 +31,76 @@ type LedgerPostingRecord struct {
 	EntryDate     string
 }
 
+// LedgerAccountVersionRecord is one effective-dated account version. A caller
+// walking a series of ascending dates replays these in order instead of issuing
+// one LedgerAccountsAsOf per date.
+type LedgerAccountVersionRecord struct {
+	LedgerAccountRecord
+	EffectiveFrom string
+}
+
+// LedgerAccountVersionsThrough returns every account version in effect at or
+// before asOf, ordered so that replaying them in sequence and keeping the last
+// version seen per account yields the same snapshot LedgerAccountsAsOf would
+// return for any date in that range.
+//
+// The ordering is the ascending mirror of the `effective_from DESC,
+// version_seq DESC LIMIT 1` pick LedgerAccountsAsOf makes per account: the last
+// version replayed for an account is the one with the greatest
+// (effective_from, version_seq), which is exactly the one that query selects.
+func (r *TransactionRepository) LedgerAccountVersionsThrough(ctx context.Context, bookID int64, asOf string) ([]LedgerAccountVersionRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT
+			a.id,
+			a.book_id,
+			a.system_role,
+			av.status,
+			av.code,
+			av.name,
+			av.account_class,
+			av.account_kind,
+			av.parent_account_id,
+			av.allows_postings,
+			av.effective_from
+		FROM accounts a
+		JOIN account_versions av ON av.account_id = a.id
+		WHERE a.book_id = ?
+			AND av.effective_from <= ?
+		ORDER BY av.effective_from, av.version_seq, a.id
+	`, bookID, asOf)
+	if err != nil {
+		return nil, fmt.Errorf("read ledger account versions: %w", err)
+	}
+	defer rows.Close()
+
+	var versions []LedgerAccountVersionRecord
+	for rows.Next() {
+		var version LedgerAccountVersionRecord
+		var allowsPostings int
+		if err := rows.Scan(
+			&version.ID,
+			&version.BookID,
+			&version.SystemRole,
+			&version.Status,
+			&version.Code,
+			&version.Name,
+			&version.AccountClass,
+			&version.AccountKind,
+			&version.ParentAccountID,
+			&allowsPostings,
+			&version.EffectiveFrom,
+		); err != nil {
+			return nil, fmt.Errorf("scan ledger account version: %w", err)
+		}
+		version.AllowsPostings = allowsPostings == 1
+		versions = append(versions, version)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate ledger account versions: %w", err)
+	}
+	return versions, nil
+}
+
 func (r *TransactionRepository) LedgerAccountsAsOf(ctx context.Context, bookID int64, asOf string) ([]LedgerAccountRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `
 		SELECT

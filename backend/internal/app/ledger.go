@@ -222,7 +222,7 @@ func (s *TransactionService) NetWorth(ctx context.Context, input NetWorthInput) 
 	if err != nil {
 		return NetWorthResult{}, err
 	}
-	totals, err := s.netWorthTotals(ctx, asOf, status, ReportFilters{})
+	totals, err := s.netWorthTotals(ctx, asOf, status)
 	if err != nil {
 		return NetWorthResult{}, err
 	}
@@ -258,16 +258,16 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 	if err != nil {
 		return NetWorthSeriesResult{}, err
 	}
+	bucketTotals, err := s.netWorthSeriesTotals(ctx, bounds, normalizedFilters)
+	if err != nil {
+		return NetWorthSeriesResult{}, err
+	}
 	resultBuckets := make([]NetWorthSeriesBucket, 0, len(bounds))
-	for _, bound := range bounds {
-		totals, err := s.netWorthTotals(ctx, bound.endDate, "posted", normalizedFilters)
-		if err != nil {
-			return NetWorthSeriesResult{}, err
-		}
+	for index, bound := range bounds {
 		resultBuckets = append(resultBuckets, NetWorthSeriesBucket{
 			StartDate: bound.startDate,
 			EndDate:   bound.endDate,
-			Totals:    totals,
+			Totals:    bucketTotals[index],
 		})
 	}
 
@@ -281,8 +281,11 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 	}, nil
 }
 
-func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string, filters ReportFilters) ([]BalanceQuantity, error) {
-
+// netWorthTotals answers the point-in-time net worth for one date. The series
+// endpoint does not use it: reading the whole ledger per reporting date is
+// quadratic in the number of buckets, so netWorthSeriesTotals folds one read
+// forward across buckets instead.
+func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string) ([]BalanceQuantity, error) {
 	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
 	if err != nil {
 		return nil, fmt.Errorf("read net worth accounts: %w", err)
@@ -292,32 +295,135 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 		return nil, fmt.Errorf("read net worth postings: %w", err)
 	}
 
-	// Account descendants are resolved as of this bucket's own date, because
-	// parent links are versioned and a reparenting must not retroactively move
-	// history between buckets. The selection itself was validated and normalized
-	// once by the caller; this shares that path so the two never diverge.
-	filterSet := reportFilterSetFrom(accounts, filters)
-
-	accountMap := ledgerAccountMap(accounts)
-	totals := map[int64]*exact.ScaledInt{}
+	running := map[int64]map[int64]*exact.ScaledInt{}
 	for _, posting := range postings {
-		account, ok := accountMap[posting.AccountID]
+		foldPosting(running, posting)
+	}
+	return netWorthBucketTotals(accounts, running, ReportFilters{})
+}
+
+// netWorthSeriesTotals computes every bucket's totals from a single pass over
+// the ledger, in bucket order.
+//
+// Each bucket reports a cumulative balance as of its own end date, so the naive
+// shape is one full ledger read per bucket and the cost is buckets x postings
+// (T-45). Here the postings are read once for the whole series and folded
+// forward into a running balance, and each bucket is answered from that balance.
+//
+// The fold is kept per account rather than collapsed straight into commodity
+// totals, because the decisions that turn balances into net worth are all
+// effective-dated: which accounts are assets or liabilities, which carry an
+// excluded system role, and how an account subtree expands are resolved against
+// the snapshot in effect at each bucket's end. Collapsing early would bake one
+// bucket's classification into every later one.
+func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []calendarBucketBound, filters ReportFilters) ([][]BalanceQuantity, error) {
+	if len(bounds) == 0 {
+		return nil, nil
+	}
+	seriesEnd := bounds[len(bounds)-1].endDate
+
+	versions, err := s.repository.LedgerAccountVersionsThrough(ctx, BookID, seriesEnd)
+	if err != nil {
+		return nil, fmt.Errorf("read net worth accounts: %w", err)
+	}
+	// Reports are posted-only: drafts, voided, and soft-deleted transactions are
+	// never part of financial truth.
+	postings, err := s.repository.LedgerPostingsThrough(ctx, BookID, seriesEnd, "posted")
+	if err != nil {
+		return nil, fmt.Errorf("read net worth postings: %w", err)
+	}
+
+	timeline := newLedgerAccountTimeline(versions)
+	running := map[int64]map[int64]*exact.ScaledInt{}
+	next := 0
+
+	bucketTotals := make([][]BalanceQuantity, 0, len(bounds))
+	for _, bound := range bounds {
+		// Postings arrive ordered by entry date and bucket ends ascend, so one
+		// forward cursor covers the whole series.
+		for next < len(postings) && postings[next].EntryDate <= bound.endDate {
+			foldPosting(running, postings[next])
+			next++
+		}
+		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, filters)
+		if err != nil {
+			return nil, err
+		}
+		bucketTotals = append(bucketTotals, totals)
+	}
+	return bucketTotals, nil
+}
+
+// netWorthBucketTotals sums the running per-account balances that count as net
+// worth under the account snapshot in effect on the reporting date.
+func netWorthBucketTotals(
+	accounts []db.LedgerAccountRecord,
+	running map[int64]map[int64]*exact.ScaledInt,
+	filters ReportFilters,
+) ([]BalanceQuantity, error) {
+	filterSet := reportFilterSetFrom(accounts, filters)
+	accountMap := ledgerAccountMap(accounts)
+
+	totals := map[int64]*exact.ScaledInt{}
+	for accountID, balances := range running {
+		account, ok := accountMap[accountID]
 		if !ok || (account.AccountClass != "asset" && account.AccountClass != "liability") {
 			continue
 		}
 		if account.SystemRole.Valid && account.SystemRole.String == "commodity_trading" {
 			continue
 		}
-		if !filterSet.includes(posting.AccountID, posting.CommodityID) {
-			continue
+		for commodityID, amount := range balances {
+			if !filterSet.includes(accountID, commodityID) {
+				continue
+			}
+			total := totals[commodityID]
+			if total == nil {
+				total = exact.NewScaledInt()
+				totals[commodityID] = total
+			}
+			total.AddScaled(amount)
 		}
-		addPosting(totals, posting)
 	}
-	quantities, err := balanceMapToQuantities(totals, "")
-	if err != nil {
-		return nil, err
+	return balanceMapToQuantities(totals, "")
+}
+
+// foldPosting accumulates one posting into the running per-account balances.
+func foldPosting(running map[int64]map[int64]*exact.ScaledInt, posting db.LedgerPostingRecord) {
+	balances := running[posting.AccountID]
+	if balances == nil {
+		balances = map[int64]*exact.ScaledInt{}
+		running[posting.AccountID] = balances
 	}
-	return quantities, nil
+	addPosting(balances, posting)
+}
+
+// ledgerAccountTimeline replays effective-dated account versions in ascending
+// order, so a walk over ascending reporting dates gets each snapshot from one
+// read instead of a LedgerAccountsAsOf per date.
+type ledgerAccountTimeline struct {
+	versions []db.LedgerAccountVersionRecord
+	next     int
+	current  map[int64]db.LedgerAccountRecord
+}
+
+func newLedgerAccountTimeline(versions []db.LedgerAccountVersionRecord) *ledgerAccountTimeline {
+	return &ledgerAccountTimeline{versions: versions, current: map[int64]db.LedgerAccountRecord{}}
+}
+
+// snapshotThrough returns the account versions in effect on asOf. Calls must
+// pass non-decreasing dates: the cursor only moves forward.
+func (t *ledgerAccountTimeline) snapshotThrough(asOf string) []db.LedgerAccountRecord {
+	for t.next < len(t.versions) && t.versions[t.next].EffectiveFrom <= asOf {
+		version := t.versions[t.next]
+		t.current[version.ID] = version.LedgerAccountRecord
+		t.next++
+	}
+	accounts := make([]db.LedgerAccountRecord, 0, len(t.current))
+	for _, account := range t.current {
+		accounts = append(accounts, account)
+	}
+	return accounts
 }
 
 type calendarBucketBound struct {

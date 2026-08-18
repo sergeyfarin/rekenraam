@@ -63,9 +63,11 @@ preconditions. Also in `roadmap.md`.
       into `scripts/test-backend.sh` so CI enforces them.
 - [ ] T-42 TypeScript 7 — blocked upstream on `openapi-typescript` TS 7
       support. Re-check on each of its releases; nothing to do here until then.
-- [ ] T-45 net-worth series re-reads the ledger per bucket (`bucket=day` over a
-      year is ~1.4 s on only 600 transactions). Worth fixing before the
-      net-worth chart makes fine buckets attractive.
+- [x] T-45 net-worth series re-reads the ledger per bucket — done 2026-08-18;
+      one ledger read folded forward across buckets, with account versions
+      replayed in one pass instead of a snapshot query per bucket. `bucket=day`
+      over a year drops from ~1.4 s to ~9 ms, and response time is now flat
+      across bucket granularity.
 - [ ] T-46 one inline style is CSP-blocked on every page load; no visual defect
       found, but the violation hides real ones.
 

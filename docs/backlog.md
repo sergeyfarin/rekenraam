@@ -73,7 +73,7 @@ spelling and casing variants. Needs a product decision on whether transaction
 entry should resolve or create a payee record from a typed name, then the
 report follows for free.
 
-### T-45 Net-worth series re-reads the whole ledger once per bucket `[ ]`
+### T-45 Net-worth series re-reads the whole ledger once per bucket `[x]`
 
 **Files:** `backend/internal/app/ledger.go` (`NetWorthSeries` loops buckets and
 calls `netWorthTotals` per bucket; each call issues
@@ -99,12 +99,50 @@ order-independent (`exact.ScaledInt`), so this is a loop restructure, not a
 financial change. `/reports/spending` does not have the problem (one range, one
 read: 14 ms on the same data).
 
-Prep landed 2026-08-18: account and commodity filtering is now one path
-(`reportFilterSet` in `reports.go`) shared by the SQL-side spending filter and
-the in-Go net-worth filter, and the per-bucket subtree expansion reuses the
-accounts `netWorthTotals` already loaded instead of issuing its own
-`LedgerAccountsAsOf`. The loop restructure only has to preserve
-`reportFilterSetFrom` per bucket, not re-derive a filter.
+Fixed 2026-08-18. `NetWorthSeries` now reads the ledger once for the whole
+series (`netWorthSeriesTotals` in `backend/internal/app/ledger.go`) and folds it
+forward across buckets.
+
+Two reads were per bucket, and both are now single reads:
+
+- **Postings.** One `LedgerPostingsThrough(series end)` folded forward into a
+  running balance, with one cursor over the date-ordered postings.
+- **Accounts.** A new `LedgerAccountVersionsThrough` returns every account
+  version effective at or before the series end, and `ledgerAccountTimeline`
+  replays them in ascending order. Replaying and keeping the last version per
+  account is the ascending mirror of the `effective_from DESC, version_seq DESC
+  LIMIT 1` pick `LedgerAccountsAsOf` makes, so each bucket gets the same
+  snapshot the per-bucket query would have returned.
+
+The fold is kept **per account**, not collapsed straight into commodity totals.
+Everything that turns balances into net worth is effective-dated — asset vs
+liability, the excluded `commodity_trading` role, and how an account subtree
+expands — and is still resolved against each bucket's own snapshot. Collapsing
+earlier would bake one bucket's classification into every later bucket. Cost
+goes from buckets x postings to postings + (buckets x accounts).
+
+Measured on the same integrated path, best of three:
+
+| Ledger | Bucket | Buckets | Before | After |
+|---|---|---|---|---|
+| 600 tx, 1 year | `day` | 365 | 1445 ms | **8.7 ms** |
+| 3000 tx, 3 years | `month` | 36 | 709 ms | **29 ms** |
+| 3000 tx, 3 years | `day` | 1096 | 21353 ms | **36 ms** |
+
+Response time is now flat across bucket granularity (29-36 ms across
+`year`/`month`/`day` on the 3000-transaction ledger) instead of scaling with
+bucket count.
+
+Guarded by three tests in `backend/internal/api/reports_test.go`: the series is
+checked against the point-in-time `/ledger/net-worth` endpoint at every bucket
+end for all five bucket sizes, the filtered series is checked against
+single-bucket requests ending on the same dates, and a mid-series reparenting
+pins that each bucket expands the subtree against its own account versions.
+
+Prep had landed earlier the same day: account and commodity filtering became one
+path (`reportFilterSet` in `reports.go`) shared by the SQL-side spending filter
+and the in-Go net-worth filter, so the restructure only had to call
+`reportFilterSetFrom` per bucket rather than re-derive a filter.
 
 ### T-46 One inline style is blocked by CSP on every page load `[ ]`
 

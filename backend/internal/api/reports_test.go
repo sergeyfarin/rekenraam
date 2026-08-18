@@ -476,3 +476,150 @@ func mustParseInt64(t *testing.T, value string) int64 {
 	require.NoError(t, err)
 	return parsed
 }
+
+// The series is the same number as the point-in-time endpoint, one per bucket
+// end. T-45 replaced the per-bucket ledger read with a single read folded
+// forward, so this pins the two against each other rather than against
+// hand-computed constants: a fold that drifts, double-counts, or leaks one
+// bucket's state into the next shows up here.
+func TestNetWorthSeriesMatchesPointInTimeNetWorthAtEveryBucketEnd(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, usdID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Fold Checking", "asset", "checking", usdID, 2)
+	card := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Fold Card", "liability", "credit_card", usdID, 2)
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Fold Salary","category_type":"income"}`)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Fold Groceries","category_type":"expense"}`)
+
+	// Deliberately created out of date order, and with two entries on one date,
+	// so the fold cannot rely on insertion order or on one posting per bucket.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-03-15",
+		posting(checking.ID, -4000, 2, usdID),
+		posting(groceries.ID, 4000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-01-10",
+		posting(checking.ID, 250000, 2, usdID),
+		posting(salary.ID, -250000, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-03-15",
+		posting(card.ID, -7500, 2, usdID),
+		posting(groceries.ID, 7500, 2, usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-02-01",
+		posting(checking.ID, -12000, 2, usdID),
+		posting(groceries.ID, 12000, 2, usdID),
+	), http.StatusCreated)
+
+	for _, bucket := range []string{"day", "week", "month", "quarter", "year"} {
+		series := readNetWorthSeriesForSession(t, handler, sessionCookie,
+			"?start_date=2026-01-01&end_date=2026-04-30&bucket="+bucket)
+		require.NotEmpty(t, series.Buckets, "bucket=%s", bucket)
+
+		for _, seriesBucket := range series.Buckets {
+			pointInTime := readNetWorthForSession(t, handler, sessionCookie,
+				"?as_of="+seriesBucket.EndDate+"&status=posted")
+			assert.Equal(t, pointInTime.Totals, seriesBucket.Totals,
+				"bucket=%s end=%s", bucket, seriesBucket.EndDate)
+		}
+	}
+}
+
+// The same equivalence must hold with filters applied, because the account
+// subtree expansion is effective-dated and is re-resolved per bucket inside the
+// fold. The point-in-time endpoint takes no filters, so each fine bucket is
+// checked against a single-bucket series ending on the same date — a request
+// that reaches the same fold with one iteration instead of thirty.
+func TestNetWorthSeriesFoldKeepsFiltersPerBucket(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	filters := "&include_descendants=true&account_id=" + strconvFormatInt(fixture.cashParent.ID) +
+		"&commodity_id=" + strconvFormatInt(fixture.usdID)
+	daily := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=day"+filters)
+	require.Len(t, daily.Buckets, 30)
+
+	for _, bucket := range daily.Buckets {
+		single := readNetWorthSeriesForSession(t, handler, fixture.sessionCookie,
+			"?start_date=2026-06-01&end_date="+bucket.EndDate+"&bucket=year"+filters)
+		require.Len(t, single.Buckets, 1, "end=%s", bucket.EndDate)
+		assert.Equal(t, single.Buckets[0].Totals, bucket.Totals, "end=%s", bucket.EndDate)
+	}
+
+	// The filter is real: the final balance is the checking subtree in USD only.
+	assertBalance(t, daily.Buckets[29].Totals, fixture.usdID, 185000, 2, 185000)
+}
+
+// Parent links are effective-dated, so the subtree a filter expands to differs
+// per bucket. The fold reads account versions once and replays them forward
+// instead of issuing a snapshot query per bucket, so this pins the replay
+// against a reparenting that lands mid-series: buckets before the effective
+// date must not see the moved subtree, buckets on or after it must.
+func TestNetWorthSeriesResolvesSubtreeAgainstEachBucketsAccountVersions(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, usdID := setupAccountAPITest(t, handler)
+
+	grandparent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Holdings",
+		"account_class":"asset",
+		"account_kind":"other_asset",
+		"allows_postings":false,
+		"opened_on":"2026-01-01",
+		"effective_from":"2026-01-01"
+	}`)
+	parent := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Cash Group",
+		"account_class":"asset",
+		"account_kind":"other_asset",
+		"allows_postings":false,
+		"opened_on":"2026-01-01",
+		"effective_from":"2026-01-01"
+	}`)
+	checking := createAccountForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Moved Checking",
+		"account_class":"asset",
+		"account_kind":"checking",
+		"parent_account_id":`+strconvFormatInt(parent.ID)+`,
+		"default_commodity_id":`+strconvFormatInt(usdID)+`,
+		"quantity_scale_override":2,
+		"allows_postings":true,
+		"opened_on":"2026-01-01",
+		"effective_from":"2026-01-01"
+	}`)
+	salary := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Moved Salary","category_type":"income"}`)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-05",
+		posting(checking.ID, 100000, 2, usdID),
+		posting(salary.ID, -100000, 2, usdID),
+	), http.StatusCreated)
+
+	// The group holds no postings of its own, so it can still be reparented, and
+	// the move is backdated into the middle of the series.
+	patchAccount(t, handler, sessionCookie, csrfToken, parent.ID, `{
+		"name":"Cash Group",
+		"account_class":"asset",
+		"account_kind":"other_asset",
+		"parent_account_id":`+strconvFormatInt(grandparent.ID)+`,
+		"allows_postings":false,
+		"effective_from":"2026-06-20",
+		"change_reason":"Moved cash group under holdings"
+	}`, http.StatusOK)
+
+	series := readNetWorthSeriesForSession(t, handler, sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=day&include_descendants=true&account_id="+strconvFormatInt(grandparent.ID))
+	require.Len(t, series.Buckets, 30)
+
+	for _, bucket := range series.Buckets {
+		if bucket.EndDate < "2026-06-20" {
+			assert.Empty(t, bucket.Totals,
+				"before the reparenting the group is not in the holdings subtree (end=%s)", bucket.EndDate)
+			continue
+		}
+		assertBalance(t, bucket.Totals, usdID, 100000, 2, 100000)
+	}
+}
