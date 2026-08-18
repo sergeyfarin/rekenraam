@@ -20,7 +20,7 @@ minimumReleaseAgeExclude:
   - '@tailwindcss/vite@4.3.1'
   - tailwindcss@4.3.1
   - '@inlang/paraglide-js@2.20.0 || 2.20.1'
-  - js-yaml@4.3.0
+  - js-yaml@4.3.1
   - '@typescript/typescript-aix-ppc64@7.0.2'
   - '@typescript/typescript-darwin-arm64@7.0.2'
   - '@typescript/typescript-darwin-x64@7.0.2'
@@ -55,5 +55,5 @@ minimumReleaseAgeExclude:
 overrides:
   # brace-expansion: 5.0.9
   cookie: 1.0.2
-  js-yaml: 4.3.0
+  js-yaml: 4.3.1
   postcss: 8.5.23
