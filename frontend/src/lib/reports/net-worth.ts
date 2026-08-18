@@ -1,4 +1,5 @@
-import type { BalanceQuantity, NetWorthSeriesResponse } from '$lib/api/ledger';
+import type { BalanceQuantity } from '$lib/api/ledger';
+import type { NetWorthSeriesResponse } from '$lib/api/reports';
 
 export type NetWorthRow = BalanceQuantity & {
   startDate: string;

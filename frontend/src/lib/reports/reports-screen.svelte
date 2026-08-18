@@ -7,13 +7,18 @@
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
   import { currenciesQueryOptions } from '$lib/api/currencies';
-  import { netWorthSeriesQueryOptions, type NetWorthSeriesOptions } from '$lib/api/ledger';
+  import {
+    netWorthSeriesQueryOptions,
+    type NetWorthSeriesOptions,
+    type SpendingGroupBy,
+    type SpendingMode,
+    type SpendingOptions
+  } from '$lib/api/reports';
   import { formatQuantity } from '$lib/transactions/transaction-labels';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
   import SpendingView from './spending-view.svelte';
-  import type { SpendingGroupBy, SpendingMode, SpendingOptions } from '$lib/api/reports';
 
   type ReportView = 'net-worth' | 'spending';
 
