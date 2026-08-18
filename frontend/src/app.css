@@ -355,6 +355,24 @@
     display: contents;
   }
 
+  /*
+   * SvelteKit's `#svelte-announcer` live region ships its visually-hidden
+   * rules in a `style` attribute, which `style-src 'self'` blocks. The
+   * `rekenraam:svelte-announcer-csp` Vite plugin strips that attribute, so the
+   * rules have to live here instead.
+   */
+  #svelte-announcer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+    width: 1px;
+    height: 1px;
+  }
+
   * {
     @apply border-border;
   }

@@ -68,8 +68,11 @@ preconditions. Also in `roadmap.md`.
       replayed in one pass instead of a snapshot query per bucket. `bucket=day`
       over a year drops from ~1.4 s to ~9 ms, and response time is now flat
       across bucket granularity.
-- [ ] T-46 one inline style is CSP-blocked on every page load; no visual defect
-      found, but the violation hides real ones.
+- [x] T-46 CSP-blocked inline style cleared — done 2026-08-18; it was a
+      `style` *attribute* (`style-src-attr`), not a stylesheet: SvelteKit's
+      generated `#svelte-announcer` hardcodes its visually-hidden rules inline.
+      A Vite plugin strips the attribute and `app.css` styles the announcer, so
+      `style-src` stays `'self'` with no `'unsafe-inline'` or `'unsafe-hashes'`.
 
 Everything else open in `backlog.md` is either roadmap-scheduled (T-37/T-38 are
 R16 slice 1; T-34's producer is R15) or awaiting an owner decision

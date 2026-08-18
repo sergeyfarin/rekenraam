@@ -2,6 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import { svelteAnnouncerCsp } from './vite/svelte-announcer-csp.js';
 
 export default defineConfig({
   plugins: [
@@ -11,7 +12,8 @@ export default defineConfig({
       outdir: './src/lib/paraglide',
       strategy: ['baseLocale']
     }),
-    sveltekit()
+    sveltekit(),
+    svelteAnnouncerCsp()
   ],
   server: {
     port: 1888,

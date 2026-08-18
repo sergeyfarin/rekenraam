@@ -144,28 +144,6 @@ path (`reportFilterSet` in `reports.go`) shared by the SQL-side spending filter
 and the in-Go net-worth filter, so the restructure only had to call
 `reportFilterSetFrom` per bucket rather than re-derive a filter.
 
-### T-46 One inline style is blocked by CSP on every page load `[ ]`
-
-**Files:** `backend/internal/api/middleware.go` (CSP: `style-src 'self'` with no
-`'unsafe-inline'`); source of the injected style not yet identified.
-
-Every page load logs `Refused to apply inline style ... "style-src 'self'"` with
-a stable hash (`sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=`), so one
-fixed stylesheet is being dropped. Investigated 2026-08-17 without a conclusion:
-the shipped `index.html` contains no `<style>` element, the built bundle contains
-no `createElement('style')`, and no `<style>` node is present in the DOM even
-with `bypassCSP` enabled — so it is injected and discarded, or built through the
-CSSOM, most likely by a dependency rather than app code.
-
-Not reproduced as a visual defect: light, dark, and 390px-wide renders of the
-install gate, reports, settings, and appearance screens were all checked and look
-correct, and inline style *attributes* (theme swatches, table column widths) do
-apply — they are not what is being blocked. Worth resolving anyway: a CSP
-violation on every load is noise that hides real ones, and whatever is being
-dropped is presumably meant to do something. Identify the injector, then either
-give it a nonce/hash or remove it. Do **not** add `'unsafe-inline'` to
-`style-src` as the fix.
-
 ### T-42 TypeScript 7 upgrade blocked by `openapi-typescript` `[ ]`
 
 **Files:** `frontend/package.json` (`typescript`, `openapi-typescript`);
@@ -184,6 +162,41 @@ each `openapi-typescript` release. The stale `typescript@7.0.2` and
 version bump.
 
 ## Closed
+
+### T-46 One inline style was blocked by CSP on every page load `[x]`
+
+Fixed 2026-08-18. The blocked style was never a `<style>` element — it was a
+`style` *attribute*, which is why the 2026-08-17 pass found no stylesheet in
+`index.html`, no `createElement('style')` in the bundle, and no `<style>` node
+in the DOM. The violation report names `style-src-attr` (`style-src 'self'` is
+its fallback), and its sample is
+`position: absolute; left: 0; top: 0; cli…` — SvelteKit's
+`#svelte-announcer` live region, whose visually-hidden rules are hardcoded as an
+inline `style` attribute in the root component it generates
+(`@sveltejs/kit/src/core/sync/write_root.js` →
+`frontend/.svelte-kit/generated/root.svelte`). Svelte 5 builds that markup
+through `template.innerHTML`, so parsing it trips the directive on every page
+load. Nothing rendered wrong because the declarations survive on the cloned
+live node; only the template parse is refused.
+
+Fixed at the source rather than by widening the CSP: the
+`rekenraam:svelte-announcer-csp` Vite plugin
+(`frontend/vite/svelte-announcer-csp.js`, wired in `frontend/vite.config.ts`)
+strips the attribute from the generated root before Svelte compiles it, and
+`#svelte-announcer` is styled from `frontend/src/app.css` instead. `style-src`
+is unchanged — no `'unsafe-inline'`, no `'unsafe-hashes'`, no hash to
+re-pin on every SvelteKit release.
+
+Proven by `e2e/playwright/csp.spec.ts` ("runs without Content-Security-Policy
+violations"), which attaches a `securitypolicyviolation` listener in an init
+script — the template is parsed during bundle startup, so a listener added later
+misses it — walks the signed-in screens against the real binary and its real
+CSP, and asserts no violations plus an announcer that is still 1×1 and clipped
+with no `style` attribute. It fails with one `style-src-attr` violation when the
+plugin is removed. Two further guards keep a SvelteKit upgrade from silently
+reintroducing the problem: the plugin throws if it finds the announcer with an
+opening tag it cannot parse, and its `buildEnd` throws if the announcer was
+never seen at all.
 
 ### T-43 `gofmt` drift in four backend files `[x]`
 
