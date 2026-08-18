@@ -299,11 +299,32 @@ UI:
      hides below 600px and share below 460px, so a 390px phone still shows
      dimension and amount instead of scrolling them off.
 
-   Remaining in this slice: category/payee/account/commodity filter *controls*
-   (the backend accepts them and the URL carries them; the UI has no pickers
-   yet) and drill-down links, which need the transactions route to honour the
-   same date/category/payee semantics before a link can be anything but
-   misleading.
+   **Progress (2026-08-18):** filter controls shipped for account, commodity,
+   category, and payee (`lib/reports/report-filter-controls.svelte` over
+   `report-filter-select.svelte`, with the URL logic isolated in
+   `report-filters.ts`). Notes worth keeping:
+
+   - **The net-worth path was accepting filters the spec never declared.**
+     `netWorthSeries` has parsed the shared contract since 2026-08-17 and its
+     response schema requires `query.filters`, but
+     `paths/reports-net-worth.yaml` declared only dates and bucket — so the
+     generated client had no way to send them and the frontend silently
+     dropped every selection on that report. The three parameters are now in
+     the spec and in `NetWorthSeriesOptions`.
+   - **Only the dimensions a report can express are offered.** Net worth has no
+     category or payee control: those exist only where a category posting does.
+     A selection made on spending stays in the URL across the switch, so
+     returning restores it rather than silently discarding it.
+   - **Selections apply immediately; dates keep their Apply button.** A
+     half-typed date is not a query, but a checkbox is never half-set.
+   - **Archived accounts, categories, and payees stay selectable**, because a
+     report looks backwards and a range can predate an archival.
+   - **`include_descendants` appears with an account selection** and is dropped
+     from the URL without one, where it expands nothing.
+
+   Remaining in this slice: drill-down links, which need the transactions route
+   to honour the same date/category/payee semantics before a link can be
+   anything but misleading.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.

@@ -26,6 +26,9 @@ export type NetWorthSeriesOptions = {
   startDate: string;
   endDate: string;
   bucket: 'day' | 'week' | 'month' | 'quarter' | 'year';
+  accountIDs?: number[];
+  includeDescendants?: boolean;
+  commodityIDs?: number[];
 };
 
 export const reportsQueryKey = ['api', 'reports'] as const;
@@ -85,7 +88,10 @@ export async function getNetWorthSeries(options: NetWorthSeriesOptions): Promise
         query: {
           start_date: options.startDate,
           end_date: options.endDate,
-          bucket: options.bucket
+          bucket: options.bucket,
+          account_id: options.accountIDs,
+          include_descendants: options.includeDescendants,
+          commodity_id: options.commodityIDs
         }
       }
     });

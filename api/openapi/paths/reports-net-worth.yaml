@@ -1,5 +1,10 @@
 get:
   summary: Read net worth over time
+  description: >
+    Assets less liabilities at each calendar bucket end, from posted ledger
+    data. Repeated ID parameters are an OR-set within that dimension and
+    combine with AND across dimensions. The response echoes the effective
+    filters, including the descendant expansion actually used.
   parameters:
     - in: query
       name: start_date
@@ -19,6 +24,37 @@ get:
       schema:
         type: string
         enum: [day, week, month, quarter, year]
+    - in: query
+      name: account_id
+      description: >
+        Repeatable. Restricts the series to these asset and liability accounts,
+        so the same endpoint powers full net worth, one account's history, or a
+        selected group without changing the calculation.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
+    - in: query
+      name: include_descendants
+      description: >
+        Expands each account_id to itself plus every descendant, using the
+        account versions in effect on the reporting date.
+      schema:
+        type: boolean
+        default: false
+    - in: query
+      name: commodity_id
+      description: Repeatable. Restricts the series to balances in these commodities.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+      style: form
+      explode: true
   responses:
     "200":
       description: Exact net worth totals at each calendar bucket end, grouped by commodity

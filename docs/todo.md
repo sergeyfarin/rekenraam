@@ -32,8 +32,10 @@ preconditions. Also in `roadmap.md`.
 - [x] Spending view (frontend): view switch, dense table, category/payee and
       spending/income switches, single-commodity bar chart, all screen states —
       done 2026-08-17. Filter *controls* and drill-down links still open below.
-- [ ] Filter controls (account / commodity / category / payee pickers) for both
-      views. The backend and the URL already carry them; only the UI is missing.
+- [x] Filter controls (account / commodity / category / payee pickers) for both
+      views — done 2026-08-18. Also fixed the net-worth OpenAPI path, which
+      never declared the shared filter parameters its handler already parsed,
+      so the generated client could not send them.
 - [ ] Drill-down links from a spending row, once the transactions route can
       honour the same date/category/payee semantics.
 - [ ] Cashflow read model + view (inflow / outflow / transfers / net).

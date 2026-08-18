@@ -2871,13 +2871,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read net worth over time */
+        /**
+         * Read net worth over time
+         * @description Assets less liabilities at each calendar bucket end, from posted ledger data. Repeated ID parameters are an OR-set within that dimension and combine with AND across dimensions. The response echoes the effective filters, including the descendant expansion actually used.
+         */
         get: {
             parameters: {
                 query: {
                     start_date: string;
                     end_date: string;
                     bucket: "day" | "week" | "month" | "quarter" | "year";
+                    /** @description Repeatable. Restricts the series to these asset and liability accounts, so the same endpoint powers full net worth, one account's history, or a selected group without changing the calculation. */
+                    account_id?: number[];
+                    /** @description Expands each account_id to itself plus every descendant, using the account versions in effect on the reporting date. */
+                    include_descendants?: boolean;
+                    /** @description Repeatable. Restricts the series to balances in these commodities. */
+                    commodity_id?: number[];
                 };
                 header?: never;
                 path?: never;

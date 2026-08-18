@@ -18,6 +18,13 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
+  import ReportFilterControls from './report-filter-controls.svelte';
+  import {
+    parseReportFilters,
+    writeReportFilters,
+    type ReportFilterDimension,
+    type ReportFilterState
+  } from './report-filters';
   import SpendingView from './spending-view.svelte';
 
   type ReportView = 'net-worth' | 'spending';
@@ -70,6 +77,13 @@
 
   const activeFilters = $derived.by(parseFilters);
   const view = $derived.by(parseView);
+  const reportFilters = $derived(parseReportFilters($page.url.searchParams));
+  // Net worth has no category or payee dimension: those exist only where a
+  // category posting does. Offering them here would be a control that changes
+  // nothing.
+  const filterDimensions = $derived<ReportFilterDimension[]>(
+    view === 'spending' ? ['account', 'commodity', 'category', 'payee'] : ['account', 'commodity']
+  );
   const groupBy = $derived.by(parseGroupBy);
   const mode = $derived.by(parseMode);
   const initialFilters = defaultFilters();
@@ -102,11 +116,23 @@
     startDate: (activeFilters ?? initialFilters).startDate,
     endDate: (activeFilters ?? initialFilters).endDate,
     groupBy,
-    mode
+    mode,
+    accountIDs: reportFilters.accountIDs,
+    includeDescendants: reportFilters.includeDescendants,
+    commodityIDs: reportFilters.commodityIDs,
+    categoryIDs: reportFilters.categoryIDs,
+    payeeIDs: reportFilters.payeeIDs
+  });
+
+  const netWorthOptions = $derived<NetWorthSeriesOptions>({
+    ...(activeFilters ?? initialFilters),
+    accountIDs: reportFilters.accountIDs,
+    includeDescendants: reportFilters.includeDescendants,
+    commodityIDs: reportFilters.commodityIDs
   });
 
   const netWorthQuery = createQuery(() => ({
-    ...netWorthSeriesQueryOptions(activeFilters ?? initialFilters),
+    ...netWorthSeriesQueryOptions(netWorthOptions),
     enabled: activeFilters !== null
   }));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
@@ -150,6 +176,15 @@
   function setParam(name: string, value: string) {
     const params = new URLSearchParams($page.url.searchParams);
     params.set(name, value);
+    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+  }
+
+  // Filter selections apply immediately rather than waiting for Apply: the date
+  // inputs need a submit because a half-typed date is not a query, but a
+  // checkbox is never half-set. A selection a net-worth request cannot express
+  // stays in the URL, so switching back to spending restores it.
+  function applyReportFilters(next: ReportFilterState) {
+    const params = writeReportFilters($page.url.searchParams, next);
     void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
   }
 </script>
@@ -196,6 +231,14 @@
         {m.reports_apply_filters()}
       </button>
     </form>
+
+    <div class="mt-5 border-t border-border pt-5">
+      <ReportFilterControls
+        filters={reportFilters}
+        dimensions={filterDimensions}
+        onChange={applyReportFilters}
+      />
+    </div>
   </Panel>
 
   <nav aria-label={m.reports_view_switch_legend()} class="flex flex-wrap gap-2">
