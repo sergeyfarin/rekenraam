@@ -111,6 +111,7 @@ pnpm test:release-preflight
 - The Playwright suite runs with one worker because the default harness shares one app instance and SQLite database.
 - Set `E2E_PORT` when the self-managed e2e port needs to move.
 - Set `E2E_BASE_URL` when you want Playwright to target an already-running app instead of booting its own fresh instance.
+- Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an existing Chromium binary when the sandbox or image cannot download the revision this Playwright release pins (`pnpm exec playwright install` fails, and the run dies with "Executable doesn't exist"). Container images that preinstall a browser usually expose one at `/opt/pw-browsers/chromium`. Prefer this over patching the browser cache by hand; leave it unset locally so Playwright uses its own pinned build.
 
 ## Area Notes
 

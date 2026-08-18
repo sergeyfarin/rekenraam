@@ -194,6 +194,12 @@ For integrated app testing, run the single binary or Docker app on `16888`, then
 E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
 
+If the environment cannot download the Chromium revision Playwright pins, point it at a browser that is already installed instead of patching the browser cache:
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium ./scripts/test-e2e.sh
+```
+
 E2E tests should cover browser-level user journeys. Prefer backend or frontend unit tests for logic that does not need a real browser.
 
 Run the critical browser release preflight separately:
