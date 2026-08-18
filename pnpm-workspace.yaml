@@ -53,7 +53,7 @@ minimumReleaseAgeExclude:
   - '@lix-js/sdk@0.12.2'
 
 overrides:
-  # brace-expansion: 5.0.9
-  cookie: 1.0.2
-  js-yaml: 4.3.1
-  postcss: 8.5.23
+  # Security pins — each holds a transitive dep above a vulnerable range.
+  # Verify with `pnpm audit` before removing: dropping either regresses.
+  cookie: 1.0.2 # GHSA-pxg6-pf52-xh8x; without this, 0.6.0 resolves
+  js-yaml: 4.3.1 # GHSA-5p4m-2wfm-xmqj + GHSA-52cp-r559-cp3m; without this, 4.2.0 resolves
