@@ -340,14 +340,31 @@ Resolve these only when their related slice becomes current work:
 
 - Export scope beyond core ledger CSV/QIF, including a full structured JSON
   backup of settings and metadata.
-- First non-English UI languages and the highest-priority mobile workflow.
+- The highest-priority mobile workflow. (First non-English UI languages were
+  decided 2026-08-19: Spanish, French, Dutch, German, Russian — recorded in
+  `product-requirements.md`.)
 - Attachment storage, retention, access-control, backup, and encryption model
   — a proposed resolution now exists in `docs/plans/receipts-plan.md` (R14a);
   decide when that slice is scheduled.
-- I-03: whether gains reporting should offer read-only analytical methods in
-  addition to the authoritative lot-disposal method.
-- I-04: whether realized gains/losses should remain computed reporting values or
-  become ledger postings with an explicit account convention.
+- I-03 / I-04 (gains reporting): **escalated 2026-08-19 from a decision to a
+  research task.** The owner's position is that this is not a yes/no choice and
+  needs dedicated research before any implementation, because:
+  - realized and unrealized gains answer different questions, and which one a
+    user should see depends on what they are trying to learn;
+  - tax treatment differs by country — some tax realized gains, some tax
+    unrealized — so a single hard-coded presentation cannot serve the persona;
+  - unrealized figures move with every price refresh, so a naive presentation
+    flip-flops and reads as instability rather than information.
+
+  The research must produce a recommendation for: which measure is authoritative
+  where, when each is shown, how the jurisdiction difference is expressed
+  without turning the app into a tax engine, and how to present unrealized
+  movement without flip-flopping. Only then do I-03 (read-only analytical
+  methods) and I-04 (computed values vs ledger postings) become answerable.
+
+  **This does not block R16 slice 1.** Zero-proceeds write-off (T-38), price
+  observation voiding (T-37), and return of capital are lot-lifecycle work; they
+  use whatever gains treatment is current and do not depend on this outcome.
 
 ## Completed milestones
 

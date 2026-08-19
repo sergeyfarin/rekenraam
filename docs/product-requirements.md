@@ -92,7 +92,7 @@ Already locked before domain work:
 
 These can wait until the related feature slice:
 
-- First non-English UI language.
+- First non-English UI languages (target set decided 2026-08-19: Spanish, French, Dutch, German, Russian; sequencing still open).
 - Full structured JSON export scope.
 - Attachment storage.
 - Report snapshots.
@@ -143,6 +143,7 @@ These apply across all feature phases.
 - UI copy must go through a translation boundary.
 - The app must support multilingual UI from an early stage.
 - English is the initial implementation language; translation boundaries must keep UI copy and built-in data ready to add other languages without reworking UI code or database schema.
+- **Target first-class UI languages (decided 2026-08-19): Spanish, French, Dutch, German, Russian.** They ship after the English translation boundary is in place, and the target set is fixed so the localization strategy can be designed against real locales rather than a placeholder. Russian brings Cyrillic and a three-form plural rule, so plural handling and the font stack must be validated against it rather than assumed from the Latin locales.
 - Built-in database records not entered by the user or imported from a source must use stable codes or keys and resolve display labels through localization assets.
 - Built-in currency, category, account-class, account-kind, system-account, and other app-defined labels must be translated at frontend render time from stable identifiers, not stored as localized canonical database names during setup.
 - The design system must support themes through semantic tokens rather than hard-coded colors.
@@ -356,6 +357,5 @@ Beyond multilingual support and themes, these areas should be deliberately defin
 These are important and should be resolved before the related feature slices begin.
 
 - Which export scope should be available from the first export milestone beyond core ledger CSV and QIF, such as full structured JSON export of settings and metadata?
-- Which first-class UI languages should ship after the English translation boundary is in place?
 - When attachments eventually enter scope, should they live in SQLite, the filesystem, or pluggable object storage?
 - Which mobile-heavy workflows deserve dedicated optimization first after the baseline responsive experience ships?

@@ -220,6 +220,12 @@ formatted tree.
 These do not block private/local development. They must be complete before
 allowing real financial data on an internet-exposed deployment.
 
+**Parked 2026-08-19 (owner decision).** The app is self-hosted locally for now,
+so none of S-04, S-06, or S-07 is scheduled work. **Trigger to unpark: the first
+time an internet-exposed deployment is planned — R3 at the earliest.** They stay
+listed because the product gate is real, not because anyone is working on them;
+do not treat them as available pickups.
+
 ### S-04 Username login throttle can cause owner lockout `[ ]`
 
 **File:** `backend/internal/app/auth.go` (username-scope throttle).

@@ -7,7 +7,32 @@ be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-17.
 
-## Decisions — none pending
+## Decisions — owner answers of 2026-08-19
+
+Recorded here as pointers; the source of truth is `roadmap.md` and
+`product-requirements.md`.
+
+- **Reporting-currency selector: build it** (one reporting currency, named
+  valuation method), sequenced after R3. Per-commodity exact totals stay in
+  every response — conversion is additive, never replacing.
+- **Free-text payees (T-44): resolve on entry, but never silently.** Typing a
+  new payee name prompts for confirmation, offering existing payees through a
+  fuzzy search before creating a record.
+- **Zero-proceeds write-off (T-38): a disposal at zero proceeds**, booking
+  through the existing realized gain/loss treatment rather than a dedicated
+  expense category.
+- **Cashflow keeps its reconciliation guarantee.** Category and payee filters
+  are not added to it; the filtered question is answered by the spending report,
+  reached by drill-down from a cashflow row. Approach still to be confirmed.
+- **Public-deployment gates (S-04, S-06, S-07): parked.** Self-hosted locally
+  for now; unpark when an internet-exposed deployment is planned, R3 at the
+  earliest.
+- **Gains reporting (I-03 / I-04): research task, not a decision.** See
+  `roadmap.md` — realized vs unrealized, per-country tax treatment, and
+  presentation stability all need study first. Does not block R16 slice 1.
+- **First non-English languages: Spanish, French, Dutch, German, Russian.**
+
+## Decisions — none otherwise pending
 
 All seven `reviews/roadmap-review-2026-07-19.md` §3/§4 proposals were decided
 2026-08-05 — **all accepted**, each with a scope fence. Recorded in
@@ -19,7 +44,8 @@ slice moved into R17; R14a stays after R5 with an attachments hook in R3;
 the provider "verify" items reclassified as blocking slice-start
 preconditions. Also in `roadmap.md`.
 
-**Nothing is currently awaiting an owner decision.**
+**Awaiting an owner decision:** only the cashflow drill-down approach (above)
+and who produces the translations for the five target languages.
 
 ## Current initiative — R2 reports (see roadmap.md)
 
