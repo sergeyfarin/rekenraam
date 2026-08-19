@@ -1,9 +1,15 @@
 # Reports Plan
 
-Status: **active implementation plan for roadmap R2**. Net worth and spending are
-shipped end to end (read models, shared filter contract, and screens); the
-cashflow read model and view are pending, as are the filter controls and
-drill-down links. Last verified against the codebase: 2026-08-17.
+Status: **R2 is code-complete; the plan is now the reference for what shipped
+and what was deliberately left out**. Net worth, spending, and cashflow are all
+shipped end to end — read models, the shared filter contract, screens, filter
+controls, drill-down, CSV export, print layout, and chart summaries. The only
+open R2 item is the acceptance review at the end of this document, which is an
+owner decision.
+
+Two gaps are deliberate and recorded below, not oversights: the net-worth series
+carries no asset/liability split, and cashflow takes no category or payee
+filter. Last verified against the codebase: 2026-08-19.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -57,9 +63,29 @@ the R2 acceptance review:
 
 - named saved report definitions and live report runs;
 - immutable/reproducible report snapshots;
-- a reporting-currency selector and named FX/price valuation method;
+- **a reporting-currency selector and named FX/price valuation method —
+  approved 2026-08-19**, sequenced after R3, so this one is no longer an open
+  review item;
 - country, jurisdiction, tax, investment, and benchmark dimensions;
 - a user-configurable report builder.
+
+**Reporting-currency selector, as approved.** One reporting currency with a
+named valuation method, and per-commodity exact totals kept in every response —
+the conversion is additive, never replacing, because outcome 3 above forbids the
+UI inventing a combined total. Three sub-decisions belong to that slice and are
+not settled here:
+
+- *Which rate date.* The recommendation on record is bucket-end for net worth
+  (it is a stock measured at a date) and posting entry date for the flows
+  (spending, cashflow). Converting a flow at a single range-end rate is cheaper
+  and reproducible from the displayed subtotals, but misattributes across a
+  large mid-period move.
+- *Missing coverage.* Recommended: fall back to the nearest earlier observation
+  inside a named window and say so in the response; when nothing exists in the
+  window, omit the converted total with an explanation. Never silently.
+- *Prerequisite.* T-37 (price observations cannot be voided) should land first.
+  Once rates drive headline figures, an unvoidable poisoned observation is no
+  longer cosmetic.
 
 ## Shared contract
 
@@ -262,18 +288,20 @@ Shipped across all three views.
    narrower result. The deterministic multi-account/multi-commodity fixture now
    exists as `newSpendingFixture` in `backend/internal/api/reports_test.go`
    (parent + checking + card + EUR cash, an expense, a refund, income, a pure
-   transfer, a voided expense, and an out-of-range expense). Frontend account
-   and commodity filter controls remain.
+   transfer, a voided expense, and an out-of-range expense). The frontend
+   account and commodity filter controls shipped 2026-08-18.
 2. **Net-worth series**
    - Implement the series read model, API, table/chart, and account/commodity
      filters. Reuse the typed result later for account-detail history.
    - Acceptance: bucket-end balances match the existing as-of net-worth result
      for each bucket end; grouped commodities never yield a fake total.
 
-   **Progress (2026-07-13):** the route renders the exact series in an
-   accessible, responsive table with currency labels. It deliberately keeps
-   unlike commodities on separate rows and explains why they cannot be summed;
-   charts and account/commodity filters remain pending.
+   **Progress (2026-07-13, completed 2026-08-19):** the route renders the exact
+   series in an accessible, responsive table with currency labels. It
+   deliberately keeps unlike commodities on separate rows and explains why they
+   cannot be summed. Account and commodity filters and a signed column chart
+   shipped later in the slice. Still outstanding for a future slice: the series
+   response carries no asset/liability split, so the screen cannot show one.
 3. **Spending**
    - Implement category/payee grouping, exact totals, filters, table/chart, and
      safe drill-down.
@@ -465,6 +493,18 @@ Shipped across all three views.
    - Acceptance: all three reports have loading, empty, error, populated, and
      multi-commodity states; their tables are usable without a pointing device.
 
+   **Progress (2026-08-19): shipped, with one gap named.** CSV and print landed
+   with the export slice above; all three views define loading, error, empty,
+   populated, and multi-commodity states; the reports render in light and dark
+   at 390px; the tables are keyboard-reachable and the charts carry
+   `role="img"` with a caption, so nothing in a chart is unavailable to a
+   screen reader.
+
+   **Not yet covered:** the validation matrix below calls for an E2E case
+   carrying a *multi-currency* transaction through every report. The existing
+   E2E cases are single-currency; the multi-commodity paths are covered by
+   backend and unit tests only. Worth closing before R2 is formally accepted.
+
 ## Validation matrix
 
 - **Backend:** exact arithmetic and scale alignment; inclusive boundaries;
@@ -482,13 +522,10 @@ Shipped across all three views.
 
 ## Competitor and parity review
 
-Before closing R2, update `docs/competitor-comparison.md` with the result:
-
-- Money/Quicken/Monarch parity: visible net worth, spending, cashflow, and
-  export-ready reports.
-- Firefly III parity: category/payee insight without compromising ledger
-  semantics.
-- PocketSmith differentiation groundwork: exact per-currency cashflow, ready
-  for R10 forecasting rather than a single fabricated base-currency number.
-- Ghostfolio/Portfolio Performance gap retained: returns, allocation, and
-  benchmarks remain R13 work, not an accidental partial R2 promise.
+**Done 2026-08-19.** `docs/competitor-comparison.md` § "What the comparison
+implies" now records the outcome per competitor: Money/Quicken/Monarch and
+Firefly III parity met, PocketSmith differentiation groundwork laid through
+exact per-currency cashflow, and the Ghostfolio/Portfolio Performance returns
+gap deliberately retained for R13. The one honest caveat recorded there is that
+the commercial tools show a single blended base-currency figure and Rekenraam
+still refuses to until the approved reporting-currency selector lands.

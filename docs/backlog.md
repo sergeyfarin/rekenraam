@@ -45,6 +45,11 @@ superseding **or voiding**" invariant is half-implemented, and a poisoned
 observation cannot be retired from historical listings or derivations.
 Audit P3. Natural home: R11 pricing UI, but the endpoint can land earlier.
 
+**Raised in priority 2026-08-19:** the approved reporting-currency selector will
+make FX and price observations drive headline report figures. An unvoidable
+poisoned observation stops being a tidy-up at that point, so this should land
+before the currency work rather than after it.
+
 ### T-38 Zero-proceeds disposal (write-off) is impossible `[ ]`
 
 **Files:** `backend/internal/app/investments.go` (`validateTradeInput`
@@ -52,9 +57,21 @@ requires `CashAmountValue > 0`; repository `DisposeLots` is unexposed).
 
 A fund closure, worthless delisting, or any total-loss position cannot be
 recorded: shares stay in open lots forever and the loss never reaches
-realized gains. Audit P4. Needs a small product decision (which account the
-loss books against) plus either `CashAmountValue == 0` support on Sell or a
-dedicated write-off endpoint over the existing disposal engine.
+realized gains. Audit P4.
+
+**Decided 2026-08-19: a write-off is a disposal at zero proceeds**, booking
+through the existing realized gain/loss treatment rather than a dedicated
+write-off expense category — an investment loss is not spending, and this is
+also the smaller change. Two guards belong in the implementation:
+
+- **Zero proceeds must be explicit intent**, not an empty amount field
+  defaulting to zero, or a mistyped sell silently becomes a write-off and the
+  position disappears. Prefer a distinct flag or endpoint over `amount == 0`.
+- It changes postings, so it goes through the **reconciliation guard** like any
+  other mutation path.
+
+Independent of the open I-03/I-04 gains-reporting research: this uses whatever
+gains treatment is current.
 
 ### T-44 Free-text payees never group in reports `[ ]`
 
@@ -69,9 +86,22 @@ into the single "no payee recorded" group. The report still reconciles exactly
 (the unattributed group is emitted, never dropped), but a user who typed payee
 names without picking records sees one undifferentiated bucket instead of a
 ranking. Grouping on the raw text is not the fix: it would duplicate rows across
-spelling and casing variants. Needs a product decision on whether transaction
-entry should resolve or create a payee record from a typed name, then the
-report follows for free.
+spelling and casing variants.
+
+**Decided 2026-08-19: resolve on entry, but never silently.** Typing a new payee
+name prompts for confirmation, offering existing payees through a fuzzy search
+before a record is created. Auto-creating without confirmation was rejected
+because it sprays near-duplicate records from typos.
+
+Two consequences the decision implies and that this item must cover:
+
+- **Imports cannot show a dialog per row.** The import path already resolves a
+  `PayeeID` where it can; the rule there is auto-link exact matches, leave the
+  rest unlinked, and surface unlinked names in the existing import review.
+- **History is not fixed by entry-side work.** Existing rows keep `payee_name`
+  with no `payee_id`, so the report stays degraded for past data until a one-off
+  "link unlinked payees" tool exists — a settings screen listing distinct
+  unlinked names with counts, offering link-to-existing or create.
 
 ### T-45 Net-worth series re-reads the whole ledger once per bucket `[x]`
 

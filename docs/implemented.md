@@ -116,7 +116,7 @@ series backend/API foundation).
 | **Dedicated reconcile workflow screen** | ✅ | `routes/app/reconcile` (R1): pick account → statement date/balance → clear postings against a server-authoritative live difference → finish only at zero, or discard. Prior active checkpoints shown read-only. Reuses the existing typed client (`lib/api/reconciliation.ts`). |
 | Void-checkpoint controls / out-of-session mark-cleared UI | ⬜ | API exists; deferred beyond the R1 trust loop. |
 
-## Reports (Phase 3) — 🟦 Net worth, spending, and cashflow shipped; export and charts pending
+## Reports (Phase 3) — 🟦 All three reports, filters, drill-down, export, print, and charts shipped; awaiting the R2 acceptance review
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -126,7 +126,7 @@ series backend/API foundation).
 | Spending / income read model | ✅ | `GET /reports/spending` ranks category or payee totals over a range, exact per commodity, with within-commodity shares as integer basis points and a per-row drill-down query. Transfers cannot enter the basis (they have no category posting). `grouping_policy: direct_postings` — parents do not absorb children. |
 | Account balances read model | 🟡 | `GET /ledger/account-balances`; overflow-guarded (422 on precision limit). |
 | Category totals read model | 🟡 | `GET /ledger/category-totals`; a building block, superseded for reporting by `/reports/spending`. |
-| **Reports UI — net worth** | 🟦 | `/app/reports` ships date/bucket controls, account and commodity filters, and an exact commodity-grouped table. Chart pending. |
+| **Reports UI — net worth** | 🟦 | `/app/reports` ships date/bucket controls, account and commodity filters, an exact commodity-grouped table, and a signed column chart. Still 🟦 because the series response carries no asset/liability split, so the screen cannot show one. |
 | **Reports UI — filter controls** | ✅ | Multi-select account, commodity, category, and payee pickers on `/app/reports`, each writing the URL so a link reproduces the exact report. Only the dimensions a report can express are offered; a spending-only selection survives a switch to net worth in the URL. |
 | **Reports UI — spending / income** | ✅ | View switch, dense table, category/payee and spending/income switches, single-commodity bar chart with a non-colour cue for negative rows, all four screen states, and drill-down links to the transactions the row was summed from. |
 | **Reports UI — drill-down** | ✅ | A spending row links to `/app/transactions` with the report's own semantics — entry-date basis, posted only, the row's category or payee and direction. Rows the transactions route cannot express (unattributed, or several accounts) stay unlinked rather than showing a different set. |

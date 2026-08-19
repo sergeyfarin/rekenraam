@@ -20,7 +20,7 @@ later · — retired/unassigned.
 | Slice | Name | Status | Primary document |
 |---|---|---|---|
 | R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
-| R2 | Reports users can act on | ▶ | `docs/plans/reports-plan.md` |
+| R2 | Reports users can act on | ▶ | `docs/plans/reports-plan.md` — code-complete 2026-08-19, awaiting acceptance review |
 | R3 | Portable core data (CSV/QIF export) | ⏭ | this file |
 | R3a | Accessibility regression coverage | ⏭ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
@@ -100,19 +100,31 @@ must not create a competing sequence.
 Ship a reports route with net worth over time, spending by category/payee, and
 cashflow. `docs/plans/reports-plan.md` is the implementation reference.
 
-**Started:** `/app/reports` now presents the exact net-worth series with
-URL-addressable date/bucket filters and an accessible per-commodity table.
-Account/commodity filters, charts, and the spending/cashflow read models remain
-to be delivered.
+**Code-complete 2026-08-19; awaiting the acceptance review below.** All three
+delivery steps shipped:
 
-Deliver in this order:
-
-1. Shared report-query contract and accessible report shell; net-worth and
+1. ✅ Shared report-query contract and accessible report shell; net-worth and
    spending views over the existing read models.
-2. Cashflow read model and view, explicitly separating inflow, outflow,
+2. ✅ Cashflow read model and view, explicitly separating inflow, outflow,
    transfers, and net movement.
-3. Date/account/category/payee/commodity filters, CSV and print-friendly tables,
-   and summary charts that do not replace the accessible data table.
+3. ✅ Date/account/category/payee/commodity filters, CSV and print-friendly
+   tables, and summary charts that do not replace the accessible data table.
+
+`/app/reports` presents all three reports with URL-addressable filters, CSV
+export, a print layout, and chart summaries alongside accessible tables.
+Drill-down runs from a spending row to the transactions it was summed from.
+
+Two known gaps are deliberate and recorded, not oversights:
+
+- the net-worth series response carries no asset/liability split, so the screen
+  cannot show one;
+- cashflow takes no category or payee filter, because such a filter removes
+  counterpart postings from the basis and `net_movement` would stop reconciling
+  to the cash balance change. The filtered question belongs to the spending
+  report.
+
+**Remaining before R3: the acceptance review only** — an owner decision, not
+implementation work.
 
 The first implementation must be a coherent vertical slice, but this is a
 **sequencing constraint, not a deleted design decision**. The fuller report

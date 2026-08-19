@@ -151,8 +151,32 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
 
 ## What the comparison implies (kept in sync with roadmap)
 
-1. **Reports UI (R2) is the perceived-completeness gap** — every comparison
-   review leads with dashboards.
+1. **Reports UI (R2) — closed 2026-08-19.** This was the perceived-completeness
+   gap; every comparison review leads with dashboards. `/app/reports` now ships
+   net worth over time, spending by category or payee, and cashflow, each with
+   URL-addressable filters, CSV export, a print layout, and chart summaries
+   alongside accessible tables. Parity and differentiation as delivered:
+
+   - **Money / Quicken / Monarch parity** — visible net worth, spending,
+     cashflow, and export-ready reports: **met**.
+   - **Firefly III parity** — category and payee insight without compromising
+     ledger semantics: **met**, and arguably exceeded: spending is built from
+     category postings rather than an inferred bank-statement classification,
+     so a transfer cannot be counted as spending by construction, and every row
+     drills through to exactly the transactions it was summed from.
+   - **PocketSmith differentiation groundwork** — exact per-currency cashflow:
+     **met**. Cashflow reports per commodity with no fabricated base-currency
+     number, and `net_movement = operating_net + transfer_net` holds as an
+     identity, which is the property R10 forecasting will need.
+   - **Ghostfolio / Portfolio Performance gap retained, deliberately** —
+     returns, allocation, and benchmarks stay R13. R2 makes no accidental
+     partial promise about them.
+
+   The one honest caveat against the commercial tools: they show a single
+   blended base-currency figure and Rekenraam still refuses to. A
+   reporting-currency selector was approved on 2026-08-19 and is sequenced after
+   R3; until it lands, a multi-currency user sees per-commodity totals rather
+   than one number.
 2. **Import rules engine** — Firefly's stickiest feature; belongs in R7's
    scope as persistent user-defined rules over the staged pipeline.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
@@ -163,7 +187,11 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
 5. **BYO-key feed adapters** — GoCardless Bank Account Data (EU) and
    SimpleFIN Bridge (US) close the manual-entry objection without coverage
    promises; both follow the Trading 212 pattern.
-6. **Jurisdiction-aware capital-gains reporting** (post-I-03) — no
-   competitor, commercial or OSS, ships it; the long-term moat.
+6. **Jurisdiction-aware capital-gains reporting** — no competitor, commercial
+   or OSS, ships it; the long-term moat. Gated on the I-03/I-04 research task
+   (escalated 2026-08-19 from a decision to research): realized versus
+   unrealized answer different questions, countries differ in which they tax,
+   and unrealized figures flip-flop with every price refresh. See
+   `roadmap.md` § Open product decisions.
 7. **Adoption assets** — public demo instance with seeded data (Ghostfolio's
    playbook), README screenshots, migration screencast.

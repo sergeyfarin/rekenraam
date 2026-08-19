@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-17.
+Last updated: 2026-08-19.
 
 ## Decisions — owner answers of 2026-08-19
 
@@ -57,7 +57,8 @@ and who produces the translations for the five target languages.
       drill-down queries — done 2026-08-17 (backend only).
 - [x] Spending view (frontend): view switch, dense table, category/payee and
       spending/income switches, single-commodity bar chart, all screen states —
-      done 2026-08-17. Filter *controls* and drill-down links still open below.
+      done 2026-08-17. Filter *controls* and drill-down links followed on
+      2026-08-18, below.
 - [x] Filter controls (account / commodity / category / payee pickers) for both
       views — done 2026-08-18. Also fixed the net-worth OpenAPI path, which
       never declared the shared filter parameters its handler already parsed,
@@ -86,9 +87,45 @@ and who produces the translations for the five target languages.
       filters, the view switch, and the export button, keeping the headings,
       the stated scope, and the table. Net worth and cashflow gained signed
       column charts; all three views keep the table as the source of truth.
-- [ ] R2 acceptance review: explicitly decide which `plans/reports-plan.md`
-      items (saved definitions, cross-currency valuation, investment
-      dimensions, snapshots) are justified before starting R3.
+- [ ] R2 acceptance review — the only thing left in R2, and an owner decision
+      rather than implementation. Cross-currency valuation is already decided
+      (build it, after R3), so the review covers the remaining
+      `plans/reports-plan.md` follow-ups: named saved report definitions,
+      immutable report snapshots, investment/tax/benchmark dimensions, and the
+      user-configurable report builder. Investment dimensions depend on R16/R17
+      lot lifecycle work that does not exist yet.
+
+## Ready to start — unblocked by the 2026-08-19 decisions
+
+Ordered by value. None of these needs a further decision.
+
+1. **T-44 payee resolution on entry.** Highest value: it repairs the payee
+   ranking in the spending report that shipped this week. Typing a new payee
+   name prompts for confirmation, offering existing payees through fuzzy search
+   before creating a record. Three parts the decision implies:
+   - manual entry gets the confirm-and-search flow;
+   - **imports cannot show a dialog per row**, so the import path needs its own
+     rule (the resolution step already carries a `PayeeID`); auto-link exact
+     matches, leave the rest unlinked, surface them in import review;
+   - **existing rows keep `payee_name` with no `payee_id`**, so history stays
+     degraded without a one-off "link unlinked payees" tool.
+   Fuzzy search needs `minisearch` added — not currently a dependency, though
+   `conventions.md` already names it as the sanctioned choice for dropdowns.
+2. **T-37 price observation voiding**, R16 slice 1 and a prerequisite for the
+   reporting-currency work.
+3. **T-38 zero-proceeds write-off**, R16 slice 1. Zero proceeds must be explicit
+   intent rather than an empty field defaulting to zero, or a mistyped sell
+   silently becomes a write-off; and it is a disposal, so it goes through the
+   reconciliation guard.
+4. **Cashflow → spending drill-down** *(approach not yet confirmed)*: link a
+   cashflow row's in/out cell to the spending report scoped to that bucket's
+   dates, the same cash accounts, and the matching direction. Wants spending's
+   account filter tightened from transaction level to journal-entry level so the
+   two agree exactly for multi-entry transactions.
+
+Localization of the five target languages is unblocked on *which* languages but
+still open on **who writes the translations** — roughly 250 messages of
+financial vocabulary where a plausible-but-wrong term is worse than English.
 
 ## Bug-fix queue (from backlog — schedule independent of R2)
 
@@ -120,9 +157,20 @@ and who produces the translations for the five target languages.
       A Vite plugin strips the attribute and `app.css` styles the announcer, so
       `style-src` stays `'self'` with no `'unsafe-inline'` or `'unsafe-hashes'`.
 
-Everything else open in `backlog.md` is either roadmap-scheduled (T-37/T-38 are
-R16 slice 1; T-34's producer is R15) or awaiting an owner decision
-(S-04 throttle design, S-06 MFA mechanism, S-07 log-vs-table).
+Everything else open in `backlog.md` is roadmap-scheduled or parked:
+
+- **T-37 and T-38 are R16 slice 1, and both now have their decisions** (T-38
+  books a write-off as a disposal at zero proceeds through the existing
+  realized gain/loss treatment). T-37 is also a prerequisite for the
+  reporting-currency work — once rates drive headline numbers, an unvoidable
+  poisoned observation stops being cosmetic.
+- **T-44 has its decision** (resolve a typed payee name on entry, with
+  confirmation and fuzzy search over existing payees; never auto-create
+  silently) and is ready to schedule.
+- **T-34's producer is R15**, still with no chosen data source.
+- **S-04, S-06, and S-07 are parked**, not awaiting a decision: the app is
+  self-hosted locally, and the trigger to unpark is the first planned
+  internet-exposed deployment.
 
 ## Hygiene
 

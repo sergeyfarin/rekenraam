@@ -245,7 +245,7 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
   whether budgets are book-wide or account-scoped, and the detailed UI for
   account budget treatment. Budget treatment is a separate account-facing axis,
   not an account kind.
-- Before reports: cashflow basis, date range inclusivity, multi-currency totals, and whether report runs need snapshots.
+- Before reports: cashflow basis, date range inclusivity, multi-currency totals, and whether report runs need snapshots. **Resolved during R2 (2026-08-19); see `plans/reports-plan.md`.** Cashflow basis: the selected liquid-cash scope, with counterparts classified per journal entry — entries balance per commodity, so no allocation rule is needed. Date ranges are inclusive at both ends throughout `/reports/*`. Multi-currency totals stay separate per commodity; a reporting-currency selector with a named valuation method is approved but sequenced after R3, and will add a conversion beside the exact per-commodity totals rather than replacing them. Report snapshots remain an open follow-up for the R2 acceptance review.
 - Before file import: supported formats, duplicate detection, source retention, preview/commit workflow, and rollback behavior.
 - Before backups: backup location, restore UX, encryption expectations, Docker volume guidance, and smoke validation.
 - Before multi-user support: owner model, roles, invitation flow, per-user audit history, and book permission rules.
