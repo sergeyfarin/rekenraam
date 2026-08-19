@@ -9,6 +9,7 @@
   import { currenciesQueryOptions } from '$lib/api/currencies';
   import {
     netWorthSeriesQueryOptions,
+    type CashflowOptions,
     type NetWorthSeriesOptions,
     type SpendingGroupBy,
     type SpendingMode,
@@ -18,6 +19,7 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
+  import CashflowView from './cashflow-view.svelte';
   import ReportFilterControls from './report-filter-controls.svelte';
   import {
     parseReportFilters,
@@ -27,7 +29,7 @@
   } from './report-filters';
   import SpendingView from './spending-view.svelte';
 
-  type ReportView = 'net-worth' | 'spending';
+  type ReportView = 'net-worth' | 'spending' | 'cashflow';
 
   const locale = $derived(getLocale());
   const dateFormatter = $derived(
@@ -64,7 +66,11 @@
   }
 
   function parseView(): ReportView {
-    return $page.url.searchParams.get('view') === 'spending' ? 'spending' : 'net-worth';
+    const view = $page.url.searchParams.get('view');
+    if (view === 'spending' || view === 'cashflow') {
+      return view;
+    }
+    return 'net-worth';
   }
 
   function parseGroupBy(): SpendingGroupBy {
@@ -84,6 +90,10 @@
   const filterDimensions = $derived<ReportFilterDimension[]>(
     view === 'spending' ? ['account', 'commodity', 'category', 'payee'] : ['account', 'commodity']
   );
+  // Cashflow is a series like net worth, so it takes the bucket control. On
+  // cashflow the account filter is not a narrowing of a fixed basis — it *is*
+  // the cash scope, which the view names in its own summary.
+  const bucketedView = $derived(view !== 'spending');
   const groupBy = $derived.by(parseGroupBy);
   const mode = $derived.by(parseMode);
   const initialFilters = defaultFilters();
@@ -131,9 +141,16 @@
     commodityIDs: reportFilters.commodityIDs
   });
 
+  const cashflowOptions = $derived<CashflowOptions>({
+    ...(activeFilters ?? initialFilters),
+    accountIDs: reportFilters.accountIDs,
+    includeDescendants: reportFilters.includeDescendants,
+    commodityIDs: reportFilters.commodityIDs
+  });
+
   const netWorthQuery = createQuery(() => ({
     ...netWorthSeriesQueryOptions(netWorthOptions),
-    enabled: activeFilters !== null
+    enabled: activeFilters !== null && view === 'net-worth'
   }));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
@@ -208,8 +225,8 @@
           class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent"
         />
       </label>
-      <!-- Bucketing is a net-worth series concern; spending ranks one range. -->
-      {#if view === 'net-worth'}
+      <!-- Bucketing belongs to the series reports; spending ranks one range. -->
+      {#if bucketedView}
         <label class="block min-w-36 flex-1 sm:flex-none">
           <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.reports_bucket()}</span>
           <select
@@ -242,7 +259,7 @@
   </Panel>
 
   <nav aria-label={m.reports_view_switch_legend()} class="flex flex-wrap gap-2">
-    {#each [{ value: 'net-worth' as const, label: m.reports_view_net_worth() }, { value: 'spending' as const, label: m.reports_view_spending() }] as choice (choice.value)}
+    {#each [{ value: 'net-worth' as const, label: m.reports_view_net_worth() }, { value: 'spending' as const, label: m.reports_view_spending() }, { value: 'cashflow' as const, label: m.reports_view_cashflow() }] as choice (choice.value)}
       <button
         type="button"
         aria-current={view === choice.value ? 'page' : undefined}
@@ -258,7 +275,9 @@
     {/each}
   </nav>
 
-  {#if view === 'spending'}
+  {#if view === 'cashflow'}
+    <CashflowView options={cashflowOptions} {commodityLabel} />
+  {:else if view === 'spending'}
     <SpendingView
       options={spendingOptions}
       {commodityLabel}

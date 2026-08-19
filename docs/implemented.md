@@ -116,7 +116,7 @@ series backend/API foundation).
 | **Dedicated reconcile workflow screen** | ✅ | `routes/app/reconcile` (R1): pick account → statement date/balance → clear postings against a server-authoritative live difference → finish only at zero, or discard. Prior active checkpoints shown read-only. Reuses the existing typed client (`lib/api/reconciliation.ts`). |
 | Void-checkpoint controls / out-of-session mark-cleared UI | ⬜ | API exists; deferred beyond the R1 trust loop. |
 
-## Reports (Phase 3) — 🟦 Net worth and spending shipped, cashflow pending
+## Reports (Phase 3) — 🟦 Net worth, spending, and cashflow shipped; export and charts pending
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -131,7 +131,7 @@ series backend/API foundation).
 | **Reports UI — spending / income** | ✅ | View switch, dense table, category/payee and spending/income switches, single-commodity bar chart with a non-colour cue for negative rows, all four screen states, and drill-down links to the transactions the row was summed from. |
 | **Reports UI — drill-down** | ✅ | A spending row links to `/app/transactions` with the report's own semantics — entry-date basis, posted only, the row's category or payee and direction. Rows the transactions route cannot express (unattributed, or several accounts) stay unlinked rather than showing a different set. |
 | Cashflow read model | ✅ | `GET /reports/cashflow` classifies movement of the selected liquid cash as inflow, outflow, and transfer/financing, per commodity per calendar bucket. Classification is exact, not heuristic: journal entries balance per commodity, so each counterpart is classified on its own class and `net_movement = operating_net + transfer_net` is an identity. A transfer inside the selected scope nets to an explicit zero. Default scope is a named liquid-cash set (cash, checking, savings, brokerage_cash), echoed as resolved account ids. Category/payee filters deferred — see the plan. |
-| Cashflow view | ⬜ | The screen is the remaining R2 piece. |
+| Cashflow view | ✅ | `/app/reports?view=cashflow`: per-bucket in, out, operating net, transfers, and net movement, exact per commodity. Names the cash scope it measured and states the transfer policy on screen. Signed figures carry an explicit sign as well as a colour; responsive priority keeps period, in, out, and net movement at every width. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 

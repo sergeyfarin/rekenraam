@@ -349,14 +349,16 @@ UI:
      arrived-from-report notice explains the narrowing and offers the way out.
      A silently filtered list reads as a broken one.
 
-   Remaining in this slice: the cashflow view.
+   Remaining in this slice: CSV and print-friendly tables, and the R2 acceptance
+   review.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.
 
-   **Progress (2026-08-18): read model shipped**, `GET /api/v1/reports/cashflow`
-   (`app/cashflow.go`, `db/reports.go#ReportCashflowPostings`). The view is the
-   remaining piece.
+   **Progress (2026-08-18): read model and view shipped**,
+   `GET /api/v1/reports/cashflow` (`app/cashflow.go`,
+   `db/reports.go#ReportCashflowPostings`) and `lib/reports/cashflow-view.svelte`
+   over `lib/reports/cashflow.ts`.
 
    The classification turned out to need no allocation rule at all, because
    **journal entries balance per commodity** (`validateBalanced` enforces it per
@@ -385,6 +387,34 @@ UI:
    - **System accounts never join the cash scope but stay visible as
      counterparts**, so transfer clearing reads as financing movement rather
      than spending. `excluded_system_roles` is `["all"]` for this endpoint.
+
+   **View notes.**
+
+   - **The scope is stated on the screen, never assumed.** The report names
+     either the default liquid-cash set and how many accounts it resolved to, or
+     the count the caller selected. "My cash" must not silently be a different
+     set from one visit to the next.
+   - **The transfer policy is part of the report, not a footnote.** A line above
+     the table says movement to an account outside the set is a transfer and
+     never spending, because that is the single thing this report exists to get
+     right.
+   - **The measures are built from the union of commodities present**, with an
+     absent measure read as zero. A month with only a card payment has a
+     transfer and a net movement but no inflow at all, and it still deserves a
+     complete row.
+   - **A bucket that netted to zero still gets a row.** The empty state keys on
+     there being no rows, not on the totals reading zero: telling someone "no
+     activity" when their transfers cancelled out would be false.
+   - **Only the transfer sides that moved are named** under the net figure.
+     "in 0.00 · out 750.00" is half noise, and in a dense table noise is what
+     stops a column being read.
+   - Signed figures carry an explicit `+`/`-` as well as a colour, so the
+     direction survives without colour vision.
+   - Responsive priority keeps period, in, out, and net movement at every width;
+     the derived subtotals (operating net, transfers) hide below `md`.
+
+   A summary chart is deliberately not part of this item — it belongs with the
+   "summary charts alongside (not replacing) the accessible data table" entry.
 
    **Deliberately deferred, not forgotten:** category and payee filters, and the
    transfer policy toggle, are listed in the contract table above but are not

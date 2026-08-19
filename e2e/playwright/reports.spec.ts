@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { todayISO } from './support/dates';
-import { createCashAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, createLiabilityAccount, readyForLedger } from './support/ledger';
 
 test('spending report ranks categories, nets refunds, and ignores transfers', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
@@ -175,6 +175,65 @@ test('a spending row drills down to exactly its transactions', async ({ page }) 
   // The way out restores the unfiltered list.
   await page.getByRole('button', { name: 'Show all transactions' }).click();
   await expect(page.getByRole('table').getByText('31.00')).toBeVisible();
+});
+
+test('cashflow separates spending from transfers and names its cash scope', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const checking = await createCashAccount(page, csrfToken, `Cashflow checking ${suffix}`, currencyID);
+  const savings = await createCashAccount(page, csrfToken, `Cashflow savings ${suffix}`, currencyID);
+  const card = await createLiabilityAccount(page, csrfToken, `Cashflow card ${suffix}`, currencyID);
+
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const category = (code: string) => {
+    const found = categories.categories.find((item) => item.code === code && item.allows_postings);
+    if (!found) throw new Error(`seeded category ${code} not found`);
+    return found.id;
+  };
+
+  // 1000.00 salary in, 60.00 groceries out.
+  await postTransaction(page, today, checking.id, category('income_salary_wages'), currencyID, -100000);
+  await postTransaction(page, today, checking.id, category('expense_food_groceries'), currencyID, 6000);
+  // 200.00 checking to savings: both are liquid cash, so this must not appear
+  // anywhere — it changed neither the cash total nor the cashflow.
+  await postTransfer(page, today, checking.id, savings.id, currencyID, 20000);
+  // 150.00 card payment: the card is outside the cash scope, so this is a
+  // transfer, never spending.
+  await postTransfer(page, today, checking.id, card.id, currencyID, 15000);
+
+  // Scoped to this test's own accounts: the e2e database is shared within a
+  // run, and every spec posts to today, so the default scope would also pick up
+  // the other specs' cash accounts.
+  const scoped = `&account_id=${checking.id}&account_id=${savings.id}`;
+  await page.goto(`/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day${scoped}`);
+
+  const table = page.getByRole('table');
+  await expect(table).toBeVisible();
+  const row = table.locator('tbody tr').first();
+
+  await expect(row).toContainText('1,000.00');
+  await expect(row).toContainText('60.00');
+  // 1000 - 60 - 150; the 200.00 internal transfer cancels.
+  await expect(row).toContainText('+790.00');
+  // The card payment is financing movement, not an expense.
+  await expect(row).toContainText('-150.00');
+  await expect(page.getByText(/Measuring the 2 accounts you selected/)).toBeVisible();
+
+  // Narrowing to checking alone turns the internal transfer into financing
+  // movement, because savings is now outside the measured set.
+  await page.goto(`/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day&account_id=${checking.id}`);
+  // 1000 - 60 - 200 - 150.
+  await expect(page.getByRole('table').locator('tbody tr').first()).toContainText('+590.00');
+
+  // Without an account filter the scope is the named liquid-cash default, and
+  // the transfer policy is stated rather than assumed.
+  await page.goto(`/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day`);
+  await expect(page.getByText(/Measuring your \d+ active cash accounts/)).toBeVisible();
+  await expect(page.getByText(/is shown as a transfer, never as spending/)).toBeVisible();
 });
 
 async function postTransaction(

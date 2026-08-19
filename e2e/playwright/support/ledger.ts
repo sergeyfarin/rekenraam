@@ -46,3 +46,19 @@ export async function createCashAccount(
     allows_postings: true
   });
 }
+
+/** Creates a posting-enabled credit-card account, outside any liquid-cash scope. */
+export async function createLiabilityAccount(
+  page: Page,
+  csrfToken: string,
+  name: string,
+  currencyID: number
+): Promise<{ id: number; name: string }> {
+  return apiJSON(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name,
+    account_class: 'liability',
+    account_kind: 'credit_card',
+    default_commodity_id: currencyID,
+    allows_postings: true
+  });
+}
