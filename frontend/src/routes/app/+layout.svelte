@@ -198,7 +198,7 @@
   </main>
 {:else if !shouldRedirectHome}
   <main class="min-h-screen lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-    <aside class="border-b border-border bg-sidebar px-4 py-4 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
+    <aside data-print-hide class="border-b border-border bg-sidebar px-4 py-4 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
       <div class="flex items-center justify-between gap-3 lg:block">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{m.app_shell_badge()}</p>

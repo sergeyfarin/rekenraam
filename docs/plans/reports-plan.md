@@ -203,6 +203,37 @@ UI:
   multi-commodity states for each report. Meet mobile layout and keyboard
   navigation requirements before chart polish.
 
+## Export, print, and charts (2026-08-18)
+
+Shipped across all three views.
+
+- **CSV carries exact, unformatted decimals**, with the commodity in its own
+  column (`lib/reports/report-csv.ts`). A locale-formatted figure destroys a
+  CSV: grouping separators split cells, and most of Europe's comma decimal
+  separator does the same. Shares export as integer basis points for the same
+  reason. Quoting is RFC 4180, so a payee named `Smith, Jones & Co "The Grocer"`
+  survives the round trip, and the file leads with a BOM so Excel reads it as
+  UTF-8 rather than the system codepage.
+- **Printing turns the page into the report.** Navigation, the filter panel, the
+  view switch, and the export button are dropped — none is actionable on paper —
+  leaving the headings, the stated scope, the table, and the chart. Rows are
+  kept off page breaks and given borders that survive without background
+  colours, which browsers do not print.
+- **Charts summarize, never replace.** Net worth and cashflow share one signed
+  column chart (`bucket-column-chart.svelte` over `report-series.ts`), matching
+  the spending bar chart's house style: one accent hue, no legend, no
+  categorical palette, and the table above as the accessible source of truth.
+  Direction is carried by which side of the baseline a column sits on — a cue
+  that survives without colour — with a hatch repeating it. Positive and
+  negative share one track so a month that burned 500 reads as the mirror of one
+  that saved 500. A chart appears only when a single commodity is in range;
+  columns across unlike commodities would be a comparison the ledger cannot
+  justify. Geometry is BigInt-exact for the same reason `spendingBars` is: a
+  38-digit coefficient does not survive a float, and the tallest column would be
+  picked against the wrong track.
+- Axis labels use a compact date format of their own. A full date is wider than
+  a column, and overlapping labels are worse than terse ones.
+
 ## Delivery slices and acceptance
 
 1. **Contract and fixtures**
@@ -349,8 +380,9 @@ UI:
      arrived-from-report notice explains the narrowing and offers the way out.
      A silently filtered list reads as a broken one.
 
-   Remaining in this slice: CSV and print-friendly tables, and the R2 acceptance
-   review.
+   Remaining in this slice: the R2 acceptance review — which of the larger items
+   above (saved definitions, cross-currency valuation, investment dimensions,
+   snapshots) are justified before R3 starts. That is an owner decision.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.

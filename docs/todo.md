@@ -53,8 +53,13 @@ preconditions. Also in `roadmap.md`.
       `net_movement`'s reconciliation guarantee.
 - [x] Date/account/category/payee/commodity filters — done 2026-08-18 across all
       three views (category and payee only where a report can express them).
-- [ ] CSV + print-friendly tables; summary charts alongside (not replacing)
-      the accessible data table.
+- [x] CSV + print-friendly tables; summary charts alongside (not replacing)
+      the accessible data table — done 2026-08-18. CSV carries exact
+      unformatted decimals with the commodity in its own column, because a
+      locale-formatted figure destroys a CSV. Printing drops navigation,
+      filters, the view switch, and the export button, keeping the headings,
+      the stated scope, and the table. Net worth and cashflow gained signed
+      column charts; all three views keep the table as the source of truth.
 - [ ] R2 acceptance review: explicitly decide which `plans/reports-plan.md`
       items (saved definitions, cross-currency valuation, investment
       dimensions, snapshots) are justified before starting R3.

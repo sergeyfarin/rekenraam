@@ -8,6 +8,7 @@
 </script>
 
 <header
+  data-print-hide
     class="sticky top-0 z-30 border-b border-topbar-border bg-topbar text-topbar-foreground shadow-sm"
 >
     <div

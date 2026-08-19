@@ -8,6 +8,9 @@
   import { formatQuantity } from '$lib/transactions/transaction-labels';
   import { cashflowQueryOptions, type CashflowOptions } from '$lib/api/reports';
   import { cashflowRows, hasMultipleCommodities, isEmptyCashflow, transferDetail, type CashflowRow } from './cashflow';
+  import BucketColumnChart from './bucket-column-chart.svelte';
+  import { seriesColumns } from './report-series';
+  import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
 
   let {
     options,
@@ -28,6 +31,14 @@
   const dateFormatter = $derived(
     new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' })
   );
+
+  // Axis labels get their own compact format: a full date is wider than a
+  // column, and overlapping labels are worse than terse ones.
+  const shortDateFormatter = $derived(new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }));
+
+  function shortDate(date: string): string {
+    return shortDateFormatter.format(parseISO(date));
+  }
 
   // date-fns rather than the Date constructor: calendar dates are financial
   // facts here, and the constructor's parsing is not a contract worth relying on.
@@ -59,6 +70,53 @@
     return value.startsWith('-') ? 'text-danger' : 'text-positive';
   }
 
+  // The chart summarizes one commodity's net movement. Columns across unlike
+  // commodities would be a comparison the ledger cannot justify, so it appears
+  // only when a single commodity is in range.
+  const chartColumns = $derived(
+    multiCommodity
+      ? []
+      : seriesColumns(
+          rows.map((row) => ({
+            key: row.key,
+            label: shortDate(row.startDate),
+            quantityValue: row.netMovement,
+            quantityScale: row.quantityScale
+          }))
+        )
+  );
+
+  function exportCSV() {
+    const header = [
+      m.reports_column_period_start(),
+      m.reports_column_period_end(),
+      m.reports_column_commodity(),
+      m.reports_cashflow_column_inflow(),
+      m.reports_cashflow_column_outflow(),
+      m.reports_cashflow_column_operating_net(),
+      m.reports_cashflow_csv_column_transfer_in(),
+      m.reports_cashflow_csv_column_transfer_out(),
+      m.reports_cashflow_column_transfers(),
+      m.reports_cashflow_column_net_movement()
+    ];
+    const body = rows.map((row) => [
+      row.startDate,
+      row.endDate,
+      commodityLabel(row.commodityID),
+      exactDecimal(row.inflow, row.quantityScale),
+      exactDecimal(row.outflow, row.quantityScale),
+      exactDecimal(row.operatingNet, row.quantityScale),
+      exactDecimal(row.transferIn, row.quantityScale),
+      exactDecimal(row.transferOut, row.quantityScale),
+      exactDecimal(row.transferNet, row.quantityScale),
+      exactDecimal(row.netMovement, row.quantityScale)
+    ]);
+    downloadCSV(
+      csvFilename('cashflow', options.startDate, options.endDate),
+      toCSV([header, ...body])
+    );
+  }
+
   // Responsive column priority. The period and the net movement are the two
   // things that must survive at any width; the split that explains the net
   // comes next, and the derived subtotals go first.
@@ -72,7 +130,12 @@
       <h2 class="text-lg font-semibold tracking-tight text-foreground">{m.reports_cashflow_title()}</h2>
       <p class="mt-1 text-sm text-muted">{m.reports_cashflow_copy()}</p>
     </div>
-    <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+    <div class="flex items-center gap-3">
+      <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+      {#if rows.length > 0}
+        <button type="button" class="report-export" onclick={exportCSV}>{m.reports_export_csv()}</button>
+      {/if}
+    </div>
   </div>
 
   <!-- The scope is never an invisible default: the report says which accounts
@@ -180,6 +243,14 @@
         </tbody>
       </table>
     </div>
+
+    {#if chartColumns.length > 0}
+      <BucketColumnChart
+        columns={chartColumns}
+        formatAmount={(value, scale) => formatQuantity(value, scale, locale)}
+        caption={m.reports_cashflow_chart_caption({ commodity: commodityLabel(rows[0].commodityID) })}
+      />
+    {/if}
 
     <p class="mt-4 text-xs text-muted">{m.reports_cashflow_identity_note()}</p>
   {/if}

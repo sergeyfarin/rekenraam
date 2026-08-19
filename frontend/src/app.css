@@ -388,6 +388,14 @@
 }
 
 @layer components {
+  .report-export {
+    @apply rounded-(--radius-control) border border-border bg-control px-3 py-1.5 text-sm font-semibold text-foreground transition;
+  }
+
+  .report-export:hover {
+    @apply bg-control-hover;
+  }
+
   .status-accent-soft {
     background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
   }
@@ -398,5 +406,71 @@
 
   .app-control:hover {
     @apply bg-control-hover;
+  }
+}
+
+/*
+ * Print: the page becomes the report.
+ *
+ * Everything a reader cannot act on from paper is dropped — navigation, the
+ * filter controls, the export button, the side panel — leaving the headings,
+ * the stated scope, and the table. Tables are the point of printing a report,
+ * so rows are kept off page breaks and given a border that survives without
+ * background colours, which browsers do not print by default.
+ */
+@media print {
+  [data-print-hide],
+  /* A download button is not actionable on paper. */
+  .report-export {
+    display: none !important;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  body {
+    background-image: none;
+  }
+
+  main {
+    display: block !important;
+    min-height: 0;
+    padding: 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid #999;
+  }
+
+  figure,
+  svg {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: '';
   }
 }

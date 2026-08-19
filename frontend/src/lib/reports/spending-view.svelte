@@ -14,6 +14,7 @@
     type SpendingOptions
   } from '$lib/api/reports';
   import SpendingBarChart from './spending-bar-chart.svelte';
+  import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
   import {
     formatShare,
     isSingleCommodity,
@@ -72,6 +73,27 @@
     return spendingDrillDownHref(row, groupBy, mode);
   }
 
+  function exportCSV() {
+    const header = [
+      groupBy === 'payee' ? m.reports_column_payee() : m.reports_column_category(),
+      m.reports_column_commodity(),
+      mode === 'income' ? m.reports_column_income() : m.reports_column_spending(),
+      m.reports_column_share()
+    ];
+    const body = rows.map((row) => [
+      rowLabel(row),
+      commodityLabel(row.commodityID),
+      exactDecimal(row.quantityValue, row.quantityScale),
+      // The share is exact basis points from the server; a percentage with a
+      // locale separator would not parse, so it goes out as basis points.
+      row.shareBasisPoints === undefined ? '' : String(row.shareBasisPoints)
+    ]);
+    downloadCSV(
+      csvFilename(mode === 'income' ? 'income' : 'spending', options.startDate, options.endDate),
+      toCSV([header, ...body])
+    );
+  }
+
   function formatAmount(value: string, scale: number): string {
     return formatQuantity(value, scale, locale);
   }
@@ -110,7 +132,12 @@
         {mode === 'income' ? m.reports_income_copy() : m.reports_spending_copy()}
       </p>
     </div>
-    <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+    <div class="flex items-center gap-3">
+      <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+      {#if rows.length > 0}
+        <button type="button" class="report-export" onclick={exportCSV}>{m.reports_export_csv()}</button>
+      {/if}
+    </div>
   </div>
 
   <div class="mt-4 flex flex-wrap gap-3">

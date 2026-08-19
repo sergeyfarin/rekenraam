@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { todayISO } from './support/dates';
@@ -234,6 +235,50 @@ test('cashflow separates spending from transfers and names its cash scope', asyn
   await page.goto(`/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day`);
   await expect(page.getByText(/Measuring your \d+ active cash accounts/)).toBeVisible();
   await expect(page.getByText(/is shown as a transfer, never as spending/)).toBeVisible();
+});
+
+test('a report exports CSV a spreadsheet can read, and prints without its chrome', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const checking = await createCashAccount(page, csrfToken, `Export checking ${suffix}`, currencyID);
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const groceries = categories.categories.find(
+    (item) => item.code === 'expense_food_groceries' && item.allows_postings
+  );
+  if (!groceries) throw new Error('seeded groceries category not found');
+
+  await postTransaction(page, today, checking.id, groceries.id, currencyID, 123456);
+
+  await page.goto(
+    `/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day&account_id=${checking.id}`
+  );
+  await expect(page.getByRole('table')).toBeVisible();
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV' }).click();
+  const file = await download;
+
+  expect(file.suggestedFilename()).toBe(`rekenraam-cashflow-${today}-${today}.csv`);
+
+  const path = await file.path();
+  const content = await readFile(path, 'utf8');
+  const [header, firstRow] = content.split('\r\n');
+  expect(header).toContain('Net movement');
+  // Exact and unformatted: a grouped or comma-decimal figure would not parse in
+  // a spreadsheet, and 1234.56 is the amount, not "1,234.56".
+  expect(firstRow).toContain('1234.56');
+  expect(firstRow).not.toContain('1,234.56');
+
+  // Printing drops what cannot be acted on from paper and keeps the report.
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.getByRole('button', { name: 'Download CSV' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Report' })).toBeHidden();
+  await expect(page.getByRole('table')).toBeVisible();
+  await page.emulateMedia({ media: 'screen' });
 });
 
 async function postTransaction(

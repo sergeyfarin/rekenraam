@@ -19,7 +19,10 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
+  import BucketColumnChart from './bucket-column-chart.svelte';
   import CashflowView from './cashflow-view.svelte';
+  import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
+  import { seriesColumns } from './report-series';
   import ReportFilterControls from './report-filter-controls.svelte';
   import {
     parseReportFilters,
@@ -168,6 +171,46 @@
     return dateFormatter.format(parseISO(date));
   }
 
+  // Axis labels get their own compact format: a full date is wider than a
+  // column, and overlapping labels are worse than terse ones.
+  const shortDateFormatter = $derived(new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }));
+
+  function shortDate(date: string): string {
+    return shortDateFormatter.format(parseISO(date));
+  }
+
+  // One commodity only: columns across unlike commodities would compare what
+  // the ledger cannot.
+  const netWorthColumns = $derived(
+    multiCommodity
+      ? []
+      : seriesColumns(
+          rows.map((row) => ({
+            key: `${row.startDate}-${row.commodity_id}`,
+            label: shortDate(row.endDate),
+            quantityValue: row.normal_quantity_value,
+            quantityScale: row.quantity_scale
+          }))
+        )
+  );
+
+  function exportNetWorthCSV() {
+    const header = [
+      m.reports_column_period_start(),
+      m.reports_column_period_end(),
+      m.reports_column_commodity(),
+      m.reports_column_net_worth()
+    ];
+    const body = rows.map((row) => [
+      row.startDate,
+      row.endDate,
+      commodityLabel(row.commodity_id),
+      exactDecimal(row.normal_quantity_value, row.quantity_scale)
+    ]);
+    const range = activeFilters ?? initialFilters;
+    downloadCSV(csvFilename('net-worth', range.startDate, range.endDate), toCSV([header, ...body]));
+  }
+
   function formatRange(start: string, end: string): string {
     return start === end ? formatDate(start) : m.reports_date_range({ start: formatDate(start), end: formatDate(end) });
   }
@@ -207,6 +250,7 @@
 </script>
 
 <div class="space-y-5">
+  <div data-print-hide>
   <Panel>
     <form class="flex flex-wrap items-end gap-3" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
       <label class="block min-w-40 flex-1 sm:flex-none">
@@ -258,7 +302,7 @@
     </div>
   </Panel>
 
-  <nav aria-label={m.reports_view_switch_legend()} class="flex flex-wrap gap-2">
+  <nav aria-label={m.reports_view_switch_legend()} class="mt-5 flex flex-wrap gap-2">
     {#each [{ value: 'net-worth' as const, label: m.reports_view_net_worth() }, { value: 'spending' as const, label: m.reports_view_spending() }, { value: 'cashflow' as const, label: m.reports_view_cashflow() }] as choice (choice.value)}
       <button
         type="button"
@@ -274,6 +318,7 @@
       </button>
     {/each}
   </nav>
+  </div>
 
   {#if view === 'cashflow'}
     <CashflowView options={cashflowOptions} {commodityLabel} />
@@ -305,7 +350,12 @@
           <h2 class="text-lg font-semibold tracking-tight text-foreground">{m.reports_net_worth_title()}</h2>
           <p class="mt-1 text-sm text-muted">{m.reports_net_worth_copy()}</p>
         </div>
-        <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+        <div class="flex items-center gap-3">
+          <p class="text-sm text-muted">{m.reports_posted_only()}</p>
+          <button type="button" class="report-export" onclick={exportNetWorthCSV}>
+            {m.reports_export_csv()}
+          </button>
+        </div>
       </div>
 
       {#if multiCommodity}
@@ -336,6 +386,14 @@
           </tbody>
         </table>
       </div>
+
+      {#if netWorthColumns.length > 0}
+        <BucketColumnChart
+          columns={netWorthColumns}
+          formatAmount={(value, scale) => formatQuantity(value, scale, locale)}
+          caption={m.reports_net_worth_chart_caption({ commodity: commodityLabel(rows[0].commodity_id) })}
+        />
+      {/if}
     </Panel>
   {/if}
 </div>
