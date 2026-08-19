@@ -201,6 +201,25 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		return db.TransactionSpec{}, err
 	}
 
+	// A typed name that already names a payee is linked to it (T-44). Active
+	// payee names are unique by normalized name, so the match is unambiguous —
+	// this resolves what the caller clearly meant, it does not create anything.
+	// Creating a record from an unrecognized name stays a deliberate, confirmed
+	// act in the UI; leaving it unlinked here is what lets an import defer the
+	// question to review instead of inventing payees in bulk.
+	if !payeeID.Valid && cleanedPayeeName != "" {
+		resolvedID, resolvedName, err := s.payeeRepository.PayeeByNormalizedName(ctx, BookID, normalizePayeeNameForMatch(cleanedPayeeName))
+		switch {
+		case err == nil:
+			payeeID = nullableInt64(&resolvedID)
+			// Adopt the record's capitalisation too, so the stored name and the
+			// linked record never disagree about how the payee is spelled.
+			cleanedPayeeName = resolvedName
+		case !errors.Is(err, db.ErrNotFound):
+			return db.TransactionSpec{}, fmt.Errorf("match payee name: %w", err)
+		}
+	}
+
 	description, err := cleanOptionalText(input.Description, "description", transactionTextMaxBytes)
 	if err != nil {
 		return db.TransactionSpec{}, err

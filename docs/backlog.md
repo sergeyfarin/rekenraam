@@ -98,6 +98,13 @@ Two consequences the decision implies and that this item must cover:
 - **Imports cannot show a dialog per row.** The import path already resolves a
   `PayeeID` where it can; the rule there is auto-link exact matches, leave the
   rest unlinked, and surface unlinked names in the existing import review.
+  **Done 2026-08-19:** the match happens in `cleanTransactionSpec`, which every
+  write path shares, so manual entry and import commit got it in one change.
+  Active payee names are unique by normalized name, so the match is
+  unambiguous; the record's own capitalisation wins, so the stored name and the
+  link never disagree. Archived payees are deliberately not matched — they are
+  not offered for new entry, and linking to one silently would resurrect it in
+  reports.
 - **History is not fixed by entry-side work.** Existing rows keep `payee_name`
   with no `payee_id`, so the report stays degraded for past data until a one-off
   "link unlinked payees" tool exists — a settings screen listing distinct

@@ -437,3 +437,10 @@ func nullableInt64FromSQL(value sql.NullInt64) *int64 {
 	copied := value.Int64
 	return &copied
 }
+
+// normalizePayeeNameForMatch produces the same normalized form payee records
+// are stored under, so a typed name can be matched against them. Kept beside
+// cleanPayeeName deliberately: if one changes, both must.
+func normalizePayeeNameForMatch(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}

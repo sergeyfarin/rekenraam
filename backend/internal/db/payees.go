@@ -419,3 +419,35 @@ func scanPayeeRecord(scanner interface{ Scan(dest ...any) error }, record *Payee
 
 	return nil
 }
+
+// PayeeByNormalizedName finds the active payee whose normalized name matches
+// exactly, or ErrNotFound.
+//
+// Active payee names are unique by normalized name (ensurePayeeNameAvailable
+// enforces it), so a match here is unambiguous — which is what lets a typed
+// name be linked to a record without asking the user to confirm something they
+// already spelled correctly.
+// It returns the record's canonical name alongside the id, so a caller adopting
+// the match also adopts its capitalisation rather than storing the typed
+// variant beside a link to the record.
+func (r *PayeeRepository) PayeeByNormalizedName(ctx context.Context, bookID int64, normalizedName string) (int64, string, error) {
+	var payeeID int64
+	var name string
+	err := r.database.QueryRowContext(ctx, `
+		SELECT p.id, pv.name
+		FROM payees p
+		JOIN current_payee_versions pv ON pv.payee_id = p.id
+		WHERE p.book_id = ?
+			AND pv.status = 'active'
+			AND pv.normalized_name = ?
+		LIMIT 1
+	`, bookID, normalizedName).Scan(&payeeID, &name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", ErrNotFound
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("read payee by normalized name: %w", err)
+	}
+
+	return payeeID, name, nil
+}

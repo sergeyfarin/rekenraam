@@ -605,3 +605,47 @@ func TestGetImportBatchRows_PaginatesWithCursor(t *testing.T) {
 	}
 	assert.Len(t, seen, 3, "pagination must not repeat or drop rows")
 }
+
+// TestCommitImportBatch_LinksRowsToExistingPayeesByName drives a real commit
+// rather than asserting on a builder's output: the import path shares
+// cleanTransactionSpec, so the T-44 name match applies to it, and this proves
+// it survives all the way through CommitImportBatch.
+//
+// A bulk import cannot ask the user to confirm each unknown name, so an
+// unrecognized payee stays unlinked and is left for review — the report shows
+// it as unattributed rather than the importer inventing records in bulk.
+func TestCommitImportBatch_LinksRowsToExistingPayeesByName(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID, checking, groceries := bootstrapImportAPITest(t, handler)
+
+	// Deliberately different capitalisation from the imported rows.
+	groceryStore := createPayeeForSession(t, handler, sessionCookie, csrfToken, `{"name":"Grocery Store"}`)
+
+	qif := qifRow("06/01/26", "-42.50", "GROCERY STORE") + qifRow("06/05/26", "1500.00", "Employer Nobody Recorded")
+	started := startQIFImportForSession(t, handler, sessionCookie, csrfToken, "bank.qif", qif, http.StatusCreated)
+	require.Len(t, started.Rows, 2)
+
+	patchBody := resolutionPatchBody(t, checking.ID, commodityID, groceries.ID, started.Rows[0].ID, started.Rows[1].ID)
+	patchImportBatchForSession(t, handler, sessionCookie, csrfToken, started.Batch.ID, patchBody, http.StatusNoContent)
+
+	commit := commitImportBatchForSession(t, handler, sessionCookie, csrfToken, started.Batch.ID, "", http.StatusOK)
+	require.Equal(t, 2, commit.CommittedCount)
+
+	linked := listTransactionsForSession(t, handler, sessionCookie, "?payee_id="+strconvFormatInt(groceryStore.ID))
+	require.Len(t, linked.Transactions, 1)
+	require.NotNil(t, linked.Transactions[0].PayeeID)
+	assert.Equal(t, groceryStore.ID, *linked.Transactions[0].PayeeID)
+	assert.Equal(t, "Grocery Store", linked.Transactions[0].PayeeName)
+
+	unknown := listTransactionsForSession(t, handler, sessionCookie, "?q=Employer")
+	require.Len(t, unknown.Transactions, 1)
+	assert.Nil(t, unknown.Transactions[0].PayeeID)
+
+	// No payee record was invented for the unrecognized name.
+	payees := listPayeesForSession(t, handler, sessionCookie, "")
+	for _, payee := range payees.Payees {
+		assert.NotEqual(t, "Employer Nobody Recorded", payee.Name)
+	}
+}

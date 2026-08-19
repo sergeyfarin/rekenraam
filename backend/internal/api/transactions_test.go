@@ -1615,3 +1615,72 @@ func assertListTransactionsStatus(t *testing.T, handler http.Handler, sessionCoo
 	handler.ServeHTTP(res, req)
 	assert.Equal(t, wantStatus, res.Code)
 }
+
+// TestTypedPayeeNameLinksToAnExistingRecord covers T-44's entry-side rule: a
+// typed name that already names a payee is linked to that record, so it groups
+// in the spending report instead of falling into "no payee recorded". An
+// unrecognized name stays unlinked — creating a record is a confirmed act in
+// the UI, never a side effect of saving a transaction.
+func TestTypedPayeeNameLinksToAnExistingRecord(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	marketHall := createPayeeForSession(t, handler, sessionCookie, csrfToken, `{"name":"Market Hall"}`)
+
+	spend := func(date string, payeeName string) transactionResponse {
+		return createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+			"transaction_date":"`+date+`",
+			"payee_name":`+strconv.Quote(payeeName)+`,
+			"journal_entries":[{
+				"entry_date":"`+date+`",
+				"postings":[`+posting(checking.ID, -1000, 2, commodityID)+`,`+posting(groceries.ID, 1000, 2, commodityID)+`]
+			}]
+		}`, http.StatusCreated)
+	}
+
+	// Exact name: linked.
+	exact := spend("2026-06-01", "Market Hall")
+	require.NotNil(t, exact.PayeeID)
+	assert.Equal(t, marketHall.ID, *exact.PayeeID)
+
+	// Case and surrounding whitespace are normalized away, the same way payee
+	// records are stored, so the match survives ordinary typing.
+	loose := spend("2026-06-02", "  market   hall ")
+	require.NotNil(t, loose.PayeeID)
+	assert.Equal(t, marketHall.ID, *loose.PayeeID)
+	// The record's own capitalisation wins, so the stored name and the link
+	// never disagree about how the payee is spelled.
+	assert.Equal(t, "Market Hall", loose.PayeeName)
+
+	// A name no payee has stays free text: the transaction is still recorded,
+	// but nothing was invented on the user's behalf.
+	unknown := spend("2026-06-03", "Markt Hall")
+	assert.Nil(t, unknown.PayeeID)
+	assert.Equal(t, "Markt Hall", unknown.PayeeName)
+
+	// An archived payee is not a match — it is not offered for new entry, so
+	// linking to it silently would resurrect it in reports.
+	archived := createPayeeForSession(t, handler, sessionCookie, csrfToken, `{"name":"Closed Deli"}`)
+	mutatePayee(t, handler, sessionCookie, csrfToken, http.MethodPost,
+		"/api/v1/payees/"+strconvFormatInt(archived.ID)+"/archive", `{"change_reason":"closed"}`, http.StatusOK)
+	afterArchive := spend("2026-06-04", "Closed Deli")
+	assert.Nil(t, afterArchive.PayeeID)
+
+	// An explicit payee_id still wins over whatever name is supplied.
+	explicit := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-05",
+		"payee_id":`+strconvFormatInt(marketHall.ID)+`,
+		"payee_name":"something else entirely",
+		"journal_entries":[{
+			"entry_date":"2026-06-05",
+			"postings":[`+posting(checking.ID, -1000, 2, commodityID)+`,`+posting(groceries.ID, 1000, 2, commodityID)+`]
+		}]
+	}`, http.StatusCreated)
+	require.NotNil(t, explicit.PayeeID)
+	assert.Equal(t, marketHall.ID, *explicit.PayeeID)
+	assert.Equal(t, "Market Hall", explicit.PayeeName)
+}
