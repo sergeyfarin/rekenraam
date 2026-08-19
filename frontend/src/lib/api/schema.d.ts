@@ -3039,7 +3039,7 @@ export interface paths {
                     category_id?: number[];
                     /** @description Repeatable. Restricts the report to these payees. */
                     payee_id?: number[];
-                    /** @description Repeatable counterpart filter. Keeps category postings whose transaction also touches one of these accounts — "what did I spend from here" — without inferring a bank-statement classification. */
+                    /** @description Repeatable counterpart filter. Keeps category postings whose *journal entry* also touches one of these accounts — "what did I spend from here" — without inferring a bank-statement classification. Matching per entry rather than per transaction means a multi-entry transaction whose category posting and filtered account sit in different entries does not count, which is also what keeps this in step with the cashflow report. */
                     account_id?: number[];
                     /** @description Expands each account_id to itself plus every descendant, using the account versions in effect on the reporting date. */
                     include_descendants?: boolean;

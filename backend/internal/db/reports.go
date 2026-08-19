@@ -26,10 +26,10 @@ type ReportCategoryPostingRecord struct {
 // report. Empty ID slices mean "no restriction on that dimension"; a non-empty
 // slice is an OR-set within the dimension and ANDs with the other dimensions.
 //
-// AccountIDs is a counterpart filter: it keeps category postings whose
-// transaction also touches one of the given accounts (already resolved to
-// include descendants by the caller), which is how "what did I spend from this
-// account" is expressed without inferring a bank-statement classification.
+// AccountIDs is a counterpart filter: it keeps category postings whose *journal
+// entry* also touches one of the given accounts (already resolved to include
+// descendants by the caller), which is how "what did I spend from this account"
+// is expressed without inferring a bank-statement classification.
 type ReportCategoryPostingsParams struct {
 	BookID       int64
 	StartDate    string
@@ -89,12 +89,17 @@ func (r *TransactionRepository) ReportCategoryPostings(ctx context.Context, para
 		where = append(where, clause)
 		args = append(args, clauseArgs...)
 	}
+	// Correlated to the category posting's own journal entry, not merely to its
+	// transaction. A multi-entry transaction can hold a groceries posting in one
+	// entry and touch the filtered account only in another; counting that as
+	// "spent from this account" would be false, and it would make a cashflow
+	// drill-down disagree with the cashflow row it came from — cashflow
+	// classifies per entry for the same reason.
 	if clause, clauseArgs := inClause("counterpart_pv.account_id", params.AccountIDs); clause != "" {
 		where = append(where, `EXISTS (
 			SELECT 1
-			FROM journal_entries counterpart_je
-			JOIN posting_versions counterpart_pv ON counterpart_pv.journal_entry_id = counterpart_je.id
-			WHERE counterpart_je.transaction_version_id = tv.id
+			FROM posting_versions counterpart_pv
+			WHERE counterpart_pv.journal_entry_id = je.id
 				AND `+clause+`
 		)`)
 		args = append(args, clauseArgs...)

@@ -623,3 +623,50 @@ func TestNetWorthSeriesResolvesSubtreeAgainstEachBucketsAccountVersions(t *testi
 		assertBalance(t, bucket.Totals, usdID, 100000, 2, 100000)
 	}
 }
+
+// TestSpendingAccountFilterMatchesPerJournalEntry pins the tightening that lets
+// a cashflow row drill down into this report without the two disagreeing.
+//
+// The filter keeps category postings whose *journal entry* also touches one of
+// the given accounts. Correlating to the transaction instead would count a
+// groceries posting that shares only a transaction — not an entry — with the
+// filtered account, which is not money spent from that account.
+func TestSpendingAccountFilterMatchesPerJournalEntry(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+
+	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", commodityID, 2)
+	savings := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Savings", "asset", "savings", commodityID, 2)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Groceries","category_type":"expense"}`)
+	fuel := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Fuel","category_type":"expense"}`)
+
+	// One transaction, two entries: groceries paid from savings, fuel paid from
+	// checking. Only the fuel entry touches checking.
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-10",
+		"journal_entries":[{
+			"entry_date":"2026-06-10",
+			"postings":[`+posting(savings.ID, -4000, 2, commodityID)+`,`+posting(groceries.ID, 4000, 2, commodityID)+`]
+		},{
+			"entry_date":"2026-06-10",
+			"postings":[`+posting(checking.ID, -6000, 2, commodityID)+`,`+posting(fuel.ID, 6000, 2, commodityID)+`]
+		}]
+	}`, http.StatusCreated)
+
+	filtered := readSpendingForSession(t, handler, sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id="+strconvFormatInt(checking.ID))
+
+	// Only the fuel entry spent from checking. Matching per transaction would
+	// have dragged the groceries entry in with it.
+	require.Len(t, filtered.Groups, 1)
+	require.NotNil(t, filtered.Groups[0].CategoryID)
+	assert.Equal(t, fuel.ID, *filtered.Groups[0].CategoryID)
+
+	// Unfiltered, both entries are still reported: the tightening narrows the
+	// account filter, it does not drop postings from the basis.
+	unfiltered := readSpendingForSession(t, handler, sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category")
+	assert.Len(t, unfiltered.Groups, 2)
+}

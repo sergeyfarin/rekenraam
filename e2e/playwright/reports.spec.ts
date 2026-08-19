@@ -281,6 +281,52 @@ test('a report exports CSV a spreadsheet can read, and prints without its chrome
   await page.emulateMedia({ media: 'screen' });
 });
 
+test('a cashflow row drills down to the categories behind it', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const checking = await createCashAccount(page, csrfToken, `Drill cash ${suffix}`, currencyID);
+  const card = await createLiabilityAccount(page, csrfToken, `Drill card ${suffix}`, currencyID);
+
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const category = (code: string) => {
+    const found = categories.categories.find((item) => item.code === code && item.allows_postings);
+    if (!found) throw new Error(`seeded category ${code} not found`);
+    return found.id;
+  };
+
+  await postTransaction(page, today, checking.id, category('expense_food_groceries'), currencyID, 8000);
+  await postTransaction(page, today, checking.id, category('expense_transport_fuel'), currencyID, 3000);
+  // A card payment is financing movement, so it must not appear in the
+  // breakdown of the outflow figure.
+  await postTransfer(page, today, checking.id, card.id, currencyID, 25000);
+
+  await page.goto(
+    `/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day&account_id=${checking.id}`
+  );
+
+  const cashflowRow = page.getByRole('table').locator('tbody tr').first();
+  await expect(cashflowRow).toContainText('110.00');
+
+  // The outflow figure is the link into its own breakdown.
+  await cashflowRow.getByRole('link', { name: '110.00' }).click();
+
+  await expect(page).toHaveURL(/view=spending/);
+  await expect(page).toHaveURL(/mode=spending/);
+  await expect(page).toHaveURL(new RegExp(`account_id=${checking.id}`));
+
+  // The breakdown adds up to the figure it came from, and the card payment is
+  // absent because a transfer has no category posting.
+  const spendingRows = page.getByRole('table').locator('tbody tr');
+  await expect(spendingRows).toHaveCount(2);
+  await expect(page.getByRole('table')).toContainText('80.00');
+  await expect(page.getByRole('table')).toContainText('30.00');
+  await expect(page.getByRole('table')).not.toContainText('250.00');
+});
+
 async function postTransaction(
   page: Page,
   date: string,

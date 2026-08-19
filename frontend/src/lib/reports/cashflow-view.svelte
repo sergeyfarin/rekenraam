@@ -7,7 +7,14 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { formatQuantity } from '$lib/transactions/transaction-labels';
   import { cashflowQueryOptions, type CashflowOptions } from '$lib/api/reports';
-  import { cashflowRows, hasMultipleCommodities, isEmptyCashflow, transferDetail, type CashflowRow } from './cashflow';
+  import {
+    cashflowDrillDownHref,
+    cashflowRows,
+    hasMultipleCommodities,
+    isEmptyCashflow,
+    transferDetail,
+    type CashflowRow
+  } from './cashflow';
   import BucketColumnChart from './bucket-column-chart.svelte';
   import { seriesColumns } from './report-series';
   import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
@@ -26,7 +33,15 @@
   const rows = $derived(query.data ? cashflowRows(query.data) : []);
   const multiCommodity = $derived(hasMultipleCommodities(rows));
   const scope = $derived(query.data?.query.cash_scope ?? 'default_liquid_cash');
-  const resolvedAccountCount = $derived(query.data?.query.filters.resolved_account_ids.length ?? 0);
+  const resolvedAccountIDs = $derived(query.data?.query.filters.resolved_account_ids ?? []);
+  const resolvedAccountCount = $derived(resolvedAccountIDs.length);
+
+  // Cashflow answers "what changed my cash"; the breakdown of a direction is the
+  // spending report's question, over the same accounts and range. Linking is how
+  // both stay true — filtering cashflow itself would break its reconciliation.
+  function drillDown(row: CashflowRow, direction: 'in' | 'out'): string | undefined {
+    return cashflowDrillDownHref(row, direction, resolvedAccountIDs, options.bucket);
+  }
 
   const dateFormatter = $derived(
     new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -208,8 +223,24 @@
               <td class={`px-3 py-3 font-medium text-foreground ${commodityCellClass}`}>
                 {commodityLabel(row.commodityID)}
               </td>
-              <td class="px-3 py-3 text-right tabular-nums text-foreground">{amount(row.inflow, row)}</td>
-              <td class="px-3 py-3 text-right tabular-nums text-foreground">{amount(row.outflow, row)}</td>
+              <td class="px-3 py-3 text-right tabular-nums text-foreground">
+                {#if drillDown(row, 'in')}
+                  <a href={drillDown(row, 'in')} class="text-accent underline underline-offset-2 transition hover:opacity-80">
+                    {amount(row.inflow, row)}
+                  </a>
+                {:else}
+                  {amount(row.inflow, row)}
+                {/if}
+              </td>
+              <td class="px-3 py-3 text-right tabular-nums text-foreground">
+                {#if drillDown(row, 'out')}
+                  <a href={drillDown(row, 'out')} class="text-accent underline underline-offset-2 transition hover:opacity-80">
+                    {amount(row.outflow, row)}
+                  </a>
+                {:else}
+                  {amount(row.outflow, row)}
+                {/if}
+              </td>
               <td class={`px-3 py-3 text-right tabular-nums ${derivedCellClass} ${toneFor(row.operatingNet)}`}>
                 {signedAmount(row.operatingNet, row)}
               </td>
@@ -253,5 +284,6 @@
     {/if}
 
     <p class="mt-4 text-xs text-muted">{m.reports_cashflow_identity_note()}</p>
+    <p class="mt-1 text-xs text-muted">{m.reports_cashflow_drill_down_hint()}</p>
   {/if}
 </Panel>

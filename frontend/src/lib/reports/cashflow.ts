@@ -126,3 +126,49 @@ export function transferDetail(row: CashflowRow): 'none' | 'in' | 'out' | 'both'
   if (outgoing) return 'out';
   return 'none';
 }
+
+/**
+ * The spending-report link that breaks down one bucket's inflow or outflow.
+ *
+ * Cashflow deliberately takes no category or payee filter: such a filter removes
+ * counterpart postings from the basis, and `net_movement` would stop reconciling
+ * to the cash balance change. The breakdown belongs to the spending report,
+ * whose account filter is a counterpart filter over the same accounts — so the
+ * two ask the same question, and this link is how you get from one to the other.
+ *
+ * The scope is passed as the *resolved* account ids the cashflow report actually
+ * measured, so the drill-down inherits the exact set rather than re-deriving a
+ * default that may have drifted since.
+ */
+export function cashflowDrillDownHref(
+  row: CashflowRow,
+  direction: 'in' | 'out',
+  resolvedAccountIDs: number[],
+  bucket: string
+): string | undefined {
+  const amount = direction === 'in' ? row.inflow : row.outflow;
+  // Nothing moved in that direction, so there is nothing to break down.
+  if (amount === '0') return undefined;
+
+  const params = new URLSearchParams();
+  params.set('view', 'spending');
+  params.set('group_by', 'category');
+  // An inflow is money from income counterparts, an outflow money to expense
+  // counterparts — exactly the spending report's direction switch.
+  params.set('mode', direction === 'in' ? 'income' : 'spending');
+  params.set('start_date', row.startDate);
+  params.set('end_date', row.endDate);
+  // Spending ranks one range and ignores the bucket, but the reports screen
+  // requires a valid one in the URL; carrying cashflow's own keeps a later
+  // switch to net worth showing the same granularity.
+  params.set('bucket', bucket);
+
+  for (const accountID of resolvedAccountIDs) {
+    params.append('account_id', String(accountID));
+  }
+  // The row's own commodity only. A cashflow row is per commodity, and widening
+  // the breakdown to the others would answer a question the row did not ask.
+  params.append('commodity_id', String(row.commodityID));
+
+  return `/app/reports?${params.toString()}`;
+}

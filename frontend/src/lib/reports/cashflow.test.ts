@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CashflowReportResponse } from '$lib/api/reports';
-import { cashflowRows, hasMultipleCommodities, isEmptyCashflow, transferDetail } from './cashflow';
+import {
+  cashflowDrillDownHref,
+  cashflowRows,
+  hasMultipleCommodities,
+  isEmptyCashflow,
+  transferDetail
+} from './cashflow';
 
 function quantity(commodityID: number, value: string, scale = 2) {
   return {
@@ -143,5 +149,47 @@ describe('transferDetail', () => {
 
   it('is none when only income and expense moved', () => {
     expect(transferDetail(rowWith({ inflow: '100000', net_movement: '100000' }))).toBe('none');
+  });
+});
+
+describe('cashflowDrillDownHref', () => {
+  const [row] = cashflowRows(
+    report([
+      {
+        ...emptyBucket,
+        inflow: [quantity(1, '320000')],
+        outflow: [quantity(1, '41250')],
+        operating_net: [quantity(1, '278750')],
+        net_movement: [quantity(1, '278750')]
+      }
+    ])
+  );
+
+  it('sends the outflow to spending over the same range and accounts', () => {
+    const href = cashflowDrillDownHref(row, 'out', [4, 5], 'week');
+    const params = new URLSearchParams(href?.split('?')[1]);
+    expect(params.get('view')).toBe('spending');
+    expect(params.get('mode')).toBe('spending');
+    expect(params.get('start_date')).toBe('2026-06-01');
+    expect(params.get('end_date')).toBe('2026-06-30');
+    // The resolved scope the cashflow report actually measured, not a default
+    // re-derived later.
+    expect(params.getAll('account_id')).toEqual(['4', '5']);
+    // The row's own commodity only.
+    expect(params.getAll('commodity_id')).toEqual(['1']);
+    expect(params.get('bucket')).toBe('week');
+  });
+
+  it('sends the inflow to the income direction', () => {
+    const href = cashflowDrillDownHref(row, 'in', [4], 'month');
+    expect(new URLSearchParams(href?.split('?')[1]).get('mode')).toBe('income');
+  });
+
+  it('does not link a direction where nothing moved', () => {
+    const [quiet] = cashflowRows(
+      report([{ ...emptyBucket, transfer_out: [quantity(1, '5000')], net_movement: [quantity(1, '-5000')] }])
+    );
+    expect(cashflowDrillDownHref(quiet, 'in', [4], 'month')).toBeUndefined();
+    expect(cashflowDrillDownHref(quiet, 'out', [4], 'month')).toBeUndefined();
   });
 });

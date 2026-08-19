@@ -476,14 +476,31 @@ Shipped across all three views.
    A summary chart is deliberately not part of this item — it belongs with the
    "summary charts alongside (not replacing) the accessible data table" entry.
 
-   **Deliberately deferred, not forgotten:** category and payee filters, and the
-   transfer policy toggle, are listed in the contract table above but are not
-   implemented. A category or payee filter removes counterpart postings from the
-   basis, at which point `net_movement` can no longer reconcile to the cash
-   balance change — rule 4's guarantee would quietly stop holding. Shipping the
-   exact core first is the honest order; those filters need their own decision
-   about what `net_movement` means under them, plus the UI explanation this plan
-   already calls for.
+   **Category and payee filters on cashflow: decided against, 2026-08-19.** They
+   are listed in the contract table above and are deliberately not implemented.
+   Such a filter removes counterpart postings from the basis, at which point
+   `net_movement` can no longer reconcile to the cash balance change — rule 4's
+   guarantee would quietly stop holding, and that guarantee is the report.
+
+   The question they were meant to answer already has a home. The spending
+   report's `account_id` is a counterpart filter over the same accounts, so
+   "what did this cash go to" is spending, scoped to the cash accounts. What was
+   missing was the bridge, so **a cashflow row's in and out figures link into the
+   spending report** for that bucket's dates, the same resolved accounts, the
+   row's own commodity, and the matching direction (in → income, out →
+   spending). A separate report was considered and rejected as a duplicate of
+   spending; the transfer-policy toggle stays unbuilt for the same reason rule 3
+   makes it unnecessary — financing movement is always shown separately.
+
+   **The tightening that makes the link honest.** Spending's account filter used
+   to correlate to the *transaction*, while cashflow classifies per *journal
+   entry*. A multi-entry transaction holding a groceries posting in one entry and
+   touching the filtered account only in another would therefore appear in the
+   drill-down but not in the row it came from. The filter now correlates to the
+   category posting's own entry, so both reports mean the same thing by "spent
+   from this account". Pinned by
+   `TestSpendingAccountFilterMatchesPerJournalEntry`, which fails against the old
+   correlation.
    - Acceptance: for every commodity and bucket, `net_movement` reconciles to
      the selected-cash balance delta; transfers within scope net to zero; a
      split transaction is not misclassified.

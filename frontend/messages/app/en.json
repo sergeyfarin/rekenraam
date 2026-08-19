@@ -72,6 +72,7 @@
   "reports_cashflow_transfer_detail_in": "In {incoming}",
   "reports_cashflow_transfer_detail_out": "Out {outgoing}",
   "reports_cashflow_identity_note": "Net movement is operating net plus transfers, and matches the change in these accounts' balances over each period.",
+  "reports_cashflow_drill_down_hint": "Select an in or out figure to see which categories it was made of, over the same period and accounts.",
   "reports_cashflow_loading_title": "Loading cashflow…",
   "reports_cashflow_loading_copy": "Reading posted movements for the selected range.",
   "reports_cashflow_error_title": "Cashflow could not be loaded",

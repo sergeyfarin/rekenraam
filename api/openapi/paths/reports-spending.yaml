@@ -58,9 +58,12 @@ get:
     - in: query
       name: account_id
       description: >
-        Repeatable counterpart filter. Keeps category postings whose transaction
-        also touches one of these accounts — "what did I spend from here" —
-        without inferring a bank-statement classification.
+        Repeatable counterpart filter. Keeps category postings whose *journal
+        entry* also touches one of these accounts — "what did I spend from
+        here" — without inferring a bank-statement classification. Matching per
+        entry rather than per transaction means a multi-entry transaction whose
+        category posting and filtered account sit in different entries does not
+        count, which is also what keeps this in step with the cashflow report.
       schema:
         type: array
         items:

@@ -23,7 +23,8 @@ Recorded here as pointers; the source of truth is `roadmap.md` and
   expense category.
 - **Cashflow keeps its reconciliation guarantee.** Category and payee filters
   are not added to it; the filtered question is answered by the spending report,
-  reached by drill-down from a cashflow row. Approach still to be confirmed.
+  reached by drill-down from a cashflow row. Confirmed and shipped 2026-08-19,
+  including the entry-level tightening of spending's account filter.
 - **Public-deployment gates (S-04, S-06, S-07): parked.** Self-hosted locally
   for now; unpark when an internet-exposed deployment is planned, R3 at the
   earliest.
@@ -44,8 +45,9 @@ slice moved into R17; R14a stays after R5 with an attachments hook in R3;
 the provider "verify" items reclassified as blocking slice-start
 preconditions. Also in `roadmap.md`.
 
-**Awaiting an owner decision:** only the cashflow drill-down approach (above)
-and who produces the translations for the five target languages.
+**Awaiting an owner decision:** who produces the translations for the five
+target languages, and whether T-47 (investment trades cannot override a
+reconciliation lock) is worth scheduling.
 
 ## Current initiative — R2 reports (see roadmap.md)
 
@@ -120,11 +122,12 @@ Ordered by value. None of these needs a further decision.
    realized-gain engine report the whole basis as a loss. Its guard test found
    T-47: the reconciliation-guard error was unmapped across the investments API
    and surfaced as a 500.
-4. **Cashflow → spending drill-down** *(approach not yet confirmed)*: link a
-   cashflow row's in/out cell to the spending report scoped to that bucket's
-   dates, the same cash accounts, and the matching direction. Wants spending's
-   account filter tightened from transaction level to journal-entry level so the
-   two agree exactly for multi-entry transactions.
+4. [x] **Cashflow → spending drill-down — done 2026-08-19** (owner chose C2). A
+   cashflow row's in and out figures link into the spending report for that
+   bucket's dates, the same resolved accounts, the row's commodity, and the
+   matching direction. Spending's account filter was tightened from transaction
+   level to journal-entry level so the two reports mean the same thing by "spent
+   from this account".
 
 Localization of the five target languages is unblocked on *which* languages but
 still open on **who writes the translations** — roughly 250 messages of
