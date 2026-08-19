@@ -280,6 +280,6 @@
   "language_title": "Sprache",
   "language_copy": "Die Sprache der Oberfläche wird in diesem Browser gespeichert. Beträge, Datumsangaben und Zahlen richten sich nach der gewählten Sprache.",
   "language_select_legend": "Sprache der Oberfläche",
-  "language_translation_progress_title": "Übersetzung noch nicht abgeschlossen",
-  "language_translation_progress_copy": "Noch nicht Übersetztes wird auf Englisch angezeigt und bleibt nicht leer."
+  "language_translation_progress_title": "Vorläufige Übersetzung",
+  "language_translation_progress_copy": "Diese Übersetzungen wurden anhand eines Terminologie-Glossars erstellt und noch nicht von Muttersprachlern geprüft. Noch nicht Übersetztes wird auf Englisch angezeigt und bleibt nicht leer."
 }

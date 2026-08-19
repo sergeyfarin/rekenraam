@@ -18,6 +18,11 @@ test('switches the interface language and keeps it across navigation', async ({ 
   await expect(page.getByRole('heading', { name: 'Язык' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Русский' })).toHaveAttribute('aria-pressed', 'true');
 
+  // The two catalogs compile into one namespace but are separate files, so a
+  // string from each has to be checked: 'Язык' comes from messages/app and the
+  // settings-section nav from messages/settings.
+  await expect(page.getByRole('link', { name: 'Оформление' })).toBeVisible();
+
   await page.goto('/app/reports');
   await expect(page.getByRole('heading', { name: 'Отчёты', level: 1 })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Группировка' })).toBeVisible();

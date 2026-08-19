@@ -280,6 +280,6 @@
   "language_title": "Taal",
   "language_copy": "De taal van de interface wordt in deze browser bewaard. Bedragen, datums en getallen volgen de gekozen taal.",
   "language_select_legend": "Taal van de interface",
-  "language_translation_progress_title": "Vertaling in uitvoering",
-  "language_translation_progress_copy": "Wat nog niet vertaald is, wordt in het Engels getoond in plaats van leeg te blijven."
+  "language_translation_progress_title": "Voorlopige vertaling",
+  "language_translation_progress_copy": "Deze vertalingen zijn opgesteld aan de hand van een terminologielijst en zijn nog niet nagekeken door een moedertaalspreker. Wat nog niet vertaald is, wordt in het Engels getoond in plaats van leeg te blijven."
 }

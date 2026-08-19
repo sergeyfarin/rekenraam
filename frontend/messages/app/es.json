@@ -280,6 +280,6 @@
   "language_title": "Idioma",
   "language_copy": "El idioma de la interfaz se guarda en este navegador. Los importes, las fechas y los números siguen el idioma que elija.",
   "language_select_legend": "Idioma de la interfaz",
-  "language_translation_progress_title": "Traducción en curso",
-  "language_translation_progress_copy": "Lo que aún no está traducido se muestra en inglés en lugar de quedar en blanco."
+  "language_translation_progress_title": "Traducción provisional",
+  "language_translation_progress_copy": "Estas traducciones se han redactado a partir de un glosario terminológico y todavía no las ha revisado un hablante nativo. Lo que aún no está traducido se muestra en inglés en lugar de quedar en blanco."
 }

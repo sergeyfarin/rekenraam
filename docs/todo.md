@@ -130,26 +130,30 @@ Ordered by value. None of these needs a further decision.
    level to journal-entry level so the two reports mean the same thing by "spent
    from this account".
 
-5. [~] **Localization of the five target languages — drafted 2026-08-19,
-   partial.** The catalog is larger than the earlier "roughly 250 messages"
-   estimate: it is **1,163 messages** — 283 in `frontend/messages/app/` and 887
-   in `frontend/messages/settings/`.
+5. [x] **Localization of the five target languages — drafted 2026-08-19.** The
+   catalog is far larger than the earlier "roughly 250 messages" estimate: it is
+   **1,170 messages** — 283 in `frontend/messages/app/` and 887 in
+   `frontend/messages/settings/`.
    - Terminology is decided first and written down in
      `docs/localization-glossary.md`, anchored to GnuCash, localized MS Money
      and Quicken, and per-market banking language. **Review that file, not the
      strings.** Two deliberate departures from the literal are recorded there
      (*commodity* → *instrument*; *cleared* and *reconciled* must not collapse).
-   - `frontend/messages/app/{es,fr,nl,de,ru}.json` are complete: 283/283 each,
-     key sets and placeholder sets verified against `en.json`.
-   - `frontend/messages/settings/{es,fr,nl,de,ru}.json` are **not written yet**
-     (887 messages each). Until they are, those screens fall back to English
-     per-message rather than going blank, and the language settings page says so.
+   - **All 1,170 messages are translated in all five languages**:
+     `frontend/messages/app/{es,fr,nl,de,ru}.json` at 283/283 each and
+     `frontend/messages/settings/{es,fr,nl,de,ru}.json` at 887/887 each. Key
+     sets and placeholder sets are verified against `en.json` for every file.
+   - A missing translation still falls back to English per message rather than
+     going blank, so adding a new English string never blanks a screen.
    - A language picker lives at `/app/settings/language`; the locale resolves
      `localStorage → browser preference → English` and is covered end-to-end by
      `e2e/playwright/language.spec.ts`.
    - Still open: **native review** of each language — the translations are
-     drafted from the glossary, not reviewed by native speakers. Spanish
-     *Punteado* for "cleared" is the first item to check.
+     drafted from the glossary, not reviewed by native speakers, and the
+     language settings page says so to anyone using a non-English locale. Three
+     items to check first, in order: Spanish *Punteado* for "cleared", Russian
+     *партия* for a tax lot, and Dutch *Instelling* for a financial institution
+     (it collides with *instellingen*, "settings").
 
 ## Bug-fix queue (from backlog — schedule independent of R2)
 

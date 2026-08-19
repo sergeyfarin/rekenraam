@@ -280,6 +280,6 @@
   "language_title": "Langue",
   "language_copy": "La langue de l'interface est enregistrée dans ce navigateur. Les montants, les dates et les nombres suivent la langue choisie.",
   "language_select_legend": "Langue de l'interface",
-  "language_translation_progress_title": "Traduction en cours",
-  "language_translation_progress_copy": "Ce qui n'est pas encore traduit s'affiche en anglais plutôt que de rester vide."
+  "language_translation_progress_title": "Traduction provisoire",
+  "language_translation_progress_copy": "Ces traductions ont été rédigées à partir d'un glossaire terminologique et n'ont pas encore été relues par un locuteur natif. Ce qui n'est pas encore traduit s'affiche en anglais plutôt que de rester vide."
 }

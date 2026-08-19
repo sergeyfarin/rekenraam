@@ -6,7 +6,7 @@ wearing a personal-finance coat, so half the vocabulary is accounting
 vocabulary with an established word in each language, and the other half is
 consumer banking vocabulary with a *different* established word.
 
-**Review this file, not the 1,163 strings.** Every catalog follows these
+**Review this file, not the 1,170 strings.** Every catalog follows these
 choices; if a term is wrong here it is wrong in a hundred places, and if it is
 right here the rest is mechanical.
 
@@ -84,6 +84,34 @@ French *pointé* is certain — pointing off a statement is the standard phrase.
 Spanish *punteado* is the traditional accounting term but is less common in
 consumer products than *conciliado*, which is already taken by "reconciled";
 **this is the first thing to check with a native speaker.**
+
+## Terms settled while translating the settings catalog
+
+| English | Spanish | French | Dutch | German | Russian |
+|---|---|---|---|---|---|
+| Register (account) | Registro | Registre | Dagboek | Kontobuch | Журнал счёта |
+| Lot (tax lot) | Lote | Lot | Lot | Posten | Партия |
+| Cost basis | Coste de adquisición | Prix de revient | Kostprijs | Anschaffungskosten | Себестоимость |
+| Proceeds | Importe de la venta | Produit de cession | Opbrengst | Verkaufserlös | Выручка |
+| Realized / unrealized | Realizada / no realizada | Réalisée / latente | Gerealiseerd / ongerealiseerd | Realisiert / nicht realisiert | Реализованная / нереализованная |
+| Void (a transaction) | Anular | Annuler | Storneren | Stornieren | Аннулировать |
+| Posted | Contabilizada | Comptabilisée | Geboekt | Gebucht | Проведена |
+| Institution | Entidad | Établissement | Instelling | Institut | Организация |
+| Withholding tax | Retención | Retenue à la source | Bronbelasting | Quellensteuer | Налог у источника |
+
+**Void is not delete.** A voided transaction stays in the ledger with its
+effect reversed, which is exactly what Dutch *storneren* and German
+*stornieren* mean; the Romance languages use their ordinary "annul" verb, so
+the *delete / void* pair is carried by the surrounding copy rather than by the
+verb alone.
+
+Russian **партия** for a tax lot is a considered choice: *лот* in Russian
+trading language means the exchange's minimum trade size, not a purchase
+tranche held for cost-basis purposes. Worth a second opinion.
+
+Dutch **Instelling** collides with *instellingen* ("settings"). It is still the
+right word for a financial institution and the contexts never sit side by side,
+but this is the second thing to check with a native speaker.
 
 ## Register
 

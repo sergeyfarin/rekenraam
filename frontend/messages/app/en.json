@@ -280,6 +280,6 @@
   "language_title": "Language",
   "language_copy": "The interface language is stored in this browser. Amounts, dates, and numbers follow the language you pick.",
   "language_select_legend": "Interface language",
-  "language_translation_progress_title": "Translation in progress",
-  "language_translation_progress_copy": "Anything not yet translated is shown in English rather than left blank."
+  "language_translation_progress_title": "Draft translation",
+  "language_translation_progress_copy": "These translations are drafted from a terminology glossary and have not yet been reviewed by a native speaker. Anything not yet translated is shown in English rather than left blank."
 }
