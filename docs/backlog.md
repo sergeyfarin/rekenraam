@@ -93,6 +93,15 @@ name prompts for confirmation, offering existing payees through a fuzzy search
 before a record is created. Auto-creating without confirmation was rejected
 because it sprays near-duplicate records from typos.
 
+**Entry side done 2026-08-19** (`lib/transactions/payee-matching.ts` +
+`transaction-editor.svelte`). The editor loads the payee list once and ranks it
+locally with `minisearch` rather than re-querying per keystroke: a server-side
+`LIKE` cannot find "Market Hall" from "Markt Hall", and that near miss is
+exactly what makes someone create the duplicate. Saving a name no payee carries
+stops and asks, offering the near matches first. Confirmation is skipped when
+the name was not edited, so an older transaction that already carries an
+unlinked name never blocks an edit to an unrelated field.
+
 Two consequences the decision implies and that this item must cover:
 
 - **Imports cannot show a dialog per row.** The import path already resolves a
@@ -108,7 +117,8 @@ Two consequences the decision implies and that this item must cover:
 - **History is not fixed by entry-side work.** Existing rows keep `payee_name`
   with no `payee_id`, so the report stays degraded for past data until a one-off
   "link unlinked payees" tool exists — a settings screen listing distinct
-  unlinked names with counts, offering link-to-existing or create.
+  unlinked names with counts, offering link-to-existing or create. **This is
+  the only part of T-44 still open.**
 
 ### T-45 Net-worth series re-reads the whole ledger once per bucket `[x]`
 

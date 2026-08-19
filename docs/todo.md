@@ -99,18 +99,17 @@ and who produces the translations for the five target languages.
 
 Ordered by value. None of these needs a further decision.
 
-1. **T-44 payee resolution on entry.** Highest value: it repairs the payee
-   ranking in the spending report that shipped this week. Typing a new payee
-   name prompts for confirmation, offering existing payees through fuzzy search
-   before creating a record. Three parts the decision implies:
-   - manual entry gets the confirm-and-search flow;
-   - **imports cannot show a dialog per row**, so the import path needs its own
-     rule (the resolution step already carries a `PayeeID`); auto-link exact
-     matches, leave the rest unlinked, surface them in import review;
-   - **existing rows keep `payee_name` with no `payee_id`**, so history stays
-     degraded without a one-off "link unlinked payees" tool.
-   Fuzzy search needs `minisearch` added — not currently a dependency, though
-   `conventions.md` already names it as the sanctioned choice for dropdowns.
+1. **T-44 payee resolution — two of three parts done 2026-08-19.**
+   - [x] Exact-name linking on every write path, so manual entry *and* import
+         commit both resolve a typed name to the record that carries it.
+   - [x] Manual entry confirm-and-search: a name no payee carries stops the save
+         and offers near matches (fuzzy, via `minisearch`) before creating a
+         record. Skipped when the name was not edited, so older unlinked data
+         never blocks an unrelated edit.
+   - [ ] **Still open: the history.** Existing rows keep `payee_name` with no
+         `payee_id`, so the spending report stays degraded for past data. Wants
+         a settings screen listing distinct unlinked names with transaction
+         counts, offering link-to-existing or create.
 2. **T-37 price observation voiding**, R16 slice 1 and a prerequisite for the
    reporting-currency work.
 3. **T-38 zero-proceeds write-off**, R16 slice 1. Zero proceeds must be explicit

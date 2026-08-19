@@ -39,6 +39,9 @@ importers:
       dinero.js:
         specifier: 2.0.2
         version: 2.0.2
+      minisearch:
+        specifier: ^7.2.0
+        version: 7.2.0
       openapi-fetch:
         specifier: 0.17.0
         version: 0.17.0
@@ -975,6 +978,9 @@ packages:
   minimatch@5.1.9:
     resolution: {integrity: sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==}
     engines: {node: '>=10'}
+
+  minisearch@7.2.0:
+    resolution: {integrity: sha512-dqT2XBYUOZOiC5t2HRnwADjhNS2cecp9u+TJRiJ1Qp/f5qjkeT5APcGPjHw+bz89Ms8Jp+cG4AlE+QZ/QnDglg==}
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -2039,6 +2045,8 @@ snapshots:
   minimatch@5.1.9:
     dependencies:
       brace-expansion: 2.1.4
+
+  minisearch@7.2.0: {}
 
   mri@1.2.0: {}
 
