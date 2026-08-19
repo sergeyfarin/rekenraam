@@ -299,7 +299,7 @@ Later phases should remain optional. The earlier phases must still produce a com
 
 These should be fixed before many screens accumulate inconsistent patterns.
 
-- Localization strategy: message catalogs, locale selection, fallback behavior, target languages, and number or date formatting boundaries.
+- ~~Localization strategy: message catalogs, locale selection, fallback behavior, target languages, and number or date formatting boundaries.~~ **Locked 2026-08-19:** Paraglide catalogs under `frontend/messages/`, locale resolved `localStorage → browser preference → English` with per-message English fallback, target languages as below, and all number/date/money formatting done by `Intl` from the active locale rather than baked into catalogs. Terminology is governed by `docs/localization-glossary.md`.
 - Built-in data localization strategy: stable keys for seeded categories, account classes, account kinds, currencies, commodities, system accounts, and other app-defined labels.
 - Theme strategy: light and dark themes first, semantic token naming, persisted preference, and chart color policy.
 - Responsive layout rules: breakpoints, dense-table behavior, sidebar or drawer behavior, and mobile transaction entry expectations.

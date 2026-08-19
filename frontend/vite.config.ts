@@ -10,7 +10,11 @@ export default defineConfig({
     paraglideVitePlugin({
       project: './project.inlang',
       outdir: './src/lib/paraglide',
-      strategy: ['baseLocale']
+      // Production is static output served by the Go binary, so a URL-segment
+      // strategy would mean new routes and a change to the SPA fallback. This
+      // order keeps locale selection entirely client-side: an explicit choice
+      // wins, otherwise the browser's own preference, otherwise English.
+      strategy: ['localStorage', 'preferredLanguage', 'baseLocale']
     }),
     sveltekit(),
     svelteAnnouncerCsp()

@@ -218,6 +218,22 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Backend translation (export file headers, server-generated content) is deferred to Phase 3. When needed, use `nicksnyder/go-i18n` with JSON message files.
 - All user-facing copy goes through a translation boundary.
 - English is the initial implementation language.
+- Message catalogs live in `frontend/messages/{app,settings}/{locale}.json`. Both
+  directories feed the single `m` namespace, so a key must be unique across
+  them; which file a key sits in is a grouping decision, not a namespace.
+- Shipping locales are `en, es, fr, nl, de, ru`. Locale resolution is
+  `localStorage → browser preference → English`, configured identically in
+  `vite.config.ts` and the `paraglide:compile` script — change both together or
+  a build silently ships English only.
+- **Terminology is decided in `docs/localization-glossary.md` before strings are
+  written.** Do not translate this app term-by-term: half its vocabulary is
+  accounting vocabulary with an established word per language, and half is
+  consumer-banking vocabulary with a different established word. Where a term
+  exists in GnuCash or a localized MS Money/Quicken, that term wins over a more
+  literal one. Add a row to the glossary before introducing a new domain term.
+- A missing translation falls back to English per message rather than rendering
+  blank; partial catalogs are an acceptable intermediate state, and the language
+  settings page says so when the active locale is not English.
 - UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.
 - Do not concatenate translated fragments to form sentences.
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.

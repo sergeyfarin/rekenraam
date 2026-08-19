@@ -3,6 +3,7 @@
   import Activity from '@lucide/svelte/icons/activity';
   import Coins from '@lucide/svelte/icons/coins';
   import Database from '@lucide/svelte/icons/database';
+  import Languages from '@lucide/svelte/icons/languages';
   import Palette from '@lucide/svelte/icons/palette';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Clock from '@lucide/svelte/icons/clock';
@@ -146,6 +147,12 @@
       icon: Palette,
       title: m.settings_card_appearance_title(),
       copy: m.settings_card_appearance_copy()
+    },
+    {
+      href: '/app/settings/language',
+      icon: Languages,
+      title: m.settings_card_language_title(),
+      copy: m.settings_card_language_copy()
     },
     {
       href: '/app/settings/currencies',

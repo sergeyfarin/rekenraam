@@ -274,5 +274,12 @@
   "import_fetching_copy": "This can take a moment. You can leave this page; the fetch keeps running in the background.",
   "import_fetching_cancel": "Cancel",
   "import_fetching_failed_title": "The fetch failed",
-  "import_fetching_failed_copy": "Check the connection's API key and try again."
+  "import_fetching_failed_copy": "Check the connection's API key and try again.",
+  "settings_card_language_title": "Language",
+  "settings_card_language_copy": "Choose the language the interface is shown in.",
+  "language_title": "Language",
+  "language_copy": "The interface language is stored in this browser. Amounts, dates, and numbers follow the language you pick.",
+  "language_select_legend": "Interface language",
+  "language_translation_progress_title": "Translation in progress",
+  "language_translation_progress_copy": "Anything not yet translated is shown in English rather than left blank."
 }

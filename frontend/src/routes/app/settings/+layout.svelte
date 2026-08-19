@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import type { Snippet } from 'svelte';
   import Coins from '@lucide/svelte/icons/coins';
+  import Languages from '@lucide/svelte/icons/languages';
   import Palette from '@lucide/svelte/icons/palette';
   import Settings2 from '@lucide/svelte/icons/settings-2';
   import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -23,6 +24,12 @@
       label: m.settings_nav_appearance(),
       icon: Palette,
       active: pathname.startsWith('/app/settings/appearance')
+    },
+    {
+      href: '/app/settings/language',
+      label: m.settings_card_language_title(),
+      icon: Languages,
+      active: pathname.startsWith('/app/settings/language')
     },
     {
       href: '/app/settings/currencies',
