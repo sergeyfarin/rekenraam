@@ -1,0 +1,60 @@
+post:
+  summary: Void a price observation
+  description: >
+    Retires an observation without deleting it. A price is corrected by
+    superseding or voiding, never by overwriting: the row remains, voided_at is
+    stamped, and every price read already filters voided observations out, so a
+    poisoned price stops feeding historical listings and derivations. A reason
+    is required — voiding is a deliberate correction to financial data, and the
+    "why" is worth nothing if it is invented for the caller.
+  parameters:
+    - in: path
+      name: price_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - void_reason
+          properties:
+            void_reason:
+              type: string
+              minLength: 1
+              maxLength: 500
+  responses:
+    "200":
+      description: The voided observation
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/PriceObservationResponse"
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: No such price observation
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: The observation is already voided
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

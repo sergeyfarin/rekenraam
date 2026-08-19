@@ -34,7 +34,7 @@ spin_off, ticker_change, delisting, `corporate_action`), which
 `dividend_income` proposed-transaction kind (dividend, distribution,
 cash_in_lieu, return_of_capital) is implemented.
 
-### T-37 Price observations can never be voided `[ ]`
+### T-37 Price observations can never be voided `[x]`
 
 **Files:** `backend/internal/db/pricing.go`, `backend/internal/app/pricing.go`,
 `backend/internal/api/pricing.go`.
@@ -45,10 +45,30 @@ superseding **or voiding**" invariant is half-implemented, and a poisoned
 observation cannot be retired from historical listings or derivations.
 Audit P3. Natural home: R11 pricing UI, but the endpoint can land earlier.
 
-**Raised in priority 2026-08-19:** the approved reporting-currency selector will
-make FX and price observations drive headline report figures. An unvoidable
-poisoned observation stops being a tidy-up at that point, so this should land
-before the currency work rather than after it.
+**Raised in priority, then fixed, 2026-08-19.** The approved reporting-currency
+selector will make FX and price observations drive headline report figures, at
+which point an unvoidable poisoned observation stops being a tidy-up — so this
+landed before the currency work rather than after it.
+
+`POST /api/v1/pricing/prices/{price_id}/void` retires an observation without
+deleting it: the row stays, `voided_at` is stamped, and every read already
+filtered on it, so a poisoned price immediately stops feeding listings and
+derivations. Decisions worth not re-litigating:
+
+- **A reason is required, never defaulted.** Voiding is a deliberate correction
+  to financial data, and inventing the "why" for the caller would make the audit
+  log lie.
+- **A second void is a 409, not a silent success.** Two people, or two clicks,
+  disagreeing about a price's state is worth surfacing.
+- Migration `0002_price_observation_void_audit.sql` adds `voided_audit_event_id`.
+  The table carried `created_audit_event_id` but had no equivalent for the void,
+  so the audit model's rule — every row an operation touches references the
+  event explaining it — could not be met from the row alone.
+
+Proven by `TestVoidPrice_RetiresObservationWithoutDeletingIt` (the voided row
+keeps its original price and leaves the listing; the good one stays) and
+`TestVoidPrice_RequiresAReasonAndRejectsRepeats`. Remaining for R11: the pricing
+UI that exposes it.
 
 ### T-38 Zero-proceeds disposal (write-off) is impossible `[ ]`
 
@@ -73,7 +93,7 @@ also the smaller change. Two guards belong in the implementation:
 Independent of the open I-03/I-04 gains-reporting research: this uses whatever
 gains treatment is current.
 
-### T-44 Free-text payees never group in reports `[ ]`
+### T-44 Free-text payees never group in reports `[x]`
 
 **Files:** `backend/internal/app/transactions_validate.go` (payee resolution:
 `payee_name` is stored as free text and only `payee_id` links a payee record);
@@ -114,11 +134,17 @@ Two consequences the decision implies and that this item must cover:
   link never disagree. Archived payees are deliberately not matched — they are
   not offered for new entry, and linking to one silently would resurrect it in
   reports.
-- **History is not fixed by entry-side work.** Existing rows keep `payee_name`
-  with no `payee_id`, so the report stays degraded for past data until a one-off
-  "link unlinked payees" tool exists — a settings screen listing distinct
-  unlinked names with counts, offering link-to-existing or create. **This is
-  the only part of T-44 still open.**
+- **No history to repair (confirmed by the owner 2026-08-19).** The app is still
+  in development and carries no real data, so the one-off "link unlinked
+  payees" backfill tool this item previously called for is **not needed and has
+  been dropped**. Should that change — a pilot user, an imported book — it comes
+  back as new work, not as a resurrection of this item.
+- **Imports still produce unlinked names, deliberately.** A bulk import cannot
+  confirm each unknown payee, so unrecognized names commit as free text. Until
+  import review can resolve them, the path is to open the transaction and edit
+  the payee, where the editor now forces link-or-create. Making import review
+  resolve distinct unknown names in one pass belongs with import work (R5/R6),
+  not with T-44; recorded there rather than left implied here.
 
 ### T-45 Net-worth series re-reads the whole ledger once per bucket `[x]`
 

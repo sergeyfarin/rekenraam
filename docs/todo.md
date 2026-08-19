@@ -99,19 +99,21 @@ and who produces the translations for the five target languages.
 
 Ordered by value. None of these needs a further decision.
 
-1. **T-44 payee resolution — two of three parts done 2026-08-19.**
+1. **T-44 payee resolution — done 2026-08-19.**
    - [x] Exact-name linking on every write path, so manual entry *and* import
          commit both resolve a typed name to the record that carries it.
    - [x] Manual entry confirm-and-search: a name no payee carries stops the save
          and offers near matches (fuzzy, via `minisearch`) before creating a
          record. Skipped when the name was not edited, so older unlinked data
          never blocks an unrelated edit.
-   - [ ] **Still open: the history.** Existing rows keep `payee_name` with no
-         `payee_id`, so the spending report stays degraded for past data. Wants
-         a settings screen listing distinct unlinked names with transaction
-         counts, offering link-to-existing or create.
-2. **T-37 price observation voiding**, R16 slice 1 and a prerequisite for the
-   reporting-currency work.
+   - [x] **History tool dropped** — the owner confirmed 2026-08-19 that the app
+         carries no real data yet, so there is nothing to backfill.
+   - Imports still commit unrecognized names as free text by design; resolving
+     them in import review is follow-up work under import (R5/R6), not T-44.
+2. [x] **T-37 price observation voiding — done 2026-08-19.**
+   `POST /api/v1/pricing/prices/{price_id}/void`, with a required reason, a 409
+   on a repeat, and a migration adding the void's audit-event link. The pricing
+   UI that surfaces it is R11.
 3. **T-38 zero-proceeds write-off**, R16 slice 1. Zero proceeds must be explicit
    intent rather than an empty field defaulting to zero, or a mistyped sell
    silently becomes a write-off; and it is a disposal, so it goes through the

@@ -450,3 +450,19 @@ R4–R7.
   of the app; loading/empty/error/success states defined per screen.
 - **No floating point:** money parses raw text → `exact.Coefficient` + scale at
   the normalize step, never through float.
+
+## Unrecognized payees in review (follow-up, opened 2026-08-19)
+
+T-44 made a typed payee name resolve to the record that carries it on every
+write path, and made manual entry confirm before creating a new record. A bulk
+import cannot ask per row, so it deliberately commits an unrecognized name as
+free text and leaves it unlinked — those transactions land in the spending
+report's "no payee recorded" group.
+
+The interim path is to open such a transaction and edit the payee, where the
+editor forces link-or-create. The improvement, when import UX is next worked on:
+group the staged rows by distinct unknown payee name and resolve each once —
+link to an existing payee (with the same fuzzy near-match search the editor
+uses) or create the record — applying the choice to every row carrying that
+name. `ImportResolution.payee_id` already exists in the API, so this is review
+UI over a contract that is already in place.

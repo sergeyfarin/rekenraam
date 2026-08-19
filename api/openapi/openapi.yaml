@@ -159,6 +159,8 @@ paths:
     $ref: "./paths/reconciliation-checkpoint-void.yaml"
   /api/v1/pricing/prices:
     $ref: "./paths/pricing-prices.yaml"
+  /api/v1/pricing/prices/{price_id}/void:
+    $ref: "./paths/pricing-price-void.yaml"
   /api/v1/pricing/sources:
     $ref: "./paths/pricing-sources.yaml"
   /api/v1/pricing/policy:

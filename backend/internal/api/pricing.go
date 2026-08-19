@@ -49,6 +49,8 @@ type priceObservationResponse struct {
 	Derivation              json.RawMessage `json:"derivation"`
 	Metadata                json.RawMessage `json:"metadata"`
 	RecordedAt              string          `json:"recorded_at"`
+	VoidedAt                string          `json:"voided_at,omitempty"`
+	VoidReason              string          `json:"void_reason,omitempty"`
 }
 
 type priceObservationsResponse struct {
@@ -289,6 +291,41 @@ func createPrice(logger *slog.Logger, authService *app.AuthService, pricingServi
 	}))
 }
 
+type voidPriceRequest struct {
+	VoidReason string `json:"void_reason"`
+}
+
+func voidPrice(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		priceID, err := strconv.ParseInt(r.PathValue("price_id"), 10, 64)
+		if err != nil || priceID <= 0 {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "price id is invalid")
+			return
+		}
+		var request voidPriceRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		price, voidErr := pricingService.VoidPrice(r.Context(), app.VoidPriceInput{
+			ObservationID: priceID,
+			OwnerUserID:   owner.ID,
+			AuthSessionID: authenticatedSessionID(r),
+			RequestID:     RequestIDFromContext(r.Context()),
+			VoidReason:    request.VoidReason,
+		})
+		if voidErr != nil {
+			writePricingServiceError(w, r, logger, "void price", voidErr)
+			return
+		}
+		writeJSON(w, http.StatusOK, toPriceObservationResponse(price))
+	}))
+}
+
 func getPricingPolicy(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
@@ -494,6 +531,10 @@ func writePricingServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing source assignment not found")
 	case errors.Is(err, app.ErrPricingBackgroundWorkNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "failed pricing background work not found")
+	case errors.Is(err, app.ErrPriceObservationNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "price observation not found")
+	case errors.Is(err, app.ErrPriceObservationAlreadyVoided):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "price observation is already voided")
 	case errors.Is(err, app.ErrPricingBackgroundWorkActive):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "equivalent pricing background work is already queued")
 	default:
@@ -533,6 +574,8 @@ func toPriceObservationResponse(price app.PriceObservation) priceObservationResp
 		Derivation:              json.RawMessage(price.DerivationJSON),
 		Metadata:                json.RawMessage(price.MetadataJSON),
 		RecordedAt:              price.RecordedAt,
+		VoidedAt:                price.VoidedAt,
+		VoidReason:              price.VoidReason,
 	}
 }
 

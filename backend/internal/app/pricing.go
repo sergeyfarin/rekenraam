@@ -15,9 +15,12 @@ import (
 )
 
 var (
-	ErrPriceObservationNotFound  = errors.New("price observation not found")
-	ErrPricingPolicyNotFound     = errors.New("pricing policy not found")
-	ErrPricingAssignmentNotFound = errors.New("pricing source assignment not found")
+	ErrPriceObservationNotFound = errors.New("price observation not found")
+	// ErrPriceObservationAlreadyVoided is a conflict, not a no-op: two people or
+	// two clicks disagreeing about a price's state is worth surfacing.
+	ErrPriceObservationAlreadyVoided = errors.New("price observation already voided")
+	ErrPricingPolicyNotFound         = errors.New("pricing policy not found")
+	ErrPricingAssignmentNotFound     = errors.New("pricing source assignment not found")
 )
 
 type MarketDataSource struct {
@@ -55,6 +58,11 @@ type PriceObservation struct {
 	DerivationJSON          string
 	MetadataJSON            string
 	RecordedAt              string
+	// VoidedAt is set once an observation has been retired. Every price read
+	// already filters voided observations out; this is here so a listing can
+	// show that a correction happened rather than a row silently disappearing.
+	VoidedAt   string
+	VoidReason string
 }
 
 type PriceObservationInput struct {
@@ -273,6 +281,63 @@ func (s *PricingService) CreatePrice(ctx context.Context, input PriceObservation
 	})
 	if err != nil {
 		return PriceObservation{}, fmt.Errorf("persist price observation: %w", err)
+	}
+	return toPriceObservation(record), nil
+}
+
+type VoidPriceInput struct {
+	ObservationID int64
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	VoidReason    string
+}
+
+// VoidPrice retires a price observation.
+//
+// The ledger rule is that a price is corrected by superseding *or voiding*,
+// never by overwriting (T-37). Until this existed the invariant was half
+// implemented: every read filtered on `voided_at`, but nothing could set it, so
+// a poisoned observation could not be taken out of historical listings or of
+// the derivations built on it.
+//
+// A reason is required rather than defaulted. Voiding is a deliberate
+// correction to financial data, and "why" is the part that is worth nothing if
+// it is invented for the user.
+func (s *PricingService) VoidPrice(ctx context.Context, input VoidPriceInput) (PriceObservation, error) {
+	if input.OwnerUserID <= 0 {
+		return PriceObservation{}, ValidationError{Message: "owner user is required"}
+	}
+	if input.ObservationID <= 0 {
+		return PriceObservation{}, ValidationError{Message: "price observation is required"}
+	}
+	reason := strings.TrimSpace(input.VoidReason)
+	if reason == "" {
+		return PriceObservation{}, ValidationError{Message: "void reason is required"}
+	}
+	if len(reason) > changeReasonMaxBytes {
+		return PriceObservation{}, ValidationError{Message: fmt.Sprintf("void reason must be at most %d bytes", changeReasonMaxBytes)}
+	}
+
+	record, err := s.repository.VoidPriceObservation(ctx, db.VoidPriceObservationParams{
+		BookID:        BookID,
+		ObservationID: input.ObservationID,
+		ActorUserID:   input.OwnerUserID,
+		AuthSessionID: input.AuthSessionID,
+		RequestID:     input.RequestID,
+		OriginType:    "browser_api",
+		Operation:     "pricing.price.void",
+		VoidedAt:      s.now().UTC().Format(time.RFC3339),
+		VoidReason:    reason,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			return PriceObservation{}, ErrPriceObservationNotFound
+		case errors.Is(err, db.ErrPriceObservationVoided):
+			return PriceObservation{}, ErrPriceObservationAlreadyVoided
+		}
+		return PriceObservation{}, fmt.Errorf("void price observation: %w", err)
 	}
 	return toPriceObservation(record), nil
 }
@@ -714,6 +779,8 @@ func toPriceObservation(record db.PriceObservationRecord) PriceObservation {
 		DerivationJSON:          record.DerivationJSON,
 		MetadataJSON:            record.MetadataJSON,
 		RecordedAt:              record.RecordedAt,
+		VoidedAt:                nullableString(record.VoidedAt),
+		VoidReason:              record.VoidReason,
 	}
 }
 

@@ -80,6 +80,12 @@ PriceObservationResponse:
     metadata:
       type: object
       additionalProperties: true
+    voided_at:
+      type: string
+      description: Set once the observation has been retired. Voided observations are excluded from every price read.
+    void_reason:
+      type: string
+      description: Why the observation was voided. Required when voiding.
     recorded_at:
       type: string
       format: date-time

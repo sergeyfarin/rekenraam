@@ -146,6 +146,7 @@ series backend/API foundation).
 | Price observations (manual, provider, FX, trade-implied) | ✅ | Source/quote-type/adjustment-basis series; valuation date preserved. Derived FX routes through up to `triangulation_max_hops` intermediate currencies, shortest chain first (T-40). |
 | Pricing sources, policy, source assignments, health | 🟡 | Full API (`/pricing/*`); no management UI. |
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
+| Price observation voiding | 🟡 | `POST /pricing/prices/{price_id}/void` retires an observation without deleting it — the row stays, `voided_at` is stamped, and every price read already filters on it. A reason is required; a repeat void is a 409. Completes the "correct a price by superseding **or voiding**" invariant, whose voiding half previously had no implementation (T-37). No UI yet — R11. |
 | **Pricing/FX management UI** | ⬜ | |
 
 ## Investments (Phase 6) — ✅ Core complete

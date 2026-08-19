@@ -7318,6 +7318,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pricing/prices/{price_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a price observation
+         * @description Retires an observation without deleting it. A price is corrected by superseding or voiding, never by overwriting: the row remains, voided_at is stamped, and every price read already filters voided observations out, so a poisoned price stops feeding historical listings and derivations. A reason is required — voiding is a deliberate correction to financial data, and the "why" is worth nothing if it is invented for the caller.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    price_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        void_reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The voided observation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PriceObservationResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No such price observation */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description The observation is already voided */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pricing/sources": {
         parameters: {
             query?: never;
@@ -10780,6 +10863,10 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /** @description Set once the observation has been retired. Voided observations are excluded from every price read. */
+            voided_at?: string;
+            /** @description Why the observation was voided. Required when voiding. */
+            void_reason?: string;
             /** Format: date-time */
             recorded_at: string;
         };

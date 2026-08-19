@@ -118,6 +118,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/pricing/sources", listMarketDataSources(logger, services.Auth, services.Pricing))
 	mux.HandleFunc("GET /api/v1/pricing/prices", listPrices(logger, services.Auth, services.Pricing))
 	mux.HandleFunc("POST /api/v1/pricing/prices", createPrice(logger, services.Auth, services.Pricing, options))
+	mux.HandleFunc("POST /api/v1/pricing/prices/{price_id}/void", voidPrice(logger, services.Auth, services.Pricing, options))
 	mux.HandleFunc("GET /api/v1/pricing/policy", getPricingPolicy(logger, services.Auth, services.Pricing))
 	mux.HandleFunc("PUT /api/v1/pricing/policy", savePricingPolicy(logger, services.Auth, services.Pricing, options))
 	mux.HandleFunc("GET /api/v1/pricing/source-assignments", listPricingSourceAssignments(logger, services.Auth, services.Pricing))

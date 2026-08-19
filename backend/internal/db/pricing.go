@@ -85,6 +85,7 @@ type PriceObservationRecord struct {
 	DerivationJSON          string
 	MetadataJSON            string
 	VoidedAt                sql.NullString
+	VoidReason              string
 	RecordedAt              string
 	CreatedByUserID         int64
 }
@@ -1118,7 +1119,7 @@ func priceObservationSelect(whereClause string) string {
 			adjustment_basis, price_value, price_scale, base_quantity_value, base_quantity_scale,
 			valuation_date, observed_at, source_published_at, source_id, provider_observation_id,
 			is_manual, is_derived, supersedes_observation_id, derivation_json, metadata_json,
-			voided_at, recorded_at, created_by_user_id
+			voided_at, void_reason, recorded_at, created_by_user_id
 		FROM price_observations
 	` + whereClause
 }
@@ -1127,7 +1128,7 @@ func scanPriceObservationRow(row rowScanner) (PriceObservationRecord, error) {
 	var record PriceObservationRecord
 	var isManual int
 	var isDerived int
-	if err := row.Scan(&record.ID, &record.BookID, &record.SeriesID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.QuoteType, &record.AdjustmentBasis, &record.PriceValue, &record.PriceScale, &record.BaseQuantityValue, &record.BaseQuantityScale, &record.ValuationDate, &record.ObservedAt, &record.SourcePublishedAt, &record.SourceID, &record.ProviderObservationID, &isManual, &isDerived, &record.SupersedesObservationID, &record.DerivationJSON, &record.MetadataJSON, &record.VoidedAt, &record.RecordedAt, &record.CreatedByUserID); err != nil {
+	if err := row.Scan(&record.ID, &record.BookID, &record.SeriesID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.QuoteType, &record.AdjustmentBasis, &record.PriceValue, &record.PriceScale, &record.BaseQuantityValue, &record.BaseQuantityScale, &record.ValuationDate, &record.ObservedAt, &record.SourcePublishedAt, &record.SourceID, &record.ProviderObservationID, &isManual, &isDerived, &record.SupersedesObservationID, &record.DerivationJSON, &record.MetadataJSON, &record.VoidedAt, &record.VoidReason, &record.RecordedAt, &record.CreatedByUserID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PriceObservationRecord{}, ErrNotFound
 		}
@@ -1231,4 +1232,81 @@ func scanRefreshRuns(rows *sql.Rows) ([]PricingRefreshRunRecord, error) {
 		return nil, fmt.Errorf("iterate pricing refresh runs: %w", err)
 	}
 	return records, nil
+}
+
+// ErrPriceObservationVoided marks a second void of the same observation. It is
+// a conflict rather than a no-op: voiding is a deliberate correction, and
+// quietly accepting a repeat would hide that two people, or two clicks,
+// disagreed about the state of a price.
+var ErrPriceObservationVoided = errors.New("price observation already voided")
+
+type VoidPriceObservationParams struct {
+	BookID        int64
+	ObservationID int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	VoidedAt      string
+	VoidReason    string
+}
+
+// VoidPriceObservation retires an observation without deleting it.
+//
+// The ledger rule is that a price is corrected by superseding *or voiding*,
+// never by overwriting: the row stays, `voided_at` is stamped, and every read
+// already filters on it. The audit event is written in the same transaction, so
+// who voided what and why is recoverable from the audit log alone.
+func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params VoidPriceObservationParams) (PriceObservationRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("begin void price observation: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	existing, err := priceObservationByIDTx(ctx, tx, params.BookID, params.ObservationID)
+	if err != nil {
+		return PriceObservationRecord{}, err
+	}
+	if existing.VoidedAt.Valid {
+		return PriceObservationRecord{}, ErrPriceObservationVoided
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.VoidedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.VoidReason,
+	})
+	if err != nil {
+		return PriceObservationRecord{}, err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE price_observations
+		SET voided_at = ?, voided_by_user_id = ?, void_reason = ?, voided_audit_event_id = ?
+		WHERE book_id = ? AND id = ? AND voided_at IS NULL
+	`, params.VoidedAt, params.ActorUserID, params.VoidReason, auditEventID, params.BookID, params.ObservationID); err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("void price observation: %w", err)
+	}
+
+	record, err := priceObservationByIDTx(ctx, tx, params.BookID, params.ObservationID)
+	if err != nil {
+		return PriceObservationRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return PriceObservationRecord{}, fmt.Errorf("commit void price observation: %w", err)
+	}
+	committed = true
+	return record, nil
 }
