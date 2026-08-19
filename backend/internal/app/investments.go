@@ -246,6 +246,14 @@ type InvestmentTradeInput struct {
 	// ReconciliationOverride allows backdated investment trades to invalidate
 	// affected checkpoints through the normal transaction write guard.
 	ReconciliationOverride bool
+	// WriteOff records a disposal at zero proceeds: a fund closure, a worthless
+	// delisting, any total loss. It is set only by WriteOff() — never by the
+	// sell endpoint — so a mistyped sell amount can never become a write-off.
+	// The trade carries no cash legs at all, which is what makes the existing
+	// realized-gain engine report the whole cost basis as a loss: proceeds are
+	// found by matching cash postings to the disposal, and finding none already
+	// means zero.
+	WriteOff bool
 	// OriginType/Operation override the default "browser_api"/"investment.buy"
 	// (or "investment.sell") attribution — set by the Trading 212 import
 	// commit path (B-T212-INVST) so an auto-booked trade is correctly
@@ -980,6 +988,32 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 }
 
 func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
+	input.WriteOff = false
+	return s.sell(ctx, input, nil)
+}
+
+// WriteOff records a total loss: a fund closure, a worthless delisting, any
+// position disposed of for nothing (T-38).
+//
+// It is a disposal at zero proceeds, not a new kind of event — the lots are
+// closed through the same engine a sale uses, and the loss reaches realized
+// gains through the same path, because proceeds of zero against the disposed
+// basis is exactly the whole basis as a loss.
+//
+// It is a separate entry point rather than "a sell with amount 0" so that zero
+// proceeds is always a stated intent. A cash amount field left empty must never
+// quietly retire a position.
+func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
+	input.WriteOff = true
+	input.CashAccountID = 0
+	input.CashCommodityID = 0
+	input.CashAmountScale = 0
+	if input.Operation == "" {
+		input.Operation = "investment.write_off"
+	}
+	if strings.TrimSpace(input.ChangeReason) == "" {
+		return InvestmentTradeResult{}, ValidationError{Message: "write-off reason is required"}
+	}
 	return s.sell(ctx, input, nil)
 }
 
@@ -1032,12 +1066,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 				EntryDate: input.TransactionDate,
 				EntryKind: "investment",
 				Memo:      memo,
-				Postings: []PostingInput{
-					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: input.CashAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-				},
+				Postings:  sellPostings(input, tradingAccountID, memo),
 			}},
 		},
 	})
@@ -1067,7 +1096,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		RequestID:       input.RequestID,
 		OriginType:      defaultString(input.OriginType, "browser_api"),
 		Operation:       "investment.lot.dispose",
-		ChangeReason:    "disposed lots from sell transaction",
+		ChangeReason:    disposalChangeReason(input.WriteOff),
 		MetadataJSON:    metadataJSON,
 	}
 	var transactionRecord db.TransactionRecord
@@ -1785,6 +1814,39 @@ var validCostBasisMethods = map[string]bool{
 	"fifo": true, "lifo": true, "average_cost": true, "specific_lot": true,
 }
 
+// disposalChangeReason labels the lot event for what it was, so the audit trail
+// distinguishes a sale from a position written off for nothing.
+func disposalChangeReason(writeOff bool) string {
+	if writeOff {
+		return "disposed lots from write-off transaction"
+	}
+	return "disposed lots from sell transaction"
+}
+
+// sellPostings builds the legs of a disposal.
+//
+// A write-off has no cash legs at all rather than zero-valued ones. Two reasons:
+// a zero posting on a cash account is noise a reconciler has to look at and
+// dismiss, and the realized-gain engine derives proceeds by matching cash
+// postings to the disposal — finding none is already how it reports zero
+// proceeds, so the whole cost basis lands as a loss with no special case.
+//
+// The commodity legs balance on their own, so the transaction stays balanced
+// per commodity either way.
+func sellPostings(input InvestmentTradeInput, tradingAccountID int64, memo string) []PostingInput {
+	postings := []PostingInput{
+		{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+		{AccountID: tradingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+	}
+	if input.WriteOff {
+		return postings
+	}
+	return append(postings,
+		PostingInput{AccountID: input.CashAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+		PostingInput{AccountID: tradingAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+	)
+}
+
 func validateTradeInput(input InvestmentTradeInput) error {
 	if input.OwnerUserID <= 0 {
 		return ValidationError{Message: "owner user is required"}
@@ -1792,7 +1854,10 @@ func validateTradeInput(input InvestmentTradeInput) error {
 	if _, err := cleanRequiredDate(input.TransactionDate, "transaction date"); err != nil {
 		return err
 	}
-	if input.CommodityID <= 0 || input.HoldingAccountID <= 0 || input.CashAccountID <= 0 || input.CashCommodityID <= 0 {
+	if input.CommodityID <= 0 || input.HoldingAccountID <= 0 {
+		return ValidationError{Message: "investment trade references are required"}
+	}
+	if !input.WriteOff && (input.CashAccountID <= 0 || input.CashCommodityID <= 0) {
 		return ValidationError{Message: "investment trade references are required"}
 	}
 	if input.QuantityValue.Sign() <= 0 {
@@ -1801,7 +1866,12 @@ func validateTradeInput(input InvestmentTradeInput) error {
 	if input.QuantityScale < 0 || input.QuantityScale > exact.MaxCryptoScale || input.CashAmountScale < 0 || input.CashAmountScale > exact.MaxStandardScale {
 		return ValidationError{Message: "quantity scale is invalid"}
 	}
-	if input.CashAmountValue <= 0 {
+	switch {
+	case input.WriteOff && input.CashAmountValue != 0:
+		// A write-off is zero proceeds by definition. Accepting an amount here
+		// would make the endpoint a second, unlabelled way to sell.
+		return ValidationError{Message: "a write-off cannot carry a cash amount"}
+	case !input.WriteOff && input.CashAmountValue <= 0:
 		return ValidationError{Message: "cash amount is required"}
 	}
 	method := strings.TrimSpace(input.CostBasisMethod)

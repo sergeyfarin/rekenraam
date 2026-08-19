@@ -201,6 +201,8 @@ paths:
     $ref: "./paths/investments-buy.yaml"
   /api/v1/investments/sell:
     $ref: "./paths/investments-sell.yaml"
+  /api/v1/investments/write-off:
+    $ref: "./paths/investments-write-off.yaml"
   /api/v1/investments/sell/preview:
     $ref: "./paths/investments-sell-preview.yaml"
   /api/v1/investments/dividend:

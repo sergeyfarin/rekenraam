@@ -114,10 +114,12 @@ Ordered by value. None of these needs a further decision.
    `POST /api/v1/pricing/prices/{price_id}/void`, with a required reason, a 409
    on a repeat, and a migration adding the void's audit-event link. The pricing
    UI that surfaces it is R11.
-3. **T-38 zero-proceeds write-off**, R16 slice 1. Zero proceeds must be explicit
-   intent rather than an empty field defaulting to zero, or a mistyped sell
-   silently becomes a write-off; and it is a disposal, so it goes through the
-   reconciliation guard.
+3. [x] **T-38 zero-proceeds write-off — done 2026-08-19.**
+   `POST /api/v1/investments/write-off`, a separate route so "no proceeds" is
+   always stated. No cash postings at all, which is what makes the existing
+   realized-gain engine report the whole basis as a loss. Its guard test found
+   T-47: the reconciliation-guard error was unmapped across the investments API
+   and surfaced as a 500.
 4. **Cashflow → spending drill-down** *(approach not yet confirmed)*: link a
    cashflow row's in/out cell to the spending report scoped to that bucket's
    dates, the same cash accounts, and the matching direction. Wants spending's

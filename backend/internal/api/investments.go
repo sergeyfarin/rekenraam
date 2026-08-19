@@ -566,6 +566,13 @@ func sellInvestment(logger *slog.Logger, authService *app.AuthService, investmen
 	return investmentTradeMutation(logger, authService, investmentService, options, "sell")
 }
 
+// writeOffInvestment records a disposal at zero proceeds. It is its own route
+// rather than a flag on sell so that "no proceeds" is always a stated intent —
+// an empty cash amount must never quietly retire a position (T-38).
+func writeOffInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return investmentTradeMutation(logger, authService, investmentService, options, "write-off")
+}
+
 func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)
@@ -608,9 +615,12 @@ func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, 
 		input := toInvestmentTradeInput(owner, r, request)
 		var result app.InvestmentTradeResult
 		var err error
-		if action == "buy" {
+		switch action {
+		case "buy":
 			result, err = investmentService.Buy(r.Context(), input)
-		} else {
+		case "write-off":
+			result, err = investmentService.WriteOff(r.Context(), input)
+		default:
 			result, err = investmentService.Sell(r.Context(), input)
 		}
 		if err != nil {
@@ -846,6 +856,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "dividend default not found")
 	case errors.Is(err, app.ErrInvestmentLotsInsufficient):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
+	// Every investment trade goes through the transaction write guard, so a
+	// backdated trade into a reconciled period raises this. It was unmapped and
+	// surfaced as a 500 "internal server error", which told the user nothing and
+	// looked like a fault rather than the deliberate refusal it is.
+	case errors.Is(err, app.ErrReconciliationOverrideRequired):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "reconciliation override is required")
 	case errors.Is(err, app.ErrInvestmentSuggestionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment event suggestion not found")
 	case errors.Is(err, app.ErrInvestmentSuggestionNotPending):

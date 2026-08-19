@@ -1,0 +1,85 @@
+post:
+  summary: Write off a position at zero proceeds (disposes lots, realizes the whole basis as a loss)
+  description: >
+    Records a total loss — a fund closure, a worthless delisting, any position
+    disposed of for nothing. It is a disposal at zero proceeds, closing lots
+    through the same engine a sale uses, so the loss reaches realized gains by
+    the same path.
+
+    It is a separate route rather than a sell with a zero amount so that "no
+    proceeds" is always a stated intent: an empty cash amount must never quietly
+    retire a position. `cash_account_id`, `cash_commodity_id`, and
+    `cash_amount_value` are rejected if supplied; `change_reason` is required.
+
+    The transaction carries no cash postings at all, only the commodity legs
+    through `commodity_trading`. A zero-valued cash posting would be noise for a
+    reconciler, and the realized-gain engine already reports zero proceeds when
+    no cash posting matches the disposal.
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentTradeRequest"
+  responses:
+    "201":
+      description: Write-off recorded
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentTradeResponse"
+    "400":
+      description: Invalid request body or validation failure
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Insufficient lots to fill the sell order
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -9307,6 +9307,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/write-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write off a position at zero proceeds (disposes lots, realizes the whole basis as a loss)
+         * @description Records a total loss — a fund closure, a worthless delisting, any position disposed of for nothing. It is a disposal at zero proceeds, closing lots through the same engine a sale uses, so the loss reaches realized gains by the same path.
+         *     It is a separate route rather than a sell with a zero amount so that "no proceeds" is always a stated intent: an empty cash amount must never quietly retire a position. `cash_account_id`, `cash_commodity_id`, and `cash_amount_value` are rejected if supplied; `change_reason` is required.
+         *     The transaction carries no cash postings at all, only the commodity legs through `commodity_trading`. A zero-valued cash posting would be noise for a reconciler, and the realized-gain engine already reports zero proceeds when no cash posting matches the disposal.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentTradeRequest"];
+                };
+            };
+            responses: {
+                /** @description Write-off recorded */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentTradeResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Insufficient lots to fill the sell order */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/sell/preview": {
         parameters: {
             query?: never;

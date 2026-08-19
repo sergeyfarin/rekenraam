@@ -482,3 +482,156 @@ func TestListInvestmentEventsAndSuggestions_HTTP(t *testing.T) {
 	require.Len(t, suggestions.Suggestions, 1)
 	assert.Equal(t, "suggested", suggestions.Suggestions[0].Status)
 }
+
+// --- Write-off (T-38) ---
+
+// TestWriteOffInvestment_RealizesTheWholeBasisAsALoss covers the case that was
+// impossible before: a fund closure or worthless delisting left shares in open
+// lots forever and the loss never reached realized gains.
+func TestWriteOffInvestment_RealizesTheWholeBasisAsALoss(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEADCO")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	// 10 shares for 1000.00.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+
+	writeOffRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		investmentTradeRequest{
+			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			QuantityValue: exact.New(10), QuantityScale: 0,
+			ChangeReason: "fund liquidated with no distribution",
+		}, http.StatusCreated)
+	var wroteOff investmentTradeResponse
+	require.NoError(t, json.NewDecoder(writeOffRes.Body).Decode(&wroteOff))
+	require.Len(t, wroteOff.Allocations, 1)
+
+	// The lot is closed, not left open with phantom shares.
+	lotsReq := httptest.NewRequest(http.MethodGet, "/api/v1/investments/lots?account_id="+strconv.FormatInt(holding.ID, 10)+"&commodity_id="+strconv.FormatInt(instrument.CommodityID, 10), nil)
+	lotsReq.AddCookie(f.sessionCookie)
+	lotsRec := httptest.NewRecorder()
+	handler.ServeHTTP(lotsRec, lotsReq)
+	require.Equal(t, http.StatusOK, lotsRec.Code)
+	var lots investmentLotsResponse
+	require.NoError(t, json.NewDecoder(lotsRec.Body).Decode(&lots))
+	require.Len(t, lots.Lots, 1)
+	assert.Equal(t, "closed", lots.Lots[0].Status)
+
+	// The whole cost basis lands as a realized loss: proceeds of zero against a
+	// 1000.00 basis is -1000.00.
+	gainsReq := httptest.NewRequest(http.MethodGet, "/api/v1/investments/gains", nil)
+	gainsReq.AddCookie(f.sessionCookie)
+	gainsRec := httptest.NewRecorder()
+	handler.ServeHTTP(gainsRec, gainsReq)
+	require.Equal(t, http.StatusOK, gainsRec.Code)
+	var gains investmentGainsResponse
+	require.NoError(t, json.NewDecoder(gainsRec.Body).Decode(&gains))
+	require.Len(t, gains.Realized, 1)
+	assert.Equal(t, int64(-100000), gains.Realized[0].RealizedGainValue)
+	assert.Equal(t, int64(0), gains.Realized[0].ProceedsValue)
+
+	// The transaction carries only the commodity legs — a zero-valued cash
+	// posting would be noise a reconciler has to look at and dismiss.
+	require.Len(t, wroteOff.Transaction.JournalEntries, 1)
+	assert.Len(t, wroteOff.Transaction.JournalEntries[0].Postings, 2)
+	for _, posting := range wroteOff.Transaction.JournalEntries[0].Postings {
+		assert.Equal(t, instrument.CommodityID, posting.CommodityID, "a write-off has no cash side")
+	}
+}
+
+func TestWriteOffInvestment_RequiresStatedIntent(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEADCO2")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+
+	base := func() investmentTradeRequest {
+		return investmentTradeRequest{
+			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			QuantityValue: exact.New(1), QuantityScale: 0, ChangeReason: "worthless",
+		}
+	}
+
+	// A reason is required: "why is this worth nothing" is the whole record.
+	noReason := base()
+	noReason.ChangeReason = "  "
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off", noReason, http.StatusBadRequest)
+
+	// A cash amount is refused rather than ignored, so the route can never
+	// become a second, unlabelled way to sell.
+	withCash := base()
+	withCash.CashAmountValue = 5000
+	withCash.CashAmountScale = 2
+	withCash.CashAccountID = f.cashAccount.ID
+	withCash.CashCommodityID = f.commodityID
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off", withCash, http.StatusBadRequest)
+
+	// Selling still demands a cash amount — the write-off route did not loosen
+	// the ordinary path.
+	sellNoCash := base()
+	sellNoCash.CashAccountID = f.cashAccount.ID
+	sellNoCash.CashCommodityID = f.commodityID
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sellNoCash, http.StatusBadRequest)
+
+	// Still a mutation: CSRF applies.
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/write-off", base(), http.StatusForbidden)
+}
+
+// TestWriteOffInvestment_BackdatedIntoAReconciledPeriodIsGuarded proves the new
+// mutation path goes through the reconciliation guard. Forgetting the guard on
+// a new path over postings is a severity-1 bug in this repo, and "it reuses the
+// guarded prepare function" is an assumption worth a test rather than a comment.
+func TestWriteOffInvestment_BackdatedIntoAReconciledPeriodIsGuarded(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEADCO3")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	// Reconcile the holding account's commodity leg up to 2026-02-01.
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+
+	// A write-off dated inside the reconciled period would move a reconciled
+	// balance, so it must be refused rather than silently accepted.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		investmentTradeRequest{
+			TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "worthless",
+		}, http.StatusConflict)
+
+	// After the checkpoint it is allowed.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		investmentTradeRequest{
+			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "worthless",
+		}, http.StatusCreated)
+}
+
+func postingByAccount(t *testing.T, transaction transactionResponse, accountID int64) postingResponse {
+	t.Helper()
+
+	for _, entry := range transaction.JournalEntries {
+		for _, posting := range entry.Postings {
+			if posting.AccountID == accountID {
+				return posting
+			}
+		}
+	}
+	require.Failf(t, "posting not found", "account_id=%d", accountID)
+	return postingResponse{}
+}

@@ -144,6 +144,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("PATCH /api/v1/investments/dividend-defaults/{default_id}", saveDividendDefault(logger, services.Auth, services.Investment, options, true))
 	mux.HandleFunc("POST /api/v1/investments/buy", buyInvestment(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/sell", sellInvestment(logger, services.Auth, services.Investment, options))
+	mux.HandleFunc("POST /api/v1/investments/write-off", writeOffInvestment(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/sell/preview", sellPreviewInvestment(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/dividend", createDividend(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/reinvested-dividend", createReinvestedDividend(logger, services.Auth, services.Investment, options))

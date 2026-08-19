@@ -70,7 +70,7 @@ keeps its original price and leaves the listing; the good one stays) and
 `TestVoidPrice_RequiresAReasonAndRejectsRepeats`. Remaining for R11: the pricing
 UI that exposes it.
 
-### T-38 Zero-proceeds disposal (write-off) is impossible `[ ]`
+### T-38 Zero-proceeds disposal (write-off) is impossible `[x]`
 
 **Files:** `backend/internal/app/investments.go` (`validateTradeInput`
 requires `CashAmountValue > 0`; repository `DisposeLots` is unexposed).
@@ -92,6 +92,26 @@ also the smaller change. Two guards belong in the implementation:
 
 Independent of the open I-03/I-04 gains-reporting research: this uses whatever
 gains treatment is current.
+
+**Done 2026-08-19.** `POST /api/v1/investments/write-off` — a separate route
+rather than a flag on sell, so "no proceeds" is always stated: a cash amount is
+*rejected* there, and a reason is required. Selling still demands a cash amount,
+so the ordinary path was not loosened.
+
+The write-off carries **no cash postings at all**, only the commodity legs
+through `commodity_trading`. That is what makes the loss land correctly with no
+new gains logic: the realized-gain engine derives proceeds by matching cash
+postings to the disposal, and already reports zero when none match (the branch
+was written for manual lot creation). Proceeds of zero against the disposed
+basis is the whole basis as a loss. A zero-valued cash posting would also have
+been noise for a reconciler.
+
+Three named tests: the -1000.00 realized loss with a closed lot and a
+two-posting transaction; the rejection paths; and one proving the new mutation
+path goes through the reconciliation guard. That last test found a real defect —
+`ErrReconciliationOverrideRequired` was unmapped in the investments API and
+surfaced as a 500 for buy and sell as well. Fixed here; the missing override
+*capability* is now T-47.
 
 ### T-44 Free-text payees never group in reports `[x]`
 
@@ -216,6 +236,26 @@ Prep had landed earlier the same day: account and commodity filtering became one
 path (`reportFilterSet` in `reports.go`) shared by the SQL-side spending filter
 and the in-Go net-worth filter, so the restructure only had to call
 `reportFilterSetFrom` per bucket rather than re-derive a filter.
+
+### T-47 Investment trades cannot override a reconciliation lock `[ ]`
+
+**Files:** `backend/internal/api/investments.go` (`investmentTradeRequest` has no
+`reconciliation_override`); `backend/internal/app/investments.go`
+(`InvestmentTradeInput.ReconciliationOverride` exists and is honoured).
+
+Found 2026-08-19 while adding T-38's write-off. Every investment trade goes
+through the transaction write guard, so a buy, sell, or write-off dated inside a
+reconciled period is correctly refused with
+`ErrReconciliationOverrideRequired` — but the investments API never exposes
+`reconciliation_override`, so there is no way to proceed deliberately the way
+the transaction editor allows. The service field is already there and honoured;
+only the request shape and a confirmation flow in the investments UI are
+missing.
+
+Separately fixed the same day: that error was **unmapped** in
+`writeInvestmentServiceError`, so it surfaced as a 500 "internal server error"
+rather than a 409. It told the user nothing and looked like a fault instead of
+the deliberate refusal it is. Now a `CONFLICT`, matching the transactions API.
 
 ### T-42 TypeScript 7 upgrade blocked by `openapi-typescript` `[ ]`
 
