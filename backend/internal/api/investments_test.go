@@ -622,6 +622,85 @@ func TestWriteOffInvestment_BackdatedIntoAReconciledPeriodIsGuarded(t *testing.T
 		}, http.StatusCreated)
 }
 
+// TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates is T-47: the
+// guard above is correct, but until now the investments API had no way to say
+// "yes, I mean it" the way the transaction editor does, so a backdated trade
+// was not merely guarded — it was unreachable. Being refused with no way
+// forward is a different bug from being refused.
+func TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEADCO4")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+
+	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, holding.ID)
+
+	backdated := func() investmentTradeRequest {
+		return investmentTradeRequest{
+			TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "delisted, written off",
+		}
+	}
+
+	// Without the flag the refusal stands — the override must be deliberate.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		backdated(), http.StatusConflict)
+
+	withOverride := backdated()
+	withOverride.ReconciliationOverride = true
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		withOverride, http.StatusCreated)
+
+	// Proceeding is only safe if the checkpoint it invalidates actually stops
+	// claiming the account is reconciled. A 201 alone would leave a checkpoint
+	// asserting a balance that the new posting has just changed.
+	checkpoints := listCheckpointsForSession(t, handler, f.sessionCookie, holding.ID)
+	var invalidated bool
+	for _, checkpoint := range checkpoints {
+		if checkpoint.ID != checkpointID {
+			continue
+		}
+		invalidated = checkpoint.Status == "invalidated"
+		require.NotEmpty(t, checkpoint.InvalidatedAt, "invalidated checkpoint records when")
+		require.Equal(t, "delisted, written off", checkpoint.InvalidationReason, "the change reason carries into the invalidation")
+	}
+	require.True(t, invalidated, "the checkpoint the trade backdated past is invalidated")
+}
+
+func listCheckpointsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, accountID int64) []reconciliationCheckpointResponse {
+	t.Helper()
+
+	res := doInvestmentRequest(t, handler, sessionCookie, "", http.MethodGet,
+		"/api/v1/accounts/"+strconv.FormatInt(accountID, 10)+"/reconciliation-checkpoints", nil, http.StatusOK)
+	var body struct {
+		Checkpoints []reconciliationCheckpointResponse `json:"checkpoints"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	return body.Checkpoints
+}
+
+func activeCheckpointID(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, accountID int64) int64 {
+	t.Helper()
+
+	for _, checkpoint := range listCheckpointsForSession(t, handler, sessionCookie, accountID) {
+		if checkpoint.Status == "active" {
+			return checkpoint.ID
+		}
+	}
+	require.Failf(t, "no active checkpoint", "account_id=%d", accountID)
+	return 0
+}
+
 func postingByAccount(t *testing.T, transaction transactionResponse, accountID int64) postingResponse {
 	t.Helper()
 

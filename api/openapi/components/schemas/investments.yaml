@@ -423,6 +423,12 @@ InvestmentTradeRequest:
       type: string
     cost_basis_method:
       $ref: "#/CostBasisMethod"
+    reconciliation_override:
+      type: boolean
+      description: >-
+        Allows a backdated trade to proceed into a reconciled period,
+        invalidating the affected checkpoints. Without it such a trade is
+        refused with a 409 CONFLICT.
 
 InvestmentLotDisposalResponse:
   type: object
@@ -539,6 +545,12 @@ DividendRequest:
       type: string
     change_reason:
       type: string
+    reconciliation_override:
+      type: boolean
+      description: >-
+        Allows a backdated trade to proceed into a reconciled period,
+        invalidating the affected checkpoints. Without it such a trade is
+        refused with a 409 CONFLICT.
 
 ReinvestedDividendRequest:
   type: object
@@ -586,6 +598,12 @@ ReinvestedDividendRequest:
       type: string
     change_reason:
       type: string
+    reconciliation_override:
+      type: boolean
+      description: >-
+        Allows a backdated trade to proceed into a reconciled period,
+        invalidating the affected checkpoints. Without it such a trade is
+        refused with a 409 CONFLICT.
 
 InvestmentLotResponse:
   type: object

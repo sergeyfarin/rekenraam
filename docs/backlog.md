@@ -237,7 +237,7 @@ path (`reportFilterSet` in `reports.go`) shared by the SQL-side spending filter
 and the in-Go net-worth filter, so the restructure only had to call
 `reportFilterSetFrom` per bucket rather than re-derive a filter.
 
-### T-47 Investment trades cannot override a reconciliation lock `[ ]`
+### T-47 Investment trades cannot override a reconciliation lock `[~]`
 
 **Files:** `backend/internal/api/investments.go` (`investmentTradeRequest` has no
 `reconciliation_override`); `backend/internal/app/investments.go`
@@ -251,6 +251,25 @@ reconciled period is correctly refused with
 the transaction editor allows. The service field is already there and honoured;
 only the request shape and a confirmation flow in the investments UI are
 missing.
+
+**Backend done 2026-08-20.** `reconciliation_override` is now on
+`investmentTradeRequest`, `dividendRequest`, and `reinvestedDividendRequest`,
+carried into the service inputs, and specified in
+`api/openapi/components/schemas/investments.yaml`.
+`TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates` proves a
+backdated write-off is refused without the flag, accepted with it, and that the
+checkpoint it backdates past ends up `invalidated` carrying the change reason —
+a 201 alone would leave a checkpoint asserting a balance the new posting just
+changed.
+
+**Still open: the confirmation flow in the investments UI**, which is blocked on
+one decision — how the UI learns *which* checkpoints it is about to invalidate.
+The transactions editor makes a second call to `/reconciliation-impact` and
+names them; the investments routes have no such preview, and adding one means
+factoring spec-building out of Buy/Sell/WriteOff/Dividend/Reinvested. The
+alternative is to attach the refs to `ErrReconciliationOverrideRequired` — the
+guard already has them at the moment it refuses — and surface them on the 409,
+which costs an additive optional field on the shared error envelope.
 
 Separately fixed the same day: that error was **unmapped** in
 `writeInvestmentServiceError`, so it surfaced as a 500 "internal server error"

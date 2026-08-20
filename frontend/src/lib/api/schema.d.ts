@@ -11966,6 +11966,8 @@ export interface components {
             lot_allocations?: components["schemas"]["InvestmentLotAllocationRequest"][];
             change_reason?: string;
             cost_basis_method?: components["schemas"]["CostBasisMethod"];
+            /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
+            reconciliation_override?: boolean;
         };
         InvestmentLotDisposalResponse: {
             /** Format: int64 */
@@ -12024,6 +12026,8 @@ export interface components {
             payee_id?: number;
             status?: string;
             change_reason?: string;
+            /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
+            reconciliation_override?: boolean;
         };
         ReinvestedDividendRequest: {
             /** Format: date */
@@ -12047,6 +12051,8 @@ export interface components {
             payee_id?: number;
             status?: string;
             change_reason?: string;
+            /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
+            reconciliation_override?: boolean;
         };
         InvestmentLotResponse: {
             /** Format: int64 */

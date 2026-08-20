@@ -152,6 +152,11 @@ type investmentTradeRequest struct {
 	LotAllocations   []investmentLotAllocationRequest `json:"lot_allocations"`
 	ChangeReason     string                           `json:"change_reason"`
 	CostBasisMethod  string                           `json:"cost_basis_method"`
+	// ReconciliationOverride lets a backdated trade proceed into a reconciled
+	// period, invalidating the affected checkpoints. The service has always
+	// honoured it; without it on the wire a buy, sell, or write-off dated
+	// before a checkpoint was simply unreachable (T-47).
+	ReconciliationOverride bool `json:"reconciliation_override"`
 }
 
 type sellPreviewResponse struct {
@@ -184,36 +189,38 @@ type investmentLotDisposalResponse struct {
 }
 
 type dividendRequest struct {
-	TransactionDate      string `json:"transaction_date"`
-	CommodityID          *int64 `json:"commodity_id"`
-	CashAccountID        int64  `json:"cash_account_id"`
-	CashCommodityID      int64  `json:"cash_commodity_id"`
-	IncomeAccountID      *int64 `json:"income_account_id"`
-	AmountValue          int64  `json:"amount_value"`
-	AmountScale          int    `json:"amount_scale"`
-	WithholdingValue     *int64 `json:"withholding_value"`
-	WithholdingScale     *int   `json:"withholding_scale"`
-	WithholdingAccountID *int64 `json:"withholding_account_id"`
-	Memo                 string `json:"memo"`
-	PayeeID              *int64 `json:"payee_id"`
-	Status               string `json:"status"`
-	ChangeReason         string `json:"change_reason"`
+	TransactionDate        string `json:"transaction_date"`
+	CommodityID            *int64 `json:"commodity_id"`
+	CashAccountID          int64  `json:"cash_account_id"`
+	CashCommodityID        int64  `json:"cash_commodity_id"`
+	IncomeAccountID        *int64 `json:"income_account_id"`
+	AmountValue            int64  `json:"amount_value"`
+	AmountScale            int    `json:"amount_scale"`
+	WithholdingValue       *int64 `json:"withholding_value"`
+	WithholdingScale       *int   `json:"withholding_scale"`
+	WithholdingAccountID   *int64 `json:"withholding_account_id"`
+	Memo                   string `json:"memo"`
+	PayeeID                *int64 `json:"payee_id"`
+	Status                 string `json:"status"`
+	ChangeReason           string `json:"change_reason"`
+	ReconciliationOverride bool   `json:"reconciliation_override"`
 }
 
 type reinvestedDividendRequest struct {
-	TransactionDate  string            `json:"transaction_date"`
-	CommodityID      int64             `json:"commodity_id"`
-	HoldingAccountID int64             `json:"holding_account_id"`
-	IncomeAccountID  *int64            `json:"income_account_id"`
-	QuantityValue    exact.Coefficient `json:"quantity_value"`
-	QuantityScale    int               `json:"quantity_scale"`
-	AmountValue      int64             `json:"amount_value"`
-	AmountScale      int               `json:"amount_scale"`
-	CashCommodityID  int64             `json:"cash_commodity_id"`
-	Memo             string            `json:"memo"`
-	PayeeID          *int64            `json:"payee_id"`
-	Status           string            `json:"status"`
-	ChangeReason     string            `json:"change_reason"`
+	TransactionDate        string            `json:"transaction_date"`
+	CommodityID            int64             `json:"commodity_id"`
+	HoldingAccountID       int64             `json:"holding_account_id"`
+	IncomeAccountID        *int64            `json:"income_account_id"`
+	QuantityValue          exact.Coefficient `json:"quantity_value"`
+	QuantityScale          int               `json:"quantity_scale"`
+	AmountValue            int64             `json:"amount_value"`
+	AmountScale            int               `json:"amount_scale"`
+	CashCommodityID        int64             `json:"cash_commodity_id"`
+	Memo                   string            `json:"memo"`
+	PayeeID                *int64            `json:"payee_id"`
+	Status                 string            `json:"status"`
+	ChangeReason           string            `json:"change_reason"`
+	ReconciliationOverride bool              `json:"reconciliation_override"`
 }
 
 type investmentLotResponse struct {
@@ -649,6 +656,7 @@ func createDividend(logger *slog.Logger, authService *app.AuthService, investmen
 			AmountScale: request.AmountScale, WithholdingValue: request.WithholdingValue, WithholdingScale: request.WithholdingScale,
 			WithholdingAccountID: request.WithholdingAccountID, Memo: request.Memo, PayeeID: request.PayeeID,
 			Status: request.Status, ChangeReason: request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "create dividend", err)
@@ -675,6 +683,7 @@ func createReinvestedDividend(logger *slog.Logger, authService *app.AuthService,
 			IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 			AmountValue: request.AmountValue, AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
 			Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
+			ReconciliationOverride: request.ReconciliationOverride,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "create reinvested dividend", err)
@@ -906,6 +915,7 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 		CashAmountValue: request.CashAmountValue, CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
+		ReconciliationOverride: request.ReconciliationOverride,
 	}
 }
 
