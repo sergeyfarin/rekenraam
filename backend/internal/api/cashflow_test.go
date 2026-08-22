@@ -197,6 +197,33 @@ func TestCashflowNetMovementReconcilesInEveryBucket(t *testing.T) {
 	assertBalance(t, netWorth.Buckets[1].Totals, f.usdID, 84500, 2, 84500)
 }
 
+func TestCashflowReturnsEmptyBucketsRatherThanOmittingPeriods(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newCashflowFixture(t, handler)
+
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-02",
+		posting(f.checking.ID, 50000, 2, f.usdID),
+		posting(f.salary.ID, -50000, 2, f.usdID),
+	), http.StatusCreated)
+
+	report := readCashflowForSession(t, handler, f.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-08-31&bucket=month")
+
+	// A month with no activity is still a row: a gap in a cashflow table reads
+	// as missing data rather than as a quiet month, and every bucket in the
+	// range must reconcile via the same identity, including the empty ones.
+	require.Len(t, report.Buckets, 3)
+	assert.Empty(t, report.Buckets[1].Inflow)
+	assert.Empty(t, report.Buckets[1].NetMovement)
+	assert.Empty(t, report.Buckets[2].Inflow)
+	assert.Empty(t, report.Buckets[2].NetMovement)
+	for _, bucket := range report.Buckets {
+		assertCashflowIdentity(t, bucket, f.usdID)
+	}
+}
+
 func TestCashflowSelectedAccountsChangeWhatCountsAsTransfer(t *testing.T) {
 	t.Parallel()
 

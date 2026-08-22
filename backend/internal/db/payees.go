@@ -113,6 +113,47 @@ func (r *PayeeRepository) ListPayees(ctx context.Context, params ListPayeesParam
 	return scanPayeeRecords(rows)
 }
 
+// PayeeNamesByID resolves current display names for an explicit set of payee
+// IDs, including archived payees.
+//
+// Deliberately not ListPayees: that method takes a Limit and silently returns a
+// clamped page, which for a report would drop labels from rows that are
+// themselves correct — a caller cannot tell a missing name from a deleted
+// payee. This method is bounded by the caller's own ID set instead, so it
+// either resolves every requested payee or the payee genuinely no longer
+// exists. Archived payees are included because a report over a past period must
+// still be able to name who was paid.
+func (r *PayeeRepository) PayeeNamesByID(ctx context.Context, bookID int64, payeeIDs []int64) (map[int64]string, error) {
+	names := map[int64]string{}
+	if len(payeeIDs) == 0 {
+		return names, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(payeeIDs)), ",")
+	args := make([]any, 0, len(payeeIDs)+1)
+	args = append(args, bookID)
+	for _, payeeID := range payeeIDs {
+		args = append(args, payeeID)
+	}
+
+	rows, err := r.database.QueryContext(ctx, currentPayeeSelect(`
+		AND p.book_id = ? AND p.id IN (`+placeholders+`)
+	`), args...)
+	if err != nil {
+		return nil, fmt.Errorf("read payee names: %w", err)
+	}
+	defer rows.Close()
+
+	records, err := scanPayeeRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		names[record.ID] = record.Name
+	}
+	return names, nil
+}
+
 func (r *PayeeRepository) PayeeByID(ctx context.Context, bookID int64, payeeID int64) (PayeeRecord, error) {
 	var record PayeeRecord
 	if err := scanPayeeRecord(r.database.QueryRowContext(ctx, currentPayeeSelect(`

@@ -1,5 +1,17 @@
 # Backend comprehensive audit (2026-07-19)
 
+> **Status: all §1 findings closed as of 2026-08-07.** P1/P2 (EU dates,
+> decimal comma) fixed 2026-08-06 as T-35/T-36; P3 (price voiding) as T-37;
+> P4 (zero-proceeds write-off) as T-38; P7 (unbounded background retries) as
+> T-39; P6 (`triangulation_max_hops` theater) as T-40. P5 was a
+> **documentation** defect, not a code one — the code's posted-only FX
+> coverage is correct, and the taxonomy wording in `docs/conventions.md` and
+> the `ledger-invariants` skill was corrected to match (2026-08-07). The §5
+> refactor list is partly done (#1 `exact.ScaledInt` = T-41, 2026-08-06); the
+> rest of §5–§7 are unscheduled suggestions, not defects — see
+> `docs/backlog.md` for what is actually queued. This document stays as the
+> dated audit record.
+
 Second-pass, wider-scope audit following the 2026-07-13 ledger/investments
 audit (all eleven findings from that pass are fixed and tested; see
 `backend-ledger-investments-audit-2026-07-13.md`). This pass covers the areas

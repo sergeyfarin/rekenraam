@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { todayISO } from './support/dates';
-import { createCashAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, expectSavedTransaction, readyForLedger } from './support/ledger';
 
 test('creates a simple transaction through the browser form', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
@@ -33,7 +33,7 @@ test('creates a simple transaction through the browser form', async ({ page }) =
   await expect(form.getByText(`No payee is named “${payeeName}” yet.`)).toBeVisible();
   await form.getByRole('button', { name: `Create “${payeeName}”` }).click();
 
-  await expect(page.getByText(description)).toBeVisible();
+  await expectSavedTransaction(page, description);
 
   const payees = await apiJSON<{ payees: Array<{ id: number; name: string }> }>(page, 'GET', '/api/v1/payees');
   const created = payees.payees.find((payee) => payee.name === payeeName);
@@ -82,7 +82,7 @@ test('offers an existing payee before creating a near-duplicate', async ({ page 
   await expect(form.getByText('Did you mean one of these?')).toBeVisible();
   await form.getByRole('button', { name: payeeName, exact: true }).click();
 
-  await expect(page.getByText(description)).toBeVisible();
+  await expectSavedTransaction(page, description);
 
   // The existing payee was reused; no near-duplicate was created.
   const payees = await apiJSON<{ payees: Array<{ id: number; name: string }> }>(page, 'GET', '/api/v1/payees');

@@ -10,7 +10,7 @@ everything else is reference material sorted by kind.
 |---|---|---|
 | [roadmap.md](roadmap.md) | What are we building next, in what order? | Only when priorities genuinely change; governed by `product-requirements.md` |
 | [todo.md](todo.md) | What is the short-horizon working queue right now? | Freely; items are deleted when done or promoted to roadmap/backlog |
-| [backlog.md](backlog.md) | What known defects and technical debt are tracked? | Add with an ID (`T-nn`, security `S-nn`); move resolved items to `reviews/resolved-backlog-2026-07.md` |
+| [backlog.md](backlog.md) | What known defects and technical debt are tracked? | Add with an ID (`T-nn`, security `S-nn`, test-coverage gaps keep their review's `G-nn`); move resolved items to `reviews/resolved-backlog-2026-07.md` |
 | [implemented.md](implemented.md) | What ships today, backend vs UI? | Reconcile with the codebase when a slice lands |
 
 The boundary between them: **roadmap** holds ordered product initiatives,
@@ -48,12 +48,17 @@ have exactly one home.
   design record (status is stated in each header); some describe future
   slices. New feature design docs go here.
 - **[design/](design/)** — durable design documents for shipped foundations
-  (account hierarchy, accounts system, categories) that are not tied to one
-  roadmap slice.
+  (account hierarchy, accounts system, categories, the opened date of an
+  import-created holding account) that are not tied to one roadmap slice.
 - **[reviews/](reviews/)** — dated, point-in-time documents: audits, reviews,
-  analyses, resolution records. Named `<topic>-<yyyy-mm[-dd]>.md`. These are
-  never updated to stay current — supersede them with a newer dated file.
-  Anything with a date in its name belongs here.
+  analyses, resolution records. Named `<topic>-<yyyy-mm[-dd]>.md`. Their
+  **bodies** are never rewritten to stay current — supersede them with a newer
+  dated file. The one allowed edit is a **status banner at the top** recording
+  how the findings were resolved (see the 2026-07-13 and 2026-07-19 audits and
+  the 2026-07-19 roadmap review), so a reader never has to re-derive whether a
+  finding is still live. Resolution records such as
+  `resolved-backlog-2026-07.md` are append-only by design. Anything with a date
+  in its name belongs here.
 - **[archive/](archive/)** — superseded documents kept for history: completed
   per-step implementation trackers (replaced by `implemented.md`) and
   reviews of the pre-Go experimental stacks. Never cite these as current.

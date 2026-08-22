@@ -15,6 +15,7 @@ export type DividendDefaultsResponse = components['schemas']['DividendDefaultsRe
 export type SellPreviewResponse = components['schemas']['SellPreviewResponse'];
 export type InvestmentTradeResponse = components['schemas']['InvestmentTradeResponse'];
 export type InvestmentTradeRequest = components['schemas']['InvestmentTradeRequest'];
+export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
 export type CostBasisMethod = components['schemas']['CostBasisMethod'];
@@ -22,6 +23,39 @@ export type InvestmentGainsResponse = components['schemas']['InvestmentGainsResp
 export type RealizedGainEntry = components['schemas']['RealizedGainEntry'];
 export type UnrealizedGainEntry = components['schemas']['UnrealizedGainEntry'];
 export type RealizedGainTotal = components['schemas']['RealizedGainTotal'];
+
+/**
+ * Convert an exact coefficient string into the JS `number` this API's money
+ * fields are typed as, or `null` when it cannot be carried losslessly.
+ *
+ * ## Why this exists
+ *
+ * The investments contract is inconsistent about coefficients.
+ * `quantity_value` is a lossless 38-digit decimal **string**
+ * (`^-?(0|[1-9][0-9]{0,37})$`), which is what ADR 0009 asks for. But every
+ * *money* field — `cash_amount_value`, `amount_value`, `withholding_value`,
+ * `cost_basis_value`, `proceeds_value` — is declared `integer/int64`, so the
+ * generated TypeScript type is `number` and a coefficient has to be squeezed
+ * through a double to reach the wire.
+ *
+ * `int64` and "safe in JS" are not the same range: int64 reaches ~9.22e18,
+ * while `Number.MAX_SAFE_INTEGER` is ~9.01e15. Above that a `Number()`
+ * conversion silently loses low digits, so this returns `null` instead and the
+ * caller surfaces a real error rather than posting a corrupted amount.
+ *
+ * This is an **API-contract adapter, not money arithmetic** — which is exactly
+ * why it lives here and not in `$lib/money/amount.ts`, whose invariant is that
+ * no `Number` ever touches a coefficient. Widening those fields to decimal
+ * strings would delete this function; until then every caller must go through
+ * it rather than calling `Number()` directly.
+ */
+export function toInt64Coefficient(value: string): number | null {
+  const parsed = BigInt(value);
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER) || parsed < -BigInt(Number.MAX_SAFE_INTEGER)) {
+    return null;
+  }
+  return Number(parsed);
+}
 export type InvestmentEventSuggestionResponse = components['schemas']['InvestmentEventSuggestionResponse'];
 export type InvestmentEventSuggestionsResponse = components['schemas']['InvestmentEventSuggestionsResponse'];
 export type InvestmentAutomationRuleResponse = components['schemas']['InvestmentAutomationRuleResponse'];
@@ -215,6 +249,55 @@ export async function recordSell(
 ): Promise<InvestmentTradeResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/sell', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+// A write-off disposes lots at zero proceeds: the whole remaining basis is
+// realized as a loss. Separate from recordSell so a mistyped sale amount can
+// never become a total loss.
+export async function previewWriteOff(
+  input: InvestmentWriteOffRequest
+): Promise<SellPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/write-off/preview', {
+      body: input
+    });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordWriteOff(
+  input: InvestmentWriteOffRequest,
+  csrfToken: string
+): Promise<InvestmentTradeResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/write-off', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });
@@ -521,6 +604,29 @@ export async function reinvestedDividendReconciliationImpact(
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/reinvested-dividend/reconciliation-impact',
+      { body: input }
+    );
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function writeOffReconciliationImpact(
+  input: InvestmentWriteOffRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/write-off/reconciliation-impact',
       { body: input }
     );
 

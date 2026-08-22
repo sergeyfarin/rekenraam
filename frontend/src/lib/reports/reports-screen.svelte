@@ -15,7 +15,7 @@
     type SpendingMode,
     type SpendingOptions
   } from '$lib/api/reports';
-  import { formatQuantity } from '$lib/transactions/transaction-labels';
+  import { formatQuantity } from '$lib/money/format';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
@@ -250,6 +250,18 @@
 </script>
 
 <div class="space-y-5">
+  <!--
+    The filter form and view switcher are interactive and mean nothing on
+    paper, but the range they hold does — so the print sheet restates it as
+    text rather than dropping that context along with the form.
+  -->
+  <p class="hidden text-sm text-muted print:block">
+    {m.reports_print_filters({
+      range: formatRange((activeFilters ?? initialFilters).startDate, (activeFilters ?? initialFilters).endDate),
+      basis: m.reports_posted_only()
+    })}
+  </p>
+
   <div data-print-hide>
   <Panel>
     <form class="flex flex-wrap items-end gap-3" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
@@ -258,6 +270,7 @@
         <input
           type="date"
           bind:value={startDate}
+          max={endDate}
           class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent"
         />
       </label>
@@ -266,6 +279,7 @@
         <input
           type="date"
           bind:value={endDate}
+          min={startDate}
           class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent"
         />
       </label>

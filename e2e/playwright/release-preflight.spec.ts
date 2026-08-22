@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import { apiJSON } from './support/api';
 import { monthStartISO, todayISO, todayQIF } from './support/dates';
-import { createCashAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, expectSavedTransaction, readyForLedger } from './support/ledger';
 
 test.describe.serial('release preflight journeys', () => {
   test('enters a balanced split transfer', async ({ page }) => {
@@ -26,7 +26,7 @@ test.describe.serial('release preflight journeys', () => {
     await expect(form.getByText('Balanced')).toBeVisible();
     await form.getByRole('button', { name: 'Add transaction' }).click();
 
-    await expect(transactionTable(page).getByText(`Preflight transfer ${suffix}`)).toBeVisible();
+    await expectSavedTransaction(page, `Preflight transfer ${suffix}`);
   });
 
   test('reconciles a selected posting to zero', async ({ page }) => {
@@ -60,9 +60,15 @@ test.describe.serial('release preflight journeys', () => {
       buffer: Buffer.from(`!Type:Bank\nD${todayQIF()}\nT-12.34\nPPreflight QIF Payee\nMPreflight QIF memo\n^\n`)
     });
     await page.getByRole('button', { name: 'Upload & preview' }).click();
-    await expect(page.getByLabel('Target account')).toBeVisible();
+    // The staged preview is identified by its mapping controls. The
+    // `import_preview_title` message exists in the catalog but is rendered
+    // nowhere, so asserting "Preview import" could never pass.
+    await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible();
     await page.getByLabel('Target account').selectOption(String(account.id));
     await page.getByLabel('Currency').selectOption(String(currencyID));
+    // A QIF row with no category hint still needs a balancing account, so the
+    // commit fails with "missing category or transfer account resolution"
+    // unless a default category is mapped too. Skip index 0, the placeholder.
     await page.getByLabel('Default category').selectOption({ index: 1 });
     await page.getByRole('button', { name: 'Apply to all rows' }).click();
     await page.getByRole('button', { name: 'Commit to ledger' }).click();
@@ -129,18 +135,9 @@ test.describe.serial('release preflight journeys', () => {
     await form.getByPlaceholder('Search categories').click();
     await form.locator('ul[role="listbox"] button[role="option"]').first().click();
     await form.getByRole('button', { name: 'Add transaction' }).click();
-    await expect(transactionTable(page).getByText(`Preflight mobile entry ${suffix}`)).toBeVisible();
+    await expectSavedTransaction(page, `Preflight mobile entry ${suffix}`);
   });
 });
-
-/**
- * The transaction list. Saving a transaction also opens the detail panel, so
- * an unscoped text locator matches the row, the panel heading and the panel
- * field alike — scope list assertions to the table.
- */
-function transactionTable(page: Page) {
-  return page.locator('[data-transaction-table]');
-}
 
 async function createSimpleTransaction(page: Page, accountID: number, description: string, amount: string) {
   await page.goto('/app/transactions');
@@ -153,5 +150,5 @@ async function createSimpleTransaction(page: Page, accountID: number, descriptio
   await form.getByPlaceholder('Search categories').click();
   await form.locator('ul[role="listbox"] button[role="option"]').first().click();
   await form.getByRole('button', { name: 'Add transaction' }).click();
-  await expect(transactionTable(page).getByText(description)).toBeVisible();
+  await expectSavedTransaction(page, description);
 }

@@ -1,20 +1,17 @@
 post:
-  summary: Write off a position at zero proceeds (disposes lots, realizes the whole basis as a loss)
-  description: >
-    Records a total loss — a fund closure, a worthless delisting, any position
-    disposed of for nothing. It is a disposal at zero proceeds, closing lots
-    through the same engine a sale uses, so the loss reaches realized gains by
-    the same path.
+  summary: Write off a holding as worthless (zero-proceeds disposal)
+  description: >-
+    Records a total loss — a fund closure, a worthless delisting, a liquidated
+    issuer. The lots are disposed at zero proceeds, so the entire remaining
+    cost basis is realized as a loss. There is no cash account, cash commodity
+    or amount: the postings are the holding credit and the matching
+    `commodity_trading` debit only.
 
-    It is a separate route rather than a sell with a zero amount so that "no
-    proceeds" is always a stated intent: an empty cash amount must never quietly
-    retire a position. `cash_account_id`, `cash_commodity_id`, and
-    `cash_amount_value` are rejected if supplied; `change_reason` is required.
-
-    The transaction carries no cash postings at all, only the commodity legs
-    through `commodity_trading`. A zero-valued cash posting would be noise for a
-    reconciler, and the realized-gain engine already reports zero proceeds when
-    no cash posting matches the disposal.
+    This is a separate endpoint rather than a sell with a zero amount on
+    purpose, so a mistyped sale amount can never silently become a total loss.
+    A reason is required. The loss is not posted to an expense account —
+    realized gains and losses are computed reporting values in this ledger and
+    appear in `GET /investments/gains`.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -27,7 +24,7 @@ post:
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/InvestmentTradeRequest"
+          $ref: "../openapi.yaml#/components/schemas/InvestmentWriteOffRequest"
   responses:
     "201":
       description: Write-off recorded
@@ -39,7 +36,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/InvestmentTradeResponse"
     "400":
-      description: Invalid request body or validation failure
+      description: Invalid request body, missing reason, or validation failure
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"
@@ -66,7 +63,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Insufficient lots to fill the sell order
+      description: Insufficient lots to cover the written-off quantity
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

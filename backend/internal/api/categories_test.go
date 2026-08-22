@@ -135,6 +135,29 @@ func TestCategoryDeleteRejectsCategoryUsedByPosting(t *testing.T) {
 	assert.Equal(t, expense.ID, read.ID)
 }
 
+func TestUserCreatedCategoryOpensAtGenesisSoItTakesEarlierHistory(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, currencyID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Checking", "asset", "checking", currencyID, 2, "2020-01-01")
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Groceries",
+		"category_type":"expense"
+	}`)
+
+	// A category is a classification bucket, not something opened on a date
+	// (T-43): its first version is stamped at the genesis date so it can take
+	// history imported from before the day it was created.
+	assert.Equal(t, "0001-01-01", groceries.OpenedOn)
+	assert.Equal(t, "0001-01-01", groceries.EffectiveFrom)
+
+	createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2020-03-04",
+		posting(checking.ID, -10000, 2, currencyID),
+		posting(groceries.ID, 10000, 2, currencyID),
+	), http.StatusCreated)
+}
+
 func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing.T) {
 	t.Parallel()
 
@@ -170,6 +193,19 @@ func TestCategoryValidationRejectsParentMismatchCycleAndAccountFields(t *testing
 		"name":"Bank-ish",
 		"category_type":"expense",
 		"default_commodity_id":1
+	}`, http.StatusBadRequest)
+	createCategoryForSessionStatus(t, handler, sessionCookie, csrfToken, `{
+		"name":"Opened Somewhen",
+		"category_type":"expense",
+		"opened_on":"2026-01-01"
+	}`, http.StatusBadRequest)
+	createCategoryForSessionStatus(t, handler, sessionCookie, csrfToken, `{
+		"name":"Effective Somewhen",
+		"category_type":"expense",
+		"effective_from":"2026-01-01"
+	}`, http.StatusBadRequest)
+	patchCategory(t, handler, sessionCookie, csrfToken, expenseChild.ID, `{
+		"opened_on":"2026-01-01"
 	}`, http.StatusBadRequest)
 	createCategoryForSessionStatus(t, handler, sessionCookie, csrfToken, `{
 		"name":"Bad Icon",

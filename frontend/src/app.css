@@ -412,11 +412,17 @@
 /*
  * Print: the page becomes the report.
  *
- * Everything a reader cannot act on from paper is dropped — navigation, the
- * filter controls, the export button, the side panel — leaving the headings,
- * the stated scope, and the table. Tables are the point of printing a report,
- * so rows are kept off page breaks and given a border that survives without
+ * A printed report is a financial document someone may keep, so it must carry
+ * its own context and drop what paper cannot act on — navigation, the filter
+ * controls, the export button, the side panel — leaving the headings, the
+ * stated scope, and the table. Colours collapse to black on white (both the
+ * raw page background and the semantic `--color-*` tokens components read, so
+ * a dark-themed screen still prints light and a photocopy stays legible), and
+ * tables are kept off page breaks and given a border that survives without
  * background colours, which browsers do not print by default.
+ *
+ * Elements marked `data-print-hide` (navigation, the filter form, export and
+ * retry buttons) are interactive controls that mean nothing on paper.
  */
 @media print {
   [data-print-hide],
@@ -427,6 +433,13 @@
 
   :root {
     color-scheme: light;
+    --color-background: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-strong: #ffffff;
+    --color-control: #ffffff;
+    --color-foreground: #000000;
+    --color-muted: #333333;
+    --color-border: #999999;
   }
 
   html,
@@ -445,11 +458,26 @@
     padding: 0;
   }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
+  /* Panels lose their screen chrome; the table is the document. */
+  section {
+    box-shadow: none !important;
+    border-color: #999999 !important;
   }
 
+  /* A horizontal scroll container has no meaning on paper — let it spill onto
+     the page rather than clipping columns off the right edge. */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+
+  /* Repeat the header on every page, and never split a row across a break. */
   thead {
     display: table-header-group;
   }

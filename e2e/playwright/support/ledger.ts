@@ -6,7 +6,7 @@
  * `readyForLedger` rather than assuming a seeded database.
  */
 
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { apiJSON, csrfTokenFor } from './api';
 import { ensureBrowserSession } from './session';
 
@@ -61,4 +61,24 @@ export async function createLiabilityAccount(
     default_commodity_id: currencyID,
     allows_postings: true
   });
+}
+
+/**
+ * Assert that a transaction was saved, by its description.
+ *
+ * Two traps make the obvious `getByText(description)` wrong:
+ *
+ *  1. Saving opens a detail panel, so the description is on screen up to three
+ *     times at once (list row, panel heading, panel description). A bare text
+ *     locator matches all of them and fails Playwright strict mode — which
+ *     reads as "not saved" when it was saved and is visible three times over.
+ *  2. The list row shows the *payee* rather than the description when the
+ *     transaction has one, so asserting against the row only works for
+ *     transactions entered without a payee.
+ *
+ * The detail panel's description field is the one element present in every
+ * case, and exactly once.
+ */
+export async function expectSavedTransaction(page: Page, description: string): Promise<void> {
+  await expect(page.getByRole('definition').filter({ hasText: description })).toBeVisible();
 }

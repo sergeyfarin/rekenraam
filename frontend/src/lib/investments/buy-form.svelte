@@ -2,6 +2,7 @@
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
+  import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
@@ -120,33 +121,17 @@
     cashCommodityID ? (currenciesByID.get(cashCommodityID)?.code ?? '') : ''
   );
 
-  function parseDecimalField(s: string): { value: bigint | null; scale: number } {
-    const trimmed = s.trim().replace(/,/g, '');
-    if (!trimmed) return { value: null, scale: 0 };
-    const dotIdx = trimmed.indexOf('.');
-    let intStr: string;
-    let fracStr: string;
-    let scale: number;
-    if (dotIdx === -1) {
-      intStr = trimmed || '0';
-      fracStr = '';
-      scale = 0;
-    } else {
-      intStr = trimmed.slice(0, dotIdx) || '0';
-      fracStr = trimmed.slice(dotIdx + 1);
-      scale = fracStr.length;
+  // Amount validation lives in $lib/investments/form-amounts.ts so its
+  // behaviour can be pinned by name; see that module for what changed.
+  function amountErrorMessage(reason: AmountFieldError): string {
+    switch (reason) {
+      case 'negative':
+        return m.investments_form_negative_number();
+      case 'too_large':
+        return m.investments_form_amount_too_large();
+      case 'invalid':
+        return m.investments_form_invalid_number();
     }
-    intStr = intStr.replace(/^0+/, '') || '0';
-    const coefficient = intStr + fracStr;
-    if (!/^\d+$/.test(coefficient)) return { value: null, scale };
-    return { value: BigInt(coefficient), scale };
-  }
-
-  // BigInt → safe JS number. Rejects coefficients that exceed Number.MAX_SAFE_INTEGER
-  // (2^53 − 1), which would be silently corrupted by Number(). Returns null on overflow.
-  function toSafeInt(v: bigint): number | null {
-    if (v > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-    return Number(v);
   }
 
   const canSubmit = $derived(
@@ -162,30 +147,24 @@
     e.preventDefault();
     if (!canSubmit || !selectedInstrument || !cashCommodityID) return;
 
-    const qty = parseDecimalField(quantityStr);
-    const cash = parseDecimalField(cashAmountStr);
-
-    if (qty.value === null || cash.value === null) {
-      formError = new Error(m.investments_form_invalid_number());
+    // quantity_value is an exact coefficient string on the wire, so it needs
+    // no safe-integer cap; cash_amount_value is a real int64 and still does.
+    const amounts = parseTradeAmounts({ quantityStr, cashAmountStr });
+    if (!amounts.ok) {
+      formError = new Error(amountErrorMessage(amounts.reason));
       return;
     }
-
-    const qtyInt = toSafeInt(qty.value);
-    const cashInt = toSafeInt(cash.value);
-    if (qtyInt === null || cashInt === null) {
-      formError = new Error(m.investments_form_amount_too_large());
-      return;
-    }
+    const { quantity, cashAmount } = amounts.values;
 
     const payload: InvestmentTradeRequest = {
       transaction_date: transactionDate,
       commodity_id: selectedInstrument.commodity_id,
       holding_account_id: Number(holdingAccountID),
       cash_account_id: Number(cashAccountID),
-      quantity_value: qtyInt,
-      quantity_scale: qty.scale,
-      cash_amount_value: cashInt,
-      cash_amount_scale: cash.scale,
+      quantity_value: quantity.value,
+      quantity_scale: quantity.scale,
+      cash_amount_value: cashAmount.int64,
+      cash_amount_scale: cashAmount.scale,
       cash_commodity_id: cashCommodityID,
       memo: memo.trim() || undefined
     };

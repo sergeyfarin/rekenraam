@@ -162,10 +162,9 @@ func TestLoginSetsSessionCookieWithMaxAge(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, res.Code)
 
-	cookies := res.Result().Cookies()
-	require.Len(t, cookies, 1)
-	assert.Equal(t, sessionCookieName, cookies[0].Name)
-	assert.Equal(t, int(app.SessionLifetime.Seconds()), cookies[0].MaxAge)
+	sessionCookie := sessionCookieFrom(t, res.Result().Cookies())
+	assert.Equal(t, sessionCookieName, sessionCookie.Name)
+	assert.Equal(t, int(app.SessionLifetime.Seconds()), sessionCookie.MaxAge)
 }
 
 func TestLoginSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testing.T) {
@@ -188,10 +187,9 @@ func TestLoginSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS(t *testing.T) 
 
 	require.Equal(t, http.StatusOK, res.Code)
 
-	cookies := res.Result().Cookies()
-	require.Len(t, cookies, 1)
-	assert.Equal(t, secureSessionCookieName, cookies[0].Name)
-	assert.True(t, cookies[0].Secure)
+	sessionCookie := sessionCookieFrom(t, res.Result().Cookies())
+	assert.Equal(t, secureSessionCookieName, sessionCookie.Name)
+	assert.True(t, sessionCookie.Secure)
 }
 
 func TestLoginRejectsCrossOriginRequest(t *testing.T) {

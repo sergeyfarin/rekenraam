@@ -29,6 +29,24 @@ type LedgerPostingRecord struct {
 	QuantityValue exact.Coefficient
 	QuantityScale int
 	EntryDate     string
+	// TransactionID groups postings that belong to the same transaction.
+	TransactionID int64
+	// JournalEntryID groups postings that balance against each other.
+	//
+	// This, not TransactionID, is the unit cashflow classification works over:
+	// validateBalanced enforces balance **per journal entry**, and an entry
+	// carries a single entry_date. So the postings sharing a JournalEntryID sum
+	// to zero per commodity *and* fall in the same reporting bucket — which is
+	// what lets cashflow decompose a bucket exactly instead of guessing which
+	// counterpart funded which leg.
+	JournalEntryID int64
+	// PayeeID is the linked payee, when the transaction names one.
+	PayeeID sql.NullInt64
+	// PayeeName is the transaction's free-text payee. It is the fallback label
+	// for an unlinked payee and is not kept in sync with a linked payee's
+	// current name, so a caller that has PayeeID should prefer the payee
+	// record.
+	PayeeName sql.NullString
 }
 
 // LedgerAccountVersionRecord is one effective-dated account version. A caller
@@ -180,6 +198,21 @@ func (r *TransactionRepository) LedgerCategoryPostings(ctx context.Context, book
 	return r.ledgerPostings(ctx, query)
 }
 
+// LedgerPostingsInRange reads every posting whose entry date falls in an
+// inclusive range, with no account or category filter.
+//
+// Cashflow needs the unfiltered set: classifying a cash posting depends on what
+// its counterparts are, so filtering counterparts out at the SQL layer would
+// destroy the very relationships the classification reads.
+func (r *TransactionRepository) LedgerPostingsInRange(ctx context.Context, bookID int64, afterDate string, beforeDate string, status string) ([]LedgerPostingRecord, error) {
+	return r.ledgerPostings(ctx, ledgerPostingQuery{
+		BookID:     bookID,
+		Status:     status,
+		AfterDate:  afterDate,
+		BeforeDate: beforeDate,
+	})
+}
+
 func (r *TransactionRepository) AccountRegisterRunningPostings(ctx context.Context, params ListTransactionsParams) ([]LedgerPostingRecord, error) {
 	return r.ledgerPostings(ctx, ledgerPostingQuery{
 		BookID:     params.BookID,
@@ -266,7 +299,11 @@ func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledger
 			pv.commodity_id,
 			pv.quantity_value,
 			pv.quantity_scale,
-			je.entry_date
+			je.entry_date,
+			tv.transaction_id,
+			je.id,
+			tv.payee_id,
+			tv.payee_name
 		FROM current_transaction_versions tv
 		JOIN transactions t ON t.id = tv.transaction_id
 		JOIN journal_entries je ON je.transaction_version_id = tv.id
@@ -289,6 +326,10 @@ func (r *TransactionRepository) ledgerPostings(ctx context.Context, query ledger
 			&posting.QuantityValue,
 			&posting.QuantityScale,
 			&posting.EntryDate,
+			&posting.TransactionID,
+			&posting.JournalEntryID,
+			&posting.PayeeID,
+			&posting.PayeeName,
 		); err != nil {
 			return nil, fmt.Errorf("scan ledger posting: %w", err)
 		}

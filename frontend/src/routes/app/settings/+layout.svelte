@@ -5,6 +5,7 @@
   import Languages from '@lucide/svelte/icons/languages';
   import Palette from '@lucide/svelte/icons/palette';
   import Settings2 from '@lucide/svelte/icons/settings-2';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import { m } from '$lib/paraglide/messages.js';
 
@@ -36,6 +37,12 @@
       label: m.settings_nav_currencies(),
       icon: Coins,
       active: pathname.startsWith('/app/settings/currencies')
+    },
+    {
+      href: '/app/settings/security',
+      label: m.settings_nav_security(),
+      icon: ShieldCheck,
+      active: pathname.startsWith('/app/settings/security')
     },
     {
       href: '/app/settings/trash',

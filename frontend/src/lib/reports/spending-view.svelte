@@ -4,7 +4,7 @@
   import StatePanel from '$lib/components/state-panel.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
-  import { formatQuantity } from '$lib/transactions/transaction-labels';
+  import { formatQuantity } from '$lib/money/format';
   import { categoriesQueryOptions, type CategoryResponse } from '$lib/api/categories';
   import { categoryDisplayName } from '$lib/categories/category-labels';
   import {

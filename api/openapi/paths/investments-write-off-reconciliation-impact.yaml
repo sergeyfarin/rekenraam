@@ -10,7 +10,7 @@ post:
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/InvestmentTradeRequest"
+          $ref: "../openapi.yaml#/components/schemas/InvestmentWriteOffRequest"
   responses:
     "200":
       description: Reconciliation impact computed (no mutation)

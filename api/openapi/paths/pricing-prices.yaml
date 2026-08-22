@@ -14,6 +14,15 @@ get:
         format: int64
       description: Filter observations by quote commodity.
     - in: query
+      name: include_voided
+      schema:
+        type: boolean
+        default: false
+      description: >-
+        Include voided observations. Voided observations are excluded from
+        every valuation and from this listing by default; set this to inspect
+        what was retired and why.
+    - in: query
       name: limit
       schema:
         type: integer

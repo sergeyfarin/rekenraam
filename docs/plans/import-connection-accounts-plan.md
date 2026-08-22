@@ -11,8 +11,10 @@ future online provider, not just Trading 212.
   + `import_connection_holdings` table, exactly as designed below.
 - The deferred-creation rule (resolution/lookup can run early, but
   **creation** only happens at commit time) was followed exactly — see
-  Slice 4b's writeup for the "opened_on/effective_from must be the trade's
-  own date, not today" bug this surfaced.
+  Slice 4b's writeup for the "opened_on/effective_from must not be today"
+  bug this surfaced. The trade's own date was the first answer to it and was
+  itself wrong (T-44): an import-created holding account now opens at the
+  genesis date — `docs/design/holding-account-opened-date.md`.
 - **Scenario 2 (link to an existing pre-connection holding account, with
   explicit human confirmation) was not implemented.** Resolution always
   either reuses a connection-linked account or creates a fresh one; the

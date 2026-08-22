@@ -17,13 +17,13 @@
     type TransactionLifecycleRequest
   } from '$lib/api/transactions';
   import { APIClientError } from '$lib/api/client';
+  import { formatQuantity } from '$lib/money/format';
   import {
     formatSignedAmount,
     resolveAccountLabel,
     statusLabel,
     statusTone,
-    commodityDisplay,
-    formatQuantity
+    commodityDisplay
   } from './transaction-labels';
   import type { AccountClass } from './transaction-labels';
 

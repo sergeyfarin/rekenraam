@@ -210,11 +210,10 @@ func createOwnerSession(t *testing.T, handler http.Handler) (*http.Cookie, strin
 	handler.ServeHTTP(res, req)
 
 	require.Equal(t, http.StatusCreated, res.Code)
-	cookies := res.Result().Cookies()
-	require.Len(t, cookies, 1)
+	sessionCookie := sessionCookieFrom(t, res.Result().Cookies())
 
 	sessionReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
-	sessionReq.AddCookie(cookies[0])
+	sessionReq.AddCookie(sessionCookie)
 	sessionRes := httptest.NewRecorder()
 	handler.ServeHTTP(sessionRes, sessionReq)
 	require.Equal(t, http.StatusOK, sessionRes.Code)
@@ -223,7 +222,7 @@ func createOwnerSession(t *testing.T, handler http.Handler) (*http.Cookie, strin
 	require.NoError(t, json.NewDecoder(sessionRes.Body).Decode(&session))
 	require.NotEmpty(t, session.CSRFToken)
 
-	return cookies[0], session.CSRFToken
+	return sessionCookie, session.CSRFToken
 }
 
 func createBookForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, name string) {

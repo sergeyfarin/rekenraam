@@ -8,6 +8,24 @@ import (
 	"strings"
 )
 
+// CommodityGenesisDate is the effective_from stamped on a commodity's first
+// version. A commodity's creation date is app bookkeeping — the day you
+// enabled the currency or added the instrument — not a financial fact, so it
+// must not constrain the ledger: posting validation resolves the commodity
+// rule as of the entry date, and any later date would reject all earlier
+// history (T-42). Mirrors systemAccountDate in app/accounts.go, which makes
+// the same call for system accounts and seeded categories.
+//
+// This is deliberately applied here, at the only writer, rather than passed in
+// by callers. Every producer of historical data would otherwise have to
+// remember to backdate — and the Trading 212 import had to do exactly that,
+// twice, before this existed.
+//
+// A genuine later change to a commodity (archive, rename, scale change) is a
+// *new* version with a real effective_from, which as-of resolution still
+// honours.
+const CommodityGenesisDate = "0001-01-01"
+
 var ErrCommodityExists = errors.New("commodity already exists")
 var ErrCurrenciesSetupComplete = errors.New("currencies setup already complete")
 
@@ -436,7 +454,7 @@ func createCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams
 			change_audit_event_id
 		)
 		VALUES (?, 1, ?, ?, ?, 'created from embedded currency catalog', 'active', ?, ?, ?, ?, ?, '{"source":"embedded_currency_catalog"}', ?)
-	`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, auditEventID)
+	`, commodityID, CommodityGenesisDate, params.CreatedAt, params.CreatedByUserID, params.Spec.Symbol, params.Spec.Symbol, params.Spec.Name, params.Spec.StandardScale, params.Spec.MaxQuantityScale, auditEventID)
 	if err != nil {
 		return CommodityRecord{}, fmt.Errorf("insert currency version: %w", err)
 	}
@@ -456,7 +474,7 @@ func createCurrency(ctx context.Context, tx *sql.Tx, params CreateCurrencyParams
 		CreatedByUserID:  params.CreatedByUserID,
 		VersionID:        versionID,
 		VersionSeq:       1,
-		EffectiveFrom:    params.EffectiveFrom,
+		EffectiveFrom:    CommodityGenesisDate,
 		RecordedAt:       params.CreatedAt,
 		ChangedByUserID:  params.CreatedByUserID,
 		ChangeReason:     "created from embedded currency catalog",

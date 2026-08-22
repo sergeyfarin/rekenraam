@@ -5,15 +5,11 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-20.
+Last updated: 2026-08-20 (merge of two long-diverged branches).
 
 ## Where things stand
 
-Everything below is merged to `main` and pushed; the working tree is clean. The
-last four commits are the localization catalogs (`efdb8d9`, `012dace`) and T-47
-(`0ddbc3c`, `be8aa11`).
-
-To pick this up on a local machine:
+Everything below is merged. To pick this up on a local machine:
 
 ```sh
 pnpm install
@@ -27,8 +23,12 @@ Leave `PLAYWRIGHT_CHROMIUM_EXECUTABLE` unset locally — it exists only for imag
 that cannot download Playwright's pinned browser. Full commands and environment
 variables: `docs/developer-workflow.md`.
 
-Nothing is half-finished in the tree. The open items are decisions and new
-work, listed below and in `roadmap.md`.
+The open items are decisions and new work, listed below and in `roadmap.md`.
+**A note on ticket IDs:** `docs/backlog.md` explains a numbering collision —
+T-42 through T-47 were used for two different sets of items across the two
+branches that merged here. This file uses the renumbered IDs (T-48–T-53) for
+the branch that lost the collision; see `backlog.md`'s header note for the
+full mapping.
 
 ## Decisions — owner answers of 2026-08-19
 
@@ -38,15 +38,17 @@ Recorded here as pointers; the source of truth is `roadmap.md` and
 - **Reporting-currency selector: build it** (one reporting currency, named
   valuation method), sequenced after R3. Per-commodity exact totals stay in
   every response — conversion is additive, never replacing.
-- **Free-text payees (T-44): resolve on entry, but never silently.** Typing a
-  new payee name prompts for confirmation, offering existing payees through a
-  fuzzy search before creating a record.
+- **Free-text payees (backlog T-50): resolve on entry, but never silently.**
+  Typing a new payee name prompts for confirmation, offering existing payees
+  through a fuzzy search before creating a record.
 - **Zero-proceeds write-off (T-38): a disposal at zero proceeds**, booking
   through the existing realized gain/loss treatment rather than a dedicated
-  expense category.
+  expense category. Shipped as a dedicated `InvestmentWriteOffInput` type with
+  its own required `reason` and preview endpoint — see `backlog.md` and
+  `implemented.md`.
 - **Cashflow keeps its reconciliation guarantee.** Category and payee filters
-  are not added to it; the filtered question is answered by the spending report,
-  reached by drill-down from a cashflow row. Confirmed and shipped 2026-08-19,
+  are not added to it; the filtered question is answered by the spending
+  report, reached by drill-down from a cashflow row. Shipped 2026-08-19,
   including the entry-level tightening of spending's account filter.
 - **Public-deployment gates (S-04, S-06, S-07): parked.** Self-hosted locally
   for now; unpark when an internet-exposed deployment is planned, R3 at the
@@ -70,61 +72,53 @@ preconditions. Also in `roadmap.md`.
 
 **Awaiting an owner decision:** who reviews the drafted translations for the
 five target languages (they are drafted, not natively reviewed — see the
-localization item below). T-47 is done — see `backlog.md`.
+localization item below).
 
-## Current initiative — R2 reports (see roadmap.md)
+**Also open (from the G-02/G-09 sweep, 2026-08-08):** whether a displayed FX
+rate in `settings/currencies/+page.svelte` should truncate or round half-up.
+See `backlog.md` G-09.
+
+## Current initiative — R2 reports — **complete, 2026-08-19**
 
 - [x] Shared report filter contract (`account_id`, `include_descendants`,
       `commodity_id`) on the backend, with a `query.filters` echo carrying the
       resolved account expansion — done 2026-08-17.
-- [x] Spending read model: `GET /api/v1/reports/spending`, category/payee
-      grouping, exact per-commodity totals, within-commodity shares, and
-      drill-down queries — done 2026-08-17 (backend only).
-- [x] Spending view (frontend): view switch, dense table, category/payee and
-      spending/income switches, single-commodity bar chart, all screen states —
-      done 2026-08-17. Filter *controls* and drill-down links followed on
-      2026-08-18, below.
-- [x] Filter controls (account / commodity / category / payee pickers) for both
-      views — done 2026-08-18. Also fixed the net-worth OpenAPI path, which
-      never declared the shared filter parameters its handler already parsed,
-      so the generated client could not send them.
-- [x] Drill-down links from a spending row — done 2026-08-18. The blocker was
-      real but narrower than stated: the transactions list already took
-      account/category/payee and inclusive dates, but filtered on the
-      transaction's own date while the reports sum on entry dates. Added
-      `date_basis=entry` and `category_type` to `GET /transactions`, and the
-      list now reads its filters from the URL. Rows the route cannot express
-      (the unattributed group, a report narrowed to several accounts) stay
-      unlinked rather than leading somewhere that disagrees with the number.
-- [x] Cashflow read model + view (inflow / outflow / transfers / net) — done
-      2026-08-18. `GET /api/v1/reports/cashflow` is exact per commodity per
-      bucket, with `net_movement = operating_net + transfer_net` holding as an
-      identity because journal entries balance per commodity. The view names its
-      cash scope and states the transfer policy on screen. Category and payee
-      filters on cashflow are deferred with a recorded reason — they break
-      `net_movement`'s reconciliation guarantee.
-- [x] Date/account/category/payee/commodity filters — done 2026-08-18 across all
-      three views (category and payee only where a report can express them).
-- [x] CSV + print-friendly tables; summary charts alongside (not replacing)
-      the accessible data table — done 2026-08-18. CSV carries exact
-      unformatted decimals with the commodity in its own column, because a
-      locale-formatted figure destroys a CSV. Printing drops navigation,
-      filters, the view switch, and the export button, keeping the headings,
-      the stated scope, and the table. Net worth and cashflow gained signed
-      column charts; all three views keep the table as the source of truth.
-- [ ] R2 acceptance review — the only thing left in R2, and an owner decision
-      rather than implementation. Cross-currency valuation is already decided
-      (build it, after R3), so the review covers the remaining
-      `plans/reports-plan.md` follow-ups: named saved report definitions,
-      immutable report snapshots, investment/tax/benchmark dimensions, and the
-      user-configurable report builder. Investment dimensions depend on R16/R17
-      lot lifecycle work that does not exist yet.
+- [x] Spending view — done 2026-08-17/18 (`GET /api/v1/reports/spending`,
+      `group_by=category|payee`, `direction=expense|income`; its own read model
+      rather than an overload of `ledger/category-totals`). View switch, dense
+      table, category/payee and spending/income switches, single-commodity bar
+      chart, all screen states.
+- [x] Cashflow read model + view — done 2026-08-18
+      (`GET /api/v1/reports/cashflow`; classification derived from the
+      per-journal-entry balancing identity, so `net_movement` reconciles to
+      the cash balance change by construction and a many-counterpart split
+      needs no allocation rule).
+- [x] Filters — **date, bucket, group_by, direction, and the repeated-ID
+      filters (`account_id`/`category_id`/`payee_id`/`commodity_id`) all
+      shipped** by 2026-08-18, closing what was briefly the one R2 delivery
+      gap.
+- [x] Drill-down — done 2026-08-18. A cashflow row's in/out figures link into
+      the spending report for that bucket's dates, resolved accounts,
+      commodity, and matching direction; a spending row links into
+      `/app/transactions` (`date_basis=entry`, `category_type` added to
+      `GET /transactions`). Spending's account filter was tightened from
+      transaction level to journal-entry level so the two reports mean the
+      same thing by "spent from this account."
+- [x] CSV + print-friendly tables; summary charts alongside (not replacing) the
+      accessible data table — done 2026-08-18. CSV uses `formatLedgerAmount`
+      from `$lib/money/amount.ts`, not the display formatter, because a
+      spreadsheet cannot parse locale group separators. Charts are
+      `aria-hidden`, single-commodity only.
+- [x] R2 acceptance review — done 2026-08-19. Every preserved follow-up is
+      answered yes or no with reasoning at the end of
+      `docs/plans/reports-plan.md`. Next: the named reporting-currency
+      valuation method, after R3. Saved definitions, snapshots,
+      tax/jurisdiction dimensions, and a report builder are all deferred with
+      stated reasons.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 
-Ordered by value. None of these needs a further decision.
-
-1. **T-44 payee resolution — done 2026-08-19.**
+1. **Payee resolution (backlog T-50) — done 2026-08-19.**
    - [x] Exact-name linking on every write path, so manual entry *and* import
          commit both resolve a typed name to the record that carries it.
    - [x] Manual entry confirm-and-search: a name no payee carries stops the save
@@ -134,25 +128,9 @@ Ordered by value. None of these needs a further decision.
    - [x] **History tool dropped** — the owner confirmed 2026-08-19 that the app
          carries no real data yet, so there is nothing to backfill.
    - Imports still commit unrecognized names as free text by design; resolving
-     them in import review is follow-up work under import (R5/R6), not T-44.
-2. [x] **T-37 price observation voiding — done 2026-08-19.**
-   `POST /api/v1/pricing/prices/{price_id}/void`, with a required reason, a 409
-   on a repeat, and a migration adding the void's audit-event link. The pricing
-   UI that surfaces it is R11.
-3. [x] **T-38 zero-proceeds write-off — done 2026-08-19.**
-   `POST /api/v1/investments/write-off`, a separate route so "no proceeds" is
-   always stated. No cash postings at all, which is what makes the existing
-   realized-gain engine report the whole basis as a loss. Its guard test found
-   T-47: the reconciliation-guard error was unmapped across the investments API
-   and surfaced as a 500.
-4. [x] **Cashflow → spending drill-down — done 2026-08-19** (owner chose C2). A
-   cashflow row's in and out figures link into the spending report for that
-   bucket's dates, the same resolved accounts, the row's commodity, and the
-   matching direction. Spending's account filter was tightened from transaction
-   level to journal-entry level so the two reports mean the same thing by "spent
-   from this account".
-
-5. [x] **Localization of the five target languages — drafted 2026-08-19.** The
+     them in import review is follow-up work under import (R5/R6), not this
+     item.
+2. **Localization of the five target languages — drafted 2026-08-19.** The
    catalog is far larger than the earlier "roughly 250 messages" estimate: it is
    **1,170 messages** — 283 in `frontend/messages/app/` and 887 in
    `frontend/messages/settings/`.
@@ -175,7 +153,9 @@ Ordered by value. None of these needs a further decision.
      language settings page says so to anyone using a non-English locale. Three
      items to check first, in order: Spanish *Punteado* for "cleared", Russian
      *партия* for a tax lot, and Dutch *Instelling* for a financial institution
-     (it collides with *instellingen*, "settings").
+     (it collides with *instellingen*, "settings"). This is also why `backlog.md`
+     G-08's input-parsing gap (decimal-comma locales) is no longer purely
+     hypothetical — es/fr/nl/de all use a comma decimal separator.
 
 ## Bug-fix queue (from backlog — schedule independent of R2)
 
@@ -189,38 +169,102 @@ Ordered by value. None of these needs a further decision.
       pricing source health with a manual re-enqueue endpoint).
 - [x] T-40 `triangulation_max_hops` now honored — done 2026-08-06
       (`app/pricing_refresh.go`: multi-hop chain search, shortest route wins).
+- [x] T-37 price observations can be voided — done 2026-08-06
+      (`POST /pricing/prices/{id}/void`; **cascades** to rates triangulated
+      from the voided leg — `TestVoidPrice_CascadesToRatesTriangulatedFromTheVoidedLeg`;
+      R11 still owns the UI).
+- [x] T-42 commodity enable date no longer blocks earlier history — done
+      2026-08-06 (`db.CommodityGenesisDate`; retired the Trading 212
+      instrument-backdating workaround). Follow-ups T-43 and T-44 both
+      done 2026-08-07.
+- [x] T-43 user-created categories open at the genesis date — done
+      2026-08-07 (`app.categoryGenesisDate`; `opened_on` removed from the
+      category create/update API and the editor).
+- [x] T-44 a later import carrying an earlier trade commits — done
+      2026-08-07 (import-created holding accounts open at the genesis date;
+      `docs/design/holding-account-opened-date.md`).
+- [x] S-04 lockout-safe login throttle — done 2026-08-06 (approved-device
+      cookie moves a known device onto its own throttle scope; the cookie is
+      not a credential). Public-deployment gate closed, then **parked
+      2026-08-19** (see Decisions above).
+- [x] S-07 authentication-event visibility — done 2026-08-06
+      (`authentication_events` + `GET /auth/events` + structured logs;
+      90-day retention). Public-deployment gate closed, then **parked
+      2026-08-19**.
+- [x] T-38 zero-proceeds write-off — done 2026-08-06, extended 2026-08-20
+      (`POST /investments/write-off` + `/preview`; dedicated
+      `InvestmentWriteOffInput` type, not a zero-amount sell; loss stays a
+      computed gains value, see I-04; reconciliation-override support added
+      2026-08-20 as T-53).
 - [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
       `scaledAmount`/`scaledInteger`/`pow10DB`).
-- [x] T-43 gofmt drift cleared — done 2026-08-17; `gofmt -l` and `go vet` moved
-      into `scripts/test-backend.sh` so CI enforces them.
-- [ ] T-42 TypeScript 7 — blocked upstream on `openapi-typescript` TS 7
-      support. Re-check on each of its releases; nothing to do here until then.
-- [x] T-45 net-worth series re-reads the ledger per bucket — done 2026-08-18;
-      one ledger read folded forward across buckets, with account versions
-      replayed in one pass instead of a snapshot query per bucket. `bucket=day`
-      over a year drops from ~1.4 s to ~9 ms, and response time is now flat
-      across bucket granularity.
-- [x] T-46 CSP-blocked inline style cleared — done 2026-08-18; it was a
-      `style` *attribute* (`style-src-attr`), not a stylesheet: SvelteKit's
-      generated `#svelte-announcer` hardcodes its visually-hidden rules inline.
-      A Vite plugin strips the attribute and `app.css` styles the announcer, so
-      `style-src` stays `'self'` with no `'unsafe-inline'` or `'unsafe-hashes'`.
+- [x] S-06 multi-factor authentication — done 2026-08-07 (TOTP + recovery
+      codes, `internal/totp/` + migration 0005 + Settings → Security). The
+      last public-deployment gate before it was **parked 2026-08-19**; what
+      remains is enrolling the owner account before an internet deployment.
+- [x] G-07 CI coverage signal — done 2026-08-07 (`COVERAGE=1
+      scripts/test-backend.sh` + non-gating `backend-coverage` job + soft floor
+      `scripts/check-coverage-floor.sh`; merged total 75.2%, floor 73.0%).
+      Closes the last open item of `plans/backend-test-coverage-plan.md`
+      besides Workstream 6, whose harnesses wait for their first consumer.
+- [x] T-49 (was remote's T-43) gofmt drift cleared — done 2026-08-17; `gofmt -l`
+      and `go vet` moved into `scripts/test-backend.sh` so CI enforces them.
+- [x] T-51 (was remote's T-45) net-worth series re-reads the ledger per bucket
+      — done 2026-08-18; one ledger read folded forward across buckets, with
+      account versions replayed in one pass instead of a snapshot query per
+      bucket. `bucket=day` over a year drops from ~1.4 s to ~9 ms, and response
+      time is now flat across bucket granularity.
+- [x] T-52 (was remote's T-46) CSP-blocked inline style cleared — done
+      2026-08-18; it was a `style` *attribute* (`style-src-attr`), not a
+      stylesheet: SvelteKit's generated `#svelte-announcer` hardcodes its
+      visually-hidden rules inline. A Vite plugin strips the attribute and
+      `app.css` styles the announcer, so `style-src` stays `'self'` with no
+      `'unsafe-inline'` or `'unsafe-hashes'`.
+- [x] T-53 (was remote's T-47) investment trades can override a reconciliation
+      lock — done 2026-08-20. `reconciliation_override` accepted on buy, sell,
+      dividend, reinvested-dividend, and write-off; five preview routes name
+      which checkpoints a write would invalidate before it happens.
 
-Everything else open in `backlog.md` is roadmap-scheduled or parked:
+Still open, listed under "Open, unscheduled" below rather than here: T-48 (was
+remote's T-42, TypeScript 7) and T-34.
 
-- **T-37 and T-38 are R16 slice 1, and both now have their decisions** (T-38
-  books a write-off as a disposal at zero proceeds through the existing
-  realized gain/loss treatment). T-37 is also a prerequisite for the
-  reporting-currency work — once rates drive headline numbers, an unvoidable
-  poisoned observation stops being cosmetic.
-- **T-44 has its decision** (resolve a typed payee name on entry, with
-  confirmation and fuzzy search over existing payees; never auto-create
-  silently) and is ready to schedule.
-- **T-34's producer is R15**, still with no chosen data source.
-- **S-04, S-06, and S-07 are parked**, not awaiting a decision: the app is
-  self-hosted locally, and the trigger to unpark is the first planned
-  internet-exposed deployment.
+## Open, unscheduled (from the doc sweep of 2026-08-07)
+
+- [x] G-02 frontend money logic untested — **done 2026-08-08**. The editor and
+      reconcile form landed first (turning up two decimal-comma/zero-posting
+      bugs, see `docs/reviews/resolved-backlog-2026-07.md`); the three
+      investment forms followed, turning up the same decimal-comma 100× error,
+      still live in every one of them. They held seven copies of three
+      helpers, not the two the survey counted. Validation is now in
+      `lib/investments/form-amounts.ts` behind 35 named tests, because with no
+      component-test harness a per-form behaviour change cannot be pinned in
+      place. `toSafeInt` became `toInt64Coefficient` in `lib/api/investments.ts`
+      — it adapts an API contract quirk and is not money arithmetic, so it
+      stayed out of `$lib/money`.
+- [~] G-09 `.svelte` files carrying private money math — opened and mostly
+      closed 2026-08-08. `category-transactions.svelte` retired onto a new
+      `sumByCommodity` in `$lib/money/amount.ts` (it held a third copy of the
+      ledger's normal-sign rule). `gains-report.svelte` turned out **not** to be
+      a defect on closer reading — its lossy conversion feeds only a sign test
+      that picks a CSS colour. Remaining: `settings/currencies/+page.svelte`,
+      which is larger than first recorded — it does ad-hoc *truncating* division
+      on an implied FX rate where `ledger-invariants` requires half-up via a
+      shared helper, and then drops the exact result through `Number()` before
+      formatting. **Needs a decision** (truncate or round a displayed rate?) so
+      it was not folded in silently. See `backlog.md` G-09.
+- [~] G-08 amount input is not locale-aware — **display half settled
+      2026-08-08**: `Intl.NumberFormat` wins over Dinero.js, the unused
+      `dinero.js` dependency is gone, and `formatQuantity` now lives in
+      `frontend/src/lib/money/format.ts` as the read-only display half of
+      `$lib/money`. The input half (resolving the separator from the active
+      locale when parsing and when refilling a form field) stays open, and is
+      no longer purely hypothetical now that es/fr/nl/de (all decimal-comma
+      locales) shipped 2026-08-19. See `backlog.md` G-08.
+- [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
+      slice and an unmade provider choice. See `backlog.md`.
+- [ ] T-48 TypeScript 7 upgrade — `[blocked]` on `openapi-typescript` shipping
+      TS 7 support. See `backlog.md`.
 
 ## Hygiene
 

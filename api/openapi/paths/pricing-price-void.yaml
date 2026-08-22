@@ -1,12 +1,12 @@
 post:
   summary: Void a price observation
-  description: >
-    Retires an observation without deleting it. A price is corrected by
-    superseding or voiding, never by overwriting: the row remains, voided_at is
-    stamped, and every price read already filters voided observations out, so a
-    poisoned price stops feeding historical listings and derivations. A reason
-    is required — voiding is a deliberate correction to financial data, and the
-    "why" is worth nothing if it is invented for the caller.
+  description: >-
+    Retires a price observation so it stops being used for valuations, without
+    deleting or overwriting it. A price is corrected by superseding or voiding,
+    never edited in place. The void cascades to every still-active observation
+    triangulated from this one, because a derived rate carries the same
+    poisoned number under a different id. Voiding is not idempotent: a second
+    void would overwrite the first reason and returns 409.
   parameters:
     - in: path
       name: price_id
@@ -14,46 +14,80 @@ post:
       schema:
         type: integer
         format: int64
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+      description: Session-bound CSRF token for authenticated mutating requests.
   requestBody:
     required: true
     content:
       application/json:
         schema:
-          type: object
-          required:
-            - void_reason
-          properties:
-            void_reason:
-              type: string
-              minLength: 1
-              maxLength: 500
+          $ref: "../openapi.yaml#/components/schemas/PriceObservationVoidRequest"
   responses:
     "200":
-      description: The voided observation
+      description: >-
+        Every observation the void retired: the requested one first, then
+        anything derived from it.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/PriceObservationResponse"
+            $ref: "../openapi.yaml#/components/schemas/PriceObservationVoidResponse"
     "400":
-      description: Invalid request
+      description: Invalid price id or missing void reason
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "401":
       description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: CSRF validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: No such price observation
+      description: Price observation not found
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: The observation is already voided
+      description: Price observation is already voided
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
       content:
         application/json:
           schema:

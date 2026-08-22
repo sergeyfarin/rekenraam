@@ -1,0 +1,40 @@
+get:
+  summary: List approved devices
+  description: >-
+    Devices that carry a login-throttle bypass (S-04). Approval is earned by
+    completing a successful login (or first-run owner setup) and is stored as
+    an HttpOnly cookie whose hash alone is kept server-side.
+
+    The cookie is a throttle-scope selector, **not** a credential: it grants no
+    access, and a login still requires the password. Its only effect is that
+    attempts from that device spend their own failure budget instead of the
+    shared username and client-IP budgets — so an attacker cannot lock the
+    single known owner out by failing logins from elsewhere.
+  responses:
+    "200":
+      description: Approved devices, most recently used first
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/TrustedDevicesResponse"
+    "401":
+      description: Authentication is required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

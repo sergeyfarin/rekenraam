@@ -60,7 +60,7 @@ func newInvestTestFixtureWithOptions(t *testing.T, seedTradingAccount bool) *inv
 		INSERT INTO commodity_versions (
 			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
 			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
-		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', 'EUR', '€', 'Euro', 2, 6)
+		) VALUES (?, 1, '0001-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', 'EUR', '€', 'Euro', 2, 6)
 	`, eurCommodityID)
 	require.NoError(t, err)
 
@@ -98,6 +98,8 @@ func newInvestTestFixtureWithOptions(t *testing.T, seedTradingAccount bool) *inv
 // system_role must be set at INSERT time — a trigger enforces that account
 // system-identity fields are immutable after creation, so seedTestAccount's
 // plain account + a follow-up UPDATE doesn't work here.
+// Dated 0001-01-01 to match production: app.systemAccountDate stamps every
+// system account, so a back-dated import can post through commodity_trading.
 func seedCommodityTradingAccount(t *testing.T, database *sql.DB) int64 {
 	t.Helper()
 	ctx := context.Background()
@@ -113,7 +115,7 @@ func seedCommodityTradingAccount(t *testing.T, database *sql.DB) int64 {
 			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
 			change_reason, status, opened_on, code, name, account_class,
 			account_kind, allows_postings
-		) VALUES (?, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', '2026-01-01', 'TRADING', 'Commodity Trading', 'asset', 'other_asset', 1)
+		) VALUES (?, 1, '0001-01-01', '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', '0001-01-01', 'TRADING', 'Commodity Trading', 'asset', 'other_asset', 1)
 	`, accountID)
 	require.NoError(t, err)
 	return accountID
@@ -947,7 +949,7 @@ func TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner(t *testing.
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	_, commodityID, _, err := f.investmentSvc.ResolveOrCreateInstrumentForImport(
-		context.Background(), f.ownerUserID, 0, "", "US0378331005", "AAPL_US_EQ", "2026-06-01",
+		context.Background(), f.ownerUserID, 0, "", "US0378331005", "AAPL_US_EQ",
 	)
 	require.NoError(t, err)
 
@@ -1102,4 +1104,97 @@ func TestCommitImportBatch_StaleIdentitySnapshotReturnsCommitted(t *testing.T) {
 	require.NoError(t, stale.err)
 	assert.Equal(t, 1, stale.result.CommittedCount)
 	assert.Equal(t, "committed", stale.result.Status)
+}
+
+// The import used to pass the trade's own date as the new instrument's
+// EffectiveFrom, purely so PostingCommodityRule would find a commodity version
+// effective as of a back-dated fill. That workaround is gone: the commodity's
+// first version is stamped db.CommodityGenesisDate, so a back-dated first
+// trade commits with no special handling (T-42).
+func TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating(t *testing.T) {
+	f := newInvestTestFixture(t)
+	// A brokerage cash account the user really opened in 2023, so the fill
+	// predates only the app's own setup — not the account it settles against.
+	cashAccountID := seedTestAccountOpenedOn(t, f.database, "2023-01-01")
+	conn := f.createConnection(t, &cashAccountID)
+
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "fill-old", OrderID: "order-old", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
+		FilledAt: "2023-06-05T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
+	})
+
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Empty(t, rows[0].CommitError)
+	assert.Equal(t, 1, result.CommittedCount)
+
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, "2", positions[0].QuantityValue.String())
+}
+
+// A later sync or a backfill can carry a trade that is *earlier* than the one
+// the holding account was created from. The account's opened date was a guess
+// made from whichever fill arrived first, so it must not reject the earlier
+// one (T-44 — see docs/design/holding-account-opened-date.md).
+func TestCommitImportBatch_LaterImportCarryingAnEarlierTradeStillCommits(t *testing.T) {
+	f := newInvestTestFixture(t)
+	cashAccountID := seedTestAccountOpenedOn(t, f.database, "2023-01-01")
+	conn := f.createConnection(t, &cashAccountID)
+
+	fill := func(fillID string, filledAt string) trading212OrderFill {
+		return trading212OrderFill{
+			FillID: fillID, OrderID: "order-" + fillID, Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+			Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
+			FilledAt: filledAt, NetValue: "-150.00", NetValueCurrency: "EUR",
+		}
+	}
+
+	firstBatch, _ := f.stageOrderFillRow(t, conn.ID, fill("fill-recent", "2026-06-01T10:00:00Z"))
+	_, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: firstBatch})
+	require.NoError(t, err)
+
+	backfillBatch, _ := f.stageOrderFillRow(t, conn.ID, fill("fill-older", "2023-06-05T10:00:00Z"))
+	result, err := f.importService.CommitImportBatch(context.Background(), CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: backfillBatch})
+	require.NoError(t, err)
+
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), backfillBatch)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Empty(t, rows[0].CommitError, "an earlier trade for an existing holding must not fail on the account's opened date")
+	assert.Equal(t, 1, result.CommittedCount)
+
+	positions, err := f.investmentSvc.Positions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, positions, 1, "both fills belong to the same lot pool")
+	assert.Equal(t, "2", positions[0].QuantityValue.String())
+}
+
+// seedTestAccountOpenedOn is seedTestAccount with a caller-chosen opening
+// date, for import journeys that predate the app's own setup date.
+func seedTestAccountOpenedOn(t *testing.T, database *sql.DB, openedOn string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	res, err := database.ExecContext(ctx, `
+		INSERT INTO accounts (book_id, created_at, created_by_user_id)
+		VALUES (?, '2026-01-01T00:00:00Z', 1)
+	`, BookID)
+	require.NoError(t, err)
+	accountID, err := res.LastInsertId()
+	require.NoError(t, err)
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, opened_on, code, name, account_class,
+			account_kind, allows_postings
+		) VALUES (?, 1, ?, '2026-01-01T00:00:00Z', 1, 'test fixture', 'active', ?, 'CASH2', 'Backdated Cash', 'asset', 'checking', 1)
+	`, accountID, openedOn, openedOn)
+	require.NoError(t, err)
+	return accountID
 }

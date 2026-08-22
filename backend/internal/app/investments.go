@@ -263,6 +263,89 @@ type InvestmentTradeInput struct {
 	Operation  string
 }
 
+// InvestmentWriteOffInput records a total loss on a holding. There is no cash
+// account or amount: proceeds are zero by definition, which is what separates
+// it from a sale (T-38).
+type InvestmentWriteOffInput struct {
+	OwnerUserID      int64
+	AuthSessionID    int64
+	RequestID        string
+	TransactionDate  string
+	CommodityID      int64
+	HoldingAccountID int64
+	QuantityValue    exact.Coefficient
+	QuantityScale    int
+	// Reason is required: "delisted", "fund closed", "issuer liquidated". A
+	// position declared worthless without a stated cause is not auditable.
+	Reason          string
+	Memo            string
+	ExternalRefHint string
+	MetadataJSON    string
+	PayeeID         *int64
+	Status          string
+	LotAllocations  []InvestmentLotAllocationInput
+	ChangeReason    string
+	CostBasisMethod string
+	// ReconciliationOverride lets a backdated write-off invalidate affected
+	// checkpoints through the normal transaction write guard.
+	ReconciliationOverride bool
+	OriginType             string
+	Operation              string
+}
+
+// asTradeInput reuses the shared disposal planner, which only reads the lot
+// selection fields. The zero cash fields are never consulted.
+func (input InvestmentWriteOffInput) asTradeInput() InvestmentTradeInput {
+	return InvestmentTradeInput{
+		OwnerUserID:      input.OwnerUserID,
+		AuthSessionID:    input.AuthSessionID,
+		RequestID:        input.RequestID,
+		TransactionDate:  input.TransactionDate,
+		CommodityID:      input.CommodityID,
+		HoldingAccountID: input.HoldingAccountID,
+		QuantityValue:    input.QuantityValue,
+		QuantityScale:    input.QuantityScale,
+		LotAllocations:   input.LotAllocations,
+		CostBasisMethod:  input.CostBasisMethod,
+	}
+}
+
+func validateWriteOffInput(input InvestmentWriteOffInput) (string, error) {
+	if input.OwnerUserID <= 0 {
+		return "", ValidationError{Message: "owner user is required"}
+	}
+	if _, err := cleanRequiredDate(input.TransactionDate, "transaction date"); err != nil {
+		return "", err
+	}
+	if input.CommodityID <= 0 || input.HoldingAccountID <= 0 {
+		return "", ValidationError{Message: "write-off references are required"}
+	}
+	if input.QuantityValue.Sign() <= 0 {
+		return "", ValidationError{Message: "quantity is required"}
+	}
+	if input.QuantityScale < 0 || input.QuantityScale > exact.MaxCryptoScale {
+		return "", ValidationError{Message: "quantity scale is invalid"}
+	}
+	if strings.TrimSpace(input.Reason) == "" {
+		return "", ValidationError{Message: "write-off reason is required"}
+	}
+	reason, err := cleanOptionalText(input.Reason, "write-off reason", investmentTextMaxBytes)
+	if err != nil {
+		return "", err
+	}
+	method := strings.TrimSpace(input.CostBasisMethod)
+	if method != "" && !validCostBasisMethods[method] {
+		return "", ValidationError{Message: "cost basis method is invalid"}
+	}
+	if len(input.LotAllocations) > 0 && method != "specific_lot" {
+		return "", ValidationError{Message: "lot allocations are only permitted with specific_lot cost basis method"}
+	}
+	if method == "specific_lot" && len(input.LotAllocations) == 0 {
+		return "", ValidationError{Message: "specific_lot cost basis method requires lot allocations"}
+	}
+	return reason, nil
+}
+
 type SellPreviewResult struct {
 	CostBasisMethod   string
 	Allocations       []InvestmentLotDisposal
@@ -544,7 +627,7 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 // durably-created instrument nobody asked for). Returns the resolved
 // instrument's InstrumentID and CommodityID together, since callers need
 // both (CommodityID for postings, InstrumentID for CreateHoldingAccount).
-func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string, effectiveFrom string) (instrumentID int64, commodityID int64, created bool, err error) {
+func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string) (instrumentID int64, commodityID int64, created bool, err error) {
 	isin = strings.TrimSpace(isin)
 	ticker = strings.TrimSpace(ticker)
 
@@ -584,11 +667,12 @@ func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Conte
 		Symbol:         ticker,
 		QuantityScale:  6,
 		PriceScale:     4,
-		// EffectiveFrom must be no later than the importing trade's own
-		// date — the CreateInstrument default ("today") would otherwise
-		// make PostingCommodityRule find no commodity version effective as
-		// of a back-dated fill and fail "posting commodity is invalid".
-		EffectiveFrom:   effectiveFrom,
+		// No EffectiveFrom: the commodity's first version is stamped
+		// db.CommodityGenesisDate, so a back-dated fill resolves whatever the
+		// instrument's own version date is (T-42). This used to have to be
+		// the trade's date, and even then only covered the instrument's first
+		// sighting — a later import carrying an *earlier* trade for an
+		// already-known instrument still failed.
 		IdentifiersJSON: identifiersJSON,
 		MetadataJSON:    "{}",
 		ChangeReason:    "created from Trading 212 import",
@@ -1019,18 +1103,11 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 	return s.sell(ctx, input, nil)
 }
 
-// WriteOff records a total loss: a fund closure, a worthless delisting, any
-// position disposed of for nothing (T-38).
-//
-// It is a disposal at zero proceeds, not a new kind of event — the lots are
-// closed through the same engine a sale uses, and the loss reaches realized
-// gains through the same path, because proceeds of zero against the disposed
-// basis is exactly the whole basis as a loss.
-//
-// It is a separate entry point rather than "a sell with amount 0" so that zero
-// proceeds is always a stated intent. A cash amount field left empty must never
-// quietly retire a position.
-func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
+// writeOffTrade is the shared disposal engine a write-off runs through: the
+// lots are closed exactly as a sale closes them, and the loss reaches
+// realized gains through the same path, because proceeds of zero against the
+// disposed basis is exactly the whole basis as a loss (T-38).
+func (s *InvestmentService) writeOffTrade(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
 	input.WriteOff = true
 	input.CashAccountID = 0
 	input.CashCommodityID = 0
@@ -1042,6 +1119,99 @@ func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentTradeI
 		return InvestmentTradeResult{}, ValidationError{Message: "write-off reason is required"}
 	}
 	return s.sell(ctx, input, nil)
+}
+
+// WriteOff records a total loss on a holding: a fund closure, a worthless
+// delisting, an issuer liquidated. There is no cash account or amount —
+// proceeds are zero by definition, which is what separates it from a sale
+// (T-38). A dedicated input type keeps that impossible to get wrong at the
+// contract level, unlike a sell whose amount was merely left at zero.
+//
+// Reason is required and distinct from ChangeReason: "why is this holding
+// worthless" is an auditable fact about the position, not metadata about the
+// edit.
+func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentWriteOffInput) (InvestmentTradeResult, error) {
+	reason, err := validateWriteOffInput(input)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	trade := input.asTradeInput()
+	trade.ChangeReason = defaultString(input.ChangeReason, "wrote off worthless holding: "+reason)
+	trade.OriginType = input.OriginType
+	trade.Operation = input.Operation
+	trade.Memo = defaultString(input.Memo, reason)
+	trade.ExternalRefHint = input.ExternalRefHint
+	trade.MetadataJSON = input.MetadataJSON
+	trade.PayeeID = input.PayeeID
+	trade.Status = input.Status
+	trade.ReconciliationOverride = input.ReconciliationOverride
+	return s.writeOffTrade(ctx, trade)
+}
+
+// PreviewWriteOff reports which lots a write-off would consume and the loss
+// it would realize, without writing anything.
+func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input InvestmentWriteOffInput) (SellPreviewResult, error) {
+	if _, err := validateWriteOffInput(input); err != nil {
+		return SellPreviewResult{}, err
+	}
+	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	if err != nil {
+		return SellPreviewResult{}, err
+	}
+	disposals, err := s.computeSellDisposals(ctx, input.asTradeInput(), method)
+	if err != nil {
+		if errors.Is(err, db.ErrInsufficientLots) {
+			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
+		}
+		if errors.Is(err, db.ErrInvalidDisposalParams) {
+			return SellPreviewResult{}, ValidationError{Message: err.Error()}
+		}
+		return SellPreviewResult{}, fmt.Errorf("preview write-off disposals: %w", err)
+	}
+	disposedBasis := exact.NewScaledInt()
+	for _, disposal := range disposals {
+		disposedBasis.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
+	}
+	// Proceeds are zero by definition, so the realized gain is the whole
+	// disposed basis as a loss.
+	gain := exact.NewScaledInt()
+	gain.SubScaled(disposedBasis)
+	gainValue, err := gain.Int64()
+	if err != nil {
+		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CommodityID}
+	}
+	return SellPreviewResult{
+		CostBasisMethod:   method,
+		Allocations:       toInvestmentLotDisposals(disposals),
+		RealizedGain:      gainValue,
+		RealizedGainScale: gain.Scale(),
+		CashAmountValue:   0,
+		CashAmountScale:   0,
+	}, nil
+}
+
+// WriteOffReconciliationImpact is TradeReconciliationImpact for a write-off:
+// the active checkpoints it would invalidate, without persisting anything
+// (T-47).
+func (s *InvestmentService) WriteOffReconciliationImpact(ctx context.Context, input InvestmentWriteOffInput) (ReconciliationImpact, error) {
+	if _, err := validateWriteOffInput(input); err != nil {
+		return ReconciliationImpact{}, err
+	}
+	trade := input.asTradeInput()
+	trade.ChangeReason = input.ChangeReason
+	trade.OriginType = input.OriginType
+	trade.Operation = input.Operation
+	trade.Memo = input.Memo
+	trade.ExternalRefHint = input.ExternalRefHint
+	trade.MetadataJSON = input.MetadataJSON
+	trade.PayeeID = input.PayeeID
+	trade.Status = input.Status
+	trade.WriteOff = true
+	plan, err := s.sellPlan(ctx, trade)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return s.reconciliationImpactForPlan(ctx, plan)
 }
 
 // sellWithPostWrite is the import-side variant of Sell. Its callback runs

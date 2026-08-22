@@ -48,12 +48,23 @@ type priceObservationResponse struct {
 	SupersedesObservationID *int64          `json:"supersedes_observation_id,omitempty"`
 	Derivation              json.RawMessage `json:"derivation"`
 	Metadata                json.RawMessage `json:"metadata"`
-	RecordedAt              string          `json:"recorded_at"`
 	VoidedAt                string          `json:"voided_at,omitempty"`
 	VoidReason              string          `json:"void_reason,omitempty"`
+	RecordedAt              string          `json:"recorded_at"`
 }
 
 type priceObservationsResponse struct {
+	Prices []priceObservationResponse `json:"prices"`
+}
+
+type priceObservationVoidRequest struct {
+	VoidReason   string `json:"void_reason"`
+	ChangeReason string `json:"change_reason"`
+}
+
+// priceObservationVoidResponse returns every observation the void retired: the
+// requested one first, then anything triangulated from it.
+type priceObservationVoidResponse struct {
 	Prices []priceObservationResponse `json:"prices"`
 }
 
@@ -243,13 +254,43 @@ func listPrices(logger *slog.Logger, authService *app.AuthService, pricingServic
 			}
 			limit = parsed
 		}
-		prices, err := pricingService.ListPrices(r.Context(), baseCommodityID, quoteCommodityID, limit)
+		includeVoided := r.URL.Query().Get("include_voided") == "true"
+		prices, err := pricingService.ListPrices(r.Context(), baseCommodityID, quoteCommodityID, limit, includeVoided)
 		if err != nil {
 			writePricingServiceError(w, r, logger, "list prices", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, priceObservationsResponse{Prices: toPriceObservationResponses(prices)})
 	}
+}
+
+// voidPrice retires a poisoned price observation. Prices are never edited or
+// deleted in place; the row stays with a reason and drops out of valuations.
+func voidPrice(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		priceID, ok := readPathInt64(w, r, "price_id", "price observation id")
+		if !ok {
+			return
+		}
+		var request priceObservationVoidRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		prices, err := pricingService.VoidPrice(r.Context(), app.VoidPriceInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			ObservationID: priceID, VoidReason: request.VoidReason, ChangeReason: request.ChangeReason,
+		})
+		if err != nil {
+			writePricingServiceError(w, r, logger, "void price", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, priceObservationVoidResponse{Prices: toPriceObservationResponses(prices)})
+	}))
 }
 
 func createPrice(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
@@ -288,41 +329,6 @@ func createPrice(logger *slog.Logger, authService *app.AuthService, pricingServi
 			return
 		}
 		writeJSON(w, http.StatusCreated, toPriceObservationResponse(price))
-	}))
-}
-
-type voidPriceRequest struct {
-	VoidReason string `json:"void_reason"`
-}
-
-func voidPrice(logger *slog.Logger, authService *app.AuthService, pricingService *app.PricingService, options HandlerOptions) http.HandlerFunc {
-	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		owner, ok := authenticatedMutationOwner(w, r)
-		if !ok {
-			return
-		}
-		priceID, err := strconv.ParseInt(r.PathValue("price_id"), 10, 64)
-		if err != nil || priceID <= 0 {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "price id is invalid")
-			return
-		}
-		var request voidPriceRequest
-		if err := decodeJSONBody(r, &request); err != nil {
-			writeDecodeError(w, err)
-			return
-		}
-		price, voidErr := pricingService.VoidPrice(r.Context(), app.VoidPriceInput{
-			ObservationID: priceID,
-			OwnerUserID:   owner.ID,
-			AuthSessionID: authenticatedSessionID(r),
-			RequestID:     RequestIDFromContext(r.Context()),
-			VoidReason:    request.VoidReason,
-		})
-		if voidErr != nil {
-			writePricingServiceError(w, r, logger, "void price", voidErr)
-			return
-		}
-		writeJSON(w, http.StatusOK, toPriceObservationResponse(price))
 	}))
 }
 
@@ -525,6 +531,10 @@ func writePricingServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 	switch {
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
+	case errors.Is(err, app.ErrPriceObservationNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "price observation not found")
+	case errors.Is(err, app.ErrPriceObservationAlreadyVoided):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "price observation is already voided")
 	case errors.Is(err, app.ErrPricingPolicyNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing policy not found")
 	case errors.Is(err, app.ErrPricingAssignmentNotFound):
@@ -573,9 +583,9 @@ func toPriceObservationResponse(price app.PriceObservation) priceObservationResp
 		SupersedesObservationID: price.SupersedesObservationID,
 		Derivation:              json.RawMessage(price.DerivationJSON),
 		Metadata:                json.RawMessage(price.MetadataJSON),
-		RecordedAt:              price.RecordedAt,
 		VoidedAt:                price.VoidedAt,
 		VoidReason:              price.VoidReason,
+		RecordedAt:              price.RecordedAt,
 	}
 }
 

@@ -292,6 +292,179 @@ func TestSell_PostsFourLegTransactionAndDisposesLot(t *testing.T) {
 	assert.Equal(t, "0", lots[0].RemainingQuantityValue.String())
 }
 
+// --- 3a: write-off (T-38) ---
+
+func TestWriteOff_ClosesLotsWithZeroProceedsAndTwoCommodityLegs(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+
+	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, bought.LotID)
+
+	written, err := f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		Reason: "issuer liquidated; shares cancelled",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "posted", written.Transaction.Status)
+	require.Len(t, written.Transaction.JournalEntries, 1)
+	// A sale posts four legs; a write-off posts the two commodity legs only,
+	// because there is no cash to move.
+	assert.Len(t, written.Transaction.JournalEntries[0].Postings, 2)
+	require.Len(t, written.Allocations, 1)
+	assert.Equal(t, *bought.LotID, written.Allocations[0].LotID)
+	assert.Equal(t, int64(100000), written.Allocations[0].CostBasisValue)
+
+	// The shares must leave open lots — the defect T-38 describes is that they
+	// never did.
+	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	assert.Equal(t, "closed", lots[0].Status)
+	assert.Equal(t, "0", lots[0].RemainingQuantityValue.String())
+}
+
+func TestWriteOff_RealizesTheWholeBasisAsALoss(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+
+	preview, err := f.investmentService.PreviewWriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0, Reason: "delisted",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(-100000), preview.RealizedGain, "zero proceeds means the entire basis is lost")
+	assert.Equal(t, int64(0), preview.CashAmountValue)
+
+	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0, Reason: "delisted",
+	})
+	require.NoError(t, err)
+
+	// The committed loss must match the preview and actually reach the gains
+	// report — "the loss never reaches realized gains" is the other half of
+	// the T-38 defect.
+	gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+	assert.Equal(t, int64(-100000), gains[0].RealizedGainValue)
+	assert.Equal(t, int64(0), gains[0].ProceedsValue)
+}
+
+func TestWriteOff_PartialQuantityLeavesTheRestOpen(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+
+	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(4), QuantityScale: 0, Reason: "partial capital return of worthless tranche",
+	})
+	require.NoError(t, err)
+
+	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	assert.Equal(t, "open", lots[0].Status)
+	assert.Equal(t, "6", lots[0].RemainingQuantityValue.String())
+}
+
+func TestWriteOff_RejectsMissingReasonAndOverlargeQuantity(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+
+	// Writing a position off is destructive and irreversible from the lot
+	// engine's point of view; it must say why.
+	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+	})
+	require.ErrorAs(t, err, &ValidationError{})
+
+	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(0), QuantityScale: 0, Reason: "delisted",
+	})
+	require.ErrorAs(t, err, &ValidationError{})
+
+	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(11), QuantityScale: 0, Reason: "delisted",
+	})
+	require.ErrorIs(t, err, ErrInvestmentLotsInsufficient, "a write-off cannot dispose more than is held")
+
+	assert.Equal(t, 1, f.transactionCount(t), "no failed write-off may leave a transaction behind")
+}
+
+func TestWriteOff_DoesNotRecordAZeroTradeImpliedPrice(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	pricingService := NewPricingService(db.NewPricingRepository(f.database))
+
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	before, err := pricingService.ListPrices(ctx, f.stockCommodityID, f.eurCommodityID, 10, true)
+	require.NoError(t, err)
+
+	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0, Reason: "delisted",
+	})
+	require.NoError(t, err)
+
+	// price_observations rejects a non-positive price; a write-off must not
+	// try to write one, and must not silently poison the price history with a
+	// near-zero stand-in either.
+	after, err := pricingService.ListPrices(ctx, f.stockCommodityID, f.eurCommodityID, 10, true)
+	require.NoError(t, err)
+	assert.Len(t, after, len(before))
+}
+
 // TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods is
 // the single most important test in this file: a preview/commit divergence
 // is a user-facing trust bug (the sell UI shows the preview, then commits —

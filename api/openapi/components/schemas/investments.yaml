@@ -8,12 +8,19 @@ CostBasisMethod:
 
 InstrumentType:
   type: string
+  description: >-
+    Accepted instrument types, matching `cleanInvestmentInstrumentSpec` in
+    `app/investments.go`. Until 2026-08-06 this enum advertised `equity` and
+    `crypto` — which the backend rejects — and omitted `stock`, `option` and
+    `future`, which it accepts. `crypto` is planned for R17.
+  default: stock
   enum:
-    - equity
+    - stock
     - etf
     - fund
     - bond
-    - crypto
+    - option
+    - future
     - other
 
 InvestmentInstrumentResponse:
@@ -107,7 +114,7 @@ InvestmentInstrumentRequest:
     commodity_code:
       type: string
     instrument_type:
-      type: string
+      $ref: "#/InstrumentType"
     display_name:
       type: string
     symbol:
@@ -365,9 +372,9 @@ InvestmentLotAllocationRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
-      description: Exact quantity integer coefficient.
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
 
@@ -396,8 +403,9 @@ InvestmentTradeRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     cash_amount_value:
@@ -430,6 +438,66 @@ InvestmentTradeRequest:
         invalidating the affected checkpoints. Without it such a trade is
         refused with a 409 CONFLICT.
 
+InvestmentWriteOffRequest:
+  type: object
+  description: >-
+    A zero-proceeds disposal. Deliberately has no cash account, cash commodity
+    or amount — those fields are what make a sale a sale.
+  required:
+    - transaction_date
+    - commodity_id
+    - holding_account_id
+    - quantity_value
+    - quantity_scale
+    - reason
+  properties:
+    transaction_date:
+      type: string
+      format: date
+    commodity_id:
+      type: integer
+      format: int64
+    holding_account_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: >-
+        Lossless exact integer coefficient normalized to quantity_scale. Must
+        be positive and no larger than the remaining holding.
+    quantity_scale:
+      type: integer
+    reason:
+      type: string
+      minLength: 1
+      description: >-
+        Why the holding is worthless ("delisted", "fund closed", "issuer
+        liquidated"). Required — a position declared worthless without a
+        stated cause is not auditable.
+    memo:
+      type: string
+      description: Defaults to the reason when omitted.
+    payee_id:
+      type: integer
+      format: int64
+    status:
+      type: string
+    lot_allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotAllocationRequest"
+    change_reason:
+      type: string
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+    reconciliation_override:
+      type: boolean
+      description: >-
+        Allows a backdated write-off to proceed into a reconciled period,
+        invalidating the affected checkpoints. Without it such a write-off is
+        refused with a 409 CONFLICT.
+
 InvestmentLotDisposalResponse:
   type: object
   required:
@@ -443,8 +511,9 @@ InvestmentLotDisposalResponse:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     cost_basis_value:
@@ -577,8 +646,9 @@ ReinvestedDividendRequest:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     amount_value:
@@ -648,13 +718,15 @@ InvestmentLotResponse:
     status:
       type: string
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     remaining_quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to remaining_quantity_scale.
     remaining_quantity_scale:
       type: integer
     cost_basis_value:
@@ -708,8 +780,9 @@ InvestmentPositionResponse:
       type: integer
       format: int64
     quantity_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Lossless exact integer coefficient normalized to quantity_scale.
     quantity_scale:
       type: integer
     remaining_cost_basis_value:

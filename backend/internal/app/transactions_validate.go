@@ -335,6 +335,16 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	accountRule, err := s.repository.PostingAccountRule(ctx, BookID, input.AccountID, entryDate)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
+			// The as-of lookup misses both for an account that does not exist
+			// and for one that existed only after this date. Entering history
+			// for an account opened later is an ordinary user mistake and must
+			// say so — otherwise the opened-date check below is unreachable in
+			// exactly the case it was written for.
+			if earliest, earliestErr := s.repository.EarliestPostingAccountRule(ctx, BookID, input.AccountID); earliestErr == nil {
+				if entryDate < earliest.OpenedOn {
+					return db.PostingSpec{}, ValidationError{Message: "posting date is before account opened date"}
+				}
+			}
 			return db.PostingSpec{}, ValidationError{Message: "posting account is invalid"}
 		}
 		return db.PostingSpec{}, fmt.Errorf("read posting account rule: %w", err)
@@ -358,6 +368,11 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	commodityRule, err := s.repository.PostingCommodityRule(ctx, BookID, input.CommodityID, entryDate)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
+			// Unlike the account rule above, this cannot mean "not yet
+			// effective on that date": a commodity's first version is stamped
+			// db.CommodityGenesisDate, so the as-of lookup always resolves it
+			// for any entry date (T-42). A miss here means the commodity does
+			// not exist.
 			return db.PostingSpec{}, ValidationError{Message: "posting commodity is invalid"}
 		}
 		return db.PostingSpec{}, fmt.Errorf("read posting commodity rule: %w", err)

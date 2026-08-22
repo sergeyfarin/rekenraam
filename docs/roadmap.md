@@ -6,21 +6,26 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-07-12. Structure updated 2026-07-19 (slice index and
-pending-proposals pointer added; no priority changes). **Priorities updated
-2026-08-05**: the 2026-07-19 review's seven proposals were all accepted —
-see "Decisions adopted 2026-08-05" below.
+Last reviewed: 2026-08-20 (merge of two long-diverged branches). R2's
+acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
+charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
+void) is fully shipped: T-37 cascades to every rate triangulated from a voided
+observation, and T-38's write-off carries its own reconciliation-impact
+preview alongside the dedicated write-off type. Structure updated 2026-07-19
+(slice index and pending-proposals pointer added). **Priorities updated
+2026-08-05**: the 2026-07-19 review's seven proposals were all accepted — see
+"Decisions adopted 2026-08-05" below.
 
 ## Slice index
 
 Every R-number ever used, so references in other documents stay resolvable.
-Statuses: ✅ shipped · ▶ current · ⏭ planned (ordered below) · ⏸ deliberately
-later · — retired/unassigned.
+Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
+⏭ planned (ordered below) · ⏸ deliberately later · — retired/unassigned.
 
 | Slice | Name | Status | Primary document |
 |---|---|---|---|
 | R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
-| R2 | Reports users can act on | ▶ | `docs/plans/reports-plan.md` — code-complete 2026-08-19, awaiting acceptance review |
+| R2 | Reports users can act on | ✅ | `docs/plans/reports-plan.md` |
 | R3 | Portable core data (CSV/QIF export) | ⏭ | this file |
 | R3a | Accessibility regression coverage | ⏭ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
@@ -37,7 +42,7 @@ later · — retired/unassigned.
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
 | R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
-| R16 | Investment lifecycle completeness (write-off, price void, return of capital, manual splits) | ⏭ | this file |
+| R16 | Investment lifecycle completeness (write-off, price void, return of capital, manual splits) | ◐ | this file |
 | R17 | Crypto instrument type + `PriceProvider` registry and quote adapters | ⏭ | this file |
 
 ## Decisions adopted 2026-08-05
@@ -95,43 +100,39 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-### Now — R2: reports users can act on
+### Done — R2: reports users can act on
 
-Ship a reports route with net worth over time, spending by category/payee, and
-cashflow. `docs/plans/reports-plan.md` is the implementation reference.
+Shipped a reports route with net worth over time, spending by category/payee,
+and cashflow. `docs/plans/reports-plan.md` is the implementation reference and
+now records what shipped and what was deliberately left out.
 
-**Code-complete 2026-08-19; awaiting the acceptance review below.** All three
-delivery steps shipped:
+**Delivered 2026-08-19, acceptance review closed the same day.** `/app/reports`
+presents all three reports as URL-addressable views: the net-worth series,
+spending/income ranked by category or payee, and cashflow classified into
+inflow, outflow, operating net, transfer/financing movement, and net movement.
+Each has an accessible per-commodity table, a single-commodity summary chart
+that adds no information the table lacks, CSV export carrying its own query and
+exclusion policy, and print output. Repeated-ID filters
+(`account_id`/`category_id`/`payee_id`/`commodity_id`) and drill-down from a
+spending or cashflow row into the transactions list — the one item the earlier
+slice cut — shipped 2026-08-18, closing what had briefly been the one
+recorded gap.
 
-1. ✅ Shared report-query contract and accessible report shell; net-worth and
-   spending views over the existing read models.
-2. ✅ Cashflow read model and view, explicitly separating inflow, outflow,
-   transfers, and net movement.
-3. ✅ Date/account/category/payee/commodity filters, CSV and print-friendly
-   tables, and summary charts that do not replace the accessible data table.
+Cashflow's counterpart classification is derived from the balancing identity
+per journal entry rather than from an allocation heuristic, so `net_movement`
+reconciles to the cash balance change by construction — see
+`docs/plans/reports-plan.md` slice 4.
 
-`/app/reports` presents all three reports with URL-addressable filters, CSV
-export, a print layout, and chart summaries alongside accessible tables.
-Drill-down runs from a spending row to the transactions it was summed from.
-
-Two known gaps are deliberate and recorded, not oversights:
-
-- the net-worth series response carries no asset/liability split, so the screen
-  cannot show one;
-- cashflow takes no category or payee filter, because such a filter removes
-  counterpart postings from the basis and `net_movement` would stop reconciling
-  to the cash balance change. The filtered question belongs to the spending
-  report.
-
-**Remaining before R3: the acceptance review only** — an owner decision, not
-implementation work.
-
-The first implementation must be a coherent vertical slice, but this is a
-**sequencing constraint, not a deleted design decision**. The fuller report
-contract—including saved definitions/runs, cross-currency valuation, investment
-dimensions, and later snapshots—remains in `docs/plans/reports-plan.md`. At the R2
-acceptance review, explicitly decide which of those items is justified by real
-use before moving to R3; do not let it disappear by omission.
+Two gaps are deliberate and recorded, not oversights: the net-worth series
+response carries no asset/liability split, and cashflow takes no category or
+payee filter, because such a filter would remove counterpart postings from the
+basis and break the `net_movement` reconciliation guarantee — the filtered
+question is answered by drilling from a cashflow row into the spending report
+instead. The fuller report contract — saved definitions/runs, cross-currency
+valuation, investment dimensions, and snapshots — remains recorded in
+`docs/plans/reports-plan.md`'s acceptance review, each with a yes/no and a
+reason; the reporting-currency valuation method is the only one approved to
+build, sequenced after R3.
 
 ### Next — R3: portable **and protected** core data
 
@@ -164,6 +165,11 @@ Design the export shape so a ledger/beancount-format export is trivially
 derivable later (review §4.2) — the plain-text-accounting audience is a
 positioning group worth courting at announcement, at zero feature cost.
 
+**Sequenced after R3, approved 2026-08-19: a reporting-currency selector**
+(one reporting currency, a named valuation method). Per-commodity exact totals
+stay in every response — conversion is additive, never replacing what R2
+shipped.
+
 ### R3a — core-workflow accessibility regression coverage
 
 Add focused automated accessibility smoke checks for setup/auth, transaction
@@ -184,6 +190,13 @@ pre-announcement gate below is met for QIF; the CSV adapter must reuse
 `canonicalDecimal` and `parseFlexibleDate` rather than re-deriving them, and
 mapping profiles must expose `date_layout` and `decimal_separator`, which the
 adapters already honor.
+
+**Free-text payees (backlog T-50): resolve on entry, but never silently —
+decided and shipped 2026-08-19.** Typing a new payee name prompts for
+confirmation, offering existing payees through a fuzzy search (`minisearch`)
+before creating a record. Import still commits an unrecognized name as free
+text by design; resolving those in import review is separate follow-up work
+that belongs with R5/R6, not with this item.
 
 **Includes a minimal rules v1** (decided 2026-08-05, review §3c). Rules are
 the retention feature for the import persona: CSV import without them means
@@ -220,9 +233,16 @@ actions as shipped, but there is **no implementation** — not even manual
 entry. This slice makes the moat claim honest. Sequenced after R5, and
 split by risk:
 
-1. **Now — independent and small:** zero-proceeds write-off (T-38), price
-   observation voiding (T-37), return-of-capital as basis reduction. None
-   needs a provider feed.
+1. **Now — independent and small, and done.** Zero-proceeds write-off (T-38 —
+   **done 2026-08-06**, dedicated `InvestmentWriteOffInput` type with a
+   required reason and its own preview endpoint, backend only) and price
+   observation voiding (T-37 — **done 2026-08-06**, cascades to every rate
+   triangulated from the voided observation; backend endpoint only, the
+   operator-facing surface still belongs to R11) are both shipped. T-38 also
+   gained its own reconciliation-impact preview (T-53) so a backdated
+   write-off can proceed deliberately, the same as buy, sell, and dividend.
+   What remains in this sub-slice: return-of-capital as basis reduction, and
+   the UI for all three (write-off has a typed API client but no form yet).
 2. **Behind a design note — manual split / reverse-split entry.** Splits
    mutate historical lots, which is the unbuilt half of T-34 and touches the
    ledger code both 2026-07 audits certified as correct. Write the
@@ -342,9 +362,18 @@ daily-driver work.
    explicitly by leading with the correctness architecture (append-only
    versions, exact decimals, trial balance).
 
-Public internet deployment with real financial data remains blocked by the live
-security gates in `docs/backlog.md`: lockout-safe login throttling, MFA, and
-authentication-event visibility.
+**Every public-deployment security gate is closed, and parked pending an
+internet-exposed deployment.** MFA (S-06) shipped 2026-08-07 as TOTP plus
+single-use recovery codes, with a Settings → Security screen and the second
+step in the login flow; lockout-safe login throttling (S-04) and
+authentication-event visibility (S-07) closed 2026-08-06. **Parked 2026-08-19
+(owner decision):** the app is self-hosted locally for now, so none of S-04,
+S-06, or S-07 is scheduled work; the trigger to unpark is the first time an
+internet-exposed deployment is planned, R3 at the earliest. What is left
+before that point is an operator action rather than product work: the owner
+account must be **enrolled** before real financial data goes on the internet,
+and `REKENRAAM_SECRET_KEY` must be configured for enrolment to be possible.
+See `docs/deployment-security.md`.
 
 ## Open product decisions
 
@@ -354,7 +383,8 @@ Resolve these only when their related slice becomes current work:
   backup of settings and metadata.
 - The highest-priority mobile workflow. (First non-English UI languages were
   decided 2026-08-19: Spanish, French, Dutch, German, Russian — recorded in
-  `product-requirements.md`.)
+  `product-requirements.md`. Native review of the drafted translations still
+  needs an owner to pick a reviewer per language.)
 - Attachment storage, retention, access-control, backup, and encryption model
   — a proposed resolution now exists in `docs/plans/receipts-plan.md` (R14a);
   decide when that slice is scheduled.
@@ -381,6 +411,7 @@ Resolve these only when their related slice becomes current work:
 ## Completed milestones
 
 Foundation, accounts, ledger transactions, reconciliation UI, QIF import,
-Trading 212 ingestion (including investment lots), and investments UI/gains are
+Trading 212 ingestion (including investment lots), reports (net worth,
+spending, cashflow, with filters and drill-down), and investments UI/gains are
 shipped. See `docs/implemented.md` for the capability ledger and the historical
 design records for rationale.

@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+// ErrPriceObservationAlreadyVoided is returned when a void is requested for an
+// observation that is already retired. Voiding is not idempotent on purpose:
+// a second void would record a second reason over an existing one.
+var ErrPriceObservationAlreadyVoided = errors.New("price observation is already voided")
+
 type PricingRepository struct {
 	database *sql.DB
 	*BackgroundWorkRepository
@@ -528,6 +533,159 @@ func (r *PricingRepository) CreatePriceObservation(ctx context.Context, params C
 	return record, nil
 }
 
+type VoidPriceObservationParams struct {
+	BookID        int64
+	ObservationID int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	VoidedAt      string
+	VoidReason    string
+	ChangeReason  string
+}
+
+// maxVoidCascadeDepth bounds how far a void follows derivation chains. A
+// triangulated rate derives from at most triangulation_max_hops legs and
+// nothing re-derives from a derived observation more than a few times, so this
+// is a loop guard against malformed derivation metadata, not a policy limit.
+const maxVoidCascadeDepth = 16
+
+// VoidPriceObservation retires one observation and every still-active
+// observation derived from it, in a single transaction. Voiding a leg without
+// retiring the rates triangulated from it would leave the poisoned number in
+// the ledger's valuations under a different id, which is the whole reason the
+// void exists.
+func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params VoidPriceObservationParams) ([]PriceObservationRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin void price observation: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+
+	target, err := priceObservationByIDTx(ctx, tx, params.BookID, params.ObservationID)
+	if err != nil {
+		return nil, err
+	}
+	if target.VoidedAt.Valid {
+		return nil, ErrPriceObservationAlreadyVoided
+	}
+
+	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID:        params.BookID,
+		ActorUserID:   params.ActorUserID,
+		AuthSessionID: params.AuthSessionID,
+		OccurredAt:    params.VoidedAt,
+		RequestID:     params.RequestID,
+		OriginType:    params.OriginType,
+		Operation:     params.Operation,
+		Reason:        params.ChangeReason,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	voidedIDs := []int64{params.ObservationID}
+	frontier := []int64{params.ObservationID}
+	seen := map[int64]bool{params.ObservationID: true}
+	for depth := 0; depth < maxVoidCascadeDepth && len(frontier) > 0; depth++ {
+		var next []int64
+		for _, observationID := range frontier {
+			derived, err := activeDerivedObservationIDsTx(ctx, tx, params.BookID, observationID)
+			if err != nil {
+				return nil, err
+			}
+			for _, derivedID := range derived {
+				if seen[derivedID] {
+					continue
+				}
+				seen[derivedID] = true
+				voidedIDs = append(voidedIDs, derivedID)
+				next = append(next, derivedID)
+			}
+		}
+		frontier = next
+	}
+
+	records := make([]PriceObservationRecord, 0, len(voidedIDs))
+	for index, observationID := range voidedIDs {
+		reason := params.VoidReason
+		if index > 0 {
+			reason = cascadeVoidReason(params.VoidReason, params.ObservationID)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE price_observations
+			SET voided_at = ?, voided_by_user_id = ?, void_reason = ?, voided_audit_event_id = ?
+			WHERE book_id = ? AND id = ? AND voided_at IS NULL
+		`, params.VoidedAt, params.ActorUserID, reason, auditEventID, params.BookID, observationID); err != nil {
+			return nil, fmt.Errorf("void price observation: %w", err)
+		}
+		record, err := priceObservationByIDTx(ctx, tx, params.BookID, observationID)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit void price observation: %w", err)
+	}
+	committed = true
+	return records, nil
+}
+
+func cascadeVoidReason(reason string, sourceObservationID int64) string {
+	return fmt.Sprintf("derived from voided observation %d: %s", sourceObservationID, reason)
+}
+
+// activeDerivedObservationIDsTx finds not-yet-voided observations whose
+// derivation metadata names observationID as one of its legs. The leg shape is
+// written by fxDerivationJSON in the app layer.
+func activeDerivedObservationIDsTx(ctx context.Context, tx *sql.Tx, bookID int64, observationID int64) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id
+		FROM price_observations
+		WHERE book_id = ?
+			AND voided_at IS NULL
+			AND is_derived = 1
+			AND json_valid(derivation_json)
+			AND EXISTS (
+				SELECT 1
+				FROM json_each(json_extract(derivation_json, '$.legs'))
+				WHERE json_extract(value, '$.observation_id') = ?
+			)
+		ORDER BY id
+	`, bookID, observationID)
+	if err != nil {
+		return nil, fmt.Errorf("list derived price observations: %w", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan derived price observation id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate derived price observations: %w", err)
+	}
+	return ids, nil
+}
+
+func (r *PricingRepository) PriceObservationByID(ctx context.Context, bookID int64, observationID int64) (PriceObservationRecord, error) {
+	return scanPriceObservationRow(r.database.QueryRowContext(ctx, priceObservationSelect(`
+		WHERE book_id = ? AND id = ?
+	`), bookID, observationID))
+}
+
 func (r *PricingRepository) PriceObservationByProviderID(ctx context.Context, sourceID int64, providerObservationID string) (PriceObservationRecord, error) {
 	providerObservationID = strings.TrimSpace(providerObservationID)
 	if sourceID <= 0 || providerObservationID == "" {
@@ -538,7 +696,7 @@ func (r *PricingRepository) PriceObservationByProviderID(ctx context.Context, so
 	`), sourceID, providerObservationID))
 }
 
-func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int) ([]PriceObservationRecord, error) {
+func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID int64, baseCommodityID int64, quoteCommodityID int64, limit int, includeVoided bool) ([]PriceObservationRecord, error) {
 	hasCurrentSchema, err := r.tableHasColumn(ctx, "price_observations", "base_commodity_id")
 	if err != nil {
 		return nil, err
@@ -547,7 +705,10 @@ func (r *PricingRepository) ListPriceObservations(ctx context.Context, bookID in
 		return r.listLegacyPriceObservations(ctx, bookID, baseCommodityID, quoteCommodityID, limit)
 	}
 
-	where := "book_id = ? AND voided_at IS NULL"
+	where := "book_id = ?"
+	if !includeVoided {
+		where += " AND voided_at IS NULL"
+	}
 	args := []any{bookID}
 	if baseCommodityID > 0 {
 		where += " AND base_commodity_id = ?"
@@ -647,7 +808,7 @@ func (r *PricingRepository) listLegacyPriceObservations(ctx context.Context, boo
 			1 AS base_quantity_value, 0 AS base_quantity_scale, price_date AS valuation_date,
 			NULL AS observed_at, NULL AS source_published_at, source_id, provider_observation_id,
 			is_manual, is_derived, supersedes_observation_id, '{}' AS derivation_json, metadata_json,
-			voided_at, created_at AS recorded_at, created_by_user_id
+			voided_at, '' AS void_reason, created_at AS recorded_at, created_by_user_id
 		FROM price_observations
 		WHERE `+where+`
 		ORDER BY price_date DESC, created_at DESC, id DESC
@@ -1232,81 +1393,4 @@ func scanRefreshRuns(rows *sql.Rows) ([]PricingRefreshRunRecord, error) {
 		return nil, fmt.Errorf("iterate pricing refresh runs: %w", err)
 	}
 	return records, nil
-}
-
-// ErrPriceObservationVoided marks a second void of the same observation. It is
-// a conflict rather than a no-op: voiding is a deliberate correction, and
-// quietly accepting a repeat would hide that two people, or two clicks,
-// disagreed about the state of a price.
-var ErrPriceObservationVoided = errors.New("price observation already voided")
-
-type VoidPriceObservationParams struct {
-	BookID        int64
-	ObservationID int64
-	ActorUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	OriginType    string
-	Operation     string
-	VoidedAt      string
-	VoidReason    string
-}
-
-// VoidPriceObservation retires an observation without deleting it.
-//
-// The ledger rule is that a price is corrected by superseding *or voiding*,
-// never by overwriting: the row stays, `voided_at` is stamped, and every read
-// already filters on it. The audit event is written in the same transaction, so
-// who voided what and why is recoverable from the audit log alone.
-func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params VoidPriceObservationParams) (PriceObservationRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return PriceObservationRecord{}, fmt.Errorf("begin void price observation: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-
-	existing, err := priceObservationByIDTx(ctx, tx, params.BookID, params.ObservationID)
-	if err != nil {
-		return PriceObservationRecord{}, err
-	}
-	if existing.VoidedAt.Valid {
-		return PriceObservationRecord{}, ErrPriceObservationVoided
-	}
-
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID:        params.BookID,
-		ActorUserID:   params.ActorUserID,
-		AuthSessionID: params.AuthSessionID,
-		OccurredAt:    params.VoidedAt,
-		RequestID:     params.RequestID,
-		OriginType:    params.OriginType,
-		Operation:     params.Operation,
-		Reason:        params.VoidReason,
-	})
-	if err != nil {
-		return PriceObservationRecord{}, err
-	}
-
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE price_observations
-		SET voided_at = ?, voided_by_user_id = ?, void_reason = ?, voided_audit_event_id = ?
-		WHERE book_id = ? AND id = ? AND voided_at IS NULL
-	`, params.VoidedAt, params.ActorUserID, params.VoidReason, auditEventID, params.BookID, params.ObservationID); err != nil {
-		return PriceObservationRecord{}, fmt.Errorf("void price observation: %w", err)
-	}
-
-	record, err := priceObservationByIDTx(ctx, tx, params.BookID, params.ObservationID)
-	if err != nil {
-		return PriceObservationRecord{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return PriceObservationRecord{}, fmt.Errorf("commit void price observation: %w", err)
-	}
-	committed = true
-	return record, nil
 }

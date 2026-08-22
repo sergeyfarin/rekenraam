@@ -191,6 +191,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a login by presenting the second factor
+         * @description Continues the login started by POST /api/v1/auth/login when it answered mfa_required. The challenge travels as an HttpOnly cookie set by that response, so no token is handled by page scripts. Accepts a TOTP code or a single-use recovery code. Failed codes spend the same throttle budget as failed passwords.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFACodeRequest"];
+                };
+            };
+            responses: {
+                /** @description Login completed */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        /** @description Browser session cookie for the authenticated owner. */
+                        "Set-Cookie"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LoginResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Invalid code, or an expired or already-used challenge */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Multi-factor authentication is not enrolled */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Too many failed attempts */
+                429: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured on the server */
+                503: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -256,6 +372,687 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the owner's multi-factor authentication status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current MFA status */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFAStatusResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/totp/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin TOTP enrollment
+         * @description Issues a new shared secret and returns it once, for display as a manual key and an otpauth URI. The enrollment stays pending — and does not gate any login — until POST /api/v1/auth/mfa/totp/activate confirms a code from it. Refused while MFA is already active: turning it off is an explicit act.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFAPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description Enrollment started; secret returned once */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFAEnrollResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the password did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Multi-factor authentication is already active */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured on the server */
+                503: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/totp/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate a pending TOTP enrollment
+         * @description Confirms the authenticator really holds the secret, turns MFA on, and returns the recovery codes. The codes are shown once and cannot be retrieved again.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFACodeRequest"];
+                };
+            };
+            responses: {
+                /** @description MFA activated; recovery codes returned once */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFARecoveryCodesResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the code did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No pending enrollment, or MFA is already active */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description REKENRAAM_SECRET_KEY is not configured on the server */
+                503: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn multi-factor authentication off
+         * @description Removes the enrollment and every recovery code with it. Password-confirmed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFAPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description Multi-factor authentication disabled */
+                204: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the password did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the set of recovery codes
+         * @description Issues a fresh set and invalidates every earlier code, including any already written down. Password-confirmed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MFAPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description New recovery codes returned once */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MFARecoveryCodesResponse"];
+                    };
+                };
+                /** @description Invalid request body or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required, or the password did not verify */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or origin validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Multi-factor authentication is not active */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent authentication events (operator visibility)
+         * @description The durable log of successful and failed authentication attempts, newest first, so an operator can detect a brute-force run and reconstruct an incident (S-07). Each event carries the proxy-aware client IP.
+         *     Owner-only: the log names client IPs and attempted usernames. It never contains password material or session tokens — `auth_session_id` is the only session reference. Rows are pruned to a 90-day retention window by the daily session-cleanup pass.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Maximum number of events to return. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Authentication events, newest first */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuthenticationEventsResponse"];
+                    };
+                };
+                /** @description Invalid query parameter */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/trusted-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List approved devices
+         * @description Devices that carry a login-throttle bypass (S-04). Approval is earned by completing a successful login (or first-run owner setup) and is stored as an HttpOnly cookie whose hash alone is kept server-side.
+         *     The cookie is a throttle-scope selector, **not** a credential: it grants no access, and a login still requires the password. Its only effect is that attempts from that device spend their own failure budget instead of the shared username and client-IP budgets — so an attacker cannot lock the single known owner out by failing logins from elsewhere.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Approved devices, most recently used first */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrustedDevicesResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/trusted-devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an approved device
+         * @description Removes that device's login-throttle bypass. It does not end the device's session — the approval cookie was never a credential.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    device_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Device approval revoked */
+                204: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid device id */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Approved device not found */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -7259,6 +8056,8 @@ export interface paths {
                     base_commodity_id?: number;
                     /** @description Filter observations by quote commodity. */
                     quote_commodity_id?: number;
+                    /** @description Include voided observations. Voided observations are excluded from every valuation and from this listing by default; set this to inspect what was retired and why. */
+                    include_voided?: boolean;
                     /** @description Maximum number of observations to return. */
                     limit?: number;
                 };
@@ -7329,12 +8128,15 @@ export interface paths {
         put?: never;
         /**
          * Void a price observation
-         * @description Retires an observation without deleting it. A price is corrected by superseding or voiding, never by overwriting: the row remains, voided_at is stamped, and every price read already filters voided observations out, so a poisoned price stops feeding historical listings and derivations. A reason is required — voiding is a deliberate correction to financial data, and the "why" is worth nothing if it is invented for the caller.
+         * @description Retires a price observation so it stops being used for valuations, without deleting or overwriting it. A price is corrected by superseding or voiding, never edited in place. The void cascades to every still-active observation triangulated from this one, because a derived rate carries the same poisoned number under a different id. Voiding is not idempotent: a second void would overwrite the first reason and returns 409.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header: {
+                    /** @description Session-bound CSRF token for authenticated mutating requests. */
+                    "X-CSRF-Token": string;
+                };
                 path: {
                     price_id: number;
                 };
@@ -7342,24 +8144,24 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        void_reason: string;
-                    };
+                    "application/json": components["schemas"]["PriceObservationVoidRequest"];
                 };
             };
             responses: {
-                /** @description The voided observation */
+                /** @description Every observation the void retired: the requested one first, then anything derived from it. */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["PriceObservationResponse"];
+                        "application/json": components["schemas"]["PriceObservationVoidResponse"];
                     };
                 };
-                /** @description Invalid request */
+                /** @description Invalid price id or missing void reason */
                 400: {
                     headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -7369,24 +8171,47 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description No such price observation */
+                /** @description CSRF validation failed */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Price observation not found */
                 404: {
                     headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description The observation is already voided */
+                /** @description Price observation is already voided */
                 409: {
                     headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -9317,10 +10142,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Write off a position at zero proceeds (disposes lots, realizes the whole basis as a loss)
-         * @description Records a total loss — a fund closure, a worthless delisting, any position disposed of for nothing. It is a disposal at zero proceeds, closing lots through the same engine a sale uses, so the loss reaches realized gains by the same path.
-         *     It is a separate route rather than a sell with a zero amount so that "no proceeds" is always a stated intent: an empty cash amount must never quietly retire a position. `cash_account_id`, `cash_commodity_id`, and `cash_amount_value` are rejected if supplied; `change_reason` is required.
-         *     The transaction carries no cash postings at all, only the commodity legs through `commodity_trading`. A zero-valued cash posting would be noise for a reconciler, and the realized-gain engine already reports zero proceeds when no cash posting matches the disposal.
+         * Write off a holding as worthless (zero-proceeds disposal)
+         * @description Records a total loss — a fund closure, a worthless delisting, a liquidated issuer. The lots are disposed at zero proceeds, so the entire remaining cost basis is realized as a loss. There is no cash account, cash commodity or amount: the postings are the holding credit and the matching `commodity_trading` debit only.
+         *     This is a separate endpoint rather than a sell with a zero amount on purpose, so a mistyped sale amount can never silently become a total loss. A reason is required. The loss is not posted to an expense account — realized gains and losses are computed reporting values in this ledger and appear in `GET /investments/gains`.
          */
         post: {
             parameters: {
@@ -9334,7 +10158,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["InvestmentTradeRequest"];
+                    "application/json": components["schemas"]["InvestmentWriteOffRequest"];
                 };
             };
             responses: {
@@ -9348,7 +10172,7 @@ export interface paths {
                         "application/json": components["schemas"]["InvestmentTradeResponse"];
                     };
                 };
-                /** @description Invalid request body or validation failure */
+                /** @description Invalid request body, missing reason, or validation failure */
                 400: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -9378,7 +10202,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Insufficient lots to fill the sell order */
+                /** @description Insufficient lots to cover the written-off quantity */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -9463,6 +10287,90 @@ export interface paths {
                     };
                 };
                 /** @description Insufficient lots to fill the sell order */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/write-off/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a write-off (lot selection and realized loss, no writes)
+         * @description Reports which lots a write-off would consume and the loss it would realize, without writing anything. Proceeds are zero, so the realized gain is the negated disposed basis. Read-only, so no CSRF token is required.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentWriteOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Write-off preview */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SellPreviewResponse"];
+                    };
+                };
+                /** @description Invalid request body, missing reason, or validation failure */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Insufficient lots to cover the written-off quantity */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -9828,7 +10736,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["InvestmentTradeRequest"];
+                    "application/json": components["schemas"]["InvestmentWriteOffRequest"];
                 };
             };
             responses: {
@@ -10510,6 +11418,14 @@ export interface components {
             /** @description Password for the single owner account. */
             password: string;
         };
+        MFAPasswordRequest: {
+            /** @description The account password, re-confirmed. Changing what protects the account is not something a stolen session may do on its own. */
+            password: string;
+        };
+        MFACodeRequest: {
+            /** @description A six-digit authenticator code, or — when completing a login — a single-use recovery code. Spaces and dashes are ignored. */
+            code: string;
+        };
         SetupStep: {
             /** @enum {string} */
             key: "owner" | "book" | "currencies" | "system_accounts" | "categories";
@@ -10918,7 +11834,10 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Always the genesis date 0001-01-01. A category is a classification bucket rather than something opened on a date, so it never constrains which dates may be posted to it; it is not settable by clients.
+             */
             opened_on: string;
             /** Format: date */
             closed_on?: string;
@@ -10943,10 +11862,6 @@ export interface components {
             allows_postings?: boolean;
             /** @description Optional stable icon token for category UI. */
             icon?: string;
-            /** Format: date */
-            opened_on?: string;
-            /** Format: date */
-            effective_from?: string;
             change_reason?: string;
         };
         UpdateCategoryRequest: {
@@ -10961,8 +11876,6 @@ export interface components {
             allows_postings?: boolean;
             /** @description Optional stable icon token for category UI. */
             icon?: string;
-            /** Format: date */
-            opened_on?: string;
             /** Format: date */
             effective_from?: string;
             change_reason?: string;
@@ -11332,14 +12245,26 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /** @description Set once the observation has been retired. Voided observations are excluded from every price read. */
+            /**
+             * Format: date-time
+             * @description Set when the observation has been retired. Voided observations are excluded from every valuation and from listings unless include_voided is requested.
+             */
             voided_at?: string;
-            /** @description Why the observation was voided. Required when voiding. */
+            /** @description Why the observation was retired. */
             void_reason?: string;
             /** Format: date-time */
             recorded_at: string;
         };
         PriceObservationsResponse: {
+            prices: components["schemas"]["PriceObservationResponse"][];
+        };
+        PriceObservationVoidRequest: {
+            /** @description Why this observation must stop being used. Required. */
+            void_reason: string;
+            change_reason?: string;
+        };
+        PriceObservationVoidResponse: {
+            /** @description The voided observation first, followed by every observation triangulated from it that the void also retired. */
             prices: components["schemas"]["PriceObservationResponse"][];
         };
         MarketDataSourceResponse: {
@@ -12124,8 +13049,89 @@ export interface components {
             /** @description Session-bound CSRF token for authenticated mutating requests. */
             csrf_token?: string;
         };
+        /** @description One recorded authentication attempt or session end. Never contains password material or session tokens. */
+        AuthenticationEventResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            occurred_at: string;
+            /** @enum {string} */
+            event_type: "login_succeeded" | "login_failed" | "login_blocked" | "logout";
+            /** @enum {string} */
+            outcome: "success" | "failure";
+            /** @description The username that was attempted. */
+            username?: string;
+            /**
+             * Format: int64
+             * @description Set when the attempt named an existing user.
+             */
+            user_id?: number;
+            /**
+             * Format: int64
+             * @description The session created or ended by this event. Becomes absent once the session row is cleaned up.
+             */
+            auth_session_id?: number;
+            /** @description Proxy-aware client address as resolved by the API layer. */
+            client_ip?: string;
+            /** @enum {string} */
+            failure_reason?: "unknown_user" | "invalid_credentials" | "rate_limited";
+            request_id?: string;
+        };
+        AuthenticationEventsResponse: {
+            events: components["schemas"]["AuthenticationEventResponse"][];
+            has_more: boolean;
+            /** @description Failed attempts in the last 24 hours. A spike here is the signal an operator is looking for, without scanning the list. */
+            failed_last_24h: number;
+        };
+        /** @description A device holding a login-throttle bypass. The approval token itself is never returned; only its hash is stored server-side. */
+        TrustedDeviceResponse: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at: string;
+            /**
+             * Format: date-time
+             * @description Slides forward on every successful login from this device.
+             */
+            expires_at: string;
+            /** @description Proxy-aware client address the device was approved from. */
+            created_client_ip?: string;
+            /** @description True for the device making this request, so it is not revoked by accident. */
+            current: boolean;
+        };
+        TrustedDevicesResponse: {
+            devices: components["schemas"]["TrustedDeviceResponse"][];
+        };
+        /** @description Either a completed login (user present) or the instruction to present a second factor (mfa_required true). Clients must branch on mfa_required rather than assuming a session cookie was set. */
         LoginResponse: {
-            user: components["schemas"]["OwnerResponse"];
+            user?: components["schemas"]["OwnerResponse"];
+            /** @description True when the password verified but multi-factor authentication is still owed. No session cookie is set; a short-lived HttpOnly challenge cookie is, and POST /api/v1/auth/login/mfa completes the login. */
+            mfa_required?: boolean;
+        };
+        MFAStatusResponse: {
+            /**
+             * @description pending means a secret was issued but never confirmed by a code; only active gates a login.
+             * @enum {string}
+             */
+            status: "disabled" | "pending" | "active";
+            /** Format: date-time */
+            activated_at?: string;
+            /** @description Unused single-use recovery codes. */
+            recovery_codes_remaining: number;
+            /** @description False when REKENRAAM_SECRET_KEY is not set on the server, in which case enrollment is refused rather than storing the shared secret in the clear. */
+            configured: boolean;
+        };
+        MFAEnrollResponse: {
+            /** @description Base32 TOTP shared secret, for manual entry. Shown once. */
+            secret: string;
+            /** @description otpauth:// URI for an authenticator app. Shown once. */
+            otpauth_uri: string;
+        };
+        MFARecoveryCodesResponse: {
+            /** @description The full replacement set of single-use recovery codes. Displayed once and never retrievable again; regenerating invalidates every earlier code. */
+            recovery_codes: string[];
         };
         CreateOwnerResponse: {
             owner: components["schemas"]["OwnerResponse"];
@@ -12173,7 +13179,7 @@ export interface components {
             /** Format: int64 */
             commodity_id?: number;
             commodity_code?: string;
-            instrument_type: string;
+            instrument_type: components["schemas"]["InstrumentType"];
             display_name: string;
             symbol?: string;
             exchange_code?: string;
@@ -12305,11 +13311,8 @@ export interface components {
         InvestmentLotAllocationRequest: {
             /** Format: int64 */
             lot_id: number;
-            /**
-             * Format: int64
-             * @description Exact quantity integer coefficient.
-             */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
         };
         InvestmentTradeRequest: {
@@ -12321,8 +13324,8 @@ export interface components {
             holding_account_id: number;
             /** Format: int64 */
             cash_account_id?: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             cash_amount_value: number;
@@ -12339,11 +13342,35 @@ export interface components {
             /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
             reconciliation_override?: boolean;
         };
+        /** @description A zero-proceeds disposal. Deliberately has no cash account, cash commodity or amount — those fields are what make a sale a sale. */
+        InvestmentWriteOffRequest: {
+            /** Format: date */
+            transaction_date: string;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. Must be positive and no larger than the remaining holding. */
+            quantity_value: string;
+            quantity_scale: number;
+            /** @description Why the holding is worthless ("delisted", "fund closed", "issuer liquidated"). Required — a position declared worthless without a stated cause is not auditable. */
+            reason: string;
+            /** @description Defaults to the reason when omitted. */
+            memo?: string;
+            /** Format: int64 */
+            payee_id?: number;
+            status?: string;
+            lot_allocations?: components["schemas"]["InvestmentLotAllocationRequest"][];
+            change_reason?: string;
+            cost_basis_method?: components["schemas"]["CostBasisMethod"];
+            /** @description Allows a backdated write-off to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a write-off is refused with a 409 CONFLICT. */
+            reconciliation_override?: boolean;
+        };
         InvestmentLotDisposalResponse: {
             /** Format: int64 */
             lot_id: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             cost_basis_value: number;
@@ -12408,8 +13435,8 @@ export interface components {
             holding_account_id: number;
             /** Format: int64 */
             income_account_id?: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             amount_value: number;
@@ -12438,11 +13465,11 @@ export interface components {
             /** Format: int64 */
             source_transaction_id?: number;
             status: string;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            remaining_quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to remaining_quantity_scale. */
+            remaining_quantity_value: string;
             remaining_quantity_scale: number;
             /** Format: int64 */
             cost_basis_value: number;
@@ -12468,8 +13495,8 @@ export interface components {
             account_id: number;
             /** Format: int64 */
             commodity_id: number;
-            /** Format: int64 */
-            quantity_value: number;
+            /** @description Lossless exact integer coefficient normalized to quantity_scale. */
+            quantity_value: string;
             quantity_scale: number;
             /** Format: int64 */
             remaining_cost_basis_value: number;
@@ -12686,6 +13713,12 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /**
+         * @description Accepted instrument types, matching `cleanInvestmentInstrumentSpec` in `app/investments.go`. Until 2026-08-06 this enum advertised `equity` and `crypto` — which the backend rejects — and omitted `stock`, `option` and `future`, which it accepts. `crypto` is planned for R17.
+         * @default stock
+         * @enum {string}
+         */
+        InstrumentType: "stock" | "etf" | "fund" | "bond" | "option" | "future" | "other";
     };
     responses: never;
     parameters: {

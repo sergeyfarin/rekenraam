@@ -509,7 +509,7 @@ func (r *InvestmentRepository) CreateInstrument(ctx context.Context, params Crea
 				max_quantity_scale, metadata_json, change_audit_event_id
 			)
 			VALUES (?, 1, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
-		`, commodityID, params.EffectiveFrom, params.CreatedAt, params.CreatedByUserID, params.ChangeReason, params.Spec.Symbol, params.Spec.Symbol, params.Spec.DisplayName, params.Spec.QuantityScale, params.Spec.QuantityScale, params.Spec.MetadataJSON, auditEventID); err != nil {
+		`, commodityID, CommodityGenesisDate, params.CreatedAt, params.CreatedByUserID, params.ChangeReason, params.Spec.Symbol, params.Spec.Symbol, params.Spec.DisplayName, params.Spec.QuantityScale, params.Spec.QuantityScale, params.Spec.MetadataJSON, auditEventID); err != nil {
 			return InvestmentInstrumentRecord{}, fmt.Errorf("insert security commodity version: %w", err)
 		}
 	}

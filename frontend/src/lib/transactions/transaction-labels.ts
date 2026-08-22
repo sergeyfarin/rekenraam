@@ -1,59 +1,12 @@
 import type { components } from '$lib/api/schema';
 import { m } from '$lib/paraglide/messages.js';
 import { builtinCategoryLabel } from '$lib/categories/category-labels';
+import { formatQuantity } from '$lib/money/format';
 
 export type PostingResponse = components['schemas']['PostingResponse'];
 export type TransactionStatus = components['schemas']['TransactionStatus'];
 export type AccountClass = components['schemas']['AccountClass'];
 export type StatusBadgeTone = 'neutral' | 'accent' | 'danger' | 'positive' | 'warning';
-
-/**
- * Format an integer-coefficient + scale amount for display without ever converting
- * to a JS number (which would lose precision beyond Number.MAX_SAFE_INTEGER).
- *
- * Safe path: BigInt arithmetic for splitting integer/fractional parts, then
- * Intl.NumberFormat with a BigInt to obtain locale-appropriate group separators.
- *
- * @param value  The integer coefficient as a decimal string (e.g. "12345", "-12345").
- * @param scale  Number of decimal places (e.g. 2 → coefficient 12345 = 123.45).
- * @param locale BCP-47 locale tag (e.g. "en-US").
- */
-export function formatQuantity(value: string, scale: number, locale: string): string {
-  if (!value || value === '') return '';
-
-  const isNegative = value.startsWith('-');
-  const absStr = isNegative ? value.slice(1) : value;
-
-  if (scale === 0) {
-    // Integer amount — BigInt handles arbitrarily large values losslessly.
-    const intPart = BigInt(absStr);
-    const formatted = new Intl.NumberFormat(locale).format(intPart);
-    return isNegative ? `-${formatted}` : formatted;
-  }
-
-  // Split coefficient into integer and fractional parts by string arithmetic.
-  let intStr: string;
-  let fracStr: string;
-
-  if (absStr.length <= scale) {
-    // Coefficient is smaller than one unit (e.g. "45", scale 2 → "0.45").
-    intStr = '0';
-    fracStr = absStr.padStart(scale, '0');
-  } else {
-    intStr = absStr.slice(0, absStr.length - scale);
-    fracStr = absStr.slice(absStr.length - scale);
-  }
-
-  // Use Intl with a BigInt to get locale-aware thousands grouping on the integer part.
-  const intPartGrouped = new Intl.NumberFormat(locale).format(BigInt(intStr));
-
-  // Get the locale decimal separator from Intl parts.
-  const parts = new Intl.NumberFormat(locale).formatToParts(0);
-  const decimalSep = parts.find((p) => p.type === 'decimal')?.value ?? '.';
-
-  const result = `${intPartGrouped}${decimalSep}${fracStr}`;
-  return isNegative ? `-${result}` : result;
-}
 
 /**
  * Resolve a posting's account display label using the priority chain:

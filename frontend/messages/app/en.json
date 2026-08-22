@@ -54,6 +54,7 @@
   "reports_column_net_worth": "Net worth",
   "reports_date_range": "{start} – {end}",
   "reports_commodity_unknown": "Commodity #{commodityId}",
+  "reports_print_filters": "Period: {range} · {basis}",
   "reports_view_switch_legend": "Report",
   "reports_view_net_worth": "Net worth",
   "reports_view_spending": "Spending",

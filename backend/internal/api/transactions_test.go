@@ -1684,3 +1684,110 @@ func TestTypedPayeeNameLinksToAnExistingRecord(t *testing.T) {
 	assert.Equal(t, marketHall.ID, *explicit.PayeeID)
 	assert.Equal(t, "Market Hall", explicit.PayeeName)
 }
+
+// --- Posting date vs. account/commodity availability ---
+
+// A user creates an account today and enters last month's transactions. The
+// as-of version lookup finds no account version effective on that date, and
+// used to report "posting account is invalid" — which reads as "your account
+// is broken" rather than "your date is too early". That misdiagnosis is what
+// made a wall-clock-dependent e2e failure expensive to trace.
+func TestCreateTransaction_BeforeAccountOpenedReportsTheDateNotTheAccount(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	checking := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Opened Later", "asset", "checking", commodityID, 2, "2026-06-01")
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Late Groceries","category_type":"expense"}`)
+
+	res := createTransactionResponseForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-05-01",
+		"description":"Before the account existed",
+		"journal_entries":[{"entry_date":"2026-05-01","postings":[
+			{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":"-1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+			{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":"1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+		]}]
+	}`, http.StatusBadRequest)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+	assert.Equal(t, "posting date is before account opened date", body.Error.Message,
+		"the account exists; only the date is wrong, and the message must say which")
+}
+
+// The account genuinely does not exist — this must keep the original message,
+// because there is no date the user could pick that would make it work.
+func TestCreateTransaction_UnknownAccountStillReportsAnInvalidAccount(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Unknown Groceries","category_type":"expense"}`)
+
+	res := createTransactionResponseForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2026-06-01",
+		"description":"No such account",
+		"journal_entries":[{"entry_date":"2026-06-01","postings":[
+			{"account_id":999999,"quantity_value":"-1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+			{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":"1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+		]}]
+	}`, http.StatusBadRequest)
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "posting account is invalid", body.Error.Message)
+}
+
+// A currency's enable date is app bookkeeping, not a financial fact, so it
+// must not constrain the ledger: history predating setup has to post. This is
+// the migration story — install today, import last year (T-42).
+func TestCreateTransaction_HistoryPredatingCurrencySetupIsAccepted(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
+	// The fixture clock enables the currency on 2026-01-01; the account really
+	// opened in 2025. Before T-42 the commodity as-of lookup rejected this
+	// with "posting commodity is invalid".
+	checking := createLedgerAccountOpenedOn(t, handler, sessionCookie, csrfToken, "Early Cash", "asset", "checking", commodityID, 2, "2025-01-01")
+	// The category needs no date of its own: since T-43 every category opens
+	// at the genesis date, so this stays a test about the commodity rule.
+	groceries := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Early Groceries",
+		"category_type":"expense"
+	}`)
+
+	res := createTransactionResponseForSession(t, handler, sessionCookie, csrfToken, `{
+		"transaction_date":"2025-06-01",
+		"description":"History from before setup",
+		"journal_entries":[{"entry_date":"2025-06-01","postings":[
+			{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":"-1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
+			{"account_id":`+strconvFormatInt(groceries.ID)+`,"quantity_value":"1000","quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
+		]}]
+	}`, http.StatusCreated)
+
+	var created transactionResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&created))
+	assert.Equal(t, "2025-06-01", created.TransactionDate)
+	require.Len(t, created.JournalEntries, 1)
+	assert.Len(t, created.JournalEntries[0].Postings, 2)
+}
+
+// createTransactionResponseForSession returns the raw recorder so a test can
+// assert on the error envelope, not just the status.
+func createTransactionResponseForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, body string, wantStatus int) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
+	return res
+}

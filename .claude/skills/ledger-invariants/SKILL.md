@@ -36,8 +36,12 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 - Division/implied prices round **half-up** via the shared helpers
   (`scaledDivision`); never write ad-hoc rounding.
 - Overflow surfaces to the API as HTTP 422 `LEDGER_OVERFLOW`, never a 500.
-- Frontend money math uses Dinero.js v2 for display only; **canonical balance
-  and report calculations happen in Go**, never in the browser.
+- **Canonical balance and report calculations happen in Go**, never in the
+  browser. The frontend has exactly two money modules and no money dependency:
+  `$lib/money/amount.ts` for parsing and exact string/BigInt arithmetic, and
+  `$lib/money/format.ts` for locale-aware display of read-only figures. A report
+  view, CSV export, or `.svelte` file that grows its own inline amount math or
+  formatting is the frontend form of the bug this section is about (G-02).
 
 ## Double entry
 

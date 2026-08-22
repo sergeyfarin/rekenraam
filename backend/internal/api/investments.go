@@ -159,6 +159,26 @@ type investmentTradeRequest struct {
 	ReconciliationOverride bool `json:"reconciliation_override"`
 }
 
+// investmentWriteOffRequest has no cash account, commodity or amount: a
+// write-off's proceeds are zero by definition (T-38).
+type investmentWriteOffRequest struct {
+	TransactionDate  string                           `json:"transaction_date"`
+	CommodityID      int64                            `json:"commodity_id"`
+	HoldingAccountID int64                            `json:"holding_account_id"`
+	QuantityValue    exact.Coefficient                `json:"quantity_value"`
+	QuantityScale    int                              `json:"quantity_scale"`
+	Reason           string                           `json:"reason"`
+	Memo             string                           `json:"memo"`
+	PayeeID          *int64                           `json:"payee_id"`
+	Status           string                           `json:"status"`
+	LotAllocations   []investmentLotAllocationRequest `json:"lot_allocations"`
+	ChangeReason     string                           `json:"change_reason"`
+	CostBasisMethod  string                           `json:"cost_basis_method"`
+	// ReconciliationOverride lets a backdated write-off proceed into a
+	// reconciled period, invalidating the affected checkpoints (T-47).
+	ReconciliationOverride bool `json:"reconciliation_override"`
+}
+
 type sellPreviewResponse struct {
 	CostBasisMethod   string                          `json:"cost_basis_method"`
 	Allocations       []investmentLotDisposalResponse `json:"allocations"`
@@ -573,13 +593,6 @@ func sellInvestment(logger *slog.Logger, authService *app.AuthService, investmen
 	return investmentTradeMutation(logger, authService, investmentService, options, "sell")
 }
 
-// writeOffInvestment records a disposal at zero proceeds. It is its own route
-// rather than a flag on sell so that "no proceeds" is always a stated intent —
-// an empty cash amount must never quietly retire a position (T-38).
-func writeOffInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
-	return investmentTradeMutation(logger, authService, investmentService, options, "write-off")
-}
-
 func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)
@@ -626,6 +639,77 @@ func investmentTradeReconciliationImpact(logger *slog.Logger, authService *app.A
 		impact, err := investmentService.TradeReconciliationImpact(r.Context(), kind, toInvestmentTradeInput(owner, r, request))
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "investment reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func writeOffInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request investmentWriteOffRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.WriteOff(r.Context(), toInvestmentWriteOffInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "investment write-off", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, toInvestmentTradeResponse(result))
+	}))
+}
+
+func writeOffPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request investmentWriteOffRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewWriteOff(r.Context(), toInvestmentWriteOffInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview write-off", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, sellPreviewResponse{
+			CostBasisMethod:   preview.CostBasisMethod,
+			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
+			RealizedGain:      preview.RealizedGain,
+			RealizedGainScale: preview.RealizedGainScale,
+			CashAmountValue:   preview.CashAmountValue,
+			CashAmountScale:   preview.CashAmountScale,
+		})
+	}
+}
+
+// writeOffReconciliationImpact is investmentTradeReconciliationImpact for a
+// write-off: it takes investmentWriteOffRequest (no cash fields) rather than
+// the shared trade request, since a write-off is its own contract shape (T-38,
+// T-47).
+func writeOffReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request investmentWriteOffRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.WriteOffReconciliationImpact(r.Context(), toInvestmentWriteOffInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "write-off reconciliation impact", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
@@ -689,8 +773,6 @@ func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, 
 		switch action {
 		case "buy":
 			result, err = investmentService.Buy(r.Context(), input)
-		case "write-off":
-			result, err = investmentService.WriteOff(r.Context(), input)
 		default:
 			result, err = investmentService.Sell(r.Context(), input)
 		}
@@ -987,6 +1069,21 @@ func toReinvestedDividendInput(owner app.Owner, r *http.Request, request reinves
 		IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 		AmountValue: request.AmountValue, AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
+		ReconciliationOverride: request.ReconciliationOverride,
+	}
+}
+
+func toInvestmentWriteOffInput(owner app.Owner, r *http.Request, request investmentWriteOffRequest) app.InvestmentWriteOffInput {
+	allocations := make([]app.InvestmentLotAllocationInput, 0, len(request.LotAllocations))
+	for _, allocation := range request.LotAllocations {
+		allocations = append(allocations, app.InvestmentLotAllocationInput{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
+	}
+	return app.InvestmentWriteOffInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
+		QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale, Reason: request.Reason,
+		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
+		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
 		ReconciliationOverride: request.ReconciliationOverride,
 	}
 }

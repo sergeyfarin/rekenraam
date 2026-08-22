@@ -36,9 +36,6 @@ importers:
       date-fns:
         specifier: 4.4.0
         version: 4.4.0
-      dinero.js:
-        specifier: 2.0.2
-        version: 2.0.2
       minisearch:
         specifier: ^7.2.0
         version: 7.2.0
@@ -683,10 +680,6 @@ packages:
 
   devalue@5.9.0:
     resolution: {integrity: sha512-RWrqdArjvPbsATEhOPUo6Wndc/iWnkWKlhIrdlF3zMMYo/c3CVtoaVAyLtWxz5h8nSlkHzxnzV2uLydPXmtF+A==}
-
-  dinero.js@2.0.2:
-    resolution: {integrity: sha512-d+4egJTvNinkb66KSed11Daqz6MWaOHzyalLu6h3p+BLrsmwKFjHjvOKivOWeM7WyoX89te+xx4cKI6zrDtCfQ==}
-    engines: {node: '>=20.0.0'}
 
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
@@ -1847,8 +1840,6 @@ snapshots:
   devalue@5.8.2: {}
 
   devalue@5.9.0: {}
-
-  dinero.js@2.0.2: {}
 
   emoji-regex@10.6.0: {}
 

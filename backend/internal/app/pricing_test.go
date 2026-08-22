@@ -102,7 +102,7 @@ func TestPricingRefreshStoresDirectRatesIdempotently(t *testing.T) {
 	assert.Equal(t, "succeeded", run.Status)
 	assert.Equal(t, 2, run.ItemsTotal)
 
-	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10)
+	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10, false)
 	require.NoError(t, err)
 	require.Len(t, prices, 1)
 	assert.Equal(t, int64(91234), prices[0].PriceValue)
@@ -110,7 +110,7 @@ func TestPricingRefreshStoresDirectRatesIdempotently(t *testing.T) {
 
 	_, err = service.RunRefresh(ctx, 1, 0, "manual")
 	require.NoError(t, err)
-	prices, err = db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10)
+	prices, err = db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10, false)
 	require.NoError(t, err)
 	assert.Len(t, prices, 1)
 }
@@ -131,7 +131,7 @@ func TestPricingRefreshStoresDerivedRateWithVintageMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "succeeded", run.Status)
 
-	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10)
+	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 10, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, prices)
 	derived := prices[0]
@@ -291,7 +291,7 @@ func TestFXCoverageBackfillsHistoricalPublicationDatesIdempotently(t *testing.T)
 	assert.Equal(t, "succeeded", run.Status)
 	assert.Equal(t, 8, run.ItemsTotal)
 
-	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 20)
+	prices, err := db.NewPricingRepository(database).ListPriceObservations(ctx, BookID, 1, 2, 20, false)
 	require.NoError(t, err)
 	require.Len(t, prices, 4)
 	assert.Equal(t, "2026-06-12", prices[0].ValuationDate)
@@ -379,7 +379,7 @@ func TestCreatePrice_HappyPathAndDuplicateSameDateAppends(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, created.ID, second.ID)
 
-	prices, err := service.ListPrices(ctx, 1, 2, 10)
+	prices, err := service.ListPrices(ctx, 1, 2, 10, false)
 	require.NoError(t, err)
 	require.Len(t, prices, 2)
 }
@@ -411,6 +411,175 @@ func TestCreateTradeImpliedPrice_RejectsZeroQuantityOrCash(t *testing.T) {
 		QuantityValue: exact.New(10), QuantityScale: 0, CashValue: 0, CashScale: 2,
 	})
 	require.Error(t, err)
+}
+
+// --- VoidPrice (T-37) ---
+
+func TestVoidPrice_RetiresObservationFromListingsButKeepsTheRecord(t *testing.T) {
+	ctx := context.Background()
+	_, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
+
+	created, err := service.CreatePrice(ctx, PriceObservationInput{
+		OwnerUserID: 1, BaseCommodityID: 1, QuoteCommodityID: 2,
+		QuoteType: "manual", PriceValue: 91234, PriceScale: 5, ValuationDate: "2026-06-12",
+		IsManual: true, MetadataJSON: `{}`,
+	})
+	require.NoError(t, err)
+
+	voided, err := service.VoidPrice(ctx, VoidPriceInput{
+		OwnerUserID: 1, ObservationID: created.ID, VoidReason: "provider published a bad fixing",
+	})
+	require.NoError(t, err)
+	require.Len(t, voided, 1)
+	assert.Equal(t, created.ID, voided[0].ID)
+	assert.NotEmpty(t, voided[0].VoidedAt)
+	assert.Equal(t, "provider published a bad fixing", voided[0].VoidReason)
+
+	active, err := service.ListPrices(ctx, 1, 2, 10, false)
+	require.NoError(t, err)
+	assert.Empty(t, active, "a voided observation must not appear in normal listings")
+
+	// The row is retired, not deleted: prices are corrected by superseding or
+	// voiding, never by removing the historical record.
+	all, err := service.ListPrices(ctx, 1, 2, 10, true)
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.Equal(t, created.ID, all[0].ID)
+	assert.Equal(t, int64(91234), all[0].PriceValue)
+}
+
+func TestVoidPrice_StopsTheObservationBeingUsedForValuation(t *testing.T) {
+	ctx := context.Background()
+	_, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
+
+	older, err := service.CreatePrice(ctx, PriceObservationInput{
+		OwnerUserID: 1, BaseCommodityID: 1, QuoteCommodityID: 2,
+		QuoteType: "manual", PriceValue: 90000, PriceScale: 5, ValuationDate: "2026-06-11",
+		IsManual: true, MetadataJSON: `{}`,
+	})
+	require.NoError(t, err)
+	poisoned, err := service.CreatePrice(ctx, PriceObservationInput{
+		OwnerUserID: 1, BaseCommodityID: 1, QuoteCommodityID: 2,
+		QuoteType: "manual", PriceValue: 9123400, PriceScale: 5, ValuationDate: "2026-06-12",
+		IsManual: true, MetadataJSON: `{}`,
+	})
+	require.NoError(t, err)
+
+	latest, err := service.LatestPricesForPairs(ctx, [][2]int64{{1, 2}})
+	require.NoError(t, err)
+	require.Len(t, latest, 1)
+	require.Equal(t, poisoned.ID, latest[0].ID)
+
+	_, err = service.VoidPrice(ctx, VoidPriceInput{
+		OwnerUserID: 1, ObservationID: poisoned.ID, VoidReason: "decimal shifted by two places",
+	})
+	require.NoError(t, err)
+
+	// The point of the void: valuation falls back to the last good rate
+	// instead of continuing to use the poisoned one.
+	latest, err = service.LatestPricesForPairs(ctx, [][2]int64{{1, 2}})
+	require.NoError(t, err)
+	require.Len(t, latest, 1)
+	assert.Equal(t, older.ID, latest[0].ID)
+	assert.Equal(t, int64(90000), latest[0].PriceValue)
+}
+
+func TestVoidPrice_CascadesToRatesTriangulatedFromTheVoidedLeg(t *testing.T) {
+	ctx := context.Background()
+	// USD -> EUR -> GBP -> JPY: the USD/JPY rate is derived from three legs,
+	// so voiding any one leg must retire the derived rate too. Leaving it
+	// active would keep the poisoned number in valuations under a new id.
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP", "JPY"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 9000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"EUR/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"GBP/JPY": {value: 2000000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+	outcome, err := service.refreshFXTarget(ctx, 1, fxTargetForTest(t, database, 1, 4), policyWithHops(2), 0, "", time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.True(t, outcome.Observation.IsDerived)
+
+	legs, err := service.ListPrices(ctx, 2, 3, 10, false) // the EUR/GBP middle leg
+	require.NoError(t, err)
+	require.Len(t, legs, 1)
+
+	voided, err := service.VoidPrice(ctx, VoidPriceInput{
+		OwnerUserID: 1, ObservationID: legs[0].ID, VoidReason: "provider restated EUR/GBP",
+	})
+	require.NoError(t, err)
+	require.Len(t, voided, 2, "the voided leg and the rate derived from it")
+	assert.Equal(t, legs[0].ID, voided[0].ID)
+	assert.Equal(t, outcome.Observation.ID, voided[1].ID)
+	assert.Contains(t, voided[1].VoidReason, "derived from voided observation")
+
+	derived, err := service.ListPrices(ctx, 1, 4, 10, false)
+	require.NoError(t, err)
+	assert.Empty(t, derived, "the triangulated USD/JPY rate must not survive its voided leg")
+}
+
+func TestVoidPrice_RejectsDoubleVoidUnknownIDAndMissingReason(t *testing.T) {
+	ctx := context.Background()
+	_, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
+
+	created, err := service.CreatePrice(ctx, PriceObservationInput{
+		OwnerUserID: 1, BaseCommodityID: 1, QuoteCommodityID: 2,
+		QuoteType: "manual", PriceValue: 91234, PriceScale: 5, ValuationDate: "2026-06-12",
+		IsManual: true, MetadataJSON: `{}`,
+	})
+	require.NoError(t, err)
+
+	_, err = service.VoidPrice(ctx, VoidPriceInput{OwnerUserID: 1, ObservationID: created.ID})
+	require.ErrorAs(t, err, &ValidationError{}, "a void without a reason is not auditable")
+
+	_, err = service.VoidPrice(ctx, VoidPriceInput{OwnerUserID: 1, ObservationID: 999999, VoidReason: "typo"})
+	require.ErrorIs(t, err, ErrPriceObservationNotFound)
+
+	_, err = service.VoidPrice(ctx, VoidPriceInput{OwnerUserID: 1, ObservationID: created.ID, VoidReason: "bad fixing"})
+	require.NoError(t, err)
+
+	_, err = service.VoidPrice(ctx, VoidPriceInput{OwnerUserID: 1, ObservationID: created.ID, VoidReason: "bad fixing again"})
+	require.ErrorIs(t, err, ErrPriceObservationAlreadyVoided, "a second void would overwrite the first reason")
+}
+
+func TestVoidPrice_RecordsOneAuditEventLinkedFromEveryVoidedRow(t *testing.T) {
+	ctx := context.Background()
+	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP"}, marketdata.NewRegistry(fakeFXProvider{
+		code: "frankfurter",
+		rates: map[string]fakeFXRate{
+			"USD/EUR": {value: 9000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+			"EUR/GBP": {value: 8000, scale: 4, publishedAt: "2026-06-12T00:00:00Z"},
+		},
+	}))
+	_, err := service.refreshFXTarget(ctx, 1, fxTargetForTest(t, database, 1, 3), policyWithHops(1), 0, "", time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	legs, err := service.ListPrices(ctx, 1, 2, 10, false)
+	require.NoError(t, err)
+	require.Len(t, legs, 1)
+
+	voided, err := service.VoidPrice(ctx, VoidPriceInput{
+		OwnerUserID: 1, ObservationID: legs[0].ID, VoidReason: "provider restated USD/EUR",
+	})
+	require.NoError(t, err)
+	require.Len(t, voided, 2)
+
+	// One audit_events row per user operation, referenced from every row it
+	// touched — not one row per observation.
+	var distinctEvents int
+	require.NoError(t, database.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT voided_audit_event_id) FROM price_observations WHERE voided_at IS NOT NULL
+	`).Scan(&distinctEvents))
+	assert.Equal(t, 1, distinctEvents)
+
+	var operation string
+	require.NoError(t, database.QueryRowContext(ctx, `
+		SELECT operation FROM audit_events WHERE id = (
+			SELECT voided_audit_event_id FROM price_observations WHERE id = ?
+		)
+	`, legs[0].ID).Scan(&operation))
+	assert.Equal(t, "pricing.price.void", operation)
 }
 
 // --- SavePolicy / cleanPricingPolicySpec / localDailyTimeUTC ---

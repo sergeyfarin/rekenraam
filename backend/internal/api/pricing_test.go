@@ -91,6 +91,63 @@ func TestCreatePrice_ValidationFailureReturnsBadRequest(t *testing.T) {
 	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
 }
 
+// --- Price voiding (T-37) ---
+
+func TestVoidPrice_HTTP(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapPricingAPITest(t, handler)
+
+	res := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/prices", priceObservationRequest{
+		BaseCommodityID: f.eurCommodity, QuoteCommodityID: f.usdCommodity, QuoteType: "manual",
+		PriceValue: 10800, PriceScale: 4, ValuationDate: "2026-06-12", IsManual: true,
+		Derivation: json.RawMessage(`{}`), SeriesMetadata: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
+	}, http.StatusCreated)
+	var created priceObservationResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&created))
+
+	voidRes := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/prices/"+itoa(created.ID)+"/void", priceObservationVoidRequest{
+		VoidReason: "provider published a bad fixing",
+	}, http.StatusOK)
+	var voided priceObservationVoidResponse
+	require.NoError(t, json.NewDecoder(voidRes.Body).Decode(&voided))
+	require.Len(t, voided.Prices, 1)
+	assert.NotEmpty(t, voided.Prices[0].VoidedAt)
+	assert.Equal(t, "provider published a bad fixing", voided.Prices[0].VoidReason)
+
+	pairQuery := "base_commodity_id=" + itoa(f.eurCommodity) + "&quote_commodity_id=" + itoa(f.usdCommodity)
+	listRes := doPricingRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/pricing/prices?"+pairQuery, nil, http.StatusOK)
+	var listed priceObservationsResponse
+	require.NoError(t, json.NewDecoder(listRes.Body).Decode(&listed))
+	assert.Empty(t, listed.Prices)
+
+	auditRes := doPricingRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/pricing/prices?"+pairQuery+"&include_voided=true", nil, http.StatusOK)
+	var audited priceObservationsResponse
+	require.NoError(t, json.NewDecoder(auditRes.Body).Decode(&audited))
+	require.Len(t, audited.Prices, 1)
+	assert.Equal(t, created.ID, audited.Prices[0].ID)
+
+	repeat := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/prices/"+itoa(created.ID)+"/void", priceObservationVoidRequest{
+		VoidReason: "again",
+	}, http.StatusConflict)
+	var conflict errorResponse
+	require.NoError(t, json.NewDecoder(repeat.Body).Decode(&conflict))
+	assert.Equal(t, "CONFLICT", conflict.Error.Code)
+}
+
+func TestVoidPrice_UnknownObservationReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapPricingAPITest(t, handler)
+
+	res := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/prices/999999/void", priceObservationVoidRequest{
+		VoidReason: "typo",
+	}, http.StatusNotFound)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "NOT_FOUND", body.Error.Code)
+}
+
 // --- Policy round-trip ---
 
 func TestPricingPolicy_GetAndSave_HTTP(t *testing.T) {
@@ -208,6 +265,7 @@ func TestPricingEndpoints_RequireAuthentication(t *testing.T) {
 		{"sources", http.MethodGet, "/api/v1/pricing/sources"},
 		{"prices", http.MethodGet, "/api/v1/pricing/prices"},
 		{"create price", http.MethodPost, "/api/v1/pricing/prices"},
+		{"void price", http.MethodPost, "/api/v1/pricing/prices/1/void"},
 		{"policy", http.MethodGet, "/api/v1/pricing/policy"},
 		{"save policy", http.MethodPut, "/api/v1/pricing/policy"},
 		{"source assignments", http.MethodGet, "/api/v1/pricing/source-assignments"},
@@ -279,53 +337,10 @@ func itoa(v int64) string {
 
 // --- Voiding (T-37) ---
 
-// TestVoidPrice_RetiresObservationWithoutDeletingIt covers the half of the
-// "correct a price by superseding or voiding" invariant that had no
-// implementation: every read filtered on voided_at, but nothing could set it.
-func TestVoidPrice_RetiresObservationWithoutDeletingIt(t *testing.T) {
-	t.Parallel()
-	handler, _ := newSetupTestHandler(t)
-	f := bootstrapPricingAPITest(t, handler)
-
-	createPrice := func(value int64, date string) priceObservationResponse {
-		res := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/prices", priceObservationRequest{
-			BaseCommodityID: f.eurCommodity, QuoteCommodityID: f.usdCommodity, QuoteType: "manual",
-			PriceValue: value, PriceScale: 4, ValuationDate: date, IsManual: true,
-			Derivation: json.RawMessage(`{}`), SeriesMetadata: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`),
-		}, http.StatusCreated)
-		var created priceObservationResponse
-		require.NoError(t, json.NewDecoder(res.Body).Decode(&created))
-		return created
-	}
-
-	poisoned := createPrice(999999, "2026-06-12")
-	good := createPrice(10800, "2026-06-13")
-
-	listPath := "/api/v1/pricing/prices?base_commodity_id=" + itoa(f.eurCommodity) + "&quote_commodity_id=" + itoa(f.usdCommodity)
-	listRes := doPricingRequest(t, handler, f.sessionCookie, "", http.MethodGet, listPath, nil, http.StatusOK)
-	var before priceObservationsResponse
-	require.NoError(t, json.NewDecoder(listRes.Body).Decode(&before))
-	require.Len(t, before.Prices, 2)
-
-	voidRes := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
-		"/api/v1/pricing/prices/"+itoa(poisoned.ID)+"/void",
-		voidPriceRequest{VoidReason: "provider published a bad rate"}, http.StatusOK)
-	var voided priceObservationResponse
-	require.NoError(t, json.NewDecoder(voidRes.Body).Decode(&voided))
-	assert.Equal(t, poisoned.ID, voided.ID)
-	assert.NotEmpty(t, voided.VoidedAt)
-	assert.Equal(t, "provider published a bad rate", voided.VoidReason)
-	// The observation is retired, not rewritten: its price is untouched.
-	assert.Equal(t, int64(999999), voided.PriceValue)
-
-	afterRes := doPricingRequest(t, handler, f.sessionCookie, "", http.MethodGet, listPath, nil, http.StatusOK)
-	var after priceObservationsResponse
-	require.NoError(t, json.NewDecoder(afterRes.Body).Decode(&after))
-	require.Len(t, after.Prices, 1)
-	assert.Equal(t, good.ID, after.Prices[0].ID)
-}
-
-func TestVoidPrice_RequiresAReasonAndRejectsRepeats(t *testing.T) {
+// TestVoidPrice_RequiresANonBlankReason covers the other half of "a reason is
+// required rather than defaulted": whitespace-only input must not pass as a
+// stated reason, since inventing one for the user would make the audit log lie.
+func TestVoidPrice_RequiresANonBlankReason(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)
 	f := bootstrapPricingAPITest(t, handler)
@@ -337,30 +352,11 @@ func TestVoidPrice_RequiresAReasonAndRejectsRepeats(t *testing.T) {
 	}, http.StatusCreated)
 	var created priceObservationResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&created))
-	voidPath := "/api/v1/pricing/prices/" + itoa(created.ID) + "/void"
 
-	// A reason is required rather than defaulted: "why" is the whole value of
-	// the record, and inventing it for the user would make the audit log lie.
-	blank := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, voidPath,
-		voidPriceRequest{VoidReason: "   "}, http.StatusBadRequest)
+	blank := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/pricing/prices/"+itoa(created.ID)+"/void",
+		priceObservationVoidRequest{VoidReason: "   "}, http.StatusBadRequest)
 	var blankBody errorResponse
 	require.NoError(t, json.NewDecoder(blank.Body).Decode(&blankBody))
 	assert.Equal(t, "VALIDATION_FAILED", blankBody.Error.Code)
-
-	doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, voidPath,
-		voidPriceRequest{VoidReason: "duplicate of a later fixing"}, http.StatusOK)
-
-	// A second void is a conflict, not a silent success: two clicks disagreeing
-	// about a price's state is worth surfacing.
-	repeat := doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, voidPath,
-		voidPriceRequest{VoidReason: "again"}, http.StatusConflict)
-	var repeatBody errorResponse
-	require.NoError(t, json.NewDecoder(repeat.Body).Decode(&repeatBody))
-	assert.Equal(t, "CONFLICT", repeatBody.Error.Code)
-
-	// Unknown observations are a 404, and the request still needs a CSRF token.
-	doPricingRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
-		"/api/v1/pricing/prices/999999/void", voidPriceRequest{VoidReason: "nope"}, http.StatusNotFound)
-	doPricingRequest(t, handler, f.sessionCookie, "", http.MethodPost, voidPath,
-		voidPriceRequest{VoidReason: "no csrf"}, http.StatusForbidden)
 }

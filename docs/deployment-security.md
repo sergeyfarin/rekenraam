@@ -4,12 +4,33 @@ This guide is the minimum security posture for a LAN or externally reachable
 Rekenraam deployment. The app is a single HTTP process; it does not terminate
 TLS itself. Put it behind a reverse proxy for HTTPS.
 
-## Non-negotiable public-deployment gate
+## Public-deployment gate: turn MFA on
 
-**Do not deploy real financial data on the public internet until MFA has an
-approved design and implementation.** This is a product requirement, not an
-operator choice. The measures below make a future external deployment safer;
-they do not lift the MFA gate.
+**Shipped 2026-08-07 (S-06).** Multi-factor authentication is TOTP (RFC 6238,
+any authenticator app) plus ten single-use recovery codes. The product gate is
+no longer "MFA does not exist"; it is now an operator step:
+
+**Before exposing real financial data to the public internet, enrol the owner
+account in two-factor authentication** at Settings → Security, and store the
+recovery codes somewhere other than the machine running the app. Enrolment
+requires `REKENRAAM_SECRET_KEY` (see below), because the shared secret is
+sealed at rest rather than stored in the clear — without the key the server
+refuses to enrol rather than degrade quietly.
+
+What it does and does not do:
+
+- A verified password alone no longer produces a session once MFA is active.
+  It produces a five-minute, single-use challenge cookie that grants nothing.
+- Wrong codes spend the same five-in-fifteen throttle budget as wrong
+  passwords, so a six-digit code is not a free guessing target.
+- A code cannot be replayed inside its own 30-second step.
+- Enrolling, disabling, and regenerating recovery codes each require the
+  password again, so a stolen session cannot change what protects the account.
+- Recovery codes are the only remote way back in if the authenticator is lost.
+  There is no server-side bypass, by design. With both gone, the last resort is
+  the `recover-owner` command on the host, which resets the owner password and
+  clears the enrolment in the same transaction — it already requires filesystem
+  access to the database, so an enrolment must not outlast it.
 
 Localhost development may use HTTP. For LAN use, HTTPS through a reverse proxy
 is strongly preferred. A browser-warning-free private deployment needs a
@@ -67,9 +88,54 @@ client can connect to the app directly. The app parses XFF right-to-left and
 stops at the first non-trusted hop; the proxy must overwrite or append the
 actual client address instead of forwarding unverified client headers unchanged.
 
+## Monitoring authentication
+
+Every successful and failed authentication attempt is recorded durably, with
+the proxy-aware client IP resolved by the rules above. Two ways to consume it:
+
+- `GET /api/v1/auth/events` (owner session required) returns the recent log,
+  newest first, plus `failed_last_24h` — the number to watch. A steady trickle
+  of `login_failed` from one address is a brute-force run; `unknown_user`
+  failures mean someone is guessing account names, not passwords.
+- The same events are emitted as structured `slog` records ("authentication
+  event"), failures at `WARN`, so a log shipper can alert on them without
+  querying SQLite.
+
+Events never contain password material or session tokens. They are pruned to a
+90-day retention window by the daily session-cleanup pass, so this is an
+incident-response aid, not a permanent sign-in archive.
+
+## Login throttling and approved devices
+
+Failed logins are throttled at five attempts per fifteen minutes. Because a
+single-owner install publishes its owner's username by construction, a plain
+username-scoped throttle would be a remote lockout switch: anyone could fail
+five logins and keep the owner out of their own finances indefinitely.
+
+A device that has completed a successful login (or first-run owner setup) is
+therefore issued an **approved-device cookie**, and attempts from it are
+throttled on that device's own budget instead of the shared username and
+client-IP budgets. An attacker elsewhere on the internet can no longer lock the
+owner out.
+
+Read this carefully when reasoning about the security posture:
+
+- The cookie is **not a credential**. It grants no access at all — a login
+  still requires the password, and presenting the cookie alone authenticates
+  nothing. Its only effect is which throttle budget an attempt spends.
+- It is HttpOnly, SameSite=Strict, and only its SHA-256 hash is stored.
+- The approved device keeps the same five-in-fifteen budget, so a stolen
+  cookie buys no extra password guesses.
+- Approval lapses after 180 days unused and slides forward on each successful
+  login. Review and revoke devices at `GET`/`DELETE /api/v1/auth/trusted-devices`.
+
+Approved devices are a throttle mechanism only, and are unrelated to the second
+factor: an approved device still has to present a code.
+
 ## Secrets and data files
 
-`REKENRAAM_SECRET_KEY` encrypts stored online-provider credentials. It is a
+`REKENRAAM_SECRET_KEY` encrypts stored online-provider credentials **and the
+MFA shared secret**. It is a
 base64 value for exactly 32 random bytes:
 
 ```sh
@@ -78,7 +144,8 @@ openssl rand -base64 32
 
 Keep it in the service environment or a secret manager, outside Git, and back
 it up with the SQLite database. Losing it leaves ledger data intact but makes
-stored provider credentials unreadable; see the root README for the
+stored provider credentials and any MFA enrolment unreadable — recover with a
+recovery code, or with the `recover-owner` command from the host; see the root README for the
 backup-first recovery procedure. Do not change it casually: no in-place key
 rotation command exists yet.
 

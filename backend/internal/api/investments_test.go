@@ -176,6 +176,67 @@ func TestInvestmentLifecycle_InstrumentBuyPreviewSellDividendReflectEverywhere(t
 	assert.Equal(t, int64(20000), gains.Realized[0].RealizedGainValue)
 }
 
+// --- Write-off (T-38) ---
+
+func TestWriteOffInvestment_PreviewAndCommitCloseThePositionAtALoss(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEAD")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+
+	body := investmentWriteOffRequest{
+		TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+		QuantityValue: exact.New(10), QuantityScale: 0, Reason: "fund closed; units cancelled at zero",
+	}
+
+	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/write-off/preview", body, http.StatusOK)
+	var preview sellPreviewResponse
+	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
+	assert.Equal(t, int64(-100000), preview.RealizedGain)
+	assert.Equal(t, int64(0), preview.CashAmountValue)
+
+	writeOffRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off", body, http.StatusCreated)
+	var written investmentTradeResponse
+	require.NoError(t, json.NewDecoder(writeOffRes.Body).Decode(&written))
+	require.Len(t, written.Allocations, 1)
+	assert.Equal(t, preview.Allocations[0].CostBasisValue, written.Allocations[0].CostBasisValue, "preview and commit must agree")
+
+	gainsReq := httptest.NewRequest(http.MethodGet, "/api/v1/investments/gains", nil)
+	gainsReq.AddCookie(f.sessionCookie)
+	gainsRec := httptest.NewRecorder()
+	handler.ServeHTTP(gainsRec, gainsReq)
+	require.Equal(t, http.StatusOK, gainsRec.Code)
+	var gains investmentGainsResponse
+	require.NoError(t, json.NewDecoder(gainsRec.Body).Decode(&gains))
+	require.Len(t, gains.Realized, 1)
+	assert.Equal(t, int64(-100000), gains.Realized[0].RealizedGainValue)
+	assert.Empty(t, gains.Unrealized, "a written-off position must not linger as an open holding")
+}
+
+func TestWriteOffInvestment_MissingReasonReturnsBadRequest(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "DEAD")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off", investmentWriteOffRequest{
+		TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+	}, http.StatusBadRequest)
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+}
+
 // --- Error mapping ---
 
 func TestSellInvestment_InsufficientLotsReturnsConflict(t *testing.T) {
@@ -281,6 +342,7 @@ func TestInvestmentMutations_RequireCSRFToken(t *testing.T) {
 		{"update instrument", http.MethodPatch, "/api/v1/investments/instruments/" + strconv.FormatInt(instrument.ID, 10), investmentInstrumentRequest{CommodityCode: "VWRL", InstrumentType: "etf", DisplayName: "Renamed", Symbol: "VWRL", QuantityScale: 6, PriceScale: 4, EffectiveFrom: "2026-01-01"}},
 		{"create holding account", http.MethodPost, "/api/v1/investments/holding-accounts", holdingAccountRequest{InstrumentID: instrument.ID, Name: "Holding", OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"}},
 		{"buy", http.MethodPost, "/api/v1/investments/buy", tradeRequestBody(f, 1, instrument.CommodityID, "1", 1000)},
+		{"write-off", http.MethodPost, "/api/v1/investments/write-off", investmentWriteOffRequest{TransactionDate: "2026-02-01", CommodityID: instrument.CommodityID, HoldingAccountID: 1, QuantityValue: exact.New(1), Reason: "delisted"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -314,6 +376,8 @@ func TestInvestmentEndpoints_RequireAuthentication(t *testing.T) {
 		{"lots", http.MethodGet, "/api/v1/investments/lots"},
 		{"gains", http.MethodGet, "/api/v1/investments/gains"},
 		{"buy", http.MethodPost, "/api/v1/investments/buy"},
+		{"write-off", http.MethodPost, "/api/v1/investments/write-off"},
+		{"write-off preview", http.MethodPost, "/api/v1/investments/write-off/preview"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -501,10 +565,10 @@ func TestWriteOffInvestment_RealizesTheWholeBasisAsALoss(t *testing.T) {
 		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
 
 	writeOffRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
-		investmentTradeRequest{
+		investmentWriteOffRequest{
 			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
 			QuantityValue: exact.New(10), QuantityScale: 0,
-			ChangeReason: "fund liquidated with no distribution",
+			Reason: "fund liquidated with no distribution",
 		}, http.StatusCreated)
 	var wroteOff investmentTradeResponse
 	require.NoError(t, json.NewDecoder(writeOffRes.Body).Decode(&wroteOff))
@@ -609,16 +673,16 @@ func TestWriteOffInvestment_BackdatedIntoAReconciledPeriodIsGuarded(t *testing.T
 	// A write-off dated inside the reconciled period would move a reconciled
 	// balance, so it must be refused rather than silently accepted.
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
-		investmentTradeRequest{
+		investmentWriteOffRequest{
 			TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
-			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "worthless",
+			QuantityValue: exact.New(10), QuantityScale: 0, Reason: "worthless",
 		}, http.StatusConflict)
 
 	// After the checkpoint it is allowed.
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
-		investmentTradeRequest{
+		investmentWriteOffRequest{
 			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
-			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "worthless",
+			QuantityValue: exact.New(10), QuantityScale: 0, Reason: "worthless",
 		}, http.StatusCreated)
 }
 
@@ -645,10 +709,10 @@ func TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates(t *testing
 
 	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, holding.ID)
 
-	backdated := func() investmentTradeRequest {
-		return investmentTradeRequest{
+	backdated := func() investmentWriteOffRequest {
+		return investmentWriteOffRequest{
 			TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
-			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "delisted, written off",
+			QuantityValue: exact.New(10), QuantityScale: 0, Reason: "delisted, written off", ChangeReason: "delisted, written off",
 		}
 	}
 
@@ -700,9 +764,9 @@ func TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates(t
 	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
 	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, holding.ID)
 
-	backdated := investmentTradeRequest{
+	backdated := investmentWriteOffRequest{
 		TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
-		QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "delisted, written off",
+		QuantityValue: exact.New(10), QuantityScale: 0, Reason: "delisted, written off",
 	}
 
 	// The preview persists nothing, so it needs no CSRF token — same as
@@ -756,9 +820,9 @@ func TestInvestmentReconciliationImpact_EmptyWhenNoCheckpointIsCrossed(t *testin
 	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
 
 	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
-		"/api/v1/investments/write-off/reconciliation-impact", investmentTradeRequest{
+		"/api/v1/investments/write-off/reconciliation-impact", investmentWriteOffRequest{
 			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
-			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "worthless",
+			QuantityValue: exact.New(10), QuantityScale: 0, Reason: "worthless",
 		}, http.StatusOK)
 	var impact reconciliationImpactResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&impact))

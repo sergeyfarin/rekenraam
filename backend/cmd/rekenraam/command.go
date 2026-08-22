@@ -69,6 +69,10 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	setupService := app.NewSetupService(setupRepository)
 	authRepository := db.NewAuthRepository(database)
 	authService := app.NewAuthServiceWithSessionLifetime(authRepository, logger, cfg.SessionLifetime)
+	// The same key that seals connection credentials seals the MFA shared
+	// secret (S-06). Absent, MFA enrollment refuses rather than storing it in
+	// the clear.
+	authService.SetSecretKey(cfg.SecretKey)
 	settingsService := app.NewSettingsService(db.NewSettingsRepository(database))
 	bookRepository := db.NewBookRepository(database)
 	bookService := app.NewBookService(bookRepository, setupService)

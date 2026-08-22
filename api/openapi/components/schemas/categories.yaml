@@ -71,6 +71,10 @@ CategoryResponse:
     opened_on:
       type: string
       format: date
+      description: >-
+        Always the genesis date 0001-01-01. A category is a classification
+        bucket rather than something opened on a date, so it never constrains
+        which dates may be posted to it; it is not settable by clients.
     closed_on:
       type: string
       format: date
@@ -119,12 +123,6 @@ CreateCategoryRequest:
       maxLength: 64
       pattern: "^[a-z][a-z0-9_-]*$"
       description: Optional stable icon token for category UI.
-    opened_on:
-      type: string
-      format: date
-    effective_from:
-      type: string
-      format: date
     change_reason:
       type: string
   additionalProperties: false
@@ -153,9 +151,6 @@ UpdateCategoryRequest:
       maxLength: 64
       pattern: "^[a-z][a-z0-9_-]*$"
       description: Optional stable icon token for category UI.
-    opened_on:
-      type: string
-      format: date
     effective_from:
       type: string
       format: date

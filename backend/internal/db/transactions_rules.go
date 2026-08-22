@@ -57,6 +57,60 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 	return rule, nil
 }
 
+// EarliestPostingAccountRule returns the account's first version, ignoring the
+// entry date. It exists so callers can tell "there is no such account" apart
+// from "the account did not exist yet on that date" — PostingAccountRule's
+// as-of lookup returns ErrNotFound for both, which turns the ordinary mistake
+// of entering history for a later-opened account into a message claiming the
+// account itself is invalid.
+func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, bookID int64, accountID int64) (PostingAccountRule, error) {
+	var rule PostingAccountRule
+	var systemRole sql.NullString
+	var allowsPostings int
+	if err := r.database.QueryRowContext(ctx, `
+		SELECT
+			a.id,
+			av.account_class,
+			av.status,
+			av.opened_on,
+			av.closed_on,
+			av.default_commodity_id,
+			av.quantity_scale_override,
+			av.allows_postings,
+			a.system_role
+		FROM accounts a
+		JOIN account_versions av ON av.account_id = a.id
+		WHERE a.book_id = ?
+			AND a.id = ?
+			AND av.id = (
+				SELECT first_av.id
+				FROM account_versions first_av
+				WHERE first_av.account_id = a.id
+				ORDER BY first_av.effective_from, first_av.version_seq
+				LIMIT 1
+			)
+	`, bookID, accountID).Scan(
+		&rule.AccountID,
+		&rule.AccountClass,
+		&rule.Status,
+		&rule.OpenedOn,
+		&rule.ClosedOn,
+		&rule.DefaultCommodityID,
+		&rule.QuantityScaleOverride,
+		&allowsPostings,
+		&systemRole,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PostingAccountRule{}, ErrNotFound
+		}
+		return PostingAccountRule{}, fmt.Errorf("read earliest posting account rule: %w", err)
+	}
+	rule.AllowsPostings = allowsPostings == 1
+	rule.IsSystem = systemRole.Valid
+
+	return rule, nil
+}
+
 func (r *TransactionRepository) PostingCommodityRule(ctx context.Context, bookID int64, commodityID int64, entryDate string) (PostingCommodityRule, error) {
 	var rule PostingCommodityRule
 	if err := r.database.QueryRowContext(ctx, `

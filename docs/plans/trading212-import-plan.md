@@ -621,6 +621,11 @@ actually shipped, and where it differs from the original plan above:
    (`PostingAccountRule` finds no account version effective as of the
    entry date). Fixed by passing the trade's own date as
    `OpenedOn`/`EffectiveFrom` for both the instrument and the holding account.
+   **Both halves of that fix were later replaced:** the instrument's by T-42
+   (`db.CommodityGenesisDate`) and the holding account's by T-44 — the
+   trade's own date only ever fixed the fill that arrived first, so an
+   import-created holding account now opens at the genesis date
+   (`docs/design/holding-account-opened-date.md`).
    The settlement-account selector and service both require a postable,
    active, non-system **asset** account (T-30/T-33); a category, closed
    account, or internal system account can no longer receive a brokerage cash
@@ -741,8 +746,9 @@ actually shipped, and where it differs from the original plan above:
    exact timestamp is re-scanned, not dropped; `fetchPage` refuses to follow an
    absolute `nextPagePath` so it can't be tricked into sending the API key to an
    untrusted host. Deeper ordering assumptions (strictly chronological pages,
-   no backdated corrections) remain unverified against the live API — see
-   `docs/backlog.md` T-17 for what's still open there and why.
+   no backdated corrections) remain unverified against the live API; T-17
+   itself is closed (`docs/reviews/resolved-backlog-2026-07.md`), and the
+   residual risk is a live-API observation, not an open code item.
 
 ## Prerequisites in the backlog — resolved before Slice 3 started
 

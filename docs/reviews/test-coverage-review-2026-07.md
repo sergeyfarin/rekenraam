@@ -201,11 +201,18 @@ workers) against shared services; `-race` in CI is cheap insurance.
 Closed 2026-07-11: `scripts/test-backend.sh` now runs `go test -race ./...`,
 which the backend CI job already invokes.
 
-### G-07 No coverage signal in CI
+### G-07 No coverage signal in CI `[x]`
 
 Nothing measures or reports coverage, so regressions in test coverage are
 invisible. Even a non-blocking `-coverprofile` upload (or a soft threshold on
 the merged number) would make trend erosion visible.
+
+Closed 2026-08-07: `COVERAGE=1 scripts/test-backend.sh` runs a separate
+coverage pass (the default run stays `-race`), and a non-gating
+`backend-coverage` CI job uploads the profile, reports the merged total in the
+job summary, and fails below a soft floor (`COVERAGE_FLOOR`, default 73.0% —
+the merged total at closing time was 75.2%). See
+`docs/plans/backend-test-coverage-plan.md` Workstream 7.
 
 ## Overall assessment
 

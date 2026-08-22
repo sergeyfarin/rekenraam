@@ -13,6 +13,12 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
+// importHoldingAccountGenesisDate is the opened_on and first-version
+// effective_from of a holding account the importer creates for itself. See
+// resolveTrading212HoldingAccount and
+// docs/design/holding-account-opened-date.md.
+const importHoldingAccountGenesisDate = systemAccountDate
+
 // commitTrading212InvestmentRow attempts to route a Trading 212 order-fill or
 // dividend staged row through InvestmentService.Buy/Sell/Dividend instead of
 // the generic buildTransactionSpec path (see CommitImportBatch).
@@ -65,7 +71,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 	}
 
 	instrumentID, commodityID, createdInstrument, err := s.investmentService.ResolveOrCreateInstrumentForImport(
-		ctx, input.OwnerUserID, input.AuthSessionID, input.RequestID, raw[rawKeyISIN], raw[rawKeyTicker], normalized.Date,
+		ctx, input.OwnerUserID, input.AuthSessionID, input.RequestID, raw[rawKeyISIN], raw[rawKeyTicker],
 	)
 	if err != nil {
 		return false, 0, 0, nil
@@ -73,7 +79,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 
 	switch kind {
 	case trading212RawKindOrderFill:
-		holding, err := s.resolveTrading212HoldingAccount(ctx, connectionID, instrumentID, commodityID, normalized.Date, input, nowStr)
+		holding, err := s.resolveTrading212HoldingAccount(ctx, connectionID, instrumentID, commodityID, input, nowStr)
 		if err != nil {
 			return false, 0, 0, s.cleanupTrading212InvestmentSetup(ctx, connectionID, commodityID, instrumentID, createdInstrument, holding, input.OwnerUserID, err)
 		}
@@ -116,7 +122,7 @@ type trading212HoldingResolution struct {
 	CreatedMapping bool
 }
 
-func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, connectionID int64, instrumentID int64, commodityID int64, tradeDate string, input CommitImportBatchInput, nowStr string) (trading212HoldingResolution, error) {
+func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, connectionID int64, instrumentID int64, commodityID int64, input CommitImportBatchInput, nowStr string) (trading212HoldingResolution, error) {
 	if holdingAccountID, found, err := s.connectionService.HoldingAccountForCommodity(ctx, connectionID, commodityID); err != nil {
 		return trading212HoldingResolution{}, err
 	} else if found {
@@ -130,20 +136,25 @@ func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, con
 	if err != nil {
 		return trading212HoldingResolution{}, fmt.Errorf("load instrument for holding account: %w", err)
 	}
-	// OpenedOn/EffectiveFrom must be the trade's own date, not "today" (the
-	// CreateAccount default) — otherwise a holding account created while
-	// importing a back-dated fill would be "opened" after that fill's own
-	// date and every posting to it would fail "posting account is invalid"
-	// (PostingAccountRule finds no account version effective as of the
-	// entry date).
+	// OpenedOn/EffectiveFrom are the genesis date, not "today" (the
+	// CreateAccount default) and not the trade's own date. Today would open the
+	// account after a back-dated fill and reject it; the trade's own date fixes
+	// that only for the fill that happened to arrive first, so a later sync or
+	// backfill carrying an *earlier* trade would fail "posting date is before
+	// account opened date" with no repair available (T-44). An import-created
+	// holding account is a container the app materializes per (connection,
+	// instrument) — its opened date is app bookkeeping, not a financial fact,
+	// so it must not constrain history at all. Hand-created holding accounts
+	// deliberately still take a user-supplied opened date. Full rationale and
+	// the options rejected: docs/design/holding-account-opened-date.md.
 	account, err := s.investmentService.CreateHoldingAccount(ctx, HoldingAccountInput{
 		OwnerUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
 		InstrumentID:  instrumentID,
 		Name:          instrument.DisplayName,
-		OpenedOn:      tradeDate,
-		EffectiveFrom: tradeDate,
+		OpenedOn:      importHoldingAccountGenesisDate,
+		EffectiveFrom: importHoldingAccountGenesisDate,
 		ChangeReason:  "created from Trading 212 import",
 	})
 	if err != nil {

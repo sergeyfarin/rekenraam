@@ -8,8 +8,9 @@
     transactionsInfiniteQueryOptions,
     type TransactionResponse
   } from '$lib/api/transactions';
+  import { formatQuantity } from '$lib/money/format';
+  import { sumByCommodity } from '$lib/money/amount';
   import {
-    formatQuantity,
     resolveAccountLabel,
     statusLabel,
     statusTone,
@@ -44,12 +45,6 @@
     query.data?.pages.flatMap((p) => p.transactions ?? []) ?? []
   );
 
-  // Rescale an integer coefficient string to a greater scale (right-pad with zeros).
-  function rescaleUp(coeff: string, fromScale: number, toScale: number): bigint {
-    const factor = BigInt(10) ** BigInt(toScale - fromScale);
-    return BigInt(coeff) * factor;
-  }
-
   // Per-commodity category amount rows for a transaction.
   // Returns one entry per commodity that has category postings.
   type CommodityAmount = {
@@ -71,46 +66,31 @@
     );
     if (catPostings.length === 0) return [];
 
-    // Group by commodity_id.
-    const byCommodity = new Map<number, PostingResponse[]>();
+    // Scale alignment and the normal-sign rule (negate income/liability/equity
+    // so activity reads positive) live in $lib/money/amount.ts, not here. This
+    // component used to carry its own rescaleUp and sign switch; every private
+    // copy of that logic in this repo has eventually drifted, and the ones that
+    // did shipped money bugs (T-45, T-46, T-47).
+    const totals = sumByCommodity(catPostings);
+
+    const representative = new Map<number, PostingResponse>();
     for (const p of catPostings) {
-      const group = byCommodity.get(p.commodity_id) ?? [];
-      group.push(p);
-      byCommodity.set(p.commodity_id, group);
+      if (!representative.has(p.commodity_id)) representative.set(p.commodity_id, p);
     }
 
-    const result: CommodityAmount[] = [];
-    for (const [commodityID, postings] of byCommodity) {
-      const maxScale = postings.reduce((s, p) => Math.max(s, p.quantity_scale), 0);
-
-      // Activity-positive sum: expense debit (positive raw) = +; income credit (negative raw) = +.
-      // For income/liability/equity, negate the raw coefficient so credits become positive.
-      let sum = BigInt(0);
-      for (const p of postings) {
-        const rescaled = rescaleUp(p.quantity_value, p.quantity_scale, maxScale);
-        if (p.account_class === 'income' || p.account_class === 'liability' || p.account_class === 'equity') {
-          sum += -rescaled;
-        } else {
-          sum += rescaled;
-        }
-      }
-
-      const isPositive = sum >= BigInt(0);
-      const absSum = isPositive ? sum : -sum;
-      const displayValue = formatQuantity(absSum.toString(), maxScale, locale);
-
-      const rep = postings[0];
-      result.push({
-        commodityID,
+    return totals.map((total) => {
+      const rep = representative.get(total.commodityID)!;
+      const isPositive = !total.value.startsWith('-');
+      const absValue = isPositive ? total.value : total.value.slice(1);
+      return {
+        commodityID: total.commodityID,
         commodityCode: rep.commodity_code,
         commoditySymbol: rep.commodity_symbol,
-        displayValue,
-        scale: maxScale,
+        displayValue: formatQuantity(absValue, total.scale, locale),
+        scale: total.scale,
         isPositive
-      });
-    }
-
-    return result;
+      };
+    });
   }
 
   // Counterpart labels: non-category (non-income/expense) postings, excluding system accounts.

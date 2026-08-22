@@ -33,9 +33,9 @@ func TestLoginSetsSessionCookieAndReturnsOwner(t *testing.T) {
 
 	response := res.Result()
 	cookies := response.Cookies()
-	require.Len(t, cookies, 1)
-	assert.Equal(t, sessionCookieName, cookies[0].Name)
-	assert.NotEmpty(t, cookies[0].Value)
+	sessionCookie := sessionCookieFrom(t, cookies)
+	assert.Equal(t, sessionCookieName, sessionCookie.Name)
+	assert.NotEmpty(t, sessionCookie.Value)
 }
 
 func TestLoginRejectsInvalidCredentials(t *testing.T) {

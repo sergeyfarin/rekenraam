@@ -1,3 +1,5 @@
+import { formatLedgerAmount } from '$lib/money/amount';
+
 /**
  * CSV export of what a report screen is showing.
  *
@@ -10,31 +12,29 @@
  *   decimal, with the commodity in its own column.
  * - **Quoting follows RFC 4180**, so a payee named `Smith, Jones & Co "The
  *   Grocer"` survives the round trip.
+ *
+ * `exactDecimal` delegates the actual digit-shifting to
+ * `$lib/money/amount.ts`'s `formatLedgerAmount` — the same plain-decimal
+ * formatter every editable amount input round-trips through — rather than
+ * reimplementing it here. Duplicated decimal-formatting helpers are a
+ * documented recurring bug class in this codebase (T-36/T-45/T-47, a silent
+ * 100x error from a second copy drifting out of sync); this module must not
+ * grow another one.
  */
 
 /** Renders an exact coefficient and scale as a plain decimal string. */
 export function exactDecimal(quantityValue: string, quantityScale: number): string {
   const scale = Number.isInteger(quantityScale) && quantityScale > 0 ? quantityScale : 0;
 
-  let coefficient: bigint;
-  try {
-    coefficient = BigInt(quantityValue);
-  } catch {
-    // A coefficient the backend could not have produced is passed through
-    // rather than guessed at: an unreadable cell is better than a wrong number.
+  // formatLedgerAmount trusts its input to be a signed digit string and does
+  // not validate it. A coefficient the backend could not have produced is
+  // passed through unchanged rather than guessed at: an unreadable cell in an
+  // exported file is better than a silently wrong number.
+  if (!/^-?\d+$/.test(quantityValue)) {
     return quantityValue;
   }
 
-  const negative = coefficient < 0n;
-  const digits = (negative ? -coefficient : coefficient).toString();
-  if (scale === 0) {
-    return `${negative ? '-' : ''}${digits}`;
-  }
-
-  const padded = digits.padStart(scale + 1, '0');
-  const whole = padded.slice(0, padded.length - scale);
-  const fraction = padded.slice(padded.length - scale);
-  return `${negative ? '-' : ''}${whole}.${fraction}`;
+  return formatLedgerAmount(quantityValue, scale);
 }
 
 /** Quotes one field per RFC 4180, only where quoting is actually needed. */

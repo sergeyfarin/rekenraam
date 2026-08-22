@@ -41,6 +41,13 @@ tree with a green pipeline (backlog T-43).
 ./scripts/test-backend.sh
 ```
 
+`COVERAGE=1 ./scripts/test-backend.sh` runs the same suite without `-race`,
+writes `backend/coverage.out`, and prints the merged total. CI runs this in a
+non-gating `backend-coverage` job and fails it below a soft floor
+(`scripts/check-coverage-floor.sh`, `COVERAGE_FLOOR` default 73.0%) — raise
+the floor deliberately when the level rises; never lower it to make a change
+pass.
+
 ### Local Owner Recovery
 
 Reset the owner password locally with a verified SQLite backup first:
@@ -63,7 +70,9 @@ printf '%s\n' 'new-password' | DATABASE_URL=file:backend/var/dev.sqlite go run .
 
 ### Online Provider Secret Key
 
-`REKENRAAM_SECRET_KEY` encrypts online provider credentials at rest. It must be
+`REKENRAAM_SECRET_KEY` encrypts online provider credentials **and the two-factor
+shared secret** at rest; without it, both connection creation and MFA enrolment
+return `CONFIG_REQUIRED` rather than storing anything in the clear. It must be
 base64 for exactly 32 random bytes:
 
 ```sh
@@ -137,7 +146,9 @@ pnpm test:release-preflight
 - Production generates a one-time setup token when `SETUP_TOKEN` is absent; operators should set a durable random token of at least 32 characters and enter it only for the first owner-creation request. See `docs/deployment-security.md`.
 - Forwarded proxy headers are ignored by default. Set `TRUST_PROXY_HEADERS=1` only when the app is behind a trusted reverse proxy that rewrites those headers, and set `TRUSTED_PROXY_CIDRS` to the proxy source ranges that are allowed to supply them.
 - Browser e2e tests live in `e2e/` and use Playwright. Keep them focused on user journeys that need a browser.
-- `e2e/playwright/release-preflight.spec.ts` is the local release preflight for critical financial workflows. It is intentionally serial against one fresh SQLite database and is not part of fast CI yet.
+- `e2e/playwright/release-preflight.spec.ts` is the local release preflight for critical financial workflows. It is intentionally serial against one fresh SQLite database and is not part of fast CI yet. Because it is `describe.serial`, a failure in the first test skips the rest of the file — check "did not run" counts before concluding a journey passed.
+- **Never hard-code a calendar date for a transaction, statement, or imported row in an e2e spec.** Everything a spec seeds is versioned as effective from *today*, and posting validation resolves account and commodity rules as of the entry date, so a date in the past relative to that seeded data matches no version and the posting is rejected. Use `todayISO()` / `todayQIF()` from `e2e/playwright/support.ts`. A hard-coded `2026-07-08` silently broke every browser transaction-entry journey once the wall clock passed it (fixed 2026-08-06).
+- **Assert a saved transaction with `expectSavedTransaction()`, not a bare `getByText(description)`.** Saving opens a detail panel, so the description can be on screen three times at once and a loose text locator fails Playwright strict mode — a failure that reads as "not saved" when the opposite is true. Note also that the list row shows the *payee* instead of the description when there is one, so asserting against the row alone is not portable either.
 - Docker assets live in `deploy/docker/` and must preserve the same single-app production shape as the binary.
 - `backend/var/`, `backend/internal/web/dist/`, and `dist/` contain local or generated files. Their README files are placeholders that keep those ignored directories present in Git.
 

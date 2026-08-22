@@ -25,7 +25,8 @@ Recovery) — it backs up and revokes sessions; never edit the users table.
 
 | Changed | Run |
 |---|---|
-| `backend/**` | `./scripts/test-backend.sh` (= `go test ./...`), plus `go vet ./...`, `gofmt -l .` in `backend/` |
+| `backend/**` | `./scripts/test-backend.sh` (= `go test -race ./...`), plus `go vet ./...`, `gofmt -l .` in `backend/` |
+| Backend coverage check (optional, same script) | `COVERAGE=1 ./scripts/test-backend.sh` — non-race coverage pass, prints the merged total; CI enforces a soft floor (`scripts/check-coverage-floor.sh`) |
 | `frontend/**` | `./scripts/test-frontend.sh` (openapi:generate + paraglide:compile + svelte-check); `pnpm --dir frontend run test` for unit-tested logic |
 | OpenAPI | both scripts above |
 | Integrated shape / static serving / embed | `pnpm build` (builds frontend, copies into `backend/internal/web/dist/`, runs embed test, compiles `dist/rekenraam`) |
@@ -47,7 +48,7 @@ non-trivial diff (yours or reviewed):
    auto-refresh.
 3. **TOCTOU guard races** — check + insert in separate statements/transactions.
 4. **Split-transaction crash holes** — a row and its idempotency marker written
-   in different transactions (open item T-06).
+   in different transactions (T-06, T-26 — both closed; the pattern recurs).
 5. **Cursor boundaries** — `<=` vs `<`, resume token vs incremental boundary
    (see `background-work`).
 6. **Unconsumed pagination** — frontend fetching page one and ignoring
@@ -69,6 +70,42 @@ non-trivial diff (yours or reviewed):
     against a real account (T-22). When testing a function that produces
     input for another service, add at least one test that calls the
     consumer for real, not just asserts on the producer's output shape.
+12. **Creation dates masquerading as financial facts** — stamping a record's
+    `effective_from`/`opened_on` with "today" makes every earlier posting
+    fail, so installing the app now and importing years of history breaks.
+    Shipped three times: commodities (T-42), user-created categories (T-43),
+    import-created holding accounts (T-44), each fixed by opening the record
+    at the genesis date `0001-01-01`. Ask of any new dated container: is this
+    date a real financial fact (account `opened_on` — keep it, it should
+    reject earlier postings) or app bookkeeping (everything above — genesis)?
+
+13. **A duplicated helper is only as fixed as its least-visited copy** — the
+    decimal-comma 100x error has now shipped **three** times from the same
+    two-line pattern, `input.replace(/,/g, '')` before parsing, which reads
+    `1,50` as 150. Fixed on the import side (T-36), then in the transaction
+    editor and reconcile form (T-45), and it was *still live* in all three
+    investment forms four months later (T-47) because the survey that scoped
+    T-45 treated those forms as a later slice. The fix each time was correct;
+    the **sweep** was what failed. So: when fixing a helper that exists in more
+    than one place, grep the whole tree for the *pattern* before declaring it
+    done, not just the copies the current ticket names — and count what you
+    find, because the T-47 survey said two copies and there were seven.
+
+14. **Consolidation that silently widens what is accepted** — retiring a
+    private helper onto a shared one is a behaviour change unless proven
+    otherwise. The investment forms' parsers rejected a leading `-` only as a
+    *side effect* of running `/^\d+$/` over the concatenated coefficient;
+    `parseDecimalAmount` handles signs properly, so a like-for-like swap would
+    have started accepting negative share quantities (T-47). Ask of any such
+    swap: what did the old code reject *incidentally* that the new code
+    accepts? Then make the rejection explicit and named, and test it where the
+    behaviour changed — per call site, not once on the shared module.
+
+    Corollary: if the call sites are `.svelte` files, that test is impossible
+    in place. This project has **no component-test harness** (no
+    `testing-library`, no `jsdom`; vitest runs plain `.ts` only), so the
+    validation has to be extracted to a module first. That is a feature, not an
+    obstacle — it is the same reason G-02 existed.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

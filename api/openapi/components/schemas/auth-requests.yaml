@@ -13,3 +13,27 @@ LoginRequest:
       description: Password for the single owner account.
       maxLength: 1024
   additionalProperties: false
+MFAPasswordRequest:
+  type: object
+  required:
+    - password
+  properties:
+    password:
+      type: string
+      description: >-
+        The account password, re-confirmed. Changing what protects the account
+        is not something a stolen session may do on its own.
+      maxLength: 1024
+  additionalProperties: false
+MFACodeRequest:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      description: >-
+        A six-digit authenticator code, or — when completing a login — a
+        single-use recovery code. Spaces and dashes are ignored.
+      maxLength: 64
+  additionalProperties: false

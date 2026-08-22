@@ -35,8 +35,13 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+// loginResponse carries either a completed login (user set) or the
+// instruction to present a second factor (mfa_required). Exactly one of the
+// two is meaningful, and the client must branch on mfa_required rather than
+// assuming a session exists (S-06).
 type loginResponse struct {
-	User OwnerResponse `json:"user"`
+	User        *OwnerResponse `json:"user,omitempty"`
+	MFARequired bool           `json:"mfa_required,omitempty"`
 }
 
 func sessionStatus(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
@@ -70,30 +75,198 @@ func login(logger *slog.Logger, authService *app.AuthService, options HandlerOpt
 		}
 
 		result, err := authService.Login(r.Context(), app.LoginInput{
-			Username: request.Username,
-			Password: request.Password,
-			ClientIP: loginClientIP(r, options),
+			Username:           request.Username,
+			Password:           request.Password,
+			ClientIP:           loginClientIP(r, options),
+			RequestID:          RequestIDFromContext(r.Context()),
+			TrustedDeviceToken: readTrustedDeviceToken(r),
 		})
 		if err != nil {
 			writeAuthServiceError(w, r, logger, "login owner", err)
 			return
 		}
 
+		// A password that verified but still owes a second factor gets no
+		// session cookie and no device approval — only the short-lived
+		// challenge.
+		if result.MFARequired {
+			writeMFAChallengeCookie(w, r, options, result.MFAChallengeToken, result.MFAChallengeLifetime)
+			writeJSON(w, http.StatusOK, loginResponse{MFARequired: true})
+			return
+		}
+
 		writeSessionCookie(w, r, options, result.SessionToken)
+		if result.TrustedDeviceToken != "" {
+			writeTrustedDeviceCookie(w, r, options, result.TrustedDeviceToken, result.TrustedDeviceLifetime)
+		}
 		writeJSON(w, http.StatusOK, loginResponse{
-			User: OwnerResponse{ID: result.User.ID, Username: result.User.Username},
+			User: &OwnerResponse{ID: result.User.ID, Username: result.User.Username},
 		})
 	}
 }
 
 func logout(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := authService.Logout(r.Context(), readSessionToken(r)); err != nil {
+		if err := authService.Logout(r.Context(), app.LogoutInput{
+			Token:     readSessionToken(r),
+			ClientIP:  loginClientIP(r, options),
+			RequestID: RequestIDFromContext(r.Context()),
+		}); err != nil {
 			writeAuthServiceError(w, r, logger, "logout owner", err)
 			return
 		}
 
 		clearSessionCookie(w, r, options)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}
+
+type authenticationEventResponse struct {
+	ID            int64  `json:"id"`
+	OccurredAt    string `json:"occurred_at"`
+	EventType     string `json:"event_type"`
+	Outcome       string `json:"outcome"`
+	Username      string `json:"username,omitempty"`
+	UserID        *int64 `json:"user_id,omitempty"`
+	AuthSessionID *int64 `json:"auth_session_id,omitempty"`
+	ClientIP      string `json:"client_ip,omitempty"`
+	FailureReason string `json:"failure_reason,omitempty"`
+	RequestID     string `json:"request_id,omitempty"`
+}
+
+type authenticationEventsResponse struct {
+	Events  []authenticationEventResponse `json:"events"`
+	HasMore bool                          `json:"has_more"`
+	// FailedLast24h makes a brute-force run visible without scanning the list.
+	FailedLast24h int `json:"failed_last_24h"`
+}
+
+// authenticationEvents exposes the authentication log to the owner (S-07).
+// Owner-only: the log names client IPs and attempted usernames, so it is not
+// something an unauthenticated caller may read.
+func authenticationEvents(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		limit := 50
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed <= 0 {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "limit is invalid")
+				return
+			}
+			limit = parsed
+		}
+		events, err := authService.AuthenticationEvents(r.Context(), limit)
+		if err != nil {
+			writeAuthServiceError(w, r, logger, "list authentication events", err)
+			return
+		}
+		responses := make([]authenticationEventResponse, 0, len(events.Events))
+		for _, event := range events.Events {
+			responses = append(responses, authenticationEventResponse{
+				ID: event.ID, OccurredAt: event.OccurredAt, EventType: event.EventType,
+				Outcome: event.Outcome, Username: event.Username, UserID: event.UserID,
+				AuthSessionID: event.AuthSessionID, ClientIP: event.ClientIP,
+				FailureReason: event.FailureReason, RequestID: event.RequestID,
+			})
+		}
+		writeJSON(w, http.StatusOK, authenticationEventsResponse{
+			Events: responses, HasMore: events.HasMore, FailedLast24h: events.FailedLast24h,
+		})
+	}
+}
+
+// --- Approved devices (S-04) ---
+
+const (
+	trustedDeviceCookieName       = "rekenraam_device"
+	secureTrustedDeviceCookieName = "__Host-rekenraam_device"
+)
+
+type trustedDeviceResponse struct {
+	ID              int64  `json:"id"`
+	CreatedAt       string `json:"created_at"`
+	LastUsedAt      string `json:"last_used_at"`
+	ExpiresAt       string `json:"expires_at"`
+	CreatedClientIP string `json:"created_client_ip,omitempty"`
+	Current         bool   `json:"current"`
+}
+
+type trustedDevicesResponse struct {
+	Devices []trustedDeviceResponse `json:"devices"`
+}
+
+// readTrustedDeviceToken reads the approved-device cookie. It is deliberately
+// never used for authentication — only to pick which login-throttle scope the
+// attempt spends.
+func readTrustedDeviceToken(r *http.Request) string {
+	for _, name := range []string{secureTrustedDeviceCookieName, trustedDeviceCookieName} {
+		if cookie, err := r.Cookie(name); err == nil {
+			return strings.TrimSpace(cookie.Value)
+		}
+	}
+
+	return ""
+}
+
+func writeTrustedDeviceCookie(w http.ResponseWriter, r *http.Request, options HandlerOptions, token string, lifetime time.Duration) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     requestTrustedDeviceCookieName(r, options),
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+		MaxAge:   int(lifetime.Seconds()),
+	})
+}
+
+func requestTrustedDeviceCookieName(r *http.Request, options HandlerOptions) string {
+	if requestUsesHTTPS(r, options) {
+		return secureTrustedDeviceCookieName
+	}
+
+	return trustedDeviceCookieName
+}
+
+func listTrustedDevices(logger *slog.Logger, authService *app.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		devices, err := authService.ListTrustedDevices(r.Context(), owner.ID, readTrustedDeviceToken(r))
+		if err != nil {
+			writeAuthServiceError(w, r, logger, "list trusted devices", err)
+			return
+		}
+		responses := make([]trustedDeviceResponse, 0, len(devices))
+		for _, device := range devices {
+			responses = append(responses, trustedDeviceResponse{
+				ID: device.ID, CreatedAt: device.CreatedAt, LastUsedAt: device.LastUsedAt,
+				ExpiresAt: device.ExpiresAt, CreatedClientIP: device.CreatedClientIP, Current: device.Current,
+			})
+		}
+		writeJSON(w, http.StatusOK, trustedDevicesResponse{Devices: responses})
+	}
+}
+
+func revokeTrustedDevice(logger *slog.Logger, authService *app.AuthService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		deviceID, ok := readPathInt64(w, r, "device_id", "trusted device id")
+		if !ok {
+			return
+		}
+		if err := authService.RevokeTrustedDevice(r.Context(), owner.ID, deviceID); err != nil {
+			writeAuthServiceError(w, r, logger, "revoke trusted device", err)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 }
@@ -111,6 +284,18 @@ func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
 		writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
+	case errors.Is(err, app.ErrSecretKeyMissing):
+		writeAPIError(w, http.StatusServiceUnavailable, "CONFIG_REQUIRED", "REKENRAAM_SECRET_KEY is not configured on the server")
+	case errors.Is(err, app.ErrMFAChallengeInvalid):
+		writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "the sign-in attempt expired, start again")
+	case errors.Is(err, app.ErrMFACodeInvalid):
+		writeAPIError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid authentication code")
+	case errors.Is(err, app.ErrMFANotEnrolled):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "multi-factor authentication is not enrolled")
+	case errors.Is(err, app.ErrMFAAlreadyActive):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", "multi-factor authentication is already active")
+	case errors.Is(err, app.ErrTrustedDeviceNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "trusted device not found")
 	case errors.Is(err, app.ErrSetupRequired):
 		writeAPIError(w, http.StatusConflict, "SETUP_REQUIRED", "owner setup is required before login")
 	case errors.Is(err, app.ErrInvalidCredentials):

@@ -21,6 +21,27 @@ jobs:
       - name: Run backend tests
         run: ./scripts/test-backend.sh
 
+  backend-coverage:
+    name: Backend Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+      - name: Run backend tests with coverage
+        # pipefail: without it, tee's exit status would hide a failing suite.
+        run: |
+          set -o pipefail
+          COVERAGE=1 ./scripts/test-backend.sh | tee coverage-summary.txt
+      - name: Upload coverage profile
+        uses: actions/upload-artifact@v5
+        with:
+          name: backend-coverage-profile
+          path: backend/coverage.out
+      - name: Report and enforce the coverage floor
+        run: ./scripts/check-coverage-floor.sh coverage-summary.txt
+
   frontend-check:
     name: Frontend Check
     runs-on: ubuntu-latest

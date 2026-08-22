@@ -71,6 +71,14 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Investment lots and lot events are durable accounting facts. FIFO is the
   default disposal method until a user-selected cost-basis policy says
   otherwise; never infer cost basis from current holdings alone.
+- A commodity's first version is effective from `db.CommodityGenesisDate`
+  (`0001-01-01`), not its creation date. When you enabled a currency or added
+  an instrument is app bookkeeping, not a financial fact, and posting rules
+  resolve the commodity as of the entry date — so a creation-dated first
+  version rejects all earlier history (T-42). Real later changes (archive,
+  rename, scale) are new versions with real effective dates. Account
+  `opened_on` is the opposite case: a genuine financial fact that legitimately
+  rejects earlier postings.
 - Market prices, FX rates, manual prices, provider prices, and trade-implied
   prices must use the generic commodity-pair pricing model: `price_series`
   identifies the source/quote-type/adjustment-basis stream, and
@@ -121,6 +129,16 @@ When a feature introduces a durable new rule, update one of those documents in t
   commodity kind. A commodity's own `max_quantity_scale` may be lower.
 - Standard/display scale is independent from maximum storage scale; do not
   render trailing places merely because a commodity permits them.
+- **In OpenAPI a quantity coefficient is `type: string` with the shared
+  `pattern: '^-?(0|[1-9][0-9]{0,37})$'`, never `type: integer`.** The
+  generator turns `integer` into a TypeScript `number`, which silently
+  reintroduces exactly the JavaScript precision loss the string form exists to
+  prevent — and because `Coefficient.UnmarshalJSON` also accepts a bare JSON
+  number, the backend keeps working and nothing fails loudly. Seven investment
+  schemas drifted this way undetected until 2026-08-06. Amount fields backed
+  by a real Go `int64` (`cash_amount_value`, `cost_basis_value`,
+  `price_value`) stay `integer`; the distinguishing question is whether the Go
+  field is `exact.Coefficient`.
 ## Data And Persistence Conventions
 
 - Never store money or quantities as floating point.
@@ -150,7 +168,7 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Physical (hard) delete is allowed only for never-posted drafts. Posted financial records must use void, soft-delete, archive, or corrective-entry workflows even when unreconciled.
 - Keep transaction lifecycle separate from reconciliation state. The transaction lifecycle is `draft`, `posted`, and `voided`; whether a transaction affects the ledger is determined by that lifecycle plus the soft-delete flag. `uncleared`, `cleared`, and `reconciled` describe account-posting verification and are an independent axis.
 - "Unsaved entry" (working copy) is **not** a transaction status. It is in-progress UI entry that has no `transactions` or `transaction_versions` row yet: half-typed forms and pre-save editor state held only in the browser. An unsaved entry triggers no background work — no FX/commodity-rate coverage, no base-currency conversion, no validation side effects — because nothing is persisted. It becomes a `draft` or `posted` transaction only when the user (or the import commit step) saves it. Do not call persisted `draft` rows "unsaved"; do not call an unsaved working copy a "draft."
-- `draft` is a reserved persisted lifecycle status, distinct from an unsaved entry, and is **system-only, not a user-facing maturity step**. A draft is a real `transaction_versions` row excluded from the posted ledger and reports. Manual transaction entry goes directly to `posted`: there is no user-facing "save as draft" action and users do not pick `draft`. No current UI workflow produces drafts. Future machine/async producers such as import commit awaiting review, scheduled generation, or explicit crash-recovery autosave may activate it and must own a dedicated review/discard surface. The general transaction table excludes drafts. A future owner-facing Unfinished Work inbox may link to each producing workflow without turning draft into a maturity tier. Because a draft is durable persisted work, it may trigger supporting background preparation such as FX/commodity-rate coverage; that preparation never makes a draft part of ledger balances or reports.
+- `draft` is a reserved persisted lifecycle status, distinct from an unsaved entry, and is **system-only, not a user-facing maturity step**. A draft is a real `transaction_versions` row excluded from the posted ledger and reports. Manual transaction entry goes directly to `posted`: there is no user-facing "save as draft" action and users do not pick `draft`. No current UI workflow produces drafts. Future machine/async producers such as import commit awaiting review, scheduled generation, or explicit crash-recovery autosave may activate it and must own a dedicated review/discard surface. The general transaction table excludes drafts. A future owner-facing Unfinished Work inbox may link to each producing workflow without turning draft into a maturity tier. Drafts do **not** trigger background FX/commodity-rate coverage today: the coverage trigger (`fx_work_after_posting_version_insert`) fires on `posted` versions only, so a promoted draft's foreign-currency dates get coverage at promotion. That is the intended behavior — a future draft producer that needs converted amounts on the review surface itself may extend coverage to drafts, and such preparation would still never make a draft part of ledger balances or reports.
 - `posted` means the transaction is entered and participates in the ledger and reports. "Entered" covers manual entry (the default and only outcome of manual entry), bank/file import (after commit), and anything already existing in the ledger; posted does not imply reconciled. Posted transactions remain directly editable.
 - The user-facing maturity line is **reconciled vs not reconciled**, not draft vs posted. Before a posting is locked by a reconciliation checkpoint it is freely editable and removable; after, changes are guarded (see the reconciliation rule below). Do not present draft-vs-posted to users as the thing that gates editability.
 - Two distinct removal workflows apply to posted transactions, and they are not interchangeable:
@@ -237,7 +255,22 @@ When a feature introduces a durable new rule, update one of those documents in t
 - UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.
 - Do not concatenate translated fragments to form sentences.
 - Formatting of numbers, dates, percentages, and money must be locale-aware and separate from message translation.
-- Use **Dinero.js v2** for all frontend money arithmetic and display (balance checks before submission, running totals, input parsing). Use `Intl.NumberFormat` via Dinero's formatting layer for locale-aware rendering.
+- All frontend money **parsing and exact arithmetic** goes through
+  `frontend/src/lib/money/amount.ts` — one module, string/BigInt arithmetic over the
+  ledger's `{ value, scale }` pair, never a JS `Number`. Do not add a second parser or
+  a private copy of a helper to a `.svelte` file; this is the frontend counterpart of
+  the backend's `exact.ScaledInt` rule above, and every copy that existed had drifted.
+- All frontend money **display** goes through `frontend/src/lib/money/format.ts`
+  (`formatQuantity`) — locale-aware presentation via `Intl.NumberFormat` over a
+  `BigInt`, for read-only money only. **No money-formatting dependency**: G-08 was
+  settled against Dinero.js on 2026-08-08 and the package was removed. Dinero
+  formats through `Intl` anyway, its default calculator is JS numbers, and it models
+  a fixed exponent per currency, which is the wrong shape for a ledger that stores a
+  24-scale crypto quantity beside a 2-scale euro. The reasoning is in `format.ts`.
+- The two halves of `$lib/money` are not interchangeable, and a report or export must
+  pick the right one rather than growing inline math: `format.ts` for anything a user
+  only reads, `amount.ts` (`formatLedgerAmount`) for anything that must round-trip
+  back into an editable input unchanged. `format.test.ts` pins the difference.
 - Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
 - Report calculations must be backend-composed read models with explicit filter
   contracts. Reuse the same report semantics across full report pages,
@@ -303,14 +336,14 @@ When a feature introduces a durable new rule, update one of those documents in t
 - `GET`, `HEAD`, and `OPTIONS` endpoints must not mutate durable state.
 - Password hashing uses **Argon2id** via `golang.org/x/crypto/argon2`. Store hashes in a self-describing format, such as PHC string format, with algorithm and parameters. Start from the OWASP minimum profile of 19 MiB memory, 2 iterations, and parallelism 1, then tune if local hardware requires it. Never store plaintext or reversibly encrypted passwords.
 - Owner passwords must be at least 12 Unicode characters and at most 1024 bytes. Apply the same policy to owner setup and local owner recovery; login may accept existing shorter passwords only if such hashes were created by an older build.
-- `REKENRAAM_SECRET_KEY` encrypts reusable online provider credentials at rest. It must be base64 for exactly 32 random bytes, must live in operator configuration or a deployment secret manager, must never be committed, and must be backed up with the SQLite database.
-- Losing `REKENRAAM_SECRET_KEY` makes stored online provider credentials unreadable but does not invalidate imported ledger data. Until an in-place rotation command exists, the documented recovery and intentional-rotation path is backup-first deletion and re-creation of affected online import connections with fresh provider credentials.
+- `REKENRAAM_SECRET_KEY` encrypts reusable online provider credentials **and the MFA shared secret** at rest. It must be base64 for exactly 32 random bytes, must live in operator configuration or a deployment secret manager, must never be committed, and must be backed up with the SQLite database.
+- Losing `REKENRAAM_SECRET_KEY` makes stored online provider credentials and any MFA enrolment unreadable but does not invalidate imported ledger data. A login can still be completed with a recovery code, which is hashed rather than sealed — the MFA verification path deliberately falls through to recovery codes when the secret cannot be opened, because that is the situation those codes exist for. Until an in-place rotation command exists, the documented recovery and intentional-rotation path is backup-first deletion and re-creation of affected online import connections with fresh provider credentials.
 - Mutating browser API routes must reject non-JSON request bodies unless a feature explicitly documents another content type. Mutating browser API routes must validate same-origin requests before business logic runs; authenticated mutations must also validate the session-bound CSRF token.
 - Public deployment requires HTTPS and the reverse-proxy/operator guidance in `docs/deployment-security.md`; the app HTTP listener must not be exposed directly to the internet.
-- Public deployment with real financial data is prohibited until MFA has both an approved design and implementation.
+- MFA (TOTP + single-use recovery codes) shipped 2026-08-07. Public deployment with real financial data requires the owner account to be **enrolled**, not merely that the feature exists. Second-factor failures spend the same login-throttle budget as password failures, a code cannot be replayed within its own step, and enrolling, disabling, or regenerating recovery codes each re-confirm the password so a stolen session cannot change what protects the account.
 - Localhost development may use HTTP.
 - LAN/private-network deployments should use HTTPS through a reverse proxy; the app does not terminate TLS or accept certificate/key configuration. Browser-warning-free LAN/private HTTPS requires either a real trusted certificate for a domain or installing a trusted local certificate authority on every client device.
-- Local-network use may ship before MFA if authentication and operator guidance are clear.
+- Local-network use may run without MFA enrolled if authentication and operator guidance are clear.
 - SQLite database encryption is deferred for early local use, but docs must explain when encrypted-at-rest storage may be needed.
 - SQLite database, WAL, SHM, and generated backup files must be mode `0600`; keep their containing data directory private to the service account.
 - Docker Compose must package the same app shape as the single binary.

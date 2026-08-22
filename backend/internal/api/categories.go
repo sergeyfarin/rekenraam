@@ -48,8 +48,6 @@ type createCategoryRequest struct {
 	ParentCategoryID *int64 `json:"parent_category_id"`
 	AllowsPostings   *bool  `json:"allows_postings"`
 	Icon             string `json:"icon"`
-	OpenedOn         string `json:"opened_on"`
-	EffectiveFrom    string `json:"effective_from"`
 	ChangeReason     string `json:"change_reason"`
 }
 
@@ -61,7 +59,6 @@ type updateCategoryRequest struct {
 	ClearParent      bool    `json:"clear_parent"`
 	AllowsPostings   *bool   `json:"allows_postings"`
 	Icon             *string `json:"icon"`
-	OpenedOn         string  `json:"opened_on"`
 	EffectiveFrom    string  `json:"effective_from"`
 	ChangeReason     string  `json:"change_reason"`
 }
@@ -144,8 +141,6 @@ func createCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 			ParentCategoryID: request.ParentCategoryID,
 			AllowsPostings:   request.AllowsPostings,
 			Icon:             request.Icon,
-			OpenedOn:         request.OpenedOn,
-			EffectiveFrom:    request.EffectiveFrom,
 			ChangeReason:     request.ChangeReason,
 		})
 		if err != nil {
@@ -189,7 +184,6 @@ func updateCategory(logger *slog.Logger, authService *app.AuthService, categoryS
 			ClearParent:      request.ClearParent,
 			AllowsPostings:   request.AllowsPostings,
 			Icon:             request.Icon,
-			OpenedOn:         request.OpenedOn,
 			EffectiveFrom:    request.EffectiveFrom,
 			ChangeReason:     request.ChangeReason,
 		})
