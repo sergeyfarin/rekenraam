@@ -47,8 +47,7 @@ preconditions. Also in `roadmap.md`.
 
 **Awaiting an owner decision:** who reviews the drafted translations for the
 five target languages (they are drafted, not natively reviewed — see the
-localization item below), and whether T-47 (investment trades cannot override a
-reconciliation lock) is worth scheduling.
+localization item below). T-47 is done — see `backlog.md`.
 
 ## Current initiative — R2 reports (see roadmap.md)
 

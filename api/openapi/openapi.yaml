@@ -209,6 +209,16 @@ paths:
     $ref: "./paths/investments-dividend.yaml"
   /api/v1/investments/reinvested-dividend:
     $ref: "./paths/investments-reinvested-dividend.yaml"
+  /api/v1/investments/buy/reconciliation-impact:
+    $ref: "./paths/investments-buy-reconciliation-impact.yaml"
+  /api/v1/investments/sell/reconciliation-impact:
+    $ref: "./paths/investments-sell-reconciliation-impact.yaml"
+  /api/v1/investments/write-off/reconciliation-impact:
+    $ref: "./paths/investments-write-off-reconciliation-impact.yaml"
+  /api/v1/investments/dividend/reconciliation-impact:
+    $ref: "./paths/investments-dividend-reconciliation-impact.yaml"
+  /api/v1/investments/reinvested-dividend/reconciliation-impact:
+    $ref: "./paths/investments-reinvested-dividend-reconciliation-impact.yaml"
   /api/v1/investments/events:
     $ref: "./paths/investments-events.yaml"
   /api/v1/investments/event-suggestions:

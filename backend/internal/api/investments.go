@@ -608,6 +608,70 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 	}
 }
 
+// investmentTradeReconciliationImpact previews which checkpoints a trade would
+// invalidate. It is a read-only preview like sell/preview, so it takes no CSRF
+// token and persists nothing; the UI calls it to name the checkpoints in its
+// confirmation before retrying with reconciliation_override (T-47).
+func investmentTradeReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, kind app.InvestmentImpactKind) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request investmentTradeRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.TradeReconciliationImpact(r.Context(), kind, toInvestmentTradeInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "investment reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func dividendReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request dividendRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.DividendReconciliationImpact(r.Context(), toDividendInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "dividend reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func reinvestedDividendReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request reinvestedDividendRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReinvestedDividendReconciliationImpact(r.Context(), toReinvestedDividendInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reinvested dividend reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
 func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions, action string) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -649,15 +713,7 @@ func createDividend(logger *slog.Logger, authService *app.AuthService, investmen
 			writeDecodeError(w, err)
 			return
 		}
-		transaction, err := investmentService.Dividend(r.Context(), app.DividendInput{
-			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
-			TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, CashAccountID: request.CashAccountID,
-			CashCommodityID: request.CashCommodityID, IncomeAccountID: request.IncomeAccountID, AmountValue: request.AmountValue,
-			AmountScale: request.AmountScale, WithholdingValue: request.WithholdingValue, WithholdingScale: request.WithholdingScale,
-			WithholdingAccountID: request.WithholdingAccountID, Memo: request.Memo, PayeeID: request.PayeeID,
-			Status: request.Status, ChangeReason: request.ChangeReason,
-			ReconciliationOverride: request.ReconciliationOverride,
-		})
+		transaction, err := investmentService.Dividend(r.Context(), toDividendInput(owner, r, request))
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "create dividend", err)
 			return
@@ -677,14 +733,7 @@ func createReinvestedDividend(logger *slog.Logger, authService *app.AuthService,
 			writeDecodeError(w, err)
 			return
 		}
-		result, err := investmentService.ReinvestedDividend(r.Context(), app.ReinvestedDividendInput{
-			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
-			TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
-			IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
-			AmountValue: request.AmountValue, AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
-			Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
-			ReconciliationOverride: request.ReconciliationOverride,
-		})
+		result, err := investmentService.ReinvestedDividend(r.Context(), toReinvestedDividendInput(owner, r, request))
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "create reinvested dividend", err)
 			return
@@ -915,6 +964,29 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 		CashAmountValue: request.CashAmountValue, CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
+		ReconciliationOverride: request.ReconciliationOverride,
+	}
+}
+
+func toDividendInput(owner app.Owner, r *http.Request, request dividendRequest) app.DividendInput {
+	return app.DividendInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, CashAccountID: request.CashAccountID,
+		CashCommodityID: request.CashCommodityID, IncomeAccountID: request.IncomeAccountID, AmountValue: request.AmountValue,
+		AmountScale: request.AmountScale, WithholdingValue: request.WithholdingValue, WithholdingScale: request.WithholdingScale,
+		WithholdingAccountID: request.WithholdingAccountID, Memo: request.Memo, PayeeID: request.PayeeID,
+		Status: request.Status, ChangeReason: request.ChangeReason,
+		ReconciliationOverride: request.ReconciliationOverride,
+	}
+}
+
+func toReinvestedDividendInput(owner app.Owner, r *http.Request, request reinvestedDividendRequest) app.ReinvestedDividendInput {
+	return app.ReinvestedDividendInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
+		IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
+		AmountValue: request.AmountValue, AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
+		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
 		ReconciliationOverride: request.ReconciliationOverride,
 	}
 }

@@ -12,9 +12,15 @@
     getDividendDefaults,
     recordDividend,
     recordReinvestedDividend,
+    dividendReconciliationImpact,
+    reinvestedDividendReconciliationImpact,
     type InvestmentInstrumentResponse,
-    type DividendDefaultResponse
+    type DividendDefaultResponse,
+    type DividendRequest,
+    type ReinvestedDividendRequest,
+    type ReconciliationImpactResponse
   } from '$lib/api/investments';
+  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
 
   let {
     mode = 'cash',
@@ -84,6 +90,17 @@
   let memo = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+
+  // Both dividend shapes can be backdated into a reconciled period, so both get
+  // the same named confirmation as the trade forms (T-47). The pending payload
+  // is tagged so the confirm handler knows which route to retry.
+  type PendingDividend =
+    | { mode: 'cash'; payload: DividendRequest }
+    | { mode: 'reinvest'; payload: ReinvestedDividendRequest };
+  let reconciliationModal = $state<{
+    impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    pending: PendingDividend;
+  } | null>(null);
 
   function todayISO(): string {
     return new Date().toISOString().slice(0, 10);
@@ -237,25 +254,33 @@
           pending = false;
           return;
         }
-        await recordDividend(
-          {
-            transaction_date: transactionDate,
-            commodity_id: selectedInstrument?.commodity_id,
-            cash_account_id: Number(cashAccountID),
-            cash_commodity_id: cashCommodityID,
-            income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            amount_value: amountInt,
-            amount_scale: amount.scale,
-            withholding_value: withholdingInt !== null ? withholdingInt : undefined,
-            withholding_scale: withholdingInt !== null ? withholding.scale : undefined,
-            withholding_account_id:
-              withholdingInt !== null && withholdingAccountID
-                ? Number(withholdingAccountID)
-                : undefined,
-            memo: memo.trim() || undefined
-          },
-          csrfToken
-        );
+        const payload: DividendRequest = {
+          transaction_date: transactionDate,
+          commodity_id: selectedInstrument?.commodity_id,
+          cash_account_id: Number(cashAccountID),
+          cash_commodity_id: cashCommodityID,
+          income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
+          amount_value: amountInt,
+          amount_scale: amount.scale,
+          withholding_value: withholdingInt !== null ? withholdingInt : undefined,
+          withholding_scale: withholdingInt !== null ? withholding.scale : undefined,
+          withholding_account_id:
+            withholdingInt !== null && withholdingAccountID
+              ? Number(withholdingAccountID)
+              : undefined,
+          memo: memo.trim() || undefined
+        };
+
+        const impact = await dividendReconciliationImpact(payload);
+        if (impact.affected_checkpoints.length > 0) {
+          reconciliationModal = {
+            impacts: impact.affected_checkpoints,
+            pending: { mode: 'cash', payload }
+          };
+          return;
+        }
+
+        await recordDividend(payload, csrfToken);
       } else {
         if (!selectedInstrument) return;
         const qty = parseDecimalField(quantityStr);
@@ -267,31 +292,68 @@
           return;
         }
 
-        await recordReinvestedDividend(
-          {
-            transaction_date: transactionDate,
-            commodity_id: selectedInstrument.commodity_id,
-            holding_account_id: Number(holdingAccountID),
-            income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-            quantity_value: qtyInt,
-            quantity_scale: qty.scale,
-            amount_value: amountInt,
-            amount_scale: amount.scale,
-            cash_commodity_id: cashCommodityID,
-            memo: memo.trim() || undefined
-          },
-          csrfToken
-        );
+        const payload: ReinvestedDividendRequest = {
+          transaction_date: transactionDate,
+          commodity_id: selectedInstrument.commodity_id,
+          holding_account_id: Number(holdingAccountID),
+          income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
+          quantity_value: qtyInt,
+          quantity_scale: qty.scale,
+          amount_value: amountInt,
+          amount_scale: amount.scale,
+          cash_commodity_id: cashCommodityID,
+          memo: memo.trim() || undefined
+        };
+
+        const impact = await reinvestedDividendReconciliationImpact(payload);
+        if (impact.affected_checkpoints.length > 0) {
+          reconciliationModal = {
+            impacts: impact.affected_checkpoints,
+            pending: { mode: 'reinvest', payload }
+          };
+          return;
+        }
+
+        await recordReinvestedDividend(payload, csrfToken);
       }
 
-      await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
-      await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
-      onSaved();
+      await refreshAfterSave();
     } catch (err) {
       formError = err;
     } finally {
       pending = false;
     }
+  }
+
+  async function confirmOverride() {
+    if (!reconciliationModal) return;
+    const target = reconciliationModal.pending;
+    reconciliationModal = null;
+    pending = true;
+    formError = undefined;
+
+    try {
+      if (target.mode === 'cash') {
+        await recordDividend({ ...target.payload, reconciliation_override: true }, csrfToken);
+      } else {
+        await recordReinvestedDividend(
+          { ...target.payload, reconciliation_override: true },
+          csrfToken
+        );
+      }
+
+      await refreshAfterSave();
+    } catch (err) {
+      formError = err;
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function refreshAfterSave() {
+    await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    onSaved();
   }
 
   const title = $derived(mode === 'cash' ? m.investments_dividend_title() : m.investments_reinvested_title());
@@ -301,6 +363,15 @@
       : (mode === 'cash' ? m.investments_dividend_submit() : m.investments_reinvested_submit())
   );
 </script>
+
+{#if reconciliationModal}
+  <ReconciliationConfirm
+    impacts={reconciliationModal.impacts}
+    {pending}
+    onCancel={() => (reconciliationModal = null)}
+    onConfirm={confirmOverride}
+  />
+{/if}
 
 <form onsubmit={handleSubmit} class="space-y-4">
   <h2 class="text-base font-semibold text-foreground">{title}</h2>

@@ -10,8 +10,12 @@
     investmentInstrumentsQueryKey,
     searchInvestmentInstruments,
     recordBuy,
-    type InvestmentInstrumentResponse
+    buyReconciliationImpact,
+    type InvestmentInstrumentResponse,
+    type InvestmentTradeRequest,
+    type ReconciliationImpactResponse
   } from '$lib/api/investments';
+  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
 
   let {
     csrfToken,
@@ -67,6 +71,14 @@
   let memo = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+
+  // A backdated buy can land inside a reconciled period. Rather than letting
+  // the server refuse it with no way forward, preview the impact and let the
+  // user accept the named consequences (T-47).
+  let reconciliationModal = $state<{
+    impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    payload: InvestmentTradeRequest;
+  } | null>(null);
 
   function todayISO(): string {
     return new Date().toISOString().slice(0, 10);
@@ -165,36 +177,71 @@
       return;
     }
 
+    const payload: InvestmentTradeRequest = {
+      transaction_date: transactionDate,
+      commodity_id: selectedInstrument.commodity_id,
+      holding_account_id: Number(holdingAccountID),
+      cash_account_id: Number(cashAccountID),
+      quantity_value: qtyInt,
+      quantity_scale: qty.scale,
+      cash_amount_value: cashInt,
+      cash_amount_scale: cash.scale,
+      cash_commodity_id: cashCommodityID,
+      memo: memo.trim() || undefined
+    };
+
     pending = true;
     formError = undefined;
 
     try {
-      await recordBuy(
-        {
-          transaction_date: transactionDate,
-          commodity_id: selectedInstrument.commodity_id,
-          holding_account_id: Number(holdingAccountID),
-          cash_account_id: Number(cashAccountID),
-          quantity_value: qtyInt,
-          quantity_scale: qty.scale,
-          cash_amount_value: cashInt,
-          cash_amount_scale: cash.scale,
-          cash_commodity_id: cashCommodityID,
-          memo: memo.trim() || undefined
-        },
-        csrfToken
-      );
+      const impact = await buyReconciliationImpact(payload);
+      if (impact.affected_checkpoints.length > 0) {
+        // Hand the decision to the user rather than overriding for them.
+        reconciliationModal = { impacts: impact.affected_checkpoints, payload };
+        return;
+      }
 
-      await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
-      await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
-      onSaved();
+      await submitBuy(payload, false);
     } catch (err) {
       formError = err;
     } finally {
       pending = false;
     }
   }
+
+  async function confirmOverride() {
+    if (!reconciliationModal) return;
+    const { payload } = reconciliationModal;
+    reconciliationModal = null;
+    pending = true;
+    formError = undefined;
+
+    try {
+      await submitBuy(payload, true);
+    } catch (err) {
+      formError = err;
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function submitBuy(payload: InvestmentTradeRequest, override: boolean) {
+    await recordBuy(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+
+    await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    onSaved();
+  }
 </script>
+
+{#if reconciliationModal}
+  <ReconciliationConfirm
+    impacts={reconciliationModal.impacts}
+    {pending}
+    onCancel={() => (reconciliationModal = null)}
+    onConfirm={confirmOverride}
+  />
+{/if}
 
 <form onsubmit={handleSubmit} class="space-y-4">
   <h2 class="text-base font-semibold text-foreground">{m.investments_buy_title()}</h2>

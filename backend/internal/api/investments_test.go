@@ -677,6 +677,94 @@ func TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates(t *testing
 	require.True(t, invalidated, "the checkpoint the trade backdated past is invalidated")
 }
 
+// TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates is
+// the other half of T-47. An override the user cannot see the consequences of
+// is barely better than no override, so the UI names the checkpoints first —
+// and a preview is only worth having if it plans the same postings the write
+// does. This pins preview and write to the same answer rather than trusting
+// that they share a builder.
+func TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEADCO5")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, holding.ID)
+
+	backdated := investmentTradeRequest{
+		TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+		QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "delisted, written off",
+	}
+
+	// The preview persists nothing, so it needs no CSRF token — same as
+	// sell/preview.
+	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/write-off/reconciliation-impact", backdated, http.StatusOK)
+	var preview reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
+
+	require.Len(t, preview.AffectedCheckpoints, 1)
+	require.Equal(t, checkpointID, preview.AffectedCheckpoints[0].CheckpointID)
+	require.Equal(t, holding.ID, preview.AffectedCheckpoints[0].AccountID)
+	require.Equal(t, "2026-02-01", preview.AffectedCheckpoints[0].StatementDate)
+	require.NotEmpty(t, preview.AffectedCheckpoints[0].AccountLabel, "the warning names the account, not just its id")
+
+	// Nothing was written: the trade is still refused without the override.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		backdated, http.StatusConflict)
+
+	// And the write invalidates exactly what the preview named.
+	withOverride := backdated
+	withOverride.ReconciliationOverride = true
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off",
+		withOverride, http.StatusCreated)
+
+	invalidated := make([]int64, 0, 1)
+	for _, checkpoint := range listCheckpointsForSession(t, handler, f.sessionCookie, holding.ID) {
+		if checkpoint.Status == "invalidated" {
+			invalidated = append(invalidated, checkpoint.ID)
+		}
+	}
+	require.Equal(t, []int64{checkpointID}, invalidated, "preview and write agree on which checkpoints are affected")
+}
+
+// A trade that lands clear of every checkpoint must preview as empty, so the UI
+// submits straight through instead of asking the user to confirm nothing.
+func TestInvestmentReconciliationImpact_EmptyWhenNoCheckpointIsCrossed(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DEADCO6")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/write-off/reconciliation-impact", investmentTradeRequest{
+			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			QuantityValue: exact.New(10), QuantityScale: 0, ChangeReason: "worthless",
+		}, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&impact))
+	require.Empty(t, impact.AffectedCheckpoints)
+}
+
 func listCheckpointsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, accountID int64) []reconciliationCheckpointResponse {
 	t.Helper()
 

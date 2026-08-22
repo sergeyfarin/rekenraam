@@ -11,10 +11,14 @@
     searchInvestmentInstruments,
     previewSell,
     recordSell,
+    sellReconciliationImpact,
     type InvestmentInstrumentResponse,
+    type InvestmentTradeRequest,
+    type ReconciliationImpactResponse,
     type SellPreviewResponse,
     type CostBasisMethod
   } from '$lib/api/investments';
+  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
   import { formatScaledValue, costBasisMethodLabel } from '$lib/investments/investment-labels';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
@@ -75,6 +79,13 @@
   let memo = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+
+  // See buy-form: a backdated sell must be able to proceed deliberately rather
+  // than being refused with no way forward (T-47).
+  let reconciliationModal = $state<{
+    impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    payload: InvestmentTradeRequest;
+  } | null>(null);
 
   // Sell preview state
   let preview = $state<SellPreviewResponse | null>(null);
@@ -237,35 +248,60 @@
       return;
     }
 
+    const payload: InvestmentTradeRequest = {
+      transaction_date: transactionDate,
+      commodity_id: selectedInstrument.commodity_id,
+      holding_account_id: Number(holdingAccountID),
+      cash_account_id: Number(cashAccountID),
+      quantity_value: qtyInt,
+      quantity_scale: qty.scale,
+      cash_amount_value: cashInt,
+      cash_amount_scale: cash.scale,
+      cash_commodity_id: cashCommodityID,
+      cost_basis_method: costBasisMethod,
+      memo: memo.trim() || undefined
+    };
+
     pending = true;
     formError = undefined;
 
     try {
-      await recordSell(
-        {
-          transaction_date: transactionDate,
-          commodity_id: selectedInstrument.commodity_id,
-          holding_account_id: Number(holdingAccountID),
-          cash_account_id: Number(cashAccountID),
-          quantity_value: qtyInt,
-          quantity_scale: qty.scale,
-          cash_amount_value: cashInt,
-          cash_amount_scale: cash.scale,
-          cash_commodity_id: cashCommodityID,
-          cost_basis_method: costBasisMethod,
-          memo: memo.trim() || undefined
-        },
-        csrfToken
-      );
+      const impact = await sellReconciliationImpact(payload);
+      if (impact.affected_checkpoints.length > 0) {
+        reconciliationModal = { impacts: impact.affected_checkpoints, payload };
+        return;
+      }
 
-      await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
-      await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
-      onSaved();
+      await submitSell(payload, false);
     } catch (err) {
       formError = err;
     } finally {
       pending = false;
     }
+  }
+
+  async function confirmOverride() {
+    if (!reconciliationModal) return;
+    const { payload } = reconciliationModal;
+    reconciliationModal = null;
+    pending = true;
+    formError = undefined;
+
+    try {
+      await submitSell(payload, true);
+    } catch (err) {
+      formError = err;
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function submitSell(payload: InvestmentTradeRequest, override: boolean) {
+    await recordSell(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+
+    await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    onSaved();
   }
 
   // specific_lot excluded until lot-allocation picker UI is added (requires per-lot selection UI)
@@ -275,6 +311,15 @@
     return formatScaledValue(gain, scale, locale);
   }
 </script>
+
+{#if reconciliationModal}
+  <ReconciliationConfirm
+    impacts={reconciliationModal.impacts}
+    {pending}
+    onCancel={() => (reconciliationModal = null)}
+    onConfirm={confirmOverride}
+  />
+{/if}
 
 <form onsubmit={handleSubmit} class="space-y-4">
   <h2 class="text-base font-semibold text-foreground">{m.investments_sell_title()}</h2>

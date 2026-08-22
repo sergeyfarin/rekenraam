@@ -802,58 +802,85 @@ func (s *InvestmentService) buyWithPostWrite(ctx context.Context, input Investme
 	return s.buy(ctx, input, postWrite)
 }
 
-func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
+// investmentTransactionPlan is the transaction a write path is about to create,
+// separated from the writing of it. Splitting it out lets the reconciliation
+// preview build exactly the same postings the real trade would, without
+// persisting anything — a preview that guessed at the postings would name the
+// wrong checkpoints, which is worse than naming none.
+type investmentTransactionPlan struct {
+	Create CreateTransactionInput
+	// MetadataJSON is the cleaned metadata the lot and disposal records reuse.
+	MetadataJSON string
+	// Date is the validated transaction date. The dividend paths normalise it,
+	// so callers must use this rather than the raw input.
+	Date string
+}
+
+func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeInput) (investmentTransactionPlan, error) {
 	if err := validateTradeInput(input); err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return InvestmentTradeResult{}, ValidationError{Message: "commodity trading system account is required"}
+			return investmentTransactionPlan{}, ValidationError{Message: "commodity trading system account is required"}
 		}
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", investmentJSONMaxBytes)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	status := input.Status
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
-		OwnerUserID:            input.OwnerUserID,
-		AuthSessionID:          input.AuthSessionID,
-		RequestID:              input.RequestID,
-		OriginType:             defaultString(input.OriginType, "browser_api"),
-		Operation:              defaultString(input.Operation, "investment.buy"),
-		ChangeReason:           input.ChangeReason,
-		ReconciliationOverride: input.ReconciliationOverride,
-		Spec: TransactionInput{
-			Status:          status,
-			TransactionKind: "investment",
-			TransactionDate: input.TransactionDate,
-			PayeeID:         input.PayeeID,
-			Description:     memo,
-			ExternalRefHint: input.ExternalRefHint,
-			MetadataJSON:    metadataJSON,
-			JournalEntries: []JournalEntryInput{{
-				EntryDate: input.TransactionDate,
-				EntryKind: "investment",
-				Memo:      memo,
-				Postings: []PostingInput{
-					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					{AccountID: input.CashAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-				},
-			}},
+	return investmentTransactionPlan{
+		MetadataJSON: metadataJSON,
+		Date:         input.TransactionDate,
+		Create: CreateTransactionInput{
+			OwnerUserID:            input.OwnerUserID,
+			AuthSessionID:          input.AuthSessionID,
+			RequestID:              input.RequestID,
+			OriginType:             defaultString(input.OriginType, "browser_api"),
+			Operation:              defaultString(input.Operation, "investment.buy"),
+			ChangeReason:           input.ChangeReason,
+			ReconciliationOverride: input.ReconciliationOverride,
+			Spec: TransactionInput{
+				Status:          status,
+				TransactionKind: "investment",
+				TransactionDate: input.TransactionDate,
+				PayeeID:         input.PayeeID,
+				Description:     memo,
+				ExternalRefHint: input.ExternalRefHint,
+				MetadataJSON:    metadataJSON,
+				JournalEntries: []JournalEntryInput{{
+					EntryDate: input.TransactionDate,
+					EntryKind: "investment",
+					Memo:      memo,
+					Postings: []PostingInput{
+						{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+						{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+						{AccountID: tradingAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+						{AccountID: input.CashAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					},
+				}},
+			},
 		},
-	})
+	}, nil
+}
+
+func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
+	plan, err := s.buyPlan(ctx, input)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	metadataJSON := plan.MetadataJSON
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, plan.Create)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1023,53 +1050,69 @@ func (s *InvestmentService) sellWithPostWrite(ctx context.Context, input Investm
 	return s.sell(ctx, input, postWrite)
 }
 
-func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
+func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeInput) (investmentTransactionPlan, error) {
 	if err := validateTradeInput(input); err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return InvestmentTradeResult{}, ValidationError{Message: "commodity trading system account is required"}
+			return investmentTransactionPlan{}, ValidationError{Message: "commodity trading system account is required"}
 		}
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	metadataJSON, err := cleanSizedJSONObject(input.MetadataJSON, "metadata", investmentJSONMaxBytes)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	status := input.Status
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
-		OwnerUserID:            input.OwnerUserID,
-		AuthSessionID:          input.AuthSessionID,
-		RequestID:              input.RequestID,
-		OriginType:             defaultString(input.OriginType, "browser_api"),
-		Operation:              defaultString(input.Operation, "investment.sell"),
-		ChangeReason:           input.ChangeReason,
-		ReconciliationOverride: input.ReconciliationOverride,
-		Spec: TransactionInput{
-			Status:          status,
-			TransactionKind: "investment",
-			TransactionDate: input.TransactionDate,
-			PayeeID:         input.PayeeID,
-			Description:     memo,
-			ExternalRefHint: input.ExternalRefHint,
-			MetadataJSON:    metadataJSON,
-			JournalEntries: []JournalEntryInput{{
-				EntryDate: input.TransactionDate,
-				EntryKind: "investment",
-				Memo:      memo,
-				Postings:  sellPostings(input, tradingAccountID, memo),
-			}},
+	return investmentTransactionPlan{
+		MetadataJSON: metadataJSON,
+		Date:         input.TransactionDate,
+		Create: CreateTransactionInput{
+			OwnerUserID:            input.OwnerUserID,
+			AuthSessionID:          input.AuthSessionID,
+			RequestID:              input.RequestID,
+			OriginType:             defaultString(input.OriginType, "browser_api"),
+			Operation:              defaultString(input.Operation, "investment.sell"),
+			ChangeReason:           input.ChangeReason,
+			ReconciliationOverride: input.ReconciliationOverride,
+			Spec: TransactionInput{
+				Status:          status,
+				TransactionKind: "investment",
+				TransactionDate: input.TransactionDate,
+				PayeeID:         input.PayeeID,
+				Description:     memo,
+				ExternalRefHint: input.ExternalRefHint,
+				MetadataJSON:    metadataJSON,
+				JournalEntries: []JournalEntryInput{{
+					EntryDate: input.TransactionDate,
+					EntryKind: "investment",
+					Memo:      memo,
+					// sellPostings omits the cash legs entirely when
+					// input.WriteOff is set, so a write-off preview and a
+					// write-off write plan the same postings.
+					Postings: sellPostings(input, tradingAccountID, memo),
+				}},
+			},
 		},
-	})
+	}, nil
+}
+
+func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
+	plan, err := s.sellPlan(ctx, input)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	metadataJSON := plan.MetadataJSON
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, plan.Create)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1144,10 +1187,10 @@ func (s *InvestmentService) dividendWithPostWrite(ctx context.Context, input Div
 	return s.dividend(ctx, input, postWrite)
 }
 
-func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, postWrite func(*sql.Tx, int64) error) (Transaction, error) {
+func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInput) (investmentTransactionPlan, error) {
 	date, err := validateDividendInput(input)
 	if err != nil {
-		return Transaction{}, err
+		return investmentTransactionPlan{}, err
 	}
 	if input.CommodityID != nil && (input.IncomeAccountID == nil || input.WithholdingAccountID == nil) {
 		defaultRecord, err := s.repository.ResolveDividendDefault(ctx, BookID, *input.CommodityID, date)
@@ -1159,7 +1202,7 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 				input.WithholdingAccountID = &defaultRecord.WithholdingAccountID.Int64
 			}
 		} else if !errors.Is(err, db.ErrNotFound) {
-			return Transaction{}, fmt.Errorf("resolve dividend default: %w", err)
+			return investmentTransactionPlan{}, fmt.Errorf("resolve dividend default: %w", err)
 		}
 	}
 	incomeAccountID := int64(0)
@@ -1167,11 +1210,11 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 		incomeAccountID = *input.IncomeAccountID
 	}
 	if incomeAccountID <= 0 {
-		return Transaction{}, ValidationError{Message: "dividend income account is required"}
+		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
 	if err != nil {
-		return Transaction{}, err
+		return investmentTransactionPlan{}, err
 	}
 	status := input.Status
 	if strings.TrimSpace(status) == "" {
@@ -1183,7 +1226,7 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	}
 	if input.WithholdingValue != nil && *input.WithholdingValue > 0 {
 		if input.WithholdingAccountID == nil || *input.WithholdingAccountID <= 0 {
-			return Transaction{}, ValidationError{Message: "withholding account is required"}
+			return investmentTransactionPlan{}, ValidationError{Message: "withholding account is required"}
 		}
 		scale := input.AmountScale
 		if input.WithholdingScale != nil {
@@ -1197,30 +1240,42 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 			PostingInput{AccountID: input.CashAccountID, QuantityValue: exact.New(-*input.WithholdingValue), QuantityScale: scale, CommodityID: input.CashCommodityID, Memo: memo},
 		)
 	}
-	createInput := CreateTransactionInput{
-		OwnerUserID:            input.OwnerUserID,
-		AuthSessionID:          input.AuthSessionID,
-		RequestID:              input.RequestID,
-		OriginType:             defaultString(input.OriginType, "browser_api"),
-		Operation:              defaultString(input.Operation, "investment.dividend"),
-		ChangeReason:           input.ChangeReason,
-		ReconciliationOverride: input.ReconciliationOverride,
-		Spec: TransactionInput{
-			Status:          status,
-			TransactionKind: "investment",
-			TransactionDate: date,
-			PayeeID:         input.PayeeID,
-			Description:     memo,
-			ExternalRefHint: input.ExternalRefHint,
-			MetadataJSON:    input.MetadataJSON,
-			JournalEntries: []JournalEntryInput{{
-				EntryDate: date,
-				EntryKind: "investment",
-				Memo:      memo,
-				Postings:  postings,
-			}},
+	return investmentTransactionPlan{
+		MetadataJSON: input.MetadataJSON,
+		Date:         date,
+		Create: CreateTransactionInput{
+			OwnerUserID:            input.OwnerUserID,
+			AuthSessionID:          input.AuthSessionID,
+			RequestID:              input.RequestID,
+			OriginType:             defaultString(input.OriginType, "browser_api"),
+			Operation:              defaultString(input.Operation, "investment.dividend"),
+			ChangeReason:           input.ChangeReason,
+			ReconciliationOverride: input.ReconciliationOverride,
+			Spec: TransactionInput{
+				Status:          status,
+				TransactionKind: "investment",
+				TransactionDate: date,
+				PayeeID:         input.PayeeID,
+				Description:     memo,
+				ExternalRefHint: input.ExternalRefHint,
+				MetadataJSON:    input.MetadataJSON,
+				JournalEntries: []JournalEntryInput{{
+					EntryDate: date,
+					EntryKind: "investment",
+					Memo:      memo,
+					Postings:  postings,
+				}},
+			},
 		},
+	}, nil
+}
+
+func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, postWrite func(*sql.Tx, int64) error) (Transaction, error) {
+	plan, err := s.dividendPlan(ctx, input)
+	if err != nil {
+		return Transaction{}, err
 	}
+	createInput := plan.Create
 	if postWrite == nil {
 		return s.transactionService.CreateTransaction(ctx, createInput)
 	}
@@ -1235,10 +1290,10 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
-func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input ReinvestedDividendInput) (InvestmentTradeResult, error) {
+func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input ReinvestedDividendInput) (investmentTransactionPlan, error) {
 	date, err := validateReinvestedDividendInput(input)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	incomeAccountID := int64(0)
 	if input.IncomeAccountID != nil {
@@ -1248,54 +1303,66 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		if err == nil {
 			incomeAccountID = defaultRecord.IncomeAccountID
 		} else if !errors.Is(err, db.ErrNotFound) {
-			return InvestmentTradeResult{}, fmt.Errorf("resolve dividend default: %w", err)
+			return investmentTransactionPlan{}, fmt.Errorf("resolve dividend default: %w", err)
 		}
 	}
 	if incomeAccountID <= 0 {
-		return InvestmentTradeResult{}, ValidationError{Message: "dividend income account is required"}
+		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return InvestmentTradeResult{}, ValidationError{Message: "commodity trading system account is required"}
+			return investmentTransactionPlan{}, ValidationError{Message: "commodity trading system account is required"}
 		}
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return investmentTransactionPlan{}, err
 	}
 	status := input.Status
 	if strings.TrimSpace(status) == "" {
 		status = "posted"
 	}
-	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
-		OwnerUserID:            input.OwnerUserID,
-		AuthSessionID:          input.AuthSessionID,
-		RequestID:              input.RequestID,
-		OriginType:             "browser_api",
-		Operation:              "investment.reinvested_dividend",
-		ChangeReason:           input.ChangeReason,
-		ReconciliationOverride: input.ReconciliationOverride,
-		Spec: TransactionInput{
-			Status:          status,
-			TransactionKind: "investment",
-			TransactionDate: date,
-			PayeeID:         input.PayeeID,
-			Description:     memo,
-			JournalEntries: []JournalEntryInput{{
-				EntryDate: date,
-				EntryKind: "investment",
-				Memo:      memo,
-				Postings: []PostingInput{
-					{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-					{AccountID: tradingAccountID, QuantityValue: exact.New(input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					{AccountID: incomeAccountID, QuantityValue: exact.New(-input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-				},
-			}},
+	return investmentTransactionPlan{
+		Date: date,
+		Create: CreateTransactionInput{
+			OwnerUserID:            input.OwnerUserID,
+			AuthSessionID:          input.AuthSessionID,
+			RequestID:              input.RequestID,
+			OriginType:             "browser_api",
+			Operation:              "investment.reinvested_dividend",
+			ChangeReason:           input.ChangeReason,
+			ReconciliationOverride: input.ReconciliationOverride,
+			Spec: TransactionInput{
+				Status:          status,
+				TransactionKind: "investment",
+				TransactionDate: date,
+				PayeeID:         input.PayeeID,
+				Description:     memo,
+				JournalEntries: []JournalEntryInput{{
+					EntryDate: date,
+					EntryKind: "investment",
+					Memo:      memo,
+					Postings: []PostingInput{
+						{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+						{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
+						{AccountID: tradingAccountID, QuantityValue: exact.New(input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+						{AccountID: incomeAccountID, QuantityValue: exact.New(-input.AmountValue), QuantityScale: input.AmountScale, CommodityID: input.CashCommodityID, Memo: memo},
+					},
+				}},
+			},
 		},
-	})
+	}, nil
+}
+
+func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input ReinvestedDividendInput) (InvestmentTradeResult, error) {
+	plan, err := s.reinvestedDividendPlan(ctx, input)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	date := plan.Date
+	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, plan.Create)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -2277,4 +2344,67 @@ func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]Unrealiz
 		})
 	}
 	return entries, nil
+}
+
+// InvestmentImpactKind names which investment write path a reconciliation
+// preview should plan. Buy and sell produce different postings from the same
+// request shape, so the kind cannot be inferred from the input alone.
+type InvestmentImpactKind string
+
+const (
+	InvestmentImpactBuy                InvestmentImpactKind = "buy"
+	InvestmentImpactSell               InvestmentImpactKind = "sell"
+	InvestmentImpactWriteOff           InvestmentImpactKind = "write_off"
+	InvestmentImpactDividend           InvestmentImpactKind = "dividend"
+	InvestmentImpactReinvestedDividend InvestmentImpactKind = "reinvested_dividend"
+)
+
+// TradeReconciliationImpact returns the active checkpoints a buy, sell, or
+// write-off would invalidate, without persisting anything. It plans the trade
+// through the same builder the write path uses, so the checkpoints it names are
+// the checkpoints the write would actually invalidate (T-47).
+func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind InvestmentImpactKind, input InvestmentTradeInput) (ReconciliationImpact, error) {
+	var plan investmentTransactionPlan
+	var err error
+	switch kind {
+	case InvestmentImpactBuy:
+		plan, err = s.buyPlan(ctx, input)
+	case InvestmentImpactSell:
+		plan, err = s.sellPlan(ctx, input)
+	case InvestmentImpactWriteOff:
+		input.WriteOff = true
+		plan, err = s.sellPlan(ctx, input)
+	default:
+		return ReconciliationImpact{}, ValidationError{Message: "investment impact kind is invalid"}
+	}
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return s.reconciliationImpactForPlan(ctx, plan)
+}
+
+// DividendReconciliationImpact is TradeReconciliationImpact for a cash dividend.
+func (s *InvestmentService) DividendReconciliationImpact(ctx context.Context, input DividendInput) (ReconciliationImpact, error) {
+	plan, err := s.dividendPlan(ctx, input)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return s.reconciliationImpactForPlan(ctx, plan)
+}
+
+// ReinvestedDividendReconciliationImpact is TradeReconciliationImpact for a
+// reinvested dividend.
+func (s *InvestmentService) ReinvestedDividendReconciliationImpact(ctx context.Context, input ReinvestedDividendInput) (ReconciliationImpact, error) {
+	plan, err := s.reinvestedDividendPlan(ctx, input)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return s.reconciliationImpactForPlan(ctx, plan)
+}
+
+func (s *InvestmentService) reconciliationImpactForPlan(ctx context.Context, plan investmentTransactionPlan) (ReconciliationImpact, error) {
+	return s.transactionService.ReconciliationImpactForCreate(ctx, CreateReconciliationImpactInput{
+		OwnerUserID: plan.Create.OwnerUserID,
+		Spec:        plan.Create.Spec,
+	})
 }

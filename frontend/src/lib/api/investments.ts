@@ -28,6 +28,7 @@ export type InvestmentAutomationRuleResponse = components['schemas']['Investment
 export type InvestmentAutomationRulesResponse = components['schemas']['InvestmentAutomationRulesResponse'];
 export type InvestmentAutomationRulesRequest = components['schemas']['InvestmentAutomationRulesRequest'];
 export type InvestmentAutomationRuleRequest = components['schemas']['InvestmentAutomationRuleRequest'];
+export type ReconciliationImpactResponse = components['schemas']['ReconciliationImpactResponse'];
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
@@ -421,6 +422,107 @@ export async function saveAutomationRules(
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+/**
+ * Reconciliation-impact previews for the investment write paths.
+ *
+ * Each one plans the same postings its write route would and reports the active
+ * checkpoints that write would invalidate, without persisting anything. The
+ * forms call these before submitting so the confirmation can name what is about
+ * to be invalidated rather than warning vaguely (T-47). They are previews, not
+ * mutations, so they carry no CSRF token — same as previewSell above.
+ */
+export async function buyReconciliationImpact(
+  input: InvestmentTradeRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/buy/reconciliation-impact',
+      { body: input }
+    );
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function sellReconciliationImpact(
+  input: InvestmentTradeRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/sell/reconciliation-impact',
+      { body: input }
+    );
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function dividendReconciliationImpact(
+  input: DividendRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/dividend/reconciliation-impact',
+      { body: input }
+    );
+
+    if (data !== undefined) {
+      return data;
+    }
+
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) {
+      throw error;
+    }
+
+    throw toNetworkError(error);
+  }
+}
+
+export async function reinvestedDividendReconciliationImpact(
+  input: ReinvestedDividendRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/reinvested-dividend/reconciliation-impact',
+      { body: input }
+    );
 
     if (data !== undefined) {
       return data;
