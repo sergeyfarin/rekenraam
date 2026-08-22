@@ -10,6 +10,7 @@ Before changing durable behavior, read:
 - `docs/conventions.md`
 - `docs/early-architecture-decisions.md`
 - `docs/adrs/`
+- `docs/localization-glossary.md` — before adding or translating a domain term.
 
 ## Daily Commands
 
@@ -121,6 +122,10 @@ pnpm test:release-preflight
 - Frontend foundation libraries are pinned in `frontend/package.json`: Tailwind CSS, Bits UI, shadcn-svelte, Paraglide JS, `@tanstack/svelte-query`, `@tanstack/svelte-table`, `openapi-typescript`, `openapi-fetch`, `date-fns`, and Dinero.js. Add TanStack Virtual only when a concrete screen needs it.
 - The frontend stays on **TypeScript 6**. TypeScript 7 (the native port) drops the JS compiler API that `openapi-typescript` builds `src/lib/api/schema.d.ts` with — `openapi-typescript` still declares `peerDependencies.typescript: ^5.x`, and under TS 7 `pnpm run openapi:generate` dies with `Cannot read properties of undefined (reading 'createKeywordTypeNode')`. See backlog T-42.
 - Frontend message catalogs live in `frontend/messages/`, split by domain as `frontend/messages/<domain>/<locale>.json`. Keep message IDs flat and prefixed by domain or screen intent instead of using one growing locale file or deep nested objects. Generated Paraglide output lives in `frontend/src/lib/paraglide/`. Regenerate the typed message layer with `pnpm --dir frontend run paraglide:compile` when changing catalog structure outside the normal `dev`, `check`, or `build` scripts.
+- Shipping locales are `en, es, fr, nl, de, ru`, listed in `frontend/project.inlang/settings.json`. Both message directories compile into the single `m` namespace, so **a key must be unique across `messages/app/` and `messages/settings/`** — which file it lives in is grouping, not namespacing.
+- Adding an English string is safe on its own: a locale missing that key falls back to English per message rather than rendering blank. Adding a *term* is not — put it in `docs/localization-glossary.md` first, because a plausible-but-wrong financial term is worse than English.
+- **Locale resolution is configured in two places that must agree**: `strategy` in `frontend/vite.config.ts` and the `--strategy` flag on the `paraglide:compile` script in `frontend/package.json`. Both are `localStorage,preferredLanguage,baseLocale`. If they drift, the plugin's compile usually wins and hides the mistake — until something skips it and the app silently ships English only.
+- A quick check that the catalogs are whole: compare each locale's key set and placeholder set against `en.json`. `e2e/playwright/language.spec.ts` covers the switcher end to end and deliberately asserts one string from *each* catalog, since a missing file would otherwise show up only as English on half a screen.
 - Multi-state Svelte routes should stay thin route entrypoints. Move reusable workflow UI and route-specific helpers into feature folders under `frontend/src/lib/`, as with `frontend/src/lib/install-gate/`.
 - Frontend OpenAPI types are generated from `api/openapi/openapi.yaml` into `frontend/src/lib/api/schema.d.ts`. The root OpenAPI file is only the entrypoint: keep top-level metadata, global components, and `$ref` registrations there rather than inline path or schema bodies.
 - Add new API endpoints by creating or extending a path item under `api/openapi/paths/`, then referencing that file from `api/openapi/openapi.yaml` under `paths`. Keep each path item focused on one route pattern such as `institutions.yaml` or `institution-versions.yaml`.

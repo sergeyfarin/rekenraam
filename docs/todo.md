@@ -5,7 +5,30 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-19.
+Last updated: 2026-08-20.
+
+## Where things stand
+
+Everything below is merged to `main` and pushed; the working tree is clean. The
+last four commits are the localization catalogs (`efdb8d9`, `012dace`) and T-47
+(`0ddbc3c`, `be8aa11`).
+
+To pick this up on a local machine:
+
+```sh
+pnpm install
+pnpm dev                     # backend :16888, frontend :1888
+./scripts/test-backend.sh    # gofmt + vet + go test -race
+./scripts/test-frontend.sh   # svelte-check + vitest
+./scripts/test-e2e.sh        # builds the binary, boots a fresh SQLite, Playwright
+```
+
+Leave `PLAYWRIGHT_CHROMIUM_EXECUTABLE` unset locally — it exists only for images
+that cannot download Playwright's pinned browser. Full commands and environment
+variables: `docs/developer-workflow.md`.
+
+Nothing is half-finished in the tree. The open items are decisions and new
+work, listed below and in `roadmap.md`.
 
 ## Decisions — owner answers of 2026-08-19
 

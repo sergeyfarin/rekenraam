@@ -36,6 +36,9 @@ have exactly one home.
   deployment guidance.
 - [early-architecture-decisions.md](early-architecture-decisions.md) — active
   architecture decisions predating the ADR series.
+- [localization-glossary.md](localization-glossary.md) — the terminology every
+  translated catalog follows. Read it before adding a domain term or reviewing
+  a translation; it is far shorter than the 1,170 strings it governs.
 - [adrs/](adrs/) — accepted decision records (numbered, immutable).
 
 ## Folders

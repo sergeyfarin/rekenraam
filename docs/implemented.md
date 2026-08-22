@@ -159,14 +159,26 @@ series backend/API foundation).
 | 3-tier cost-basis method resolution | ✅ | Per-transaction override → account default → global default → "fifo". `resolveCostBasisMethod` in `app/investments.go`. |
 | Account-level cost-basis method | ✅ | `account_versions.cost_basis_method` (beta baseline). Exposed via account CRUD API. |
 | Sell preview endpoint | ✅ | `POST /api/v1/investments/sell/preview` — read-only simulation using `SimulateDisposeLots` (always rolls back). Returns allocations + realized gain. |
-| OpenAPI spec for all 24 investment endpoints | ✅ | `api/openapi/components/schemas/investments.yaml` + 14 path files. Generated TS types in `schema.d.ts`. |
+| OpenAPI spec for every investment endpoint | ✅ | `api/openapi/components/schemas/investments.yaml` + one path file per route under `api/openapi/paths/`. Generated TS types in `schema.d.ts`. (Counts were inlined here and went stale twice; the spec is the count.) |
 | Investments portfolio page (positions + lot drill-down) | ✅ | `routes/app/investments/+page.svelte`. Positions table; click a row to see open lots. Degrades gracefully when no market price. Investments nav link in app shell. |
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
 | Buy / sell / dividend entry UI | ✅ | Buy form; sell form with server-computed preview + specific-lot picker; dividend + reinvested-dividend forms. Modal over positions page. |
 | **Gains reporting** | ✅ | `GET /api/v1/investments/gains` — realized gains (lot events × cash proceeds join, FIFO arithmetic, date-range filter) + unrealized gains (positions × latest price). Portfolio/Gains/Suggestions tab UI. Sign convention: disposed_basis_value is stored negative; gain = proceeds + disposed_basis. |
 | Zero-proceeds write-off | 🟡 | `POST /investments/write-off` closes a position for nothing — fund closure, worthless delisting — as a disposal at zero proceeds through the normal lot engine, so the whole cost basis reaches realized gains as a loss. A separate route from sell, which still requires a cash amount: a cash amount is rejected here and a reason is required, so an empty field can never retire a position. The transaction carries only the commodity legs. No UI yet — R16. |
+| **Backdated trades into a reconciled period** | ✅ | Every investment write goes through the transaction reconciliation guard, and `reconciliation_override` is now accepted on the trade, dividend, and reinvested-dividend routes, so a backdated trade can proceed deliberately instead of being refused with no way forward (T-47). Five preview routes — `POST /investments/{buy,sell,write-off,dividend,reinvested-dividend}/reconciliation-impact` — plan the *same* postings the write would, via shared `investmentTransactionPlan` builders, and report which checkpoints would be invalidated without persisting anything. The buy, sell, and dividend forms preview first and raise the transaction editor's own named warning, over the same messages, so invalidating a reconciliation reads identically from either screen. |
 | **Provider-event suggestions UI** | ✅ | Suggestions tab: pending suggestions with Accept/Ignore actions; history section. Accept parses `proposed_transaction_json` and posts a real transaction (currently only `kind:"dividend_income"`, covering dividend/distribution/cash_in_lieu/return_of_capital); ignore/accept both guard against re-transitioning a non-`suggested` suggestion. **No producer exists yet** — nothing in the app writes to `investment_provider_events`/`investment_event_suggestions` (verified 2026-07-15), so this UI has nothing to review until a fetcher is built (`docs/backlog.md`). Structural corporate actions (split/merger/spin_off/ticker_change/delisting/`corporate_action`) are explicitly rejected at accept time, not silently dropped — no lot-mutation design exists for them yet. |
 | **Automation rules list** | ✅ | `GET /api/v1/investments/automation-rules`; rules listed in Suggestions tab (read-only; PUT genuinely replaces the full active set — any existing active rule omitted from a PUT is archived in the same transaction, fixed 2026-07-15). Rule *matching/execution* (auto-post dispatch against incoming provider events) has no consumer yet — moot until a producer exists. |
+
+## Localization — 🟡 translated, not natively reviewed
+
+| Capability | State | Notes |
+| --- | --- | --- |
+| Translation boundary | ✅ | Paraglide JS over `frontend/messages/{app,settings}/<locale>.json`. All user-facing copy goes through it; built-in database records keep stable codes and resolve display labels here. |
+| **Five non-English locales** | 🟡 | `es, fr, nl, de, ru` — all **1,170** messages translated in every locale (283 app + 887 settings), key sets and placeholder sets verified against `en.json`. 🟡 because they are **drafted from a glossary, not reviewed by native speakers**; the language settings page says so to anyone using a non-English locale. First three items for a reviewer: Spanish *Punteado* ("cleared"), Russian *партия* (tax lot), Dutch *Instelling* (financial institution, collides with *instellingen*). |
+| Terminology governance | ✅ | `docs/localization-glossary.md` decides terms before strings are written, anchored to GnuCash, localized MS Money/Quicken, and per-market banking language. Two deliberate departures from the literal are recorded there: *commodity* → *instrument* (the literal means physical goods in all five), and *cleared* vs *reconciled* must not collapse into one word. |
+| Language picker | ✅ | `/app/settings/language`, each locale offered by its own autonym. Resolution is `localStorage → browser preference → English`, with per-message English fallback so a missing key never renders blank. Covered by `e2e/playwright/language.spec.ts`. |
+| Backend translation | 🟦 | Export headers and server-generated content are still English only — deferred to Phase 3 (`nicksnyder/go-i18n`). |
+| Locale-aware formatting | ✅ | Numbers, dates, and money are formatted by `Intl` from the active locale; catalogs never bake in a separator or currency symbol. |
 
 ## Cross-cutting — ✅ in place
 
@@ -180,7 +192,8 @@ series backend/API foundation).
 
 Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
-multi-currency reporting, report snapshots, reports UI, and pricing UI.
+multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
+shipped in R2 — see the Reports section above.)
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment
