@@ -1616,7 +1616,7 @@ func assertListTransactionsStatus(t *testing.T, handler http.Handler, sessionCoo
 	assert.Equal(t, wantStatus, res.Code)
 }
 
-// TestTypedPayeeNameLinksToAnExistingRecord covers T-44's entry-side rule: a
+// TestTypedPayeeNameLinksToAnExistingRecord covers T-50's entry-side rule: a
 // typed name that already names a payee is linked to that record, so it groups
 // in the spending report instead of falling into "no payee recorded". An
 // unrecognized name stays unlinked — creating a record is a confirmed act in

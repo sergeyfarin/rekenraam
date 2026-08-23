@@ -94,7 +94,7 @@
   let formError = $state<unknown>(undefined);
 
   // Both dividend shapes can be backdated into a reconciled period, so both get
-  // the same named confirmation as the trade forms (T-47). The pending payload
+  // the same named confirmation as the trade forms (T-53). The pending payload
   // is tagged so the confirm handler knows which route to retry.
   type PendingDividend =
     | { mode: 'cash'; payload: DividendRequest }

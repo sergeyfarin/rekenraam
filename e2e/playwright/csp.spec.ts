@@ -3,7 +3,7 @@
  * sends (`withSecurityHeaders` in `backend/internal/api/middleware.go`).
  *
  * A violation on every page load is not harmless: it buries the one that
- * matters. T-46 was exactly that — SvelteKit's `#svelte-announcer` carries its
+ * matters. T-52 was exactly that — SvelteKit's `#svelte-announcer` carries its
  * visually-hidden rules in a `style` attribute, which `style-src 'self'`
  * refuses through `style-src-attr` when Svelte parses the compiled template.
  * Nothing looked broken, so it went unnoticed for as long as it took someone to
@@ -45,7 +45,7 @@ test('runs without Content-Security-Policy violations', async ({ page }) => {
   }
 
   // The announcer only exists after the client-side router has mounted, and it
-  // is the element T-46 was about — assert it is still hidden without its
+  // is the element T-52 was about — assert it is still hidden without its
   // inline style attribute rather than merely absent.
   const announcer = page.locator('#svelte-announcer');
   await expect(announcer).toHaveCount(1);

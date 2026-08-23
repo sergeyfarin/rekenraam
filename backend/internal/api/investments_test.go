@@ -686,7 +686,7 @@ func TestWriteOffInvestment_BackdatedIntoAReconciledPeriodIsGuarded(t *testing.T
 		}, http.StatusCreated)
 }
 
-// TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates is T-47: the
+// TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates is T-53: the
 // guard above is correct, but until now the investments API had no way to say
 // "yes, I mean it" the way the transaction editor does, so a backdated trade
 // was not merely guarded — it was unreachable. Being refused with no way
@@ -742,7 +742,7 @@ func TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates(t *testing
 }
 
 // TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates is
-// the other half of T-47. An override the user cannot see the consequences of
+// the other half of T-53. An override the user cannot see the consequences of
 // is barely better than no override, so the UI names the checkpoints first —
 // and a preview is only worth having if it plans the same postings the write
 // does. This pins preview and write to the same answer rather than trusting
@@ -827,6 +827,119 @@ func TestInvestmentReconciliationImpact_EmptyWhenNoCheckpointIsCrossed(t *testin
 	var impact reconciliationImpactResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&impact))
 	require.Empty(t, impact.AffectedCheckpoints)
+}
+
+// The dividend and reinvested-dividend routes gained reconciliation_override
+// and their own impact previews at the same time as buy/sell/write-off, but
+// they take their own request types rather than the shared trade type, so the
+// field had to be added to each one separately. These two tests exist because
+// that is exactly the shape of change that gets wired for three of five routes
+// and quietly missed on the other two: a dividend reaches the cash account and
+// a reinvested dividend reaches the holding account, so each crosses a
+// different checkpoint and neither is covered by the trade tests above.
+func TestDividend_ReconciliationOverrideProceedsAndInvalidates(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DIVCO1")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	// A dividend credits the cash account, so it is the cash account's
+	// checkpoint that a backdated dividend would invalidate.
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	cashPosting := postingByAccount(t, bought.Transaction, f.cashAccount.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, f.cashAccount.ID, f.commodityID, cashPosting, "2026-02-01")
+	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, f.cashAccount.ID)
+
+	backdated := dividendRequest{
+		TransactionDate: "2026-01-15", CommodityID: &instrument.CommodityID,
+		CashAccountID: f.cashAccount.ID, CashCommodityID: f.commodityID,
+		IncomeAccountID: &f.incomeAccount.ID, AmountValue: 5000, AmountScale: 2,
+	}
+
+	// The preview names the checkpoint and persists nothing, so it needs no
+	// CSRF token.
+	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/dividend/reconciliation-impact", backdated, http.StatusOK)
+	var preview reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
+	require.Len(t, preview.AffectedCheckpoints, 1)
+	require.Equal(t, checkpointID, preview.AffectedCheckpoints[0].CheckpointID)
+	require.Equal(t, f.cashAccount.ID, preview.AffectedCheckpoints[0].AccountID)
+	require.NotEmpty(t, preview.AffectedCheckpoints[0].AccountLabel, "the warning names the account, not just its id")
+
+	// Without the override the dividend is refused, and refused as a conflict
+	// rather than surfacing as an internal error.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend",
+		backdated, http.StatusConflict)
+
+	withOverride := backdated
+	withOverride.ReconciliationOverride = true
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend",
+		withOverride, http.StatusCreated)
+
+	invalidated := make([]int64, 0, 1)
+	for _, checkpoint := range listCheckpointsForSession(t, handler, f.sessionCookie, f.cashAccount.ID) {
+		if checkpoint.Status == "invalidated" {
+			invalidated = append(invalidated, checkpoint.ID)
+		}
+	}
+	require.Equal(t, []int64{checkpointID}, invalidated, "preview and write agree on which checkpoints are affected")
+}
+
+func TestReinvestedDividend_ReconciliationOverrideProceedsAndInvalidates(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "DIVCO2")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	// A reinvested dividend buys more of the instrument rather than paying
+	// cash, so the leg that lands in a reconciled period is the holding one.
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, holding.ID)
+
+	backdated := reinvestedDividendRequest{
+		TransactionDate: "2026-01-15", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+		IncomeAccountID: &f.incomeAccount.ID, QuantityValue: exact.New(1), QuantityScale: 0,
+		AmountValue: 2500, AmountScale: 2, CashCommodityID: f.commodityID,
+	}
+
+	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/reinvested-dividend/reconciliation-impact", backdated, http.StatusOK)
+	var preview reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
+	require.Len(t, preview.AffectedCheckpoints, 1)
+	require.Equal(t, checkpointID, preview.AffectedCheckpoints[0].CheckpointID)
+	require.Equal(t, holding.ID, preview.AffectedCheckpoints[0].AccountID)
+
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/reinvested-dividend",
+		backdated, http.StatusConflict)
+
+	withOverride := backdated
+	withOverride.ReconciliationOverride = true
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/reinvested-dividend",
+		withOverride, http.StatusCreated)
+
+	invalidated := make([]int64, 0, 1)
+	for _, checkpoint := range listCheckpointsForSession(t, handler, f.sessionCookie, holding.ID) {
+		if checkpoint.Status == "invalidated" {
+			invalidated = append(invalidated, checkpoint.ID)
+		}
+	}
+	require.Equal(t, []int64{checkpointID}, invalidated, "preview and write agree on which checkpoints are affected")
 }
 
 func listCheckpointsForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, accountID int64) []reconciliationCheckpointResponse {

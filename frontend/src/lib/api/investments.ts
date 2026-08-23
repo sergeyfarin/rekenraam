@@ -526,7 +526,7 @@ export async function saveAutomationRules(
  * Each one plans the same postings its write route would and reports the active
  * checkpoints that write would invalidate, without persisting anything. The
  * forms call these before submitting so the confirmation can name what is about
- * to be invalidated rather than warning vaguely (T-47). They are previews, not
+ * to be invalidated rather than warning vaguely (T-53). They are previews, not
  * mutations, so they carry no CSRF token — same as previewSell above.
  */
 export async function buyReconciliationImpact(

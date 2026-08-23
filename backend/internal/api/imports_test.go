@@ -608,7 +608,7 @@ func TestGetImportBatchRows_PaginatesWithCursor(t *testing.T) {
 
 // TestCommitImportBatch_LinksRowsToExistingPayeesByName drives a real commit
 // rather than asserting on a builder's output: the import path shares
-// cleanTransactionSpec, so the T-44 name match applies to it, and this proves
+// cleanTransactionSpec, so the T-50 name match applies to it, and this proves
 // it survives all the way through CommitImportBatch.
 //
 // A bulk import cannot ask the user to confirm each unknown name, so an

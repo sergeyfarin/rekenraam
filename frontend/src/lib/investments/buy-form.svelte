@@ -75,7 +75,7 @@
 
   // A backdated buy can land inside a reconciled period. Rather than letting
   // the server refuse it with no way forward, preview the impact and let the
-  // user accept the named consequences (T-47).
+  // user accept the named consequences (T-53).
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     payload: InvestmentTradeRequest;

@@ -307,7 +307,7 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 //
 // Each bucket reports a cumulative balance as of its own end date, so the naive
 // shape is one full ledger read per bucket and the cost is buckets x postings
-// (T-45). Here the postings are read once for the whole series and folded
+// (T-51). Here the postings are read once for the whole series and folded
 // forward into a running balance, and each bucket is answered from that balance.
 //
 // The fold is kept per account rather than collapsed straight into commodity

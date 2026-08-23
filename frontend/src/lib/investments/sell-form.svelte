@@ -82,7 +82,7 @@
   let formError = $state<unknown>(undefined);
 
   // See buy-form: a backdated sell must be able to proceed deliberately rather
-  // than being refused with no way forward (T-47).
+  // than being refused with no way forward (T-53).
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     payload: InvestmentTradeRequest;

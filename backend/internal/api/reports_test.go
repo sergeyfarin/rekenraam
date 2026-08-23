@@ -478,7 +478,7 @@ func mustParseInt64(t *testing.T, value string) int64 {
 }
 
 // The series is the same number as the point-in-time endpoint, one per bucket
-// end. T-45 replaced the per-bucket ledger read with a single read folded
+// end. T-51 replaced the per-bucket ledger read with a single read folded
 // forward, so this pins the two against each other rather than against
 // hand-computed constants: a fold that drifts, double-counts, or leaks one
 // bucket's state into the next shows up here.

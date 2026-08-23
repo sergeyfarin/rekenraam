@@ -83,7 +83,7 @@
   // Payee autocomplete. The whole payee list is loaded once and ranked here
   // rather than re-queried per keystroke: a personal book's payees are a small
   // set, and local fuzzy ranking finds the typo that a server-side LIKE cannot
-  // — which is the case this control exists for (T-44).
+  // — which is the case this control exists for (T-50).
   let payeeSearch = $state('');
   let payeeDropdownOpen = $state(false);
   /** The name the editor opened with, so an untouched payee never blocks a save. */
@@ -310,7 +310,7 @@
 
     // A newly typed name that names no payee stops here rather than being saved
     // as free text. Free text is what collapsed every such transaction into one
-    // "no payee recorded" row in the spending report (T-44). An untouched name
+    // "no payee recorded" row in the spending report (T-50). An untouched name
     // is left alone, so editing an unrelated field on older data is never
     // blocked by history the user did not create.
     const resolution = resolveTypedPayee(payeeSearch, payeeID, allPayees);

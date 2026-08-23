@@ -31,6 +31,32 @@ describe('exactDecimal', () => {
   it('passes through a value it cannot read rather than guessing', () => {
     expect(exactDecimal('not-a-number', 2)).toBe('not-a-number');
   });
+
+  // exactDecimal delegates digit-shifting to formatLedgerAmount, which trusts
+  // its input to be a signed digit string and does not validate it. The guard
+  // in front of it is this module's own, so these pin what counts as readable.
+  // A coefficient the backend could not have produced must survive to the cell
+  // unchanged: an unreadable cell is recoverable, a silently wrong number in an
+  // exported financial file is not.
+  it.each(['', ' 12', '12 ', '+5', '1.5', '1,50', '12e3', '-'])(
+    'passes through %o rather than coercing it to a number',
+    (value) => {
+      expect(exactDecimal(value, 2)).toBe(value);
+    }
+  );
+
+  it('reads a plain signed digit string', () => {
+    expect(exactDecimal('-12345', 2)).toBe('-123.45');
+    expect(exactDecimal('-5', 2)).toBe('-0.05');
+  });
+
+  // A non-positive or non-integer scale is normalised to 0 rather than
+  // throwing or shifting by a fraction of a digit.
+  it('treats a scale that is not a positive integer as zero', () => {
+    expect(exactDecimal('12345', 0)).toBe('12345');
+    expect(exactDecimal('12345', -1)).toBe('12345');
+    expect(exactDecimal('12345', 1.5)).toBe('12345');
+  });
 });
 
 describe('csvField', () => {

@@ -155,7 +155,7 @@ type investmentTradeRequest struct {
 	// ReconciliationOverride lets a backdated trade proceed into a reconciled
 	// period, invalidating the affected checkpoints. The service has always
 	// honoured it; without it on the wire a buy, sell, or write-off dated
-	// before a checkpoint was simply unreachable (T-47).
+	// before a checkpoint was simply unreachable (T-53).
 	ReconciliationOverride bool `json:"reconciliation_override"`
 }
 
@@ -175,7 +175,7 @@ type investmentWriteOffRequest struct {
 	ChangeReason     string                           `json:"change_reason"`
 	CostBasisMethod  string                           `json:"cost_basis_method"`
 	// ReconciliationOverride lets a backdated write-off proceed into a
-	// reconciled period, invalidating the affected checkpoints (T-47).
+	// reconciled period, invalidating the affected checkpoints (T-53).
 	ReconciliationOverride bool `json:"reconciliation_override"`
 }
 
@@ -624,7 +624,7 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 // investmentTradeReconciliationImpact previews which checkpoints a trade would
 // invalidate. It is a read-only preview like sell/preview, so it takes no CSRF
 // token and persists nothing; the UI calls it to name the checkpoints in its
-// confirmation before retrying with reconciliation_override (T-47).
+// confirmation before retrying with reconciliation_override (T-53).
 func investmentTradeReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, kind app.InvestmentImpactKind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)
@@ -695,7 +695,7 @@ func writeOffPreviewInvestment(logger *slog.Logger, authService *app.AuthService
 // writeOffReconciliationImpact is investmentTradeReconciliationImpact for a
 // write-off: it takes investmentWriteOffRequest (no cash fields) rather than
 // the shared trade request, since a write-off is its own contract shape (T-38,
-// T-47).
+// T-53).
 func writeOffReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)

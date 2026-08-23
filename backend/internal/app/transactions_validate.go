@@ -201,7 +201,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 		return db.TransactionSpec{}, err
 	}
 
-	// A typed name that already names a payee is linked to it (T-44). Active
+	// A typed name that already names a payee is linked to it (T-50). Active
 	// payee names are unique by normalized name, so the match is unambiguous —
 	// this resolves what the caller clearly meant, it does not create anything.
 	// Creating a record from an unrecognized name stays a deliberate, confirmed

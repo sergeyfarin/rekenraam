@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/backend"
 
 # Formatting gate. Without this in the wrapper script, CI never sees gofmt
-# drift (backlog T-43: four files sat unformatted with a green pipeline).
+# drift (backlog T-49: four files sat unformatted with a green pipeline).
 unformatted="$(gofmt -l .)"
 if [ -n "$unformatted" ]; then
   echo "gofmt needs to be run on:" >&2

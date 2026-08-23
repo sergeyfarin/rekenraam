@@ -15,17 +15,22 @@ Status legend: `[ ]` open · `[~]` partly done, with the remainder stated ·
 
 **A note on IDs T-42–T-47.** Two long-diverged branches independently used
 these six numbers for six *different* defects/features before merging. Rather
-than silently pick one meaning and erase the other's history — both are real,
-both are merged in, and both are referenced by name in already-committed test
-names and code comments — the branch that used them first in already-resolved,
+than silently pick one meaning and erase the other's history — both are real
+and both are merged in — the branch that used them first in already-resolved,
 frozen history (`docs/reviews/resolved-backlog-2026-07.md`, `docs/design/`)
-keeps T-42–T-47 with its original meaning (all genesis-date fixes and frontend
-decimal-comma bugs, all closed). The other branch's same-numbered items are
-renumbered **T-48–T-53** below. If you find `T-47` in a backend code comment
-meaning "reconciliation override," that comment predates this renumbering and
-means what is recorded here as **T-53** — the mapping is: T-42→T-48 (TS7),
-T-43→T-49 (gofmt), T-44→T-50 (payee resolution), T-45→T-51 (net-worth perf),
-T-46→T-52 (CSP), T-47→T-53 (investment reconciliation override).
+keeps T-42–T-47 with its original meaning (the genesis-date fixes and the
+frontend decimal-comma bugs, all closed). The other branch's same-numbered
+items are renumbered **T-48–T-53** below: T-42→T-48 (TS7), T-43→T-49 (gofmt),
+T-44→T-50 (payee resolution), T-45→T-51 (net-worth perf), T-46→T-52 (CSP),
+T-47→T-53 (investment reconciliation override).
+
+Every code comment and test name has been rewritten to the renumbered ID, so
+an ID in the tree now has exactly one meaning and needs no lookup. Note that
+T-44 was overloaded across *both* sets: the holding-account opened-date
+comments in `import_trading212_invest.go` are the surviving T-44, while the
+payee-resolution comments are T-50. Only the frozen `docs/reviews/` and
+`docs/design/` files still use the pre-merge numbering — that history is not
+rewritten, and this mapping is how to read it.
 
 ## General
 
@@ -277,7 +282,7 @@ formatted tree.
 
 **Files:** `backend/internal/app/transactions_validate.go` (payee resolution:
 `payee_name` is stored as free text and only `payee_id` links a payee record);
-`backend/internal/app/reports_spending.go` (payee grouping).
+`backend/internal/app/reports.go` (payee grouping).
 
 A transaction may carry a `payee_name` with no `payee_id` — the create path
 accepts the name as free text and only sets `payee_id` when the caller supplies
@@ -479,6 +484,18 @@ guessed at the postings would name the wrong checkpoints, which is worse than
 naming none — and
 `TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates`
 pins preview and write to the same answer rather than assuming it.
+
+**Coverage completed 2026-08-23** (merge review). Because `dividendRequest` and
+`reinvestedDividendRequest` are their own types rather than the shared trade
+type, each had to be wired for the override separately — the shape of change
+that gets done for three of five routes and missed on the other two. Those two
+routes had no test at all, so the wiring was unpinned:
+`TestDividend_ReconciliationOverrideProceedsAndInvalidates` and
+`TestReinvestedDividend_ReconciliationOverrideProceedsAndInvalidates` now cover
+them. They are not duplicates of the trade test — a dividend crosses the *cash*
+account's checkpoint and a reinvested dividend the *holding* account's, so each
+exercises a leg the buy/sell/write-off tests never touch. Both were confirmed to
+fail when the override wiring is removed.
 
 The buy, sell and dividend forms preview before submitting and, when
 checkpoints are affected, show the same named warning the transaction editor

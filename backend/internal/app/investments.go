@@ -1192,7 +1192,7 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 
 // WriteOffReconciliationImpact is TradeReconciliationImpact for a write-off:
 // the active checkpoints it would invalidate, without persisting anything
-// (T-47).
+// (T-53).
 func (s *InvestmentService) WriteOffReconciliationImpact(ctx context.Context, input InvestmentWriteOffInput) (ReconciliationImpact, error) {
 	if _, err := validateWriteOffInput(input); err != nil {
 		return ReconciliationImpact{}, err
@@ -2532,7 +2532,7 @@ const (
 // TradeReconciliationImpact returns the active checkpoints a buy, sell, or
 // write-off would invalidate, without persisting anything. It plans the trade
 // through the same builder the write path uses, so the checkpoints it names are
-// the checkpoints the write would actually invalidate (T-47).
+// the checkpoints the write would actually invalidate (T-53).
 func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind InvestmentImpactKind, input InvestmentTradeInput) (ReconciliationImpact, error) {
 	var plan investmentTransactionPlan
 	var err error

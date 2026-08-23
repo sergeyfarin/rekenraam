@@ -1,7 +1,7 @@
 /**
  * Matching a typed payee name against existing payee records.
  *
- * T-44: a typed name that names no payee used to be stored as free text, and
+ * T-50: a typed name that names no payee used to be stored as free text, and
  * every such transaction collapsed into one "no payee recorded" row in the
  * spending report. The backend now links an *exact* match on its own; this
  * module covers the rest — recognising when a name is genuinely new, and

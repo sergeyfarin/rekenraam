@@ -16,7 +16,7 @@ function daysFromTodayISO(days: number): string {
 }
 
 /**
- * T-47: a backdated investment trade must be able to proceed deliberately.
+ * T-53: a backdated investment trade must be able to proceed deliberately.
  *
  * The guard itself is covered by Go tests. What only a browser can prove is
  * that the user is shown *which* reconciliation the trade would invalidate and
