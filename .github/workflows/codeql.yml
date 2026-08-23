@@ -44,6 +44,12 @@ jobs:
           # build-mode: none to fall back on, and 2.26.3 is the newest bundle.
           # govulncheck.yml still covers known CVEs in dependencies meanwhile.
           # RESTORE these two lines once a CodeQL release extracts Go 1.27.
+          # Upstream fix is already merged — github/codeql#22042 "Go: Update to
+          # 1.27" (2026-08-20), tracked by github/codeql#22394. It missed the
+          # 2.26.3 bundle (2026-08-12), so it lands in 2.26.4. Bundles ship
+          # roughly every 2 weeks, so expect it around early September 2026;
+          # codeql-action picks it up a few days later. Check with:
+          #   gh api repos/github/codeql-cli-binaries/releases --jq '.[0].tag_name'
           # - language: go
           #   build-mode: autobuild
           - language: javascript-typescript

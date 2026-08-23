@@ -229,9 +229,14 @@ Workflow conventions:
   module — every backend package fails with "package requires newer Go version
   go1.27 (application built with go1.26)", yielding a partial database and a
   red job. Go supports no `build-mode: none` fallback, and 2.26.3 was already
-  the newest bundle. Restore the two commented matrix lines once a CodeQL
-  release extracts Go 1.27; `govulncheck.yml` covers known dependency CVEs in
-  the meantime.
+  the newest bundle. `govulncheck.yml` covers known dependency CVEs meanwhile.
+  The upstream fix is already merged — github/codeql#22042 "Go: Update to 1.27"
+  (2026-08-20), tracked by github/codeql#22394, where a CodeQL maintainer put it
+  in "the next release". It missed the 2.26.3 bundle (2026-08-12), so it lands
+  in 2.26.4; bundles ship roughly fortnightly, putting this around early
+  September 2026. To restore: check `gh api
+  repos/github/codeql-cli-binaries/releases --jq '.[0].tag_name'` for >= 2.26.4,
+  then uncomment the two `go` matrix lines and confirm the job goes green.
 - Dependabot version updates are configured in `.github/dependabot.yml` for
   GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
   Docker runtime image.
