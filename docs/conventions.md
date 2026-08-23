@@ -222,11 +222,14 @@ with it.
   immutable: schema changes only ever land as new sequential files, and a
   documented upgrade path from the previous release becomes mandatory. Nothing
   is tagged today, so the rewrite freedom above is currently in force.
-- **Migration numbers are renumbered before merge, not after.** Two branches
-  that both add `00NN_` collide. The branch merged second renumbers its own
-  migration to the next free number as part of resolving the merge; never merge
-  two files sharing a number, and never renumber a migration that is already on
-  `main` (that is a rewrite, and needs the declaration above).
+- **Migration numbers are renumbered before merge, not after.** Work lands
+  directly on `main` (see *Branches And PRs* in `docs/developer-workflow.md`),
+  so a collision now mostly means unpushed local work: pull first, and if your
+  `00NN_` is taken, renumber **your own** file to the next free number before
+  pushing. The same holds for the occasional branch — the one merged second
+  renumbers itself. Never merge two files sharing a number, and never renumber a
+  migration already on `main` (that is a rewrite, and needs the declaration
+  above).
 - **After the freeze**, this section is replaced by a real upgrade policy: every
   release must migrate any database from any previously released version, and
   the migration suite grows a historical-upgrade mode alongside the

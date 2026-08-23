@@ -130,10 +130,15 @@ early-architecture-decisions → ADRs govern all → developer-workflow.
 
 Conventional Commits, smallest honest scope:
 `feat(backend): ...`, `fix(api): ...`, `docs(requirements): ...`,
-`test(backend): ...`. Don't mix unrelated refactors. Feature branches and PRs
-encouraged, not mandatory; direct small fixes are fine when obvious and low
-risk. If a change alters product rules, conventions, or ADRs, say so
-explicitly in the PR/commit summary.
+`test(backend): ...`. Don't mix unrelated refactors.
+
+**Commit straight to `main`; do not open a branch.** Pre-release with one
+contributor, so there is no PR review to reach and branches were where the
+2026-08 merge damage came from. The commit message is the only review artifact:
+if a change alters product rules, conventions, or ADRs, say so in its body.
+Branch only when the work genuinely needs isolation (a throwaway spike, or
+something you want CI to see first). This flips at the `v0.1.0` release — see
+*Branches And PRs* in `docs/developer-workflow.md`, which governs.
 
 ## Definition of done for a slice
 

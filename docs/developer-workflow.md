@@ -233,10 +233,36 @@ Database* above.
 
 ## Branches And PRs
 
-- Feature branches are encouraged, not mandatory.
-- PRs are encouraged for reviewable changes, especially when they affect product rules, workflows, or CI.
-- Direct small fixes are acceptable when the change is obvious and low risk.
-- If a PR changes product requirements, conventions, or ADRs, mention that explicitly in the PR summary.
+**Commit directly to `main`.** This is the default for all work, including
+changes to product rules, conventions, workflows, and CI. Do not open a feature
+branch unless there is a specific reason to (owner decision, 2026-08-23).
+
+Why: the project is pre-release with a single contributor, so there is no
+release to protect and no second reviewer for a PR to reach. Branches bought
+nothing and cost something — the 2026-08 merge of two long-diverged branches is
+where the duplicated `docs/conventions.md` paragraph, the duplicated
+`writePricingServiceError` arms, the duplicate CodeQL workflow, and the
+colliding T-42–T-47 backlog IDs all came from.
+
+What replaces the PR as the safety net:
+
+- **`main` stays green.** Run the narrowest relevant validation before pushing
+  (see *Validation Expectations By Area* below). CI runs the same scripts, so a
+  local failure is a push that should not happen.
+- **Commits stay focused and honest.** The commit message is now the only
+  review artifact, so it carries the reasoning a PR summary would have. A commit
+  that changes product requirements, conventions, or ADRs says so in its body.
+- **Push often.** Long-lived local work recreates exactly the divergence this
+  rule exists to avoid.
+
+Branch when the work genuinely needs isolation — a spike you may throw away, or
+a change you want CI to run before it reaches `main`. That is a judgement call,
+not a default.
+
+**This flips at the `v0.1.0` release**, the same milestone that freezes
+migrations (see *Project Lifecycle And Migration Immutability* in
+`docs/conventions.md`). From that tag, feature branches and PRs become the norm:
+once a released version exists, `main` is something users can be running.
 
 ## Validation Expectations By Area
 
