@@ -221,9 +221,14 @@ Workflow conventions:
   above that version fails extraction and takes every other language in the run
   down with it. This workflow instead runs `actions/setup-go` with
   `go-version-file: backend/go.mod`. Reverting to default setup reintroduces
-  that failure mode. Note that advanced and default setup are mutually
-  exclusive: while default setup is enabled in repository settings, this
-  workflow's results are rejected on upload.
+  that failure mode. Advanced setup was enabled in repository settings on
+  2026-08-23; the two are mutually exclusive, so while default setup is on, an
+  advanced workflow's results are rejected on upload with "CodeQL analyses from
+  advanced configurations cannot be processed when the default setup is
+  enabled". Keep exactly one CodeQL workflow file — enabling advanced setup
+  through the GitHub UI offers to add its own `codeql.yml` and will create a
+  second file (`codeql2.yml`) if that name is taken, which then runs duplicate
+  analyses and uploads conflicting SARIF for the same categories.
 - **CodeQL's `go` matrix entry is paused** (2026-08-23). The Go extractor
   bundled with CodeQL is itself built with Go 1.26 and cannot parse a 1.27
   module — every backend package fails with "package requires newer Go version
