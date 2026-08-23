@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"rekenraam/backend/internal/exact"
@@ -1098,7 +1099,7 @@ func currentReconciliationPostingsByID(ctx context.Context, queryer queryer, ses
 	if err != nil {
 		return nil, err
 	}
-	if len(postings) != len(uniqueInt64(postingVersionIDs)) {
+	if len(postings) != distinctPositiveCount(postingVersionIDs) {
 		return nil, ErrReconciliationPosting
 	}
 	for index := range postings {
@@ -1132,7 +1133,7 @@ func currentAccountPostingsByID(ctx context.Context, queryer queryer, bookID int
 	if err != nil {
 		return nil, err
 	}
-	if len(postings) != len(uniqueInt64(postingVersionIDs)) {
+	if len(postings) != distinctPositiveCount(postingVersionIDs) {
 		return nil, ErrReconciliationPosting
 	}
 	return postings, nil
@@ -1331,15 +1332,20 @@ func postingIDs(postings []ReconciliationPostingRecord) []int64 {
 	return ids
 }
 
-func uniqueInt64(values []int64) []int64 {
-	seen := map[int64]bool{}
-	unique := make([]int64, 0, len(values))
+// distinctPositiveCount counts the distinct positive ids in values. Its two
+// callers compare it against the number of rows a query returned, so only the
+// count is ever needed; the previous helper built a whole deduplicated slice
+// only for its caller to take len of.
+//
+// values is not modified: the callers have already built their query
+// placeholders and args from that same slice.
+func distinctPositiveCount(values []int64) int {
+	sorted := make([]int64, 0, len(values))
 	for _, value := range values {
-		if value <= 0 || seen[value] {
-			continue
+		if value > 0 {
+			sorted = append(sorted, value)
 		}
-		seen[value] = true
-		unique = append(unique, value)
 	}
-	return unique
+	slices.Sort(sorted)
+	return len(slices.Compact(sorted))
 }
