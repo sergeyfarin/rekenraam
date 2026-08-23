@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"slices"
 	"strings"
@@ -312,49 +313,90 @@ func (s *TransactionService) spendingGroupLabels(
 	return map[int64]spendingCategoryLabel{}, names, nil
 }
 
-// sortSpendingGroups ranks by the largest single-commodity magnitude, then by a
-// stable identity tiebreak.
+// sortSpendingGroups orders the groups without ever comparing unlike
+// commodities, which the plan requires and which a "largest magnitude wins"
+// rule cannot honour: taking each group's maximum and comparing those maxima
+// still compares the commodities they came from, and makes the order depend on
+// unit conventions — 90,000 JPY would outrank 1 BTC, and 0.9 BTC would lose to
+// 1 EUR, neither having been valued against anything.
 //
-// **The multi-commodity ranking policy, stated rather than implied:** unlike
-// commodities are never added together, and the order is not a claim that they
-// are comparable. A group's rank is the largest single-commodity magnitude it
-// contains, compared as a number of whole-and-fractional units — so 0.75 BTC
-// ranks below 100.00 EUR because 0.75 is less than 100, not because any
-// exchange rate was applied. Without a reporting currency that is the only
-// honest total order available; the table still shows each commodity its own
-// row, and shares are computed only within one commodity.
+// **The policy.** One commodity ranks the report: the one appearing in the most
+// groups, ties broken by the lowest commodity id. Groups are then ordered by
+// their total in *that* commodity, so every comparison is within a single unit.
+// A group with no total in it cannot be placed by value and sorts after the
+// ones that can, by identity. A single-commodity report is the ordinary case of
+// this rule, and ranks exactly by value.
+//
+// Cross-commodity ranking stays out of reach until a reporting currency and a
+// named valuation method exist — the follow-up the acceptance review approved.
 //
 // The comparison is exact. Truncating to whole units first — which is what this
 // did until 2026-08-23 — made every group under one unit rank as zero, so 0.90
 // and 0.10 tied and fell through to the identity tiebreak, which is precisely
 // the case a high-scale instrument or crypto quantity lands in.
 func sortSpendingGroups(groups []SpendingGroup) {
-	rankOf := func(group SpendingGroup) *exact.ScaledInt {
-		best := exact.NewScaledInt()
-		for i, total := range group.Totals {
-			value := exact.ScaledIntFromCoefficient(total.QuantityValue, total.QuantityScale)
-			if i == 0 || value.Cmp(best) > 0 {
-				best = value
-			}
-		}
-		return best
+	rankingCommodityID, ok := rankingCommodity(groups)
+	if !ok {
+		slices.SortStableFunc(groups, func(a, b SpendingGroup) int {
+			return cmp.Compare(spendingGroupIdentity(a), spendingGroupIdentity(b))
+		})
+		return
 	}
 
 	// Ranks are computed once per group rather than inside the comparator, which
 	// would rebuild both sides on every comparison.
 	ranks := make(map[int64]*exact.ScaledInt, len(groups))
 	for _, group := range groups {
-		ranks[spendingGroupIdentity(group)] = rankOf(group)
+		for _, total := range group.Totals {
+			if total.CommodityID == rankingCommodityID {
+				ranks[spendingGroupIdentity(group)] = exact.ScaledIntFromCoefficient(total.QuantityValue, total.QuantityScale)
+				break
+			}
+		}
 	}
 
 	slices.SortStableFunc(groups, func(a, b SpendingGroup) int {
 		identityA, identityB := spendingGroupIdentity(a), spendingGroupIdentity(b)
-		// rank descending, then identity ascending as a stable tiebreak.
-		if c := ranks[identityB].Cmp(ranks[identityA]); c != 0 {
-			return c
+		rankA, hasA := ranks[identityA]
+		rankB, hasB := ranks[identityB]
+		switch {
+		case hasA && hasB:
+			// rank descending, then identity ascending as a stable tiebreak.
+			if c := rankB.Cmp(rankA); c != 0 {
+				return c
+			}
+		case hasA:
+			return -1
+		case hasB:
+			return 1
 		}
 		return cmp.Compare(identityA, identityB)
 	})
+}
+
+// rankingCommodity picks the one commodity the ordering is computed in: the one
+// present in the most groups, with the lowest id winning a tie so the choice is
+// deterministic. It is a structural choice about which column to sort on, not a
+// comparison of one commodity's magnitude against another's.
+//
+// Reports nothing when no group carries a total, in which case there is no
+// value order to compute.
+func rankingCommodity(groups []SpendingGroup) (int64, bool) {
+	counts := map[int64]int{}
+	for _, group := range groups {
+		for _, total := range group.Totals {
+			counts[total.CommodityID]++
+		}
+	}
+
+	var best int64
+	bestCount := 0
+	for _, commodityID := range slices.Sorted(maps.Keys(counts)) {
+		if counts[commodityID] > bestCount {
+			best, bestCount = commodityID, counts[commodityID]
+		}
+	}
+	return best, bestCount > 0
 }
 
 // spendingGroupIdentity is a stable tiebreak. The unattributed group sorts last

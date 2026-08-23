@@ -24,6 +24,7 @@ type spendingFixture struct {
 	cashParent    accountResponse
 	checking      accountResponse
 	card          accountResponse
+	euroCash      accountResponse
 	groceries     categoryResponse
 	travel        categoryResponse
 	salary        categoryResponse
@@ -123,6 +124,7 @@ func newSpendingFixture(t *testing.T, handler http.Handler) spendingFixture {
 		cashParent:    cashParent,
 		checking:      checking,
 		card:          card,
+		euroCash:      euroCash,
 		groceries:     groceries,
 		travel:        travel,
 		salary:        salary,
@@ -877,4 +879,45 @@ func TestSpendingCategoryFilterRejectsAccountsThatAreNotCategories(t *testing.T)
 			strconvFormatInt(fixture.groceries.ID))
 	require.Len(t, report.Groups, 1)
 	assert.Equal(t, fixture.groceries.ID, *report.Groups[0].CategoryID)
+}
+
+// TestSpendingRankingNeverComparesUnlikeCommodities pins the ordering policy.
+// A group whose only total is in another commodity cannot be placed by value
+// against groups measured in the ranking commodity, so it sorts after them
+// rather than jumping the queue on a number that was never valued — 900.00 EUR
+// is not "more than" 10.00 USD until a reporting currency says so.
+func TestSpendingRankingNeverComparesUnlikeCommodities(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	dining := createCategoryForSession(t, handler, fixture.sessionCookie, fixture.csrfToken,
+		`{"name":"Dining","category_type":"expense"}`)
+
+	// Two groups in USD, one in EUR only. USD ranks the report because it is the
+	// commodity present in the most groups.
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-11-05",
+		posting(fixture.checking.ID, -1000, 2, fixture.usdID),
+		posting(fixture.groceries.ID, 1000, 2, fixture.usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-11-06",
+		posting(fixture.checking.ID, -500, 2, fixture.usdID),
+		posting(fixture.travel.ID, 500, 2, fixture.usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-11-07",
+		posting(fixture.euroCash.ID, -90000, 2, fixture.eurID),
+		posting(dining.ID, 90000, 2, fixture.eurID),
+	), http.StatusCreated)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-11-01&end_date=2026-11-30&group_by=category")
+
+	require.Len(t, report.Groups, 3)
+	// 10.00 USD then 5.00 USD: a real comparison, both in one commodity.
+	assert.Equal(t, fixture.groceries.ID, *report.Groups[0].CategoryID)
+	assert.Equal(t, fixture.travel.ID, *report.Groups[1].CategoryID)
+	// The EUR-only group last, because its magnitude says nothing about the
+	// others. A "largest magnitude wins" rule would have ranked it first.
+	assert.Equal(t, dining.ID, *report.Groups[2].CategoryID)
 }

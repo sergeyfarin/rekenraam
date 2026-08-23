@@ -94,6 +94,11 @@ get:
           format: int64
       style: form
       explode: true
+  # Group order: one commodity ranks the report — the one present in the most
+  # groups, ties broken by the lowest commodity id — and groups are ordered by
+  # their total in that commodity. A group with no total in it sorts after those
+  # that have one, by a stable identity. Unlike commodities are never compared,
+  # so the order is not a valuation claim; that waits on a reporting currency.
   responses:
     "200":
       description: Exact per-commodity totals per group, ranked, with the effective query
